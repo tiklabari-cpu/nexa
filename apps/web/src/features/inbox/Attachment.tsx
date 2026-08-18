@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 /**
  * An attachment on a message.
@@ -26,6 +27,7 @@ export function AttachmentView({
   const api = useApiClient();
   const apiRef = useRef(api);
   apiRef.current = api;
+  const t = useTranslate();
   const [objectUrl, setObjectUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const isImage = IMAGE.test(url);
@@ -53,7 +55,9 @@ export function AttachmentView({
   }, [path]);
 
   if (failed) {
-    return <span className="text-2xs text-content-tertiary">Attachment unavailable</span>;
+    return (
+      <span className="text-2xs text-content-tertiary">{t('inbox.attachment.unavailable')}</span>
+    );
   }
 
   if (isImage) {
@@ -69,7 +73,7 @@ export function AttachmentView({
     ) : (
       <div
         className="h-32 w-48 animate-pulse rounded-md bg-inset"
-        aria-label="Loading attachment"
+        aria-label={t('inbox.attachment.loading')}
       />
     );
   }
@@ -96,6 +100,6 @@ export function AttachmentView({
       {name}
     </a>
   ) : (
-    <span className="text-2xs text-content-tertiary">Loading…</span>
+    <span className="text-2xs text-content-tertiary">{t('inbox.attachment.loadingText')}</span>
   );
 }

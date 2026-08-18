@@ -21,8 +21,9 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Composer } from './Composer.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
-function setup(): void {
+function stubCannedResponsesFetch(): void {
   // The composer fetches the canned-reply library on mount; keep it quiet.
   vi.stubGlobal(
     'fetch',
@@ -33,6 +34,10 @@ function setup(): void {
       json: async () => ({ items: [] }),
     })),
   );
+}
+
+function setup(): void {
+  stubCannedResponsesFetch();
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={queryClient}>
@@ -93,5 +98,25 @@ describe('Composer — mode tabs', () => {
     const hint = screen.getByText('Only your team will see this.');
     expect(hint.className).toContain('text-note');
     expect(hint.className).not.toContain('bg-note');
+  });
+});
+
+describe('Composer localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    resetLocale();
+  });
+
+  it('paints the composer in Turkish when that is the active locale', () => {
+    stubCannedResponsesFetch();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <Composer chatId="CHAT1" disabled={false} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByRole('button', { name: 'Gönder' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Dahili not' })).toBeInTheDocument();
   });
 });

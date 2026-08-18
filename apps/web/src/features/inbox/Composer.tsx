@@ -21,6 +21,7 @@ import {
   useCannedResponses,
   useMatchingResponses,
 } from './useCannedResponses.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 /**
  * Message composer.
@@ -57,6 +58,7 @@ export function Composer({
   const send = useSendMessage(chatId);
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const t = useTranslate();
 
   const canned = useCannedResponses();
   const matches = useMatchingResponses(canned.data?.items, shortcut?.query ?? null);
@@ -138,7 +140,8 @@ export function Composer({
     } catch (error) {
       // The message from `/uploads` is already user-facing ("Files of type … are
       // not allowed."), so surface it rather than a generic line.
-      setUploadError(error instanceof Error ? error.message : 'Could not attach that file.');
+      // i18n-ignore: dynamic server validation text, shown as-is by design (see above).
+      setUploadError(error instanceof Error ? error.message : t('inbox.composer.attachError'));
     } finally {
       setUploading(false);
     }
@@ -254,7 +257,7 @@ export function Composer({
   if (disabled) {
     return (
       <div className="shrink-0 border-t border-border bg-surface px-4 py-4 text-center text-sm text-content-secondary">
-        This conversation is archived. Reopen it to reply.
+        {t('inbox.composer.disabledNotice')}
       </div>
     );
   }
@@ -266,11 +269,15 @@ export function Composer({
       }`}
     >
       <div className="mb-2 flex items-center gap-2">
-        <div role="radiogroup" aria-label="Message type" className="flex gap-1">
+        <div
+          role="radiogroup"
+          aria-label={t('inbox.composer.modeAriaLabel')}
+          className="flex gap-1"
+        >
           {(
             [
-              { id: 'all', label: 'Reply' },
-              { id: 'agents', label: 'Internal note' },
+              { id: 'all', label: t('inbox.composer.mode.reply') },
+              { id: 'agents', label: t('inbox.composer.mode.note') },
             ] as const
           ).map((option) => (
             <button
@@ -311,11 +318,11 @@ export function Composer({
           ))}
         </div>
 
-        {isNote && <span className="text-2xs text-note">Only your team will see this.</span>}
+        {isNote && <span className="text-2xs text-note">{t('inbox.composer.noteHint')}</span>}
       </div>
 
       <label className="sr-only" htmlFor="composer-input">
-        {isNote ? 'Internal note' : 'Reply to the customer'}
+        {isNote ? t('inbox.composer.mode.note') : t('inbox.composer.replyLabel')}
       </label>
 
       {attachment && (
@@ -327,7 +334,7 @@ export function Composer({
           <span className="truncate text-content-secondary">{attachment.name}</span>
           <button
             type="button"
-            aria-label="Remove attachment"
+            aria-label={t('inbox.composer.attachment.remove')}
             onClick={() => setAttachment(null)}
             className="ml-auto rounded-sm px-1 text-content-tertiary hover:bg-surface-2 hover:text-content"
           >
@@ -339,7 +346,7 @@ export function Composer({
       {suggestions !== null && !isNote && (
         <div
           role="group"
-          aria-label="Reply suggestions"
+          aria-label={t('inbox.composer.suggestions.ariaLabel')}
           className="mb-2 flex flex-wrap items-start gap-1.5"
         >
           {suggestions.map((suggestion) => (
@@ -354,7 +361,7 @@ export function Composer({
           ))}
           <button
             type="button"
-            aria-label="Dismiss reply suggestions"
+            aria-label={t('inbox.composer.suggestions.dismiss')}
             onClick={() => {
               setSuggestions(null);
               requestAnimationFrame(() => inputRef.current?.focus());
@@ -370,7 +377,7 @@ export function Composer({
         {pickerOpen && (
           <ul
             role="listbox"
-            aria-label="Saved replies"
+            aria-label={t('inbox.composer.picker.ariaLabel')}
             // Above the input: the composer sits at the bottom of the window, so
             // a list opening downwards would fall off screen.
             className="absolute bottom-full left-0 z-10 mb-1 w-full overflow-hidden rounded-lg border border-border bg-surface shadow-md"
@@ -429,9 +436,7 @@ export function Composer({
           rows={3}
           maxLength={10_000}
           placeholder={
-            isNote
-              ? 'Add a note for your team…'
-              : 'Type your reply, or press Space for suggestions…'
+            isNote ? t('inbox.composer.placeholder.note') : t('inbox.composer.placeholder.reply')
           }
           className="w-full resize-none rounded-md border border-border bg-inset px-3 py-2 text-sm outline-none placeholder:text-content-tertiary"
         />
@@ -449,7 +454,7 @@ export function Composer({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            aria-label="Attach a file"
+            aria-label={t('inbox.composer.attachFile')}
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
             className="rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content disabled:opacity-50"
@@ -457,7 +462,7 @@ export function Composer({
             <PaperclipIcon />
           </button>
           <span className="text-2xs text-content-tertiary">
-            {uploading ? 'Uploading…' : 'Enter to send · Shift+Enter for a new line'}
+            {uploading ? t('inbox.composer.uploading') : t('inbox.composer.hint')}
           </span>
         </div>
         <div className="flex items-center gap-2">
@@ -468,7 +473,7 @@ export function Composer({
           )}
           {send.isError && (
             <span role="alert" className="text-2xs text-danger">
-              Not sent — try again.
+              {t('inbox.composer.sendError')}
             </span>
           )}
           <button
@@ -477,7 +482,7 @@ export function Composer({
             disabled={!canSend}
             className="rounded-md bg-brand-500 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
           >
-            {send.isPending ? 'Sending…' : 'Send'}
+            {send.isPending ? t('inbox.composer.send.pending') : t('inbox.composer.send.cta')}
           </button>
         </div>
       </div>

@@ -4,6 +4,8 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { Banner, Modal, Panel, PanelSection } from '../../components/ui/index.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { getLocale, useTranslate } from '../../lib/i18n.js';
+import { formatDateTime } from '../../lib/format.js';
 import { useChatAction } from './useInbox.js';
 import type { ChatDetail } from './types.js';
 import type { AppChatData } from '@nexa/types';
@@ -33,6 +35,7 @@ export function DetailsPanel({
   const api = useApiClient();
   const actions = useChatAction(chatId);
   const role = useAuth((s) => s.agent?.role ?? null);
+  const t = useTranslate();
   // Takeover only makes sense on a chat still open to reassign (a closed one
   // answers 409 `chat_inactive`) and to a supervisor-ranked caller — the same
   // pair the route itself checks (chats.ts: roleAtLeast(role, 'admin')).
@@ -74,26 +77,30 @@ export function DetailsPanel({
   return (
     <>
       <Panel
-        label="Conversation details"
-        title="Details"
+        label={t('inbox.details.panelLabel')}
+        title={t('inbox.details.title')}
         className="w-details shrink-0 overflow-y-auto border-l border-border"
         onCollapse={onCollapse}
-        collapseLabel="Collapse details panel"
+        collapseLabel={t('inbox.details.collapseLabel')}
       >
-        <PanelSection title="Conversation">
-          <Row label="Status">
+        <PanelSection title={t('inbox.details.section.conversation')}>
+          <Row label={t('inbox.details.row.status')}>
             <StatusDot
               tone={chat.active ? 'success' : 'neutral'}
-              label={chat.active ? 'Active' : 'Archived'}
+              label={
+                chat.active ? t('inbox.details.status.active') : t('inbox.details.status.archived')
+              }
             />
           </Row>
-          <Row label="Chat ID">
+          <Row label={t('inbox.details.row.chatId')}>
             <span className="font-mono text-2xs">{chat.id}</span>
           </Row>
-          <Row label="Assignee">
+          <Row label={t('inbox.details.row.assignee')}>
             <div className="flex items-center gap-2">
               <span className="text-xs">
-                {chat.thread?.assignee_id ? 'Assigned' : 'Unassigned'}
+                {chat.thread?.assignee_id
+                  ? t('inbox.details.assignee.assigned')
+                  : t('inbox.details.assignee.unassigned')}
               </span>
               {canTakeover && (
                 <button
@@ -101,24 +108,24 @@ export function DetailsPanel({
                   onClick={() => setTakeoverOpen(true)}
                   className="rounded-sm border border-border px-1.5 py-0.5 text-2xs hover:bg-surface-2"
                 >
-                  Take over
+                  {t('inbox.details.takeover.cta')}
                 </button>
               )}
             </div>
           </Row>
           {chat.thread?.queue_position != null && (
-            <Row label="Queue">
+            <Row label={t('inbox.details.row.queue')}>
               <span className="tabular text-xs text-warning">#{chat.thread.queue_position}</span>
             </Row>
           )}
-          <Row label="Started">
-            <span className="text-xs">{new Date(chat.created_at).toLocaleString()}</span>
+          <Row label={t('inbox.details.row.started')}>
+            <span className="text-xs">{formatDateTime(chat.created_at)}</span>
           </Row>
         </PanelSection>
 
-        <PanelSection title="Tags">
+        <PanelSection title={t('inbox.details.section.tags')}>
           {tags.length === 0 ? (
-            <p className="text-xs text-content-tertiary">No tags yet.</p>
+            <p className="text-xs text-content-tertiary">{t('inbox.details.tags.empty')}</p>
           ) : (
             <ul className="flex flex-wrap gap-1.5">
               {tags.map((tag) => (
@@ -127,7 +134,7 @@ export function DetailsPanel({
                     {tag}
                     <button
                       type="button"
-                      aria-label={`Remove tag ${tag}`}
+                      aria-label={t('inbox.details.tags.remove', { tag })}
                       onClick={() => actions.untag.mutate(tag)}
                       className="text-content-tertiary hover:text-danger"
                     >
@@ -141,7 +148,7 @@ export function DetailsPanel({
 
           <div className="mt-2 flex gap-1.5">
             <label className="sr-only" htmlFor="new-tag">
-              Add a tag
+              {t('inbox.details.tags.addLabel')}
             </label>
             <input
               id="new-tag"
@@ -154,7 +161,7 @@ export function DetailsPanel({
                   addTag();
                 }
               }}
-              placeholder="Add a tag…"
+              placeholder={t('inbox.details.tags.addPlaceholder')}
               maxLength={64}
               className="min-w-0 flex-1 rounded-sm border border-border bg-inset px-2 py-1 text-xs"
             />
@@ -169,14 +176,14 @@ export function DetailsPanel({
               disabled={!newTag.trim()}
               className="rounded-sm border border-border px-2 py-1 text-xs disabled:opacity-50"
             >
-              Add
+              {t('inbox.details.tags.addButton')}
             </button>
           </div>
         </PanelSection>
 
-        <PanelSection title="Teams">
+        <PanelSection title={t('inbox.details.section.teams')}>
           {chat.access.group_ids.length === 0 ? (
-            <p className="text-xs text-content-tertiary">Not routed to a team.</p>
+            <p className="text-xs text-content-tertiary">{t('inbox.details.teams.empty')}</p>
           ) : (
             <p className="text-xs">{chat.access.group_ids.join(', ')}</p>
           )}
@@ -185,9 +192,9 @@ export function DetailsPanel({
         {/* Data pulled from connected marketplace apps (FR-MOD-09.1): a CRM's
           lifecycle stage, a store's order count — the context an integration is
           connected to provide. Empty until an app is connected in Settings. */}
-        <PanelSection title="Apps">
+        <PanelSection title={t('inbox.details.section.apps')}>
           {connectedApps.length === 0 ? (
-            <p className="text-xs text-content-tertiary">No connected apps.</p>
+            <p className="text-xs text-content-tertiary">{t('inbox.details.apps.empty')}</p>
           ) : (
             <div className="flex flex-col gap-3">
               {connectedApps.map((app) => (
@@ -210,9 +217,9 @@ export function DetailsPanel({
         {/* Where this visitor has been and on what — the context an agent reads
           before replying (FR-MOD-02.4). Both sections stay visible with an
           explicit empty state so a quiet panel never reads as a loading bug. */}
-        <PanelSection title="Visited pages">
+        <PanelSection title={t('inbox.details.section.visitedPages')}>
           {visitedPages.length === 0 ? (
-            <p className="text-xs text-content-tertiary">No pages recorded for this visitor.</p>
+            <p className="text-xs text-content-tertiary">{t('inbox.details.visitedPages.empty')}</p>
           ) : (
             <ol className="flex flex-col gap-1.5">
               {visitedPages.map((page, index) => (
@@ -228,7 +235,7 @@ export function DetailsPanel({
                   </a>
                   {page.at && (
                     <span className="text-2xs text-content-tertiary">
-                      {new Date(page.at).toLocaleTimeString()}
+                      {new Date(page.at).toLocaleTimeString(getLocale())}
                     </span>
                   )}
                 </li>
@@ -237,23 +244,25 @@ export function DetailsPanel({
           )}
         </PanelSection>
 
-        <PanelSection title="Visit info">
+        <PanelSection title={t('inbox.details.section.visitInfo')}>
           {visitInfo === null ? (
-            <p className="text-xs text-content-tertiary">No visit information yet.</p>
+            <p className="text-xs text-content-tertiary">{t('inbox.details.visitInfo.empty')}</p>
           ) : (
             <>
-              <Row label="Device">
+              <Row label={t('inbox.details.row.device')}>
                 <span className="text-xs">{visitInfo.device ?? '—'}</span>
               </Row>
-              <Row label="Referring">
-                <span className="text-xs">{visitInfo.referrer ?? 'Direct'}</span>
+              <Row label={t('inbox.details.row.referring')}>
+                <span className="text-xs">
+                  {visitInfo.referrer ?? t('inbox.details.visitInfo.direct')}
+                </span>
               </Row>
-              <Row label="Duration">
+              <Row label={t('inbox.details.row.duration')}>
                 <span className="tabular text-xs">
                   {formatDuration(visitInfo.duration_seconds)}
                 </span>
               </Row>
-              <Row label="IP">
+              <Row label={t('inbox.details.row.ip')}>
                 <span className="font-mono text-2xs">{visitInfo.ip ?? '—'}</span>
               </Row>
             </>
@@ -268,7 +277,9 @@ export function DetailsPanel({
               disabled={actions.archive.isPending}
               className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
             >
-              {actions.archive.isPending ? 'Archiving…' : 'Archive conversation'}
+              {actions.archive.isPending
+                ? t('inbox.details.archive.pending')
+                : t('inbox.details.archive.cta')}
             </button>
           ) : (
             <button
@@ -277,7 +288,9 @@ export function DetailsPanel({
               disabled={actions.reopen.isPending}
               className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >
-              {actions.reopen.isPending ? 'Reopening…' : 'Reopen conversation'}
+              {actions.reopen.isPending
+                ? t('inbox.details.reopen.pending')
+                : t('inbox.details.reopen.cta')}
             </button>
           )}
         </div>
@@ -310,6 +323,7 @@ function TakeoverModal({
 }): ReactElement {
   const api = useApiClient();
   const actions = useChatAction(chatId);
+  const t = useTranslate();
 
   // Names the current holder in the confirmation copy — the same roster
   // `GET /agents` already serves every other assignee picker from (agents.ts:
@@ -321,22 +335,27 @@ function TakeoverModal({
     staleTime: 60_000,
   });
   const assigneeName = assigneeId
-    ? (agents.data?.items.find((a) => a.id === assigneeId)?.name ?? 'the current agent')
+    ? (agents.data?.items.find((a) => a.id === assigneeId)?.name ??
+      t('inbox.details.takeover.fallbackName'))
     : null;
 
   return (
-    <Modal onClose={onClose} title="Take over this chat?">
+    <Modal onClose={onClose} title={t('inbox.details.takeover.title')}>
       <p className="text-sm text-content-secondary">
         {assigneeName
-          ? `This reassigns the chat to you, taking it from ${assigneeName}.`
-          : 'This chat is unassigned — it will be reassigned to you.'}
+          ? t('inbox.details.takeover.bodyAssigned', { name: assigneeName })
+          : t('inbox.details.takeover.bodyUnassigned')}
       </p>
 
       {actions.takeover.isError && (
         <Banner tone="danger" className="mt-3">
+          {/* The 403 vs 409 wording must stay distinct (see the failure-specific
+              tests) — the catalogue's generic authorization/conflict buckets would
+              collapse both into one sentence, so the server's own text is shown as-is. */}
           {actions.takeover.error instanceof ApiClientError
-            ? actions.takeover.error.message
-            : 'Could not take over this chat.'}
+            ? // i18n-ignore: server text shown by design, see comment above.
+              actions.takeover.error.message
+            : t('inbox.details.takeover.errorGeneric')}
         </Banner>
       )}
 
@@ -346,7 +365,7 @@ function TakeoverModal({
           onClick={onClose}
           className="rounded-md border border-border px-3 py-1.5 text-sm"
         >
-          Cancel
+          {t('inbox.details.takeover.cancel')}
         </button>
         <button
           type="button"
@@ -354,7 +373,9 @@ function TakeoverModal({
           disabled={actions.takeover.isPending}
           className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
         >
-          {actions.takeover.isPending ? 'Taking over…' : 'Take over'}
+          {actions.takeover.isPending
+            ? t('inbox.details.takeover.pending')
+            : t('inbox.details.takeover.cta')}
         </button>
       </div>
     </Modal>

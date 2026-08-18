@@ -1,6 +1,7 @@
 import { useEffect, useRef, type ReactElement } from 'react';
 import type { ChatEvent } from './types.js';
 import { AttachmentView } from './Attachment.js';
+import { getLocale, useTranslate } from '../../lib/i18n.js';
 
 /**
  * The conversation.
@@ -21,6 +22,7 @@ export function Transcript({
 }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
+  const t = useTranslate();
 
   useEffect(() => {
     const node = containerRef.current;
@@ -50,7 +52,7 @@ export function Transcript({
       onScroll={handleScroll}
       role="log"
       aria-live="polite"
-      aria-label="Conversation transcript"
+      aria-label={t('inbox.transcript.ariaLabel')}
       className="flex flex-1 flex-col gap-3 overflow-y-auto p-5"
     >
       {events.map((event, index) => (
@@ -77,6 +79,7 @@ function Bubble({
   const isNote = event.recipients === 'agents';
   const isSystem = event.type === 'system_message' || event.author_type === 'system';
   const pending = event.properties?.['pending'] === true;
+  const t = useTranslate();
 
   return (
     <>
@@ -98,7 +101,7 @@ function Bubble({
         >
           {isNote && (
             <span className="text-2xs font-medium text-note">
-              Internal note — not sent to the customer
+              {t('inbox.transcript.noteLabel')}
             </span>
           )}
           <div
@@ -115,8 +118,8 @@ function Bubble({
             )}
           </div>
           <span className="tabular text-2xs text-content-tertiary">
-            {pending ? 'Sending…' : formatTime(event.created_at)}
-            {event.author_type === 'bot' && ' · AI'}
+            {pending ? t('inbox.transcript.sending') : formatTime(event.created_at)}
+            {event.author_type === 'bot' && ` · ${t('inbox.transcript.aiSuffix')}`}
           </span>
         </div>
       )}
@@ -148,16 +151,21 @@ function needsDayDivider(previous: ChatEvent | undefined, current: ChatEvent): b
   );
 }
 
+/**
+ * Explicit locale, not `undefined` (the browser's own) — the agent's chosen
+ * language, not the machine's, is what should decide how a timestamp reads
+ * (NFR-I18N2; the same runtime-locale leak `format.ts` binds against).
+ */
 function formatTime(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ''
-    : date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    : date.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
 }
 
 function formatDay(iso: string): string {
   const date = new Date(iso);
   return Number.isNaN(date.getTime())
     ? ''
-    : date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+    : date.toLocaleDateString(getLocale(), { weekday: 'short', day: 'numeric', month: 'short' });
 }

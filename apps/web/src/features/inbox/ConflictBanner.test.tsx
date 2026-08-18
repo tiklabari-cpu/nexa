@@ -7,6 +7,7 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ConflictBanner } from './ConflictBanner.js';
 import { useConflictStore } from './conflict.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const CHAT = 'TJ1H8CFKRV';
 
@@ -59,5 +60,23 @@ describe('ConflictBanner', () => {
     const banner = screen.getByTestId('conflict-banner');
     expect(banner).toHaveAttribute('role', 'status');
     expect(banner).toHaveAttribute('aria-live', 'polite');
+  });
+});
+
+describe('ConflictBanner localisation (NFR-I18N2)', () => {
+  beforeEach(() => {
+    useConflictStore.setState({ byChat: {} });
+  });
+  afterEach(() => {
+    useConflictStore.getState().clear(CHAT);
+    resetLocale();
+  });
+
+  it('paints the warning in Turkish when that is the active locale', () => {
+    useConflictStore.getState().note(CHAT, TWO_AGENTS, '2026-08-02T10:00:01.000Z');
+    renderWithLocale(<ConflictBanner chatId={CHAT} />, 'tr');
+    expect(screen.getByTestId('conflict-banner')).toHaveTextContent(
+      'Bu sohbette 2 temsilci aynı anda yazıyor:',
+    );
   });
 });

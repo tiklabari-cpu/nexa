@@ -12,6 +12,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CopilotPanel } from './CopilotPanel.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function okJson(body: unknown): Response {
   return {
@@ -342,5 +343,25 @@ describe('CopilotPanel', () => {
       await userEvent.click(widen);
       expect(input.value).toBe('Customer satisfaction score in the last 30 days?');
     });
+  });
+});
+
+describe('CopilotPanel localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    resetLocale();
+  });
+
+  it('paints the panel in Turkish when that is the active locale', () => {
+    stubFetch({});
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <CopilotPanel chatId="CHAT123" chatActive onShowDetails={vi.fn()} onCollapse={vi.fn()} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByRole('button', { name: 'Sohbeti özetle' })).toBeInTheDocument();
   });
 });

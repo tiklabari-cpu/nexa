@@ -18,6 +18,9 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/index.js';
+import { errorMessageKey } from '../../lib/api-client.js';
+import { formatDateTime } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import {
   useAddFollower,
   useAgents,
@@ -42,6 +45,23 @@ function toneFor(status: TicketStatus): 'success' | 'warning' | 'neutral' | 'dan
   return 'neutral';
 }
 
+/** Display word for the raw status enum — kept in one place so the pane and the grid agree. */
+const STATUS_LABEL_KEY: Record<TicketStatus, string> = {
+  open: 'inbox.ticketStatus.open',
+  pending: 'inbox.ticketStatus.pending',
+  solved: 'inbox.ticketStatus.solved',
+  closed: 'inbox.ticketStatus.closed',
+  spam: 'inbox.ticketStatus.spam',
+};
+
+/** Display word for a named priority level — `nearestPriority().label` is English-only. */
+const PRIORITY_LABEL_KEY: Record<string, string> = {
+  Urgent: 'inbox.priority.urgent',
+  High: 'inbox.priority.high',
+  Normal: 'inbox.priority.normal',
+  Low: 'inbox.priority.low',
+};
+
 const PRIORITY_PILL: Record<'danger' | 'warning' | 'neutral', string> = {
   danger: 'bg-inset text-danger',
   warning: 'bg-inset text-warning',
@@ -49,12 +69,12 @@ const PRIORITY_PILL: Record<'danger' | 'warning' | 'neutral', string> = {
 };
 
 /** A small coloured label for a non-default priority, in the list and the pane. */
-function PriorityPill({ value }: { value: number }): ReactElement | null {
+function PriorityPill({ value, t }: { value: number; t: TFunction }): ReactElement | null {
   if (!hasElevatedPriority(value)) return null;
   const level = nearestPriority(value);
   return (
     <span className={`rounded-sm px-1.5 py-0.5 text-2xs ${PRIORITY_PILL[level.tone]}`}>
-      {level.label}
+      {t(PRIORITY_LABEL_KEY[level.label] ?? level.label)}
     </span>
   );
 }
@@ -70,6 +90,7 @@ export function TicketList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }): ReactElement {
+  const t = useTranslate();
   if (loading) {
     return <ListSkeleton rows={3} />;
   }
@@ -77,8 +98,8 @@ export function TicketList({
   if (tickets.length === 0) {
     return (
       <EmptyState
-        title="No tickets here"
-        description="Follow-up work created from a conversation shows up in this list."
+        title={t('inbox.ticket.list.empty.title')}
+        description={t('inbox.ticket.list.empty.description')}
       />
     );
   }
@@ -88,7 +109,7 @@ export function TicketList({
       items={tickets}
       rowHeight={60}
       maxHeight="100%"
-      label="Tickets"
+      label={t('inbox.ticket.list.ariaLabel')}
       renderRow={(ticket) => (
         <div key={ticket.id} role="listitem">
           <button
@@ -101,16 +122,33 @@ export function TicketList({
           >
             <span className="flex items-center gap-2">
               <span className="flex-1 truncate text-sm font-medium">{ticket.subject}</span>
-              <PriorityPill value={ticket.priority} />
+              <PriorityPill value={ticket.priority} t={t} />
             </span>
             <span className="flex items-center gap-2 text-xs text-content-secondary">
-              <span className="truncate">{ticket.customer_name ?? 'Visitor'}</span>
-              <StatusDot tone={toneFor(ticket.status)} label={ticket.status} />
+              <span className="truncate">
+                {ticket.customer_name ?? t('inbox.ticket.visitorFallback')}
+              </span>
+              <StatusDot tone={toneFor(ticket.status)} label={t(STATUS_LABEL_KEY[ticket.status])} />
             </span>
           </button>
         </div>
       )}
     />
+  );
+}
+
+/**
+ * Splits a `{id}`-carrying template around the id so it keeps its monospace
+ * styling instead of collapsing into plain interpolated text.
+ */
+function withMonospaceId(template: string, id: string): ReactElement {
+  const [before, after] = template.split('{id}');
+  return (
+    <>
+      {before}
+      <span className="font-mono text-xs">{id}</span>
+      {after}
+    </>
   );
 }
 
@@ -124,6 +162,7 @@ function MergedBanner({
   onUnmerge: () => void;
   pending: boolean;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <Banner
       tone="neutral"
@@ -135,12 +174,11 @@ function MergedBanner({
           disabled={pending}
           className="rounded-md border border-border px-2.5 py-1 text-xs font-medium disabled:opacity-40"
         >
-          Unmerge
+          {t('inbox.ticket.unmerge')}
         </button>
       }
     >
-      Merged into <span className="font-mono text-xs">{ticket.merged_into_id}</span>. It is folded
-      under that ticket and hidden from lists until you unmerge it.
+      {withMonospaceId(t('inbox.ticket.merged.banner'), ticket.merged_into_id ?? '')}
     </Banner>
   );
 }
@@ -153,12 +191,13 @@ function MergedBanner({
  */
 function TicketCustomFieldsSection({ ticket }: { ticket: TicketDetail }): ReactElement | null {
   const setFields = useSetTicketCustomFields(ticket.id);
+  const t = useTranslate();
   if (ticket.custom_fields.length === 0) return null;
 
   return (
     <section className="mt-8 max-w-xl border-t border-border pt-6">
       <h3 className="mb-3 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-        Custom fields
+        {t('inbox.ticket.section.customFields')}
       </h3>
       <CustomFields
         fields={ticket.custom_fields}
@@ -175,6 +214,7 @@ function FollowersSection({ ticket }: { ticket: TicketDetail }): ReactElement {
   const add = useAddFollower();
   const remove = useRemoveFollower();
   const [choice, setChoice] = useState('');
+  const t = useTranslate();
 
   const following = new Set(ticket.followers.map((f) => f.account_id));
   const addable = (agents.data?.items ?? []).filter((agent) => !following.has(agent.id));
@@ -182,11 +222,11 @@ function FollowersSection({ ticket }: { ticket: TicketDetail }): ReactElement {
   return (
     <section className="mt-8 max-w-xl border-t border-border pt-6">
       <h3 className="mb-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-        Followers
+        {t('inbox.ticket.followers.heading')}
       </h3>
 
       {ticket.followers.length === 0 ? (
-        <p className="text-sm text-content-tertiary">No one is following this ticket yet.</p>
+        <p className="text-sm text-content-tertiary">{t('inbox.ticket.followers.empty')}</p>
       ) : (
         <ul className="flex flex-col gap-1.5">
           {ticket.followers.map((follower) => (
@@ -199,9 +239,11 @@ function FollowersSection({ ticket }: { ticket: TicketDetail }): ReactElement {
                 }
                 disabled={remove.isPending}
                 className="text-xs text-content-tertiary hover:text-danger disabled:opacity-40"
-                aria-label={`Remove ${follower.name ?? follower.account_id}`}
+                aria-label={t('inbox.ticket.followers.remove', {
+                  name: follower.name ?? follower.account_id,
+                })}
               >
-                Remove
+                {t('inbox.ticket.followers.removeLabel')}
               </button>
             </li>
           ))}
@@ -210,7 +252,7 @@ function FollowersSection({ ticket }: { ticket: TicketDetail }): ReactElement {
 
       <div className="mt-3 flex gap-2">
         <label htmlFor="ticket-follower" className="sr-only">
-          Add a follower
+          {t('inbox.ticket.followers.addSrLabel')}
         </label>
         <select
           id="ticket-follower"
@@ -220,7 +262,9 @@ function FollowersSection({ ticket }: { ticket: TicketDetail }): ReactElement {
           className="flex-1 rounded-md border border-border bg-inset px-2 py-1.5 text-sm disabled:opacity-40"
         >
           <option value="">
-            {addable.length === 0 ? 'Everyone is already following' : 'Add a follower…'}
+            {addable.length === 0
+              ? t('inbox.ticket.followers.allFollowing')
+              : t('inbox.ticket.followers.addPlaceholder')}
           </option>
           {addable.map((agent) => (
             <option key={agent.id} value={agent.id}>
@@ -237,13 +281,13 @@ function FollowersSection({ ticket }: { ticket: TicketDetail }): ReactElement {
           }}
           className="rounded-md border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-40"
         >
-          Add
+          {t('inbox.ticket.followers.addButton')}
         </button>
       </div>
 
       {(add.isError || remove.isError) && (
         <p role="alert" className="mt-2 text-xs text-danger">
-          Could not update followers.
+          {t('inbox.ticket.followers.error')}
         </p>
       )}
     </section>
@@ -264,6 +308,7 @@ function MergeSection({
   const merge = useMergeTicket();
   const unmerge = useUnmergeTicket();
   const [choice, setChoice] = useState('');
+  const t = useTranslate();
 
   const targets = candidates.filter((candidate) => candidate.id !== ticket.id);
   const isPrimary = ticket.merged_ticket_ids.length > 0;
@@ -271,14 +316,13 @@ function MergeSection({
   return (
     <section className="mt-8 max-w-xl border-t border-border pt-6">
       <h3 className="mb-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-        Merge
+        {t('inbox.ticket.merge.heading')}
       </h3>
 
       {isPrimary ? (
         <>
           <p className="mb-2 text-sm text-content-secondary">
-            {ticket.merged_ticket_ids.length} ticket
-            {ticket.merged_ticket_ids.length === 1 ? '' : 's'} folded into this one.
+            {t('inbox.ticket.merge.foldedCount', { count: ticket.merged_ticket_ids.length })}
           </p>
           <ul className="flex flex-col gap-1.5">
             {ticket.merged_ticket_ids.map((id) => (
@@ -290,18 +334,18 @@ function MergeSection({
                   disabled={unmerge.isPending}
                   className="text-xs text-content-tertiary hover:text-content disabled:opacity-40"
                 >
-                  Unmerge
+                  {t('inbox.ticket.unmerge')}
                 </button>
               </li>
             ))}
           </ul>
         </>
       ) : targets.length === 0 ? (
-        <p className="text-sm text-content-tertiary">No other ticket to merge into.</p>
+        <p className="text-sm text-content-tertiary">{t('inbox.ticket.merge.noTargets')}</p>
       ) : (
         <div className="flex gap-2">
           <label htmlFor="ticket-merge" className="sr-only">
-            Merge into another ticket
+            {t('inbox.ticket.merge.selectLabel')}
           </label>
           <select
             id="ticket-merge"
@@ -309,7 +353,7 @@ function MergeSection({
             onChange={(event) => setChoice(event.target.value)}
             className="flex-1 rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
           >
-            <option value="">Merge into…</option>
+            <option value="">{t('inbox.ticket.merge.selectPlaceholder')}</option>
             {targets.map((candidate) => (
               <option key={candidate.id} value={candidate.id}>
                 {candidate.subject} ({candidate.id})
@@ -325,14 +369,14 @@ function MergeSection({
             }}
             className="rounded-md border border-border px-3 py-1.5 text-sm font-medium disabled:opacity-40"
           >
-            Merge
+            {t('inbox.ticket.merge.cta')}
           </button>
         </div>
       )}
 
       {(merge.isError || unmerge.isError) && (
         <p role="alert" className="mt-2 text-xs text-danger">
-          {merge.error?.message ?? unmerge.error?.message ?? 'Could not change the merge.'}
+          {t(errorMessageKey(merge.error ?? unmerge.error))}
         </p>
       )}
     </section>
@@ -341,6 +385,7 @@ function MergeSection({
 
 /** "← Tickets" — returns from a ticket record to the grid (FR-MOD-02.7). */
 function BackToTickets({ onBack }: { onBack: () => void }): ReactElement {
+  const t = useTranslate();
   return (
     <button
       type="button"
@@ -348,7 +393,7 @@ function BackToTickets({ onBack }: { onBack: () => void }): ReactElement {
       className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
     >
       <span aria-hidden="true">←</span>
-      Tickets
+      {t('inbox.ticket.backToTickets')}
     </button>
   );
 }
@@ -367,6 +412,7 @@ export function TicketDetailPane({
   const update = useUpdateTicket(ticketId);
   const unmerge = useUnmergeTicket();
   const [subject, setSubject] = useState<string | null>(null);
+  const t = useTranslate();
 
   if (!ticketId || !ticket.data) {
     return (
@@ -377,8 +423,8 @@ export function TicketDetailPane({
           </header>
         )}
         <EmptyState
-          title="No ticket selected"
-          description="Pick a ticket from the grid to see it here."
+          title={t('inbox.ticket.detail.empty.title')}
+          description={t('inbox.ticket.detail.empty.description')}
         />
       </main>
     );
@@ -398,9 +444,9 @@ export function TicketDetailPane({
       <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
         {onBack && <BackToTickets onBack={onBack} />}
         <h2 className="flex-1 truncate text-sm font-semibold">{data.subject}</h2>
-        <PriorityPill value={data.priority} />
+        <PriorityPill value={data.priority} t={t} />
         <span className="font-mono text-2xs text-content-tertiary">{data.id}</span>
-        <StatusDot tone={toneFor(data.status)} label={data.status} />
+        <StatusDot tone={toneFor(data.status)} label={t(STATUS_LABEL_KEY[data.status])} />
       </header>
 
       <div className="flex-1 overflow-y-auto p-6">
@@ -413,26 +459,30 @@ export function TicketDetailPane({
         )}
 
         <dl className="grid max-w-xl grid-cols-[8rem_1fr] gap-y-3 text-sm">
-          <dt className="text-content-tertiary">Customer</dt>
+          <dt className="text-content-tertiary">{t('inbox.ticket.row.customer')}</dt>
           <dd>
-            {data.customer_name ?? 'Visitor'}
+            {data.customer_name ?? t('inbox.ticket.visitorFallback')}
             {data.customer_email && (
               <span className="ml-2 text-content-tertiary">{data.customer_email}</span>
             )}
           </dd>
 
-          <dt className="text-content-tertiary">Assignee</dt>
-          <dd>{data.assignee_name ?? <span className="text-content-tertiary">Unassigned</span>}</dd>
+          <dt className="text-content-tertiary">{t('inbox.ticket.row.assignee')}</dt>
+          <dd>
+            {data.assignee_name ?? (
+              <span className="text-content-tertiary">{t('inbox.ticket.assigneeUnassigned')}</span>
+            )}
+          </dd>
 
-          <dt className="text-content-tertiary">Created</dt>
-          <dd>{new Date(data.created_at).toLocaleString()}</dd>
+          <dt className="text-content-tertiary">{t('inbox.ticket.row.created')}</dt>
+          <dd>{formatDateTime(data.created_at)}</dd>
 
-          <dt className="text-content-tertiary">From chat</dt>
+          <dt className="text-content-tertiary">{t('inbox.ticket.row.fromChat')}</dt>
           <dd>
             {data.source_chat_id ? (
               <span className="font-mono text-xs">{data.source_chat_id}</span>
             ) : (
-              <span className="text-content-tertiary">Created directly</span>
+              <span className="text-content-tertiary">{t('inbox.ticket.createdDirectly')}</span>
             )}
           </dd>
         </dl>
@@ -442,7 +492,7 @@ export function TicketDetailPane({
             htmlFor="ticket-subject"
             className="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Subject
+            {t('inbox.ticket.subjectLabel')}
           </label>
           <div className="flex gap-2">
             <input
@@ -463,7 +513,7 @@ export function TicketDetailPane({
               }}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             >
-              Save
+              {t('inbox.ticket.saveButton')}
             </button>
           </div>
 
@@ -471,7 +521,7 @@ export function TicketDetailPane({
             htmlFor="ticket-status"
             className="mb-1.5 mt-6 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Status
+            {t('inbox.ticket.statusLabel')}
           </label>
           <select
             id="ticket-status"
@@ -482,7 +532,7 @@ export function TicketDetailPane({
           >
             {STATUSES.map((status) => (
               <option key={status} value={status}>
-                {status}
+                {t(STATUS_LABEL_KEY[status])}
               </option>
             ))}
           </select>
@@ -491,7 +541,7 @@ export function TicketDetailPane({
             htmlFor="ticket-priority"
             className="mb-1.5 mt-6 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Priority
+            {t('inbox.ticket.priorityLabel')}
           </label>
           <select
             id="ticket-priority"
@@ -502,14 +552,14 @@ export function TicketDetailPane({
           >
             {TICKET_PRIORITIES.map((level) => (
               <option key={level.value} value={level.value}>
-                {level.label}
+                {t(PRIORITY_LABEL_KEY[level.label] ?? level.label)}
               </option>
             ))}
           </select>
 
           {update.isError && (
             <p role="alert" className="mt-3 text-xs text-danger">
-              Could not save that change.
+              {t('inbox.ticket.updateError')}
             </p>
           )}
         </div>

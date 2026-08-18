@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TicketDetailPane, TicketList } from './TicketPane.js';
 import type { Ticket, TicketDetail } from './types.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function makeSummary(overrides: Partial<Ticket> = {}): Ticket {
   return {
@@ -245,5 +246,22 @@ describe('TicketDetailPane HelpDesk actions', () => {
         handles.calls.some((c) => c.method === 'DELETE' && c.path === '/tickets/TCK7/merge'),
       ).toBe(true),
     );
+  });
+});
+
+describe('TicketPane localisation (NFR-I18N2)', () => {
+  afterEach(() => resetLocale());
+
+  it('paints the detail pane in Turkish when that is the active locale', () => {
+    // `ticketId={null}` renders the empty state without firing any request —
+    // no fetch stub needed (`useTicket` is `enabled: ticketId !== null`).
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={client}>
+        <TicketDetailPane ticketId={null} candidates={[]} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByText('Talep seçilmedi')).toBeInTheDocument();
   });
 });

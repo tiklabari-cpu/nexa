@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { useTypingStore } from './typing.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 /**
  * "The visitor is typing…", with a preview of their in-progress message when a
@@ -18,9 +19,10 @@ export function TypingIndicator({
   customerName: string | null;
 }): ReactElement | null {
   const typing = useTypingStore((state) => state.byChat[chatId]);
+  const t = useTranslate();
   if (!typing?.isTyping) return null;
 
-  const who = customerName ?? 'Visitor';
+  const who = customerName ?? t('inbox.typing.visitorFallback');
   return (
     <div
       role="status"
@@ -36,7 +38,7 @@ export function TypingIndicator({
         </span>
       ) : (
         <span>
-          <span className="font-medium">{who}</span> is typing…
+          <span className="font-medium">{who}</span> {t('inbox.typing.suffix')}
         </span>
       )}
     </div>

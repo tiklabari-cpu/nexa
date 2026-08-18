@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -52,12 +53,12 @@ import {
 } from './ticket-grid.js';
 import type { InboxView, TicketView, TrafficTab } from './types.js';
 
-const VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
-  { id: 'all', label: 'All', icon: '▤' },
-  { id: 'my', label: 'My chats', icon: '◍' },
-  { id: 'queued', label: 'Queued', icon: '◔' },
-  { id: 'unassigned', label: 'Unassigned', icon: '◌' },
-  { id: 'archived', label: 'Archive', icon: '▣' },
+const VIEWS: Array<{ id: InboxView; icon: string }> = [
+  { id: 'all', icon: '▤' },
+  { id: 'my', icon: '◍' },
+  { id: 'queued', icon: '◔' },
+  { id: 'unassigned', icon: '◌' },
+  { id: 'archived', icon: '▣' },
 ];
 
 /**
@@ -66,10 +67,21 @@ const VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
  * AI-resolution set ADR-09 bills for — the same conversations Reports counts as
  * "Automated".
  */
-const AI_VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
-  { id: 'ai', label: 'AI agent', icon: '✦' },
-  { id: 'ai_solved', label: 'Solved', icon: '✓' },
+const AI_VIEWS: Array<{ id: InboxView; icon: string }> = [
+  { id: 'ai', icon: '✦' },
+  { id: 'ai_solved', icon: '✓' },
 ];
+
+/** Display word per chat-list view — shared by `VIEWS` and `AI_VIEWS`, one `InboxView`. */
+const VIEW_LABEL_KEY: Record<InboxView, string> = {
+  all: 'inbox.rail.view.all',
+  my: 'inbox.rail.view.my',
+  queued: 'inbox.rail.view.queued',
+  unassigned: 'inbox.rail.view.unassigned',
+  archived: 'inbox.rail.view.archived',
+  ai: 'inbox.rail.view.ai',
+  ai_solved: 'inbox.rail.view.aiSolved',
+};
 
 /**
  * The PRD keeps chats and tickets in one inbox under two groups, so the
@@ -79,14 +91,29 @@ const AI_VIEWS: Array<{ id: InboxView; label: string; icon: string }> = [
  */
 type Selection = { kind: 'chat'; view: InboxView } | { kind: 'ticket'; view: TicketView };
 
-const TICKET_VIEWS: Array<{ id: TicketView; label: string; icon: string }> = [
-  { id: 'all', label: 'All tickets', icon: '▦' },
-  { id: 'unassigned', label: 'Unassigned', icon: '◇' },
-  { id: 'my_open', label: 'My open', icon: '◈' },
-  { id: 'solved', label: 'Solved', icon: '✓' },
+const TICKET_VIEWS: Array<{ id: TicketView; icon: string }> = [
+  { id: 'all', icon: '▦' },
+  { id: 'unassigned', icon: '◇' },
+  { id: 'my_open', icon: '◈' },
+  { id: 'solved', icon: '✓' },
 ];
 
+const TICKET_VIEW_LABEL_KEY: Record<TicketView, string> = {
+  all: 'inbox.rail.ticketView.all',
+  unassigned: 'inbox.rail.ticketView.unassigned',
+  my_open: 'inbox.rail.ticketView.myOpen',
+  solved: 'inbox.rail.ticketView.solved',
+};
+
+const TRAFFIC_TAB_LABEL_KEY: Record<TrafficTab, string> = {
+  all: 'inbox.list.traffic.all',
+  chatting: 'inbox.list.traffic.chatting',
+  queued: 'inbox.list.traffic.queued',
+  waiting: 'inbox.list.traffic.waiting',
+};
+
 export function InboxPage(): ReactElement {
+  const t = useTranslate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [selection, setSelection] = useState<Selection>({ kind: 'chat', view: 'all' });
@@ -236,11 +263,11 @@ export function InboxPage(): ReactElement {
     <>
       {/* Views */}
       <nav
-        aria-label="Inbox views"
+        aria-label={t('inbox.rail.ariaLabel')}
         className="flex w-sidebar shrink-0 flex-col overflow-y-auto border-r border-border bg-surface"
       >
         <header className="flex h-topbar items-center justify-between px-4">
-          <h1 className="text-lg font-semibold">Inbox</h1>
+          <h1 className="text-lg font-semibold">{t('inbox.rail.title')}</h1>
           <ConnectionBadge status={rtmStatus} />
         </header>
 
@@ -248,7 +275,7 @@ export function InboxPage(): ReactElement {
           {VIEWS.map((item) => (
             <li key={item.id}>
               <ViewButton
-                label={item.label}
+                label={t(VIEW_LABEL_KEY[item.id])}
                 icon={item.icon}
                 active={selection.kind === 'chat' && selection.view === item.id}
                 count={counts[item.id]}
@@ -259,13 +286,13 @@ export function InboxPage(): ReactElement {
         </ul>
 
         <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          AI Agents
+          {t('inbox.rail.aiHeading')}
         </h2>
         <ul className="flex flex-col gap-0.5 px-2">
           {AI_VIEWS.map((item) => (
             <li key={item.id}>
               <ViewButton
-                label={item.label}
+                label={t(VIEW_LABEL_KEY[item.id])}
                 icon={item.icon}
                 active={selection.kind === 'chat' && selection.view === item.id}
                 count={counts[item.id]}
@@ -276,13 +303,13 @@ export function InboxPage(): ReactElement {
         </ul>
 
         <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          Tickets
+          {t('inbox.rail.ticketsHeading')}
         </h2>
         <ul className="flex flex-col gap-0.5 px-2">
           {TICKET_VIEWS.map((item) => (
             <li key={item.id}>
               <ViewButton
-                label={item.label}
+                label={t(TICKET_VIEW_LABEL_KEY[item.id])}
                 icon={item.icon}
                 active={selection.kind === 'ticket' && selection.view === item.id}
                 onClick={() => selectTicketView(item.id)}
@@ -311,7 +338,7 @@ export function InboxPage(): ReactElement {
             htmlFor="routing-status"
             className="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Availability
+            {t('inbox.rail.availability')}
           </label>
           <select
             id="routing-status"
@@ -319,9 +346,9 @@ export function InboxPage(): ReactElement {
             onChange={(event) => void setRoutingStatus(event.target.value as 'accepting_chats')}
             className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
           >
-            <option value="accepting_chats">Accepting chats</option>
-            <option value="not_accepting_chats">Not accepting</option>
-            <option value="offline">Offline</option>
+            <option value="accepting_chats">{t('inbox.rail.routing.accepting')}</option>
+            <option value="not_accepting_chats">{t('inbox.rail.routing.notAccepting')}</option>
+            <option value="offline">{t('inbox.rail.routing.offline')}</option>
           </select>
         </div>
       </nav>
@@ -340,9 +367,7 @@ export function InboxPage(): ReactElement {
         ) : (
           <main className="flex min-w-0 flex-1 flex-col bg-canvas">
             <header className="flex h-topbar shrink-0 items-center justify-between border-b border-border bg-surface px-4">
-              <h2 className="text-sm font-semibold">
-                {TICKET_VIEWS.find((v) => v.id === ticketView)?.label}
-              </h2>
+              <h2 className="text-sm font-semibold">{t(TICKET_VIEW_LABEL_KEY[ticketView])}</h2>
               <span className="tabular text-2xs text-content-tertiary">{sortedTickets.length}</span>
             </header>
             <div className="min-h-0 flex-1 overflow-hidden p-4">
@@ -361,20 +386,18 @@ export function InboxPage(): ReactElement {
         <>
           {/* Conversation list */}
           <section
-            aria-label="Conversations"
+            aria-label={t('inbox.list.ariaLabel')}
             className="flex w-list shrink-0 flex-col border-r border-border bg-surface"
           >
             <header className="flex h-topbar items-center justify-between border-b border-border px-4">
-              <h2 className="text-sm font-semibold">
-                {[...VIEWS, ...AI_VIEWS].find((v) => v.id === view)?.label}
-              </h2>
+              <h2 className="text-sm font-semibold">{t(VIEW_LABEL_KEY[view])}</h2>
               <span className="tabular text-2xs text-content-tertiary">{visibleChats.length}</span>
             </header>
 
             {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list. */}
             <div
               role="tablist"
-              aria-label="Real-time tabs"
+              aria-label={t('inbox.list.trafficAriaLabel')}
               className="flex gap-1 border-b border-border px-2 py-1.5"
             >
               {TRAFFIC_TABS.map((tab) => {
@@ -392,7 +415,7 @@ export function InboxPage(): ReactElement {
                         : 'text-content-secondary hover:bg-surface-2'
                     }`}
                   >
-                    <span>{tab.label}</span>
+                    <span>{t(TRAFFIC_TAB_LABEL_KEY[tab.id])}</span>
                     <span
                       aria-hidden="true"
                       className={`tabular rounded-sm px-1 text-2xs ${
@@ -413,19 +436,19 @@ export function InboxPage(): ReactElement {
                 <EmptyState
                   title={
                     chats.length > 0 && trafficTab !== 'all'
-                      ? 'Nothing in this tab'
-                      : 'Nothing here yet'
+                      ? t('inbox.list.empty.tabTitle')
+                      : t('inbox.list.empty.title')
                   }
                   description={
                     chats.length > 0 && trafficTab !== 'all'
-                      ? 'No conversations match this tab right now.'
+                      ? t('inbox.list.empty.tabDescription')
                       : view === 'archived'
-                        ? 'Closed conversations will appear here.'
+                        ? t('inbox.list.empty.archived')
                         : view === 'ai'
-                          ? 'Conversations the AI agent is handling appear here.'
+                          ? t('inbox.list.empty.ai')
                           : view === 'ai_solved'
-                            ? 'Conversations the AI resolved on its own appear here.'
-                            : 'New conversations land here as they arrive.'
+                            ? t('inbox.list.empty.aiSolved')
+                            : t('inbox.list.empty.description')
                   }
                 />
               ) : (
@@ -444,22 +467,26 @@ export function InboxPage(): ReactElement {
                       >
                         <span className="flex items-center gap-2">
                           <span className="flex-1 truncate text-sm font-medium">
-                            {item.customer_name ?? 'Visitor'}
+                            {item.customer_name ?? t('inbox.list.item.visitorFallback')}
                           </span>
                           {item.queue_position !== null && (
                             <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
-                              #{item.queue_position} in queue
+                              {t('inbox.list.item.queuePosition', {
+                                position: item.queue_position,
+                              })}
                             </span>
                           )}
                           {item.unread_count > 0 && (
                             <span
-                              aria-label={`${item.unread_count} unread`}
+                              aria-label={t('inbox.list.item.unreadAria', {
+                                count: item.unread_count,
+                              })}
                               className="h-2 w-2 rounded-full bg-brand-500"
                             />
                           )}
                         </span>
                         <span className="truncate text-xs text-content-secondary">
-                          {item.last_event?.text ?? 'No messages yet'}
+                          {item.last_event?.text ?? t('inbox.list.item.noMessages')}
                         </span>
                         {item.tags.length > 0 && (
                           <span className="flex flex-wrap gap-1">
@@ -487,12 +514,17 @@ export function InboxPage(): ReactElement {
               <>
                 <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
                   <h2 className="flex-1 truncate text-sm font-semibold">
-                    {chats.find((c) => c.id === selectedId)?.customer_name ?? 'Visitor'}
+                    {chats.find((c) => c.id === selectedId)?.customer_name ??
+                      t('inbox.thread.visitorFallback')}
                   </h2>
                   <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
                   <StatusDot
                     tone={chat.data.active ? 'success' : 'neutral'}
-                    label={chat.data.active ? 'Active' : 'Archived'}
+                    label={
+                      chat.data.active
+                        ? t('inbox.thread.statusActive')
+                        : t('inbox.thread.statusArchived')
+                    }
                   />
                   <CopyLinkButton chatId={selectedId} />
                   <CreateTicketButton
@@ -535,8 +567,8 @@ export function InboxPage(): ReactElement {
               </>
             ) : (
               <EmptyState
-                title="No conversation selected"
-                description="Pick a conversation from the list to see it here."
+                title={t('inbox.thread.empty.title')}
+                description={t('inbox.thread.empty.description')}
               />
             )}
           </main>
@@ -573,15 +605,16 @@ export function InboxPage(): ReactElement {
  * while the transcript here is narrow.
  */
 function ShowDetailsButton({ onShow }: { onShow: () => void }): ReactElement {
+  const t = useTranslate();
   return (
     <button
       type="button"
       onClick={onShow}
-      aria-label="Show details panel"
+      aria-label={t('inbox.thread.showDetails')}
       className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
     >
       <span aria-hidden="true">◧</span>
-      Details
+      {t('inbox.thread.detailsLabel')}
     </button>
   );
 }
@@ -592,6 +625,7 @@ function ShowDetailsButton({ onShow }: { onShow: () => void }): ReactElement {
  * is one click from any chat.
  */
 function CopilotButton({ onOpen }: { onOpen: () => void }): ReactElement {
+  const t = useTranslate();
   return (
     <button
       type="button"
@@ -599,7 +633,7 @@ function CopilotButton({ onOpen }: { onOpen: () => void }): ReactElement {
       className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
     >
       <span aria-hidden="true">✧</span>
-      Copilot
+      {t('inbox.thread.copilotLabel')}
     </button>
   );
 }
@@ -663,10 +697,11 @@ function ViewsGroup({
   onAddSavedView: (name: string) => SavedView | null;
   onRemoveSavedView: (id: string) => void;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <>
       <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-        Views
+        {t('inbox.rail.viewsHeading')}
       </h2>
 
       {/* Channel views. Gated on `channelsResolved` so the promo does not flash
@@ -678,14 +713,12 @@ function ViewsGroup({
             data-testid="channel-promo"
             className="mx-2 rounded-md border border-dashed border-border p-3"
           >
-            <p className="text-2xs text-content-secondary">
-              Connect Messenger, WhatsApp or SMS to see their conversations here.
-            </p>
+            <p className="text-2xs text-content-secondary">{t('inbox.rail.channelPromo.text')}</p>
             <Link
               to="/app/settings"
               className="mt-1.5 inline-block text-2xs font-medium text-content-brand hover:underline"
             >
-              Connect a channel →
+              {t('inbox.rail.channelPromo.cta')}
             </Link>
           </div>
         ) : (
@@ -698,7 +731,7 @@ function ViewsGroup({
                 >
                   <span aria-hidden="true">{channel.icon}</span>
                   <span className="flex-1">{channel.label}</span>
-                  <StatusDot tone="success" label="Connected" />
+                  <StatusDot tone="success" label={t('inbox.rail.channelConnected')} />
                 </Link>
               </li>
             ))}
@@ -723,7 +756,7 @@ function ViewsGroup({
               <button
                 type="button"
                 onClick={() => onRemoveSavedView(saved.id)}
-                aria-label={`Remove saved view ${saved.name}`}
+                aria-label={t('inbox.rail.savedView.remove', { name: saved.name })}
                 className="shrink-0 rounded-md px-1.5 py-1 text-2xs text-content-tertiary opacity-0 transition-opacity hover:text-danger focus:opacity-100 group-hover:opacity-100"
               >
                 ✕
@@ -747,6 +780,7 @@ function ViewsGroup({
 function AddSavedView({ onAdd }: { onAdd: (name: string) => SavedView | null }): ReactElement {
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
+  const t = useTranslate();
 
   const submit = (event: FormEvent): void => {
     event.preventDefault();
@@ -765,7 +799,7 @@ function AddSavedView({ onAdd }: { onAdd: (name: string) => SavedView | null }):
           className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-2xs font-medium text-content-tertiary transition-colors hover:bg-surface-2"
         >
           <span aria-hidden="true">＋</span>
-          Save current view
+          {t('inbox.rail.savedView.saveCurrent')}
         </button>
       </div>
     );
@@ -778,8 +812,8 @@ function AddSavedView({ onAdd }: { onAdd: (name: string) => SavedView | null }):
         value={name}
         onChange={(event) => setName(event.target.value)}
         maxLength={SAVED_VIEW_NAME_MAX}
-        placeholder="Name this view"
-        aria-label="Saved view name"
+        placeholder={t('inbox.rail.savedView.namePlaceholder')}
+        aria-label={t('inbox.rail.savedView.nameAriaLabel')}
         className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
       />
       <div className="flex gap-1.5">
@@ -788,7 +822,7 @@ function AddSavedView({ onAdd }: { onAdd: (name: string) => SavedView | null }):
           disabled={name.trim().length === 0}
           className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
         >
-          Save
+          {t('inbox.rail.savedView.submit')}
         </button>
         <button
           type="button"
@@ -798,7 +832,7 @@ function AddSavedView({ onAdd }: { onAdd: (name: string) => SavedView | null }):
           }}
           className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
         >
-          Cancel
+          {t('inbox.rail.savedView.cancel')}
         </button>
       </div>
     </form>
@@ -811,9 +845,15 @@ function AddSavedView({ onAdd }: { onAdd: (name: string) => SavedView | null }):
  * users and anyone glancing at a bright screen (design-brief §7).
  */
 function ConnectionBadge({ status }: { status: string }): ReactElement {
+  const t = useTranslate();
   const tone =
     status === 'live' ? 'success' : status === 'offline' ? 'danger' : ('warning' as const);
-  const label = status === 'live' ? 'Live' : status === 'offline' ? 'Offline' : 'Reconnecting';
+  const label =
+    status === 'live'
+      ? t('inbox.rail.connection.live')
+      : status === 'offline'
+        ? t('inbox.rail.connection.offline')
+        : t('inbox.rail.connection.reconnecting');
   return <StatusDot tone={tone} label={label} />;
 }
 
@@ -825,6 +865,7 @@ function ConnectionBadge({ status }: { status: string }): ReactElement {
  */
 function CopyLinkButton({ chatId }: { chatId: string }): ReactElement {
   const [copied, setCopied] = useState(false);
+  const t = useTranslate();
   const copy = (): void => {
     const url = `${window.location.origin}/app/inbox?chat=${chatId}`;
     void navigator.clipboard?.writeText(url).then(
@@ -841,7 +882,7 @@ function CopyLinkButton({ chatId }: { chatId: string }): ReactElement {
       onClick={copy}
       className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
     >
-      {copied ? 'Copied' : 'Copy link'}
+      {copied ? t('inbox.thread.copied') : t('inbox.thread.copyLink')}
     </button>
   );
 }

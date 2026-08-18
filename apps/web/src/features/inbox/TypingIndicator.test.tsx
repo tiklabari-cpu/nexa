@@ -8,6 +8,7 @@ import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { TypingIndicator } from './TypingIndicator.js';
 import { useTypingStore } from './typing.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const CHAT = 'TJ1H8CFKRV';
 
@@ -42,5 +43,21 @@ describe('TypingIndicator', () => {
     useTypingStore.getState().noteCustomer(CHAT, true, null);
     render(<TypingIndicator chatId={CHAT} customerName={null} />);
     expect(screen.getByTestId('typing-indicator')).toHaveTextContent('Visitor is typing…');
+  });
+});
+
+describe('TypingIndicator localisation (NFR-I18N2)', () => {
+  beforeEach(() => {
+    useTypingStore.setState({ byChat: {} });
+  });
+  afterEach(() => {
+    useTypingStore.getState().clear(CHAT);
+    resetLocale();
+  });
+
+  it('paints the indicator in Turkish when that is the active locale', () => {
+    useTypingStore.getState().noteCustomer(CHAT, true, null);
+    renderWithLocale(<TypingIndicator chatId={CHAT} customerName="Robin" />, 'tr');
+    expect(screen.getByTestId('typing-indicator')).toHaveTextContent('Robin yazıyor…');
   });
 });

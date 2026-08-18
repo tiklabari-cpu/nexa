@@ -6,9 +6,10 @@
  */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TicketGrid } from './TicketGrid.js';
 import { DEFAULT_TICKET_SORT } from './ticket-grid.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { Ticket } from './types.js';
 
 function makeTicket(overrides: Partial<Ticket> = {}): Ticket {
@@ -96,5 +97,24 @@ describe('TicketGrid', () => {
   it('shows an empty state when there are no tickets', () => {
     renderGrid({ tickets: [] });
     expect(screen.getByText('No tickets here')).toBeInTheDocument();
+  });
+});
+
+describe('TicketGrid localisation (NFR-I18N2)', () => {
+  afterEach(() => resetLocale());
+
+  it('paints the grid in Turkish when that is the active locale', () => {
+    renderWithLocale(
+      <TicketGrid
+        tickets={TICKETS}
+        loading={false}
+        sort={DEFAULT_TICKET_SORT}
+        onSort={vi.fn()}
+        onOpen={vi.fn()}
+        selectedId={null}
+      />,
+      'tr',
+    );
+    expect(screen.getByRole('columnheader', { name: /Son mesaj/ })).toBeInTheDocument();
   });
 });

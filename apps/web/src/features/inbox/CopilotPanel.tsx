@@ -14,6 +14,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { Skeleton } from '../../components/Skeleton.js';
 import { Panel, PanelSection } from '../../components/ui/index.js';
 import { formatCount, formatDate, formatRate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { offerDraft } from './copilotDraft.js';
 import {
   useCopilotBi,
@@ -23,12 +24,14 @@ import {
   type EnhanceMode,
 } from './useCopilot.js';
 
-const ENHANCE_MODES: Array<{ id: EnhanceMode; label: string }> = [
-  { id: 'rephrase', label: 'Rephrase' },
-  { id: 'friendly', label: 'Friendlier' },
-  { id: 'formal', label: 'More formal' },
-  { id: 'grammar', label: 'Fix grammar' },
-];
+const ENHANCE_MODE_IDS: readonly EnhanceMode[] = ['rephrase', 'friendly', 'formal', 'grammar'];
+
+const ENHANCE_MODE_LABEL_KEY: Record<EnhanceMode, string> = {
+  rephrase: 'inbox.copilot.enhance.mode.rephrase',
+  friendly: 'inbox.copilot.enhance.mode.friendly',
+  formal: 'inbox.copilot.enhance.mode.formal',
+  grammar: 'inbox.copilot.enhance.mode.grammar',
+};
 
 /**
  * Example questions for the `not_understood` empty state (FR-EK-B.1).
@@ -90,76 +93,73 @@ export function CopilotPanel({
   const bi = useCopilotBi();
   const [draftText, setDraftText] = useState('');
   const [biQuestion, setBiQuestion] = useState('');
+  const t = useTranslate();
 
   return (
     <Panel
-      label="Copilot"
+      label={t('inbox.copilot.panelLabel')}
       title={
         <span className="flex items-center gap-1.5">
-          <span aria-hidden="true">✧</span> Copilot
+          <span aria-hidden="true">✧</span> {t('inbox.copilot.title')}
         </span>
       }
       className="w-details shrink-0 overflow-y-auto border-l border-border"
       onCollapse={onCollapse}
-      collapseLabel="Collapse Copilot panel"
+      collapseLabel={t('inbox.copilot.collapseLabel')}
       headerAction={
         <button
           type="button"
           onClick={onShowDetails}
           className="rounded-md border border-border px-2 py-0.5 text-2xs font-medium text-content-secondary hover:bg-surface-2"
         >
-          Details
+          {t('inbox.copilot.detailsButton')}
         </button>
       }
     >
       {!chatActive && (
         <p className="border-b border-border px-4 py-3 text-xs text-content-tertiary">
-          Reopen the conversation to use Copilot.
+          {t('inbox.copilot.disabledNotice')}
         </p>
       )}
 
       {/* Summary → internal note (12.3 / 02.5) */}
-      <PanelSection title="Summary">
-        <p className="text-xs text-content-secondary">
-          Summarise this conversation and post it as an internal note for your team.
-        </p>
+      <PanelSection title={t('inbox.copilot.section.summary')}>
+        <p className="text-xs text-content-secondary">{t('inbox.copilot.summary.description')}</p>
         <button
           type="button"
           onClick={() => summary.mutate()}
           disabled={!chatActive || summary.isPending}
           className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
         >
-          {summary.isPending ? 'Summarising…' : 'Summarise conversation'}
+          {summary.isPending ? t('inbox.copilot.summary.pending') : t('inbox.copilot.summary.cta')}
         </button>
         {summary.isError && (
           <p role="alert" className="text-2xs text-danger">
-            Could not summarise — try again.
+            {t('inbox.copilot.summary.error')}
           </p>
         )}
         {summary.data && (
           <div className="rounded-md bg-inset p-2 text-xs">
             <p className="text-content-secondary">{summary.data.summary}</p>
-            <p className="mt-1 text-2xs text-success">Added as an internal note.</p>
+            <p className="mt-1 text-2xs text-success">{t('inbox.copilot.summary.noteAdded')}</p>
           </div>
         )}
       </PanelSection>
 
       {/* Reply draft from the copilot knowledge base (12.3) */}
-      <PanelSection title="Suggested reply">
-        <p className="text-xs text-content-secondary">
-          Draft a reply from the copilot knowledge base.
-        </p>
+      <PanelSection title={t('inbox.copilot.section.reply')}>
+        <p className="text-xs text-content-secondary">{t('inbox.copilot.reply.description')}</p>
         <button
           type="button"
           onClick={() => reply.mutate()}
           disabled={!chatActive || reply.isPending}
           className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
         >
-          {reply.isPending ? 'Drafting…' : 'Draft a reply'}
+          {reply.isPending ? t('inbox.copilot.reply.pending') : t('inbox.copilot.reply.cta')}
         </button>
         {reply.isError && (
           <p role="alert" className="text-2xs text-danger">
-            Could not draft a reply — try again.
+            {t('inbox.copilot.reply.error')}
           </p>
         )}
         {reply.data &&
@@ -169,21 +169,21 @@ export function CopilotPanel({
               <InsertButton chatId={chatId} text={reply.data.draft} />
               {reply.data.sources.length > 0 && (
                 <p className="text-2xs text-content-tertiary">
-                  From: {reply.data.sources.map((s) => s.name).join(', ')}
+                  {t('inbox.copilot.reply.sources', {
+                    names: reply.data.sources.map((s) => s.name).join(', '),
+                  })}
                 </p>
               )}
             </div>
           ) : (
-            <p className="text-2xs text-content-tertiary">
-              No suggestion found in the copilot knowledge base.
-            </p>
+            <p className="text-2xs text-content-tertiary">{t('inbox.copilot.reply.empty')}</p>
           ))}
       </PanelSection>
 
       {/* Enhance / rephrase the agent's own draft (12.3) */}
-      <PanelSection title="Improve a draft">
+      <PanelSection title={t('inbox.copilot.section.enhance')}>
         <label className="sr-only" htmlFor="copilot-enhance-input">
-          Draft to improve
+          {t('inbox.copilot.enhance.label')}
         </label>
         <textarea
           id="copilot-enhance-input"
@@ -191,25 +191,25 @@ export function CopilotPanel({
           onChange={(event) => setDraftText(event.target.value)}
           rows={3}
           maxLength={10_000}
-          placeholder="Paste or write a draft, then pick a tone…"
+          placeholder={t('inbox.copilot.enhance.placeholder')}
           className="w-full resize-none rounded-md border border-border bg-inset px-2 py-1.5 text-xs outline-none placeholder:text-content-tertiary"
         />
         <div className="flex flex-wrap gap-1">
-          {ENHANCE_MODES.map((mode) => (
+          {ENHANCE_MODE_IDS.map((mode) => (
             <button
-              key={mode.id}
+              key={mode}
               type="button"
-              onClick={() => enhance.mutate({ text: draftText, mode: mode.id })}
+              onClick={() => enhance.mutate({ text: draftText, mode })}
               disabled={!chatActive || !draftText.trim() || enhance.isPending}
               className="rounded-sm border border-border px-2 py-1 text-2xs hover:bg-surface-2 disabled:opacity-50"
             >
-              {mode.label}
+              {t(ENHANCE_MODE_LABEL_KEY[mode])}
             </button>
           ))}
         </div>
         {enhance.isError && (
           <p role="alert" className="text-2xs text-danger">
-            Could not rewrite that — try again.
+            {t('inbox.copilot.enhance.error')}
           </p>
         )}
         {enhance.data && (
@@ -221,10 +221,8 @@ export function CopilotPanel({
       </PanelSection>
 
       {/* BI command — a report/metric question about the workspace (12.4) */}
-      <PanelSection title="Ask about your reports">
-        <p className="text-xs text-content-secondary">
-          Ask a report question about this workspace, e.g. how many chats closed this week.
-        </p>
+      <PanelSection title={t('inbox.copilot.section.bi')}>
+        <p className="text-xs text-content-secondary">{t('inbox.copilot.bi.description')}</p>
         <form
           onSubmit={(event) => {
             event.preventDefault();
@@ -234,7 +232,7 @@ export function CopilotPanel({
           className="flex gap-1.5"
         >
           <label className="sr-only" htmlFor="copilot-bi-question">
-            Ask about your reports
+            {t('inbox.copilot.section.bi')}
           </label>
           <input
             id="copilot-bi-question"
@@ -242,7 +240,7 @@ export function CopilotPanel({
             value={biQuestion}
             onChange={(event) => setBiQuestion(event.target.value)}
             maxLength={500}
-            placeholder="How many chats closed this week?"
+            placeholder={t('inbox.copilot.bi.placeholder')}
             className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-xs outline-none placeholder:text-content-tertiary"
           />
           <button
@@ -250,7 +248,7 @@ export function CopilotPanel({
             disabled={!biQuestion.trim() || bi.isPending}
             className="shrink-0 rounded-md border border-border px-3 py-1.5 text-sm hover:bg-surface-2 disabled:opacity-50"
           >
-            {bi.isPending ? 'Asking…' : 'Ask'}
+            {bi.isPending ? t('inbox.copilot.bi.pending') : t('inbox.copilot.bi.cta')}
           </button>
         </form>
         <BiAnswerCard bi={bi} onExampleClick={setBiQuestion} />
@@ -261,13 +259,14 @@ export function CopilotPanel({
 
 /** Hands a suggestion to the composer (FR-MOD-12.3). */
 function InsertButton({ chatId, text }: { chatId: string; text: string }): ReactElement {
+  const t = useTranslate();
   return (
     <button
       type="button"
       onClick={() => offerDraft(chatId, text)}
       className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white hover:bg-brand-600"
     >
-      Insert into reply
+      {t('inbox.copilot.insert')}
     </button>
   );
 }
@@ -294,6 +293,7 @@ function BiAnswerCard({
   /** Fills the question input with a suggestion — it never asks it outright, so the agent can review or edit first. */
   onExampleClick: (question: string) => void;
 }): ReactElement | null {
+  const t = useTranslate();
   if (bi.isPending) {
     return (
       <div aria-hidden="true" className="flex flex-col gap-2 rounded-md bg-inset p-2">
@@ -307,7 +307,7 @@ function BiAnswerCard({
   if (bi.isError) {
     return (
       <p role="alert" className="text-2xs text-danger">
-        Could not get an answer — try again.
+        {t('inbox.copilot.bi.error')}
       </p>
     );
   }
@@ -318,7 +318,7 @@ function BiAnswerCard({
   if (kind === 'not_understood') {
     return (
       <EmptyState
-        title="Not sure what you mean"
+        title={t('inbox.copilot.bi.notUnderstood.title')}
         description={answer}
         action={
           <div className="flex w-full flex-col gap-1">
@@ -342,7 +342,7 @@ function BiAnswerCard({
     const widened = metric ? widenedBiQuestion(metric) : null;
     return (
       <EmptyState
-        title="No data for this window"
+        title={t('inbox.copilot.bi.noData.title')}
         description={answer}
         action={
           widened ? (
@@ -381,7 +381,7 @@ function BiAnswerCard({
       <p className="text-2xs text-content-tertiary">
         {formatDate(range.from)} – {formatDate(range.to)}
       </p>
-      <p className="text-2xs text-content-tertiary">Source: Reports → Overview</p>
+      <p className="text-2xs text-content-tertiary">{t('inbox.copilot.bi.source')}</p>
     </div>
   );
 }

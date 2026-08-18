@@ -9,6 +9,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { existingTicketIdOf, useCreateTicketFromChat } from './useTickets.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 export function CreateTicketButton({
   chatId,
@@ -22,11 +23,16 @@ export function CreateTicketButton({
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState('');
   const create = useCreateTicketFromChat();
+  const t = useTranslate();
 
   const existingId = existingTicketIdOf(create.error);
 
   function start(): void {
-    setSubject(`Follow-up for ${customerName ?? 'visitor'}`);
+    setSubject(
+      t('inbox.createTicket.subjectTemplate', {
+        customer: customerName ?? t('inbox.createTicket.visitorFallback'),
+      }),
+    );
     create.reset();
     setOpen(true);
   }
@@ -38,7 +44,7 @@ export function CreateTicketButton({
         onClick={start}
         className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-content-secondary hover:bg-surface-2"
       >
-        Create ticket
+        {t('inbox.createTicket.cta')}
       </button>
     );
   }
@@ -46,7 +52,7 @@ export function CreateTicketButton({
   return (
     <div className="flex items-center gap-2">
       <label htmlFor="new-ticket-subject" className="sr-only">
-        Ticket subject
+        {t('inbox.createTicket.subjectLabel')}
       </label>
       <input
         id="new-ticket-subject"
@@ -74,19 +80,19 @@ export function CreateTicketButton({
         }}
         className="rounded-md bg-brand-500 px-2.5 py-1 text-xs font-medium text-white disabled:opacity-40"
       >
-        Create
+        {t('inbox.createTicket.create')}
       </button>
       <button
         type="button"
         onClick={() => setOpen(false)}
         className="px-1 text-xs text-content-tertiary hover:text-content"
       >
-        Cancel
+        {t('inbox.createTicket.cancel')}
       </button>
 
       {existingId && (
         <span role="status" className="flex items-center gap-2 text-xs text-content-secondary">
-          Already has one.
+          {t('inbox.createTicket.alreadyExists')}
           <button
             type="button"
             onClick={() => {
@@ -95,13 +101,13 @@ export function CreateTicketButton({
             }}
             className="font-medium text-content-brand underline"
           >
-            Open it
+            {t('inbox.createTicket.openExisting')}
           </button>
         </span>
       )}
       {create.isError && !existingId && (
         <span role="alert" className="text-xs text-danger">
-          Could not create that ticket.
+          {t('inbox.createTicket.error')}
         </span>
       )}
     </div>

@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { useConflictStore } from './conflict.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 /**
  * "N agents are typing in this chat", for when two or more agents compose a
@@ -12,6 +13,7 @@ import { useConflictStore } from './conflict.js';
  */
 export function ConflictBanner({ chatId }: { chatId: string }): ReactElement | null {
   const conflict = useConflictStore((state) => state.byChat[chatId]);
+  const t = useTranslate();
   if (!conflict) return null;
 
   const count = conflict.agents.length;
@@ -25,7 +27,7 @@ export function ConflictBanner({ chatId }: { chatId: string }): ReactElement | n
     >
       <WarningIcon />
       <span>
-        Bu sohbette {count} ajan aynı anda yazıyor:{' '}
+        {t('inbox.conflict.warning', { count })}{' '}
         <span className="font-medium">
           {conflict.agents.map((agent) => agent.agentId).join(', ')}
         </span>

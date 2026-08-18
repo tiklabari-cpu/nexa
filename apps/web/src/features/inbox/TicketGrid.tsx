@@ -19,6 +19,7 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { formatDate } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { hasElevatedPriority, nearestPriority } from './ticket-priority.js';
 import {
   TICKET_COLUMNS,
@@ -37,14 +38,42 @@ function statusTone(status: TicketStatus): 'success' | 'warning' | 'neutral' | '
   return 'neutral';
 }
 
+/** Display word for the raw status enum — kept in one place so the grid and the pane agree. */
+const STATUS_LABEL_KEY: Record<TicketStatus, string> = {
+  open: 'inbox.ticketStatus.open',
+  pending: 'inbox.ticketStatus.pending',
+  solved: 'inbox.ticketStatus.solved',
+  closed: 'inbox.ticketStatus.closed',
+  spam: 'inbox.ticketStatus.spam',
+};
+
+/** Display word for a named priority level — `nearestPriority().label` is English-only. */
+const PRIORITY_LABEL_KEY: Record<string, string> = {
+  Urgent: 'inbox.priority.urgent',
+  High: 'inbox.priority.high',
+  Normal: 'inbox.priority.normal',
+  Low: 'inbox.priority.low',
+};
+
+/** Display word for a grid column — `TICKET_COLUMNS[].label` is English-only. */
+const COLUMN_LABEL_KEY: Record<TicketSortKey, string> = {
+  subject: 'inbox.ticketGrid.column.subject',
+  customer: 'inbox.ticketGrid.column.customer',
+  status: 'inbox.ticketGrid.column.status',
+  priority: 'inbox.ticketGrid.column.priority',
+  assignee: 'inbox.ticketGrid.column.assignee',
+  last_message: 'inbox.ticketGrid.column.lastMessage',
+};
+
 /** The priority cell: a named level, muted when it is the unremarkable default. */
-function PriorityCell({ value }: { value: number }): ReactElement {
+function PriorityCell({ value, t }: { value: number; t: TFunction }): ReactElement {
   const level = nearestPriority(value);
+  const label = t(PRIORITY_LABEL_KEY[level.label] ?? level.label);
   if (!hasElevatedPriority(value)) {
-    return <span className="text-content-tertiary">{level.label}</span>;
+    return <span className="text-content-tertiary">{label}</span>;
   }
   const tone = level.tone === 'danger' ? 'text-danger' : 'text-warning';
-  return <span className={tone}>{level.label}</span>;
+  return <span className={tone}>{label}</span>;
 }
 
 /** A sortable column header: a button that toggles the sort, with `aria-sort`. */
@@ -52,10 +81,12 @@ function SortHeader({
   column,
   sort,
   onSort,
+  t,
 }: {
   column: TicketColumn;
   sort: TicketSort;
   onSort: (key: TicketSortKey) => void;
+  t: TFunction;
 }): ReactElement {
   const active = sort.key === column.key;
   const glyph = active ? (sort.order === 'asc' ? '▲' : '▼') : '↕';
@@ -74,7 +105,7 @@ function SortHeader({
           active ? 'text-content' : ''
         }`}
       >
-        <span>{column.label}</span>
+        <span>{t(COLUMN_LABEL_KEY[column.key])}</span>
         <span aria-hidden="true" className={active ? '' : 'text-content-tertiary'}>
           {glyph}
         </span>
@@ -98,6 +129,7 @@ export function TicketGrid({
   onOpen: (id: string) => void;
   selectedId: string | null;
 }): ReactElement {
+  const t = useTranslate();
   if (loading) {
     return <ListSkeleton rows={6} />;
   }
@@ -105,8 +137,8 @@ export function TicketGrid({
   if (tickets.length === 0) {
     return (
       <EmptyState
-        title="No tickets here"
-        description="Follow-up work created from a conversation shows up in this grid."
+        title={t('inbox.ticketGrid.empty.title')}
+        description={t('inbox.ticketGrid.empty.description')}
       />
     );
   }
@@ -116,14 +148,14 @@ export function TicketGrid({
       items={tickets}
       rowHeight={52}
       maxHeight="100%"
-      caption="Tickets"
+      caption={t('inbox.ticketGrid.caption')}
       colSpan={TICKET_COLUMNS.length}
       tableClassName="w-full text-sm"
       head={
         <thead>
           <tr className="border-b border-border">
             {TICKET_COLUMNS.map((column) => (
-              <SortHeader key={column.key} column={column} sort={sort} onSort={onSort} />
+              <SortHeader key={column.key} column={column} sort={sort} onSort={onSort} t={t} />
             ))}
           </tr>
         </thead>
@@ -150,17 +182,24 @@ export function TicketGrid({
           </td>
           <td className="px-4 py-2.5 text-content-secondary">
             <span className="block max-w-[12rem] truncate">
-              {ticket.customer_name ?? 'Visitor'}
+              {ticket.customer_name ?? t('inbox.ticketGrid.visitorFallback')}
             </span>
           </td>
           <td className="px-4 py-2.5">
-            <StatusDot tone={statusTone(ticket.status)} label={ticket.status} />
+            <StatusDot
+              tone={statusTone(ticket.status)}
+              label={t(STATUS_LABEL_KEY[ticket.status])}
+            />
           </td>
           <td className="px-4 py-2.5">
-            <PriorityCell value={ticket.priority} />
+            <PriorityCell value={ticket.priority} t={t} />
           </td>
           <td className="px-4 py-2.5 text-content-secondary">
-            {ticket.assignee_name ?? <span className="text-content-tertiary">Unassigned</span>}
+            {ticket.assignee_name ?? (
+              <span className="text-content-tertiary">
+                {t('inbox.ticketGrid.assigneeUnassigned')}
+              </span>
+            )}
           </td>
           <td className="px-4 py-2.5 text-right text-content-secondary">
             {formatDate(ticket.last_message_at) ?? '—'}

@@ -230,6 +230,17 @@ const envSchema = z.object({
     .enum(['true', 'false'])
     .default('false')
     .transform((v) => v === 'true'),
+  /**
+   * Attempts a webhook delivery gets in total — the three inside the triggering
+   * request plus every scheduled redelivery after them (M-SCHED-e).
+   *
+   * Eight covers roughly four hours of the backoff curve
+   * (`webhook-dispatcher.ts`), which is long enough to ride out a receiver's
+   * deploy or a brief outage and short enough that a permanently dead endpoint
+   * is declared dead the same day. Lowering it takes effect on rows already
+   * queued: the sweep will not retry past a cap the deployment has withdrawn.
+   */
+  WEBHOOK_MAX_ATTEMPTS: z.coerce.number().int().min(1).default(8),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 

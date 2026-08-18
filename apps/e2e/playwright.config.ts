@@ -62,7 +62,21 @@ export default defineConfig({
       // full-suite run past even a raised local limit. Give the test server
       // ample headroom so a 429 never masquerades as a product failure — the
       // limiter itself is covered by the integration suite, not here.
-      env: { ...process.env, RATE_LIMIT_ANON_PER_MIN: '2000' },
+      //
+      // And no background sweeps. Every test in this suite asserts against one
+      // shared, seeded workspace, so a sweep is a second writer nobody in the
+      // test declared: the SLA pass marks *every* overdue thread the moment a
+      // target is saved — not only the conversation the test just created — and
+      // the idle-chat pass would close conversations a test is still holding
+      // open. Measured: with the sweeps on (their default outside tests), the
+      // 11.5-d SLA test read 3 breaches where it created 1, because the sweep
+      // had also marked two threads left behind by earlier files. That is
+      // correct product behaviour and a broken fixture at the same time.
+      // The scheduler is proven where it can be proven deterministically —
+      // `apps/api/test/integration/scheduler-e2e.test.ts` boots real servers on
+      // 200 ms intervals against its own isolated database and asserts each
+      // sweep's actual effect.
+      env: { ...process.env, RATE_LIMIT_ANON_PER_MIN: '2000', SCHEDULER_ENABLED: 'false' },
     },
     {
       command: 'pnpm --filter @nexa/rtm dev',

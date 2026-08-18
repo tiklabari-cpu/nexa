@@ -83,10 +83,15 @@ const TICK_MS = '200';
 const NEVER_MS = '600000';
 
 /**
- * The four sweeps that run unconditionally. Retention is the fifth and is
+ * The sweeps that run unconditionally. Retention is the one that is
  * deliberately not among them: it only runs when a deployment opts in.
+ *
+ * `webhook_redelivery` is here despite being the one job that talks to the
+ * outside world — with nothing queued there is nothing for it to send, so what
+ * a tick proves is that it is scheduled and resolves, not that it can post.
+ * The delivering is `webhook-redelivery.test.ts`'s.
  */
-const UNCONDITIONAL = ['chat_timeout', 'sla', 'siem', 'scheduled_reports'];
+const UNCONDITIONAL = ['chat_timeout', 'sla', 'siem', 'scheduled_reports', 'webhook_redelivery'];
 
 /**
  * Jitter off wherever a status is asserted.
@@ -337,6 +342,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_SIEM_MS: TICK_MS,
         SCHEDULE_SCHEDULED_REPORTS_MS: TICK_MS,
         SCHEDULE_RETENTION_MS: TICK_MS,
+        SCHEDULE_WEBHOOK_REDELIVERY_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -447,7 +453,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     expect(await owner.auditLogEntry.count({ where: { action: 'data.retention_pruned' } })).toBe(0);
   });
 
-  it("says so on /health — enabled, five jobs, and what each one's last pass did", () => {
+  it("says so on /health — enabled, six jobs, and what each one's last pass did", () => {
     expect(health.scheduler.enabled).toBe(true);
     expect(health.scheduler.jobs.map((job) => job.name)).toEqual([
       'chat_timeout',
@@ -455,6 +461,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'siem',
       'scheduled_reports',
       'retention',
+      'webhook_redelivery',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -506,6 +513,7 @@ describe('two API instances sharing one Redis', () => {
       SCHEDULE_SLA_MS: '1500',
       SCHEDULE_SIEM_MS: '1500',
       SCHEDULE_SCHEDULED_REPORTS_MS: '1500',
+      SCHEDULE_WEBHOOK_REDELIVERY_MS: '1500',
     };
     // Booted together so the gap between the two `scheduler.start()` calls is
     // as small as two concurrent boots allow — it has to be under the lock's
@@ -599,6 +607,7 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_SLA_MS: NEVER_MS,
       SCHEDULE_SIEM_MS: NEVER_MS,
       SCHEDULE_SCHEDULED_REPORTS_MS: NEVER_MS,
+      SCHEDULE_WEBHOOK_REDELIVERY_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 

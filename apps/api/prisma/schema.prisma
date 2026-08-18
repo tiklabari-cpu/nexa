@@ -1535,28 +1535,63 @@ model Webhook {
   @@map("webhooks")
 }
 
-/// One outbound delivery attempt (FR-MOD-08.8.4 · NFR-M5).
+/// One outbound delivery attempt (FR-MOD-08.8.4 · NFR-M5; redelivery M-SCHED-e).
 ///
-/// Every attempt — first try and each of the three retries — writes a row, so
-/// the trail of what was sent and how it fared is complete and auditable.
-/// `permanent` marks the row that exhausted the retries, the single flag that
-/// distinguishes "gave up" from "still trying"/"succeeded".
+/// Every attempt — the first try, each in-request retry and each scheduled
+/// redelivery — writes a row, so the trail of what was sent and how it fared is
+/// complete and auditable. Two kinds of column live here and they behave
+/// differently:
+///
+///   * **History** (`attempt`, `ok`, `status_code`, `error`, `created_at`) is
+///     written once and never changed. It records one send.
+///   * **Queue state** (`state`, `next_attempt_at`, `payload`) is mutable, and
+///     is only ever live on the newest row of a delivery. It is what lets a
+///     redelivery survive a restart: `pending` means "this attempt failed and
+///     another is owed at `next_attempt_at`", and the payload beside it is the
+///     exact body to re-sign and re-send.
+///
+/// `event_id` groups the attempts of one logical delivery (one domain event to
+/// one webhook). A partial unique index on `(license_id, event_id) WHERE state
+/// = 'pending'` — hand-written in the migration, since Prisma cannot express a
+/// predicate — is what guarantees an event is queued in exactly one place, and
+/// so can never be picked up and delivered twice.
+///
+/// `permanent` is now the boolean shadow of `state = 'exhausted'`, held to it
+/// by a CHECK. It used to mean "the third in-request attempt failed", which
+/// stopped meaning "gave up" the moment a scheduler began carrying the row on.
 model WebhookDelivery {
-  id         String   @id @default(uuid()) @db.Uuid
-  licenseId  BigInt   @map("license_id")
-  webhookId  String   @map("webhook_id") @db.Uuid
+  id        String @id @default(uuid()) @db.Uuid
+  licenseId BigInt @map("license_id")
+  webhookId String @map("webhook_id") @db.Uuid
+  /// Null on rows written before redelivery existed; those can never be queued.
+  eventId    String? @map("event_id") @db.Uuid
   action     String
   attempt    Int
   ok         Boolean
-  statusCode Int?     @map("status_code")
+  statusCode Int?    @map("status_code")
   error      String?
-  permanent  Boolean  @default(false)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  permanent  Boolean @default(false)
+  /// `pending` | `delivered` | `failed` | `exhausted`. The migration's CHECK
+  /// constraint is the authority on the vocabulary; there is deliberately no
+  /// default, so every writer has to say which of the four it means.
+  state      String
+  /// Live only while `state = 'pending'`: when the delivery is next owed a try
+  /// and — pushed forward by the sweep that claims it — the lease that stops a
+  /// second worker taking the same row.
+  nextAttemptAt DateTime? @map("next_attempt_at") @db.Timestamptz(6)
+  /// The exact serialized body to re-send, held only while a retry is still
+  /// owed and cleared the moment the delivery is terminal. Text rather than
+  /// jsonb because these are the bytes the signature commits to and jsonb
+  /// would reorder them; kept off terminal rows so a delivered webhook leaves
+  /// no lasting copy of a customer payload in the log.
+  payload   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
 
   @@index([licenseId, webhookId, createdAt])
+  @@index([licenseId, state, nextAttemptAt])
   @@map("webhook_deliveries")
 }
 

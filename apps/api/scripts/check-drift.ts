@@ -55,6 +55,14 @@ const KNOWN_UNMODELLABLE = [
     reason:
       'partial expression unique index (one workspace per connected channel address) — Prisma cannot express a JSON expression index or a WHERE predicate',
   },
+  {
+    // Created as `ON webhook_deliveries(license_id, event_id) WHERE state = 'pending'`
+    // in 20260818100000_webhook_redelivery.
+    pattern:
+      /CREATE UNIQUE INDEX "webhook_deliveries_one_pending_per_event" ON "public"\."webhook_deliveries"/,
+    reason:
+      'partial unique index (one queued redelivery per event) — Prisma cannot express a WHERE predicate',
+  },
 ];
 
 async function main(): Promise<void> {

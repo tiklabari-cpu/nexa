@@ -6155,7 +6155,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T04:28:36.270Z",
+        "updatedAt": "2026-08-18T04:30:10.309Z",
         "subtasks": [
           {
             "id": 1,
@@ -6215,13 +6215,13 @@
             "description": "İstek içinde biten webhook denemeleri sunucu yeniden başlasa da kalıcı yeniden teslimle tamamlanır.",
             "details": "NE YAPILACAK: `webhook_redelivery` job'u (60 s): son denemesi başarısız ve `attempts < MAX`\n(env `WEBHOOK_MAX_ATTEMPTS`, varsayılan 8) ve `next_attempt_at <= now` olan `webhook_deliveries`\nsatırlarını lisans bazında (`withTenant`) alır, aynı `WebhookDispatcher.attempt` ile dener, sonucu\nloglar, backoff `next_attempt_at` yazar; başarılı olan satır `delivered`; tükenen `exhausted` +\naudit `webhook.delivery_exhausted`. ŞEMA: `webhook_deliveries`'e `next_attempt_at`/`state` kolonu\ngerekiyorsa migration (katkısal, RLS korunur, `db:check-drift` temiz). İstek-içi ilk deneme\ndavranışı KORUNUR (hızlı yol); yalnız istek-içi denemeler tükenince satır zamanlayıcıya kalır.\nİdempotency: aynı olayın aynı webhook'a ikinci başarılı teslimi OLMAZ (`state` kontrolü + kilit).\nNEDEN: `webhook-dispatcher.ts:117-135` istek içi retry; süreç ölürse teslim kaybolur; NFR-S7/08.8.4\n\"retry\" iddiası kalıcı değil (§D113/K1).\nDOSYALAR: `services/webhooks/{webhook-dispatcher.ts, redelivery.ts(+test)}` · `services/scheduler/\njobs.ts` · `prisma/migrations/<ts>_webhook_redelivery` (gerekirse) · `schema.prisma` · `@nexa/types`\naudit action · `test/integration/webhook-redelivery.test.ts`.\nREFERANS: `webhook-dispatcher.ts` (HMAC + SSRF korumaları AYNEN — attempt fonksiyonu yeniden\nkullanılır, ikinci bir gönderim yolu AÇILMAZ) · C6-a2 audit action ekleme deseni.\nKK: integration: başarısız teslim → job → başarı; tükenme → exhausted + audit; cross-tenant: A'nın\nsatırı B'nin kilidiyle işlenmez; idempotency.\nKAPSAM DIŞI: UI (webhook ekranı zaten teslim durumunu gösteriyor mu bak; göstermiyorsa not düş, ekleme).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SCHED (türetilmiş — FR-MOD-08.7.3 idle auto-close · 11.5-d SLA · NFR-C8 retention · C6-d SIEM · 07.9 scheduled reports)**. Gereksinim satırı: `grep -n '| M-SCHED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SCHED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/api test` + `test:integration` (webhook-redelivery ≥ 5) exit 0; migration varsa `pnpm -w db:check-drift` temiz; typecheck/lint.\n- Ölçülebilir: idempotency testi (aynı olay iki kez teslim edilmez) yeşil.\n- PLAN: KM-SCHED'e madde; K08.8.4'e de \"kalıcı yeniden teslim\" maddesi (satır ✅ kalır).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "130.1",
               "130.2"
             ],
             "parentId": "130",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-18T04:30:10.309Z"
           }
         ]
       },
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T04:28:36.271Z",
+      "lastModified": "2026-08-18T04:30:10.310Z",
       "taskCount": 143,
       "completedCount": 128,
       "tags": [

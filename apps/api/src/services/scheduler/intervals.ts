@@ -17,8 +17,8 @@ import type { Env } from '../../config/env.js';
  * Every job this deployment schedules, in the order `/health` lists them.
  *
  * The first five are the sweeps that had no scheduler at all (§D113/K1); the
- * sixth is webhook redelivery, which today gives up when the request that
- * triggered it ends (M-SCHED-e).
+ * sixth carries a failed webhook delivery past the request that triggered it
+ * (M-SCHED-e).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',

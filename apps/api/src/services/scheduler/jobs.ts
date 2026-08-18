@@ -1,5 +1,6 @@
 /**
- * The five sweeps as scheduler jobs (M-SCHED-b · §D113/K1).
+ * The sweeps as scheduler jobs (M-SCHED-b, plus webhook redelivery M-SCHED-e ·
+ * §D113/K1).
  *
  * Each of these already existed as a `pnpm --filter @nexa/api <job>:run`
  * script wrapping a class with its own `run()` — the CLI entry point and the
@@ -30,6 +31,8 @@ import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
 import { resolveRetentionPolicy } from '../retention/policy.js';
 import { RetentionRunner } from '../retention/retention.js';
 import { SlaSweeper } from '../sla/sla-sweep.js';
+import { WebhookRedeliverer } from '../webhooks/redelivery.js';
+import { createHttpWebhookSender } from '../webhooks/webhook-dispatcher.js';
 import { jobIntervals } from './intervals.js';
 import type { JobDefinition } from './types.js';
 
@@ -54,12 +57,8 @@ export interface SchedulerJobsOptions {
 }
 
 /**
- * Every job M-SCHED-b registers, in the order `/health` lists them.
- *
- * Webhook redelivery — the scheduler's sixth name in
- * {@link import('./intervals.js').SCHEDULER_JOB_NAMES} — is M-SCHED-e's; this
- * module simply does not register it, which leaves it out of `/health` until
- * that job exists, rather than registered and permanently `disabled`.
+ * Every job the scheduler registers, in the order `/health` lists them —
+ * {@link import('./intervals.js').SCHEDULER_JOB_NAMES}, in full.
  */
 export function buildSchedulerJobs({ db, env, mailer }: SchedulerJobsOptions): JobDefinition[] {
   const intervals = jobIntervals(env);
@@ -153,6 +152,31 @@ export function buildSchedulerJobs({ db, env, mailer }: SchedulerJobsOptions): J
             visits: report.totals.visits,
             mailFiles: report.totals.mailFiles,
             auditEntries: report.totals.auditEntries,
+          },
+        };
+      },
+    },
+    {
+      name: 'webhook_redelivery',
+      intervalMs: intervals.webhook_redelivery,
+      async run(context) {
+        // The only job here that talks to the outside world, so it is the only
+        // one built with the real HTTP sender. Everything that makes a webhook
+        // safe to send — the DNS re-check, the signature — lives inside
+        // `WebhookDispatcher.attempt`, which is what the redeliverer calls.
+        const report = await new WebhookRedeliverer(db, {
+          sender: createHttpWebhookSender(),
+          auditChainSecret: env.AUDIT_CHAIN_SECRET,
+          maxAttempts: env.WEBHOOK_MAX_ATTEMPTS,
+        }).run({ signal: context.signal });
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            attempted: report.totals.attempted,
+            delivered: report.totals.delivered,
+            requeued: report.totals.requeued,
+            exhausted: report.totals.exhausted,
+            skipped: report.totals.skipped,
           },
         };
       },

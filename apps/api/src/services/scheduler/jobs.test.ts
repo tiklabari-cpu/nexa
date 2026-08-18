@@ -1,11 +1,11 @@
 /**
- * `buildSchedulerJobs` — wiring the five sweeps into `JobDefinition`s
- * (M-SCHED-b · §D113/K1).
+ * `buildSchedulerJobs` — wiring the sweeps into `JobDefinition`s (M-SCHED-b,
+ * plus webhook redelivery M-SCHED-e · §D113/K1).
  *
  * Each sweep's own behaviour — does an idle chat actually close, does a
  * breach actually get marked — is already proven against real fixtures in
  * `test/integration/{chat-timeout,sla,siem-sink,scheduled-reports-sweep,
- * retention}.test.ts`. This suite is only about what this module adds on top
+ * retention,webhook-redelivery}.test.ts`. This suite is only about what this module adds on top
  * of that: does every job get the interval its own `SCHEDULE_<JOB>_MS` names,
  * does `retention` alone answer to `RETENTION_ENABLED`, and does calling
  * `run()` the way the scheduler will actually resolve — against a real
@@ -21,6 +21,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { NullMailer } from '../mail/mailer.js';
 import { ownerClient, resetDatabase, testEnv } from '../../../test/helpers/fixtures.js';
 import { silentLogger } from '../../../test/helpers/scheduler.js';
+import { SCHEDULER_JOB_NAMES } from './intervals.js';
 import { buildSchedulerJobs } from './jobs.js';
 
 describe('buildSchedulerJobs', () => {
@@ -40,7 +41,7 @@ describe('buildSchedulerJobs', () => {
     await db.$disconnect();
   });
 
-  it('registers the five sweeps that had no scheduler — not webhook redelivery, which is M-SCHED-e', () => {
+  it('registers every job in SCHEDULER_JOB_NAMES, and nothing else', () => {
     const jobs = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() });
     // Also the order `/health` lists them in: registration order.
     expect(jobs.map((job) => job.name)).toEqual([
@@ -49,7 +50,11 @@ describe('buildSchedulerJobs', () => {
       'siem',
       'scheduled_reports',
       'retention',
+      'webhook_redelivery',
     ]);
+    // A name declared but never registered is a job somebody forgot to wire,
+    // and `/health` would simply not mention it.
+    expect(jobs.map((job) => job.name).sort()).toEqual([...SCHEDULER_JOB_NAMES].sort());
   });
 
   it('gives each job its own SCHEDULE_<JOB>_MS interval', () => {
@@ -59,6 +64,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_SIEM_MS: '33000',
       SCHEDULE_SCHEDULED_REPORTS_MS: '44000',
       SCHEDULE_RETENTION_MS: '55000',
+      SCHEDULE_WEBHOOK_REDELIVERY_MS: '66000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -69,9 +75,10 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('siem')).toBe(33_000);
     expect(intervalOf('scheduled_reports')).toBe(44_000);
     expect(intervalOf('retention')).toBe(55_000);
+    expect(intervalOf('webhook_redelivery')).toBe(66_000);
   });
 
-  it('registers retention disabled unless RETENTION_ENABLED is set — the other four are never gated', () => {
+  it('registers retention disabled unless RETENTION_ENABLED is set — no other job is gated', () => {
     const off = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() });
     expect(off.find((job) => job.name === 'retention')?.enabled).toBe(false);
     for (const job of off) {
@@ -138,6 +145,24 @@ describe('buildSchedulerJobs', () => {
         visits: 0,
         mailFiles: 0,
         auditEntries: 0,
+      });
+    });
+
+    it('webhook_redelivery finds nothing owed and reports zero tenants', async () => {
+      // Built with the real HTTP sender — which is exactly why an empty
+      // database matters here: with nothing queued there is no send to make,
+      // so the job resolves without ever touching the network.
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'webhook_redelivery',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({
+        tenants: 0,
+        attempted: 0,
+        delivered: 0,
+        requeued: 0,
+        exhausted: 0,
+        skipped: 0,
       });
     });
   });

@@ -77,6 +77,12 @@ describe('AUDIT_ACTIONS', () => {
     expect(AUDIT_ACTIONS).toContain('webhook.deleted');
   });
 
+  it('records giving up on an outbound delivery', () => {
+    // Not a "change" to the webhook, but the one fact about it a workspace
+    // cannot otherwise discover: deliveries silently stopped arriving.
+    expect(AUDIT_ACTIONS).toContain('webhook.delivery_exhausted');
+  });
+
   it('records the targeted-delete action NFR-S12 names by hand', () => {
     // "veri silme" is one of the four events the requirement enumerates.
     expect(AUDIT_ACTIONS).toContain('data.deleted');

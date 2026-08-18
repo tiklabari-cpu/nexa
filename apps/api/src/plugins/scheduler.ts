@@ -1,5 +1,6 @@
 /**
- * Wires the five sweeps into a running server (M-SCHED-b · §D113/K1).
+ * Wires the background sweeps into a running server (M-SCHED-b, and webhook
+ * redelivery M-SCHED-e · §D113/K1).
  *
  * `Scheduler.start()` is itself the on/off switch — it reads `enabled` and,
  * off, only logs (`scheduler.ts`) — so this plugin registers unconditionally

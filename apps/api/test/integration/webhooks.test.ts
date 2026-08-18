@@ -8,9 +8,10 @@
  *   - The signing secret is returned exactly once and never re-exposed by list.
  *   - Isolation: another tenant cannot see, list or delete a webhook, and cannot
  *     read its delivery log.
- *   - Delivery signs every attempt (HMAC-SHA256), retries up to three times, and
- *     writes one delivery-log row per attempt — the last of a failed run flagged
- *     `permanent`.
+ *   - Delivery signs every attempt (HMAC-SHA256), retries up to three times
+ *     inside the request, and writes one delivery-log row per attempt — the
+ *     last of a failed burst left `pending` for the scheduled sweep to carry on
+ *     (M-SCHED-e; the sweep itself is `webhook-redelivery.test.ts`).
  *
  * Negative cases lead: refusing a forged, cross-tenant or SSRF request is the
  * point of the feature, so those assertions come before the happy path.
@@ -348,7 +349,7 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
         dispatcher(script.sender).deliver(tx, contextA(), webhook, { chat_id: 'TJ1H8CFKRV' }),
       );
 
-      expect(outcome).toEqual({ webhookId: webhook.id, delivered: true, attempts: 3 });
+      expect(outcome).toMatchObject({ webhookId: webhook.id, delivered: true, attempts: 3 });
       expect(script.calls()).toBe(3);
 
       const rows = await deliveriesFor(webhook.id);
@@ -356,6 +357,12 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
       expect(rows.map((r) => r.ok)).toEqual([false, false, true]);
       // A recovered delivery is never flagged permanent.
       expect(rows.every((r) => r.permanent === false)).toBe(true);
+      // Nothing is owed: the delivery ended here, so the sweep will never see
+      // it and no copy of the payload is left behind.
+      expect(rows.map((r) => r.state)).toEqual(['failed', 'failed', 'delivered']);
+      expect(rows.every((r) => r.nextAttemptAt === null && r.payload === null)).toBe(true);
+      // All three attempts are one delivery.
+      expect(new Set(rows.map((r) => r.eventId)).size).toBe(1);
 
       // The last attempt was genuinely signed: its headers verify.
       const req = script.lastRequest()!;
@@ -368,7 +375,7 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
       expect(result).toEqual({ ok: true });
     });
 
-    it('gives up after three failures and marks the last attempt permanent', async () => {
+    it('stops trying inside the request after three failures and queues the last attempt', async () => {
       const webhook = await registerDeliverable();
       const script = scriptedSender(Number.POSITIVE_INFINITY);
 
@@ -376,14 +383,27 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
         dispatcher(script.sender).deliver(tx, contextA(), webhook, { chat_id: 'X' }),
       );
 
-      expect(outcome).toEqual({ webhookId: webhook.id, delivered: false, attempts: 3 });
+      expect(outcome).toMatchObject({ webhookId: webhook.id, delivered: false, attempts: 3 });
       expect(script.calls()).toBe(3);
 
       const rows = await deliveriesFor(webhook.id);
       expect(rows.map((r) => r.ok)).toEqual([false, false, false]);
-      // Exactly one row — the last — carries the "gave up" flag.
-      expect(rows.map((r) => r.permanent)).toEqual([false, false, true]);
       expect(rows.every((r) => r.statusCode === 500)).toBe(true);
+      // The burst is over but the delivery is not: nothing here is "permanent",
+      // because the scheduler still owes this event five more attempts
+      // (M-SCHED-e). Before that job existed, the third row was flagged
+      // permanent and the delivery simply ended.
+      expect(rows.map((r) => r.permanent)).toEqual([false, false, false]);
+      expect(rows.map((r) => r.state)).toEqual(['failed', 'failed', 'pending']);
+
+      // Exactly one queued row, and it carries what a retry needs.
+      const queued = rows.filter((r) => r.state === 'pending');
+      expect(queued).toHaveLength(1);
+      expect(queued[0]?.nextAttemptAt).toBeInstanceOf(Date);
+      expect(JSON.parse(queued[0]?.payload ?? 'null')).toEqual({
+        action: 'chat_started',
+        data: { chat_id: 'X' },
+      });
     });
 
     it('dispatches to every enabled webhook subscribed to the action', async () => {

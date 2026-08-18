@@ -175,6 +175,14 @@ export const AUDIT_ACTIONS = [
   // secret the register response carries once.
   'webhook.created',
   'webhook.deleted',
+  // A delivery was given up on (M-SCHED-e) — every attempt used up, or the
+  // webhook switched off while one was still queued. Recorded because the
+  // failure mode it names is silent by nature: an integration that stopped
+  // receiving looks exactly like one with nothing to receive, and without this
+  // the workspace finds out when somebody notices the far end is missing data.
+  // The delivery *payload* is deliberately not in the entry — the trail is
+  // append-only and outlives every retention window that governs the content.
+  'webhook.delivery_exhausted',
   // Scheduled report exports (PRD §5.3-Reports) — the unaudited twin of
   // webhook.*: recurring, unattended egress of report data, just mailed
   // instead of posted. The recipient addresses are the one thing withheld —

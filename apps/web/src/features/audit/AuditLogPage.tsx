@@ -103,7 +103,10 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
   },
   { label: 'Sales tracking', actions: ['sale.tracked'] },
   { label: 'Billing', actions: ['billing.subscription_updated', 'billing.payment_method_updated'] },
-  { label: 'Webhooks', actions: ['webhook.created', 'webhook.deleted'] },
+  {
+    label: 'Webhooks',
+    actions: ['webhook.created', 'webhook.deleted', 'webhook.delivery_exhausted'],
+  },
   {
     label: 'Tickets',
     actions: [

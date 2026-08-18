@@ -1,10 +1,10 @@
 /**
- * `GET /health`'s `scheduler` block (M-SCHED-b · §D113/K1).
+ * `GET /health`'s `scheduler` block (M-SCHED-b, sixth job M-SCHED-e · §D113/K1).
  *
  * The dependency probes (`database`, `redis`) already existed and are
  * unchanged by this slice. What is new is the one thing `/health` used to be
- * unable to say: whether the five background sweeps are actually ticking in
- * this process, or registered and silent — the exact ambiguity that let a
+ * unable to say: whether the background sweeps are actually ticking in this
+ * process, or registered and silent — the exact ambiguity that let a
  * `make dev` with no scheduler at all look identical to one that simply had
  * nothing to sweep.
  *
@@ -29,14 +29,13 @@ interface HealthBody {
 }
 
 describe('GET /health — scheduler', () => {
-  it('lists the five sweeps that had no scheduler, disabled by default under test', async () => {
+  it('lists every registered job, disabled by default under test', async () => {
     const server = await startTestServer();
     try {
       const response = await server.get('/health');
       expect(response.statusCode).toBe(200);
       const body = response.json() as HealthBody;
 
-      // Not `webhook_redelivery` (M-SCHED-e) — that job is not registered yet.
       expect(body.scheduler.enabled).toBe(false);
       expect(body.scheduler.jobs.map((job) => job.name)).toEqual([
         'chat_timeout',
@@ -44,6 +43,7 @@ describe('GET /health — scheduler', () => {
         'siem',
         'scheduled_reports',
         'retention',
+        'webhook_redelivery',
       ]);
       // Registered but never ticked — `SCHEDULER_ENABLED` defaults to off
       // under `NODE_ENV=test` (env.ts), same as every other suite's server.
@@ -55,14 +55,20 @@ describe('GET /health — scheduler', () => {
     }
   });
 
-  it('marks retention disabled from registration — the other four are not gated', async () => {
+  it('marks retention disabled from registration — no other job is gated', async () => {
     const server = await startTestServer();
     try {
       const body = (await server.get('/health')).json() as HealthBody;
       const byName = Object.fromEntries(body.scheduler.jobs.map((job) => [job.name, job]));
 
       expect(byName['retention']).toMatchObject({ enabled: false, last_status: 'disabled' });
-      for (const name of ['chat_timeout', 'sla', 'siem', 'scheduled_reports']) {
+      for (const name of [
+        'chat_timeout',
+        'sla',
+        'siem',
+        'scheduled_reports',
+        'webhook_redelivery',
+      ]) {
         expect(byName[name]).toMatchObject({ enabled: true, last_status: null });
       }
     } finally {

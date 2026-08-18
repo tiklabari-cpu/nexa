@@ -188,25 +188,28 @@ gitignored; no secret is ever committed.
 
 ## Background jobs
 
-`apps/api` runs five sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
+`apps/api` runs six sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
 default: on outside tests). A Redis lock (`SET NX`, one key per job) keeps two running
 instances from double-running the same pass; `GET /health` reports each job's interval,
 enabled flag, and last run's time/status.
 
-| Job                 | Default interval | What it does                                         |
-| ------------------- | ---------------- | ---------------------------------------------------- |
-| `chat_timeout`      | 60 s             | Closes idle chats (FR-MOD-08.7.3)                    |
-| `sla`               | 60 s             | Marks first-response SLA breaches (11.5-d)           |
-| `siem`              | 5 min            | Exports the SIEM audit sink (NFR-C6 · C6-d)          |
-| `scheduled_reports` | 60 s             | Delivers due scheduled reports (07.9)                |
-| `retention`         | 1 h              | Hard-deletes data past its retention window (NFR-C8) |
+| Job                  | Default interval | What it does                                         |
+| -------------------- | ---------------- | ---------------------------------------------------- |
+| `chat_timeout`       | 60 s             | Closes idle chats (FR-MOD-08.7.3)                    |
+| `sla`                | 60 s             | Marks first-response SLA breaches (11.5-d)           |
+| `siem`               | 5 min            | Exports the SIEM audit sink (NFR-C6 · C6-d)          |
+| `scheduled_reports`  | 60 s             | Delivers due scheduled reports (07.9)                |
+| `retention`          | 1 h              | Hard-deletes data past its retention window (NFR-C8) |
+| `webhook_redelivery` | 60 s             | Retries failed outbound webhooks (08.8.4 · NFR-S7)   |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
 `.env.example` for every key. To turn a background sweep off entirely and drive it from
 outside the app instead (a host cron, a managed job runner), set `SCHEDULER_ENABLED=false`;
-each job also keeps its own `pnpm --filter @nexa/api <job>:run` CLI script, which is what
-that outside trigger calls.
+the first five each keep their own `pnpm --filter @nexa/api <job>:run` CLI script, which is
+what that outside trigger calls. Webhook redelivery has no CLI equivalent — it is not a pass
+an operator would ever want to force, and a hand-run one would race the scheduled one for the
+same rows.
 
 `retention` stays off even when the scheduler is otherwise on: `RETENTION_ENABLED=false`
 by default. It is the one sweep here that deletes, and unlike the CLI's `--apply` flag — an
@@ -215,9 +218,14 @@ still lists it (`enabled: false`, never simply absent) so its being off is visib
 silent. Review the policy (`RETENTION_*_DAYS` in `.env.example`) before setting
 `RETENTION_ENABLED=true`.
 
-Webhook redelivery has its interval reserved (`SCHEDULE_WEBHOOK_REDELIVERY_MS`) but is not
-registered yet — it lands with the job that persists failed `webhook_deliveries` rows for
-it to retry.
+`webhook_redelivery` is the one sweep that talks to the outside world. An outbound webhook is
+tried three times inside the request that fired it; if all three fail the delivery stays
+queued in `webhook_deliveries` with the body to re-send, and this job carries it on a widening
+backoff (4 min, 8, 16 …) up to `WEBHOOK_MAX_ATTEMPTS` attempts in total (default 8, about four
+hours). Giving up writes a `webhook.delivery_exhausted` audit entry, so an integration that
+quietly stopped receiving is discoverable rather than silent. An event is queued in exactly one
+place — a partial unique index, not a convention — so no restart, no second instance and no
+overlapping tick delivers the same event twice.
 
 ---
 

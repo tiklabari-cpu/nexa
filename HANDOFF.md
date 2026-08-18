@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 132.1 — M-CI-a: CI drift kapısı + bayat `if` kaldır + mobil jest ayrı job — done — 2026-08-18 UTC
+
+- **Yapıldı:** `.github/workflows/ci.yml` — `verify` job'una `db:migrate` sonrası `pnpm -w db:check-drift` adımı; `ci.yml:120`'nin bayat `if: hashFiles('apps/e2e/package.json')` koşulu kaldırıldı (e2e her zaman koşuyor, `needs: verify` aynen kaldı); mobil jest kendi `mobile` job'una taşındı (install → `pnpm --filter @nexa/mobile test` → `pnpm --filter @nexa/mobile build`); `verify`'ın unit adımı `turbo run test:unit --filter=!@nexa/mobile` oldu. Ürün kodu dokunulmadı, yalnız CI config.
+- **Doğrulama (hepsi exit 0, lokal):** `pnpm -w db:check-drift` · `pnpm -w format:check` · `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w build` 8/8 · `turbo run test --force --filter=!@nexa/e2e --filter=!@nexa/api` 9/9 (rtm 104 dahil) · api `test:unit` 64 dosya/995 · api `test:integration` 95 dosya/2417 üç shard'da (283 s/220 s/145 s) — hepsi taban ile birebir aynı sayı. `pnpm -w test:e2e` KOŞULMADI: bu tur hiçbir rota/ekran/kontrat/migration değiştirmedi, yalnız CI workflow dosyası (130.4/131.1'in aynı gerekçesi). GitHub Actions doğrulaması push sonrası (`act` yerelde yok).
+- **Varsayımlar:** PLAN §7.2 + Faz-4 düz tablo `M-CI` satırı `⬜ → ◐ → KM-CI` oldu, `✅` OLMADI — M-CI beş alt-görevden (132.1-132.5) yalnız birini kapatıyor; M-DOCS-a/b, M-HYGIENE-a, M4-a hâlâ pending.
+- **Sonraki pencereye not:** (1) tm 132.2 (M-DOCS-a) README'yi güncelleyecek. (2) tm 132.3 (M-DOCS-b) CONVENTIONS §1 DoD listesine format:check/codegen diff/db:check-drift ekleyecek — bu görev CI tarafını zaten kapattı. (3) Actions'ta `verify`/`mobile`/`e2e` üç job'un yeşil olduğunu bir sonraki push'ta doğrula (bu pencere yalnız yerel kapıyı koştu).
+
 ## 131.3 — M-ENV-b: RTM `/health` Postgres probu + api `/health` sağlayıcı özeti — M-ENV KAPANDI — done — 2026-08-18 UTC
 
 - **Yapıldı:** (1) `apps/rtm/src/server.ts`'in `health()`'i artık `db.$queryRaw\`SELECT 1\`` da yokluyor (api `routes/health.ts`'in `probe` deseniyle birebir: 2 s zaman aşımı, hata sınıfı sızar mesajı değil); PG veya Redis'ten biri `down` ise gövde `degraded` ve mevcut `res.writeHead` zaten bunu 503'e çeviriyordu. (2) api `/api/v1/health` gövdesine `providers: {mail,push,storage,payment,siem,llm,virus_scanner}` — doğrudan `options.env`'den okunuyor, ayrı bir snapshot yok (131.2'nin fabrikaları zaten `env.<X>_PROVIDER`'dan seçiyor). (3) Sözleşme: `Health` şemasına katkısal `providers` + yeni `HealthProviders`; `contract:generate` diff'i yalnız `generated/api.ts`.

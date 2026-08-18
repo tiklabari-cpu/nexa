@@ -93,6 +93,9 @@ jobs:
       - name: Apply migrations
         run: pnpm --filter @nexa/api db:migrate
 
+      - name: Check for schema drift
+        run: pnpm db:check-drift
+
       - name: Typecheck
         run: pnpm typecheck
 
@@ -103,7 +106,7 @@ jobs:
         run: pnpm format:check
 
       - name: Unit tests
-        run: pnpm test:unit
+        run: turbo run test:unit --filter=!@nexa/mobile
 
       - name: Integration tests
         run: pnpm test:integration
@@ -111,13 +114,37 @@ jobs:
       - name: Build
         run: pnpm build
 
+  mobile:
+    name: Mobile (Jest)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Test
+        run: pnpm --filter @nexa/mobile test
+
+      - name: Build (expo export)
+        run: pnpm --filter @nexa/mobile build
+
   e2e:
     name: End-to-end
     runs-on: ubuntu-latest
     timeout-minutes: 25
     needs: verify
-    # The e2e workspace lands with slice 4; skip cleanly until then.
-    if: ${{ hashFiles('apps/e2e/package.json') != '' }}
 
     services:
       postgres:

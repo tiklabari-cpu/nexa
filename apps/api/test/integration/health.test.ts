@@ -13,6 +13,7 @@
  * the same reason `contract-parity.test.ts` and `scheduler-lock.test.ts` boot
  * real servers rather than stubbing around them.
  */
+import { Redis } from 'ioredis';
 import { describe, expect, it } from 'vitest';
 import { startTestServer } from '../helpers/server.js';
 
@@ -118,6 +119,78 @@ describe('GET /health — scheduler', () => {
       // Stops the now-running scheduler (`onClose`) before the process moves
       // on — the same reason `scheduler.test.ts` never lets a started one
       // outlive its test.
+      await server.close();
+    }
+  });
+});
+
+describe('GET /health — body shape (M4-a · §D113/K4-K6)', () => {
+  it('reports status, version, region, uptime and both dependencies when everything is up', async () => {
+    const server = await startTestServer();
+    try {
+      const response = await server.get('/health');
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as {
+        status: string;
+        service: string;
+        version: string;
+        region: string;
+        uptime_s: number;
+        dependencies: {
+          database: { status: string; latency_ms: number };
+          redis: { status: string; latency_ms: number };
+        };
+      };
+
+      expect(body.status).toBe('ok');
+      expect(body.service).toBe('api');
+      expect(typeof body.version).toBe('string');
+      expect(typeof body.region).toBe('string');
+      expect(body.uptime_s).toBeGreaterThanOrEqual(0);
+      expect(body.dependencies.database).toMatchObject({ status: 'up' });
+      expect(body.dependencies.redis).toMatchObject({ status: 'up' });
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('GET /health — degraded when a dependency is down (M4-a · §D113/K4-K6)', () => {
+  it('returns 503 with dependencies.redis down, without touching the shared test Redis', async () => {
+    const server = await startTestServer();
+    try {
+      // A dedicated, deliberately unreachable client swapped onto *this*
+      // server instance — not the connection `with-test-datastores` handed
+      // the whole run, which every other suite sharing the process still
+      // needs. `redisPlugin`'s own `await redis.ping()` at boot means a bad
+      // `REDIS_URL` fails server startup outright (by design — see
+      // `plugins/redis.ts`), so the only way to observe the probe's 503 path
+      // is to break the connection after boot, not before it.
+      const broken = new Redis('redis://127.0.0.1:1/0', {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        retryStrategy: () => null,
+      });
+      broken.on('error', () => {
+        // ioredis emits on every failed attempt; a bare listener just stops
+        // that from crashing the process, same as `redisPlugin` does.
+      });
+      server.app.redis = broken;
+
+      try {
+        const response = await server.get('/health');
+        expect(response.statusCode).toBe(503);
+        const body = response.json() as {
+          status: string;
+          dependencies: { database: { status: string }; redis: { status: string } };
+        };
+        expect(body.status).toBe('degraded');
+        expect(body.dependencies.redis.status).toBe('down');
+        expect(body.dependencies.database.status).toBe('up');
+      } finally {
+        broken.disconnect();
+      }
+    } finally {
       await server.close();
     }
   });

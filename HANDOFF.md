@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 132.5 — M4-a: playbook/health integration testleri — M-CI KAPANDI — done — 2026-08-18 UTC
+
+- **Yapıldı:** Yeni `apps/api/test/integration/playbook.test.ts` (26 test): skill CRUD (`POST/GET/PATCH/DELETE /skills`, `/skills/:id`) + `POST /skills/compile` + `POST /skills/preview` + `GET /skills/:id/runs` (yeni zarf + eski düz-dizi log biçimi) — hepsinde scope reddi (403) ve cross-tenant 404. `GET/PATCH /ai-agents` ve `/knowledge-sources*` bilerek tekrarlanmadı — sırasıyla `ai-agent-profile.test.ts` ve `knowledge-bulk*.test.ts`/`knowledge-crawl.test.ts`/`audit-log.test.ts` zaten kapsıyor (dosya başlığında atıf var). `test/integration/health.test.ts`'e 2 test eklendi: 200 gövdesi tam şekil + Redis düşükken 503 `degraded` (paylaşılan test Redis'ine dokunmadan — `server.app.redis`'i bozuk URL'li ikinci bir istemciyle değiştirdi, çünkü `redisPlugin`'in boot-zamanı `ping()`'i bozuk `REDIS_URL`'i sunucu açılışında reddediyor).
+- **Doğrulama:** hepsi exit 0 — `format:check` · `typecheck` 12/12 · `lint` 9/9 · `build` 8/8 · `turbo test --force --filter=!@nexa/e2e --filter=!@nexa/api` 9/9 · api `test:unit` 64/995 · api `test:integration` 96 dosya/2445 üç shard'da (taban 95/2417 → +1 dosya +28 test, aritmetik tutuyor). `test:e2e` KOŞULMADI — yalnız test dosyası, rota/kontrat/migration değişmedi (132.1-132.4'ün aynı gerekçesi).
+- **Varsayımlar:** Copilot'un çapa skill'inin `kind`'i ilk taslakta `routes/playbook.ts` yorumundaki `'copilot'` sanıldı; DB kısıtı (`skills_kind_check`) yalnız `ai_agent`/`workspace` kabul ediyor, gerçek değer `copilot-service.ts`'in `COPILOT_SKILL_KIND` sabitinden (`'workspace'`) doğrulandı.
+- **Sonraki pencereye not:** M-CI (tm 132, 5/5 alt-görev) KAPANDI — PLAN §6A düz tablo + §7.2 satırı + KM-CI bloğu güncellendi. Faz-4'te sırada tm 133 (I18N1/2).
+
 ## 132.4 — M-HYGIENE-a: `.playwright-mcp/` temizliği + `.audit-tm126/` → `scripts/audit/` + `pnpm audit:*` — done — 2026-08-18 UTC
 
 - **Yapıldı:** `.playwright-mcp/` 14 MCP sayfa dökümü `git rm -r` ile depodan çıktı + `.gitignore`'a `.playwright-mcp/` eklendi. `.audit-tm126/{sweep,silent-debt,dead-code,schema-consumers,endpoint-ui}.cjs` + `README.md` `git mv` ile `scripts/audit/`'e taşındı. İki tm-126'ya özel varsayım genelleştirildi: `silent-debt.cjs`'in kendi-hariç-tutma yolu (`.audit-tm126/` → `scripts/audit/`) ve `sweep.cjs`'nin PRD §6 aralığını okuduğu sabit satır indeksi (`slice(463,733)`) → `## 6.`/`## 7.` başlıklarını dinamik bulan `findIndex`. Kök `package.json`'a 5 komut: `audit:sweep` · `audit:silent-debt` · `audit:dead-code` · `audit:schema-consumers` · `audit:endpoint-ui`.

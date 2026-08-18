@@ -6155,7 +6155,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T04:05:45.988Z",
+        "updatedAt": "2026-08-18T04:28:36.270Z",
         "subtasks": [
           {
             "id": 1,
@@ -6201,13 +6201,13 @@
             "description": "Zamanlayıcının belgeleri ve env örnekleri; M-SCHED satırı kapanır.",
             "details": "NE YAPILACAK: `.env.example`'a `SCHEDULER_ENABLED`, `SCHEDULE_*_MS`, `SCHEDULE_JITTER_PCT`,\n`RETENTION_ENABLED` (yorumlu, varsayılanlarla) — 130.1/130.2 eklediyse doğrula, eksik olanı tamamla;\nkök `README.md`'ye \"Background jobs\" bölümü (hangi iş, hangi aralık, nasıl kapatılır, host cron\nalternatifi = CLI script'leri, retention'ın kapalı varsayılanı ve NEDEN); `apps/api` runner\ndosyalarındaki \"zamanlayıcı yok\" notları güncellenir (silinmez — \"artık scheduler'dan da çağrılır\");\nPLAN §7.2 `M-SCHED` satırı `✅ → KM-SCHED`; K bloğuna özet madde.\nNEDEN: §D113/K1 + §F.1/8 doküman tazeliği.\nDOSYALAR: `.env.example` · `README.md` · 5 runner dosyası başlığı · PLAN.md · HANDOFF.md.\nKK: README bölümü var; `.env.example`'daki her scheduler anahtarı `env.ts`'te okunuyor (tm 131.1'in\nnöbetçisi varsa yeşil).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SCHED (türetilmiş — FR-MOD-08.7.3 idle auto-close · 11.5-d SLA · NFR-C8 retention · C6-d SIEM · 07.9 scheduled reports)**. Gereksinim satırı: `grep -n '| M-SCHED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SCHED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w format:check` exit 0 (README/.env.example) · `pnpm -w typecheck`.\n- Ölçülebilir: `grep -c \"SCHEDULE_\" .env.example` ≥ 6; README'de \"Background jobs\" başlığı.\n- PLAN §7.2 `M-SCHED` → `✅ → KM-SCHED`.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "130.2",
               "130.3"
             ],
             "parentId": "130",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-18T04:28:36.270Z"
           },
           {
             "id": 5,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T04:05:45.989Z",
+      "lastModified": "2026-08-18T04:28:36.271Z",
       "taskCount": 143,
       "completedCount": 128,
       "tags": [

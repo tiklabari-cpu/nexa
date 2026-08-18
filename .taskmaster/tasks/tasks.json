@@ -6234,7 +6234,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-18T06:03:18.697Z",
+        "updatedAt": "2026-08-18T06:47:58.019Z",
         "subtasks": [
           {
             "id": 1,
@@ -6253,12 +6253,12 @@
             "description": "Doğrulanıp okunmayan *_PROVIDER anahtarları gerçekten seçici olur; eksik arayüzler açılır.",
             "details": "NE YAPILACAK: (a) `services/providers.ts` (ya da her servisin kendi `create*()` fabrikası —\n`virus-scanner.ts:58 createVirusScanner()` deseni): `createMailer(env)` → `MAIL_PROVIDER=file|null`\n(mock adı 'file' — mevcut `FileMailer`; test'te 'null'), `createPushProvider(env)` → `PUSH_PROVIDER=file|null`\n(YENİ anahtar; env.ts + .env.example + turbo), `createObjectStore(env)` → `STORAGE_PROVIDER=local`\n(arayüz `ObjectStore`: put/get/signedUrl/delete — `LocalStore` onu uygular; üç `new LocalStore`\nçağrı yeri fabrikaya döner), `createPaymentProvider(env)` → `STRIPE_PROVIDER=mock` (YENİ arayüz\n`PaymentProvider`: mevcut mock davranış — `payment-method-service.ts` + faturalama çağrıları —\narayüzün arkasına alınır; davranış BİREBİR aynı, testler değişmeden yeşil), `createSiemTarget(env)`\n→ `SIEM_PROVIDER=file` (arayüz `SiemTarget.deliver(batch)`; `SiemSink` dosya yazımını `FileSiemTarget`'a\ndevreder). (b) `server.ts:100-101` NODE_ENV dalı KALKAR; test ortamı `.env`/with-test-datastores\nüzerinden `null` sağlayıcıları alır — integration süitleri mail/push dosyası bekliyorsa (`MAIL_DIR`\nokuyan testler var) onlar 'file' ister: test env'de varsayılanı testlerin bugünkü beklentisine göre\nseç ve GEREKÇESİYLE yaz. (c) Bilinmeyen değer → boot'ta açık hata (zod enum).\nNEDEN: §D113/K3 — anahtarlar sahte seçici; gerçek sağlayıcı bir gün eklenecekse dikiş şimdi kurulmalı\n(MASTER-PROMPT: \"arayüz + sahte sağlayıcı\").\nDOSYALAR: `services/mail/mailer.ts` · `services/push/push-provider.ts` · `services/storage/\n{object-store.ts(yeni), local-store.ts}` · `services/billing/{payment-provider.ts(yeni), *}` ·\n`services/audit/siem-sink.ts` (+`siem-target.ts`) · `server.ts` · `routes/{uploads,chats,customer}.ts` ·\n`config/env.ts` · `.env.example` · `turbo.json` · testler.\nREFERANS: `services/upload/virus-scanner.ts:29-60` (arayüz + iki impl + env fabrikası — bu deseni\nkopyala) · `services/channels/registry.ts` (exhaustive Record).\nKK: her fabrika env ile impl seçer (unit); yanlış değer boot hatası; mevcut integration süitleri\nDEĞİŞMEDEN yeşil (davranış birebir); `grep -rn \"NODE_ENV\" apps/api/src/server.ts` provider seçimi\niçin 0.\nKAPSAM DIŞI: gerçek Stripe/S3/SMTP/APNs/Splunk impl'i (CLAUDE.md sınırı — mock kalır) · UI.\nTUZAK: `PaymentProvider` arayüzünü mevcut mock'un TÜM çağrı yüzeyinden çıkar (yeni davranış icat\netme); OPUS çünkü ödeme/sır dokunuşu ve çok dosyalı dikiş.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-ENV / M-PROV (türetilmiş — NFR-M bakım kolaylığı · MASTER-PROMPT \"dış servisler mock, arayüz + sahte sağlayıcı\")**. Gereksinim satırı: `grep -n '| M-ENV' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-ENV' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/api test` + `pnpm -w test:integration` (mevcut mail/push/billing/siem süitleri değişmeden) exit 0; typecheck/lint/build.\n- Ölçülebilir: 5 fabrika env ile seçiyor (unit); `server.ts`'te provider için NODE_ENV dalı yok; env.parity testi (131.1) yeni anahtarlarla yeşil.\n- PLAN: KM-ENV'e madde; K10.3'e \"PaymentProvider dikişi\" notu (satır ✅ kalır).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "131.1"
             ],
             "parentId": "131",
-            "updatedAt": "2026-08-18T06:03:18.697Z"
+            "updatedAt": "2026-08-18T06:47:58.019Z"
           },
           {
             "id": 3,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T06:03:18.698Z",
+      "lastModified": "2026-08-18T06:47:58.020Z",
       "taskCount": 143,
       "completedCount": 129,
       "tags": [

@@ -6025,7 +6025,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T00:44:20.978Z",
+        "updatedAt": "2026-08-18T01:31:53.526Z",
         "subtasks": [
           {
             "id": 1,
@@ -6106,12 +6106,12 @@
             "description": "ErrorBoundary + RTM token-yok yeniden deneme + ağ-yok bandı.",
             "details": "NE YAPILACAK: (a) `app/ErrorBoundary.tsx` (class component, `componentDidCatch` → log + \"Bir şeyler\nters gitti / Yeniden dene\" ekranı, `ThemeProvider` altında; `App.tsx` navigator'ı sarar; config hatası\nekranı (`ConfigErrorScreen`) ondan ÖNCE kalır); (b) `rtm/client.ts:177-180`: `getToken()` null iken\n`#open()` sessizce dönüyor ve yeniden deneme planlamıyor — yenileme uçuştayken açılan soket\nAppState değişene kadar geri gelmez; düzeltme: token yoksa mevcut backoff zamanlayıcısıyla yeniden\ndene (jitter'lı; `13.7-f`'nin reconnect testleri emsal), oturum `signed-out` olduysa denemeyi durdur;\n(c) ağ-yok bandı: `ConnectionBanner` bugün yalnız RTM durumu; REST hataları için `api/client.ts`'in\n`network` kategorisi (13.7-a) tek bir \"çevrimdışı\" sinyaline bağlanır (küçük `useSyncExternalStore`\ndeposu — copilotDraft.ts deseni; NetInfo bağımlılığı EKLENMEZ — fetch/soket hatasından türetmek yeter,\ngerekçe: yeni native modül `expo export`/Expo Go riskidir) ve tek bir band gösterir (\"Ağ yok — son\ngörülen …\"), band kalkınca liste yenilenir.\nNEDEN: hata sınırı yok (render hatası beyaz ekran) · RTM latent boşluk · çevrimdışı hâl yalnız metin (§D111).\nDOSYALAR: `app/ErrorBoundary.tsx` (+test) · `rtm/client.ts` (+`client.test.ts` +2: token yokken retry;\nsigned-out iken durur) · `lib/connectivity.ts` (+test) · `features/inbox/ConnectionBanner.tsx` (band\nkaynağı genişler) · `App.tsx`.\nREFERANS DESEN: `rtm/client.test.ts` reconnect/backoff testleri · `features/copilot/copilotDraft.ts`\n(useSyncExternalStore) · `features/inbox/ChatListScreen.tsx` \"sessiz sabah ≠ ağ yok\" ayrımı.\nKK: fırlatan bir ekran uygulamayı düşürmez, \"yeniden dene\" çalışır; token null → soket kendiliğinden\nyeniden denenir; ağ gidip gelince band görünür/kaybolur ve liste yenilenir.\nKAPSAM DIŞI: çevrimdışı önbellek/persist (veri saklamak secure-store dışı depoyu gerektirir — eslint\nkuralı bilerek kapalı, açma).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-13.7 (mobil)**. Gereksinim satırı: `grep -n '| 13\\.7 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K13.7' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Mobil süit exit 0; ErrorBoundary/connectivity/rtm testleri +≥6.\n- typecheck/lint/build exit 0.\n- Ölçülebilir: `grep -n \"componentDidCatch\" apps/mobile/src/app/ErrorBoundary.tsx` = 1; `rtm/client.ts` token-null dalı bir zamanlayıcı planlıyor (test kanıtlar).\n- PLAN: K13.7'ye madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "128.1"
             ],
             "parentId": "128",
-            "updatedAt": "2026-08-18T00:44:20.978Z"
+            "updatedAt": "2026-08-18T01:31:53.526Z"
           },
           {
             "id": 8,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T00:44:20.979Z",
+      "lastModified": "2026-08-18T01:31:53.527Z",
       "taskCount": 143,
       "completedCount": 127,
       "tags": [

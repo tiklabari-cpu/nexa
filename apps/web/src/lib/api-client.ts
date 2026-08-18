@@ -5,7 +5,7 @@
  * `type` and `request_id`, so UI code branches on a stable machine-readable
  * value and support can correlate a user report with a server log line.
  */
-import type { ApiErrorBody, ErrorType } from '@nexa/types';
+import { isErrorType, type ApiErrorBody, type ErrorType } from '@nexa/types';
 
 export class ApiClientError extends Error {
   readonly type: ErrorType | 'network';
@@ -41,6 +41,34 @@ export class ApiClientError extends Error {
       this.type === 'request_timeout'
     );
   }
+}
+
+/**
+ * The `common.errors.*` key whose sentence answers `error` in the agent's
+ * language (NFR-I18N2).
+ *
+ * The ADR-06 `type` is the only part of a failure that is both stable and
+ * translatable. `error.message` is English prose the API wrote for whoever
+ * reads a log line, and rendering it is what makes a Turkish console answer a
+ * refused save with "Chat is not active." — so the display path resolves the
+ * *type* through the catalogue instead, and anything specific the user still
+ * needs (which field was rejected) travels in `error.details`.
+ *
+ * Returns a key rather than a sentence, and takes no locale: callers hold a
+ * `t()` already, and passing the key through it is what makes a banner already
+ * on screen change language when the agent flips the switcher.
+ * `locales/en/common.ts` carries an entry for every `ErrorType`, for the
+ * client-only `network`, and for `unknown` — a thrown value that is not an
+ * `ApiClientError` at all.
+ */
+export function errorMessageKey(error: unknown): string {
+  if (!(error instanceof ApiClientError)) return 'common.errors.unknown';
+  // The type is *typed* as `ErrorType | 'network'`, but it is read straight off the
+  // wire — a server ahead of this build, or a proxy writing its own envelope,
+  // can put anything there. Narrowing against the real taxonomy is what keeps
+  // an unmapped value from reaching the screen as the raw key `common.errors.x`.
+  if (error.type !== 'network' && !isErrorType(error.type)) return 'common.errors.unknown';
+  return `common.errors.${error.type}`;
 }
 
 export interface ApiClientOptions {

@@ -380,7 +380,7 @@ describe('command palette — action triggering', () => {
 
   it('rolls the optimistic status back and says so when the request is refused', async () => {
     const seen = stubRoutingStatus(() =>
-      errorResponse(403, 'insufficient_scope', 'Your token cannot change routing status.'),
+      errorResponse(403, 'authorization', 'Your token cannot change routing status.'),
     );
     const user = userEvent.setup();
     renderPalette(['agents--my:rw'], 'accepting_chats');
@@ -391,7 +391,11 @@ describe('command palette — action triggering', () => {
     // launched it, since the palette closed before the answer arrived.
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('That action did not go through.');
-    expect(alert).toHaveTextContent('Your token cannot change routing status.');
+    // The ADR-06 type is what gets spoken, translated (NFR-I18N2) — not the
+    // server's own English sentence, which is written for a log reader and would
+    // stay English in a Turkish console.
+    expect(alert).toHaveTextContent('You do not have permission to do that.');
+    expect(alert).not.toHaveTextContent('Your token cannot change routing status.');
     expect(screen.queryByRole('dialog')).toBeNull();
 
     // And the screen tells the truth again: nothing was changed.

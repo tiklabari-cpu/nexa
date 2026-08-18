@@ -55,6 +55,7 @@ interface SandboxInfo {
  */
 function SandboxBadge(): ReactElement | null {
   const api = useApiClient();
+  const t = useTranslate();
   const { data } = useQuery({
     queryKey: ['settings', 'sandbox'],
     queryFn: () => api.get<SandboxInfo>('/settings/sandbox'),
@@ -71,7 +72,7 @@ function SandboxBadge(): ReactElement | null {
       className="flex items-center justify-center gap-2 border-b border-border bg-warning/10 px-4 py-1.5 text-xs text-content"
     >
       <span aria-hidden="true">◐</span>
-      <span>Sandbox workspace — nothing here is billed, and nothing here is production data.</span>
+      <span>{t('shell.sandbox.notice')}</span>
     </div>
   );
 }
@@ -116,11 +117,7 @@ function TrialBanner(): ReactElement | null {
       className="flex items-center justify-center gap-2 border-b border-border bg-brand-500/10 px-4 py-1.5 text-xs text-content"
     >
       <span aria-hidden="true">◈</span>
-      <span>
-        {readOnly
-          ? t('shell.trial.ended')
-          : t('shell.trial.remaining', { days, s: days === 1 ? '' : 's' })}
-      </span>
+      <span>{readOnly ? t('shell.trial.ended') : t('shell.trial.remaining', { count: days })}</span>
       <NavLink
         to="/app/billing"
         className="font-semibold text-content-brand underline-offset-2 hover:underline"

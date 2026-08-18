@@ -46,6 +46,7 @@ import {
   type ReactElement,
 } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ApiClientError, errorMessageKey } from '../lib/api-client.js';
 import { useApiClient, useAuth, type CurrentAgent } from '../lib/auth-store.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
 import { Banner } from './ui/index.js';
@@ -80,10 +81,11 @@ export function CommandPalette(): ReactElement | null {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   // Survives the close, because the failure it reports usually arrives after it.
-  // `detail` is the server's own wording where there was any — kept beside the
-  // plain-language line rather than replacing it, since "insufficient_scope" is
-  // useful to whoever is diagnosing and meaningless to whoever is working.
-  const [actionError, setActionError] = useState<{ detail: string | null } | null>(null);
+  // Holds the catalogue *key* rather than a finished sentence: the notice can
+  // outlive a language switch, and a string frozen at throw time would sit there
+  // in the language the agent has just left. `null` means the failure carried no
+  // ADR-06 type to speak of, so only the generic line is shown.
+  const [actionError, setActionError] = useState<{ messageKey: string | null } | null>(null);
   // The debounced query text once "Ask AI" is chosen — its presence is what
   // switches the list to the answer card. Cleared the moment the agent types
   // again, so editing the query always returns to search rather than leaving
@@ -257,7 +259,9 @@ export function CommandPalette(): ReactElement | null {
           void action.run(actionDeps).catch((error: unknown) => {
             // The entry has undone its own guess by now. The screen is honest
             // again but silent about why it moved back, so say it out loud.
-            setActionError({ detail: error instanceof Error ? error.message : null });
+            setActionError({
+              messageKey: error instanceof ApiClientError ? errorMessageKey(error) : null,
+            });
           });
         },
       });
@@ -431,7 +435,7 @@ export function CommandPalette(): ReactElement | null {
         dismissLabel={t('palette.action.failedDismiss')}
         className="max-w-xl shadow-lg"
       >
-        {actionError.detail ?? t('palette.action.failedFallback')}
+        {actionError.messageKey ? t(actionError.messageKey) : t('palette.action.failedFallback')}
       </Banner>
     </div>
   );

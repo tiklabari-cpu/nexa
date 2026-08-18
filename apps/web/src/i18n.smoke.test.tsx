@@ -5,18 +5,25 @@
  * switcher drives, then asserts the navigation chrome actually changes language.
  * This is the "locale değişince metin değişir" gate: the plumbing — catalogue,
  * `t()`, store subscription, re-render — is proven end to end without a browser.
+ *
+ * Both directions are covered on purpose. A live switch proves the subscription;
+ * a first paint in Turkish proves the *initial* read, which is the case an agent
+ * who set their language last week actually gets and which a switch-only test
+ * would never exercise.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import type { ReactElement } from 'react';
 import { AppShell } from './components/AppShell.js';
 import { useAuth } from './lib/auth-store.js';
-import { useLocaleStore } from './lib/i18n.js';
+import type { Locale } from './lib/i18n.js';
+import { renderWithLocale, resetLocale, setLocale } from './test/i18n.js';
 
-function renderShell() {
+function shell(): ReactElement {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  return (
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/app/inbox']}>
         <Routes>
@@ -25,12 +32,16 @@ function renderShell() {
           </Route>
         </Routes>
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
 }
 
+function renderShell(locale: Locale = 'en') {
+  return renderWithLocale(shell(), locale);
+}
+
 beforeEach(() => {
-  act(() => useLocaleStore.getState().setLocale('en'));
+  resetLocale();
   useAuth.setState({
     status: 'signed-in',
     accessToken: 'test-token',
@@ -48,7 +59,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  act(() => useLocaleStore.getState().setLocale('en'));
+  resetLocale();
 });
 
 it('renders the rail in English by default and switches it to Turkish live', () => {
@@ -57,11 +68,21 @@ it('renders the rail in English by default and switches it to Turkish live', () 
   expect(screen.getByRole('link', { name: 'Inbox' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Reports' })).toBeInTheDocument();
 
-  act(() => useLocaleStore.getState().setLocale('tr'));
+  setLocale('tr');
 
   // The same rail, now in Turkish — and the English names are gone, so this is a
   // real relabel rather than a duplicate.
   expect(screen.getByRole('link', { name: 'Gelen Kutusu' })).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Raporlar' })).toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Inbox' })).toBeNull();
+});
+
+it('paints Turkish on the first render when that is the remembered language', () => {
+  renderShell('tr');
+
+  expect(screen.getByRole('link', { name: 'Gelen Kutusu' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: 'Inbox' })).toBeNull();
+  // `<html lang>` follows too, so assistive tech reads the page in the language
+  // it is actually written in rather than announcing Turkish with English rules.
+  expect(document.documentElement.lang).toBe('tr');
 });

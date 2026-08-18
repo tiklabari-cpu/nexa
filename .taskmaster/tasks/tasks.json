@@ -6025,7 +6025,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T01:31:53.526Z",
+        "updatedAt": "2026-08-18T11:56:33.652Z",
         "subtasks": [
           {
             "id": 1,
@@ -6095,10 +6095,10 @@
             "description": "İkon/splash/adaptive/notification PNG dosyaları bağımlılıksız script ile üretilir ve bağlanır.",
             "details": "NE YAPILACAK: `apps/mobile/assets/{icon.png (1024²), adaptive-icon.png (1024², ön plan), splash.png,\nnotification-icon.png (96², beyaz-transparan)}` — kaynak marka rengi `apps/mobile/src/theme/tokens.ts`\n(brand-500) ve düz bir \"N\" harfi/monogram; dış görsel KOPYALANMAZ (PLAN §9/2). PNG'ler\n`apps/mobile/scripts/gen-assets.mjs` ile üretilir: sıfır bağımlılık (Node `zlib` deflate + CRC ile\nham PNG yazıcı — küçük, ~80 satır) ki depo yeni devDependency almasın; script + üretilen PNG'ler\nBİRLİKTE commit'lenir (script kanıttır, PNG artefakttır); `app.config.ts`'e `icon`, `splash`\n(`backgroundColor` token'dan), `android.adaptiveIcon`, `notification.icon` bağlanır (13.7-s plugin\nbloğu ikonu bekliyorsa oraya da).\nNEDEN: `assets/` yok; build Expo'nun stok görselini taşır (§D111) — \"hazır\" bir uygulama kendi\nikonuyla gelir.\nDOSYALAR: `apps/mobile/assets/*` · `apps/mobile/scripts/gen-assets.mjs` · `app.config.ts` ·\n`scripts/gen-assets.test.ts`? (jest testMatch `src/**` — script testi `src/__tests__/assets.test.ts`\nolarak: dosyalar var, boyutlar doğru — `node:fs` testte serbest).\nREFERANS DESEN: `src/theme/tokens.ts` renkleri; `__tests__/parity.test.ts`'in artefaktı diskten okuma tekniği.\nKK: dört PNG diskte, boyutları doğru, `expo export` yeşil, script yeniden koşunca aynı byte'ları üretir\n(deterministik).\nKAPSAM DIŞI: tasarımcı kalitesinde ikon; mağaza ekran görüntüleri.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-13.7 (mobil)**. Gereksinim satırı: `grep -n '| 13\\.7 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K13.7' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Mobil süit (assets testi) · typecheck · lint · build (expo export) exit 0.\n- Ölçülebilir: `ls apps/mobile/assets` 4 dosya; `node apps/mobile/scripts/gen-assets.mjs && git status --short apps/mobile/assets` boş (deterministik).\n- PLAN: K13.7'ye madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "128",
-            "updatedAt": "2026-08-17T23:44:26.106Z"
+            "updatedAt": "2026-08-18T11:56:33.652Z"
           },
           {
             "id": 7,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T11:26:25.653Z",
+      "lastModified": "2026-08-18T11:56:33.653Z",
       "taskCount": 143,
       "completedCount": 131,
       "tags": [

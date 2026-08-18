@@ -6234,7 +6234,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-18T05:37:51.987Z",
+        "updatedAt": "2026-08-18T06:01:57.309Z",
         "subtasks": [
           {
             "id": 1,
@@ -6242,10 +6242,10 @@
             "description": "Üç kaynak arasında env anahtarı paritesi kurulur ve bir testle korunur.",
             "details": "NE YAPILACAK: (a) `.env.example`'a 13 eksik anahtar (yorumlu, varsayılan değerleriyle; INBOUND_EMAIL_SECRET\niçin \"unset = inbound webhook açık — üretimde ZORUNLU\" uyarısı); OTEL_ENABLED / LLM_PROVIDER_REGION\nyorumlu kalabilir ama nöbetçi test yorumlu satırı da \"belgelenmiş\" sayar (regex `^#?\\s*KEY=`);\n(b) `turbo.json` globalEnv'e 19 eksik anahtar; (c) nöbetçi: `apps/api/src/config/env.parity.test.ts`\n— `env.ts` ve `apps/rtm/src/config/env.ts`'in zod şemasından anahtar listesini çıkarır (şema\nnesnesinin `shape`'i), `.env.example`'ı ve `turbo.json`'ı okur (`node:fs`, test dosyası), her okunan\nanahtar iki dosyada da var mı → yoksa hangi anahtar eksik listeleyerek düşer; ters yön: `.env.example`'da\nolup hiçbir env.ts'te olmayan anahtar (WEB_PORT/WIDGET_PORT vite tarafı — beyaz liste) → düşer.\nNEDEN: §D113/K2. Secret'ların turbo'dan düşmesi CI'da gerçek risk.\nDOSYALAR: `.env.example` · `turbo.json` · `apps/api/src/config/env.parity.test.ts` (yeni) ·\n`apps/api/src/config/env.ts` (yalnız export gerekiyorsa: şema nesnesini dışa aç).\nREFERANS: `env.ts:207` tek `process.env` erişimi · `apps/mobile/src/theme/tokens.test.ts` (bir kaynak\ndosyayı ayrıştırıp karşılaştıran nöbetçi deseni).\nKK: test yeşil; kasıtlı bir anahtar silinince kırmızı (bunu testin kendi negatif senaryosuyla kanıtla).\nKAPSAM DIŞI: anahtarların değerlerini/semantiğini değiştirmek · sağlayıcı seçimi (131.2).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-ENV / M-PROV (türetilmiş — NFR-M bakım kolaylığı · MASTER-PROMPT \"dış servisler mock, arayüz + sahte sağlayıcı\")**. Gereksinim satırı: `grep -n '| M-ENV' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-ENV' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/api test` (env.parity) exit 0 · `pnpm -w typecheck` · `lint` · `format:check`.\n- Ölçülebilir: nöbetçi test hem api hem rtm şemasını tarar; `.env.example`'da 13 yeni anahtar; `turbo.json` globalEnv +19.\n- PLAN: KM-ENV'e madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "131",
-            "updatedAt": "2026-08-18T05:37:51.987Z"
+            "updatedAt": "2026-08-18T06:01:57.309Z"
           },
           {
             "id": 2,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T05:37:51.988Z",
+      "lastModified": "2026-08-18T06:01:57.310Z",
       "taskCount": 143,
       "completedCount": 129,
       "tags": [

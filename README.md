@@ -186,6 +186,41 @@ gitignored; no secret is ever committed.
 
 ---
 
+## Background jobs
+
+`apps/api` runs five sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
+default: on outside tests). A Redis lock (`SET NX`, one key per job) keeps two running
+instances from double-running the same pass; `GET /health` reports each job's interval,
+enabled flag, and last run's time/status.
+
+| Job                 | Default interval | What it does                                         |
+| ------------------- | ---------------- | ---------------------------------------------------- |
+| `chat_timeout`      | 60 s             | Closes idle chats (FR-MOD-08.7.3)                    |
+| `sla`               | 60 s             | Marks first-response SLA breaches (11.5-d)           |
+| `siem`              | 5 min            | Exports the SIEM audit sink (NFR-C6 · C6-d)          |
+| `scheduled_reports` | 60 s             | Delivers due scheduled reports (07.9)                |
+| `retention`         | 1 h              | Hard-deletes data past its retention window (NFR-C8) |
+
+Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
+they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
+`.env.example` for every key. To turn a background sweep off entirely and drive it from
+outside the app instead (a host cron, a managed job runner), set `SCHEDULER_ENABLED=false`;
+each job also keeps its own `pnpm --filter @nexa/api <job>:run` CLI script, which is what
+that outside trigger calls.
+
+`retention` stays off even when the scheduler is otherwise on: `RETENTION_ENABLED=false`
+by default. It is the one sweep here that deletes, and unlike the CLI's `--apply` flag — an
+operator confirming a specific run — a scheduled pass has no operator to ask. `/health`
+still lists it (`enabled: false`, never simply absent) so its being off is visible, not
+silent. Review the policy (`RETENTION_*_DAYS` in `.env.example`) before setting
+`RETENTION_ENABLED=true`.
+
+Webhook redelivery has its interval reserved (`SCHEDULE_WEBHOOK_REDELIVERY_MS`) but is not
+registered yet — it lands with the job that persists failed `webhook_deliveries` rows for
+it to retry.
+
+---
+
 ## Status
 
 See [PLAN.md](PLAN.md) for what is done and what is next, and [HANDOFF.md](HANDOFF.md)

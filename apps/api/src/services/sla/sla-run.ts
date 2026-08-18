@@ -1,10 +1,13 @@
 /**
  * `sla:run` — the manual trigger for the SLA sweep (FR-MOD-11.5 · 11.5-d).
  *
- * There is no production scheduler in this environment (a project boundary), so
- * the sweep is a script an operator (or a host cron outside the app) runs, not a
- * cron job inside it. It connects as the runtime (RLS-bound) role, so every read
- * and every mark is scoped to its own workspace exactly as a request would be.
+ * There is no *external* scheduler in this environment (a project boundary) —
+ * no host cron, no managed job runner — so this script is how an operator (or
+ * CI) drives the sweep by hand. Since M-SCHED-b the in-process scheduler
+ * (`services/scheduler/jobs.ts`) also calls `SlaSweeper.run()` on its own
+ * interval, the same way this script does. It connects as the runtime
+ * (RLS-bound) role, so every read and every mark is scoped to its own
+ * workspace exactly as a request would be.
  *
  * No dry-run: the sweep writes breach rows and sends alerts, neither of which
  * changes a conversation, a queue or an invoice (§C-A27). The blast radius of a

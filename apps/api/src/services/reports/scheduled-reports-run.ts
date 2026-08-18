@@ -2,11 +2,15 @@
  * `scheduled-reports:run` — the manual trigger for the scheduled-report sweep
  * (07.9-sched-e/-f).
  *
- * There is no production scheduler in this environment (a project boundary), so
- * — like `retention:run` and `chat-timeout:run` — this is a script an operator
- * (or a host cron outside the app) runs. It connects as the runtime (RLS-bound)
- * role, so every read and delivery is scoped to its own workspace exactly as a
- * request would be.
+ * There is no *external* scheduler in this environment (a project boundary) —
+ * no host cron, no managed job runner — so, like `retention:run` and
+ * `chat-timeout:run`, this is a script an operator (or CI) drives by hand.
+ * Since M-SCHED-b the in-process scheduler (`services/scheduler/jobs.ts`)
+ * also calls the same `ScheduledReportSweeper.run()` this script's `--apply`
+ * path calls, on its own interval — always committing, the way `--apply`
+ * does; the scheduler has no dry-run mode. It connects as the runtime
+ * (RLS-bound) role, so every read and delivery is scoped to its own
+ * workspace exactly as a request would be.
  *
  * Safety default: **dry-run**, because a sent e-mail cannot be recalled — the
  * same reasoning `retention:run` uses for an irreversible delete. But this

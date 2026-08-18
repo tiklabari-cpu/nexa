@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 130.4 — M-SCHED-d: docs + env — README "Background jobs" + runner başlıkları güncellendi — done — 2026-08-18 UTC
+
+- **Yapıldı:** Kök `README.md`'ye yeni "Background jobs" bölümü (beş iş + varsayılan aralık tablosu, `SCHEDULE_<JOB>_MS`/`SCHEDULE_JITTER_PCT` override, `SCHEDULER_ENABLED=false` + CLI script'leri host-cron alternatifi, `RETENTION_ENABLED`'ın kapalı varsayılanı + NEDENi, `SCHEDULE_WEBHOOK_REDELIVERY_MS`'in henüz kayıtlı olmadığı notu). `.env.example` scheduler anahtarları (130.1/130.2'de eklenmişti) doğrulandı — hepsi `env.ts`'te okunuyor. Beş runner dosyasının ("no production scheduler") başlık yorumu güncellendi (silinmedi): artık `services/scheduler/jobs.ts`'in aynı sınıfı kendi aralığında da çağırdığını anlatıyor; CLI hâlâ aynı elle/CI tetikleyicisi. Ürün kodu DEĞİŞMEDİ.
+- **Doğrulama:** `pnpm -w format:check` exit 0 · `grep -c "SCHEDULE_" .env.example` = 7 (≥ 6 KK) · README'de "Background jobs" başlığı var · `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w build` 8/8 · `turbo run test --force --filter=!@nexa/e2e` yeşil · `pnpm -w test:e2e` KOŞULMADI (bu tur yalnız doküman/yorum; hiçbir rota/ekran/kontrat/migration değişmedi).
+- **Varsayımlar:** PLAN §7.2 `M-SCHED` satırı bilerek **`◐` KALDI**, task'ın kendi testStrategy'sindeki "✅ → KM-SCHED" talimatına RAĞMEN: M-SCHED-e (tm 130.5, webhook kalıcı yeniden teslimi) hâlâ `pending` ve M-SCHED'in kendi kapsamı ("webhook yeniden teslim", 08.8.4) bunu içeriyor — TASK-RUNNER-PROMPT §3 "kapanış uğruna ✅ uydurma" kuralı somut bir eksik varken önceliklidir.
+- **Sonraki pencereye not:** tm 130.5 (M-SCHED-e) bitince PLAN §7.2 + §6A `M-SCHED` satırları `✅ → KM-SCHED` yapılabilir; K bloğuna 130.4 maddesi zaten eklendi.
+
 ## 130.3 — M-SCHED-c: uçtan uca doğrulama — sunucu gerçekten süpürüyor mu — done — 2026-08-18 UTC
 
 - **Yapıldı:** Yeni `apps/api/test/integration/scheduler-e2e.test.ts` (11 test, 3,2 sn). Hiçbir sweeper kurmuyor, hiç `run()` çağırmıyor: gerçek `buildServer`'ı 200 ms aralıklarla ayağa kaldırıp ETKİYİ bekliyor — boşta sohbet kapanır (thread arşivli + sistem olayı) · SLA ilk-yanıt ihlali işaretlenir (thread hâlâ açık) · SIEM NDJSON diske yazılır + cursor ilerler (hedefsiz kiracının izi yerinde) · rapor posta kutusuna düşer + run `sent` · retention kapalıyken 400 günlük kanarya thread DURUR ve `/health` `disabled` der, `RETENTION_ENABLED=true` ile aynı thread SİLİNİR + `data.retention_pruned` yazılır · iki GERÇEK sunucu tek Redis'e → her iş için biri `ok` biri `skipped`. Kiracılar bilerek ayrık (A: timeout+SIEM+rapor · B: SLA+kanarya): chat-timeout thread'i arşivler, SLA yalnız açık thread'i yargılar. Ürün kodu DEĞİŞMEDİ.

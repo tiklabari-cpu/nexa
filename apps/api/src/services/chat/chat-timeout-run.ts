@@ -1,10 +1,13 @@
 /**
  * `chat-timeout:run` — the manual trigger for the idle-chat sweep (FR-MOD-08.7.3).
  *
- * There is no production scheduler in this environment (a project boundary), so
- * the sweep is a script an operator (or a host cron outside the app) runs, not a
- * cron job inside it. It connects as the runtime (RLS-bound) role, so every read
- * and close is scoped to its own workspace exactly as a request would be.
+ * There is no *external* scheduler in this environment (a project boundary) —
+ * no host cron, no managed job runner — so this script is how an operator (or
+ * CI) drives the sweep by hand. Since M-SCHED-b the in-process scheduler
+ * (`services/scheduler/jobs.ts`) also calls `ChatTimeoutSweeper.run()` on its
+ * own interval, the same way this script does. It connects as the runtime
+ * (RLS-bound) role, so every read and close is scoped to its own workspace
+ * exactly as a request would be.
  *
  * Unlike the retention sweep this has no dry-run: closing an idle chat is
  * reversible (the customer returning simply opens a new thread), so there is no

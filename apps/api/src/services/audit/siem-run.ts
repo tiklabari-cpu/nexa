@@ -1,10 +1,13 @@
 /**
  * `siem:run` — the manual trigger for the scheduled SIEM sink (NFR-C6 · C6-d).
  *
- * There is no production scheduler in this environment (a project boundary), so
- * — like `retention:run`, `chat-timeout:run` and `scheduled-reports:run` — this
- * is a script an operator (or a host cron outside the app) runs. It connects as
- * the runtime (RLS-bound) role, so every read and delivery is scoped to its own
+ * There is no *external* scheduler in this environment (a project boundary) —
+ * no host cron, no managed job runner — so, like `retention:run`,
+ * `chat-timeout:run` and `scheduled-reports:run`, this is a script an
+ * operator (or CI) drives by hand. Since M-SCHED-b the in-process scheduler
+ * (`services/scheduler/jobs.ts`) also calls `SiemSink.run()` on its own
+ * interval, the same way this script does. It connects as the runtime
+ * (RLS-bound) role, so every read and delivery is scoped to its own
  * workspace exactly as a request would be.
  *
  * No dry-run, for the same reason `chat-timeout:run` has none: this sink's

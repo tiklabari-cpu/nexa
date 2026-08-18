@@ -1,10 +1,16 @@
 /**
  * `retention:run` — the manual trigger for the retention sweep (NFR-C8).
  *
- * There is no production scheduler in this environment (a project boundary), so
- * the sweep is a script an operator runs, not a cron job. It connects as the
- * runtime (RLS-bound) role, so every delete is subject to tenant isolation just
- * as a request would be.
+ * There is no *external* scheduler in this environment (a project boundary) —
+ * no host cron, no managed job runner — so this script is how an operator (or
+ * CI) drives the sweep by hand. Since M-SCHED-b the in-process scheduler
+ * (`services/scheduler/jobs.ts`) also calls `RetentionRunner.run()` on its own
+ * interval, gated by `RETENTION_ENABLED` (see `.env.example`) — that flag
+ * stands in for the `--apply` an operator would type here, because a
+ * scheduled pass has no operator to ask. This script's own `--apply` is
+ * unaffected by that flag and is still required every time. It connects as
+ * the runtime (RLS-bound) role, so every delete is subject to tenant
+ * isolation just as a request would be.
  *
  * Safety default: **dry-run**. Because the sweep is irreversible, it only counts
  * unless invoked with `--apply`. The machine-readable report goes to stdout; a

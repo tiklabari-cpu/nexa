@@ -44,6 +44,9 @@ coverage/
 # --- Test / e2e artefaktları ---
 playwright-report/
 test-results/
+# Playwright MCP'nin sayfa dökümleri (`.playwright-mcp/page-*.yml`) — pencere başına üretilir,
+# kimse silmediği için depoda birikiyordu (tm 132.4 · 14 dosya temizlendi).
+.playwright-mcp/
 
 # --- OS / editör ---
 .DS_Store

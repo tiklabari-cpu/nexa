@@ -10,7 +10,7 @@ const fs = require('fs');
 const files = execSync('git ls-files', { encoding: 'utf8' })
   .trim()
   .split(/\r?\n/)
-  .filter((f) => /\.(ts|tsx|js|cjs|mjs)$/.test(f) && !f.startsWith('.audit-tm126/'));
+  .filter((f) => /\.(ts|tsx|js|cjs|mjs)$/.test(f) && !f.startsWith('scripts/audit/'));
 
 const patterns = [
   ['TODO', /\b(TODO)\b/],

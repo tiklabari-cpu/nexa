@@ -6,7 +6,10 @@
 const fs = require('fs');
 
 const prd = fs.readFileSync('urun-gereksinim-dokumani-PRD.md', 'utf8').split(/\r?\n/);
-const section6 = prd.slice(463, 733); // §6 (line 464) .. before §7 (line 734)
+const start = prd.findIndex((l) => /^##\s+6\./.test(l));
+const end = prd.findIndex((l, i) => i > start && /^##\s+7\./.test(l));
+if (start === -1 || end === -1) throw new Error('PRD §6/§7 headers not found — file structure changed');
+const section6 = prd.slice(start, end); // §6 up to (not including) §7, found by header, not a fixed line range
 
 const ids = [];
 for (const line of section6) {

@@ -5005,17 +5005,19 @@ bırakıldığı için **aylarca** görünmedi. Bu yüzden §F.1'in çekirdeği 
 
 | # | §F.1 maddesi     | Mini sürümde ne yapılır                                   | Kanıt                 |
 | - | ---------------- | -------------------------------------------------------- | --------------------- |
-| 1 | Kapsam süpürmesi | Yalnız **o dilimin** `FR-MOD` satırları koda karşı denetlenir | Route/dosya listesi |
+| 1 | Kapsam süpürmesi | Yalnız **o dilimin** `FR-MOD` satırları koda karşı denetlenir | `pnpm audit:sweep` |
 | 2 | Faz sızıntısı    | Dilimde başka fazdan iş var mı                           | Evet/Hayır + §D kaydı |
 | 3 | NFR kapıları     | Dilimin dokunduğu NFR'ler **ölçülür** (tahmin değil)     | Ölçüm çıktısı         |
 | 5 | Kontrat bütünlüğü| `contract-parity` testi çalıştırılır                     | exit code             |
-| 6 | Sessiz borç      | Dilimde eklenen `TODO`/`skip`/`@ts-expect-error` taranır | grep çıktısı          |
+| 6 | Sessiz borç      | Dilimde eklenen `TODO`/`skip`/`@ts-expect-error` taranır | `pnpm audit:silent-debt` |
 | 8 | Doküman tazeliği | Test sayısı + sayaç + "sıradaki adım" gerçekle uyuşuyor mu | Güncellenmiş satırlar |
 
-> **Araçlar (2026-08-18 · tm 132.3):** yukarıdaki "Kanıt" sütunu henüz elle üretiliyor — kalıcı,
-> komutla çağrılabilir denetim script'leri `scripts/audit/` altında toplanacak ve kök
-> `package.json`'a `pnpm audit:*` komutları olarak eklenecek (tm 132.4). Bitince bu tablonun
-> "Kanıt" sütunu ilgili komut adına güncellenir.
+> **Araçlar (2026-08-18 · tm 132.4):** kalıcı denetim script'leri `scripts/audit/` altında
+> (`.audit-tm126/`'dan taşındı) ve kök `package.json`'da beş `pnpm audit:*` komutu olarak
+> çağrılabilir: `audit:sweep` · `audit:silent-debt` · `audit:dead-code` (§F.1/7) ·
+> `audit:schema-consumers` (§F.1/4) · `audit:endpoint-ui` (§F.1/7). Yukarıdaki tablo yalnız
+> mini denetimin kapsadığı iki maddeyi (1, 6) komuta bağlar — 4 ve 7 mini sürümde yok, tam
+> §F.1 turunda kullanılır.
 
 **Tam sürüm (10 maddenin hepsi)** yalnız **faz kapanışında** ve projenin en sonunda çalışır.
 
@@ -6142,6 +6144,7 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 - **Elle KK provası (bu makinede, gerçek komutlar):** `pnpm --filter @nexa/e2e exec playwright install chromium` exit 0 (chromium zaten kuruluydu); `set -a; source .env; set +a` sonrası `pnpm db:migrate` exit 0 (62 migration, pending yok) ve `pnpm --filter @nexa/api db:seed` exit 0 (idempotent, "already present") — README'nin yeni "Environment" bölümündeki komut birebir bu. Not: bu pencerenin Bash/PowerShell'inde `make` binary'si YOK (`which make` / `Get-Command make` ikisi de bulamadı) — literal `make dev`/`make migrate` bu makinede koşulamadı; onun yerine altındaki gerçek zinciri (`docker compose` datastore'ları zaten `make up`'tan sağlıklı çalışıyordu · `pnpm db:migrate` · `pnpm db:seed`) tek tek doğruladım, `pnpm dev` (sonsuz süreç) hariç.
 - **Doğrulama (hepsi exit 0):** `pnpm -w format:check` · `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w build` 8/8 · `turbo run test --force --filter=!@nexa/e2e --filter=!@nexa/api` 9/9 (rtm 104 dahil) · api `test:unit` 64 dosya/995 · api `test:integration` 95 dosya/2417 üç shard'da (284 s/246 s/150 s) — hepsi taban ile birebir aynı sayı (yalnız README/HANDOFF değişti). `pnpm -w test:e2e` KOŞULMADI: bu tur hiçbir rota/ekran/kontrat/migration değiştirmedi, yalnız dokümantasyon — 130.1/130.4/131.1/132.1'in aynı gerekçesi; e2e'nin kendi önkoşul komutu ayrıca elle doğrulandı (yukarıda). `contract:generate`/`db:check-drift` gereksiz (kontrat/migration yok). · tm 132.2
 - ✅ **M-DOCS-b (tm 132.3).** `CONVENTIONS.md` §1 DoD listesine CI'ın zaten zorunlu tuttuğu üç kapı eklendi (ci.yml:81-88 kontrat diff · :97 `db:check-drift` · :105-106 `format:check`): `pnpm -w format:check` (exit 0) · kontrat değiştiyse `contract:generate` sonrası `packages/contract/src/generated` diff'i boş · migration eklendiyse `pnpm -w db:check-drift` (exit 0). `TASK-RUNNER-PROMPT.md`'nin bayat boyut notları (`≈770 KB/3.700 satır`, `≈880 KB/244 blok`) ölçülüp güncellendi: `wc -c/-l PLAN.md` → `~1.4 MB/~6.150 satır`; `HANDOFF.md` boyutu + `## <TASK-ID>` blok sayımı (`grep -c`) → `~1.3 MB/~25 blok`. PLAN §F.0 mini denetim tablosuna 132.4'ü bekleyen yer tutucu not eklendi ("Kanıt" sütunu henüz elle üretiliyor, `scripts/audit/` tm 132.4'te gelecek). Ürün kodu DEĞİŞMEDİ, salt doküman. — `CONVENTIONS.md` · `TASK-RUNNER-PROMPT.md` · `PLAN.md` §F.0 · tm 132.3
+- ✅ **M-HYGIENE-a (tm 132.4).** `.playwright-mcp/` 14 MCP sayfa dökümü `git rm -r` ile depodan çıktı, `.gitignore`'a `.playwright-mcp/` eklendi. `.audit-tm126/{sweep,silent-debt,dead-code,schema-consumers,endpoint-ui}.cjs` + `README.md` `git mv` ile `scripts/audit/`'e taşındı (klasör artık yok). tm-126'ya özel iki varsayım genelleştirildi: `silent-debt.cjs`'in kendi kendini hariç tutan yolu `.audit-tm126/` → `scripts/audit/`; `sweep.cjs`'nin PRD §6 aralığını okuduğu **sabit satır indeksi** (`slice(463,733)`, tek bir PRD sürümüne kilitliydi) → `## 6.`/`## 7.` başlıklarını dinamik arayan `findIndex`, PRD büyüdükçe kırılmaz. Kök `package.json`'a beş komut: `audit:sweep` · `audit:silent-debt` · `audit:dead-code` · `audit:schema-consumers` · `audit:endpoint-ui` (her biri `node scripts/audit/<x>.cjs`). Beşi de bu turda gerçek komutla çalıştırıldı, hepsi exit 0: `sweep` 137 FR-MOD (116 ✅ · 2 ◐ · 1 ⛔ · 3 🔒 · 15 NOROW — tm-126'daki 137 sayısıyla birebir, dinamik header-arama regresyon yaratmadı) · `silent-debt` 898 dosya tarandı (1 eslint-disable + 2 istanbul-ignore, hepsi bilinen/gerekçeli) · `dead-code` api route 0/40 + web feature 0/102 unreferenced, api service 5/107 (beşi zamanlayıcı CLI script'i — README'nin bilinen yanlış-pozitif kategorisi, M-SCHED tm 130'dan) · `schema-consumers` 77 model, 2 tüketicisiz (`PasswordResetToken`, `Workflow`) + 1 yalnız-ham-SQL (`AuditChainHead`) · `endpoint-ui` 183 path, 20 istemcisiz (SCIM/SAML ACS/public KB gibi bilinen başsız uçlar). Script mantığı GENİŞLETİLMEDİ (kapsam dışı) — yalnız taşındı + genelleştirildi + komutlandı. PLAN §F.0 mini tablosunun "Kanıt" sütunu (madde 1, 6) `pnpm audit:sweep`/`pnpm audit:silent-debt`'e güncellendi; §D113/K6'daki `.audit-tm126/…` atıfları CONVENTIONS §1.2 gereği değiştirilmedi (tarihçe), yeni konum bu maddeyle kayda geçti. — `.gitignore` · `scripts/audit/{sweep,silent-debt,dead-code,schema-consumers,endpoint-ui}.cjs` + `README.md` (taşındı) · `package.json` · `PLAN.md` §F.0 · tm 132.4
 
 #### KM-UI-GAP — M-UI-GAP · İstemcisiz dört uç
 

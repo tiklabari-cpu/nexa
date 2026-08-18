@@ -13,7 +13,8 @@ const secret = (minLength: number) =>
     .min(minLength, `must be at least ${minLength} characters`)
     .refine((v) => !/^(changeme|secret|password)$/i.test(v), 'must not be a placeholder value');
 
-const envSchema = z.object({
+/** Exported so `env.parity.test.ts` can enumerate keys off `.shape` rather than re-parsing this file as text. */
+export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   /**
    * Which region *this process* serves (C4-a). Not the region of any workspace

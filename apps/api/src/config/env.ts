@@ -181,6 +181,44 @@ const envSchema = z.object({
    */
   VIRUS_SCANNER: z.enum(['mock', 'unavailable']).default('mock'),
 
+  /**
+   * Background job scheduler (M-SCHED · §D113/K1). Unset it follows the
+   * environment: on in dev/prod, off under test — the suites must not have a
+   * sweep archiving their fixtures underneath them, and every one of them boots
+   * a server. `true`/`false` overrides either way.
+   *
+   * Off does not mean the sweeps are unreachable: each one keeps its
+   * `pnpm --filter @nexa/api <job>:run` script, which is also how a deployment
+   * that would rather drive them from a host cron does it.
+   */
+  SCHEDULER_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  /**
+   * How far each interval is spread, in percent. Instances that came up from one
+   * deploy would otherwise tick in lockstep forever, and every tick but one
+   * would be a wasted round trip to the lock. Capped well below 100 because a
+   * spread wide enough to reorder intervals is no longer jitter.
+   */
+  SCHEDULE_JITTER_PCT: z.coerce.number().int().min(0).max(50).default(10),
+  /**
+   * Per-job intervals in milliseconds (see services/scheduler/intervals.ts).
+   *
+   * The minute-scale ones are latency budgets a person can feel: an idle chat
+   * that stays open, an SLA breach that is not yet marked, a scheduled report
+   * that has not gone out. SIEM is coarser because its consumer batches anyway,
+   * and retention is hourly because it deletes — there is nothing to gain from
+   * looking more often, and a tight loop over every tenant's old rows is real
+   * database load.
+   */
+  SCHEDULE_CHAT_TIMEOUT_MS: z.coerce.number().int().positive().default(60_000),
+  SCHEDULE_SLA_MS: z.coerce.number().int().positive().default(60_000),
+  SCHEDULE_SIEM_MS: z.coerce.number().int().positive().default(300_000),
+  SCHEDULE_SCHEDULED_REPORTS_MS: z.coerce.number().int().positive().default(60_000),
+  SCHEDULE_RETENTION_MS: z.coerce.number().int().positive().default(3_600_000),
+  SCHEDULE_WEBHOOK_REDELIVERY_MS: z.coerce.number().int().positive().default(60_000),
+
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 
   /**
@@ -202,6 +240,8 @@ export type Env = z.infer<typeof envSchema> & {
   isTest: boolean;
   /** Whether OpenTelemetry instrumentation is active for this process. */
   otelEnabled: boolean;
+  /** Whether this process runs the background sweeps (M-SCHED). */
+  schedulerEnabled: boolean;
 };
 
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
@@ -237,5 +277,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
+    schedulerEnabled: env.SCHEDULER_ENABLED ?? env.NODE_ENV !== 'test',
   };
 }

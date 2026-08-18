@@ -16,6 +16,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { DEFAULT_REGION, REGIONS, type Region } from '@nexa/types';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { Banner } from '../../components/ui/index.js';
 import {
   FieldError,
@@ -139,11 +140,6 @@ function ErrorNote({ message }: { message: string | null }): ReactElement | null
 
 const MIN_PASSWORD = 12;
 
-const REGION_LABELS: Record<Region, string> = {
-  eu: 'European Union',
-  us: 'United States',
-};
-
 /**
  * What to put on the form when signup fails (C4-h).
  *
@@ -155,22 +151,22 @@ const REGION_LABELS: Record<Region, string> = {
  * `served_region` is the half of `details` the client cannot work out for
  * itself; the region they chose is already on screen.
  */
-function signupFailureMessage(failure: unknown): string {
-  if (!(failure instanceof ApiClientError)) return 'Could not create that workspace.';
+function signupFailureMessage(failure: unknown, t: TFunction): string {
+  if (!(failure instanceof ApiClientError)) return t('auth.signup.errorGeneric');
 
   if (failure.type === 'account_exists') {
-    return 'An account already exists for that email — sign in instead.';
+    return t('auth.signup.errorAccountExists');
   }
 
   if (failure.type === 'misdirected_request') {
     const served = failure.details?.['served_region'];
-    const label = isRegion(served) ? REGION_LABELS[served] : null;
-    return label
-      ? `Nothing was created. This address only creates workspaces in ${label} — choose that data region, or sign up at the address that serves the one you picked.`
-      : 'Nothing was created. This address does not create workspaces in the data region you picked.';
+    if (isRegion(served)) {
+      return t('auth.signup.errorRegionMismatch', { region: t(`auth.signup.region.${served}`) });
+    }
+    return t('auth.signup.errorRegionUnknown');
   }
 
-  return 'Could not create that workspace.';
+  return t('auth.signup.errorGeneric');
 }
 
 function isRegion(value: unknown): value is Region {
@@ -179,6 +175,7 @@ function isRegion(value: unknown): value is Region {
 
 /** FR-MOD-00.2 — create a workspace and its first owner. */
 export function SignUpPage(): ReactElement {
+  const t = useTranslate();
   const signIn = useAuth((s) => s.signIn);
   // Not a form field (ADR-12): a `<select>` next to a warning, not something a
   // string validator has an opinion about — the same split `InviteTeammates`
@@ -188,10 +185,16 @@ export function SignUpPage(): ReactElement {
   const form = useForm({
     initial: { organization: '', name: '', email: '', password: '' },
     validators: {
-      organization: required('Enter a workspace name.'),
-      name: required('Enter your name.'),
-      email: compose(required('Enter your email.'), emailRule()),
-      password: minLength(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`),
+      organization: required(t('auth.validation.organizationRequired')),
+      name: required(t('auth.validation.nameRequired')),
+      email: compose(
+        required(t('auth.validation.emailRequired')),
+        emailRule(t('auth.validation.emailInvalid')),
+      ),
+      password: minLength(
+        MIN_PASSWORD,
+        t('auth.validation.passwordMinLength', { count: MIN_PASSWORD }),
+      ),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
@@ -209,20 +212,20 @@ export function SignUpPage(): ReactElement {
         // after choosing a password is a step with nothing behind it.
         await signIn(values.email.trim(), values.password, session.memberships[0]!.license_id);
       } catch (failure) {
-        setSubmitError(signupFailureMessage(failure));
+        setSubmitError(signupFailureMessage(failure, t));
       }
     },
   });
 
   return (
     <AuthCard
-      title="Create a workspace"
-      subtitle="14 days free. No card."
+      title={t('auth.signup.title')}
+      subtitle={t('auth.signup.subtitle')}
       footer={
         <>
-          Already have an account?{' '}
+          {t('auth.signup.alreadyHaveAccount')}{' '}
           <Link to="/signin" className="text-content-brand underline">
-            Sign in
+            {t('auth.signup.signIn')}
           </Link>
         </>
       }
@@ -231,7 +234,7 @@ export function SignUpPage(): ReactElement {
         <ErrorNote message={form.submitError} />
         <Field
           id="org"
-          label="Workspace name"
+          label={t('auth.fields.workspaceName')}
           value={form.values.organization}
           onChange={(value) => form.setValue('organization', value)}
           onBlur={() => form.blur('organization')}
@@ -240,7 +243,7 @@ export function SignUpPage(): ReactElement {
         />
         <div className="mb-4">
           <label htmlFor="signup-region" className="mb-1.5 block text-sm font-medium">
-            Data region
+            {t('auth.fields.dataRegion')}
           </label>
           <select
             id="signup-region"
@@ -250,18 +253,17 @@ export function SignUpPage(): ReactElement {
           >
             {REGIONS.map((value) => (
               <option key={value} value={value}>
-                {REGION_LABELS[value]}
+                {t(`auth.signup.region.${value}`)}
               </option>
             ))}
           </select>
         </div>
         <Banner tone="warning" className="mb-4">
-          This is where your workspace's data will live. It cannot be changed after your workspace
-          is created.
+          {t('auth.signup.regionWarning')}
         </Banner>
         <Field
           id="name"
-          label="Your name"
+          label={t('auth.fields.yourName')}
           value={form.values.name}
           onChange={(value) => form.setValue('name', value)}
           onBlur={() => form.blur('name')}
@@ -269,7 +271,7 @@ export function SignUpPage(): ReactElement {
         />
         <Field
           id="email"
-          label="Email"
+          label={t('auth.fields.email')}
           type="email"
           value={form.values.email}
           onChange={(value) => form.setValue('email', value)}
@@ -278,13 +280,13 @@ export function SignUpPage(): ReactElement {
         />
         <Field
           id="password"
-          label="Password"
+          label={t('auth.fields.password')}
           type="password"
           value={form.values.password}
           onChange={(value) => form.setValue('password', value)}
           onBlur={() => form.blur('password')}
           error={form.errorFor('password')}
-          hint={`At least ${MIN_PASSWORD} characters. Length is the only rule.`}
+          hint={t('auth.signup.passwordHint', { count: MIN_PASSWORD })}
         />
         {/* Disabled until the form can actually succeed (FR-EK-A.1). */}
         <button
@@ -292,7 +294,7 @@ export function SignUpPage(): ReactElement {
           disabled={!form.canSubmit}
           className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {form.isSubmitting ? 'Creating…' : 'Create workspace'}
+          {form.isSubmitting ? t('auth.signup.submitting') : t('auth.signup.submit')}
         </button>
       </form>
     </AuthCard>
@@ -301,11 +303,17 @@ export function SignUpPage(): ReactElement {
 
 /** FR-MOD-00.3 — ask for a link. The answer never says whether you got one. */
 export function ForgotPasswordPage(): ReactElement {
+  const t = useTranslate();
   const [sent, setSent] = useState(false);
 
   const form = useForm({
     initial: { email: '' },
-    validators: { email: compose(required('Enter your email.'), emailRule()) },
+    validators: {
+      email: compose(
+        required(t('auth.validation.emailRequired')),
+        emailRule(t('auth.validation.emailInvalid')),
+      ),
+    },
     // Deliberately no error branch: the server answers 202 either way, and a UI
     // that showed a failure for one address and not another would reopen the
     // enumeration channel the endpoint closes.
@@ -319,23 +327,23 @@ export function ForgotPasswordPage(): ReactElement {
 
   return (
     <AuthCard
-      title="Reset your password"
-      subtitle="We will send you a link."
+      title={t('auth.forgotPassword.title')}
+      subtitle={t('auth.forgotPassword.subtitle')}
       footer={
         <Link to="/signin" className="text-content-brand underline">
-          Back to sign in
+          {t('auth.common.backToSignIn')}
         </Link>
       }
     >
       {sent ? (
         <p role="status" className="text-sm text-content-secondary">
-          If an account exists for that address, we sent a link. It expires in an hour.
+          {t('auth.forgotPassword.sent')}
         </p>
       ) : (
         <form onSubmit={form.handleSubmit} noValidate>
           <Field
             id="email"
-            label="Email"
+            label={t('auth.fields.email')}
             type="email"
             value={form.values.email}
             onChange={(value) => form.setValue('email', value)}
@@ -343,7 +351,11 @@ export function ForgotPasswordPage(): ReactElement {
             error={form.errorFor('email')}
             autoFocus
           />
-          <Submit disabled={!form.canSubmit}>{form.isSubmitting ? 'Sending…' : 'Send link'}</Submit>
+          <Submit disabled={!form.canSubmit}>
+            {form.isSubmitting
+              ? t('auth.forgotPassword.submitting')
+              : t('auth.forgotPassword.submit')}
+          </Submit>
         </form>
       )}
     </AuthCard>
@@ -352,53 +364,61 @@ export function ForgotPasswordPage(): ReactElement {
 
 /** FR-MOD-00.3 — spend the link. */
 export function ResetPasswordPage(): ReactElement {
+  const t = useTranslate();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
   const [done, setDone] = useState(false);
 
   const form = useForm({
     initial: { password: '' },
-    validators: { password: minLength(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`) },
+    validators: {
+      password: minLength(
+        MIN_PASSWORD,
+        t('auth.validation.passwordMinLength', { count: MIN_PASSWORD }),
+      ),
+    },
     onSubmit: async (values, { setSubmitError }) => {
       try {
         await anonymous.post('/auth/password-reset/confirm', { token, password: values.password });
         setDone(true);
       } catch {
-        setSubmitError('This link is no longer valid. Ask for a new one.');
+        setSubmitError(t('auth.resetPassword.errorInvalidLink'));
       }
     },
   });
 
   return (
     <AuthCard
-      title="Choose a new password"
-      subtitle="The link works once."
+      title={t('auth.resetPassword.title')}
+      subtitle={t('auth.resetPassword.subtitle')}
       footer={
         <Link to="/signin" className="text-content-brand underline">
-          Back to sign in
+          {t('auth.common.backToSignIn')}
         </Link>
       }
     >
       {done ? (
         <p role="status" className="text-sm text-content-secondary">
-          Your password is set, and any other sessions have been signed out. You can sign in now.
+          {t('auth.resetPassword.done')}
         </p>
       ) : (
         <form onSubmit={form.handleSubmit} noValidate>
           <ErrorNote message={form.submitError} />
           <Field
             id="password"
-            label="New password"
+            label={t('auth.fields.newPassword')}
             type="password"
             value={form.values.password}
             onChange={(value) => form.setValue('password', value)}
             onBlur={() => form.blur('password')}
             error={form.errorFor('password')}
-            hint={`At least ${MIN_PASSWORD} characters.`}
+            hint={t('auth.resetPassword.hint', { count: MIN_PASSWORD })}
             autoFocus
           />
           <Submit disabled={!form.canSubmit}>
-            {form.isSubmitting ? 'Saving…' : 'Set password'}
+            {form.isSubmitting
+              ? t('auth.resetPassword.submitting')
+              : t('auth.resetPassword.submit')}
           </Submit>
         </form>
       )}
@@ -415,6 +435,7 @@ interface Preview {
 
 /** The receiving half of FR-MOD-04.4 — what an invited person lands on. */
 export function JoinPage(): ReactElement {
+  const t = useTranslate();
   const [params] = useSearchParams();
   const token = params.get('token') ?? '';
   const navigate = useNavigate();
@@ -446,8 +467,11 @@ export function JoinPage(): ReactElement {
     initial: { name: '', password: '' },
     validators: needsPassword
       ? {
-          name: required('Enter your name.'),
-          password: minLength(MIN_PASSWORD, `Use at least ${MIN_PASSWORD} characters.`),
+          name: required(t('auth.validation.nameRequired')),
+          password: minLength(
+            MIN_PASSWORD,
+            t('auth.validation.passwordMinLength', { count: MIN_PASSWORD }),
+          ),
         }
       : undefined,
     onSubmit: async (values, { setSubmitError }) => {
@@ -468,29 +492,24 @@ export function JoinPage(): ReactElement {
           navigate('/signin');
         }
       } catch {
-        setSubmitError('Could not accept that invitation.');
+        setSubmitError(t('auth.join.errorGeneric'));
       }
     },
   });
 
   if (invalid) {
     return (
-      <AuthCard
-        title="This invitation is not valid"
-        subtitle="It may have expired or been revoked."
-      >
-        <p className="text-sm text-content-secondary">
-          Ask whoever invited you to send a new one. Links work once and last seven days.
-        </p>
+      <AuthCard title={t('auth.join.invalidTitle')} subtitle={t('auth.join.invalidSubtitle')}>
+        <p className="text-sm text-content-secondary">{t('auth.join.invalidBody')}</p>
       </AuthCard>
     );
   }
 
   if (!preview) {
     return (
-      <AuthCard title="Checking your invitation" subtitle="One moment.">
+      <AuthCard title={t('auth.join.checkingTitle')} subtitle={t('auth.join.checkingSubtitle')}>
         <p role="status" className="text-sm text-content-secondary">
-          Loading…
+          {t('auth.join.loading')}
         </p>
       </AuthCard>
     );
@@ -498,8 +517,8 @@ export function JoinPage(): ReactElement {
 
   return (
     <AuthCard
-      title={`Join ${preview.organization_name}`}
-      subtitle={`Invited as ${preview.role} · ${preview.email}`}
+      title={t('auth.join.title', { organization: preview.organization_name })}
+      subtitle={t('auth.join.subtitle', { role: preview.role, email: preview.email })}
     >
       <form onSubmit={form.handleSubmit} noValidate>
         <ErrorNote message={form.submitError} />
@@ -507,7 +526,7 @@ export function JoinPage(): ReactElement {
           <>
             <Field
               id="name"
-              label="Your name"
+              label={t('auth.fields.yourName')}
               value={form.values.name}
               onChange={(value) => form.setValue('name', value)}
               onBlur={() => form.blur('name')}
@@ -516,18 +535,18 @@ export function JoinPage(): ReactElement {
             />
             <Field
               id="password"
-              label="Choose a password"
+              label={t('auth.fields.choosePassword')}
               type="password"
               value={form.values.password}
               onChange={(value) => form.setValue('password', value)}
               onBlur={() => form.blur('password')}
               error={form.errorFor('password')}
-              hint={`At least ${MIN_PASSWORD} characters.`}
+              hint={t('auth.join.passwordHint', { count: MIN_PASSWORD })}
             />
           </>
         ) : (
           <p className="mb-4 text-sm text-content-secondary">
-            You already have a Nexa account for this address. Accepting adds this workspace to it.
+            {t('auth.join.existingAccountNotice')}
           </p>
         )}
         <button
@@ -535,7 +554,7 @@ export function JoinPage(): ReactElement {
           disabled={!form.canSubmit}
           className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
-          {form.isSubmitting ? 'Joining…' : 'Join workspace'}
+          {form.isSubmitting ? t('auth.join.submitting') : t('auth.join.submit')}
         </button>
       </form>
     </AuthCard>

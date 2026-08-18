@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { ForgotPasswordPage, ResetPasswordPage, SignUpPage } from './PublicPages.js';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function renderAt(ui: ReactElement, path = '/'): void {
   render(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
@@ -175,5 +176,22 @@ describe('ForgotPasswordPage validation', () => {
     await userEvent.clear(field);
     await userEvent.type(field, 'robin@example.com');
     expect(submit).toBeEnabled();
+  });
+});
+
+describe('SignUpPage localisation (NFR-I18N2)', () => {
+  afterEach(() => resetLocale());
+
+  it('paints the signup form in Turkish when that is the active locale', () => {
+    renderWithLocale(
+      <MemoryRouter initialEntries={['/']}>
+        <SignUpPage />
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(screen.getByRole('heading', { name: 'Çalışma alanı oluştur' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Çalışma alanı adı')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Çalışma alanı oluştur' })).toBeInTheDocument();
   });
 });

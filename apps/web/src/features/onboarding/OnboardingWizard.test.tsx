@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { OnboardingWizard } from './OnboardingWizard.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function okJson(body: unknown) {
   return {
@@ -93,5 +94,29 @@ describe('OnboardingWizard', () => {
     renderWizard();
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect(screen.getByRole('heading', { name: 'Connect your first website' })).toBeInTheDocument();
+  });
+});
+
+describe('OnboardingWizard localisation (NFR-I18N2)', () => {
+  afterEach(() => resetLocale());
+
+  it('paints the wizard in Turkish when that is the active locale', () => {
+    vi.stubGlobal('fetch', vi.fn());
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/app/onboarding']}>
+          <Routes>
+            <Route path="/app/onboarding" element={<OnboardingWizard />} />
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      screen.getByRole('heading', { name: 'Çalışma alanınızı ayarlayın' }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Kurulumu atla' })).toBeInTheDocument();
   });
 });

@@ -16,8 +16,10 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 export function AuthCallbackPage(): ReactElement {
+  const t = useTranslate();
   const [params] = useSearchParams();
   const completeSsoLogin = useAuth((s) => s.completeSsoLogin);
   const [error, setError] = useState<string | null>(null);
@@ -35,13 +37,14 @@ export function AuthCallbackPage(): ReactElement {
     started.current = true;
 
     if (!code) {
-      setError('This sign-in did not complete. Start again from the sign-in page.');
+      setError(t('auth.callback.noCode'));
       return;
     }
     completeSsoLogin(code, state).catch((cause: unknown) => {
-      setError(cause instanceof Error ? cause.message : 'Sign-in failed.');
+      // i18n-ignore: a store-thrown message, not raw server prose reaching the screen.
+      setError(cause instanceof Error ? cause.message : t('auth.callback.genericFailure'));
     });
-  }, [code, state, completeSsoLogin]);
+  }, [code, state, completeSsoLogin, t]);
 
   return (
     <main className="flex min-h-full items-center justify-center bg-canvas p-6">
@@ -53,13 +56,13 @@ export function AuthCallbackPage(): ReactElement {
             </p>
             <p className="mt-4 text-xs text-content-secondary">
               <Link to="/" className="text-content-brand underline">
-                Back to sign in
+                {t('auth.common.backToSignIn')}
               </Link>
             </p>
           </>
         ) : (
           <p role="status" className="text-sm text-content-secondary">
-            Signing you in…
+            {t('auth.callback.signingIn')}
           </p>
         )}
       </div>

@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignInPage } from './SignInPage.js';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function renderSignIn(initialEntry = '/'): void {
   render(
@@ -216,5 +217,21 @@ describe('SignInPage arriving from an identity provider', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/not available/);
     // Somewhere to go next, rather than a dead status line.
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
+  });
+});
+
+describe('SignInPage localisation (NFR-I18N2)', () => {
+  afterEach(() => resetLocale());
+
+  it('paints the sign-in form in Turkish when that is the active locale', () => {
+    renderWithLocale(
+      <MemoryRouter initialEntries={['/']}>
+        <SignInPage />
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(screen.getByText('Çalışma alanınızda oturum açın')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Oturum aç' })).toBeInTheDocument();
   });
 });

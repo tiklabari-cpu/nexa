@@ -12,6 +12,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthCallbackPage } from './AuthCallbackPage.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const original = useAuth.getState();
 
@@ -70,5 +71,24 @@ describe('AuthCallbackPage', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/did not start in this browser/);
     expect(screen.getByRole('link', { name: 'Back to sign in' })).toBeInTheDocument();
+  });
+});
+
+describe('AuthCallbackPage localisation (NFR-I18N2)', () => {
+  afterEach(() => resetLocale());
+
+  it('shows the waiting status in Turkish when that is the active locale', async () => {
+    useAuth.setState({ completeSsoLogin: vi.fn(async () => undefined) });
+
+    await act(async () => {
+      renderWithLocale(
+        <MemoryRouter initialEntries={['/auth/callback?code=abc123&state=xyz']}>
+          <AuthCallbackPage />
+        </MemoryRouter>,
+        'tr',
+      );
+    });
+
+    expect(screen.getByRole('status')).toHaveTextContent('Oturumunuz açılıyor…');
   });
 });

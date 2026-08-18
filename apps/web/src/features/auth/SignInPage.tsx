@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
 
 /**
@@ -33,8 +34,6 @@ import { FieldError, compose, email as emailRule, required, useForm } from '../.
  * tile — and their session there makes the second leg silent. Nothing in the
  * URL decides where they go: the destination comes from the connection row.
  */
-const SSO_REQUIRED =
-  'This workspace requires single sign-on. Continue from your identity provider’s Nexa tile.';
 
 /**
  * Whether a password still opens this workspace.
@@ -47,6 +46,7 @@ function passwordWorks(membership: Membership): boolean {
 }
 
 export function SignInPage(): ReactElement {
+  const t = useTranslate();
   const [workspaces, setWorkspaces] = useState<Membership[] | null>(null);
   const [chooseError, setChooseError] = useState<string | null>(null);
 
@@ -67,11 +67,10 @@ export function SignInPage(): ReactElement {
     if (!ssoParam || ssoStarted.current) return;
     ssoStarted.current = true;
     startSsoLogin(ssoParam).catch((cause: unknown) => {
-      setSsoError(
-        cause instanceof Error ? cause.message : 'Could not start single sign-on for that link.',
-      );
+      // i18n-ignore: a store-thrown message, not raw server prose (see continueWithSso below).
+      setSsoError(cause instanceof Error ? cause.message : t('auth.signin.ssoLinkFailed'));
     });
-  }, [ssoParam, startSsoLogin]);
+  }, [ssoParam, startSsoLogin, t]);
 
   /**
    * Hand a workspace's sign-in to its identity provider.
@@ -86,27 +85,31 @@ export function SignInPage(): ReactElement {
   ): Promise<void> => {
     const connectionId = workspace.sso_enforced_connection_id;
     if (!connectionId) {
-      report(SSO_REQUIRED);
+      report(t('auth.signin.ssoRequired'));
       return;
     }
     try {
       await startSsoLogin(connectionId, workspace.client_id);
     } catch (cause) {
-      report(cause instanceof Error ? cause.message : 'Could not start single sign-on.');
+      // i18n-ignore: see the ssoParam effect above — a store-thrown message, not raw server prose.
+      report(cause instanceof Error ? cause.message : t('auth.signin.ssoStartFailed'));
     }
   };
 
   const form = useForm({
     initial: { email: '', password: '' },
     validators: {
-      email: compose(required('Enter your email.'), emailRule()),
-      password: required('Enter your password.'),
+      email: compose(
+        required(t('auth.validation.emailRequired')),
+        emailRule(t('auth.validation.emailInvalid')),
+      ),
+      password: required(t('auth.validation.passwordRequired')),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
         const memberships = await listWorkspaces(values.email, values.password);
         if (memberships.length === 0) {
-          setSubmitError('This account is not a member of any workspace.');
+          setSubmitError(t('auth.signin.noWorkspaces'));
           return;
         }
         if (memberships.length === 1) {
@@ -125,7 +128,7 @@ export function SignInPage(): ReactElement {
       } catch {
         // One message for a wrong password and an unknown address alike — the
         // server does not distinguish them and neither should the UI.
-        setSubmitError('Invalid email or password.');
+        setSubmitError(t('auth.signin.invalidCredentials'));
       }
     },
   });
@@ -142,7 +145,7 @@ export function SignInPage(): ReactElement {
     try {
       await signIn(form.values.email, form.values.password, licenseId);
     } catch {
-      setChooseError('Could not open that workspace.');
+      setChooseError(t('auth.signin.workspaceOpenFailed'));
     }
   };
 
@@ -161,7 +164,7 @@ export function SignInPage(): ReactElement {
           </span>
           <div>
             <h1 className="text-lg font-semibold">Nexa</h1>
-            <p className="text-xs text-content-secondary">Sign in to your workspace</p>
+            <p className="text-xs text-content-secondary">{t('auth.signin.subtitle')}</p>
           </div>
         </header>
 
@@ -175,14 +178,14 @@ export function SignInPage(): ReactElement {
           // The redirect is already in flight; a form underneath it would only
           // invite somebody to start typing a password they will lose.
           <p role="status" className="text-sm text-content-secondary">
-            Taking you to your identity provider…
+            {t('auth.signin.ssoRedirecting')}
           </p>
         ) : workspaces ? (
           <section
-            aria-label="Choose a workspace"
+            aria-label={t('auth.signin.chooseWorkspace')}
             className="rounded-lg border border-border bg-surface p-4 shadow-xs"
           >
-            <h2 className="mb-3 text-sm font-medium">Choose a workspace</h2>
+            <h2 className="mb-3 text-sm font-medium">{t('auth.signin.chooseWorkspace')}</h2>
             {chooseError && (
               <p role="alert" className="mb-3 text-xs text-danger">
                 {chooseError}
@@ -199,7 +202,9 @@ export function SignInPage(): ReactElement {
                   >
                     <span>{workspace.organization_name}</span>
                     <span className="text-2xs capitalize text-content-tertiary">
-                      {passwordWorks(workspace) ? workspace.role : 'SSO required'}
+                      {passwordWorks(workspace)
+                        ? workspace.role
+                        : t('auth.signin.ssoRequiredBadge')}
                     </span>
                   </button>
                 </li>
@@ -214,7 +219,7 @@ export function SignInPage(): ReactElement {
           >
             <div className="flex flex-col gap-1">
               <label htmlFor="email" className="text-xs font-medium">
-                Email
+                {t('auth.fields.email')}
               </label>
               <input
                 id="email"
@@ -232,7 +237,7 @@ export function SignInPage(): ReactElement {
 
             <div className="flex flex-col gap-1">
               <label htmlFor="password" className="text-xs font-medium">
-                Password
+                {t('auth.fields.password')}
               </label>
               <input
                 id="password"
@@ -259,25 +264,25 @@ export function SignInPage(): ReactElement {
               disabled={busy || !form.canSubmit}
               className="mt-1 rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
             >
-              {busy || form.isSubmitting ? 'Signing in…' : 'Sign in'}
+              {busy || form.isSubmitting ? t('auth.signin.submitting') : t('auth.signin.submit')}
             </button>
           </form>
         )}
 
         <p className="mt-4 text-center text-xs text-content-secondary">
           <Link to="/forgot-password" className="text-content-brand underline">
-            Forgot your password?
+            {t('auth.signin.forgotPassword')}
           </Link>
         </p>
         <p className="mt-2 text-center text-xs text-content-secondary">
-          New here?{' '}
+          {t('auth.signin.newHere')}{' '}
           <Link to="/signup" className="text-content-brand underline">
-            Create a workspace
+            {t('auth.signin.createWorkspace')}
           </Link>
         </p>
 
         <p className="mt-4 text-center text-2xs text-content-tertiary">
-          Demo: owner@acme.localhost / nexa-demo-password
+          {t('auth.signin.demoCredentials')}
         </p>
       </div>
     </main>

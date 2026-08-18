@@ -13,9 +13,14 @@ describe('contract binding', () => {
     expect(contractPath('/health')).toBe('/health');
   });
 
-  it('names the four FR-MOD-13.7 surfaces, the Team + Playbook + Billing parity modules, plus the liveness probe', () => {
+  it('names the four FR-MOD-13.7 surfaces, the Team + Playbook + Billing parity modules, the auth shell, plus the liveness probe', () => {
     expect(MOBILE_ENDPOINTS).toEqual({
       health: '/health',
+      authLogin: '/auth/login',
+      authAuthorize: '/auth/authorize',
+      authToken: '/auth/token',
+      authMe: '/auth/me',
+      authRevoke: '/auth/revoke',
       chats: '/chats',
       customers: '/customers',
       reportsOverview: '/reports/overview',

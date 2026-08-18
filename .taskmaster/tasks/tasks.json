@@ -6025,7 +6025,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T11:56:33.652Z",
+        "updatedAt": "2026-08-18T13:42:19.078Z",
         "subtasks": [
           {
             "id": 1,
@@ -6119,7 +6119,7 @@
             "description": "Soğuk açılış yolculuğu testi + parite AUTH satırları + PLAN damgası ◐→✅.",
             "details": "NE YAPILACAK: (a) `apps/mobile/src/__tests__/journey.test.tsx`: GERÇEK `App` (mock'lanan yalnız\n`expo-*` native modüller + `fetch`/WebSocket) — soğuk açılış → giriş ekranı → e-posta/parola →\n(çok workspace) seçim → Inbox listesi (sahte `/chats`) → sohbet aç (sahte events) → yanıt gönder\n(iyimser balon → echo) → Settings → Sign out → giriş ekranı. Bu, mobilin Playwright'a girmemesinin\n(§C-A28) karşılığıdır: bir kullanıcının yürüdüğü yolun tamamını TEK testte kanıtlar; 13.7-k'nın parite\nmatrisi \"ekran var\" derken bu \"ekrana ULAŞILIYOR\" der. (b) `parity.test.ts`: AUTH yüzeyi\n(SignIn/WorkspacePicker/Account) `SUPPORTING` ya da yeni bir `SHELL` sınıfına; `/auth/login`,\n`/auth/authorize`, `/auth/token`, `/auth/me`? sınıflı; iki yönlü eşitlik korunur;\n`SCOPE_BOUNDARIES` (mağaza) aynen; sayım güncellenir. (c) Bayatlar: `app/navigation.ts:5` \"her\nstack'te tek placeholder ekran\" yorumu · `App.test.tsx:136` \"each showing its own placeholder\"\nadı → gerçek. (d) PLAN.md: satır 572 `◐ → K13.7` → `✅ → K13.7`; K13.7 üst kutusu \"GÜNCEL DURUM: ✅\"\n(giriş yolu §D111 kapandı — tm 128.1–128.8, sayılarla) — kutu SİLİNMEZ, güncellenir; §1 faz tablosu\nFaz-3 satırının sayacı `6 ✅ + 0 ◐`; §2 matrisi `Mobil app` satırı; §6 kapsam tablosu 13.7 satırı;\n§6.2 dilim 5 hücresi; §F.00 13.7 paragrafına \"§D111 kapandı\" cümlesi; §6A tablosunda 13.7 kalemi ✅.\nFaz-4'ün ilk ✅ kalemi bu olur.\nNEDEN: 12+3 alt-görev \"kendi payını\" teslim etti, kimse zinciri baştan sona yürümedi (§D111'in dersi:\nistemci yüzeyinin ✅'i \"soğuk açılış yolculuğu\" testi ister — bu alt-görev o kuralı bu kaleme uygular).\nDOSYALAR: `__tests__/journey.test.tsx` · `__tests__/parity.test.ts` · `lib/contract.test.ts`\n(MOBILE_ENDPOINTS beklentisi) · `app/navigation.ts` · `App.test.tsx` · PLAN.md.\nREFERANS DESEN: `App.test.tsx`'in fetch mock kurulumu (13.7-h/-j genişletmişti) · `ChatScreen.test.tsx`\ncomposer akışı · `parity.test.ts:184-330`.\nKK: journey testi yeşil ve ≥ 8 adım assert eder; parity matrisi iki yönlü eşit; PLAN damgası ✅.\nTUZAKLAR: RNTL zaman aşımı — jest.config `testTimeout`'u tm 129 belirler; bu test 20 s'yi aşmamalı\n(fake timers KULLANMA — soket/backoff gerçek zamanlayıcı ister; `waitFor` `timeout` ver).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-13.7 (mobil)**. Gereksinim satırı: `grep -n '| 13\\.7 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K13.7' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/mobile test` exit 0 (journey + parity + App); 3 ardışık koşu yeşil (flake yok).\n- `pnpm -w typecheck` · `lint` · `build` · `test` · `test:integration` exit 0 (kapı tam).\n- Ölçülebilir: journey.test.tsx ≥ 8 `expect`; parity sayımında AUTH satırları; PLAN.md:572 `✅ → K13.7`; K13.7 kutusu güncel; §1 tablosu Faz-3 sayacı `6 ✅ + 0 ◐`; §6A tablosunda 13.7 ✅.\n- HANDOFF: \"13.7 kapandı — Faz-4'ün ilk ✅ kalemi\".",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "128.1",
               "128.2",
@@ -6130,7 +6130,7 @@
               "128.7"
             ],
             "parentId": "128",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-18T13:42:19.078Z"
           }
         ]
       },
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T11:56:33.653Z",
+      "lastModified": "2026-08-18T13:42:19.079Z",
       "taskCount": 143,
       "completedCount": 131,
       "tags": [

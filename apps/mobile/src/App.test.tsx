@@ -10,10 +10,10 @@ import type { ChatSummary } from './features/inbox/types';
 
 /**
  * The tab bar renders every label as plain text, and — for whichever tab is
- * focused — that same word also appears as the header title and the
- * placeholder screen's own heading. `getByText('Inbox')` on the focused tab
- * is therefore ambiguous; the accessibility label React Navigation puts on
- * the tab button itself (`"Inbox, tab, 1 of 4"`) is not.
+ * focused — that same word also appears as the header title above the screen
+ * it owns. `getByText('Inbox')` on the focused tab is therefore ambiguous; the
+ * accessibility label React Navigation puts on the tab button itself
+ * (`"Inbox, tab, 1 of 4"`) is not.
  */
 const tabButton = (label: string) => screen.getByLabelText(new RegExp(`^${label}, tab,`));
 
@@ -334,7 +334,7 @@ describe('App', () => {
     }
   });
 
-  it('switches screens when a tab is pressed, each showing its own placeholder', async () => {
+  it('switches screens when a tab is pressed, each showing the surface it owns', async () => {
     mockStore.session = STORED_SESSION;
 
     await render(<App />);

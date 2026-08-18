@@ -1,11 +1,12 @@
 /**
  * Route names and param lists for the app shell.
  *
- * Each tab owns a stack, and today every stack has exactly one screen — its
- * placeholder root. `13.7-f`…`-j` extend these param lists as they add real
- * screens (a chat detail push, a customer detail push, …); nothing here is
- * speculative infrastructure for routes that do not exist yet, it is the
- * minimum shape a stack navigator requires to type-check at all.
+ * Each tab owns a stack, and every route below is mounted and reached by a real
+ * screen — `13.7-f`…`-j` filled the four surfaces in, `13.7-m`…`-o` hung the
+ * parity modules off Settings, and `13.7-p`…`-r` added the tree in front of all
+ * of them. Nothing here is speculative infrastructure: `parity.test.ts` fails a
+ * route that is typed and never handed to a `Stack.Screen`, which is what keeps
+ * this file a description of the app rather than an intention about it.
  */
 import type { NavigatorScreenParams } from '@react-navigation/native';
 

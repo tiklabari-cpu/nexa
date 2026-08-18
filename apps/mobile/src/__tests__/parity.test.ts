@@ -25,6 +25,12 @@
  * and an out-of-scope module quietly wired up (the narrowing was abandoned
  * without anybody revisiting §C-A28). Adding a surface is deliberately not
  * free — the matrix has to be edited for the suite to pass again.
+ *
+ * A fourth was added by `13.7-w`, and it is the one this file was blind to when
+ * it shipped: every surface can be present, mounted and correct while the app
+ * has no door. §D111 found exactly that — four ticks above, and a cold launch
+ * that ended on a 401 with no sign-in screen to reach. `SHELL` is that row now,
+ * and `journey.test.tsx` is where somebody walks it.
  */
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -80,10 +86,34 @@ const CONTRACT_PATHS: readonly string[] = [
   ),
 ];
 
-/** The route names the navigator mounts, across every stack. */
-const MOUNTED_ROUTES: readonly string[] = SOURCES.filter(({ path }) =>
-  path.includes(join('app', 'stacks')),
+/**
+ * The route names the navigator mounts, across every stack.
+ *
+ * `app/stacks/` holds the four tabs' stacks. The signed-out tree is not one of
+ * them — `AuthStack` renders *instead of* the tab navigator (13.7-p), so it
+ * lives beside the screens it mounts and has to be read from there. Both are
+ * included, which is what keeps "typed but never mounted" a failure on either
+ * side of the gate.
+ */
+const AUTH_STACK = join('features', 'auth', 'AuthStack.tsx');
+const MOUNTED_ROUTES: readonly string[] = SOURCES.filter(
+  ({ path }) => path.includes(join('app', 'stacks')) || path.endsWith(AUTH_STACK),
 ).flatMap(({ text }) => [...text.matchAll(/name="(\w+)"/g)].map((match) => match[1]!));
+
+/** Endpoints requested from a subtree — the same read `REQUESTED` does, narrowed. */
+function requestsUnder(prefixes: readonly string[]): string[] {
+  const roots = prefixes.map((prefix) => join(SRC, prefix));
+  return [
+    ...new Set(
+      SOURCES.filter(({ path }) => roots.some((root) => path.startsWith(root))).flatMap(
+        ({ text }) =>
+          [...text.matchAll(/\.request\(\s*'(?:get|post|put|patch|delete)',\s*'([^']+)'/g)].map(
+            (match) => match[1]!,
+          ),
+      ),
+    ),
+  ].sort();
+}
 
 const NAVIGATION_SOURCE = readFileSync(join(SRC, 'app', 'navigation.ts'), 'utf8');
 
@@ -223,6 +253,79 @@ const PARITY_MODULES: readonly ParityModule[] = [
 ];
 
 /**
+ * The shell: the way into the four surfaces, and the way back out (13.7-w).
+ *
+ * A third class rather than a row in either list above, because it answers a
+ * different question. `MATRIX` and `PARITY_MODULES` ask "is this module on the
+ * phone?"; this asks "can a person get to any of them?" — and until `13.7-p`
+ * the honest answer was no, while every assertion above passed. That is the
+ * whole of §D111: `MobileSession.signIn`, `signInWithSso`, `signOut` and
+ * `switchAccount` had zero production callers, the sign-in screen did not
+ * exist, and `RootNavigator` mounted the tab bar regardless of the session, so
+ * a cold launch asked `/chats` without a token and stopped at a 401. Three
+ * audits measured this item against its acceptance criterion in that state and
+ * found it met, because nothing they read was about the door.
+ *
+ * So the shell is counted the same way the surfaces are — screens on disk,
+ * routes typed and mounted, endpoints equal in both directions — and its
+ * reachability is walked rather than described in `journey.test.tsx`.
+ */
+interface ShellSurface {
+  /** What it is for, in the words `13.7-p`…`-r` used. */
+  surface: 'Sign-in' | 'Account';
+  /** Its directory under `src/features/`. */
+  feature: string;
+  screens: string[];
+  routes: string[];
+  /**
+   * Where its request literals live. Unlike a surface, the shell has no
+   * `api.ts`: everything it causes goes through `MobileSession`, which is the
+   * point — one way to mint a token, and it is the console's own (13.7-b).
+   */
+  requestsFrom: string[];
+  endpoints: string[];
+  registry: MobileEndpointKey[];
+  narrowedTo: string;
+}
+
+const SHELL: readonly ShellSurface[] = [
+  {
+    surface: 'Sign-in',
+    feature: 'auth',
+    screens: [
+      'AuthStack.tsx',
+      'SignInScreen.tsx',
+      'WorkspacePickerScreen.tsx',
+      'LoadingScreen.tsx',
+    ],
+    routes: ['SignIn', 'WorkspacePicker'],
+    // `auth/session.ts` alone, not the whole of `auth/`: the handset's own push
+    // registration is called from `auth/device-token-transport.ts` and is a
+    // session decision rather than a screen, which is why it stays under
+    // `SUPPORTING` below (§C-A31 · 13.7-l).
+    requestsFrom: ['auth/session.ts'],
+    endpoints: ['/auth/login', '/auth/authorize', '/auth/token', '/auth/me', '/auth/revoke'],
+    registry: ['authLogin', 'authAuthorize', 'authToken', 'authMe', 'authRevoke'],
+    narrowedTo:
+      'email + password over `/auth/login`, one workspace picked from the memberships it answers with, then the console’s own S256 PKCE pair — plus the federated door through the device browser (§C-A29 · 13.7-q). No sign-up, no password reset and no "remember this device": all three are console jobs, and none of them may become a second way to mint a token (13.7-b · 13.7-p)',
+  },
+  {
+    surface: 'Account',
+    feature: 'account',
+    screens: ['AccountScreen.tsx'],
+    // `SwitchAccount` is `AuthStack` in `'switch'` mode, pushed while still
+    // signed in — the one place the signed-out tree is reached from inside the
+    // signed-in one (13.7-r).
+    routes: ['Account', 'SwitchAccount'],
+    requestsFrom: ['features/account'],
+    endpoints: [],
+    registry: [],
+    narrowedTo:
+      'name, email, workspace and role read straight off `sessionState.principal` — no second request, which is why its endpoint list is empty rather than short — plus sign out (revoke, then clear) and switch account (§C-A31 ordering, run by the session rather than this screen). No profile or password editing: desk work (§C-A28 · 13.7-r)',
+  },
+];
+
+/**
  * Endpoints the phone calls that belong to no FR-MOD-13.7 surface.
  *
  * Every entry is load-bearing rather than a leftover, and all of them are here
@@ -230,10 +333,6 @@ const PARITY_MODULES: readonly ParityModule[] = [
  * them instead of the matrix growing a fifth surface it does not have.
  */
 const SUPPORTING: readonly { endpoints: string[]; why: string }[] = [
-  {
-    endpoints: ['/auth/login', '/auth/authorize', '/auth/token', '/auth/me', '/auth/revoke'],
-    why: 'the session itself — the console’s own OAuth 2.1 + PKCE pair, no second way to mint a token (13.7-b)',
-  },
   {
     endpoints: ['/agents/me/notification-preferences'],
     why: 'FR-MOD-08.2 asks for one preference set consistent across channels, so the phone reads and writes the same five (13.7-j)',
@@ -364,6 +463,7 @@ describe('module parity matrix — the surfaces FR-MOD-13.7 names', () => {
     const claimed = [
       ...MATRIX.flatMap((surface) => surface.registry),
       ...PARITY_MODULES.flatMap((module_) => module_.registry),
+      ...SHELL.flatMap((entry) => entry.registry),
     ].sort();
     const registered = (Object.keys(MOBILE_ENDPOINTS) as MobileEndpointKey[])
       .filter((key) => key !== 'health')
@@ -378,6 +478,11 @@ describe('module parity matrix — the surfaces FR-MOD-13.7 names', () => {
     for (const module_ of PARITY_MODULES) {
       for (const key of module_.registry) {
         expect(module_.endpoints).toContain(MOBILE_ENDPOINTS[key]);
+      }
+    }
+    for (const entry of SHELL) {
+      for (const key of entry.registry) {
+        expect(entry.endpoints).toContain(MOBILE_ENDPOINTS[key]);
       }
     }
   });
@@ -418,6 +523,59 @@ describe('module parity matrix — modules paid off since (§D96, one subtask at
   );
 });
 
+// --- The shell those surfaces hang off --------------------------------------
+
+describe('module parity matrix — the way in and the way out (13.7-w)', () => {
+  it.each(SHELL)('$surface — has screens on disk under features/$feature', (entry) => {
+    const dir = join(SRC, 'features', entry.feature);
+    expect(existsSync(dir)).toBe(true);
+    for (const screen of entry.screens) {
+      expect(existsSync(join(dir, screen))).toBe(true);
+    }
+  });
+
+  it.each(SHELL)('$surface — is reachable: its routes are typed and mounted', (entry) => {
+    for (const route of entry.routes) {
+      expect(NAVIGATION_SOURCE).toContain(`${route}:`);
+      expect(MOUNTED_ROUTES).toContain(route);
+    }
+  });
+
+  it.each(SHELL)('$surface — requests exactly the endpoints the matrix claims', (entry) => {
+    expect(requestsUnder(entry.requestsFrom)).toEqual([...entry.endpoints].sort());
+  });
+
+  it.each(SHELL)('$surface — says what it narrowed, so parity is not overclaimed', (entry) => {
+    expect(entry.narrowedTo.length).toBeGreaterThan(0);
+  });
+
+  it('branches the tree on the session rather than hiding the tabs', () => {
+    // The §D111 defect itself, as an assertion: before `13.7-p` this file
+    // mounted the four tabs whatever the session said, so every surface above
+    // was "covered" and none of them was reachable with a token. A signed-out
+    // person must have nowhere in the tab tree to be.
+    const navigator = readFileSync(join(SRC, 'app', 'RootNavigator.tsx'), 'utf8');
+    expect(navigator).toContain('useSessionState()');
+    expect(navigator).toContain("status === 'signed-out'");
+    expect(navigator).toContain('<AuthStack />');
+  });
+
+  it('keeps a thrown render and a dead radio from looking like an empty inbox', () => {
+    // The two pieces `13.7-v` added that belong to no feature directory, so
+    // nothing above would notice them being unwired — which is the failure mode
+    // §D111 was: the code existed, and no production caller reached it.
+    const app = readFileSync(join(SRC, 'App.tsx'), 'utf8');
+    expect(app).toContain('<ErrorBoundary>');
+    expect(existsSync(join(SRC, 'app', 'ErrorBoundary.tsx'))).toBe(true);
+
+    const readers = SOURCES.filter(({ text }) => text.includes('useConnectivity()')).map(
+      ({ path }) => path,
+    );
+    expect(readers.length).toBeGreaterThan(0);
+    expect(existsSync(join(SRC, 'lib', 'connectivity.ts'))).toBe(true);
+  });
+});
+
 // --- What the phone calls, and nothing more ---------------------------------
 
 describe('module parity matrix — every request is accounted for', () => {
@@ -425,6 +583,7 @@ describe('module parity matrix — every request is accounted for', () => {
     const classified = [
       ...MATRIX.flatMap((surface) => surface.endpoints),
       ...PARITY_MODULES.flatMap((module_) => module_.endpoints),
+      ...SHELL.flatMap((entry) => entry.endpoints),
       ...SUPPORTING.flatMap((entry) => entry.endpoints),
     ].sort();
 
@@ -485,27 +644,17 @@ describe('module parity matrix — the modules §C-A28 puts out of scope', () =>
     // are the module-parity debt paid off so far (13.7-m, 13.7-n, 13.7-o) —
     // all four live in the Settings tab, none of them is a `MATRIX` surface.
     //
-    // `auth` is not a surface either, and not a module: it is the way in
-    // (13.7-p). It renders *instead of* the tabs while the session is signed
-    // out, and Settings → Account's "Switch account" (13.7-r) is the one
-    // exception — it pushes the same stack, in `'switch'` mode, while still
-    // signed in, rather than a tab of its own. Either way it calls nothing
-    // directly: every request it causes goes through `MobileSession`, which
-    // is why `/auth/login` and `/auth/authorize` are already classified
-    // under `SUPPORTING` above rather than appearing here. `13.7-w` gives it
-    // a row of its own once sign-out and the SSO leg land.
-    //
-    // `account` is the one Settings surface FR-MOD-08.2 does not already
-    // name — who is signed in, which workspace, sign out, switch account
-    // (13.7-r). Like `notifications` it requests nothing of its own; every
-    // field it shows is already on `sessionState.principal`.
+    // `auth` and `account` are neither surfaces nor modules but the shell they
+    // are reached through, and they have carried a row of their own since
+    // `13.7-w` (`SHELL` above) rather than being named here as exceptions.
+    // Only `notifications` is still spelled out, because it is a lone screen
+    // inside a surface the criterion already names.
     expect(shipped).toEqual(
       [
         ...MATRIX.map((surface) => surface.feature),
         ...PARITY_MODULES.map((module_) => module_.feature),
+        ...SHELL.map((entry) => entry.feature),
         'notifications',
-        'auth',
-        'account',
       ].sort(),
     );
   });
@@ -593,12 +742,17 @@ describe('module parity matrix — what is still owed', () => {
     expect({
       surfacesCovered: MATRIX.length,
       modulesPaidOff: PARITY_MODULES.length,
+      shellSurfaces: SHELL.length,
       modulesOutOfScope: OUT_OF_SCOPE.length,
       endpointsCalled: REQUESTED.size,
       contractEndpoints: CONTRACT_PATHS.length,
       scopeBoundaries: SCOPE_BOUNDARIES.length,
     }).toEqual({
       surfacesCovered: 4,
+      // The way in (`SignIn` + `WorkspacePicker`) and the way out (`Account`).
+      // Two rows that did not exist while §D111 was open, because neither
+      // screen did — which is why the count is here rather than implied.
+      shellSurfaces: 2,
       // The debt §D96 recorded pays down here one subtask at a time: Team
       // (13.7-m), then Playbook (13.7-n), then Billing (13.7-o), so
       // `OUT_OF_SCOPE` below drops from four to one — Settings is what is left.

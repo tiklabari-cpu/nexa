@@ -1,6 +1,6 @@
 # HANDOFF — Nexa
 
-**Date:** 2026-08-01 · **Branch:** `main` (güncel — Faz-0 + v1 + v2 planı burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
+**Date:** güncel — bkz. Task log · **Branch:** `main` (Faz-0 + v1 + v2 planı burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 > **Dal durumu (2026-08-01):** `main` uzun süre `e118695` (tm 21) noktasında takılı kalmıştı; Faz-0
 > kapanışı, **tüm v1** ve v2 planlama turu yalnızca `docs/plan-expand-audit` üzerinde birikmişti
@@ -12,6 +12,13 @@
 ---
 
 ## Task log (newest-first)
+
+## 132.2 — M-DOCS-a: README gerçekle hizalandı — test:unit/e2e önkoşulları/`.env` yükleme + HANDOFF:3 tarih — done — 2026-08-18 UTC
+
+- **Yapıldı:** `README.md` — `test:unit` satırındaki "no external services needed" düzeltildi (api/rtm canlı Postgres+Redis ister); yeni "End-to-end tests" alt bölümü (`playwright install chromium` · 5 sunucu · global setup'ın dev DB'yi `NEXA_SEED_RESET=1` ile sıfırladığı uyarısı + geri alma notu · tek seferde bir koşu); yeni "Environment" alt bölümü (`make` hedefleri `.env`'i otomatik export eder, çıplak `pnpm db:migrate`/`test:e2e` etmez → `set -a; source .env; set +a`). Mobile app / Background jobs bölümleri zaten 128.5/130.4'te yazılmıştı, dokunulmadı (görev metninin kendi koşulu). `HANDOFF.md:3` tarih sabiti → "güncel — bkz. Task log".
+- **Doğrulama (hepsi exit 0):** `pnpm -w format:check` · `typecheck` 12/12 · `lint` 9/9 · `build` 8/8 · `turbo test --force --filter=!@nexa/e2e --filter=!@nexa/api` 9/9 · api `test:unit` 64/995 · api `test:integration` 95/2417 üç shard'da — taban ile birebir aynı. Elle KK: `pnpm --filter @nexa/e2e exec playwright install chromium` ve (kaynaklı `.env` ile) `pnpm db:migrate` + `pnpm --filter @nexa/api db:seed` bu makinede fiilen koşturuldu, ikisi de exit 0 — README'nin yeni komutları doğru. `test:e2e` KOŞULMADI (yalnız doküman, önceki dokümantasyon turlarının aynı gerekçesi).
+- **Varsayımlar:** Bu pencerenin kabuğunda `make` binary'si yok (Git Bash + PowerShell ikisi de bulamadı); "make dev yolu" KK'sı bu yüzden altındaki zincirle (docker datastore + `pnpm db:migrate` + `pnpm db:seed`) doğrulandı, `make` komutunun kendisiyle değil — `pnpm dev`'in sonsuz sürece açıldığı için hiç çalıştırılmadığı gibi.
+- **Sonraki pencereye not:** tm 132.3 (M-DOCS-b) CONVENTIONS §1'i genişletsin; tm 132.4/132.5 hijyen+testler. M-CI satırı `◐` kalır (132.3-132.5 pending).
 
 ## 132.1 — M-CI-a: CI drift kapısı + bayat `if` kaldır + mobil jest ayrı job — done — 2026-08-18 UTC
 

@@ -151,9 +151,10 @@ thing on an Android emulator or a physical phone), and demo login credentials.
 ```bash
 pnpm typecheck      # tsc across the workspace
 pnpm lint           # eslint
-pnpm test:unit      # vitest, no external services needed
+pnpm test:unit      # vitest; @nexa/api and @nexa/rtm need a live Postgres + Redis
+                    # (each run gets its own isolated database — see below)
 pnpm test:integration
-pnpm test:e2e       # playwright (chromium)
+pnpm test:e2e       # playwright (chromium) — see "End-to-end tests" below
 pnpm format         # prettier
 ```
 
@@ -181,8 +182,38 @@ failing test by hand.
 The e2e suite is the exception — it drives the real servers on fixed ports against the
 seeded development database, so two of those still cannot run at once.
 
-Environment lives in `.env` (created from `.env.example` by `make env`). It is
-gitignored; no secret is ever committed.
+### End-to-end tests
+
+```bash
+pnpm --filter @nexa/e2e exec playwright install chromium   # one-time browser download
+pnpm test:e2e
+```
+
+Playwright starts five real servers for you (api, rtm, web, widget, mock-idp) on their
+usual ports, then a global setup step reseeds the demo tenant with `NEXA_SEED_RESET=1`.
+
+**This resets your local dev database** — the reset truncates the tenant tables (it
+neither drops the database nor touches the schema) so every run starts from the same
+fixture instead of piling more fixtures onto the last one. If you have local data in
+`make dev`'s database you care about, back it up first (`make psql` → `pg_dump`, or just
+re-seed afterwards with `make seed`). Because it drives fixed ports against that one
+database, two `test:e2e` runs — or windows — cannot execute at the same time.
+
+### Environment
+
+Environment lives in `.env` (created from `.env.example` by `make env`). `make` targets
+export it automatically (`Makefile` does `include .env` + `export`), but a bare `pnpm`
+command run from your shell does not load it — nothing in this repo calls `dotenv`, so
+`apps/api`/`apps/rtm`/Prisma read `process.env` directly. `pnpm db:migrate` and
+`pnpm test:e2e` both need `DATABASE_URL` (and friends) in the shell's environment first:
+
+```bash
+set -a; source .env; set +a
+pnpm db:migrate
+```
+
+or use the `make` targets (`make migrate`, `make test-e2e`), which already export `.env`
+for you. It is gitignored; no secret is ever committed.
 
 ---
 

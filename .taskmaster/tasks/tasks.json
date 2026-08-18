@@ -6285,7 +6285,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-18T07:51:13.444Z",
+        "updatedAt": "2026-08-18T07:54:16.671Z",
         "subtasks": [
           {
             "id": 1,
@@ -6304,10 +6304,10 @@
             "description": "README’nin yanlış/eksik iddiaları düzeltilir; e2e’nin dev DB’yi sıfırladığı yazılır.",
             "details": "NE YAPILACAK: `README.md`: (a) \"Development\" bölümünde `pnpm test:unit` satırı → \"vitest; **api ve rtm\ncanlı Postgres+Redis ister** (koşu başına izole veritabanı, bkz. aşağıda)\"; (b) yeni \"End-to-end\ntests\" alt bölümü: `pnpm exec playwright install chromium` · 5 sunucu otomatik açılır · **global\nsetup dev `nexa` veritabanını sıfırlar** (`NEXA_SEED_RESET=1`) — verini kaybetmek istemiyorsan …\n· iki pencere aynı anda e2e koşamaz; (c) \"Environment\" notu: kök kabuktan `pnpm db:migrate`/\n`pnpm test:e2e` için `.env` yüklenmeli (`set -a; source .env; set +a` ya da `make migrate`);\n(d) \"Mobile app\" bölümü (13.7-t/tm 128.5 yazdıysa link, yazmadıysa kısa özet + `apps/mobile/README.md`'ye\nişaret — 128.5 bitmediyse \"bkz.\" yerine adımları buraya yaz, sonra 128.5 taşır); (e) \"Background jobs\"\n(tm 130.4 yazdıysa dokunma; yazmadıysa bugünkü gerçeği yaz: script'ler + scheduler durumu). Ayrıca\n`HANDOFF.md:3` başlık tarihini \"güncel — bkz. Task log\" biçimine çevir (tarih sabiti bayatlıyor).\nNEDEN: §D113/K5 + §F.1/8 doküman tazeliği.\nDOSYALAR: `README.md` · `HANDOFF.md` (yalnız satır 3).\nKK: README'deki her komut bu makinede çalışır (en az `make dev` yolunu ve e2e önkoşul komutunu fiilen\nkoştur; HANDOFF'a çıktı özeti).\nKAPSAM DIŞI: mimari bölümünü yeniden yazmak; PLAN.md.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-CI / M-DOCS / M-HYGIENE (türetilmiş — NFR-M4 test piramidi · NFR-M bakım · §F.1/8 doküman tazeliği)**. Gereksinim satırı: `grep -n '| M-CI' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-CI' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w format:check` exit 0.\n- Ölçülebilir: README'de \"no external services needed\" ifadesi yok; \"End-to-end tests\" + \"Mobile app\" başlıkları var; HANDOFF:3 tarih sabiti yok.\n- PLAN: KM-CI'ye madde.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "132",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-18T07:54:16.671Z"
           },
           {
             "id": 3,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T07:51:13.445Z",
+      "lastModified": "2026-08-18T07:54:16.672Z",
       "taskCount": 143,
       "completedCount": 130,
       "tags": [

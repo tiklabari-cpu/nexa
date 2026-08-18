@@ -6360,7 +6360,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-18T09:18:13.016Z",
+        "updatedAt": "2026-08-18T09:57:29.007Z",
         "subtasks": [
           {
             "id": 1,
@@ -6368,10 +6368,10 @@
             "description": "Sayfa çevirilerinin üstüne oturacağı katalog düzeni, yardımcılar ve nöbetçi test.",
             "details": "NE YAPILACAK: (a) `apps/web/src/lib/i18n.ts`'i BOZMADAN genişlet: kataloğu `src/locales/{en,tr}/\n{shell,auth,inbox,customers,team,reports,billing,playbook,settings,apps,home,common}.ts` dosyalarına\nböl (mevcut ~148 anahtar `shell`/`common`'a taşınır, davranış aynı; `i18n.test.ts` yeşil kalır),\n`t(key, vars?)` interpolasyon (`{count}`) + basit çoğul (`Intl.PluralRules`), fallback zinciri\naynen (aktif→en→anahtar); (b) ADR-06 hata `type` → kullanıcı metni eşlemesi `common.errors.<type>`\n(24 tip) ve `lib/api-client.ts`'in hata gösterim yolu onu kullanır (sayfalar sunucu mesajını ham\ngöstermez); (c) nöbetçi `src/lib/i18n-coverage.test.ts`: `features/**/*.tsx` (test hariç) dosyalarını\ntarar; sabit liste `TRANSLATED_FILES` (bu turda: AppShell, CommandPalette + 133.x'in ekleyecekleri) —\nlistede olmayan bir dosya `t(` çağırmıyorsa \"henüz çevrilmedi\" olarak SAYILIR ve test kalan sayıyı\nraporlar; listede olan dosyada JSX metin düğümü olarak İngilizce cümle kalıp kalmadığı için heuristik\n(≥ 3 kelimelik düz metin JSX çocuğu) — false-positive'leri `// i18n-ignore` ile açıkla; en/tr anahtar\nkümeleri EŞİT (fark listelenir); (d) test yardımcısı `test/i18n.tsx`: `renderWithLocale(ui, 'tr')`;\n(e) `lib/format.ts` locale'i store'dan alır (zaten öyle mi doğrula).\nNEDEN: §D113/K7 — sayfa çevirileri ortak düzen olmadan on pencerede on farklı yapı üretir.\nDOSYALAR: `lib/i18n.ts` · `src/locales/**` · `lib/api-client.ts` · `lib/i18n-coverage.test.ts` ·\n`test/i18n.tsx` · `lib/i18n.test.ts` (+interpolasyon/çoğul testleri).\nREFERANS: mevcut `lib/i18n.ts` (store + fallback) · `components/AppShell.tsx` kullanımı · widget\n`apps/widget/src/i18n.ts` (createTranslator) — iki katalog AYRI kalır.\nKK: mevcut testler yeşil; nöbetçi çalışıyor ve \"kalan N dosya\" raporluyor; en/tr eşit.\nKAPSAM DIŞI: sayfaların kendisini çevirmek (133.2+); üçüncü dil.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **NFR-I18N2 panel i18n (+ I18N1 widget · I18N5 yerelleştirme)**. Gereksinim satırı: `grep -n '| I18N1/2' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KI18N1-2' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/web test` exit 0 (i18n + coverage nöbetçisi + mevcut süit) · typecheck/lint/build.\n- Ölçülebilir: `src/locales/en` ve `tr` altında aynı dosya adları; nöbetçi çıktısında \"kalan\" sayısı raporlanır (bu turda ~76).\n- PLAN: KI18N1-2'ye madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "133",
-            "updatedAt": "2026-08-18T09:18:13.016Z"
+            "updatedAt": "2026-08-18T09:57:29.007Z"
           },
           {
             "id": 2,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T09:18:13.016Z",
+      "lastModified": "2026-08-18T09:57:29.008Z",
       "taskCount": 143,
       "completedCount": 131,
       "tags": [

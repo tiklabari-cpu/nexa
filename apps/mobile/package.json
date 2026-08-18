@@ -9,7 +9,7 @@
     "ios": "expo start --ios",
     "build": "expo export --platform ios --platform android --output-dir dist",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint index.ts app.config.ts src",
+    "lint": "eslint index.ts app.config.ts src scripts",
     "test": "jest --ci",
     "test:unit": "jest --ci"
   },

@@ -232,11 +232,34 @@ describe('agent push notifications', () => {
     expect((await mailer.outbox()).filter((m) => m.kind === 'notification')).toEqual([]);
   });
 
-  it('does not push to a handset that was signed out', async () => {
-    await owner.deviceToken.updateMany({
-      where: { licenseId: fx.a.licenseId, token: AGENT_PHONE },
-      data: { revokedAt: new Date() },
+  /**
+   * Sign a handset out the way the table allows it to be signed out.
+   *
+   * `revoked_at` and `created_at` are read off two different clocks — this
+   * process's for the first, Postgres's for the second (`DEFAULT
+   * CURRENT_TIMESTAMP`) — and `device_tokens_revoked_check` compares them. A
+   * millisecond of skew in the wrong direction is enough to make
+   * `revokedAt: new Date()` a constraint violation, which is what it was on one
+   * run of this suite: `revoked_at …44.354Z` against `created_at …44.355Z`
+   * (§D87's clock-skew class, tm 129). Deriving the stamp from the row's own
+   * `created_at` takes the second clock out of the comparison, so the test
+   * fails only for the reason it is about.
+   */
+  async function revoke(token: string): Promise<void> {
+    const rows = await owner.deviceToken.findMany({
+      where: { licenseId: fx.a.licenseId, token },
+      select: { id: true, createdAt: true },
     });
+    for (const row of rows) {
+      await owner.deviceToken.update({
+        where: { id: row.id },
+        data: { revokedAt: new Date(Math.max(Date.now(), row.createdAt.getTime())) },
+      });
+    }
+  }
+
+  it('does not push to a handset that was signed out', async () => {
+    await revoke(AGENT_PHONE);
 
     await visitorWrites('anyone there?');
 

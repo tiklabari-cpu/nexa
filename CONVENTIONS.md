@@ -75,6 +75,36 @@ Pencere için iki sonuç:
 iki pencere aynı anda e2e koşamaz. Paylaşılan veritabanına karşı koşmak (bir testin bıraktığı
 veriyi elle incelemek) için: `NEXA_TEST_ISOLATION=off`.
 
+### 1.3 Kapıyı KOŞMAK da objektif olmalı: `--force` ve parçalama (tm 129)
+
+§1.1 test veri depolarını izole ederek kapının _sonucunu_ objektif yaptı. tm 129 kapının
+_determinizmini_ kapattı (mobil jest artık `NODE_ENV`'i pinliyor, kendi `testTimeout`/
+`asyncUtilTimeout`'unu ve `maxWorkers`'ını taşıyor — §D112-ÇÖZÜM). Geriye iki **koşma** toleransı
+kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
+
+- **turbo `test` görevini önbelleğe alır.** Girdiler değişmediyse `pnpm -w test` yeniden koşmaz,
+  `FULL TURBO` deyip son sonucu döndürür (ölçüldü: 49 ms). Bu normal ve istenen — ama "kapıyı üç kez
+  koşturdum, üçü de yeşil" demenin hiçbir anlamı yok demektir. Bir kırmızıyı kovalarken ya da bir
+  flake düzeltmesini kanıtlarken **`--force` şart**:
+  `npx turbo run test --force --filter=!@nexa/e2e`. Normal DoD kapısında `--force` gerekmez.
+- **Tek komut olarak kapı, bir pencerenin komut tavanını aşar.** `@nexa/api`'nin `test` script'i unit
+  **ve** integration'ı birlikte koşar, `fileParallelism: false` ile sırayla: tek başına ~858 s, yani
+  `pnpm -w test` ~15 dk. Pencerenin komut tavanı 10 dk. `pnpm -w test:integration` için zaten
+  kullanılan çözüm burada da geçerli — **parçala ve her parçanın exit code'unu yaz**; içerik aynı
+  kaldığı sürece kapı geçilmiş sayılır:
+
+  ```
+  npx turbo run test --force --filter=!@nexa/e2e --filter=!@nexa/api   # ~1 dk
+  npx turbo run test:unit --force --filter=@nexa/api                   # ~30 sn (54 dosya)
+  # ×3 (shard 1/3, 2/3, 3/3) — ~5 / 4 / 2,5 dk
+  cd apps/api
+  npx tsx scripts/with-test-datastores.ts vitest run --dir test/integration --shard=1/3
+  ```
+
+  Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
+  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api 54 + 90 = 144). HANDOFF'a
+  "parçalandı" diye yaz ki bir sonraki pencere sayıları eşleştirebilsin.
+
 ## 2) Git kuralları
 
 - Branch: her task `feat/<kısa-slug>` (ör. `feat/rtm-websocket`) veya `fix/<slug>`.

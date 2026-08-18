@@ -26,6 +26,15 @@ interface SchedulerJobBody {
 
 interface HealthBody {
   scheduler: { enabled: boolean; jobs: SchedulerJobBody[] };
+  providers: {
+    mail: string;
+    push: string;
+    storage: string;
+    payment: string;
+    siem: string;
+    llm: string;
+    virus_scanner: string;
+  };
 }
 
 describe('GET /health — scheduler', () => {
@@ -71,6 +80,28 @@ describe('GET /health — scheduler', () => {
       ]) {
         expect(byName[name]).toMatchObject({ enabled: true, last_status: null });
       }
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('names which implementation each mockable dependency runs', async () => {
+    const server = await startTestServer();
+    try {
+      const body = (await server.get('/health')).json() as HealthBody;
+
+      // Straight off the validated env (`fixtures.ts`'s `testEnv()`), not a
+      // separate snapshot — so this can never drift from what `server.ts`
+      // actually built the factories with.
+      expect(body.providers).toEqual({
+        mail: 'null',
+        push: 'null',
+        storage: 'local',
+        payment: 'mock',
+        siem: 'file',
+        llm: 'mock',
+        virus_scanner: 'mock',
+      });
     } finally {
       await server.close();
     }

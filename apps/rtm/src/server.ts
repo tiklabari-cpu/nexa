@@ -97,7 +97,7 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
 
   const http = createServer((req, res) => {
     if (req.url?.startsWith('/health')) {
-      void health(commands, version, env, registry).then((body) => {
+      void health(db, commands, version, env, registry).then((body) => {
         res.writeHead(body.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
         res.end(JSON.stringify(body));
       });
@@ -168,26 +168,59 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   };
 }
 
+interface RtmDependencyHealth {
+  status: 'up' | 'down';
+  error?: string;
+}
+
+const HEALTH_PROBE_TIMEOUT_MS = 2_000;
+
+// Same shape as `apps/api/src/routes/health.ts`'s `probe`: a dependency that
+// never answers must not hang the health check forever, and a driver error can
+// carry a connection string, so only its class is surfaced.
+async function probeHealth(
+  name: string,
+  check: () => Promise<unknown>,
+): Promise<RtmDependencyHealth> {
+  try {
+    const outcome = check();
+    // A slow dependency can still reject well after the timeout branch below
+    // has already won the race — without this, that later rejection has no
+    // handler left and surfaces as an unhandled rejection instead of the 503
+    // this function already answered.
+    outcome.catch(() => {});
+    await Promise.race([
+      outcome,
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(`${name} probe timed out`)), HEALTH_PROBE_TIMEOUT_MS),
+      ),
+    ]);
+    return { status: 'up' };
+  } catch (error) {
+    return { status: 'down', error: error instanceof Error ? error.name : 'unknown error' };
+  }
+}
+
 async function health(
+  db: PrismaClient,
   redis: Redis,
   version: string,
   env: RtmEnv,
   registry: ConnectionRegistry,
 ): Promise<{ status: 'ok' | 'degraded'; [key: string]: unknown }> {
-  let redisStatus: 'up' | 'down' = 'down';
-  try {
-    await redis.ping();
-    redisStatus = 'up';
-  } catch {
-    redisStatus = 'down';
-  }
+  // Every agent login reads Postgres (`auth.ts`) — a gateway that reports `ok`
+  // with the database down accepts no logins while claiming to be healthy.
+  const [database, redisHealth] = await Promise.all([
+    probeHealth('database', () => db.$queryRaw`SELECT 1`),
+    probeHealth('redis', () => redis.ping()),
+  ]);
   return {
-    status: redisStatus === 'up' ? 'ok' : 'degraded',
+    status: database.status === 'up' && redisHealth.status === 'up' ? 'ok' : 'degraded',
     service: 'rtm',
     version,
     region: env.NEXA_REGION,
     connections: registry.size,
-    dependencies: { redis: { status: redisStatus } },
+    dependencies: { database, redis: redisHealth },
   };
 }
 

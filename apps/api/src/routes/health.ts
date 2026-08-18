@@ -64,6 +64,18 @@ export default async function healthRoutes(
       // deployment with none of them running looked identical to one that had
       // just found nothing to do.
       scheduler: app.scheduler.snapshot(),
+      // Which implementation each mockable dependency currently runs (M-ENV-b ·
+      // §D113/K3) — read straight off the validated env, so this can never drift
+      // from what `server.ts` actually built the factories with.
+      providers: {
+        mail: options.env.MAIL_PROVIDER,
+        push: options.env.PUSH_PROVIDER,
+        storage: options.env.STORAGE_PROVIDER,
+        payment: options.env.STRIPE_PROVIDER,
+        siem: options.env.SIEM_PROVIDER,
+        llm: options.env.LLM_PROVIDER,
+        virus_scanner: options.env.VIRUS_SCANNER,
+      },
     });
   });
 }

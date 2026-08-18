@@ -566,7 +566,7 @@ components:
         email: { type: boolean }
     Health:
       type: object
-      required: [status, service, version, region, uptime_s, dependencies, scheduler]
+      required: [status, service, version, region, uptime_s, dependencies, scheduler, providers]
       properties:
         status:
           type: string
@@ -588,6 +588,7 @@ components:
             database: { $ref: "#/components/schemas/DependencyHealth" }
             redis: { $ref: "#/components/schemas/DependencyHealth" }
         scheduler: { $ref: "#/components/schemas/SchedulerHealth" }
+        providers: { $ref: "#/components/schemas/HealthProviders" }
 
     DependencyHealth:
       type: object
@@ -645,6 +646,39 @@ components:
         last_error_class:
           type: string
           description: The error's class, never its message — driver messages can carry connection strings.
+
+    HealthProviders:
+      type: object
+      description: |
+        Which implementation each mockable dependency (M-ENV-b · §D113/K3)
+        currently runs, read straight off the validated environment — so an
+        operator can tell "mail is really SMTP" from "mail writes to disk"
+        without reading `.env` on the box. Every dependency here is mocked or
+        file-backed by default (MASTER-PROMPT "dış servisler mock'lanır");
+        none of these becoming a real provider changes this endpoint's shape.
+      required: [mail, push, storage, payment, siem, llm, virus_scanner]
+      properties:
+        mail:
+          type: string
+          examples: [file]
+        push:
+          type: string
+          examples: [file]
+        storage:
+          type: string
+          examples: [local]
+        payment:
+          type: string
+          examples: [mock]
+        siem:
+          type: string
+          examples: [file]
+        llm:
+          type: string
+          examples: [mock]
+        virus_scanner:
+          type: string
+          examples: [mock]
 
     TokenGrant:
       type: object

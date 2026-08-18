@@ -5747,6 +5747,7 @@ export interface components {
         redis: components['schemas']['DependencyHealth'];
       };
       scheduler: components['schemas']['SchedulerHealth'];
+      providers: components['schemas']['HealthProviders'];
     };
     DependencyHealth: {
       /** @enum {string} */
@@ -5791,6 +5792,30 @@ export interface components {
       last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
       /** @description The error's class, never its message — driver messages can carry connection strings. */
       last_error_class?: string;
+    };
+    /**
+     * @description Which implementation each mockable dependency (M-ENV-b · §D113/K3)
+     *     currently runs, read straight off the validated environment — so an
+     *     operator can tell "mail is really SMTP" from "mail writes to disk"
+     *     without reading `.env` on the box. Every dependency here is mocked or
+     *     file-backed by default (MASTER-PROMPT "dış servisler mock'lanır");
+     *     none of these becoming a real provider changes this endpoint's shape.
+     */
+    HealthProviders: {
+      /** @example file */
+      mail: string;
+      /** @example file */
+      push: string;
+      /** @example local */
+      storage: string;
+      /** @example mock */
+      payment: string;
+      /** @example file */
+      siem: string;
+      /** @example mock */
+      llm: string;
+      /** @example mock */
+      virus_scanner: string;
     };
     TokenGrant: {
       access_token: string;

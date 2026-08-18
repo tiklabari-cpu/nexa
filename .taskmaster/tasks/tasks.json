@@ -6155,7 +6155,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T02:17:16.958Z",
+        "updatedAt": "2026-08-18T02:53:35.407Z",
         "subtasks": [
           {
             "id": 1,
@@ -6163,10 +6163,10 @@
             "description": "In-process zamanlayıcı çekirdeği: kayıt defteri, aralık+jitter, Redis lider kilidi, hata izolasyonu, health özeti.",
             "details": "NE YAPILACAK: `apps/api/src/services/scheduler/scheduler.ts` — `Scheduler` sınıfı: `register({name,\nintervalMs, run(ctx): Promise<JobOutcome>})`, `start()`/`stop()`, iş başına zamanlayıcı (ilk koşu\njitter'lı gecikmeyle — tüm instance'lar aynı anda başlamasın), koşu başına Redis kilidi\n`nexa:sched:<job>` (`SET key <ownerToken> NX PX <intervalMs*0.9>`; serbest bırakma yalnız sahip\ntoken'ıyla — Lua `if redis.call('get',k)==tok then del`), kilit alınamazsa \"skipped: not leader\"\n(log debug), fırlatan job → `last_status='error'` + `last_error_class`, diğer job'lar etkilenmez;\n`snapshot()` → health için özet. Env: `SCHEDULER_ENABLED`, `SCHEDULE_<JOB>_MS`, `SCHEDULE_JITTER_PCT`\n(`config/env.ts`'e zod ile; `.env.example` + `turbo.json` globalEnv AYNI alt-görevde — tm 131.1'in\nnöbetçisi henüz yoksa da parite şimdiden korunur). OTel: `lib/otel` mevcut yardımcıyla span\n(`scheduler.<job>`, attr: outcome, duration_ms). Job'lar bu alt-görevde KAYDEDİLMEZ (130.2).\nNEDEN: §D113/K1 — hiçbir sweep kendiliğinden koşmuyor; çoklu instance'ta çift koşu riski olduğu için\nkilit çekirdeğin parçası ve bölünmez (§5.1.2 güvenlik/eşzamanlılık çekirdeği).\nDOSYALAR: `services/scheduler/{scheduler.ts, scheduler.test.ts, lock.ts, lock.test.ts, types.ts}` ·\n`config/env.ts` · `.env.example` · `turbo.json` · `test/integration/scheduler-lock.test.ts`.\nREFERANS DESEN: `plugins/database.ts:47-57` (tek mevcut in-process interval + hata yutma) · Redis\nistemcisi `plugins/redis.ts` (adı doğrula) · rate-limit'in Redis atomik deseni (`lib/rate-limit*`) ·\n`lib/otel` span yardımcıları (M5).\nKK: unit (fake timers): kayıt/başlat/durdur · aralık+jitter sınırları · fırlatan job diğerini\ndurdurmaz · snapshot doğru; integration (gerçek Redis): iki `Scheduler` aynı job → bir koşu; kilit\nsüresi dolunca diğeri alır; sahip olmayan serbest bırakamaz.\nKAPSAM DIŞI: iş kaydı (130.2) · health route (130.2) · cron ifadeleri (aralık yeter).\nTUZAKLAR: `unref` ETME (sunucu yaşadıkça çalışır) ama `stop()` her zamanlayıcıyı temizler yoksa\nintegration testleri kapanmaz; `NODE_ENV=test`'te varsayılan kapalı — with-test-datastores altında\nsessizce açılırsa 90 dosyalık süit yavaşlar/kirlenir.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SCHED (türetilmiş — FR-MOD-08.7.3 idle auto-close · 11.5-d SLA · NFR-C8 retention · C6-d SIEM · 07.9 scheduled reports)**. Gereksinim satırı: `grep -n '| M-SCHED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SCHED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/api test` (scheduler + lock unit) · `test:integration` (scheduler-lock) exit 0; typecheck/lint.\n- Ölçülebilir: kilit testi \"iki scheduler → tek koşu\" yeşil; `env.ts`'te 3 yeni anahtar ve `.env.example`+`turbo.json`'da karşılıkları.\n- PLAN: KM-SCHED'e madde (satır `⬜` kalır — 130.4 çevirir).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "130",
-            "updatedAt": "2026-08-18T02:17:16.958Z"
+            "updatedAt": "2026-08-18T02:53:35.407Z"
           },
           {
             "id": 2,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T02:17:16.958Z",
+      "lastModified": "2026-08-18T02:53:35.408Z",
       "taskCount": 143,
       "completedCount": 128,
       "tags": [

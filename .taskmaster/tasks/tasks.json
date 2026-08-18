@@ -6155,7 +6155,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T03:30:44.175Z",
+        "updatedAt": "2026-08-18T04:05:45.988Z",
         "subtasks": [
           {
             "id": 1,
@@ -6187,13 +6187,13 @@
             "description": "Zamanlayıcı açıkken beş işin gerçekten koştuğunu tek entegrasyon süitiyle kanıtlar.",
             "details": "NE YAPILACAK: `apps/api/test/integration/scheduler-e2e.test.ts`: `SCHEDULER_ENABLED=true` +\n`SCHEDULE_*_MS=200` ile bir server kur (with-test-datastores izole DB/Redis'te), tohumla: boşta\nsohbet (chat_timeout ayarı 1 s) → kapanır; SLA hedefi 1 s + ilk yanıtsız sohbet → ihlal işareti;\naudit olayı → SIEM dosyası `SIEM_DIR` altında; zamanlanmış rapor (07.9) → `MAIL_DIR`'de dosya;\nretention `RETENTION_ENABLED=false` → snapshot \"disabled\" ve hiçbir satır silinmez; ikinci server\ninstance'ı aynı Redis → her iş tek koşu (koşu sayacı). Testler `waitFor`-benzeri polling ile\n(sabit sleep DEĞİL). Ayrıca §F.1/9 provasına eklenmek üzere: `make dev` sonrası health'te job'lar\n(elle, HANDOFF'a çıktı yapıştır).\nNEDEN: sweep'lerin her biri kendi süitinde test edilmişti; \"kendiliğinden koşar\" iddiası hiç\nölçülmemişti (§D113/K1).\nDOSYALAR: `test/integration/scheduler-e2e.test.ts` (yeni) · gerekirse test yardımcıları.\nREFERANS: `test/integration/push-lifecycle.test.ts` (durumların birleşmesini tek testte kanıtlama\ngerekçesi) · `with-test-datastores.ts` · ilgili sweep süitleri (`chat-timeout`, `sla`, `siem`,\n`scheduled-reports`).\nKAPSAM DIŞI: e2e Playwright (sweep'ler UI'sız) · süre ölçümü/perf.\nTUZAK: aralıklar çok kısa olursa kilit TTL'i (`interval*0.9`) 180 ms olur — Redis gidiş-dönüşü\nbuna sığmalı; gerekirse test için minimum TTL sabiti.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SCHED (türetilmiş — FR-MOD-08.7.3 idle auto-close · 11.5-d SLA · NFR-C8 retention · C6-d SIEM · 07.9 scheduled reports)**. Gereksinim satırı: `grep -n '| M-SCHED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SCHED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/api test:integration` (scheduler-e2e ≥ 6 senaryo) exit 0; tam `pnpm -w test:integration` süresi taban ± %5.\n- Ölçülebilir: iki instance testi \"tek koşu\"; retention disabled'da silinen satır 0.\n- HANDOFF: dev health çıktısı yapıştırılır. PLAN: KM-SCHED'e madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "130.1",
               "130.2"
             ],
             "parentId": "130",
-            "updatedAt": "2026-08-18T03:30:44.175Z"
+            "updatedAt": "2026-08-18T04:05:45.988Z"
           },
           {
             "id": 4,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T03:30:44.176Z",
+      "lastModified": "2026-08-18T04:05:45.989Z",
       "taskCount": 143,
       "completedCount": 128,
       "tags": [

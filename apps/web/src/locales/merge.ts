@@ -57,13 +57,17 @@ export type Namespace = (typeof NAMESPACES)[number];
  * (`nav.*`) and the command palette (`palette.*`) are chrome that surrounds
  * every screen and is translated as one unit, and renaming ~30 live keys to
  * satisfy a filing rule would be churn with no reader on the other end.
+ * `customers` is the second exception (I18N-d, tm 133.4): the task groups four
+ * screens — Contacts, the live Real-time board, Campaigns and Goals — plus the
+ * `custom-fields` control they share into one file (`locales/{en,tr}/customers.ts`),
+ * so each keeps its own prefix rather than forcing every key under `customers.*`.
  */
 export const NAMESPACE_PREFIXES: Record<Namespace, readonly string[]> = {
   apps: ['apps.'],
   auth: ['auth.'],
   billing: ['billing.'],
   common: ['common.'],
-  customers: ['customers.'],
+  customers: ['customers.', 'customFields.', 'traffic.', 'campaigns.', 'goals.'],
   home: ['home.'],
   inbox: ['inbox.'],
   playbook: ['playbook.'],

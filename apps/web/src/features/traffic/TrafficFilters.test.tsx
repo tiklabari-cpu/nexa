@@ -8,6 +8,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TrafficFilters } from './TrafficFilters.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { TrafficCondition } from './traffic-filters.js';
 
 function renderFilters(initialConditions: TrafficCondition[] = []) {
@@ -142,5 +143,19 @@ describe('TrafficFilters', () => {
     await addFilter('Country');
     // Empty is invalid, but nothing was typed or blurred yet — no alert.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('TrafficFilters localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the panel chrome in Turkish when that is the active locale', () => {
+    renderWithLocale(<TrafficFilters initialConditions={[]} onChange={vi.fn()} />, 'tr');
+    expect(screen.getByText('Tüm filtrelerle eşleştir')).toBeInTheDocument();
+    expect(
+      screen.getByText('Uygulanan filtre yok — her ziyaretçi gösteriliyor.'),
+    ).toBeInTheDocument();
   });
 });

@@ -16,7 +16,8 @@
  */
 import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
 import { customFieldError, type CustomFieldValue } from '@nexa/types';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 interface Props {
   fields: CustomFieldValue[];
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export function CustomFields({ fields, canEdit, save }: Props): ReactElement | null {
+  const t = useTranslate();
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
     try {
       await save(changes);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : 'Could not save custom fields.');
+      setError(t(errorMessageKey(cause)));
     } finally {
       setSaving(false);
     }
@@ -120,8 +122,8 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
                 className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
               >
                 {!field.required && <option value="">—</option>}
-                <option value="true">Yes</option>
-                <option value="false">No</option>
+                <option value="true">{t('customFields.booleanYes')}</option>
+                <option value="false">{t('customFields.booleanNo')}</option>
               </select>
             ) : (
               <input
@@ -156,7 +158,7 @@ export function CustomFields({ fields, canEdit, save }: Props): ReactElement | n
         disabled={!dirty || hasError || saving}
         className="mt-0.5 self-start rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {saving ? 'Saving…' : 'Save fields'}
+        {saving ? t('customFields.saving') : t('customFields.save')}
       </button>
     </form>
   );

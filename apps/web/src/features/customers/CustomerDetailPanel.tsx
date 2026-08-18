@@ -9,9 +9,10 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { Card, CardSkeleton } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { CustomFields } from '../custom-fields/CustomFields.js';
 import type { CustomerDetail } from './types.js';
 
@@ -32,6 +33,7 @@ export function CustomerDetailPanel({
   onBanToggle,
   banPending,
 }: Props): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
 
   const detail = useQuery({
@@ -44,7 +46,7 @@ export function CustomerDetailPanel({
     return (
       <Card>
         <p className="p-6 text-center text-sm text-content-secondary">
-          Select someone to see their history.
+          {t('customers.detail.emptySelection')}
         </p>
       </Card>
     );
@@ -55,7 +57,7 @@ export function CustomerDetailPanel({
     return (
       <Card>
         <p role="alert" className="p-6 text-sm text-danger">
-          Could not load this customer.
+          {t('customers.detail.loadError')}
         </p>
       </Card>
     );
@@ -74,16 +76,22 @@ export function CustomerDetailPanel({
       <Card>
         <div className="border-b border-border px-4 py-3">
           <h2 className="text-sm font-semibold">
-            {customer.name ?? <span className="italic text-content-tertiary">Unnamed visitor</span>}
+            {customer.name ?? (
+              <span className="italic text-content-tertiary">
+                {t('customers.detail.unnamedVisitor')}
+              </span>
+            )}
           </h2>
           <p className="text-2xs text-content-tertiary">
-            First seen {formatDate(customer.created_at)}
+            {t('customers.detail.firstSeen', { date: formatDate(customer.created_at) ?? '' })}
           </p>
           {customer.banned && (
             <p className="mt-1.5">
               <StatusDot
                 tone="danger"
-                label={`Banned ${formatDate(customer.banned_at) ?? ''}`.trim()}
+                label={t('customers.detail.bannedAt', {
+                  date: formatDate(customer.banned_at) ?? '',
+                }).trim()}
               />
             </p>
           )}
@@ -100,19 +108,23 @@ export function CustomerDetailPanel({
         />
 
         <dl className="grid grid-cols-2 gap-x-3 gap-y-2 border-t border-border px-4 py-3 text-sm">
-          <dt className="text-content-secondary">Conversations</dt>
+          <dt className="text-content-secondary">{t('customers.detail.conversations')}</dt>
           <dd className="tabular text-right">{customer.chats_count}</dd>
-          <dt className="text-content-secondary">Tickets</dt>
+          <dt className="text-content-secondary">{t('customers.detail.tickets')}</dt>
           <dd className="tabular text-right">{customer.tickets_count}</dd>
-          <dt className="text-content-secondary">Visits</dt>
+          <dt className="text-content-secondary">{t('customers.detail.visits')}</dt>
           <dd className="flex items-center justify-end gap-1.5">
             <span className="tabular">{customer.visits_count}</span>
-            {customer.visits_count > 1 && <StatusDot tone="info" label="Returning visitor" />}
+            {customer.visits_count > 1 && (
+              <StatusDot tone="info" label={t('customers.detail.returningVisitor')} />
+            )}
           </dd>
-          <dt className="text-content-secondary">Country</dt>
+          <dt className="text-content-secondary">{t('customers.detail.country')}</dt>
           <dd className="text-right">{customer.country ?? customer.country_code ?? '—'}</dd>
-          <dt className="text-content-secondary">Last active</dt>
-          <dd className="text-right">{formatDate(customer.last_activity_at) ?? 'Never'}</dd>
+          <dt className="text-content-secondary">{t('customers.detail.lastActive')}</dt>
+          <dd className="text-right">
+            {formatDate(customer.last_activity_at) ?? t('customers.detail.never')}
+          </dd>
         </dl>
 
         {canBan && (
@@ -127,12 +139,12 @@ export function CustomerDetailPanel({
                   : 'border-danger text-danger hover:bg-danger/10'
               }`}
             >
-              {customer.banned ? 'Lift ban' : 'Ban customer'}
+              {customer.banned ? t('customers.detail.liftBan') : t('customers.detail.banCustomer')}
             </button>
             <p className="mt-1.5 text-2xs text-content-tertiary">
               {customer.banned
-                ? 'They will be able to start conversations again.'
-                : 'Blocks new conversations. History is kept.'}
+                ? t('customers.detail.bannedHint')
+                : t('customers.detail.notBannedHint')}
             </p>
           </div>
         )}
@@ -141,7 +153,7 @@ export function CustomerDetailPanel({
       {customer.custom_fields.length > 0 && (
         <Card>
           <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
-            Custom fields
+            {t('customers.detail.customFieldsHeading')}
           </h3>
           <div className="px-4 py-3">
             <CustomFields
@@ -155,11 +167,11 @@ export function CustomerDetailPanel({
 
       <Card>
         <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
-          Visited pages
+          {t('customers.detail.visitedPages')}
         </h3>
         {customer.visits.length === 0 ? (
           <p className="px-4 py-3 text-sm text-content-secondary">
-            No visits recorded. Pages are captured when someone messages from the widget.
+            {t('customers.detail.noVisits')}
           </p>
         ) : (
           <ul className="divide-y divide-border">
@@ -177,7 +189,7 @@ export function CustomerDetailPanel({
                     className="mt-0.5 truncate text-2xs text-content-tertiary"
                     title={visit.came_from}
                   >
-                    Came from {visit.came_from}
+                    {t('customers.detail.cameFrom', { source: visit.came_from })}
                   </p>
                 )}
                 <ul className="mt-1 flex flex-col gap-0.5">
@@ -190,7 +202,7 @@ export function CustomerDetailPanel({
                       className="truncate text-xs text-content-secondary"
                       title={page.url}
                     >
-                      {page.url ?? 'Unknown page'}
+                      {page.url ?? t('customers.detail.unknownPage')}
                     </li>
                   ))}
                 </ul>
@@ -202,10 +214,12 @@ export function CustomerDetailPanel({
 
       <Card>
         <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
-          Conversations
+          {t('customers.detail.conversations')}
         </h3>
         {customer.chats.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-content-secondary">No conversations yet.</p>
+          <p className="px-4 py-3 text-sm text-content-secondary">
+            {t('customers.detail.noConversations')}
+          </p>
         ) : (
           <ul className="divide-y divide-border">
             {customer.chats.map((chat) => (
@@ -216,7 +230,9 @@ export function CustomerDetailPanel({
                 </span>
                 <StatusDot
                   tone={chat.active ? 'success' : 'neutral'}
-                  label={chat.active ? 'Open' : 'Closed'}
+                  label={
+                    chat.active ? t('customers.detail.chatOpen') : t('customers.detail.chatClosed')
+                  }
                 />
               </li>
             ))}
@@ -226,12 +242,11 @@ export function CustomerDetailPanel({
 
       <Card>
         <h3 className="border-b border-border px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-content-tertiary">
-          Groups
+          {t('customers.detail.groups')}
         </h3>
         {customer.groups.length === 0 ? (
           <p className="px-4 py-3 text-sm text-content-secondary">
-            Not routed to a team yet. Groups appear here once one of their conversations is
-            assigned.
+            {t('customers.detail.noGroups')}
           </p>
         ) : (
           <ul className="divide-y divide-border">
@@ -256,6 +271,7 @@ function EditForm({
   canEdit: boolean;
   onSaved: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const [name, setName] = useState(customer.name ?? '');
   const [email, setEmail] = useState(customer.email ?? '');
@@ -297,9 +313,9 @@ function EditForm({
   if (!canEdit) {
     return (
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 px-4 py-3 text-sm">
-        <dt className="text-content-secondary">Email</dt>
+        <dt className="text-content-secondary">{t('customers.detail.field.email')}</dt>
         <dd className="truncate">{customer.email ?? '—'}</dd>
-        <dt className="text-content-secondary">Phone</dt>
+        <dt className="text-content-secondary">{t('customers.detail.field.phone')}</dt>
         <dd className="truncate">{customer.phone ?? '—'}</dd>
       </dl>
     );
@@ -307,15 +323,30 @@ function EditForm({
 
   return (
     <form onSubmit={submit} className="flex flex-col gap-2 px-4 py-3">
-      <Field id="customer-name" label="Name" value={name} onChange={setName} />
-      <Field id="customer-email" label="Email" value={email} onChange={setEmail} type="email" />
-      <Field id="customer-phone" label="Phone" value={phone} onChange={setPhone} type="tel" />
+      <Field
+        id="customer-name"
+        label={t('customers.detail.field.name')}
+        value={name}
+        onChange={setName}
+      />
+      <Field
+        id="customer-email"
+        label={t('customers.detail.field.email')}
+        value={email}
+        onChange={setEmail}
+        type="email"
+      />
+      <Field
+        id="customer-phone"
+        label={t('customers.detail.field.phone')}
+        value={phone}
+        onChange={setPhone}
+        type="tel"
+      />
 
       {save.isError && (
         <p role="alert" className="text-2xs text-danger">
-          {save.error instanceof ApiClientError && save.error.type === 'validation'
-            ? save.error.message
-            : 'Could not save. Try again.'}
+          {t(errorMessageKey(save.error))}
         </p>
       )}
 
@@ -324,7 +355,7 @@ function EditForm({
         disabled={!dirty || save.isPending}
         className="mt-1 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {save.isPending ? 'Saving…' : 'Save changes'}
+        {save.isPending ? t('customers.detail.saving') : t('customers.detail.saveChanges')}
       </button>
     </form>
   );

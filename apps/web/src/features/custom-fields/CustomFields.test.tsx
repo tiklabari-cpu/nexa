@@ -6,9 +6,10 @@
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CustomFieldValue } from '@nexa/types';
 import { CustomFields } from './CustomFields.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const playerId: CustomFieldValue = {
   definition_id: 'def-1',
@@ -75,5 +76,16 @@ describe('CustomFields', () => {
     );
     expect(screen.queryByRole('button', { name: 'Save fields' })).not.toBeInTheDocument();
     expect(screen.getByText('P-9')).toBeInTheDocument();
+  });
+});
+
+describe('CustomFields localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the save button in Turkish when that is the active locale', () => {
+    renderWithLocale(<CustomFields fields={[playerId, balance]} canEdit save={vi.fn()} />, 'tr');
+    expect(screen.getByRole('button', { name: 'Alanları kaydet' })).toBeInTheDocument();
   });
 });

@@ -8,9 +8,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Goal } from '@nexa/types';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api, auth } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
@@ -179,5 +180,27 @@ describe('GoalsPage', () => {
         definition: { url_contains: '/thank-you' },
       });
     });
+  });
+});
+
+describe('GoalsPage localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the page in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <GoalsPage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Signed up')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Müşteriler', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Yeni hedef' })).toBeInTheDocument();
   });
 });

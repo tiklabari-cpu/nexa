@@ -11,9 +11,10 @@
 import { useMutation } from '@tanstack/react-query';
 import { type ReactElement } from 'react';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
+import { useTranslate } from '../../lib/i18n.js';
 import type { Campaign } from '@nexa/types';
 
 /** An ISO instant as the `YYYY-MM-DDTHH:mm` a `datetime-local` input wants. */
@@ -42,6 +43,7 @@ export function CampaignBuilder({
   onClose: () => void;
   onSaved: (result: { campaign: Campaign; reached: number }) => void;
 }): ReactElement {
+  const t = useTranslate();
   const save = useMutation({
     mutationFn: (body: unknown) =>
       campaign
@@ -58,9 +60,9 @@ export function CampaignBuilder({
       ends_at: toDateTimeLocal(campaign?.ends_at ?? null),
     },
     validators: {
-      name: required('Give the campaign a name.'),
-      url_contains: required('A campaign needs a trigger to know who to reach.'),
-      message: required('A campaign needs a message to send.'),
+      name: required(t('campaigns.builder.nameRequired')),
+      url_contains: required(t('campaigns.builder.triggerRequired')),
+      message: required(t('campaigns.builder.messageRequired')),
     },
     onSubmit: async (values, { setFieldError, setSubmitError }) => {
       try {
@@ -75,23 +77,25 @@ export function CampaignBuilder({
         // re-fires, only newly-matched visitors add to it.
         onSaved({ campaign: saved, reached: saved.performance.displayed });
       } catch (failure) {
-        if (failure instanceof ApiClientError && failure.type === 'validation') {
-          // The window check is the one field-specific server verdict worth pinning.
-          if (failure.message.toLowerCase().includes('ends_at')) {
-            setFieldError('ends_at', 'The end must be after the start.');
-            return;
-          }
-          setSubmitError(failure.message);
+        // The window check is the one field-specific server verdict worth pinning;
+        // the message text is inspected only to route it, never shown as-is.
+        if (
+          failure instanceof ApiClientError &&
+          failure.type === 'validation' &&
+          // i18n-ignore: inspected only, not displayed — see comment above.
+          failure.message.toLowerCase().includes('ends_at')
+        ) {
+          setFieldError('ends_at', t('campaigns.builder.endsError'));
           return;
         }
-        setSubmitError('Could not save the campaign. Please try again.');
+        setSubmitError(t(errorMessageKey(failure)));
       }
     },
   });
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
-    message: 'Discard this campaign?',
+    message: t('campaigns.builder.discardConfirm'),
     onClose,
   });
 
@@ -103,8 +107,8 @@ export function CampaignBuilder({
   return (
     <Modal
       onClose={close}
-      title={campaign ? 'Edit campaign' : 'New campaign'}
-      description="Reach the visitors on a matching page with a proactive message."
+      title={campaign ? t('campaigns.builder.editTitle') : t('campaigns.builder.newTitle')}
+      description={t('campaigns.builder.description')}
       align="top"
     >
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
@@ -114,7 +118,7 @@ export function CampaignBuilder({
           </p>
         )}
 
-        <Field label="Name" htmlFor="campaign-name" error={nameError}>
+        <Field label={t('campaigns.builder.nameLabel')} htmlFor="campaign-name" error={nameError}>
           <input
             id="campaign-name"
             autoFocus
@@ -127,9 +131,9 @@ export function CampaignBuilder({
         </Field>
 
         <Field
-          label="Trigger — page URL contains"
+          label={t('campaigns.builder.triggerLabel')}
           htmlFor="campaign-trigger"
-          hint="e.g. /pricing — the message fires for visitors on a matching page."
+          hint={t('campaigns.builder.triggerHint')}
           error={triggerError}
         >
           <input
@@ -143,7 +147,11 @@ export function CampaignBuilder({
           />
         </Field>
 
-        <Field label="Message" htmlFor="campaign-message" error={messageError}>
+        <Field
+          label={t('campaigns.builder.messageLabel')}
+          htmlFor="campaign-message"
+          error={messageError}
+        >
           <textarea
             id="campaign-message"
             rows={3}
@@ -151,13 +159,13 @@ export function CampaignBuilder({
             onChange={(event) => form.setValue('message', event.target.value)}
             onBlur={() => form.blur('message')}
             aria-invalid={messageError ? true : undefined}
-            placeholder="Hi there — can I help you find the right plan?"
+            placeholder={t('campaigns.builder.messagePlaceholder')}
             className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
           />
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Starts (optional)" htmlFor="campaign-starts">
+          <Field label={t('campaigns.builder.startsLabel')} htmlFor="campaign-starts">
             <input
               id="campaign-starts"
               type="datetime-local"
@@ -166,7 +174,7 @@ export function CampaignBuilder({
               className="w-full rounded-md border border-border bg-inset px-2 py-2 text-sm"
             />
           </Field>
-          <Field label="Ends (optional)" htmlFor="campaign-ends" error={endsError}>
+          <Field label={t('campaigns.builder.endsLabel')} htmlFor="campaign-ends" error={endsError}>
             <input
               id="campaign-ends"
               type="datetime-local"
@@ -185,14 +193,18 @@ export function CampaignBuilder({
             onClick={close}
             className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary hover:bg-surface-2"
           >
-            Cancel
+            {t('campaigns.builder.cancel')}
           </button>
           <button
             type="submit"
             disabled={!form.canSubmit}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {form.isSubmitting ? 'Saving…' : campaign ? 'Save changes' : 'Create campaign'}
+            {form.isSubmitting
+              ? t('campaigns.builder.saving')
+              : campaign
+                ? t('campaigns.builder.saveChanges')
+                : t('campaigns.builder.create')}
           </button>
         </div>
       </form>

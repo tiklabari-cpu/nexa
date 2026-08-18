@@ -7,18 +7,20 @@
  */
 import type { ReactElement } from 'react';
 import { NavLink } from 'react-router-dom';
+import { useTranslate } from '../../lib/i18n.js';
 
 const TABS = [
   // `end` so Contacts is not left highlighted while on the nested Real-time route.
-  { to: '/app/customers', label: 'Contacts', end: true },
-  { to: '/app/customers/real-time', label: 'Real-time', end: false },
-  { to: '/app/customers/campaigns', label: 'Campaigns', end: false },
-  { to: '/app/customers/goals', label: 'Goals', end: false },
+  { to: '/app/customers', labelKey: 'customers.tabs.contacts', end: true },
+  { to: '/app/customers/real-time', labelKey: 'customers.tabs.realTime', end: false },
+  { to: '/app/customers/campaigns', labelKey: 'customers.tabs.campaigns', end: false },
+  { to: '/app/customers/goals', labelKey: 'customers.tabs.goals', end: false },
 ];
 
 export function CustomersTabs(): ReactElement {
+  const t = useTranslate();
   return (
-    <nav aria-label="Customer views" className="flex gap-1">
+    <nav aria-label={t('customers.tabs.ariaLabel')} className="flex gap-1">
       {TABS.map((tab) => (
         <NavLink
           key={tab.to}
@@ -32,7 +34,7 @@ export function CustomersTabs(): ReactElement {
             }`
           }
         >
-          {tab.label}
+          {t(tab.labelKey)}
         </NavLink>
       ))}
     </nav>

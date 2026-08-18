@@ -16,6 +16,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Dropdown } from '../../components/ui/index.js';
 import { FieldError } from '../../lib/form.js';
+import { useTranslate } from '../../lib/i18n.js';
 import {
   availableFields,
   conditionError,
@@ -36,6 +37,7 @@ interface TrafficFiltersProps {
 }
 
 export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersProps): ReactElement {
+  const t = useTranslate();
   const [rows, setRows] = useState<TrafficCondition[]>(() => [...initialConditions]);
   const [touched, setTouched] = useState<Partial<Record<TrafficConditionField, boolean>>>({});
   const timers = useRef<Partial<Record<TrafficConditionField, ReturnType<typeof setTimeout>>>>({});
@@ -105,7 +107,7 @@ export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersPr
   return (
     <div className="flex flex-col gap-2 rounded-md border border-border bg-surface p-3">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold">Match all filters</h2>
+        <h2 className="text-sm font-semibold">{t('traffic.filters.heading')}</h2>
         <div className="flex items-center gap-2">
           {rows.length > 0 && (
             <button
@@ -113,19 +115,19 @@ export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersPr
               onClick={clearAll}
               className="rounded-md px-2 py-1 text-xs font-medium text-content-tertiary hover:text-content"
             >
-              Clear
+              {t('traffic.filters.clear')}
             </button>
           )}
           <Dropdown
-            label="Add filter"
-            trigger="+ Add filter"
+            label={t('traffic.filters.addFilter')}
+            trigger={t('traffic.filters.addFilterTrigger')}
             triggerClassName="rounded-md border border-border bg-inset px-2.5 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:text-content"
             panelClassName="right-0 top-full mt-1 w-56 p-1"
           >
             {({ close }) =>
               addable.length === 0 ? (
                 <p className="px-2 py-1.5 text-xs text-content-tertiary">
-                  Every filter is already applied.
+                  {t('traffic.filters.allApplied')}
                 </p>
               ) : (
                 <ul className="flex flex-col gap-0.5">
@@ -151,9 +153,7 @@ export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersPr
       </div>
 
       {rows.length === 0 ? (
-        <p className="text-xs text-content-tertiary">
-          No filters applied — every visitor is shown.
-        </p>
+        <p className="text-xs text-content-tertiary">{t('traffic.filters.empty')}</p>
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((row) => {
@@ -202,7 +202,7 @@ export function TrafficFilters({ initialConditions, onChange }: TrafficFiltersPr
                 <button
                   type="button"
                   onClick={() => removeField(row.field)}
-                  aria-label={`Remove ${def.label} filter`}
+                  aria-label={t('traffic.filters.removeField', { label: def.label })}
                   className="shrink-0 rounded-md px-1.5 py-1 text-2xs text-content-tertiary hover:text-danger"
                 >
                   ✕

@@ -19,18 +19,20 @@ import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
 import { CustomersTabs } from './CustomersTabs.js';
 import type { CustomerSummary, Segment } from './types.js';
 
-const SEGMENTS: Array<{ id: Segment; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'leads', label: 'Leads' },
-  { id: 'recent', label: 'Last 30 days' },
-  { id: 'banned', label: 'Banned' },
+const SEGMENTS: Array<{ id: Segment; labelKey: string }> = [
+  { id: 'all', labelKey: 'customers.page.segment.all' },
+  { id: 'leads', labelKey: 'customers.page.segment.leads' },
+  { id: 'recent', labelKey: 'customers.page.segment.recent' },
+  { id: 'banned', labelKey: 'customers.page.segment.banned' },
 ];
 
 export function CustomersPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
@@ -98,22 +100,25 @@ export function CustomersPage(): ReactElement {
 
   return (
     <Page
-      title="Customers"
+      title={t('customers.page.title')}
       description={
         list.data
-          ? `${formatCount(list.data.total)} ${list.data.total === 1 ? 'person' : 'people'}`
-          : 'People who have contacted this workspace.'
+          ? t('customers.page.count', {
+              count: list.data.total,
+              formatted: formatCount(list.data.total) ?? '0',
+            })
+          : t('customers.page.subtitle')
       }
       actions={
         <div className="flex items-center gap-3">
           <CustomersTabs />
           <label className="flex items-center gap-2">
-            <span className="sr-only">Search customers</span>
+            <span className="sr-only">{t('customers.page.searchLabel')}</span>
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Name, email or phone…"
+              placeholder={t('customers.page.searchPlaceholder')}
               className="w-64 rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
             />
           </label>
@@ -122,7 +127,7 @@ export function CustomersPage(): ReactElement {
     >
       <div
         role="tablist"
-        aria-label="Customer segments"
+        aria-label={t('customers.page.segmentsAriaLabel')}
         className="flex gap-1 border-b border-border pb-2"
       >
         {SEGMENTS.map((item) => (
@@ -138,13 +143,13 @@ export function CustomersPage(): ReactElement {
                 : 'text-content-secondary hover:bg-surface-2'
             }`}
           >
-            {item.label}
+            {t(item.labelKey)}
           </button>
         ))}
       </div>
 
       {list.error ? (
-        <ErrorNotice message="Could not load customers. Check that the API is reachable and try again." />
+        <ErrorNotice message={t('customers.page.loadError')} />
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
           <Card>
@@ -152,26 +157,28 @@ export function CustomersPage(): ReactElement {
               <ListSkeleton />
             ) : items.length === 0 ? (
               <EmptyState
-                title={debounced ? 'Nobody matches that search' : 'No customers yet'}
-                description={
+                title={t(
+                  debounced ? 'customers.page.empty.searchTitle' : 'customers.page.empty.title',
+                )}
+                description={t(
                   debounced
-                    ? 'Try a shorter search, or a different segment.'
-                    : 'People who message from the widget appear here automatically.'
-                }
+                    ? 'customers.page.empty.searchDescription'
+                    : 'customers.page.empty.description',
+                )}
               />
             ) : (
               <VirtualTable
                 items={items}
                 rowHeight={56}
-                caption="Customers"
+                caption={t('customers.page.table.caption')}
                 colSpan={4}
                 head={
                   <thead>
                     <tr className="border-b border-border text-left">
-                      <Th>Name</Th>
-                      <Th>Country</Th>
-                      <Th align="right">Chats</Th>
-                      <Th>Last active</Th>
+                      <Th>{t('customers.page.table.name')}</Th>
+                      <Th>{t('customers.page.table.country')}</Th>
+                      <Th align="right">{t('customers.page.table.chats')}</Th>
+                      <Th>{t('customers.page.table.lastActive')}</Th>
                     </tr>
                   </thead>
                 }
@@ -196,17 +203,21 @@ export function CustomersPage(): ReactElement {
                       >
                         <span className="flex items-center gap-2 font-medium">
                           {customer.name ?? (
-                            <span className="italic text-content-tertiary">Unnamed visitor</span>
+                            <span className="italic text-content-tertiary">
+                              {t('customers.page.unnamedVisitor')}
+                            </span>
                           )}
                           {customer.is_lead && (
                             <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
-                              lead
+                              {t('customers.page.lead')}
                             </span>
                           )}
-                          {customer.banned && <StatusDot tone="danger" label="Banned" />}
+                          {customer.banned && (
+                            <StatusDot tone="danger" label={t('customers.page.banned')} />
+                          )}
                         </span>
                         <span className="block truncate text-2xs text-content-tertiary">
-                          {customer.email ?? customer.phone ?? 'No contact details'}
+                          {customer.email ?? customer.phone ?? t('customers.page.noContactDetails')}
                         </span>
                       </button>
                     </td>
@@ -215,7 +226,7 @@ export function CustomersPage(): ReactElement {
                     </td>
                     <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
                     <td className="px-4 py-2.5 text-content-secondary">
-                      {formatDate(customer.last_activity_at) ?? 'Never'}
+                      {formatDate(customer.last_activity_at) ?? t('customers.page.never')}
                     </td>
                   </tr>
                 )}

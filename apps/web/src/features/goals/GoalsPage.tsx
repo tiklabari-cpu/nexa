@@ -18,13 +18,22 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { GoalBuilder } from './GoalBuilder.js';
 import { GoalsFunnel } from './GoalsFunnel.js';
 import { GOAL_TABS, filterGoals, goalCounts } from './goals.js';
 import type { Goal, GoalFilter } from '@nexa/types';
 
+/** `GOAL_TABS[].label` is English-only (see goals.ts). */
+const TAB_LABEL_KEY: Record<GoalFilter, string> = {
+  all: 'goals.tab.all',
+  active: 'goals.tab.active',
+  inactive: 'goals.tab.inactive',
+};
+
 export function GoalsPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const scopes = useAuth((s) => s.agent?.scopes) ?? [];
@@ -57,14 +66,14 @@ export function GoalsPage(): ReactElement {
 
   return (
     <Page
-      title="Customers"
-      description="Define the pages a visitor reaching them counts as a conversion."
+      title={t('customers.page.title')}
+      description={t('goals.page.description')}
       actions={<CustomersTabs />}
     >
       <GoalsFunnel />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <nav aria-label="Goal status" className="flex flex-wrap gap-1">
+        <nav aria-label={t('goals.page.statusAriaLabel')} className="flex flex-wrap gap-1">
           {GOAL_TABS.map((tab) => {
             const active = filter === tab.id;
             return (
@@ -79,7 +88,7 @@ export function GoalsPage(): ReactElement {
                     : 'text-content-secondary hover:bg-surface-2'
                 }`}
               >
-                {tab.label}
+                {t(TAB_LABEL_KEY[tab.id])}
                 <span className="ml-1.5 text-2xs text-content-tertiary">{counts[tab.id]}</span>
               </button>
             );
@@ -92,13 +101,13 @@ export function GoalsPage(): ReactElement {
             onClick={() => setCreating(true)}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
           >
-            New goal
+            {t('goals.page.new')}
           </button>
         )}
       </div>
 
       {query.error ? (
-        <ErrorNotice message="Could not load goals. Check that the API is reachable and try again." />
+        <ErrorNotice message={t('goals.page.loadError')} />
       ) : query.isPending ? (
         <Card>
           <ListSkeleton />
@@ -106,12 +115,14 @@ export function GoalsPage(): ReactElement {
       ) : visible.length === 0 ? (
         <Card>
           <EmptyState
-            title={filter === 'all' ? 'No goals yet' : `No ${filter} goals`}
-            description={
-              canWrite
-                ? 'Create a goal to track when a visitor reaches a page that counts as a conversion.'
-                : 'Goals track when a visitor reaches a page that counts as a conversion.'
+            title={
+              filter === 'all'
+                ? t('goals.page.empty.allTitle')
+                : t('goals.page.empty.filteredTitle', { status: t(TAB_LABEL_KEY[filter]) })
             }
+            description={t(
+              canWrite ? 'goals.page.empty.writeDescription' : 'goals.page.empty.readDescription',
+            )}
             action={
               canWrite && filter === 'all' ? (
                 <button
@@ -119,7 +130,7 @@ export function GoalsPage(): ReactElement {
                   onClick={() => setCreating(true)}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
                 >
-                  New goal
+                  {t('goals.page.new')}
                 </button>
               ) : undefined
             }
@@ -165,6 +176,7 @@ function GoalCard({
   busy: boolean;
   onToggle: () => void;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-xs">
       <div className="flex items-start justify-between gap-4">
@@ -173,17 +185,17 @@ function GoalCard({
             <h3 className="truncate font-medium">{goal.name}</h3>
             <StatusDot
               tone={goal.active ? 'success' : 'neutral'}
-              label={goal.active ? 'Active' : 'Inactive'}
+              label={goal.active ? t('goals.page.active') : t('goals.page.inactive')}
             />
           </div>
           <p className="mt-1 truncate text-xs text-content-secondary">
-            When URL contains{' '}
+            {t('goals.page.whenUrlContains')}{' '}
             <code className="rounded-sm bg-inset px-1 py-0.5 text-2xs">
               {goal.definition.url_contains ?? '—'}
             </code>
           </p>
           <p className="mt-0.5 text-2xs text-content-tertiary">
-            Created {formatDate(goal.created_at)}
+            {t('goals.page.created', { date: formatDate(goal.created_at) ?? '' })}
           </p>
         </div>
 
@@ -199,7 +211,7 @@ function GoalCard({
                 : 'border-brand-500 text-content-brand hover:bg-brand-50 dark:hover:bg-brand-950'
             }`}
           >
-            {goal.active ? 'Turn off' : 'Turn on'}
+            {goal.active ? t('goals.page.turnOff') : t('goals.page.turnOn')}
           </button>
         )}
       </div>

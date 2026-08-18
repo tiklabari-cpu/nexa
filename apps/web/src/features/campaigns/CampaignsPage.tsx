@@ -19,10 +19,10 @@ import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/index.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { CampaignBuilder } from './CampaignBuilder.js';
 import {
-  CAMPAIGN_STATUS_LABEL,
   CAMPAIGN_TABS,
   campaignCounts,
   conversionRate,
@@ -37,7 +37,22 @@ const STATUS_TONE: Record<CampaignStatus, StatusTone> = {
   inactive: 'neutral',
 };
 
+/** `CAMPAIGN_STATUS_LABEL`/`CAMPAIGN_TABS[].label` are English-only (see campaigns.ts). */
+const STATUS_LABEL_KEY: Record<CampaignStatus, string> = {
+  ongoing: 'campaigns.status.ongoing',
+  scheduled: 'campaigns.status.scheduled',
+  inactive: 'campaigns.status.inactive',
+};
+
+const TAB_LABEL_KEY: Record<CampaignStatusFilter, string> = {
+  all: 'campaigns.tab.all',
+  ongoing: 'campaigns.tab.ongoing',
+  scheduled: 'campaigns.tab.scheduled',
+  inactive: 'campaigns.tab.inactive',
+};
+
 export function CampaignsPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const scopes = useAuth((s) => s.agent?.scopes) ?? [];
@@ -67,7 +82,11 @@ export function CampaignsPage(): ReactElement {
       invalidate();
       if (input.active && campaign.performance.displayed > 0) {
         setNotice(
-          `“${campaign.name}” reached ${formatCount(campaign.performance.displayed)} on-site visitors.`,
+          t('campaigns.page.notice.reached', {
+            name: campaign.name,
+            count: campaign.performance.displayed,
+            formatted: formatCount(campaign.performance.displayed) ?? '0',
+          }),
         );
       }
     },
@@ -75,8 +94,8 @@ export function CampaignsPage(): ReactElement {
 
   return (
     <Page
-      title="Customers"
-      description="Reach visitors with proactive, targeted messages."
+      title={t('customers.page.title')}
+      description={t('campaigns.page.description')}
       actions={<CustomersTabs />}
     >
       {notice && (
@@ -88,7 +107,7 @@ export function CampaignsPage(): ReactElement {
       )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-        <nav aria-label="Campaign status" className="flex flex-wrap gap-1">
+        <nav aria-label={t('campaigns.page.statusAriaLabel')} className="flex flex-wrap gap-1">
           {CAMPAIGN_TABS.map((tab) => {
             const active = filter === tab.id;
             return (
@@ -103,7 +122,7 @@ export function CampaignsPage(): ReactElement {
                     : 'text-content-secondary hover:bg-surface-2'
                 }`}
               >
-                {tab.label}
+                {t(TAB_LABEL_KEY[tab.id])}
                 <span className="ml-1.5 text-2xs text-content-tertiary">{counts[tab.id]}</span>
               </button>
             );
@@ -116,13 +135,13 @@ export function CampaignsPage(): ReactElement {
             onClick={() => setEditing('new')}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
           >
-            New campaign
+            {t('campaigns.page.new')}
           </button>
         )}
       </div>
 
       {query.error ? (
-        <ErrorNotice message="Could not load campaigns. Check that the API is reachable and try again." />
+        <ErrorNotice message={t('campaigns.page.loadError')} />
       ) : query.isPending ? (
         <Card>
           <ListSkeleton />
@@ -130,12 +149,16 @@ export function CampaignsPage(): ReactElement {
       ) : visible.length === 0 ? (
         <Card>
           <EmptyState
-            title={filter === 'all' ? 'No campaigns yet' : `No ${filter} campaigns`}
-            description={
-              canWrite
-                ? 'Create a campaign to greet visitors on a matching page with a targeted message.'
-                : 'Campaigns greet visitors on a matching page with a targeted message.'
+            title={
+              filter === 'all'
+                ? t('campaigns.page.empty.allTitle')
+                : t('campaigns.page.empty.filteredTitle', { status: t(TAB_LABEL_KEY[filter]) })
             }
+            description={t(
+              canWrite
+                ? 'campaigns.page.empty.writeDescription'
+                : 'campaigns.page.empty.readDescription',
+            )}
             action={
               canWrite && filter === 'all' ? (
                 <button
@@ -143,7 +166,7 @@ export function CampaignsPage(): ReactElement {
                   onClick={() => setEditing('new')}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
                 >
-                  New campaign
+                  {t('campaigns.page.new')}
                 </button>
               ) : undefined
             }
@@ -176,7 +199,13 @@ export function CampaignsPage(): ReactElement {
             setEditing(null);
             invalidate();
             if (reached > 0) {
-              setNotice(`“${campaign.name}” reached ${formatCount(reached)} on-site visitors.`);
+              setNotice(
+                t('campaigns.page.notice.reached', {
+                  name: campaign.name,
+                  count: reached,
+                  formatted: formatCount(reached) ?? '0',
+                }),
+              );
             }
           }}
         />
@@ -198,6 +227,7 @@ function CampaignCard({
   onEdit: () => void;
   onToggle: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const active = isCampaignActive(campaign);
   const { displayed, chats, conversion } = campaign.performance;
 
@@ -209,19 +239,23 @@ function CampaignCard({
             <h3 className="truncate font-medium">{campaign.name}</h3>
             <StatusDot
               tone={STATUS_TONE[campaign.status]}
-              label={CAMPAIGN_STATUS_LABEL[campaign.status]}
+              label={t(STATUS_LABEL_KEY[campaign.status])}
             />
           </div>
           <p className="mt-1 truncate text-xs text-content-secondary">
-            When URL contains{' '}
+            {t('campaigns.page.whenUrlContains')}{' '}
             <code className="rounded-sm bg-inset px-1 py-0.5 text-2xs">
               {campaign.conditions.url_contains ?? '—'}
             </code>
           </p>
           {(campaign.starts_at || campaign.ends_at) && (
             <p className="mt-0.5 text-2xs text-content-tertiary">
-              {campaign.starts_at ? `From ${formatDate(campaign.starts_at)}` : 'From now'}
-              {campaign.ends_at ? ` until ${formatDate(campaign.ends_at)}` : ''}
+              {campaign.starts_at
+                ? t('campaigns.page.fromDate', { date: formatDate(campaign.starts_at) ?? '' })
+                : t('campaigns.page.fromNow')}
+              {campaign.ends_at
+                ? t('campaigns.page.untilDate', { date: formatDate(campaign.ends_at) ?? '' })
+                : ''}
             </p>
           )}
         </div>
@@ -233,7 +267,7 @@ function CampaignCard({
               onClick={onEdit}
               className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary hover:bg-surface-2"
             >
-              Edit
+              {t('campaigns.page.edit')}
             </button>
             <button
               type="button"
@@ -246,17 +280,17 @@ function CampaignCard({
                   : 'border-brand-500 text-content-brand hover:bg-brand-50 dark:hover:bg-brand-950'
               }`}
             >
-              {active ? 'Turn off' : 'Turn on'}
+              {active ? t('campaigns.page.turnOff') : t('campaigns.page.turnOn')}
             </button>
           </div>
         )}
       </div>
 
       <dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3">
-        <Stat label="Displayed" value={formatCount(displayed) ?? '0'} />
-        <Stat label="Chats" value={formatCount(chats) ?? '0'} />
+        <Stat label={t('campaigns.page.stat.displayed')} value={formatCount(displayed) ?? '0'} />
+        <Stat label={t('campaigns.page.stat.chats')} value={formatCount(chats) ?? '0'} />
         <Stat
-          label="Conversion"
+          label={t('campaigns.page.stat.conversion')}
           value={formatCount(conversion) ?? '0'}
           hint={displayed > 0 ? `${conversionRate(campaign.performance)}%` : undefined}
         />

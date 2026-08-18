@@ -10,8 +10,9 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { CustomerDetail } from './types.js';
 
 const { api } = vi.hoisted(() => ({
@@ -255,5 +256,30 @@ describe('CustomerDetailPanel — regression: existing cards still render', () =
     expect(screen.getByRole('heading', { name: 'Conversations' })).toBeInTheDocument();
     expect(screen.getByText('CHAT0000001')).toBeInTheDocument();
     expect(screen.getByText('Open')).toBeInTheDocument();
+  });
+});
+
+describe('CustomerDetailPanel localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the panel in Turkish when that is the active locale', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <CustomerDetailPanel
+          customerId={null}
+          canEdit={false}
+          canBan={false}
+          onChanged={() => {}}
+          onBanToggle={() => {}}
+          banPending={false}
+        />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(screen.getByText('Geçmişini görmek için birini seçin.')).toBeInTheDocument();
   });
 });

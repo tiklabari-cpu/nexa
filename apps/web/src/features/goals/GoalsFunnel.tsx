@@ -13,6 +13,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatCount, formatRate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { funnelStages } from './goals.js';
 import type { GoalFunnel } from '@nexa/types';
 
@@ -22,7 +23,20 @@ interface GoalsReport {
   by_goal: Array<{ goal_id: string; name: string; conversions: number }>;
 }
 
+/**
+ * `funnelStages()['label']` (`goals.ts`) is English-only, kept as a stable id
+ * a unit test pins down — this maps it to a translation key, and separately
+ * to the fixed `data-testid` the e2e suite reads (13.3-i), so translating the
+ * visible label can never rename the id an automated test looks for.
+ */
+const STAGE_KEY: Record<string, { labelKey: string; testId: string }> = {
+  Visitors: { labelKey: 'goals.funnel.visitors', testId: 'visitors' },
+  Chats: { labelKey: 'goals.funnel.chats', testId: 'chats' },
+  Conversions: { labelKey: 'goals.funnel.conversions', testId: 'conversions' },
+};
+
 export function GoalsFunnel(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const query = useQuery({
     queryKey: ['reports', 'goals-funnel'],
@@ -30,12 +44,9 @@ export function GoalsFunnel(): ReactElement {
   });
 
   return (
-    <Section
-      title="Goal funnel"
-      description="Visitors who reached a chat, and of those, a tracked goal."
-    >
+    <Section title={t('goals.funnel.title')} description={t('goals.funnel.description')}>
       {query.error ? (
-        <ErrorNotice message="Could not load the goal funnel. Check that the API is reachable and try again." />
+        <ErrorNotice message={t('goals.funnel.loadError')} />
       ) : query.isPending ? (
         <Card>
           <ListSkeleton rows={1} />
@@ -43,8 +54,8 @@ export function GoalsFunnel(): ReactElement {
       ) : query.data.by_goal.length === 0 ? (
         <Card>
           <EmptyState
-            title="No conversions yet"
-            description="Define a goal to see visitors, chats and conversions here."
+            title={t('goals.funnel.emptyTitle')}
+            description={t('goals.funnel.emptyDescription')}
           />
         </Card>
       ) : (
@@ -53,7 +64,8 @@ export function GoalsFunnel(): ReactElement {
             {funnelStages(query.data.funnel).map((stage, i) => (
               <Stat
                 key={stage.label}
-                label={stage.label}
+                label={t(STAGE_KEY[stage.label]!.labelKey)}
+                testId={STAGE_KEY[stage.label]!.testId}
                 value={formatCount(stage.value) ?? '0'}
                 hint={i === 2 ? (formatRate(stage.rate) ?? '—') : undefined}
               />
@@ -67,10 +79,12 @@ export function GoalsFunnel(): ReactElement {
 
 function Stat({
   label,
+  testId,
   value,
   hint,
 }: {
   label: string;
+  testId: string;
   value: string;
   hint?: string;
 }): ReactElement {
@@ -85,7 +99,7 @@ function Stat({
             together ("1" + "12.5%" = "112.5%") and no selector can split that
             back. jsdom is not affected — RTL matches on direct text nodes — so
             this exists for the e2e (13.3-i), which is where it is read. */}
-        <span data-testid={`goal-funnel-${label.toLowerCase()}`}>{value}</span>
+        <span data-testid={`goal-funnel-${testId}`}>{value}</span>
         {hint && <span className="ml-1 text-2xs font-normal text-content-tertiary">{hint}</span>}
       </dd>
     </div>

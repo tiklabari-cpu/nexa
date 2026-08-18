@@ -11,9 +11,10 @@
 import { useMutation } from '@tanstack/react-query';
 import { type ReactElement } from 'react';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
+import { errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
+import { useTranslate } from '../../lib/i18n.js';
 import type { Goal } from '@nexa/types';
 
 export function GoalBuilder({
@@ -25,6 +26,7 @@ export function GoalBuilder({
   onClose: () => void;
   onSaved: (goal: Goal) => void;
 }): ReactElement {
+  const t = useTranslate();
   const save = useMutation({
     mutationFn: (body: unknown) => api.post<Goal>('/goals', body),
   });
@@ -32,8 +34,8 @@ export function GoalBuilder({
   const form = useForm({
     initial: { name: '', url_contains: '' },
     validators: {
-      name: required('Give the goal a name.'),
-      url_contains: required('A goal needs a trigger to know what counts as a conversion.'),
+      name: required(t('goals.builder.nameRequired')),
+      url_contains: required(t('goals.builder.triggerRequired')),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
@@ -43,18 +45,14 @@ export function GoalBuilder({
         });
         onSaved(saved);
       } catch (failure) {
-        if (failure instanceof ApiClientError && failure.type === 'validation') {
-          setSubmitError(failure.message);
-          return;
-        }
-        setSubmitError('Could not save the goal. Please try again.');
+        setSubmitError(t(errorMessageKey(failure)));
       }
     },
   });
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
-    message: 'Discard this goal?',
+    message: t('goals.builder.discardConfirm'),
     onClose,
   });
 
@@ -64,8 +62,8 @@ export function GoalBuilder({
   return (
     <Modal
       onClose={close}
-      title="New goal"
-      description="Define a page a visitor reaching it counts as a conversion."
+      title={t('goals.builder.title')}
+      description={t('goals.builder.description')}
       align="top"
     >
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
@@ -75,7 +73,7 @@ export function GoalBuilder({
           </p>
         )}
 
-        <Field label="Name" htmlFor="goal-name" error={nameError}>
+        <Field label={t('goals.builder.nameLabel')} htmlFor="goal-name" error={nameError}>
           <input
             id="goal-name"
             autoFocus
@@ -88,9 +86,9 @@ export function GoalBuilder({
         </Field>
 
         <Field
-          label="Trigger — page URL contains"
+          label={t('goals.builder.triggerLabel')}
           htmlFor="goal-trigger"
-          hint="e.g. /thank-you — a visitor reaching a matching page has converted."
+          hint={t('goals.builder.triggerHint')}
           error={triggerError}
         >
           <input
@@ -110,14 +108,14 @@ export function GoalBuilder({
             onClick={close}
             className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary hover:bg-surface-2"
           >
-            Cancel
+            {t('goals.builder.cancel')}
           </button>
           <button
             type="submit"
             disabled={!form.canSubmit}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {form.isSubmitting ? 'Saving…' : 'Create goal'}
+            {form.isSubmitting ? t('goals.builder.saving') : t('goals.builder.create')}
           </button>
         </div>
       </form>

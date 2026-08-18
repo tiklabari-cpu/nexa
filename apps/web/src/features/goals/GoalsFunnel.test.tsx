@@ -7,8 +7,9 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
 
@@ -93,5 +94,29 @@ describe('GoalsFunnel', () => {
     renderFunnel();
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Could not load the goal funnel/);
+  });
+});
+
+describe('GoalsFunnel localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the stage labels in Turkish, keeping the testid stable', async () => {
+    api.get.mockResolvedValue(
+      report({ funnel: { visitors: 100, chats: 40, conversions: 10, conversion_rate: 0.25 } }),
+    );
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <GoalsFunnel />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Ziyaretçiler')).toBeInTheDocument();
+    expect(screen.getByText('Sohbetler')).toBeInTheDocument();
+    expect(screen.getByText('Dönüşümler')).toBeInTheDocument();
+    expect(screen.getByTestId('goal-funnel-conversions')).toHaveTextContent('10');
   });
 });

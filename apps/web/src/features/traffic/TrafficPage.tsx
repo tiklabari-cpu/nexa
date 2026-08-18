@@ -22,6 +22,7 @@ import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
 import { TrafficFilters } from './TrafficFilters.js';
@@ -43,46 +44,56 @@ import type { TrafficActivity, TrafficVisitor } from './types.js';
 
 const TAB_PARAM = 'tab';
 
-const EMPTY_STATE: Record<TrafficTab, { title: string; description: string }> = {
-  all: {
-    title: 'No live visitors right now',
-    description:
-      'People browsing your site or in a live conversation appear here. Install the widget to start seeing traffic.',
-  },
+/** `TRAFFIC_TABS[].label` and `ACTIVITY[].label` are English-only (see those files). */
+const TAB_LABEL_KEY: Record<TrafficTab, string> = {
+  all: 'traffic.tab.all',
+  chatting: 'traffic.tab.chatting',
+  supervised: 'traffic.tab.supervised',
+  queued: 'traffic.tab.queued',
+  waiting: 'traffic.tab.waiting',
+  invited: 'traffic.tab.invited',
+  browsing: 'traffic.tab.browsing',
+};
+
+const EMPTY_STATE_KEY: Record<TrafficTab, { title: string; description: string }> = {
+  all: { title: 'traffic.empty.all.title', description: 'traffic.empty.all.description' },
   chatting: {
-    title: 'No one is chatting right now',
-    description: 'Visitors currently answered by an agent or the AI appear here.',
+    title: 'traffic.empty.chatting.title',
+    description: 'traffic.empty.chatting.description',
   },
   supervised: {
-    title: 'No supervised conversations',
-    description: 'Conversations an agent is watching without answering yet appear here.',
+    title: 'traffic.empty.supervised.title',
+    description: 'traffic.empty.supervised.description',
   },
-  queued: {
-    title: 'The queue is empty',
-    description: 'Visitors waiting for an agent to pick up their conversation appear here.',
-  },
+  queued: { title: 'traffic.empty.queued.title', description: 'traffic.empty.queued.description' },
   waiting: {
-    title: 'Nobody is waiting for a reply',
-    description:
-      "Conversations where the visitor's last message has not been answered yet appear here.",
+    title: 'traffic.empty.waiting.title',
+    description: 'traffic.empty.waiting.description',
   },
   invited: {
-    title: 'No pending invitations',
-    description: 'Visitors proactively invited to chat who have not replied yet appear here.',
+    title: 'traffic.empty.invited.title',
+    description: 'traffic.empty.invited.description',
   },
   browsing: {
-    title: 'No one is just browsing',
-    description: 'Visitors on your site with no conversation yet appear here.',
+    title: 'traffic.empty.browsing.title',
+    description: 'traffic.empty.browsing.description',
   },
 };
 
 export const ACTIVITY: Record<TrafficActivity, { tone: StatusTone; label: string }> = {
-  browsing: { tone: 'info', label: 'Browsing' },
-  queued: { tone: 'warning', label: 'Queued' },
-  waiting: { tone: 'warning', label: 'Waiting for reply' },
-  chatting: { tone: 'success', label: 'Chatting' },
-  supervised: { tone: 'info', label: 'Supervised' },
-  invited: { tone: 'warning', label: 'Invited' },
+  browsing: { tone: 'info', label: 'traffic.activity.browsing' },
+  queued: { tone: 'warning', label: 'traffic.activity.queued' },
+  waiting: { tone: 'warning', label: 'traffic.activity.waiting' },
+  chatting: { tone: 'success', label: 'traffic.activity.chatting' },
+  supervised: { tone: 'info', label: 'traffic.activity.supervised' },
+  invited: { tone: 'warning', label: 'traffic.activity.invited' },
+};
+
+const ROW_ACTION_LABEL_KEY: Record<RowActionId, string> = {
+  start_chat: 'traffic.action.startChat',
+  supervise: 'traffic.action.superviseChat',
+  assign_to_me: 'traffic.action.assignToMe',
+  edit: 'traffic.action.editContact',
 };
 
 /**
@@ -100,6 +111,7 @@ function hasAny(scopes: string[], ...wanted: string[]): boolean {
 }
 
 export function TrafficPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -255,30 +267,33 @@ export function TrafficPage(): ReactElement {
 
   return (
     <Page
-      title="Customers"
+      title={t('customers.page.title')}
       description={
         live.data
-          ? `${formatCount(live.data.total)} ${live.data.total === 1 ? 'visitor' : 'visitors'} on your site now`
-          : 'People on your site right now.'
+          ? t('traffic.page.count', {
+              count: live.data.total,
+              formatted: formatCount(live.data.total) ?? '0',
+            })
+          : t('traffic.page.subtitle')
       }
       actions={<CustomersTabs />}
     >
       <div
         role="tablist"
-        aria-label="Traffic status"
+        aria-label={t('traffic.page.statusTablistAriaLabel')}
         onKeyDown={onTabKeyDown}
         className="flex flex-wrap gap-1 border-b border-border pb-2"
       >
-        {TRAFFIC_TABS.map((t, index) => {
-          const active = t.id === tab;
+        {TRAFFIC_TABS.map((tabDef, index) => {
+          const active = tabDef.id === tab;
           // Only ever shown for a bucket the current response actually
           // covers — the active tab, or every tab while viewing the
           // unfiltered board — so a badge never states a count the client
           // does not truly know.
-          const count = active || tab === 'all' ? counts[t.id] : undefined;
+          const count = active || tab === 'all' ? counts[tabDef.id] : undefined;
           return (
             <button
-              key={t.id}
+              key={tabDef.id}
               ref={(element) => {
                 tabRefs.current[index] = element;
               }}
@@ -286,14 +301,14 @@ export function TrafficPage(): ReactElement {
               role="tab"
               aria-selected={active}
               tabIndex={active ? 0 : -1}
-              onClick={() => selectTab(t.id)}
+              onClick={() => selectTab(tabDef.id)}
               className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors ${
                 active
                   ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
                   : 'text-content-secondary hover:bg-surface-2'
               }`}
             >
-              <span>{t.label}</span>
+              <span>{t(TAB_LABEL_KEY[tabDef.id])}</span>
               {count !== undefined && (
                 <span className="text-2xs text-content-tertiary">{count}</span>
               )}
@@ -305,26 +320,29 @@ export function TrafficPage(): ReactElement {
       <TrafficFilters initialConditions={conditions} onChange={handleFiltersChange} />
 
       {live.error ? (
-        <ErrorNotice message="Could not load live traffic. Check that the API is reachable and try again." />
+        <ErrorNotice message={t('traffic.page.loadError')} />
       ) : (
         <Card>
           {live.isPending ? (
             <ListSkeleton />
           ) : items.length === 0 ? (
-            <EmptyState title={EMPTY_STATE[tab].title} description={EMPTY_STATE[tab].description} />
+            <EmptyState
+              title={t(EMPTY_STATE_KEY[tab].title)}
+              description={t(EMPTY_STATE_KEY[tab].description)}
+            />
           ) : (
             <VirtualTable
               items={items}
               rowHeight={60}
-              caption="Live visitors"
+              caption={t('traffic.page.table.caption')}
               colSpan={4}
               head={
                 <thead>
                   <tr className="border-b border-border text-left">
-                    <Th>Visitor</Th>
-                    <Th>Activity</Th>
-                    <Th>Chatting with</Th>
-                    <Th align="right">Actions</Th>
+                    <Th>{t('traffic.page.table.visitor')}</Th>
+                    <Th>{t('traffic.page.table.activity')}</Th>
+                    <Th>{t('traffic.page.table.chattingWith')}</Th>
+                    <Th align="right">{t('traffic.page.table.actions')}</Th>
                   </tr>
                 </thead>
               }
@@ -333,21 +351,23 @@ export function TrafficPage(): ReactElement {
                   <td className="px-4 py-2.5">
                     <span className="block font-medium">
                       {visitor.name ?? (
-                        <span className="italic text-content-tertiary">Unnamed visitor</span>
+                        <span className="italic text-content-tertiary">
+                          {t('traffic.page.unnamedVisitor')}
+                        </span>
                       )}
                     </span>
                     <span className="block truncate text-2xs text-content-tertiary">
-                      {visitor.email ?? 'No contact details'}
+                      {visitor.email ?? t('traffic.page.noContactDetails')}
                     </span>
                   </td>
                   <td className="px-4 py-2.5">
                     <StatusDot
                       tone={ACTIVITY[visitor.activity].tone}
-                      label={ACTIVITY[visitor.activity].label}
+                      label={t(ACTIVITY[visitor.activity].label)}
                     />
                   </td>
                   <td className="px-4 py-2.5">
-                    <ChattingWith visitor={visitor} />
+                    <ChattingWith visitor={visitor} t={t} />
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
@@ -359,7 +379,7 @@ export function TrafficPage(): ReactElement {
                           onClick={() => run(action.id, visitor)}
                           className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
                         >
-                          {action.label}
+                          {t(ROW_ACTION_LABEL_KEY[action.id])}
                         </button>
                       ))}
                     </div>
@@ -375,7 +395,7 @@ export function TrafficPage(): ReactElement {
 }
 
 /** The "Chatting with" cell — a name plus a human/AI tag, or a dash. */
-function ChattingWith({ visitor }: { visitor: TrafficVisitor }): ReactElement {
+function ChattingWith({ visitor, t }: { visitor: TrafficVisitor; t: TFunction }): ReactElement {
   const respondent = visitor.chatting_with;
   if (!respondent) return <span className="text-content-tertiary">—</span>;
 
@@ -390,7 +410,7 @@ function ChattingWith({ visitor }: { visitor: TrafficVisitor }): ReactElement {
             : 'bg-inset text-content-secondary'
         }`}
       >
-        {isAi ? 'AI' : 'Agent'}
+        {isAi ? t('traffic.page.respondentAi') : t('traffic.page.respondentAgent')}
       </span>
     </span>
   );

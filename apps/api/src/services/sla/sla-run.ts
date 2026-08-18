@@ -24,7 +24,7 @@ loadEnvFile();
 
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
-import { FileMailer } from '../mail/mailer.js';
+import { createMailer } from '../mail/mailer.js';
 import { SlaSweeper } from './sla-sweep.js';
 
 async function main(): Promise<void> {
@@ -33,7 +33,10 @@ async function main(): Promise<void> {
   try {
     // Mail is written to disk like everything else outgoing (PLAN A4), so the
     // alert is inspectable rather than sent.
-    const report = await new SlaSweeper(db, new FileMailer(env.MAIL_DIR)).run();
+    const report = await new SlaSweeper(
+      db,
+      createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+    ).run();
 
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.stderr.write(

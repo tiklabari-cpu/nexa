@@ -36,12 +36,8 @@ import ticketEmailTemplateRoutes from './routes/ticket-email-templates.js';
 import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
-import { FileMailer, NullMailer, type Mailer } from './services/mail/mailer.js';
-import {
-  FilePushProvider,
-  NullPushProvider,
-  type PushProvider,
-} from './services/push/push-provider.js';
+import { createMailer, type Mailer } from './services/mail/mailer.js';
+import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
 import reportRoutes from './routes/reports.js';
 import scheduledReportRoutes from './routes/scheduled-reports.js';
 import homeRoutes from './routes/home.js';
@@ -70,16 +66,16 @@ export const VERSION = '0.1.0';
 export interface BuildServerOptions {
   env: Env;
   /**
-   * Outgoing mail. Defaults to writing files (PLAN A4); the test server passes
-   * a null one so a suite that sends hundreds of invitations leaves nothing
-   * behind, and the tests that care about delivery pass their own.
+   * Outgoing mail. Defaults to whatever `MAIL_PROVIDER` names (PLAN A4 —
+   * `file` writes the message instead of sending it). The test fixture sets
+   * that key to `null` so a suite sending hundreds of invitations leaves
+   * nothing behind; the tests that care about delivery still pass their own.
    */
   mailer?: Mailer;
   /**
-   * Outgoing push. Defaults to writing files (13.7-d) — there is no APNs/FCM
-   * key to hold — and the test server discards, so a suite that starts hundreds
-   * of chats leaves nothing behind. Tests that care about delivery pass their
-   * own, the way the mailer ones do.
+   * Outgoing push. Defaults to whatever `PUSH_PROVIDER` names (13.7-d) — there
+   * is no APNs/FCM key to hold, so both values are mocks. Same arrangement as
+   * the mailer, including the test fixture's `null`.
    */
   push?: PushProvider;
   /**
@@ -98,8 +94,13 @@ export interface BuildServerOptions {
 
 export async function buildServer({
   env,
-  mailer = env.NODE_ENV === 'test' ? new NullMailer() : new FileMailer(env.MAIL_DIR),
-  push = env.NODE_ENV === 'test' ? new NullPushProvider() : new FilePushProvider(env.PUSH_DIR),
+  // The provider is chosen by the setting that names it, not by `NODE_ENV`
+  // (M-PROV-a · §D113/K3). The branch that used to be here meant `MAIL_PROVIDER`
+  // was validated at boot and then never read, so an operator who set it got a
+  // different mailer than the one they asked for — and a test that wanted a real
+  // spool had to lie about the environment to get one.
+  mailer = createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+  push = createPushProvider(env.PUSH_PROVIDER, { dir: env.PUSH_DIR }),
   telemetry,
   logStream,
 }: BuildServerOptions): Promise<FastifyInstance> {

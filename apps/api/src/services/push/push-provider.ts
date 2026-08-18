@@ -170,3 +170,34 @@ export class NullPushProvider implements PushProvider {
     // Intentionally empty.
   }
 }
+
+/** The push providers this deployment can select between (`PUSH_PROVIDER`). */
+export const PUSH_PROVIDERS = ['file', 'null'] as const;
+export type PushProviderId = (typeof PUSH_PROVIDERS)[number];
+
+export interface PushProviderOptions {
+  /** Where the `file` provider spools (`env.PUSH_DIR`), partitioned by licence. */
+  dir: string;
+}
+
+/**
+ * The push provider `PUSH_PROVIDER` names (M-PROV-a).
+ *
+ * `PUSH_PROVIDER` is a new key: this channel arrived with `13.7-d` after the
+ * other providers had theirs, and `server.ts` chose its implementation off
+ * `NODE_ENV` instead. It gets one now for the same reason the others have one —
+ * an operator who wants the spool off says so, rather than lying about the
+ * environment — and it takes the same `file`/`null` vocabulary as the mailer,
+ * because it is the same pair of mocks.
+ */
+export function createPushProvider(
+  provider: PushProviderId,
+  options: PushProviderOptions,
+): PushProvider {
+  switch (provider) {
+    case 'file':
+      return new FilePushProvider(options.dir);
+    case 'null':
+      return new NullPushProvider();
+  }
+}

@@ -35,7 +35,7 @@ import { PrismaClient } from '@prisma/client';
 import type { ScheduledExportFrequency } from '@nexa/types';
 import { parseEnv } from '../../config/env.js';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
-import { FileMailer } from '../mail/mailer.js';
+import { createMailer } from '../mail/mailer.js';
 import { periodFor } from './scheduled-report-period.js';
 import { ScheduledReportSweeper } from './scheduled-report-sweeper.js';
 
@@ -174,7 +174,10 @@ async function main(): Promise<void> {
       return;
     }
 
-    const report = await new ScheduledReportSweeper(db, new FileMailer(env.MAIL_DIR)).run({ now });
+    const report = await new ScheduledReportSweeper(
+      db,
+      createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+    ).run({ now });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     const { totals } = report;
     process.stderr.write(

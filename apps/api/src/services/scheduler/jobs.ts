@@ -24,6 +24,7 @@
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import { SiemSink } from '../audit/siem-sink.js';
+import { createSiemTarget } from '../audit/siem-target.js';
 import { ChatService } from '../chat/chat-service.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
 import type { Mailer } from '../mail/mailer.js';
@@ -104,6 +105,7 @@ export function buildSchedulerJobs({ db, env, mailer }: SchedulerJobsOptions): J
       async run() {
         const sink = new SiemSink(db, {
           siemDir: env.SIEM_DIR,
+          target: createSiemTarget(env.SIEM_PROVIDER, { siemDir: env.SIEM_DIR }),
           auditChainSecret: env.AUDIT_CHAIN_SECRET,
           horizonMs: env.SIEM_EXPORT_HORIZON_MS,
         });

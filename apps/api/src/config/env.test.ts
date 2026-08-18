@@ -10,6 +10,11 @@
  */
 import { describe, expect, it } from 'vitest';
 import { REGIONS } from '@nexa/types';
+import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
+import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
+import { MAIL_PROVIDERS } from '../services/mail/mailer.js';
+import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
+import { STORAGE_PROVIDERS } from '../services/storage/object-store.js';
 import { parseEnv } from './env.js';
 
 /** The minimum a boot needs, so a failure below is about the region and nothing else. */
@@ -43,5 +48,59 @@ describe('NEXA_REGION', () => {
     // Fail at boot, loudly. A process that shrugged at `apac` would serve
     // requests while claiming a residency guarantee nobody implements.
     expect(() => parseEnv({ ...BASE, NEXA_REGION: 'apac' })).toThrow(/NEXA_REGION/);
+  });
+});
+
+/**
+ * The provider keys (M-PROV-a · §D113/K3).
+ *
+ * §D113/K3 found `MAIL_PROVIDER`, `STORAGE_PROVIDER` and `STRIPE_PROVIDER`
+ * "doğrulanıp okunmuyor" — parsed here, and then ignored by a `server.ts` that
+ * branched on `NODE_ENV`. The factories are what closed that (each has its own
+ * test); what this file owns is the other half of the same promise: the schema's
+ * vocabulary is the factories' vocabulary, so a value that parses is a value
+ * something can actually build, and a value that does not parse stops the boot
+ * instead of silently becoming a default.
+ */
+describe('provider selection', () => {
+  const PROVIDERS = [
+    { key: 'MAIL_PROVIDER', vocabulary: MAIL_PROVIDERS, fallback: 'file' },
+    { key: 'PUSH_PROVIDER', vocabulary: PUSH_PROVIDERS, fallback: 'file' },
+    { key: 'STORAGE_PROVIDER', vocabulary: STORAGE_PROVIDERS, fallback: 'local' },
+    { key: 'STRIPE_PROVIDER', vocabulary: PAYMENT_PROVIDERS, fallback: 'mock' },
+    { key: 'SIEM_PROVIDER', vocabulary: SIEM_PROVIDERS, fallback: 'file' },
+  ] as const;
+
+  for (const { key, vocabulary, fallback } of PROVIDERS) {
+    describe(key, () => {
+      it('accepts every value its factory implements', () => {
+        // Driven off the factory's own list rather than a literal, for the
+        // reason NEXA_REGION is: widening one side alone is precisely the drift
+        // this pair of readers exists to prevent.
+        for (const value of vocabulary) {
+          expect(parseEnv({ ...BASE, [key]: value })[key]).toBe(value);
+        }
+      });
+
+      it('falls back to the mock when unset', () => {
+        expect(parseEnv(BASE)[key]).toBe(fallback);
+        expect(vocabulary).toContain(fallback);
+      });
+
+      it('refuses a value nothing implements, at boot', () => {
+        // Loudly, and before the first request. A process that shrugged at
+        // `smtp` would keep writing files while an operator believed mail was
+        // being sent — the failure mode that is only ever noticed by whoever
+        // did not get the e-mail.
+        expect(() => parseEnv({ ...BASE, [key]: 'nonesuch' })).toThrow(new RegExp(key));
+      });
+    });
+  }
+
+  it('does not accept the pre-seam spelling of MAIL_PROVIDER', () => {
+    // `mock` used to be the only value, and named the environment rather than
+    // the implementation — there are two mocks now. A stale `.env` has to fail
+    // at boot rather than quietly getting whichever one is the default.
+    expect(() => parseEnv({ ...BASE, MAIL_PROVIDER: 'mock' })).toThrow(/MAIL_PROVIDER/);
   });
 });

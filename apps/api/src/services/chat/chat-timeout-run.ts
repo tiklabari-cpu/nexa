@@ -22,7 +22,7 @@ loadEnvFile();
 
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
-import { FileMailer } from '../mail/mailer.js';
+import { createMailer } from '../mail/mailer.js';
 import { ChatService } from './chat-service.js';
 import { ChatTimeoutSweeper } from './chat-timeout.js';
 
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
       undefined,
       undefined,
       { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
-      new FileMailer(env.MAIL_DIR),
+      createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
     );
     const report = await new ChatTimeoutSweeper(db, chats).run();
 

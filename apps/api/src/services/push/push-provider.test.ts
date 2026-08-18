@@ -7,11 +7,17 @@
  * the partitioning were ever flattened those assertions would keep passing
  * while proving nothing.
  */
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FilePushProvider, NullPushProvider, type PushNotification } from './push-provider.js';
+import {
+  createPushProvider,
+  FilePushProvider,
+  NullPushProvider,
+  PUSH_PROVIDERS,
+  type PushNotification,
+} from './push-provider.js';
 
 function notification(overrides: Partial<PushNotification> = {}): PushNotification {
   return {
@@ -91,5 +97,53 @@ describe('FilePushProvider', () => {
 describe('NullPushProvider', () => {
   it('accepts a delivery and keeps nothing', async () => {
     await expect(new NullPushProvider().send()).resolves.toBeUndefined();
+  });
+});
+
+/**
+ * `PUSH_PROVIDER` selects a provider (M-PROV-a · §D113/K3).
+ *
+ * A new key: this channel arrived after the others had theirs and `server.ts`
+ * chose its implementation off `NODE_ENV` instead, so an operator had no way to
+ * say "spool nothing" short of lying about the environment. Each case asserts
+ * what the value promises on disk rather than which class came back, for the
+ * reason `mailer.test.ts` gives.
+ */
+describe('createPushProvider', () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'nexa-push-factory-'));
+  });
+
+  afterEach(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('spools the delivery under PUSH_DIR for "file"', async () => {
+    const provider = createPushProvider('file', { dir });
+    expect(provider).toBeInstanceOf(FilePushProvider);
+
+    await provider.send(notification());
+
+    expect(await (provider as FilePushProvider).delivered(7n)).toHaveLength(1);
+  });
+
+  it('keeps nothing for "null"', async () => {
+    const provider = createPushProvider('null', { dir });
+    expect(provider).toBeInstanceOf(NullPushProvider);
+
+    await provider.send(notification());
+
+    // The licence partition the file provider would have created is absent, so
+    // this cannot pass by having spooled somewhere else.
+    await expect(readdir(dir)).resolves.toEqual([]);
+  });
+
+  it('has an implementation for every value the vocabulary allows', () => {
+    for (const provider of PUSH_PROVIDERS) {
+      expect(createPushProvider(provider, { dir })).toBeDefined();
+    }
+    expect(PUSH_PROVIDERS).toEqual(['file', 'null']);
   });
 });

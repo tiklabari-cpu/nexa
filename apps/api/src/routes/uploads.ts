@@ -24,7 +24,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
 import type { Env } from '../config/env.js';
-import { LocalStore } from '../services/storage/local-store.js';
+import { createObjectStore, digestBytes } from '../services/storage/object-store.js';
 import { UploadSigner, buildKey, licenseOfKey } from '../services/storage/upload-url.js';
 import { assertClean, createVirusScanner } from '../services/storage/virus-scanner.js';
 
@@ -60,7 +60,7 @@ interface Options {
 
 export default async function uploadRoutes(app: FastifyInstance, { env }: Options): Promise<void> {
   const signer = new UploadSigner(env.UPLOAD_SIGNING_KEY);
-  const store = new LocalStore(env.STORAGE_LOCAL_DIR);
+  const store = createObjectStore(env.STORAGE_PROVIDER, { localDir: env.STORAGE_LOCAL_DIR });
   const scanner = createVirusScanner(env.VIRUS_SCANNER);
 
   /**
@@ -172,7 +172,7 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
       return reply.status(201).send({
         file_url: `/api/v1/uploads/${verdict.grant.key}`,
         size_bytes: bytes.byteLength,
-        checksum_sha256: LocalStore.digest(bytes),
+        checksum_sha256: digestBytes(bytes),
       });
     },
   );

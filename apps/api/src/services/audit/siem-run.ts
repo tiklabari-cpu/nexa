@@ -27,6 +27,7 @@ loadEnvFile();
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
 import { SiemSink } from './siem-sink.js';
+import { createSiemTarget } from './siem-target.js';
 
 async function main(): Promise<void> {
   const env = parseEnv();
@@ -34,6 +35,7 @@ async function main(): Promise<void> {
   try {
     const sink = new SiemSink(db, {
       siemDir: env.SIEM_DIR,
+      target: createSiemTarget(env.SIEM_PROVIDER, { siemDir: env.SIEM_DIR }),
       auditChainSecret: env.AUDIT_CHAIN_SECRET,
       horizonMs: env.SIEM_EXPORT_HORIZON_MS,
     });

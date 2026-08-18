@@ -1,5 +1,6 @@
 /**
- * The `local` storage provider.
+ * The `local` storage provider — the `ObjectStore` implementation
+ * `STORAGE_PROVIDER=local` selects (see `object-store.ts`).
  *
  * Files land under `STORAGE_LOCAL_DIR`, which lives inside the already-ignored
  * `.data/`. Keys are `<licenseId>/<uuid><ext>` and are built by `buildKey`, so
@@ -8,17 +9,19 @@
  * file would hand out the filesystem, and "the caller cannot reach it" is an
  * argument that stops being true the first time someone adds a caller.
  */
-import { createHash } from 'node:crypto';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve, sep } from 'node:path';
+import type { ObjectStore, StoredFile } from './object-store.js';
 import { licenseOfKey } from './upload-url.js';
 
-export interface StoredFile {
-  bytes: Buffer;
-  contentType: string;
-}
+/**
+ * Re-exported where it has always been imported from. It is declared next to
+ * the `ObjectStore` interface it belongs to, and a type-only import back means
+ * this file still has exactly one runtime dependency direction.
+ */
+export type { StoredFile };
 
-export class LocalStore {
+export class LocalStore implements ObjectStore {
   readonly #root: string;
 
   constructor(directory: string) {
@@ -62,11 +65,6 @@ export class LocalStore {
     } catch {
       return false;
     }
-  }
-
-  /** Content addressing for the caller's benefit — lets a client dedupe. */
-  static digest(bytes: Buffer): string {
-    return createHash('sha256').update(bytes).digest('hex');
   }
 
   #pathFor(key: string): string {

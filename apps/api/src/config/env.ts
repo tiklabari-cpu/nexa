@@ -6,6 +6,15 @@
 import { z } from 'zod';
 import { DEFAULT_REGION, REGIONS } from '@nexa/types';
 import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
+// The provider vocabularies live with their factories, not here: a value this
+// schema accepts and no factory implements is exactly the drift M-PROV-a exists
+// to close, and one list read from both ends cannot drift. None of these
+// modules reaches back into this one, so there is no import cycle.
+import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
+import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
+import { MAIL_PROVIDERS } from '../services/mail/mailer.js';
+import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
+import { STORAGE_PROVIDERS } from '../services/storage/object-store.js';
 
 const secret = (minLength: number) =>
   z
@@ -147,6 +156,14 @@ export const envSchema = z.object({
    * Splunk/Sentinel/Datadog connector (a project boundary).
    */
   SIEM_DIR: z.string().default('.data/siem'),
+  /**
+   * Where the scheduled sink delivers (NFR-C6 · C6-d · M-PROV-a). `file` writes
+   * the sealed NDJSON page plus its `.sig` sidecar under `SIEM_DIR`. A workspace
+   * may only choose a `SIEM_EXPORT_TARGETS` value this deployment implements —
+   * the sink fails loudly on a row naming anything else, rather than quietly
+   * shipping nothing. See services/audit/siem-target.ts.
+   */
+  SIEM_PROVIDER: z.enum(SIEM_PROVIDERS).default('file'),
 
   TRIAL_DAYS: z.coerce.number().int().positive().default(14),
   UNIT_PRICE_CENTS: z.coerce.number().int().nonnegative().default(9900),
@@ -168,13 +185,32 @@ export const envSchema = z.object({
    * content inferred outside its own region. See services/ai/inference.ts.
    */
   LLM_PROVIDER_REGION: z.enum(REGIONS).optional(),
-  MAIL_PROVIDER: z.enum(['mock']).default('mock'),
-  STORAGE_PROVIDER: z.enum(['local']).default('local'),
+  /**
+   * Outgoing mail (M-PROV-a). `file` writes each message under `MAIL_DIR`
+   * instead of sending it (PLAN A4); `null` discards, which is what the test
+   * fixture asks for so a suite that sends hundreds of invitations leaves
+   * nothing behind. Named after what the implementation does rather than after
+   * the environment that wants it: `server.ts` used to pick off `NODE_ENV`,
+   * which made this key validated-but-unread.
+   */
+  MAIL_PROVIDER: z.enum(MAIL_PROVIDERS).default('file'),
+  /**
+   * Outgoing push (M-PROV-a). Same pair of mocks as the mailer, spooling under
+   * `PUSH_DIR` (13.7-d). A newer key than the rest — this channel arrived after
+   * the others had theirs, and inherited the `NODE_ENV` branch instead.
+   */
+  PUSH_PROVIDER: z.enum(PUSH_PROVIDERS).default('file'),
+  STORAGE_PROVIDER: z.enum(STORAGE_PROVIDERS).default('local'),
   /** Where the `local` provider keeps uploads. Inside `.data/`, which is ignored. */
   STORAGE_LOCAL_DIR: z.string().default('.data/uploads'),
   /** How long a signed upload URL stays usable. One shot, so this is short. */
   UPLOAD_URL_TTL: z.coerce.number().int().positive().max(3600).default(300),
-  STRIPE_PROVIDER: z.enum(['mock']).default('mock'),
+  /**
+   * The payment processor (M-PROV-a). `mock` accepts any unexpired card and
+   * charges nothing (ADR-13); a real Stripe provider slots in behind
+   * `PaymentProvider`. See services/billing/payment-provider.ts.
+   */
+  STRIPE_PROVIDER: z.enum(PAYMENT_PROVIDERS).default('mock'),
   /**
    * Upload virus scanning (FR-MOD-08.9.4). `mock` flags the EICAR test file and
    * passes the rest; `unavailable` is always-down, for exercising the fail-closed

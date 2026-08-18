@@ -17,11 +17,11 @@
  * caller probing for another tenant's keys gets to learn.
  */
 import { ApiError } from '../../lib/api-error.js';
-import type { LocalStore } from './local-store.js';
+import type { ObjectStore } from './object-store.js';
 import { keyFromAttachmentUrl, licenseOfKey } from './upload-url.js';
 
 export async function assertUploadedAttachment(
-  store: LocalStore,
+  store: ObjectStore,
   licenseId: bigint,
   url: string,
 ): Promise<void> {

@@ -79,3 +79,34 @@ export class NullMailer implements Mailer {
     // Intentionally empty.
   }
 }
+
+/** The mailers this deployment can select between (`MAIL_PROVIDER`). */
+export const MAIL_PROVIDERS = ['file', 'null'] as const;
+export type MailProvider = (typeof MAIL_PROVIDERS)[number];
+
+export interface MailerOptions {
+  /** Where the `file` provider writes (`env.MAIL_DIR`). */
+  dir: string;
+}
+
+/**
+ * The mailer `MAIL_PROVIDER` names (M-PROV-a).
+ *
+ * Before this, `server.ts` branched on `NODE_ENV` — file in dev and prod, null
+ * under test — and `MAIL_PROVIDER` was validated by zod and then never read,
+ * which made it a setting that looked like a choice and was not one. The two
+ * mocks are now named after what they do rather than after the environment that
+ * happens to want them, so a test that wants a real spool asks for `file` and a
+ * dev run that wants silence asks for `null`, neither by changing `NODE_ENV`.
+ *
+ * A `switch` rather than a ternary, like `createObjectStore`: adding an `smtp`
+ * value to the enum should fail to compile here, not fall through to a file.
+ */
+export function createMailer(provider: MailProvider, options: MailerOptions): Mailer {
+  switch (provider) {
+    case 'file':
+      return new FileMailer(options.dir);
+    case 'null':
+      return new NullMailer();
+  }
+}

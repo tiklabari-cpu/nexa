@@ -7,21 +7,22 @@
  * four, expiry and holder — the same fields a Stripe `PaymentMethod` exposes and
  * the only ones safe to keep. There is deliberately no field for a full card
  * number, so the out-of-scope data cannot be persisted even by accident.
+ *
+ * This module owns the *storage* half. Whether a card is acceptable at all is
+ * the processor's call and lives behind `PaymentProvider` (`payment-provider.ts`)
+ * — the seam `STRIPE_PROVIDER` selects through.
  */
-import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import type { PaymentMethodDetails, PaymentProvider } from './payment-provider.js';
 
-/** Card networks the mock accepts — the four a real form would detect. */
-export const PAYMENT_BRANDS = ['visa', 'mastercard', 'amex', 'discover'] as const;
-export type PaymentBrand = (typeof PAYMENT_BRANDS)[number];
-
-export interface PaymentMethodInput {
-  brand: PaymentBrand;
-  last4: string;
-  expMonth: number;
-  expYear: number;
-  holderName: string;
-}
+/**
+ * The card vocabulary and shape now belong to the processor seam
+ * (`payment-provider.ts`), and are re-exported from where every caller has
+ * always imported them. What a processor will accept is the processor's
+ * statement, not this module's.
+ */
+export { PAYMENT_BRANDS, type PaymentBrand } from './payment-provider.js';
+export type PaymentMethodInput = PaymentMethodDetails;
 
 /** The wire shape — snake_case, `updated_at` as ISO, or null when none on file. */
 export interface PaymentMethodView {
@@ -31,22 +32,6 @@ export interface PaymentMethodView {
   exp_year: number;
   holder_name: string;
   updated_at: string;
-}
-
-/**
- * Reject a card whose expiry is already past.
- *
- * A real card form does this before it ever reaches a processor; the mock keeps
- * the check so a saved method is always one that *could* be charged, rather than
- * a dead card the workspace thinks is on file. Compared at month granularity in
- * UTC — a card is good through the last day of its expiry month.
- */
-function assertNotExpired(expMonth: number, expYear: number, now = new Date()): void {
-  const currentYear = now.getUTCFullYear();
-  const currentMonth = now.getUTCMonth() + 1;
-  if (expYear < currentYear || (expYear === currentYear && expMonth < currentMonth)) {
-    throw ApiError.validation('The card expiry date is in the past.');
-  }
 }
 
 /** Serialise a stored row to the wire shape, or null when there is no method. */
@@ -84,22 +69,31 @@ export async function getPaymentMethod(
  * Set (or replace) the payment method on file.
  *
  * An upsert on the license-keyed singleton: a workspace has at most one method,
- * and updating it just overwrites the row. Semantic validation the request shape
- * cannot express — an expired card — is settled here before the write.
+ * and updating it just overwrites the row.
+ *
+ * The card goes past the processor first (`STRIPE_PROVIDER`, M-PROV-a). That is
+ * where semantic validation the request shape cannot express now lives — an
+ * expired card is refused by whoever would have to charge it, not by us — and
+ * what gets stored is the masked representation the processor hands back, which
+ * is the only thing a real one would let us keep. The mock returns the details
+ * unchanged and rejects the same expiry with the same message, so nothing the
+ * API does changed; a real provider would return its own normalised brand and
+ * last four, and this write already stores those rather than the request's.
  */
 export async function upsertPaymentMethod(
   tx: TenantClient,
   tenant: TenantContext,
   input: PaymentMethodInput,
+  payments: PaymentProvider,
 ): Promise<PaymentMethodView> {
-  assertNotExpired(input.expMonth, input.expYear);
+  const registered = await payments.registerPaymentMethod(input);
 
   const data = {
-    brand: input.brand,
-    last4: input.last4,
-    expMonth: input.expMonth,
-    expYear: input.expYear,
-    holderName: input.holderName,
+    brand: registered.brand,
+    last4: registered.last4,
+    expMonth: registered.expMonth,
+    expYear: registered.expYear,
+    holderName: registered.holderName,
   };
 
   const row = await tx.paymentMethod.upsert({

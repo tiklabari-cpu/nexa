@@ -42,6 +42,16 @@ export function testEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): Env {
     ...process.env,
     NODE_ENV: 'test',
     LOG_LEVEL: 'silent',
+    // The test environment names its own providers (M-PROV-a). `server.ts` used
+    // to branch on `NODE_ENV` for these two; now that the env key decides, the
+    // fixture has to say what the suites have always relied on — discard, so a
+    // run that sends hundreds of invitations or starts hundreds of chats leaves
+    // nothing on disk. Placed above `overrides` on purpose: a test that wants a
+    // real spool asks for `file` (or, as the delivery tests do, passes its own
+    // provider pointed at a temporary directory), and a developer's `.env`
+    // cannot quietly turn spooling back on for every suite.
+    MAIL_PROVIDER: 'null',
+    PUSH_PROVIDER: 'null',
     ...overrides,
   });
 }

@@ -109,6 +109,7 @@ import {
   getPaymentMethod,
   upsertPaymentMethod,
 } from '../services/billing/payment-method-service.js';
+import { createPaymentProvider } from '../services/billing/payment-provider.js';
 import {
   purchaseApiPackage,
   serialiseApiPackagePurchase,
@@ -1422,6 +1423,9 @@ export default async function reportRoutes(
   options: { env: Env },
 ): Promise<void> {
   const { env } = options;
+  // The processor `STRIPE_PROVIDER` names (M-PROV-a). Built once per plugin
+  // registration, like `uploads.ts` builds its scanner.
+  const payments = createPaymentProvider(env.STRIPE_PROVIDER);
 
   app.get('/reports/overview', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
     const { from, to, baseline } = resolveReportQuery(request.query);
@@ -1898,13 +1902,18 @@ export default async function reportRoutes(
       const tenant = request.tenant();
 
       const paymentMethod = await request.withTenant(async (tx) => {
-        const stored = await upsertPaymentMethod(tx, tenant, {
-          brand: body.brand,
-          last4: body.last4,
-          expMonth: body.exp_month,
-          expYear: body.exp_year,
-          holderName: body.holder_name,
-        });
+        const stored = await upsertPaymentMethod(
+          tx,
+          tenant,
+          {
+            brand: body.brand,
+            last4: body.last4,
+            expMonth: body.exp_month,
+            expYear: body.exp_year,
+            holderName: body.holder_name,
+          },
+          payments,
+        );
         // Record who set the card and which brand/last four — never the expiry or
         // holder, which the audit log has no reason to keep.
         await writeAuditEntry(tx, request.auditContext(), {

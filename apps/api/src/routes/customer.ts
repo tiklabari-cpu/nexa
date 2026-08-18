@@ -33,7 +33,7 @@ import { CustomFieldService } from '../services/custom-fields/custom-field-servi
 import { visitorPageUrls } from '../services/campaigns/campaign-matching.js';
 import { GoalService } from '../services/goals/goal-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
-import { LocalStore } from '../services/storage/local-store.js';
+import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import type { PushEventKind, PushProvider } from '../services/push/push-provider.js';
@@ -188,7 +188,7 @@ export default async function customerRoutes(
   const customFields = new CustomFieldService();
   const goals = new GoalService();
   const ai = new AiResponder(chats, publisher);
-  const store = new LocalStore(env.STORAGE_LOCAL_DIR);
+  const store = createObjectStore(env.STORAGE_PROVIDER, { localDir: env.STORAGE_LOCAL_DIR });
 
   /**
    * Tell the human assigned to a chat that their visitor wrote in

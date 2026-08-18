@@ -33,15 +33,13 @@
  * second sweep for the same licence blocks until the first has fully committed
  * or fully rolled back, and then sees the position the first one left.
  */
-import { randomUUID } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { readEntitlements } from '../../lib/entitlements.js';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { deriveChainKey } from './audit-chain.js';
 import { readAuditExportPage, sealExportPage } from './audit-export.js';
 import { cursorOf, readSiemExportRow } from './siem-export.js';
+import { FileSiemTarget, type SiemBatch, type SiemTarget } from './siem-target.js';
 
 /** How much of a failure's message is kept — same bound as the report sweeper. */
 const ERROR_MAX_LENGTH = 500;
@@ -49,6 +47,16 @@ const ERROR_MAX_LENGTH = 500;
 export interface SiemSinkOptions {
   /** Root the file sink writes under (`env.SIEM_DIR`). `.data/siem` by default. */
   siemDir: string;
+  /**
+   * Where a sealed page goes (`SIEM_PROVIDER`, via `createSiemTarget`).
+   *
+   * Optional, defaulting to the file sink over `siemDir`: every caller that
+   * only ever wanted the mock — the tests, and anything constructed before this
+   * seam existed — keeps saying `{ siemDir }` and gets exactly what it got
+   * before. The runners pass one built from the env, which is what makes
+   * `SIEM_PROVIDER` a setting that is read rather than merely validated.
+   */
+  target?: SiemTarget;
   /** `AUDIT_CHAIN_SECRET` — the export's records are signed exactly as the pull endpoint signs them. */
   auditChainSecret: string;
   /** Same horizon the pull endpoint reads to (`env.SIEM_EXPORT_HORIZON_MS`). */
@@ -96,13 +104,13 @@ interface TenantRow {
 
 export class SiemSink {
   readonly #db: PrismaClient;
-  readonly #siemDir: string;
+  readonly #target: SiemTarget;
   readonly #auditChainSecret: string;
   readonly #horizonMs: number;
 
   constructor(db: PrismaClient, options: SiemSinkOptions) {
     this.#db = db;
-    this.#siemDir = options.siemDir;
+    this.#target = options.target ?? new FileSiemTarget(options.siemDir);
     this.#auditChainSecret = options.auditChainSecret;
     this.#horizonMs = options.horizonMs;
   }
@@ -259,14 +267,12 @@ export class SiemSink {
     }
 
     const sealed = sealExportPage(chainKey, licenseId, page.records);
-    const file = await deliverToTarget(
-      row.target,
-      this.#siemDir,
+    const file = await deliverToTarget(this.#target, row.target, {
       licenseId,
       now,
-      sealed.body,
-      sealed.signature,
-    );
+      body: sealed.body,
+      signature: sealed.signature,
+    });
 
     // Past this point the file is written and closed. Only now may the
     // position move — the invariant this module exists to hold.
@@ -293,57 +299,28 @@ export class SiemSink {
 }
 
 /**
- * Write one page to its destination and return the path written.
+ * Hand one page to the configured destination and return the locator it gives
+ * back.
  *
- * A `switch` of one case looks like overkill for a vocabulary of one value,
- * but the vocabulary is `SIEM_EXPORT_TARGETS`, not this function's — the
- * database will happily hold a target this deployment gains no delivery code
- * for until someone adds it, and failing loudly here is better than a silent
- * no-op that quietly stops shipping a workspace's trail.
+ * The guard looks like overkill for a vocabulary of one value, but the two
+ * vocabularies are not the same one: `row.target` is what the *workspace* chose
+ * and lives in the database, while the target instance is what this *build* can
+ * deliver to. The database will happily hold a target this deployment gained no
+ * delivery code for — a workspace configured against a build that had a Splunk
+ * provider, running on one that does not — and failing loudly here is better
+ * than a silent no-op that quietly stops shipping that workspace's trail. It
+ * throws inside the tenant transaction, so the cursor stays put and the range
+ * is still owed.
  */
 async function deliverToTarget(
-  target: string,
-  siemDir: string,
-  licenseId: bigint,
-  now: Date,
-  body: string,
-  signature: string,
+  target: SiemTarget,
+  configured: string,
+  batch: SiemBatch,
 ): Promise<string> {
-  switch (target) {
-    case 'file':
-      return writeFileSink(siemDir, licenseId, now, body, signature);
-    default:
-      throw new Error(`no delivery implementation for SIEM target "${target}"`);
+  if (configured !== target.name) {
+    throw new Error(`no delivery implementation for SIEM target "${configured}"`);
   }
-}
-
-/**
- * The mock file sink: `.data/siem/<licenseId>/<timestamp>-<random>.ndjson`,
- * plus a `.sig` sidecar carrying the detached signature — the same split
- * `audit-export.ts` documents for the pull endpoint's header, here as a
- * second file because a file sink has no header to put it in.
- *
- * The body is written and closed before the signature, and both are written
- * and closed before this function returns — `writeFile` only resolves once
- * the file is flushed and its descriptor closed, so the caller awaiting this
- * function has the "written and closed" half of the order invariant by
- * construction. A random suffix, like `FileMailer`'s, keeps two deliveries in
- * the same millisecond (concurrent sweeps, or a fast retry) from colliding.
- */
-async function writeFileSink(
-  siemDir: string,
-  licenseId: bigint,
-  now: Date,
-  body: string,
-  signature: string,
-): Promise<string> {
-  const dir = join(siemDir, licenseId.toString());
-  await mkdir(dir, { recursive: true });
-  const stamp = now.toISOString().replace(/[:.]/g, '-');
-  const path = join(dir, `${stamp}-${randomUUID().slice(0, 8)}.ndjson`);
-  await writeFile(path, body, 'utf8');
-  await writeFile(`${path}.sig`, signature, 'utf8');
-  return path;
+  return target.deliver(batch);
 }
 
 /** A failure as one bounded line — identical shape to the report sweeper's. */

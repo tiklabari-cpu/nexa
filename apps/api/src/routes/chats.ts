@@ -12,7 +12,7 @@ import type { Mailer } from '../services/mail/mailer.js';
 import type { PushProvider } from '../services/push/push-provider.js';
 import { pushToAgentDevices } from '../services/notifications/push.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
-import { LocalStore } from '../services/storage/local-store.js';
+import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
 
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
@@ -90,7 +90,7 @@ export default async function chatRoutes(
   app: FastifyInstance,
   { env, mailer, push }: { env: Env; mailer: Mailer; push: PushProvider },
 ): Promise<void> {
-  const store = new LocalStore(env.STORAGE_LOCAL_DIR);
+  const store = createObjectStore(env.STORAGE_PROVIDER, { localDir: env.STORAGE_LOCAL_DIR });
   const chats = new ChatService(
     app.db,
     app.redis,

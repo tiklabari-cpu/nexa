@@ -12,7 +12,7 @@ Sırayla oku:
 2. `CONVENTIONS.md` — Definition of Done (DoD) kapısı, git kuralları, handoff formatı.
 3. Task Master'dan HEDEF TASK'ı çek (get_task / show): başlık, detay, test stratejisi, kabul
    kriteri, bağımlılıklar, alt-görevler.
-4. `PLAN.md` — **baştan sona OKUMA** (≈770 KB / 3.700 satır, bağlamı boşa harcar). Şu iki adımı yap:
+4. `PLAN.md` — **baştan sona OKUMA** (~1.4 MB / ~6.150 satır, bağlamı boşa harcar). Şu iki adımı yap:
    a. Task başlığındaki iş kalemi kimliğini (ör. `11.7-a`) `### Düz tablo (aktarım kaynağı)`
    bölümünde ara → `PRD` sütunu sana gereksinim kodunu verir (`11.7`). Eşleme burada
    yazılıdır, tahmin etme.
@@ -41,7 +41,7 @@ Bu task daha önce yarım kalmış olabilir. ÖNCE mevcut durumu tespit et: ilgi
 var mı, testler ne durumda, `git status` ne diyor, `HANDOFF.md`'de bu task için not var mı.
 **Sıfırdan yapma** — kaldığı yerden devam et veya hatayı düzelt.
 
-`HANDOFF.md`'yi **tam okuma** (≈880 KB, 244 blok). Bloklar newest-first sıralı ve `## Task log`
+`HANDOFF.md`'yi **tam okuma** (~1.3 MB, ~25 blok). Bloklar newest-first sıralı ve `## Task log`
 başlığı 14. satırdadır — sana gereken yalnız en üstteki birkaç blok. Kalıp: `head -60 HANDOFF.md`
 veya `Read(limit: 60)`. Daha eski bir işi arıyorsan tam metin yerine hedefli ara:
 `grep -n 'tm <id>' HANDOFF.md | head -5` → dönen satır numarası çevresini dar bir aralıkla oku.

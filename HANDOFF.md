@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 132.3 — M-DOCS-b: Kapı sözleşmesi CI ile hizalandı — format:check/kontrat diff/db:check-drift + bayat boyutlar — done — 2026-08-18 UTC
+
+- **Yapıldı:** `CONVENTIONS.md` §1 DoD listesine CI'ın zaten zorunlu tuttuğu üç kutu eklendi: `pnpm -w format:check` · kontrat değiştiyse `contract:generate` sonrası `packages/contract/src/generated` diff'i boş · migration eklendiyse `pnpm -w db:check-drift`. `TASK-RUNNER-PROMPT.md`'nin bayat boyut notları (`≈770 KB/3.700 satır`, `≈880 KB/244 blok`) ölçülüp güncellendi (`~1.4 MB/~6.150 satır`, `~1.3 MB/~25 blok`). `PLAN.md` §F.0 tablosuna 132.4'ü bekleyen yer tutucu not eklendi.
+- **Doğrulama (hepsi exit 0):** `pnpm -w format:check` · `typecheck` 12/12 · `lint` 9/9 · `build` 8/8 · `turbo test --force --filter=!@nexa/e2e --filter=!@nexa/api` 9/9. `test:integration`/`test:e2e`/`contract:generate`/`db:check-drift` KOŞULMADI — yalnız doküman, kod/kontrat/migration dokunulmadı (130.1/131.1/132.1/132.2'nin aynı gerekçesi).
+- **Varsayımlar:** Boyut sayıları "yaklaşık" verildi (task talebi gereği) ki bir sonraki büyüme turunda hemen bayatlamasın; HANDOFF blok sayımı `grep -c '^## [0-9]'` ile ölçüldü.
+- **Sonraki pencereye not:** 132.4 (M-HYGIENE-a) tamamlanınca PLAN §F.0 tablosunun "Kanıt" sütununu gerçek `pnpm audit:*` komut adlarıyla güncelle, bu turun yer tutucu notunu kaldır.
+
 ## 132.2 — M-DOCS-a: README gerçekle hizalandı — test:unit/e2e önkoşulları/`.env` yükleme + HANDOFF:3 tarih — done — 2026-08-18 UTC
 
 - **Yapıldı:** `README.md` — `test:unit` satırındaki "no external services needed" düzeltildi (api/rtm canlı Postgres+Redis ister); yeni "End-to-end tests" alt bölümü (`playwright install chromium` · 5 sunucu · global setup'ın dev DB'yi `NEXA_SEED_RESET=1` ile sıfırladığı uyarısı + geri alma notu · tek seferde bir koşu); yeni "Environment" alt bölümü (`make` hedefleri `.env`'i otomatik export eder, çıplak `pnpm db:migrate`/`test:e2e` etmez → `set -a; source .env; set +a`). Mobile app / Background jobs bölümleri zaten 128.5/130.4'te yazılmıştı, dokunulmadı (görev metninin kendi koşulu). `HANDOFF.md:3` tarih sabiti → "güncel — bkz. Task log".

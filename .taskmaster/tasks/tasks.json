@@ -6155,7 +6155,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-18T02:53:35.407Z",
+        "updatedAt": "2026-08-18T03:27:47.344Z",
         "subtasks": [
           {
             "id": 1,
@@ -6174,12 +6174,12 @@
             "description": "Beş mevcut runner zamanlayıcıya kaydedilir; server boot başlatır; health özeti; CLI aynı fonksiyonu çağırır.",
             "details": "NE YAPILACAK: Her runner'ın \"bir tur koş\" fonksiyonunu CLI giriş noktasından ayır (çoğunda zaten\nayrı: `chat-timeout.ts` sweep fonksiyonu vs `chat-timeout-run.ts` CLI — dosya adlarını oku, yoksa\nçıkar) ve `services/scheduler/jobs.ts`'te kaydet: `chat_timeout` (60 s) · `sla` (60 s) · `siem`\n(300 s) · `scheduled_reports` (60 s) · `retention` (3600 s, `RETENTION_ENABLED` false ise job\n\"disabled\" olarak snapshot'ta görünür ama koşmaz). `server.ts`/`index.ts`: `SCHEDULER_ENABLED`\ntrue ise `buildServer` sonrası `scheduler.start()`, `onClose` → `stop()`. `routes/health.ts`:\ngövdeye `scheduler` alanı (130.1 `snapshot()`); sözleşme `paths/health.yaml` şeması genişletilir\n(katkısal) → `pnpm -w contract:generate` → generated diff commit. CLI script'leri (5) DEĞİŞMEZ\ndavranışla aynı fonksiyonu çağırmaya devam eder (dry-run varsayılanları CLI'da korunur).\nNEDEN: §D113/K1. `make dev` ile ayağa kalkan ürün bu beş işi hiç yapmıyor.\nDOSYALAR: `services/scheduler/jobs.ts` (+test) · `server.ts`/`index.ts` · `routes/health.ts` (+test) ·\n`packages/contract/openapi/paths/health.yaml` (+generated) · `services/{chat,sla,audit,reports,\nretention}/*-run.ts` (yalnız fonksiyon ayrımı gerekiyorsa).\nREFERANS DESEN: 130.1'in `register` API'si · `routes/health.ts:48-55` mevcut degraded mantığı ·\n`test/integration/contract-parity.test.ts` (health şeması değişince yeşil kalmalı).\nKK: `NODE_ENV=development`'ta health gövdesinde 5 job (+ retention disabled) · test ortamında\n`enabled:false` · CLI'lar hâlâ çalışır (`pnpm --filter @nexa/api chat-timeout:run` exit 0).\nKAPSAM DIŞI: webhook redelivery (130.5) · yeni sweep yazmak.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SCHED (türetilmiş — FR-MOD-08.7.3 idle auto-close · 11.5-d SLA · NFR-C8 retention · C6-d SIEM · 07.9 scheduled reports)**. Gereksinim satırı: `grep -n '| M-SCHED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SCHED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm --filter @nexa/api test` (jobs + health) · `test:integration` (contract-parity + health) exit 0; `pnpm -w contract:generate` sonrası `git status` temiz; typecheck/lint/build.\n- Ölçülebilir: dev'de `curl -s :4000/api/v1/health | jq .scheduler.jobs | length` = 5; test env'de `enabled=false`.\n- PLAN: KM-SCHED'e madde.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "130.1"
             ],
             "parentId": "130",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-18T03:27:47.344Z"
           },
           {
             "id": 3,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-18T02:53:35.408Z",
+      "lastModified": "2026-08-18T03:27:47.346Z",
       "taskCount": 143,
       "completedCount": 128,
       "tags": [

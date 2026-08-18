@@ -18,6 +18,7 @@ import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
+import scheduler from './plugins/scheduler.js';
 import authRoutes from './routes/auth.js';
 import samlRoutes from './routes/saml.js';
 import scimRoutes from './routes/scim.js';
@@ -197,6 +198,9 @@ export async function buildServer({
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  // After both stores it reads through, before anything request-facing: the
+  // five sweeps are background work, not part of answering a request.
+  await app.register(scheduler, { env, mailer, telemetry: telemetryInstance });
   await app.register(auth, { env });
   await app.register(audit, { env });
   // After `audit`, which it writes through, and before the routes that declare

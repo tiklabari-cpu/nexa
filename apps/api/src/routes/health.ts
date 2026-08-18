@@ -59,6 +59,11 @@ export default async function healthRoutes(
       region: options.env.NEXA_REGION,
       uptime_s: Math.round((Date.now() - startedAt) / 100) / 10,
       dependencies: { database, redis },
+      // Whether the five background sweeps are ticking in this process at all
+      // (M-SCHED-b · §D113/K1) — the failure this replaces was silent: a
+      // deployment with none of them running looked identical to one that had
+      // just found nothing to do.
+      scheduler: app.scheduler.snapshot(),
     });
   });
 }

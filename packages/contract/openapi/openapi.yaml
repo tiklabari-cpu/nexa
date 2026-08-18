@@ -566,7 +566,7 @@ components:
         email: { type: boolean }
     Health:
       type: object
-      required: [status, service, version, region, uptime_s, dependencies]
+      required: [status, service, version, region, uptime_s, dependencies, scheduler]
       properties:
         status:
           type: string
@@ -587,6 +587,7 @@ components:
           properties:
             database: { $ref: "#/components/schemas/DependencyHealth" }
             redis: { $ref: "#/components/schemas/DependencyHealth" }
+        scheduler: { $ref: "#/components/schemas/SchedulerHealth" }
 
     DependencyHealth:
       type: object
@@ -599,6 +600,51 @@ components:
           type: number
         error:
           type: string
+
+    SchedulerHealth:
+      type: object
+      description: |
+        The in-process background scheduler (M-SCHED · §D113/K1) — idle-chat
+        auto-close, SLA breach marking, the SIEM export, scheduled reports and
+        retention. `enabled` false means this process runs none of them (every
+        job below is still listed, each `disabled`); a deployment that would
+        rather drive the sweeps from a host cron leaves it off and uses each
+        job's own `pnpm --filter @nexa/api <job>:run` script instead.
+      required: [enabled, jobs]
+      properties:
+        enabled:
+          type: boolean
+        jobs:
+          type: array
+          items: { $ref: "#/components/schemas/SchedulerJob" }
+
+    SchedulerJob:
+      type: object
+      required: [name, interval_ms, enabled, last_run_at, last_status]
+      properties:
+        name:
+          type: string
+          examples: [chat_timeout, sla, siem, scheduled_reports, retention]
+        interval_ms:
+          type: integer
+        enabled:
+          type: boolean
+          description: |
+            False for a job registered but switched off from the moment it was
+            registered — today only `retention`, gated by `RETENTION_ENABLED`
+            because unlike the other four it hard-deletes data.
+        last_run_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the job last ticked, whatever came of it. Null before its first pass.
+        last_status:
+          type: string
+          nullable: true
+          enum: [ok, skipped, error, disabled]
+        last_error_class:
+          type: string
+          description: The error's class, never its message — driver messages can carry connection strings.
 
     TokenGrant:
       type: object

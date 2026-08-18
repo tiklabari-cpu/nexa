@@ -218,6 +218,18 @@ const envSchema = z.object({
   SCHEDULE_SCHEDULED_REPORTS_MS: z.coerce.number().int().positive().default(60_000),
   SCHEDULE_RETENTION_MS: z.coerce.number().int().positive().default(3_600_000),
   SCHEDULE_WEBHOOK_REDELIVERY_MS: z.coerce.number().int().positive().default(60_000),
+  /**
+   * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
+   * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
+   * this is the one sweep that hard-deletes data, and there is no operator
+   * here to type `--apply` the way `retention:run` asks for outside a
+   * scheduler. The job is registered either way, so `/health` always shows
+   * it — `disabled` until this is set, never simply absent.
+   */
+  RETENTION_ENABLED: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 

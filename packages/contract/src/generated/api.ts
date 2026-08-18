@@ -5746,12 +5746,51 @@ export interface components {
         database: components['schemas']['DependencyHealth'];
         redis: components['schemas']['DependencyHealth'];
       };
+      scheduler: components['schemas']['SchedulerHealth'];
     };
     DependencyHealth: {
       /** @enum {string} */
       status: 'up' | 'down';
       latency_ms?: number;
       error?: string;
+    };
+    /**
+     * @description The in-process background scheduler (M-SCHED · §D113/K1) — idle-chat
+     *     auto-close, SLA breach marking, the SIEM export, scheduled reports and
+     *     retention. `enabled` false means this process runs none of them (every
+     *     job below is still listed, each `disabled`); a deployment that would
+     *     rather drive the sweeps from a host cron leaves it off and uses each
+     *     job's own `pnpm --filter @nexa/api <job>:run` script instead.
+     */
+    SchedulerHealth: {
+      enabled: boolean;
+      jobs: components['schemas']['SchedulerJob'][];
+    };
+    SchedulerJob: {
+      /**
+       * @example chat_timeout
+       * @example sla
+       * @example siem
+       * @example scheduled_reports
+       * @example retention
+       */
+      name: string;
+      interval_ms: number;
+      /**
+       * @description False for a job registered but switched off from the moment it was
+       *     registered — today only `retention`, gated by `RETENTION_ENABLED`
+       *     because unlike the other four it hard-deletes data.
+       */
+      enabled: boolean;
+      /**
+       * Format: date-time
+       * @description When the job last ticked, whatever came of it. Null before its first pass.
+       */
+      last_run_at: string | null;
+      /** @enum {string|null} */
+      last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
+      /** @description The error's class, never its message — driver messages can carry connection strings. */
+      last_error_class?: string;
     };
     TokenGrant: {
       access_token: string;

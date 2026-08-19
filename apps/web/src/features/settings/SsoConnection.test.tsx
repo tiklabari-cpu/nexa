@@ -11,10 +11,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -439,7 +440,7 @@ describe('SsoConnection', () => {
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/settings/scim-tokens/token-1'));
   });
 
-  it('shows a server rejection of a connection save as a form-level alert', async () => {
+  it('answers a save rejection through the ADR-06 catalogue, not the server’s own wording', async () => {
     api.post.mockRejectedValue(
       new ApiClientError({
         type: 'validation',
@@ -455,6 +456,25 @@ describe('SsoConnection', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add connection' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('The certificate is not currently valid.');
+    expect(alert).toHaveTextContent('Check the highlighted fields and try again.');
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('SsoConnection localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Single sign-on in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <SsoConnection canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('region', { name: 'Tek oturum açma' })).toBeInTheDocument();
   });
 });

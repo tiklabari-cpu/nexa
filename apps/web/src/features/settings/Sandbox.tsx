@@ -30,9 +30,10 @@ import type { SandboxView } from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 export const SANDBOX_QUERY_KEY = ['settings', 'sandbox'];
 
@@ -64,6 +65,7 @@ function SandboxCard({
   /** Scope allows writing but the role does not — explain the missing button, not just omit it. */
   restricted: boolean;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const signOut = useAuth((s) => s.signOut);
@@ -94,15 +96,15 @@ function SandboxCard({
   return (
     <Section
       id="section-sandbox"
-      title="Sandbox"
-      description="A second, disconnected workspace to test integrations or onboard a new hire in — never billed, never counted against a seat, and invisible from production."
+      title={t('settings.sandbox.title')}
+      description={t('settings.sandbox.description')}
     >
       {settings.error ? (
-        <ErrorNotice message="Could not load the sandbox." />
+        <ErrorNotice message={t('settings.sandbox.loadError')} />
       ) : (
         <Card>
           {settings.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : (
             <SandboxBody
               view={settings.data!}
@@ -129,11 +131,11 @@ function SandboxCard({
   );
 }
 
-function entitlementMessage(error: unknown, fallback: string): string {
+function entitlementMessage(t: TFunction, error: unknown): string {
   if (error instanceof ApiClientError && error.details?.['entitlement'] === 'sandbox') {
-    return 'A sandbox is an Enterprise feature. Upgrade the plan to create one.';
+    return t('settings.sandbox.entitlementNote');
   }
-  return error instanceof ApiClientError ? error.message : fallback;
+  return t(errorMessageKey(error));
 }
 
 function SandboxBody({
@@ -153,16 +155,15 @@ function SandboxBody({
   createError: unknown;
   onRequestReset: () => void;
 }): ReactElement {
+  const t = useTranslate();
+
   if (view.is_sandbox) {
     return (
       <div className="flex flex-col gap-3 p-4">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <StatusDot tone="warning" label="This is a sandbox" />
+          <StatusDot tone="warning" label={t('settings.sandbox.isSandboxLabel')} />
         </div>
-        <p className="text-2xs text-content-tertiary">
-          Everything in this workspace is disconnected from production — nothing here is billed or
-          counted, and nothing here is real customer data.
-        </p>
+        <p className="text-2xs text-content-tertiary">{t('settings.sandbox.isSandboxNote')}</p>
 
         {canManage ? (
           <button
@@ -170,12 +171,10 @@ function SandboxBody({
             onClick={onRequestReset}
             className="self-start rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10"
           >
-            Reset sandbox
+            {t('settings.sandbox.resetButton')}
           </button>
         ) : restricted ? (
-          <p className="text-2xs text-content-tertiary">
-            Only the workspace owner can reset this sandbox.
-          </p>
+          <p className="text-2xs text-content-tertiary">{t('settings.sandbox.resetRestricted')}</p>
         ) : null}
       </div>
     );
@@ -185,11 +184,9 @@ function SandboxBody({
     return (
       <div className="flex flex-col gap-2 p-4">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <StatusDot tone="neutral" label="Not available" />
+          <StatusDot tone="neutral" label={t('settings.sandbox.notAvailable')} />
         </div>
-        <p className="text-2xs text-content-tertiary">
-          A sandbox is an Enterprise feature. Upgrade the plan to create one.
-        </p>
+        <p className="text-2xs text-content-tertiary">{t('settings.sandbox.entitlementNote')}</p>
       </div>
     );
   }
@@ -198,14 +195,17 @@ function SandboxBody({
     return (
       <div className="flex flex-col gap-2 p-4">
         <div className="flex items-center gap-2 text-sm font-medium">
-          <StatusDot tone="success" label="Sandbox created" />
+          <StatusDot tone="success" label={t('settings.sandbox.createdLabel')} />
         </div>
         <p className="text-2xs text-content-tertiary">
-          Created {formatDateTime(view.sandbox.created_at) ?? 'unknown'}. Last reset:{' '}
-          {formatDateTime(view.sandbox.reset_at) ?? 'never'}.
+          {t('settings.sandbox.createdSummary', {
+            created:
+              formatDateTime(view.sandbox.created_at) ?? t('settings.sandbox.createdUnknown'),
+            reset: formatDateTime(view.sandbox.reset_at) ?? t('settings.sandbox.resetNever'),
+          })}
         </p>
         <p className="text-2xs text-content-tertiary">
-          Reset it by signing in to the sandbox itself — a production credential cannot wipe it.
+          {t('settings.sandbox.resetFromInsideNote')}
         </p>
       </div>
     );
@@ -213,7 +213,7 @@ function SandboxBody({
 
   return (
     <div className="flex flex-col gap-3 p-4">
-      <p className="text-sm text-content-secondary">This workspace has no sandbox yet.</p>
+      <p className="text-sm text-content-secondary">{t('settings.sandbox.emptyNote')}</p>
 
       {canManage ? (
         <div className="flex flex-col gap-2">
@@ -223,18 +223,16 @@ function SandboxBody({
             disabled={creating}
             className="self-start rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
           >
-            {creating ? 'Creating…' : 'Create sandbox'}
+            {creating ? t('settings.sandbox.creating') : t('settings.sandbox.createButton')}
           </button>
           {createError !== null && (
             <p role="alert" className="text-2xs text-danger">
-              {entitlementMessage(createError, 'Could not create the sandbox.')}
+              {entitlementMessage(t, createError)}
             </p>
           )}
         </div>
       ) : restricted ? (
-        <p className="text-2xs text-content-tertiary">
-          Only the workspace owner can create a sandbox.
-        </p>
+        <p className="text-2xs text-content-tertiary">{t('settings.sandbox.createRestricted')}</p>
       ) : null}
     </div>
   );
@@ -251,17 +249,16 @@ function ResetSandboxModal({
   resetting: boolean;
   resetError: unknown;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <Modal
       onClose={onClose}
-      title="Reset this sandbox?"
-      description="Every conversation, contact, and setting inside it is deleted. This cannot be undone, and you will be signed out."
+      title={t('settings.sandbox.resetModalTitle')}
+      description={t('settings.sandbox.resetModalDescription')}
     >
       {resetError !== null && (
         <p role="alert" className="text-2xs text-danger">
-          {resetError instanceof ApiClientError
-            ? resetError.message
-            : 'Could not reset the sandbox.'}
+          {t(errorMessageKey(resetError))}
         </p>
       )}
       <div className="mt-4 flex justify-end gap-2">
@@ -270,7 +267,7 @@ function ResetSandboxModal({
           onClick={onClose}
           className="rounded-md border border-border px-3 py-1.5 text-sm"
         >
-          Cancel
+          {t('settings.cancel')}
         </button>
         <button
           type="button"
@@ -278,7 +275,7 @@ function ResetSandboxModal({
           disabled={resetting}
           className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
         >
-          {resetting ? 'Resetting…' : 'Reset sandbox'}
+          {resetting ? t('settings.sandbox.resetting') : t('settings.sandbox.resetButton')}
         </button>
       </div>
     </Modal>

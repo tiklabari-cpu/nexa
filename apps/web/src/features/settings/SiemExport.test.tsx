@@ -13,10 +13,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), patch: vi.fn() },
@@ -159,7 +160,7 @@ describe('SiemExport', () => {
     expect(screen.getByRole('combobox', { name: 'Destination' })).toBeDisabled();
   });
 
-  it('surfaces a server rejection as an alert', async () => {
+  it('answers a rejection through the ADR-06 catalogue, not the server’s own wording', async () => {
     api.patch.mockRejectedValue(
       new ApiClientError({ type: 'not_allowed', status: 403, message: 'Nope.', requestId: '-' }),
     );
@@ -168,6 +169,25 @@ describe('SiemExport', () => {
 
     await userEvent.click(checkbox);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Nope.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('That is not allowed here.');
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('SiemExport localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints SiemExport in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <SiemExport canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('region', { name: 'SIEM dışa aktarımı' })).toBeInTheDocument();
   });
 });

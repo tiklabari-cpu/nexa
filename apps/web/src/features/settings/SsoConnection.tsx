@@ -20,6 +20,12 @@
  * URL are well-formed, and the attribute mapping (if any) names an email
  * claim. The server still re-validates everything on submit; this exists so
  * a typo is caught before the round trip, not instead of the real check.
+ *
+ * `verifySsoMetadata` and its helpers are pure validation, called and tested
+ * outside any component (`describe('verifySsoMetadata', …)` pins its English
+ * `problems` verbatim) — kept untranslated on purpose, the same "kapsam dışı"
+ * precedent `ticket-priority.ts` (I18N-c) and `kbSlugError` (I18N-h) set for a
+ * pure logic module whose own tests pin exact English output.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -27,10 +33,11 @@ import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 
 interface SsoAttributeMapping {
@@ -215,6 +222,7 @@ function SsoConnections({
   /** Scope allows writing but the role does not — explain the empty form, not just omit it. */
   restricted: boolean;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [allowIdpInitiated, setAllowIdpInitiated] = useState(false);
@@ -273,10 +281,10 @@ function SsoConnections({
       attribute_name: '',
     },
     validators: {
-      name: required('Name this connection.'),
-      idp_entity_id: required('Enter the IdP entity id.'),
-      idp_sso_url: required('Enter the IdP sign-on URL.'),
-      idp_certificate_pem: required('Paste the IdP certificate.'),
+      name: required(t('settings.sso.nameError')),
+      idp_entity_id: required(t('settings.sso.entityIdError')),
+      idp_sso_url: required(t('settings.sso.ssoUrlError')),
+      idp_certificate_pem: required(t('settings.sso.certificateError')),
     },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
@@ -294,9 +302,7 @@ function SsoConnections({
         setEnabledOnCreate(false);
         setVerifyResult(null);
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiClientError ? error.message : 'Could not save that connection.',
-        );
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
@@ -306,17 +312,14 @@ function SsoConnections({
   const certificateError = form.errorFor('idp_certificate_pem');
 
   return (
-    <Section
-      title="Single sign-on"
-      description="Federate sign-in to a SAML 2.0 identity provider. Adding or changing a connection is restricted to the workspace owner — writing the certificate here decides whose signature is trusted."
-    >
+    <Section title={t('settings.sso.title')} description={t('settings.sso.description')}>
       {list.error ? (
-        <ErrorNotice message="Could not load SSO connections." />
+        <ErrorNotice message={t('settings.sso.loadError')} />
       ) : (
         <Card>
           {restricted && (
             <p className="border-b border-border p-4 text-2xs text-content-tertiary">
-              Only the workspace owner can add, rotate or remove a connection.
+              {t('settings.sso.restrictedNote')}
             </p>
           )}
 
@@ -326,13 +329,7 @@ function SsoConnections({
               error where the person is looking. */}
           {toggle.isError && !enforceTarget && (
             <div className="border-b border-border p-4">
-              <ErrorNotice
-                message={
-                  toggle.error instanceof ApiClientError
-                    ? toggle.error.message
-                    : 'Could not change that connection.'
-                }
-              />
+              <ErrorNotice message={t(errorMessageKey(toggle.error))} />
             </div>
           )}
 
@@ -345,7 +342,7 @@ function SsoConnections({
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="sso-name" className="flex min-w-48 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Name
+                    {t('settings.sso.nameLabel')}
                   </span>
                   <input
                     id="sso-name"
@@ -362,7 +359,7 @@ function SsoConnections({
 
                 <label htmlFor="sso-entity-id" className="flex min-w-64 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    IdP entity id
+                    {t('settings.sso.entityIdLabel')}
                   </span>
                   <input
                     id="sso-entity-id"
@@ -379,7 +376,7 @@ function SsoConnections({
 
                 <label htmlFor="sso-sso-url" className="flex min-w-64 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Sign-on URL
+                    {t('settings.sso.ssoUrlLabel')}
                   </span>
                   <input
                     id="sso-sso-url"
@@ -397,7 +394,7 @@ function SsoConnections({
 
               <label htmlFor="sso-certificate" className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  IdP signing certificate (PEM)
+                  {t('settings.sso.certificateLabel')}
                 </span>
                 <textarea
                   id="sso-certificate"
@@ -419,7 +416,7 @@ function SsoConnections({
                   className="flex min-w-48 flex-1 flex-col gap-1"
                 >
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Email attribute (optional)
+                    {t('settings.sso.emailAttributeLabel')}
                   </span>
                   <input
                     id="sso-attribute-email"
@@ -432,7 +429,7 @@ function SsoConnections({
 
                 <label htmlFor="sso-attribute-name" className="flex min-w-48 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Name attribute (optional)
+                    {t('settings.sso.nameAttributeLabel')}
                   </span>
                   <input
                     id="sso-attribute-name"
@@ -451,7 +448,7 @@ function SsoConnections({
                     checked={allowIdpInitiated}
                     onChange={(event) => setAllowIdpInitiated(event.target.checked)}
                   />
-                  Allow IdP-initiated sign-in
+                  {t('settings.sso.allowIdpInitiatedLabel')}
                 </label>
                 <label className="flex items-center gap-2 text-sm text-content-secondary">
                   <input
@@ -459,7 +456,7 @@ function SsoConnections({
                     checked={enabledOnCreate}
                     onChange={(event) => setEnabledOnCreate(event.target.checked)}
                   />
-                  Enable immediately
+                  {t('settings.sso.enableImmediatelyLabel')}
                 </label>
               </div>
 
@@ -479,7 +476,7 @@ function SsoConnections({
                   }
                   className="rounded-md border border-border px-3 py-1.5 text-sm text-content-secondary transition-colors hover:bg-surface-2"
                 >
-                  Verify format
+                  {t('settings.sso.verifyButton')}
                 </button>
 
                 <button
@@ -487,14 +484,11 @@ function SsoConnections({
                   disabled={!form.canSubmit}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {form.isSubmitting ? 'Adding…' : 'Add connection'}
+                  {form.isSubmitting ? t('settings.adding') : t('settings.sso.addButton')}
                 </button>
               </div>
 
-              <p className="text-2xs text-content-tertiary">
-                Verify format checks the certificate, entity id and URL locally — it never contacts
-                the identity provider.
-              </p>
+              <p className="text-2xs text-content-tertiary">{t('settings.sso.verifyHint')}</p>
 
               {verifyResult && (
                 <div
@@ -506,7 +500,7 @@ function SsoConnections({
                   }`}
                 >
                   {verifyResult.ok ? (
-                    'Looks well-formed.'
+                    t('settings.sso.verifyOk')
                   ) : (
                     <ul className="list-disc pl-4">
                       {verifyResult.problems.map((problem) => (
@@ -526,11 +520,11 @@ function SsoConnections({
           )}
 
           {list.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : list.data.items.length === 0 ? (
             <EmptyState
-              title="No SSO connections"
-              description="Add your identity provider's metadata to let its members sign in with SAML."
+              title={t('settings.sso.empty.title')}
+              description={t('settings.sso.empty.description')}
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -541,7 +535,11 @@ function SsoConnections({
                       {connection.name}
                       <StatusDot
                         tone={connection.enabled ? 'success' : 'neutral'}
-                        label={connection.enabled ? 'Enabled' : 'Disabled'}
+                        label={
+                          connection.enabled
+                            ? t('settings.sso.enabledStatus')
+                            : t('settings.sso.disabledStatus')
+                        }
                       />
                     </p>
                     <p className="truncate text-2xs text-content-tertiary">
@@ -552,8 +550,9 @@ function SsoConnections({
                     </p>
                     {connection.previous_certificate_expires_at && (
                       <p className="text-2xs text-warning">
-                        Rotation overlap active until{' '}
-                        {formatDate(connection.previous_certificate_expires_at)}
+                        {t('settings.sso.rotationOverlapNote', {
+                          date: formatDate(connection.previous_certificate_expires_at) ?? '',
+                        })}
                       </p>
                     )}
                     {/* Two sentences for two different states, because the
@@ -565,8 +564,8 @@ function SsoConnections({
                     {connection.enforced && (
                       <p className="text-2xs text-warning">
                         {connection.enabled
-                          ? 'Required — members cannot sign in with a password. Owners keep theirs.'
-                          : 'Marked required, but the connection is switched off, so passwords still work.'}
+                          ? t('settings.sso.enforcedActiveNote')
+                          : t('settings.sso.enforcedInactiveNote')}
                       </p>
                     )}
                   </div>
@@ -582,7 +581,7 @@ function SsoConnections({
                             toggle.mutate({ id: connection.id, enabled: event.target.checked })
                           }
                         />
-                        Enabled
+                        {t('settings.sso.enabledCheckboxLabel')}
                       </label>
                       <label className="flex items-center gap-1.5 text-2xs text-content-secondary">
                         <input
@@ -594,14 +593,14 @@ function SsoConnections({
                             else toggle.mutate({ id: connection.id, enforced: false });
                           }}
                         />
-                        Require SSO
+                        {t('settings.sso.requireSsoLabel')}
                       </label>
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(connection)}
                         className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                       >
-                        Remove
+                        {t('settings.remove')}
                       </button>
                     </div>
                   )}
@@ -615,8 +614,8 @@ function SsoConnections({
       {enforceTarget && (
         <Modal
           onClose={() => setEnforceTarget(null)}
-          title={`Require ${enforceTarget.name} for sign-in?`}
-          description="Everyone in this workspace will have to sign in through your identity provider — their passwords stop working here. Owners keep a password door so a provider outage cannot lock the workspace out, and every one of those sign-ins is recorded in the audit log."
+          title={t('settings.sso.enforceModalTitle', { name: enforceTarget.name })}
+          description={t('settings.sso.enforceModalDescription')}
         >
           {/* The server refuses this when no owner holds a password — the
               self-lockout guard. Its message names what to fix, so it is shown
@@ -625,8 +624,9 @@ function SsoConnections({
             <ErrorNotice
               message={
                 toggle.error instanceof ApiClientError
-                  ? toggle.error.message
-                  : 'Could not require single sign-on.'
+                  ? // i18n-ignore — self-lockout guard names the exact fix (set a password on the owner account); genericizing would strand the one person who can act on it (S11-h).
+                    toggle.error.message
+                  : t('settings.sso.requireErrorFallback')
               }
             />
           )}
@@ -636,7 +636,7 @@ function SsoConnections({
               onClick={() => setEnforceTarget(null)}
               className="rounded-md border border-border px-3 py-1.5 text-sm"
             >
-              Cancel
+              {t('settings.cancel')}
             </button>
             <button
               type="button"
@@ -644,7 +644,7 @@ function SsoConnections({
               disabled={toggle.isPending}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {toggle.isPending ? 'Requiring…' : 'Require single sign-on'}
+              {toggle.isPending ? t('settings.sso.requiring') : t('settings.sso.requireButton')}
             </button>
           </div>
         </Modal>
@@ -653,25 +653,17 @@ function SsoConnections({
       {deleteTarget && (
         <Modal
           onClose={() => setDeleteTarget(null)}
-          title={`Remove ${deleteTarget.name}?`}
-          description="Anyone who signs in through this connection loses that path immediately. This cannot be undone."
+          title={t('settings.sso.removeModalTitle', { name: deleteTarget.name })}
+          description={t('settings.sso.removeModalDescription')}
         >
-          {remove.isError && (
-            <ErrorNotice
-              message={
-                remove.error instanceof ApiClientError
-                  ? remove.error.message
-                  : 'Could not remove that connection.'
-              }
-            />
-          )}
+          {remove.isError && <ErrorNotice message={t(errorMessageKey(remove.error))} />}
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setDeleteTarget(null)}
               className="rounded-md border border-border px-3 py-1.5 text-sm"
             >
-              Cancel
+              {t('settings.cancel')}
             </button>
             <button
               type="button"
@@ -679,7 +671,9 @@ function SsoConnections({
               disabled={remove.isPending}
               className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
             >
-              {remove.isPending ? 'Removing…' : 'Remove connection'}
+              {remove.isPending
+                ? t('settings.sso.removing')
+                : t('settings.sso.removeConfirmButton')}
             </button>
           </div>
         </Modal>
@@ -691,6 +685,7 @@ function SsoConnections({
 // --- SCIM provisioning tokens ---------------------------------------------------
 
 function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [created, setCreated] = useState<ScimTokenCreated | null>(null);
@@ -723,14 +718,14 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
 
   const form = useForm({
     initial: { name: '', expires_in_days: '' },
-    validators: { name: required('Name this token.') },
+    validators: { name: required(t('settings.scim.tokenNameError')) },
     onSubmit: async (values, { setSubmitError, reset }) => {
       const days = values.expires_in_days.trim();
       let expiresInDays: number | undefined;
       if (days !== '') {
         const parsed = Number(days);
         if (!Number.isInteger(parsed) || parsed < 1 || parsed > 365) {
-          setSubmitError('Expiry must be a whole number of days, 1 to 365.');
+          setSubmitError(t('settings.scim.expiryRangeError'));
           return;
         }
         expiresInDays = parsed;
@@ -742,21 +737,16 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
         });
         reset();
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiClientError ? error.message : 'Could not create that token.',
-        );
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
   const nameError = form.errorFor('name');
 
   return (
-    <Section
-      title="SCIM provisioning"
-      description="Bearer tokens for your identity provider's SCIM connector. A token is shown once, at creation, then never again."
-    >
+    <Section title={t('settings.scim.title')} description={t('settings.scim.description')}>
       {list.error ? (
-        <ErrorNotice message="Could not load provisioning tokens." />
+        <ErrorNotice message={t('settings.scim.loadError')} />
       ) : (
         <Card>
           {canEdit && (
@@ -768,7 +758,7 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="scim-token-name" className="flex min-w-48 flex-1 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Token name
+                    {t('settings.scim.tokenNameLabel')}
                   </span>
                   <input
                     id="scim-token-name"
@@ -785,7 +775,7 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
 
                 <label htmlFor="scim-token-expiry" className="flex w-40 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Expires in (days)
+                    {t('settings.scim.expiresInLabel')}
                   </span>
                   <input
                     id="scim-token-expiry"
@@ -794,7 +784,7 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
                     max={365}
                     value={form.values.expires_in_days}
                     onChange={(event) => form.setValue('expires_in_days', event.target.value)}
-                    placeholder="Never"
+                    placeholder={t('settings.never')}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                   />
                 </label>
@@ -804,7 +794,9 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
                   disabled={!form.canSubmit}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {form.isSubmitting ? 'Creating…' : 'Create token'}
+                  {form.isSubmitting
+                    ? t('settings.scim.creating')
+                    : t('settings.scim.createButton')}
                 </button>
               </div>
 
@@ -817,24 +809,30 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
           )}
 
           {list.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : list.data.items.length === 0 ? (
             <EmptyState
-              title="No provisioning tokens"
-              description="Create one to paste into your identity provider's SCIM connector."
+              title={t('settings.scim.empty.title')}
+              description={t('settings.scim.empty.description')}
             />
           ) : (
             <ul className="divide-y divide-border">
               {list.data.items.map((token) => (
                 <li key={token.id} className="flex items-center gap-3 px-4 py-2.5">
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{token.name ?? 'Untitled token'}</p>
+                    <p className="truncate text-sm font-medium">
+                      {token.name ?? t('settings.scim.untitledToken')}
+                    </p>
                     <p className="text-2xs text-content-tertiary">
                       {token.last_used_at
-                        ? `Last used ${formatDate(token.last_used_at)}`
-                        : 'Never used'}
+                        ? t('settings.scim.lastUsed', {
+                            date: formatDate(token.last_used_at) ?? '',
+                          })
+                        : t('settings.scim.neverUsed')}
                       {' · '}
-                      {token.expires_at ? `Expires ${formatDate(token.expires_at)}` : 'No expiry'}
+                      {token.expires_at
+                        ? t('settings.scim.expires', { date: formatDate(token.expires_at) ?? '' })
+                        : t('settings.scim.noExpiry')}
                     </p>
                   </div>
                   {canEdit && (
@@ -843,7 +841,7 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
                       onClick={() => setRevokeTarget(token)}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
-                      Revoke
+                      {t('settings.scim.revokeButton')}
                     </button>
                   )}
                 </li>
@@ -858,25 +856,19 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
       {revokeTarget && (
         <Modal
           onClose={() => setRevokeTarget(null)}
-          title={`Revoke ${revokeTarget.name ?? 'this token'}?`}
-          description="Your identity provider's connector stops being able to provision or deprovision users the moment this takes effect. This cannot be undone."
+          title={t('settings.scim.revokeModalTitle', {
+            name: revokeTarget.name ?? t('settings.scim.revokeModalDefaultName'),
+          })}
+          description={t('settings.scim.revokeModalDescription')}
         >
-          {revoke.isError && (
-            <ErrorNotice
-              message={
-                revoke.error instanceof ApiClientError
-                  ? revoke.error.message
-                  : 'Could not revoke that token.'
-              }
-            />
-          )}
+          {revoke.isError && <ErrorNotice message={t(errorMessageKey(revoke.error))} />}
           <div className="mt-4 flex justify-end gap-2">
             <button
               type="button"
               onClick={() => setRevokeTarget(null)}
               className="rounded-md border border-border px-3 py-1.5 text-sm"
             >
-              Cancel
+              {t('settings.cancel')}
             </button>
             <button
               type="button"
@@ -884,7 +876,9 @@ function ScimTokens({ canEdit }: { canEdit: boolean }): ReactElement {
               disabled={revoke.isPending}
               className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
             >
-              {revoke.isPending ? 'Revoking…' : 'Revoke token'}
+              {revoke.isPending
+                ? t('settings.scim.revoking')
+                : t('settings.scim.revokeConfirmButton')}
             </button>
           </div>
         </Modal>
@@ -906,6 +900,7 @@ function ScimTokenOncePanel({
   created: ScimTokenCreated;
   onClose: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const [copied, setCopied] = useState(false);
 
   function copy(): void {
@@ -921,14 +916,16 @@ function ScimTokenOncePanel({
   return (
     <Modal
       onClose={onClose}
-      title={`${created.name ?? 'Token'} created`}
-      description="Paste this into your identity provider's SCIM connector now."
+      title={t('settings.scim.tokenCreatedTitle', {
+        name: created.name ?? t('settings.scim.defaultTokenName'),
+      })}
+      description={t('settings.scim.tokenCreatedDescription')}
       className="w-[28rem]"
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Bearer token
+            {t('settings.scim.bearerTokenLabel')}
           </span>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs">
@@ -939,11 +936,11 @@ function ScimTokenOncePanel({
               onClick={copy}
               className="shrink-0 rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('settings.copied') : t('settings.copy')}
             </button>
           </div>
           <p role="alert" className="text-2xs text-warning">
-            This token will not be shown again — store it now.
+            {t('settings.scim.tokenWarning')}
           </p>
         </div>
 
@@ -953,7 +950,7 @@ function ScimTokenOncePanel({
             onClick={onClose}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            Done
+            {t('settings.scim.doneButton')}
           </button>
         </div>
       </div>

@@ -9,9 +9,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -85,5 +86,26 @@ describe('BannedCustomerIps', () => {
     expect(await screen.findByText('203.0.113.5')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Block address' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument();
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('BannedCustomerIps localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Blocked IP addresses in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <BannedCustomerIps canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByRole('region', { name: 'Engellenen IP adresleri' }),
+    ).toBeInTheDocument();
   });
 });

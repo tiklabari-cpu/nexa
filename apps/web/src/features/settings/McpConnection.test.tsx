@@ -11,6 +11,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpConnection } from './McpConnection.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const MANIFEST = {
   protocol_version: '2025-06-18',
@@ -154,5 +155,25 @@ describe('McpConnection', () => {
     expect(text).not.toMatch(/token/i);
     expect(text).not.toMatch(/secret/i);
     expect(text).not.toMatch(/api[_-]?key/i);
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('McpConnection localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints MCP server in Turkish when that is the active locale', async () => {
+    stubFetch();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <McpConnection />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('region', { name: 'MCP sunucusu' })).toBeInTheDocument();
   });
 });

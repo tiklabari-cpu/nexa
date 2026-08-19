@@ -12,9 +12,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -249,5 +250,26 @@ describe('ScheduledExports', () => {
 
     expect(screen.queryByRole('button', { name: 'Schedule export' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Cancel .* export/ })).not.toBeInTheDocument();
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('ScheduledExports localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Scheduled exports in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <ScheduledExports canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByRole('region', { name: 'Zamanlanmış dışa aktarımlar' }),
+    ).toBeInTheDocument();
   });
 });

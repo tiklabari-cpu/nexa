@@ -11,6 +11,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SalesTracker } from './SalesTracker.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const DEFAULTS = {
   enabled: false,
@@ -146,7 +147,7 @@ describe('SalesTracker', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'Could not save that configuration.',
+      'Check the highlighted fields and try again.',
     );
     expect(screen.getByLabelText('Attribution window (days)')).toHaveValue(21);
   });
@@ -159,5 +160,26 @@ describe('SalesTracker', () => {
     expect(screen.getByLabelText('Attribution window (days)')).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(putBodies).toHaveLength(0);
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('SalesTracker localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Sales tracker in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SalesTracker canEdit />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('region', { name: 'Satış takibi' })).toBeInTheDocument();
   });
 });

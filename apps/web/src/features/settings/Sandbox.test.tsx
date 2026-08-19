@@ -9,10 +9,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api, signOut } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn() },
@@ -175,5 +176,26 @@ describe('Sandbox', () => {
     await screen.findByText('This is a sandbox');
     expect(screen.queryByRole('button', { name: 'Reset sandbox' })).not.toBeInTheDocument();
     expect(screen.getByText(/Only the workspace owner can reset this sandbox/)).toBeInTheDocument();
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('Sandbox localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Sandbox in Turkish when that is the active locale', async () => {
+    currentRole = 'owner';
+    api.get.mockImplementation(mockGet(NOT_ENTITLED));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <Sandbox canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('region', { name: 'Sandbox' })).toBeInTheDocument();
   });
 });

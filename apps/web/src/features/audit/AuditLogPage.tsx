@@ -14,6 +14,12 @@
  * view is a link an admin can share (FR-EK-B.1). Free-text search, CSV export
  * and a virtualized "load more" list stay out of scope (Enterprise / page size
  * too small to need it).
+ *
+ * Action codes (`auth.login`, `member.invited`, …) are the server's own event
+ * names, shown verbatim in the filter and the table — like ticket status/
+ * priority elsewhere (I18N-f/g), a raw identifier is data, not chrome, and
+ * this screen has no per-action dictionary to translate 60-odd of them into.
+ * Only the nine group labels above them are chrome, and those are translated.
  */
 import { useInfiniteQuery } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
@@ -24,6 +30,7 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 interface AuditLogEntry {
   id: string;
@@ -41,12 +48,9 @@ interface AuditLogPageResponse {
   next_page_id?: string;
 }
 
-const ACTOR_LABEL: Record<AuditLogEntry['actor_type'], string> = {
-  agent: 'Agent',
-  bot: 'Bot',
-  customer: 'Customer',
-  system: 'System',
-};
+function actorLabel(t: TFunction, actorType: AuditLogEntry['actor_type']): string {
+  return t(`audit.actor.${actorType}`);
+}
 
 /**
  * Mirrors `AUDIT_ACTIONS` (apps/api/src/services/audit/audit-log.ts), grouped
@@ -55,9 +59,9 @@ const ACTOR_LABEL: Record<AuditLogEntry['actor_type'], string> = {
  * added server-side and forgotten here is still filterable via a hand-built
  * link; it is only missing from the dropdown.
  */
-const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }> = [
+const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[] }> = [
   {
-    label: 'Authentication',
+    labelKey: 'audit.group.authentication',
     actions: [
       'auth.login',
       'auth.login_failed',
@@ -70,7 +74,7 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
     ],
   },
   {
-    label: 'Team',
+    labelKey: 'audit.group.team',
     actions: [
       'member.invited',
       'member.invitation_revoked',
@@ -80,7 +84,7 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
     ],
   },
   {
-    label: 'Settings',
+    labelKey: 'audit.group.settings',
     actions: [
       'settings.security_updated',
       'settings.routing_rule_updated',
@@ -98,17 +102,20 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
     // workspace *committed to* and what that commitment refused, which is what
     // an auditor asks for by name (NFR-C4). Settings entries record a
     // configuration somebody can change back.
-    label: 'Compliance',
+    labelKey: 'audit.group.compliance',
     actions: ['compliance.baa_signed', 'compliance.ai_region_blocked'],
   },
-  { label: 'Sales tracking', actions: ['sale.tracked'] },
-  { label: 'Billing', actions: ['billing.subscription_updated', 'billing.payment_method_updated'] },
+  { labelKey: 'audit.group.salesTracking', actions: ['sale.tracked'] },
   {
-    label: 'Webhooks',
+    labelKey: 'audit.group.billing',
+    actions: ['billing.subscription_updated', 'billing.payment_method_updated'],
+  },
+  {
+    labelKey: 'audit.group.webhooks',
     actions: ['webhook.created', 'webhook.deleted', 'webhook.delivery_exhausted'],
   },
   {
-    label: 'Tickets',
+    labelKey: 'audit.group.tickets',
     actions: [
       'ticket.status_changed',
       'ticket.priority_changed',
@@ -119,7 +126,7 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
     ],
   },
   {
-    label: 'Credentials',
+    labelKey: 'audit.group.credentials',
     actions: [
       'pat.created',
       'pat.revoked',
@@ -129,7 +136,7 @@ const ACTION_GROUPS: ReadonlyArray<{ label: string; actions: readonly string[] }
       'partner_app.secret_rotated',
     ],
   },
-  { label: 'Data', actions: ['data.retention_pruned', 'data.deleted'] },
+  { labelKey: 'audit.group.data', actions: ['data.retention_pruned', 'data.deleted'] },
 ];
 
 const ACTION_PARAM = 'action';
@@ -166,6 +173,7 @@ function buildQuery(
 }
 
 export function AuditLogPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const canView = scopes.includes('audit_log--all:ro');
@@ -198,8 +206,8 @@ export function AuditLogPage(): ReactElement {
 
   return (
     <Page
-      title="Audit log"
-      description="Sign-ins, role changes, deletions and webhook changes — the last 30 days by default."
+      title={t('audit.title')}
+      description={t('audit.description')}
       actions={
         canView ? (
           <AuditFilters
@@ -215,35 +223,32 @@ export function AuditLogPage(): ReactElement {
     >
       {!canView ? (
         <EmptyState
-          title="Audit log not available"
-          description="Viewing the security trail is limited to owners and admins with read access to this workspace's audit log."
+          title={t('audit.notAvailable.title')}
+          description={t('audit.notAvailable.description')}
         />
       ) : query.isError ? (
-        <ErrorNotice message="Could not load the audit log. Check that the API is reachable and try again." />
+        <ErrorNotice message={t('audit.loadError')} />
       ) : (
         <Card>
           {query.isPending ? (
             <ListSkeleton />
           ) : items.length === 0 ? (
-            <EmptyState
-              title="No activity yet"
-              description="Sign-ins, role changes, deletions and webhook changes will appear here as they happen."
-            />
+            <EmptyState title={t('audit.empty.title')} description={t('audit.empty.description')} />
           ) : (
             <>
               <VirtualTable
                 items={items}
                 rowHeight={52}
-                caption="Audit log"
+                caption={t('audit.title')}
                 colSpan={5}
                 head={
                   <thead>
                     <tr className="border-b border-border text-left">
-                      <Th>Time</Th>
-                      <Th>Action</Th>
-                      <Th>Actor</Th>
-                      <Th>Target</Th>
-                      <Th>IP</Th>
+                      <Th>{t('audit.column.time')}</Th>
+                      <Th>{t('audit.column.action')}</Th>
+                      <Th>{t('audit.column.actor')}</Th>
+                      <Th>{t('audit.column.target')}</Th>
+                      <Th>{t('audit.column.ip')}</Th>
                     </tr>
                   </thead>
                 }
@@ -254,7 +259,7 @@ export function AuditLogPage(): ReactElement {
                     </td>
                     <td className="px-4 py-2.5 font-mono text-2xs">{entry.action}</td>
                     <td className="px-4 py-2.5">
-                      <span className="block">{ACTOR_LABEL[entry.actor_type]}</span>
+                      <span className="block">{actorLabel(t, entry.actor_type)}</span>
                       {entry.actor_id && (
                         <span className="block truncate font-mono text-2xs text-content-tertiary">
                           {entry.actor_id}
@@ -280,7 +285,7 @@ export function AuditLogPage(): ReactElement {
                     disabled={query.isFetchingNextPage}
                     className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content disabled:opacity-60"
                   >
-                    {query.isFetchingNextPage ? 'Loading…' : 'Load more'}
+                    {query.isFetchingNextPage ? t('audit.loading') : t('audit.loadMore')}
                   </button>
                 </div>
               )}
@@ -308,18 +313,19 @@ function AuditFilters({
   onDateFrom: (value: string) => void;
   onDateTo: (value: string) => void;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <div className="flex flex-wrap items-center gap-3">
       <label className="flex items-center gap-2 text-xs text-content-secondary">
-        <span className="sr-only">Filter by action</span>
+        <span className="sr-only">{t('audit.filterByActionAriaLabel')}</span>
         <select
           value={action}
           onChange={(event: ChangeEvent<HTMLSelectElement>) => onAction(event.target.value)}
           className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
         >
-          <option value="">All actions</option>
+          <option value="">{t('audit.allActions')}</option>
           {ACTION_GROUPS.map((group) => (
-            <optgroup key={group.label} label={group.label}>
+            <optgroup key={group.labelKey} label={t(group.labelKey)}>
               {group.actions.map((value) => (
                 <option key={value} value={value}>
                   {value}
@@ -331,7 +337,7 @@ function AuditFilters({
       </label>
       <div className="flex items-center gap-1 text-xs text-content-secondary">
         <label className="flex items-center gap-1">
-          <span className="sr-only">From date</span>
+          <span className="sr-only">{t('audit.fromDateAriaLabel')}</span>
           <input
             type="date"
             value={dateFrom}
@@ -342,7 +348,7 @@ function AuditFilters({
         </label>
         <span aria-hidden="true">→</span>
         <label className="flex items-center gap-1">
-          <span className="sr-only">To date</span>
+          <span className="sr-only">{t('audit.toDateAriaLabel')}</span>
           <input
             type="date"
             value={dateTo}

@@ -8,8 +8,9 @@
  */
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 let currentScopes: string[] = [];
 
@@ -46,5 +47,24 @@ describe('Settings → Audit log entry', () => {
     );
 
     expect(container).toBeEmptyDOMElement();
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('AuditLog localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the audit log door in Turkish when that is the active locale', () => {
+    currentScopes = ['audit_log--all:ro'];
+    renderWithLocale(
+      <MemoryRouter>
+        <AuditLog />
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(screen.getByRole('region', { name: 'Denetim günlüğü' })).toBeInTheDocument();
   });
 });

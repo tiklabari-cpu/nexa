@@ -17,9 +17,10 @@ import {
   type SalesTrackerCurrency,
 } from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, useForm, type Validator } from '../../lib/form.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 interface SalesTrackerSettings extends SalesTrackerConfig {
   updated_at: string | null;
@@ -32,18 +33,22 @@ type FormValues = Record<'enabled' | 'currency' | 'attribution_window_days', str
  * emptied field already fails the range check, so a second, redundant message
  * would never show — one validator, one message.
  */
-function attributionWindow(): Validator {
+function attributionWindow(t: TFunction): Validator {
   return (value) => {
     const days = Number(value);
     return Number.isInteger(days) &&
       days >= SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS &&
       days <= SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS
       ? null
-      : `Enter a whole number of days, ${SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS}-${SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS}.`;
+      : t('settings.salesTracker.attributionWindowError', {
+          min: SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
+          max: SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
+        });
   };
 }
 
 export function SalesTracker({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -52,17 +57,17 @@ export function SalesTracker({ canEdit }: { canEdit: boolean }): ReactElement {
     queryFn: () => api.get<SalesTrackerSettings>('/settings/sales-tracker'),
   });
 
-  if (settings.error) return <ErrorNotice message="Could not load the sales tracker settings." />;
+  if (settings.error) return <ErrorNotice message={t('settings.salesTracker.loadError')} />;
 
   return (
     <Section
       id="section-sales-tracker"
-      title="Sales tracker"
-      description="Attribute orders your site reports through the widget snippet to the chat that led to them."
+      title={t('settings.salesTracker.title')}
+      description={t('settings.salesTracker.description')}
     >
       <Card>
         {settings.isPending ? (
-          <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
         ) : (
           <SalesTrackerForm
             config={settings.data}
@@ -90,6 +95,7 @@ function SalesTrackerForm({
   canEdit: boolean;
   onSaved: (data: SalesTrackerSettings) => void;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
 
   const save = useMutation({
@@ -105,7 +111,7 @@ function SalesTrackerForm({
       attribution_window_days: String(config.attribution_window_days),
     },
     validators: {
-      attribution_window_days: attributionWindow(),
+      attribution_window_days: attributionWindow(t),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
@@ -115,11 +121,7 @@ function SalesTrackerForm({
           attribution_window_days: Number(values.attribution_window_days),
         });
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiClientError
-            ? error.message
-            : 'Could not save the sales tracker settings.',
-        );
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
@@ -140,10 +142,9 @@ function SalesTrackerForm({
             onChange={(event) => form.setValue('enabled', String(event.target.checked))}
           />
           <span className="text-sm">
-            Track sales
+            {t('settings.salesTracker.trackLabel')}
             <span className="block text-2xs text-content-tertiary">
-              Off by default. While on, orders reported through the widget's tracking snippet are
-              recorded and attributed to the chat that led to them.
+              {t('settings.salesTracker.trackHint')}
             </span>
           </span>
         </label>
@@ -153,7 +154,7 @@ function SalesTrackerForm({
             htmlFor="sales-tracker-currency"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Currency
+            {t('settings.salesTracker.currencyLabel')}
           </label>
           <select
             id="sales-tracker-currency"
@@ -168,7 +169,7 @@ function SalesTrackerForm({
             ))}
           </select>
           <span className="text-2xs text-content-tertiary">
-            Every tracked order is recorded and reported in this currency.
+            {t('settings.salesTracker.currencyHint')}
           </span>
         </div>
 
@@ -177,7 +178,7 @@ function SalesTrackerForm({
             htmlFor="sales-tracker-window"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Attribution window (days)
+            {t('settings.salesTracker.windowLabel')}
           </label>
           <input
             id="sales-tracker-window"
@@ -193,7 +194,7 @@ function SalesTrackerForm({
           />
           <FieldError id="sales-tracker-window-error" message={windowError} />
           <span className="text-2xs text-content-tertiary">
-            How long after a chat a sale can still be credited to it.
+            {t('settings.salesTracker.windowHint')}
           </span>
         </div>
       </fieldset>
@@ -205,7 +206,7 @@ function SalesTrackerForm({
             disabled={!form.canSubmit || !form.isDirty}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
           >
-            {form.isSubmitting ? 'Saving…' : 'Save'}
+            {form.isSubmitting ? t('settings.saving') : t('settings.save')}
           </button>
 
           {form.submitError && (
@@ -216,11 +217,11 @@ function SalesTrackerForm({
 
           {justSaved && (
             <p className="text-2xs text-content-tertiary">
-              Saved. Tracked sales show up in{' '}
+              {t('settings.salesTracker.savedNotePrefix')}{' '}
               <Link to="/app/reports" className="text-content-brand hover:underline">
-                Reports → Reviews → Ecommerce
+                {t('settings.salesTracker.savedNoteLink')}
               </Link>
-              .
+              {t('settings.salesTracker.savedNoteSuffix')}
             </p>
           )}
         </div>

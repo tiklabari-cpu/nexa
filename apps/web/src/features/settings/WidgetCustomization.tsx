@@ -23,8 +23,9 @@ import {
   type WidgetTheme,
 } from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useBrand } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 interface WidgetSettings extends WidgetAppearance {
   updated_at: string | null;
@@ -34,6 +35,7 @@ interface WidgetSettings extends WidgetAppearance {
 type Edits = Partial<WidgetAppearance>;
 
 export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const { brandId } = useBrand();
@@ -69,7 +71,7 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
     },
   });
 
-  if (settings.error) return <ErrorNotice message="Could not load widget appearance." />;
+  if (settings.error) return <ErrorNotice message={t('settings.widgetCustomization.loadError')} />;
 
   // The unsaved draft: server values with the pending edits laid over them, or
   // the shipped defaults until the first load resolves.
@@ -88,12 +90,16 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
   return (
     <Section
       id="widget-customization"
-      title={brandName ? `Widget appearance · ${brandName}` : 'Widget appearance'}
-      description="How the chat widget looks on your sites. Changes are baked into the install snippet and applied the next time the widget loads."
+      title={
+        brandName
+          ? t('settings.widgetCustomization.titleWithBrand', { brand: brandName })
+          : t('settings.widgetCustomization.title')
+      }
+      description={t('settings.widgetCustomization.description')}
     >
       <Card>
         {settings.isPending ? (
-          <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
         ) : (
           <div className="grid gap-6 p-4 md:grid-cols-2">
             {/* --- Controls --- */}
@@ -112,33 +118,39 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                 />
 
                 <ChoiceControl
-                  legend="Position"
-                  hint="Which corner the launcher sits in."
+                  legend={t('settings.widgetCustomization.positionLegend')}
+                  hint={t('settings.widgetCustomization.positionHint')}
                   name="widget-position"
                   value={value.position}
-                  options={POSITIONS}
+                  options={POSITIONS.map((option) => ({
+                    value: option,
+                    label: t(`settings.widgetCustomization.position.${option}`),
+                  }))}
                   onChange={(next) => set('position', next)}
                 />
 
                 <ChoiceControl
-                  legend="Colour scheme"
-                  hint="Auto follows each visitor's device; the others force it."
+                  legend={t('settings.widgetCustomization.themeLegend')}
+                  hint={t('settings.widgetCustomization.themeHint')}
                   name="widget-theme"
                   value={value.theme}
-                  options={THEMES}
+                  options={THEMES.map((option) => ({
+                    value: option,
+                    label: t(`settings.widgetCustomization.theme.${option}`),
+                  }))}
                   onChange={(next) => set('theme', next)}
                 />
 
                 <ToggleControl
-                  label="Full screen on mobile"
-                  hint="Open edge-to-edge on phones rather than as a floating card."
+                  label={t('settings.widgetCustomization.mobileFullscreenLabel')}
+                  hint={t('settings.widgetCustomization.mobileFullscreenHint')}
                   checked={value.mobile_fullscreen}
                   onChange={(next) => set('mobile_fullscreen', next)}
                 />
 
                 <ToggleControl
-                  label="Show “Powered by Nexa”"
-                  hint="A small credit in the widget footer. Turn it off to remove it."
+                  label={t('settings.widgetCustomization.poweredByLabel')}
+                  hint={t('settings.widgetCustomization.poweredByHint')}
                   checked={value.powered_by}
                   onChange={(next) => set('powered_by', next)}
                 />
@@ -151,7 +163,9 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                     disabled={!dirty || !colorValid || save.isPending}
                     className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                   >
-                    {save.isPending ? 'Saving…' : 'Save appearance'}
+                    {save.isPending
+                      ? t('settings.saving')
+                      : t('settings.widgetCustomization.saveButton')}
                   </button>
                   {dirty && (
                     <button
@@ -159,14 +173,12 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                       onClick={() => setEdits({})}
                       className="rounded-md border border-border px-3 py-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
-                      Reset
+                      {t('settings.widgetCustomization.resetButton')}
                     </button>
                   )}
                   {save.isError && (
                     <p role="alert" className="text-2xs text-danger">
-                      {save.error instanceof ApiClientError
-                        ? save.error.message
-                        : 'Could not save the appearance.'}
+                      {t(errorMessageKey(save.error))}
                     </p>
                   )}
                 </div>
@@ -182,16 +194,8 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
   );
 }
 
-const POSITIONS: ReadonlyArray<{ value: WidgetPosition; label: string }> = [
-  { value: 'bottom-right', label: 'Bottom right' },
-  { value: 'bottom-left', label: 'Bottom left' },
-];
-
-const THEMES: ReadonlyArray<{ value: WidgetTheme; label: string }> = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'light', label: 'Light' },
-  { value: 'dark', label: 'Dark' },
-];
+const POSITIONS: readonly WidgetPosition[] = ['bottom-right', 'bottom-left'];
+const THEMES: readonly WidgetTheme[] = ['auto', 'light', 'dark'];
 
 // --- Controls ----------------------------------------------------------------
 
@@ -204,15 +208,16 @@ function ColorControl({
   valid: boolean;
   onChange: (next: string) => void;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <div className="flex flex-col gap-1">
       <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-        Brand colour
+        {t('settings.widgetCustomization.colorLabel')}
       </span>
       <div className="flex items-center gap-2">
         <input
           type="color"
-          aria-label="Brand colour swatch"
+          aria-label={t('settings.widgetCustomization.colorSwatchAriaLabel')}
           // The native picker only understands full hex; feed it the last valid
           // value so an in-progress edit in the text box does not blank it.
           value={valid ? value : DEFAULT_WIDGET_APPEARANCE.primary_color}
@@ -221,7 +226,7 @@ function ColorControl({
         />
         <input
           type="text"
-          aria-label="Brand colour hex"
+          aria-label={t('settings.widgetCustomization.colorHexAriaLabel')}
           value={value}
           onChange={(event) => onChange(event.target.value.trim())}
           spellCheck={false}
@@ -233,7 +238,7 @@ function ColorControl({
       </div>
       {!valid && (
         <p id="widget-color-error" role="alert" className="text-2xs text-danger">
-          Enter a hex colour such as #2d67fa.
+          {t('settings.widgetCustomization.colorError')}
         </p>
       )}
     </div>
@@ -321,6 +326,7 @@ function ToggleControl({
  * the preview shows a concrete, readable result rather than guessing.
  */
 function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactElement {
+  const t = useTranslate();
   const dark = appearance.theme === 'dark';
   const surface = dark ? '#121829' : '#ffffff';
   const text = dark ? '#edf0f6' : '#111726';
@@ -332,7 +338,7 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
   return (
     <div className="flex flex-col gap-2">
       <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-        Preview
+        {t('settings.widgetCustomization.previewLabel')}
       </span>
       <div
         // A neutral "page" the widget sits on, so the surface stands out whether
@@ -356,25 +362,27 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
             >
               N
             </span>
-            <span className="text-xs font-semibold">Chat with us</span>
+            <span className="text-xs font-semibold">
+              {t('settings.widgetCustomization.previewChatWithUs')}
+            </span>
           </div>
           <div className="flex flex-col gap-1.5 p-3">
             <span
               className="max-w-[80%] self-start rounded-lg px-2.5 py-1.5 text-[11px]"
               style={{ background: agentBubble, color: text }}
             >
-              Hi! How can we help?
+              {t('settings.widgetCustomization.previewGreeting')}
             </span>
             <span
               className="max-w-[80%] self-end rounded-lg px-2.5 py-1.5 text-[11px] text-white"
               style={{ background: appearance.primary_color }}
             >
-              I have a question
+              {t('settings.widgetCustomization.previewCustomerMessage')}
             </span>
           </div>
           {appearance.powered_by && (
             <p className="pb-1.5 text-center text-[10px]" style={{ color: muted }}>
-              Powered by Nexa
+              {t('settings.widgetCustomization.previewPoweredBy')}
             </p>
           )}
         </div>
@@ -392,10 +400,10 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
       </div>
       <p className="text-2xs text-content-tertiary">
         {appearance.theme === 'auto'
-          ? 'Auto shows light or dark to match each visitor’s device — light shown here.'
+          ? t('settings.widgetCustomization.previewAutoNote')
           : appearance.mobile_fullscreen
-            ? 'On phones the panel opens full screen.'
-            : 'On phones the panel opens as a floating card.'}
+            ? t('settings.widgetCustomization.previewFullscreenNote')
+            : t('settings.widgetCustomization.previewFloatingNote')}
       </p>
     </div>
   );

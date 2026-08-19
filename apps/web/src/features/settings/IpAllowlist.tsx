@@ -15,8 +15,9 @@ import { useState, type FormEvent, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 interface IpAllowlistEntry {
   id: string;
@@ -50,6 +51,7 @@ export function IpAllowlist({ canEdit }: { canEdit: boolean }): ReactElement {
 // --- Allowlist entries --------------------------------------------------------
 
 function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [entry, setEntry] = useState('');
@@ -87,11 +89,11 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
 
   return (
     <Section
-      title="IP allowlist"
-      description="Sources allowed to reach the agent/admin panel once enforcement is on below. A saved list can never exclude the address you are connecting from — the server refuses a change that would lock you out."
+      title={t('settings.ipAllowlist.title')}
+      description={t('settings.ipAllowlist.description')}
     >
       {list.error ? (
-        <ErrorNotice message="Could not load the IP allowlist." />
+        <ErrorNotice message={t('settings.ipAllowlist.loadError')} />
       ) : (
         <Card>
           {canEdit && (
@@ -101,7 +103,7 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
             >
               <label htmlFor="new-allowlist-entry" className="flex min-w-56 flex-1 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Address or CIDR range
+                  {t('settings.ipAllowlist.entryLabel')}
                 </span>
                 <input
                   id="new-allowlist-entry"
@@ -114,7 +116,7 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
 
               <label htmlFor="new-allowlist-label" className="flex w-48 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Label (optional)
+                  {t('settings.ipAllowlist.labelLabel')}
                 </span>
                 <input
                   id="new-allowlist-label"
@@ -130,25 +132,26 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
                 disabled={!entry.trim() || add.isPending}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {add.isPending ? 'Adding…' : 'Add entry'}
+                {add.isPending ? t('settings.adding') : t('settings.ipAllowlist.addButton')}
               </button>
 
               {add.isError && (
                 <p role="alert" className="w-full text-2xs text-danger">
                   {add.error instanceof ApiClientError
-                    ? add.error.message
-                    : 'Could not add that entry.'}
+                    ? // i18n-ignore — self-lockout guard names the exact fix; genericizing would strand the one person who can act on it (08.9.6-g).
+                      add.error.message
+                    : t(errorMessageKey(add.error))}
                 </p>
               )}
             </form>
           )}
 
           {list.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : list.data.items.length === 0 ? (
             <EmptyState
-              title="No allowlist entries"
-              description="Nothing is restricted yet. Add the addresses your team connects from before turning enforcement on below."
+              title={t('settings.ipAllowlist.empty.title')}
+              description={t('settings.ipAllowlist.empty.description')}
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -168,7 +171,7 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
                       onClick={() => remove.mutate(item.id)}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
-                      Remove
+                      {t('settings.remove')}
                     </button>
                   )}
                 </li>
@@ -184,6 +187,7 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
 // --- Session policy ------------------------------------------------------------
 
 function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [idleMinutes, setIdleMinutes] = useState<string | null>(null);
@@ -204,7 +208,8 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
     },
   });
 
-  if (settings.error) return <ErrorNotice message="Could not load the session policy." />;
+  if (settings.error)
+    return <ErrorNotice message={t('settings.ipAllowlist.sessionPolicyLoadError')} />;
 
   const current = settings.data;
   // `?? current` throughout: the inputs are uncontrolled drafts until touched,
@@ -237,28 +242,37 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
 
   return (
     <Section
-      title="Session policy"
-      description="Whether the allowlist above is enforced, how long a session may sit idle, and how many may run at once for one owner. Leave a limit blank to turn it off."
+      title={t('settings.ipAllowlist.sessionPolicyTitle')}
+      description={t('settings.ipAllowlist.sessionPolicyDescription')}
     >
       <Card>
         {settings.isPending ? (
-          <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
         ) : !canEdit ? (
           <div className="flex flex-col gap-2 p-4 text-sm text-content-secondary">
             <p className="flex items-center gap-2">
-              IP allowlist enforcement
+              {t('settings.ipAllowlist.enforceLabel')}
               <StatusDot
                 tone={current!.ip_allowlist_enforced ? 'success' : 'neutral'}
-                label={current!.ip_allowlist_enforced ? 'On' : 'Off'}
+                label={current!.ip_allowlist_enforced ? t('settings.on') : t('settings.off')}
               />
             </p>
             <p>
-              Idle timeout:{' '}
-              {current!.session_idle_timeout_seconds != null
-                ? `${Math.round(current!.session_idle_timeout_seconds / 60)} minutes`
-                : 'Off'}
+              {t('settings.ipAllowlist.idleTimeoutSummary', {
+                value:
+                  current!.session_idle_timeout_seconds != null
+                    ? t('settings.ipAllowlist.minutesValue', {
+                        count: Math.round(current!.session_idle_timeout_seconds / 60),
+                      })
+                    : t('settings.off'),
+              })}
             </p>
-            <p>Max concurrent sessions: {current!.max_concurrent_sessions ?? '25 (default)'}</p>
+            <p>
+              {t('settings.ipAllowlist.maxSessionsSummary', {
+                value:
+                  current!.max_concurrent_sessions ?? t('settings.ipAllowlist.defaultMaxSessions'),
+              })}
+            </p>
           </div>
         ) : (
           <form onSubmit={submit} className="flex flex-col gap-4 p-4">
@@ -270,9 +284,9 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
                 onChange={(event) => save.mutate({ ip_allowlist_enforced: event.target.checked })}
               />
               <span className="flex-1 text-sm">
-                Enforce the IP allowlist
+                {t('settings.ipAllowlist.enforceCheckboxLabel')}
                 <span className="block text-2xs text-content-tertiary">
-                  Once on, only the addresses above may reach the agent/admin panel.
+                  {t('settings.ipAllowlist.enforceHint')}
                 </span>
               </span>
             </label>
@@ -280,7 +294,7 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
             <div className="flex flex-wrap items-end gap-3">
               <label htmlFor="idle-timeout" className="flex w-40 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Idle timeout (minutes)
+                  {t('settings.ipAllowlist.idleTimeoutLabel')}
                 </span>
                 <input
                   id="idle-timeout"
@@ -288,14 +302,14 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
                   min={1}
                   value={idleDraft}
                   onChange={(event) => setIdleMinutes(event.target.value)}
-                  placeholder="Off"
+                  placeholder={t('settings.off')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
               </label>
 
               <label htmlFor="max-sessions" className="flex w-40 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Max concurrent sessions
+                  {t('settings.ipAllowlist.maxSessionsLabel')}
                 </span>
                 <input
                   id="max-sessions"
@@ -303,7 +317,7 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
                   min={1}
                   value={maxDraft}
                   onChange={(event) => setMaxSessions(event.target.value)}
-                  placeholder="25 (default)"
+                  placeholder={t('settings.ipAllowlist.defaultMaxSessions')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
               </label>
@@ -313,15 +327,13 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
                 disabled={save.isPending}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {save.isPending ? 'Saving…' : 'Save'}
+                {save.isPending ? t('settings.saving') : t('settings.save')}
               </button>
             </div>
 
             {save.isError && (
               <p role="alert" className="text-2xs text-danger">
-                {save.error instanceof ApiClientError
-                  ? save.error.message
-                  : 'Could not save the session policy.'}
+                {t(errorMessageKey(save.error))}
               </p>
             )}
           </form>

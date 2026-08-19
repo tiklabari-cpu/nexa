@@ -12,10 +12,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn() },
@@ -118,7 +119,7 @@ describe('Compliance', () => {
     expect(screen.queryByRole('button', { name: 'Accept the BAA' })).not.toBeInTheDocument();
   });
 
-  it('surfaces the server error message if acceptance is refused', async () => {
+  it('answers a refusal through the ADR-06 catalogue, not the server’s own wording', async () => {
     currentRole = 'owner';
     api.get.mockResolvedValue(US_UNSIGNED);
     api.post.mockRejectedValue(
@@ -129,6 +130,29 @@ describe('Compliance', () => {
     await screen.findByText('United States');
     await userEvent.click(screen.getByRole('button', { name: 'Accept the BAA' }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Nope.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('That is not allowed here.');
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('Compliance localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Compliance in Turkish when that is the active locale', async () => {
+    currentRole = 'owner';
+    api.get.mockResolvedValue(US_UNSIGNED);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <Compliance canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByRole('region', { name: 'Veri bölgesi ve uyumluluk' }),
+    ).toBeInTheDocument();
   });
 });

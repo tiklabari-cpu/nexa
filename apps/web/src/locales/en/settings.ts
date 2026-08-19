@@ -23,6 +23,17 @@ export const settings: Messages = {
   'settings.cancel': 'Cancel',
   'settings.requiredLabel': 'Required',
   'settings.requiredSuffix': ' · required',
+  // Shared across I18N-j's screens too (tm 133.10)
+  'settings.save': 'Save',
+  'settings.copy': 'Copy',
+  'settings.on': 'On',
+  'settings.off': 'Off',
+  'settings.never': 'Never',
+  'settings.enable': 'Enable',
+  'settings.disable': 'Disable',
+  'settings.andJoiner': ' and ',
+  'settings.pageTitle': 'Settings',
+  'settings.pageDescription': 'Widget installation, saved replies and routing.',
 
   // Integrations — Integrations.tsx
   'settings.integrations.title': 'Integrations',
@@ -218,4 +229,421 @@ export const settings: Messages = {
   'settings.websiteWidgets.mailtoSubject': 'Install our chat widget on {domain}',
   'settings.websiteWidgets.mailtoBody':
     'Please paste this snippet immediately before the closing </body> tag on {domain}:\n\n{snippet}',
+
+  // Settings, second half (I18N-j, tm 133.10): security (SSO/SCIM/IP allowlist/
+  // HIPAA/SIEM/audit), sandbox, white-label widget appearance, SLA, sales
+  // tracker, brands, MCP connection, scheduled exports, banned IPs, file
+  // sharing, skills and routing/ticket rules — see HANDOFF.md for the split.
+
+  // MCP server — McpConnection.tsx
+  'settings.mcpConnection.title': 'MCP server',
+  'settings.mcpConnection.description':
+    'Ask AI assistants about your Nexa data. Works with Claude, ChatGPT, and any MCP-compatible tool.',
+  'settings.mcpConnection.loadError': 'Could not load the MCP server details.',
+  'settings.mcpConnection.serverUrlLabel': 'MCP server URL',
+  'settings.mcpConnection.claudeSetup': 'Claude setup',
+  'settings.mcpConnection.step1': 'Open Claude, then go to Settings → Connectors.',
+  'settings.mcpConnection.step2': 'Choose “Add custom connector”.',
+  'settings.mcpConnection.step3': 'Paste the MCP server URL above.',
+  'settings.mcpConnection.step4':
+    'Sign in with your Nexa account when prompted, and approve the scopes it requests.',
+  'settings.mcpConnection.step5': 'Ask a question about your workspace — see the example below.',
+  'settings.mcpConnection.examplePromptLabel': 'Example prompt',
+  'settings.mcpConnection.examplePrompt': 'Find all tickets where customers ask about bulk orders',
+  'settings.mcpConnection.availableToolsLabel': 'Available tools',
+  'settings.mcpConnection.empty.title': 'No tools published yet',
+  'settings.mcpConnection.empty.description':
+    'Tools appear here as they are connected to this server.',
+
+  // Brands — Brands.tsx
+  'settings.brands.title': 'Brands',
+  'settings.brands.description':
+    'Run several brands under one subscription. Each has its own channels, websites and widget appearance, selected from the brand switcher.',
+  'settings.brands.loadError': 'Could not load your brands.',
+  'settings.brands.nameLabel': 'Brand name',
+  'settings.brands.nameError': 'Enter a brand name.',
+  'settings.brands.addButton': 'Add brand',
+  'settings.brands.empty.title': 'No brands yet',
+  'settings.brands.empty.description':
+    'Add a brand to run a second storefront or support line under this subscription.',
+  'settings.brands.default': 'Default',
+  'settings.brands.removeAriaLabel': 'Remove {name}',
+  'settings.brands.nameFieldAriaLabel': '{name} name',
+
+  // Widget appearance / white-label — WidgetCustomization.tsx
+  'settings.widgetCustomization.title': 'Widget appearance',
+  'settings.widgetCustomization.titleWithBrand': 'Widget appearance · {brand}',
+  'settings.widgetCustomization.description':
+    'How the chat widget looks on your sites. Changes are baked into the install snippet and applied the next time the widget loads.',
+  'settings.widgetCustomization.loadError': 'Could not load widget appearance.',
+  'settings.widgetCustomization.colorLabel': 'Brand colour',
+  'settings.widgetCustomization.colorSwatchAriaLabel': 'Brand colour swatch',
+  'settings.widgetCustomization.colorHexAriaLabel': 'Brand colour hex',
+  'settings.widgetCustomization.colorError': 'Enter a hex colour such as #2d67fa.',
+  'settings.widgetCustomization.positionLegend': 'Position',
+  'settings.widgetCustomization.positionHint': 'Which corner the launcher sits in.',
+  'settings.widgetCustomization.position.bottom-right': 'Bottom right',
+  'settings.widgetCustomization.position.bottom-left': 'Bottom left',
+  'settings.widgetCustomization.themeLegend': 'Colour scheme',
+  'settings.widgetCustomization.themeHint':
+    "Auto follows each visitor's device; the others force it.",
+  'settings.widgetCustomization.theme.auto': 'Auto',
+  'settings.widgetCustomization.theme.light': 'Light',
+  'settings.widgetCustomization.theme.dark': 'Dark',
+  'settings.widgetCustomization.mobileFullscreenLabel': 'Full screen on mobile',
+  'settings.widgetCustomization.mobileFullscreenHint':
+    'Open edge-to-edge on phones rather than as a floating card.',
+  'settings.widgetCustomization.poweredByLabel': 'Show “Powered by Nexa”',
+  'settings.widgetCustomization.poweredByHint':
+    'A small credit in the widget footer. Turn it off to remove it.',
+  'settings.widgetCustomization.saveButton': 'Save appearance',
+  'settings.widgetCustomization.resetButton': 'Reset',
+  'settings.widgetCustomization.previewLabel': 'Preview',
+  'settings.widgetCustomization.previewChatWithUs': 'Chat with us',
+  'settings.widgetCustomization.previewGreeting': 'Hi! How can we help?',
+  'settings.widgetCustomization.previewCustomerMessage': 'I have a question',
+  'settings.widgetCustomization.previewPoweredBy': 'Powered by Nexa',
+  'settings.widgetCustomization.previewAutoNote':
+    "Auto shows light or dark to match each visitor's device — light shown here.",
+  'settings.widgetCustomization.previewFullscreenNote': 'On phones the panel opens full screen.',
+  'settings.widgetCustomization.previewFloatingNote':
+    'On phones the panel opens as a floating card.',
+
+  // Sales tracker — SalesTracker.tsx
+  'settings.salesTracker.title': 'Sales tracker',
+  'settings.salesTracker.description':
+    'Attribute orders your site reports through the widget snippet to the chat that led to them.',
+  'settings.salesTracker.loadError': 'Could not load the sales tracker settings.',
+  'settings.salesTracker.attributionWindowError': 'Enter a whole number of days, {min}-{max}.',
+  'settings.salesTracker.trackLabel': 'Track sales',
+  'settings.salesTracker.trackHint':
+    "Off by default. While on, orders reported through the widget's tracking snippet are recorded and attributed to the chat that led to them.",
+  'settings.salesTracker.currencyLabel': 'Currency',
+  'settings.salesTracker.currencyHint':
+    'Every tracked order is recorded and reported in this currency.',
+  'settings.salesTracker.windowLabel': 'Attribution window (days)',
+  'settings.salesTracker.windowHint': 'How long after a chat a sale can still be credited to it.',
+  'settings.salesTracker.savedNotePrefix': 'Saved. Tracked sales show up in',
+  'settings.salesTracker.savedNoteLink': 'Reports → Reviews → Ecommerce',
+  'settings.salesTracker.savedNoteSuffix': '.',
+
+  // IP allowlist + session policy — IpAllowlist.tsx
+  'settings.ipAllowlist.title': 'IP allowlist',
+  'settings.ipAllowlist.description':
+    'Sources allowed to reach the agent/admin panel once enforcement is on below. A saved list can never exclude the address you are connecting from — the server refuses a change that would lock you out.',
+  'settings.ipAllowlist.loadError': 'Could not load the IP allowlist.',
+  'settings.ipAllowlist.entryLabel': 'Address or CIDR range',
+  'settings.ipAllowlist.labelLabel': 'Label (optional)',
+  'settings.ipAllowlist.addButton': 'Add entry',
+  'settings.ipAllowlist.empty.title': 'No allowlist entries',
+  'settings.ipAllowlist.empty.description':
+    'Nothing is restricted yet. Add the addresses your team connects from before turning enforcement on below.',
+  'settings.ipAllowlist.sessionPolicyTitle': 'Session policy',
+  'settings.ipAllowlist.sessionPolicyDescription':
+    'Whether the allowlist above is enforced, how long a session may sit idle, and how many may run at once for one owner. Leave a limit blank to turn it off.',
+  'settings.ipAllowlist.sessionPolicyLoadError': 'Could not load the session policy.',
+  'settings.ipAllowlist.enforceLabel': 'IP allowlist enforcement',
+  'settings.ipAllowlist.enforceCheckboxLabel': 'Enforce the IP allowlist',
+  'settings.ipAllowlist.enforceHint':
+    'Once on, only the addresses above may reach the agent/admin panel.',
+  'settings.ipAllowlist.idleTimeoutLabel': 'Idle timeout (minutes)',
+  'settings.ipAllowlist.idleTimeoutSummary': 'Idle timeout: {value}',
+  'settings.ipAllowlist.minutesValue.one': '{count} minute',
+  'settings.ipAllowlist.minutesValue.other': '{count} minutes',
+  'settings.ipAllowlist.maxSessionsLabel': 'Max concurrent sessions',
+  'settings.ipAllowlist.maxSessionsSummary': 'Max concurrent sessions: {value}',
+  'settings.ipAllowlist.defaultMaxSessions': '25 (default)',
+
+  // Single sign-on + SCIM — SsoConnection.tsx
+  'settings.sso.title': 'Single sign-on',
+  'settings.sso.description':
+    'Federate sign-in to a SAML 2.0 identity provider. Adding or changing a connection is restricted to the workspace owner — writing the certificate here decides whose signature is trusted.',
+  'settings.sso.loadError': 'Could not load SSO connections.',
+  'settings.sso.restrictedNote': 'Only the workspace owner can add, rotate or remove a connection.',
+  'settings.sso.nameLabel': 'Name',
+  'settings.sso.nameError': 'Name this connection.',
+  'settings.sso.entityIdLabel': 'IdP entity id',
+  'settings.sso.entityIdError': 'Enter the IdP entity id.',
+  'settings.sso.ssoUrlLabel': 'Sign-on URL',
+  'settings.sso.ssoUrlError': 'Enter the IdP sign-on URL.',
+  'settings.sso.certificateLabel': 'IdP signing certificate (PEM)',
+  'settings.sso.certificateError': 'Paste the IdP certificate.',
+  'settings.sso.emailAttributeLabel': 'Email attribute (optional)',
+  'settings.sso.nameAttributeLabel': 'Name attribute (optional)',
+  'settings.sso.allowIdpInitiatedLabel': 'Allow IdP-initiated sign-in',
+  'settings.sso.enableImmediatelyLabel': 'Enable immediately',
+  'settings.sso.verifyButton': 'Verify format',
+  'settings.sso.addButton': 'Add connection',
+  'settings.sso.verifyHint':
+    'Verify format checks the certificate, entity id and URL locally — it never contacts the identity provider.',
+  'settings.sso.verifyOk': 'Looks well-formed.',
+  'settings.sso.empty.title': 'No SSO connections',
+  'settings.sso.empty.description':
+    "Add your identity provider's metadata to let its members sign in with SAML.",
+  'settings.sso.enabledStatus': 'Enabled',
+  'settings.sso.disabledStatus': 'Disabled',
+  'settings.sso.rotationOverlapNote': 'Rotation overlap active until {date}',
+  'settings.sso.enforcedActiveNote':
+    'Required — members cannot sign in with a password. Owners keep theirs.',
+  'settings.sso.enforcedInactiveNote':
+    'Marked required, but the connection is switched off, so passwords still work.',
+  'settings.sso.enabledCheckboxLabel': 'Enabled',
+  'settings.sso.requireSsoLabel': 'Require SSO',
+  'settings.sso.enforceModalTitle': 'Require {name} for sign-in?',
+  'settings.sso.enforceModalDescription':
+    'Everyone in this workspace will have to sign in through your identity provider — their passwords stop working here. Owners keep a password door so a provider outage cannot lock the workspace out, and every one of those sign-ins is recorded in the audit log.',
+  'settings.sso.requireButton': 'Require single sign-on',
+  'settings.sso.requiring': 'Requiring…',
+  'settings.sso.requireErrorFallback': 'Could not require single sign-on.',
+  'settings.sso.removeModalTitle': 'Remove {name}?',
+  'settings.sso.removeModalDescription':
+    'Anyone who signs in through this connection loses that path immediately. This cannot be undone.',
+  'settings.sso.removeConfirmButton': 'Remove connection',
+  'settings.sso.removing': 'Removing…',
+  'settings.scim.title': 'SCIM provisioning',
+  'settings.scim.description':
+    "Bearer tokens for your identity provider's SCIM connector. A token is shown once, at creation, then never again.",
+  'settings.scim.loadError': 'Could not load provisioning tokens.',
+  'settings.scim.tokenNameLabel': 'Token name',
+  'settings.scim.tokenNameError': 'Name this token.',
+  'settings.scim.expiresInLabel': 'Expires in (days)',
+  'settings.scim.createButton': 'Create token',
+  'settings.scim.creating': 'Creating…',
+  'settings.scim.expiryRangeError': 'Expiry must be a whole number of days, 1 to 365.',
+  'settings.scim.empty.title': 'No provisioning tokens',
+  'settings.scim.empty.description':
+    "Create one to paste into your identity provider's SCIM connector.",
+  'settings.scim.untitledToken': 'Untitled token',
+  'settings.scim.lastUsed': 'Last used {date}',
+  'settings.scim.neverUsed': 'Never used',
+  'settings.scim.expires': 'Expires {date}',
+  'settings.scim.noExpiry': 'No expiry',
+  'settings.scim.revokeButton': 'Revoke',
+  'settings.scim.revokeModalTitle': 'Revoke {name}?',
+  'settings.scim.revokeModalDefaultName': 'this token',
+  'settings.scim.revokeModalDescription':
+    "Your identity provider's connector stops being able to provision or deprovision users the moment this takes effect. This cannot be undone.",
+  'settings.scim.revokeConfirmButton': 'Revoke token',
+  'settings.scim.revoking': 'Revoking…',
+  'settings.scim.tokenCreatedTitle': '{name} created',
+  'settings.scim.defaultTokenName': 'Token',
+  'settings.scim.tokenCreatedDescription':
+    "Paste this into your identity provider's SCIM connector now.",
+  'settings.scim.bearerTokenLabel': 'Bearer token',
+  'settings.scim.tokenWarning': 'This token will not be shown again — store it now.',
+  'settings.scim.doneButton': 'Done',
+
+  // Data region + HIPAA/BAA — Compliance.tsx
+  'settings.compliance.title': 'Data region and compliance',
+  'settings.compliance.description':
+    "Where this workspace's data lives, and its HIPAA Business Associate Agreement status.",
+  'settings.compliance.loadError': 'Could not load compliance settings.',
+  'settings.compliance.regionLabel': 'Data region',
+  'settings.compliance.regionFixedNote':
+    "Fixed at signup — a workspace's region can never be changed.",
+  'settings.compliance.region.eu': 'European Union',
+  'settings.compliance.region.us': 'United States',
+  'settings.compliance.baaLabel': 'HIPAA Business Associate Agreement',
+  'settings.compliance.baaSigned': 'Signed',
+  'settings.compliance.baaNotSigned': 'Not signed',
+  'settings.compliance.baaAcceptedOn': 'Accepted {date}.',
+  'settings.compliance.baaUnavailable':
+    'HIPAA cover is only available to workspaces hosted in the United States.',
+  'settings.compliance.baaRestricted': 'Only the workspace owner can accept the BAA.',
+  'settings.compliance.acceptButton': 'Accept the BAA',
+  'settings.compliance.accepting': 'Accepting…',
+
+  // SIEM export — SiemExport.tsx
+  'settings.siemExport.title': 'SIEM export',
+  'settings.siemExport.description':
+    "Ship this workspace's audit trail to a SIEM destination on a schedule (SOC 2 / ISO 27001).",
+  'settings.siemExport.loadError': 'Could not load the SIEM export configuration.',
+  'settings.siemExport.gapTitle': 'A gap was found in the audit trail.',
+  'settings.siemExport.gapBody':
+    'The chain of audit entries is missing a piece — some part of the record cannot be accounted for. Delivery keeps running; this needs investigating.',
+  'settings.siemExport.enableLabel': 'Enable export',
+  'settings.siemExport.enableHint':
+    'When on, a scheduled job ships new audit entries to the destination below.',
+  'settings.siemExport.destinationLabel': 'Destination',
+  'settings.siemExport.target.file': 'File (.data/siem sink)',
+  'settings.siemExport.lastExport': 'Last export',
+  'settings.siemExport.lastRun': 'Last run',
+  'settings.siemExport.delivered': 'Delivered',
+  'settings.siemExport.pending': 'Pending',
+
+  // SLA — SlaPolicy.tsx
+  'settings.sla.title': 'SLA',
+  'settings.sla.description':
+    'How long a customer may wait for a first reply and for a case to be finished. Measured and marked, never enforced — nothing here re-routes or re-prioritises a conversation.',
+  'settings.sla.loadError': 'Could not load the SLA targets.',
+  'settings.sla.minutesError':
+    'Enter a whole number of minutes, 1-{max}, or leave blank for no target.',
+  'settings.sla.statusLabel': 'Status',
+  'settings.sla.active': 'Active',
+  'settings.sla.notActive': 'Not active',
+  'settings.sla.downgradeNote':
+    'Targets are saved but not being measured right now — this plan does not include SLA tracking. Upgrading restores measurement against the numbers below, unchanged.',
+  'settings.sla.firstResponseLabel': 'First response target (minutes)',
+  'settings.sla.resolutionLabel': 'Resolution target (minutes)',
+  'settings.sla.noTargetPlaceholder': 'No target',
+  'settings.sla.businessHoursLabel': 'Count only business hours',
+  'settings.sla.businessHoursHint':
+    "Measured against the agents' saved work schedules. With no saved schedule anywhere, clocks run continuously.",
+  'settings.sla.entitlementError':
+    'SLA targets are an Enterprise feature. Upgrade the plan to save changes here.',
+  'settings.sla.savedNotePrefix': 'Saved. Misses show up as',
+  'settings.sla.savedNoteLink': 'Reports → Overview → SLA breaches',
+  'settings.sla.savedNoteSuffix': '.',
+
+  // Sandbox — Sandbox.tsx
+  'settings.sandbox.title': 'Sandbox',
+  'settings.sandbox.description':
+    'A second, disconnected workspace to test integrations or onboard a new hire in — never billed, never counted against a seat, and invisible from production.',
+  'settings.sandbox.loadError': 'Could not load the sandbox.',
+  'settings.sandbox.isSandboxLabel': 'This is a sandbox',
+  'settings.sandbox.isSandboxNote':
+    'Everything in this workspace is disconnected from production — nothing here is billed or counted, and nothing here is real customer data.',
+  'settings.sandbox.resetButton': 'Reset sandbox',
+  'settings.sandbox.resetting': 'Resetting…',
+  'settings.sandbox.resetRestricted': 'Only the workspace owner can reset this sandbox.',
+  'settings.sandbox.notAvailable': 'Not available',
+  'settings.sandbox.entitlementNote':
+    'A sandbox is an Enterprise feature. Upgrade the plan to create one.',
+  'settings.sandbox.createdLabel': 'Sandbox created',
+  'settings.sandbox.createdSummary': 'Created {created}. Last reset: {reset}.',
+  'settings.sandbox.createdUnknown': 'unknown',
+  'settings.sandbox.resetNever': 'never',
+  'settings.sandbox.resetFromInsideNote':
+    'Reset it by signing in to the sandbox itself — a production credential cannot wipe it.',
+  'settings.sandbox.emptyNote': 'This workspace has no sandbox yet.',
+  'settings.sandbox.createButton': 'Create sandbox',
+  'settings.sandbox.creating': 'Creating…',
+  'settings.sandbox.createRestricted': 'Only the workspace owner can create a sandbox.',
+  'settings.sandbox.resetModalTitle': 'Reset this sandbox?',
+  'settings.sandbox.resetModalDescription':
+    'Every conversation, contact, and setting inside it is deleted. This cannot be undone, and you will be signed out.',
+
+  // Scheduled exports — ScheduledExports.tsx
+  'settings.scheduledExports.title': 'Scheduled exports',
+  'settings.scheduledExports.description':
+    'Mail a report group to your team on a timer — daily, weekly or monthly, as a CSV.',
+  'settings.scheduledExports.loadError': 'Could not load scheduled exports.',
+  'settings.scheduledExports.reportLabel': 'Report',
+  'settings.scheduledExports.reportPlaceholder': 'Select a report…',
+  'settings.scheduledExports.frequencyLabel': 'Frequency',
+  'settings.scheduledExports.frequency.daily': 'Daily',
+  'settings.scheduledExports.frequency.weekly': 'Weekly',
+  'settings.scheduledExports.frequency.monthly': 'Monthly',
+  'settings.scheduledExports.scheduleButton': 'Schedule export',
+  'settings.scheduledExports.scheduling': 'Scheduling…',
+  'settings.scheduledExports.recipientsLegend': 'Recipients',
+  'settings.scheduledExports.noActiveAgents': 'No active agents to notify.',
+  'settings.scheduledExports.groupError': 'Select a report group.',
+  'settings.scheduledExports.recipientsError': 'Select at least one recipient.',
+  'settings.scheduledExports.empty.title': 'No scheduled exports',
+  'settings.scheduledExports.empty.description':
+    "Schedule a report group above and it lands in your team's inbox automatically.",
+  'settings.scheduledExports.neverRun': 'Never run',
+  'settings.scheduledExports.delivered': 'Delivered',
+  'settings.scheduledExports.failed': 'Failed',
+  'settings.scheduledExports.running': 'Running',
+  'settings.scheduledExports.checking': 'Checking…',
+  'settings.scheduledExports.recipientCount.one': '{count} recipient',
+  'settings.scheduledExports.recipientCount.other': '{count} recipients',
+  'settings.scheduledExports.summary': '{frequency} · {recipients}',
+  'settings.scheduledExports.cancelConfirm': 'Cancel this export?',
+  'settings.scheduledExports.confirmCancelButton': 'Confirm cancel',
+  'settings.scheduledExports.keepButton': 'Keep',
+  'settings.scheduledExports.cancelAriaLabel': 'Cancel {group} export',
+
+  // Blocked IP addresses — BannedCustomerIps.tsx
+  'settings.bannedIps.title': 'Blocked IP addresses',
+  'settings.bannedIps.description':
+    'A visitor on one of these addresses is refused a chat, even from a fresh session. To ban a named contact instead, use the block action on their profile in Customers.',
+  'settings.bannedIps.loadError': 'Could not load blocked addresses.',
+  'settings.bannedIps.ipLabel': 'IP address',
+  'settings.bannedIps.ipHint':
+    'An IPv4 or IPv6 address. The visitor is blocked until you remove it here.',
+  'settings.bannedIps.blockButton': 'Block address',
+  'settings.bannedIps.empty.title': 'No blocked addresses',
+  'settings.bannedIps.empty.description':
+    'Add an IP address to refuse chats from it. Nothing is blocked until you do.',
+
+  // Audit log door — AuditLog.tsx (the page itself is the `audit.*` namespace)
+  'settings.auditLog.title': 'Audit log',
+  'settings.auditLog.description':
+    'Sign-ins, role changes, deletions and webhook changes — the last 30 days, kept for every plan.',
+  'settings.auditLog.body': 'Review who did what across this workspace.',
+  'settings.auditLog.openButton': 'Open audit log',
+
+  // File sharing — FileSharing.tsx
+  'settings.fileSharing.title': 'File sharing',
+  'settings.fileSharing.description':
+    'Applies to attachments from agents and customers alike. Anything outside these rules is refused.',
+  'settings.fileSharing.loadError': 'Could not load file sharing rules.',
+  'settings.fileSharing.allowLabel': 'Allow file sharing',
+  'settings.fileSharing.allowHint': 'Turning this off refuses every attachment, whoever sends it.',
+  'settings.fileSharing.allowedTypesLabel': 'Allowed types',
+  'settings.fileSharing.allowedTypesHint':
+    'MIME types, comma separated — the form a browser labels a file with.',
+  'settings.fileSharing.maxSizeLabel': 'Max size (MB)',
+
+  // Skills (expertise catalogue) — Skills.tsx
+  'settings.skills.title': 'Skills',
+  'settings.skills.description':
+    'Areas of expertise. Require one in a routing rule, or assign one to an agent in Team.',
+  'settings.skills.loadError': 'Could not load skills.',
+  'settings.skills.nameLabel': 'Skill',
+  'settings.skills.nameError': 'Name the skill.',
+  'settings.skills.addButton': 'Add skill',
+  'settings.skills.empty.title': 'No skills yet',
+  'settings.skills.empty.description':
+    'Add a skill to require it in a routing rule or assign it to an agent in Team.',
+  'settings.skills.deleteAriaLabel': 'Delete skill {name}',
+
+  // Routing rules — RoutingRules.tsx
+  'settings.routing.title': 'Routing',
+  'settings.routing.description':
+    'Checked in order. The first rule whose conditions all match decides the team.',
+  'settings.routing.loadError': 'Could not load routing rules.',
+  'settings.routing.empty.title': 'No routing rules',
+  'settings.routing.empty.description':
+    'Without a fallback rule, conversations have nowhere to go.',
+  'settings.routing.fallbackBadge': 'fallback',
+  'settings.routing.everythingElse': 'Everything else',
+  'settings.routing.ruleLabel': 'Rule',
+  'settings.routing.noTeam': 'no team',
+  'settings.routing.fallbackDisabledTitle': 'The fallback rule cannot be disabled',
+  'settings.routing.anything': 'Anything',
+  'settings.routing.conditionSkill': 'skill {names}',
+
+  // Ticket rules — TicketRules.tsx
+  'settings.ticketRules.title': 'Ticket rules',
+  'settings.ticketRules.description':
+    'When a ticket is opened, the first matching rule sets its priority or applies a tag.',
+  'settings.ticketRules.loadError': 'Could not load ticket rules.',
+  'settings.ticketRules.ruleNameLabel': 'Rule name',
+  'settings.ticketRules.ruleNameError': 'Name the rule.',
+  'settings.ticketRules.subjectLabel': 'When subject contains',
+  'settings.ticketRules.subjectError': 'Enter the text the subject must contain.',
+  'settings.ticketRules.thenLabel': 'Then',
+  'settings.ticketRules.setPriorityOption': 'Set priority',
+  'settings.ticketRules.addTagOption': 'Add tag',
+  'settings.ticketRules.priorityLabel': 'Priority',
+  'settings.ticketRules.tagLabel': 'Tag',
+  'settings.ticketRules.valueError': 'Enter a value for the action.',
+  'settings.ticketRules.priorityWholeNumberError': 'Enter a whole number, 0 or more.',
+  'settings.ticketRules.addButton': 'Add rule',
+  'settings.ticketRules.empty.title': 'No ticket rules',
+  'settings.ticketRules.empty.description':
+    'Auto-assign, prioritise or tag tickets the moment they are opened.',
+  'settings.ticketRules.deleteAriaLabel': 'Delete rule {name}',
+  'settings.ticketRules.subjectContains': 'subject contains “{text}”',
+  'settings.ticketRules.fromSource': 'from {source}',
+  'settings.ticketRules.anyTicket': 'any ticket',
+  'settings.ticketRules.assignAgent': 'assign to an agent',
+  'settings.ticketRules.assignTeam': 'assign to a team',
+  'settings.ticketRules.setPriorityAction': 'set priority {priority}',
+  'settings.ticketRules.addTagAction': 'add tag “{tag}”',
+  'settings.ticketRules.doNothing': 'do nothing',
 };

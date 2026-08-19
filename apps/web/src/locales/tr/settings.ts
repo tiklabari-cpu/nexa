@@ -13,6 +13,17 @@ export const settings: Messages = {
   'settings.cancel': 'İptal',
   'settings.requiredLabel': 'Zorunlu',
   'settings.requiredSuffix': ' · zorunlu',
+  // I18N-j'nin ekranları arasında da paylaşılan (tm 133.10)
+  'settings.save': 'Kaydet',
+  'settings.copy': 'Kopyala',
+  'settings.on': 'Açık',
+  'settings.off': 'Kapalı',
+  'settings.never': 'Hiç',
+  'settings.enable': 'Etkinleştir',
+  'settings.disable': 'Devre dışı bırak',
+  'settings.andJoiner': ' ve ',
+  'settings.pageTitle': 'Ayarlar',
+  'settings.pageDescription': 'Widget kurulumu, kayıtlı yanıtlar ve yönlendirme.',
 
   // Entegrasyonlar — Integrations.tsx
   'settings.integrations.title': 'Entegrasyonlar',
@@ -209,4 +220,425 @@ export const settings: Messages = {
   'settings.websiteWidgets.mailtoSubject': 'Sohbet widget’ımızı {domain} sitesine kurun',
   'settings.websiteWidgets.mailtoBody':
     'Lütfen bu kod parçasını {domain} sitesinde kapanış </body> etiketinden hemen önce yapıştırın:\n\n{snippet}',
+
+  // Ayarlar, ikinci yarı (I18N-j, tm 133.10): güvenlik (SSO/SCIM/IP izin
+  // listesi/HIPAA/SIEM/denetim), sandbox, widget görünümü (white-label), SLA,
+  // satış takibi, markalar, MCP bağlantısı, zamanlanmış dışa aktarımlar,
+  // engellenen IP'ler, dosya paylaşımı, yetenekler ve yönlendirme/talep
+  // kuralları — bölünme için HANDOFF.md'ye bakın.
+
+  // MCP sunucusu — McpConnection.tsx
+  'settings.mcpConnection.title': 'MCP sunucusu',
+  'settings.mcpConnection.description':
+    'Nexa verileriniz hakkında yapay zekâ asistanlarına sorun. Claude, ChatGPT ve herhangi bir MCP uyumlu araçla çalışır.',
+  'settings.mcpConnection.loadError': 'MCP sunucu bilgileri yüklenemedi.',
+  'settings.mcpConnection.serverUrlLabel': 'MCP sunucu adresi',
+  'settings.mcpConnection.claudeSetup': 'Claude kurulumu',
+  'settings.mcpConnection.step1': "Claude'ı açın, ardından Ayarlar → Bağlayıcılar'a gidin.",
+  'settings.mcpConnection.step2': '“Özel bağlayıcı ekle” seçeneğini seçin.',
+  'settings.mcpConnection.step3': 'Yukarıdaki MCP sunucu adresini yapıştırın.',
+  'settings.mcpConnection.step4':
+    'İstendiğinde Nexa hesabınızla oturum açın ve istenen kapsamları onaylayın.',
+  'settings.mcpConnection.step5':
+    'Çalışma alanınız hakkında bir soru sorun — aşağıdaki örneğe bakın.',
+  'settings.mcpConnection.examplePromptLabel': 'Örnek istem',
+  'settings.mcpConnection.examplePrompt':
+    'Toplu sipariş hakkında soran müşterilerin olduğu tüm talepleri bul',
+  'settings.mcpConnection.availableToolsLabel': 'Kullanılabilir araçlar',
+  'settings.mcpConnection.empty.title': 'Henüz araç yayımlanmadı',
+  'settings.mcpConnection.empty.description': 'Araçlar bu sunucuya bağlandıkça burada görünür.',
+
+  // Markalar — Brands.tsx
+  'settings.brands.title': 'Markalar',
+  'settings.brands.description':
+    'Tek bir abonelik altında birden çok marka çalıştırın. Her birinin kendi kanalları, web siteleri ve widget görünümü vardır, marka değiştiriciden seçilir.',
+  'settings.brands.loadError': 'Markalarınız yüklenemedi.',
+  'settings.brands.nameLabel': 'Marka adı',
+  'settings.brands.nameError': 'Bir marka adı girin.',
+  'settings.brands.addButton': 'Marka ekle',
+  'settings.brands.empty.title': 'Henüz marka yok',
+  'settings.brands.empty.description':
+    'Bu abonelik altında ikinci bir mağaza veya destek hattı çalıştırmak için bir marka ekleyin.',
+  'settings.brands.default': 'Varsayılan',
+  'settings.brands.removeAriaLabel': '{name} kaldır',
+  'settings.brands.nameFieldAriaLabel': '{name} adı',
+
+  // Widget görünümü (white-label) — WidgetCustomization.tsx
+  'settings.widgetCustomization.title': 'Widget görünümü',
+  'settings.widgetCustomization.titleWithBrand': 'Widget görünümü · {brand}',
+  'settings.widgetCustomization.description':
+    "Sohbet widget'ının sitelerinizde nasıl göründüğü. Değişiklikler kurulum kod parçasına gömülür ve widget bir sonraki yüklendiğinde uygulanır.",
+  'settings.widgetCustomization.loadError': 'Widget görünümü yüklenemedi.',
+  'settings.widgetCustomization.colorLabel': 'Marka rengi',
+  'settings.widgetCustomization.colorSwatchAriaLabel': 'Marka rengi örneği',
+  'settings.widgetCustomization.colorHexAriaLabel': 'Marka rengi onaltılık kodu',
+  'settings.widgetCustomization.colorError': '#2d67fa gibi bir onaltılık renk kodu girin.',
+  'settings.widgetCustomization.positionLegend': 'Konum',
+  'settings.widgetCustomization.positionHint': 'Başlatıcının hangi köşede oturduğu.',
+  'settings.widgetCustomization.position.bottom-right': 'Sağ alt',
+  'settings.widgetCustomization.position.bottom-left': 'Sol alt',
+  'settings.widgetCustomization.themeLegend': 'Renk şeması',
+  'settings.widgetCustomization.themeHint':
+    'Otomatik, her ziyaretçinin cihazını izler; diğerleri zorlar.',
+  'settings.widgetCustomization.theme.auto': 'Otomatik',
+  'settings.widgetCustomization.theme.light': 'Açık',
+  'settings.widgetCustomization.theme.dark': 'Koyu',
+  'settings.widgetCustomization.mobileFullscreenLabel': 'Mobilde tam ekran',
+  'settings.widgetCustomization.mobileFullscreenHint':
+    'Telefonlarda kayan bir kart yerine kenardan kenara açılır.',
+  'settings.widgetCustomization.poweredByLabel': '“Powered by Nexa” yazısını göster',
+  'settings.widgetCustomization.poweredByHint':
+    'Widget altbilgisinde küçük bir ibare. Kaldırmak için kapatın.',
+  'settings.widgetCustomization.saveButton': 'Görünümü kaydet',
+  'settings.widgetCustomization.resetButton': 'Sıfırla',
+  'settings.widgetCustomization.previewLabel': 'Önizleme',
+  'settings.widgetCustomization.previewChatWithUs': 'Bizimle sohbet edin',
+  'settings.widgetCustomization.previewGreeting': 'Merhaba! Nasıl yardımcı olabiliriz?',
+  'settings.widgetCustomization.previewCustomerMessage': 'Bir sorum var',
+  'settings.widgetCustomization.previewPoweredBy': 'Powered by Nexa',
+  'settings.widgetCustomization.previewAutoNote':
+    'Otomatik, her ziyaretçinin cihazına uyacak şekilde açık veya koyu gösterir — burada açık gösteriliyor.',
+  'settings.widgetCustomization.previewFullscreenNote': 'Telefonlarda panel tam ekran açılır.',
+  'settings.widgetCustomization.previewFloatingNote':
+    'Telefonlarda panel kayan bir kart olarak açılır.',
+
+  // Satış takibi — SalesTracker.tsx
+  'settings.salesTracker.title': 'Satış takibi',
+  'settings.salesTracker.description':
+    'Widget kod parçası aracılığıyla sitenizin bildirdiği siparişleri, onlara yol açan sohbete atfedin.',
+  'settings.salesTracker.loadError': 'Satış takibi ayarları yüklenemedi.',
+  'settings.salesTracker.attributionWindowError': '{min}-{max} arasında tam bir gün sayısı girin.',
+  'settings.salesTracker.trackLabel': 'Satışları izle',
+  'settings.salesTracker.trackHint':
+    "Varsayılan olarak kapalı. Açıkken, widget'ın izleme kod parçası aracılığıyla bildirilen siparişler kaydedilir ve onlara yol açan sohbete atfedilir.",
+  'settings.salesTracker.currencyLabel': 'Para birimi',
+  'settings.salesTracker.currencyHint':
+    'İzlenen her sipariş bu para biriminde kaydedilir ve raporlanır.',
+  'settings.salesTracker.windowLabel': 'Atfetme penceresi (gün)',
+  'settings.salesTracker.windowHint':
+    'Bir sohbetten sonra bir satışın ona ne kadar süre atfedilebileceği.',
+  'settings.salesTracker.savedNotePrefix': 'Kaydedildi. İzlenen satışlar şurada görünür:',
+  'settings.salesTracker.savedNoteLink': 'Raporlar → İncelemeler → E-ticaret',
+  'settings.salesTracker.savedNoteSuffix': '.',
+
+  // IP izin listesi + oturum politikası — IpAllowlist.tsx
+  'settings.ipAllowlist.title': 'IP izin listesi',
+  'settings.ipAllowlist.description':
+    'Aşağıda zorunlu kılma açıldığında temsilci/yönetici paneline erişebilecek kaynaklar. Kaydedilen bir liste, bağlandığınız adresi asla dışlayamaz — sunucu sizi kilitleyecek bir değişikliği reddeder.',
+  'settings.ipAllowlist.loadError': 'IP izin listesi yüklenemedi.',
+  'settings.ipAllowlist.entryLabel': 'Adres veya CIDR aralığı',
+  'settings.ipAllowlist.labelLabel': 'Etiket (opsiyonel)',
+  'settings.ipAllowlist.addButton': 'Girdi ekle',
+  'settings.ipAllowlist.empty.title': 'Henüz izin listesi girdisi yok',
+  'settings.ipAllowlist.empty.description':
+    'Aşağıda zorunlu kılmayı açmadan önce ekibinizin bağlandığı adresleri ekleyin.',
+  'settings.ipAllowlist.sessionPolicyTitle': 'Oturum politikası',
+  'settings.ipAllowlist.sessionPolicyDescription':
+    'Yukarıdaki izin listesinin zorunlu olup olmadığı, bir oturumun ne kadar boşta kalabileceği ve bir sahip için aynı anda kaç oturum çalışabileceği. Kapatmak için bir sınırı boş bırakın.',
+  'settings.ipAllowlist.sessionPolicyLoadError': 'Oturum politikası yüklenemedi.',
+  'settings.ipAllowlist.enforceLabel': 'IP izin listesi zorunluluğu',
+  'settings.ipAllowlist.enforceCheckboxLabel': 'IP izin listesini zorunlu kıl',
+  'settings.ipAllowlist.enforceHint':
+    'Açıldığında, yalnızca yukarıdaki adresler temsilci/yönetici paneline erişebilir.',
+  'settings.ipAllowlist.idleTimeoutLabel': 'Boşta kalma süresi (dakika)',
+  'settings.ipAllowlist.idleTimeoutSummary': 'Boşta kalma süresi: {value}',
+  'settings.ipAllowlist.minutesValue.one': '{count} dakika',
+  'settings.ipAllowlist.minutesValue.other': '{count} dakika',
+  'settings.ipAllowlist.maxSessionsLabel': 'Maksimum eşzamanlı oturum',
+  'settings.ipAllowlist.maxSessionsSummary': 'Maksimum eşzamanlı oturum: {value}',
+  'settings.ipAllowlist.defaultMaxSessions': '25 (varsayılan)',
+
+  // Tek oturum açma + SCIM — SsoConnection.tsx
+  'settings.sso.title': 'Tek oturum açma',
+  'settings.sso.description':
+    'Oturum açmayı bir SAML 2.0 kimlik sağlayıcısına federe edin. Bir bağlantı eklemek veya değiştirmek yalnızca çalışma alanı sahibiyle sınırlıdır — buraya sertifika yazmak kimin imzasına güvenileceğine karar verir.',
+  'settings.sso.loadError': 'SSO bağlantıları yüklenemedi.',
+  'settings.sso.restrictedNote':
+    'Bir bağlantı eklemeyi, döndürmeyi veya kaldırmayı yalnızca çalışma alanı sahibi yapabilir.',
+  'settings.sso.nameLabel': 'Ad',
+  'settings.sso.nameError': 'Bu bağlantıya bir ad verin.',
+  'settings.sso.entityIdLabel': 'IdP varlık kimliği',
+  'settings.sso.entityIdError': 'IdP varlık kimliğini girin.',
+  'settings.sso.ssoUrlLabel': 'Oturum açma URL’si',
+  'settings.sso.ssoUrlError': "IdP oturum açma URL'sini girin.",
+  'settings.sso.certificateLabel': 'IdP imzalama sertifikası (PEM)',
+  'settings.sso.certificateError': 'IdP sertifikasını yapıştırın.',
+  'settings.sso.emailAttributeLabel': 'E-posta özniteliği (opsiyonel)',
+  'settings.sso.nameAttributeLabel': 'Ad özniteliği (opsiyonel)',
+  'settings.sso.allowIdpInitiatedLabel': 'IdP tarafından başlatılan oturum açmaya izin ver',
+  'settings.sso.enableImmediatelyLabel': 'Hemen etkinleştir',
+  'settings.sso.verifyButton': 'Biçimi doğrula',
+  'settings.sso.addButton': 'Bağlantı ekle',
+  'settings.sso.verifyHint':
+    'Biçimi doğrula, sertifikayı, varlık kimliğini ve URL’yi yalnızca yerel olarak kontrol eder — kimlik sağlayıcıyla asla iletişime geçmez.',
+  'settings.sso.verifyOk': 'Doğru biçimlendirilmiş görünüyor.',
+  'settings.sso.empty.title': 'SSO bağlantısı yok',
+  'settings.sso.empty.description':
+    'Üyelerinin SAML ile oturum açmasına izin vermek için kimlik sağlayıcınızın meta verilerini ekleyin.',
+  'settings.sso.enabledStatus': 'Etkin',
+  'settings.sso.disabledStatus': 'Devre dışı',
+  'settings.sso.rotationOverlapNote': 'Döndürme örtüşmesi {date} tarihine kadar etkin',
+  'settings.sso.enforcedActiveNote':
+    'Zorunlu — üyeler parolayla oturum açamaz. Sahipler kendi parolalarını korur.',
+  'settings.sso.enforcedInactiveNote':
+    'Zorunlu olarak işaretlendi, ancak bağlantı kapalı, bu yüzden parolalar hâlâ çalışıyor.',
+  'settings.sso.enabledCheckboxLabel': 'Etkin',
+  'settings.sso.requireSsoLabel': "SSO'yu zorunlu kıl",
+  'settings.sso.enforceModalTitle': '{name} oturum açma için zorunlu kılınsın mı?',
+  'settings.sso.enforceModalDescription':
+    'Bu çalışma alanındaki herkes kimlik sağlayıcınız üzerinden oturum açmak zorunda kalacak — parolaları burada çalışmayı durduracak. Sahipler bir parola kapısı tutar, böylece bir sağlayıcı kesintisi çalışma alanını kilitleyemez ve bu oturum açmaların her biri denetim günlüğüne kaydedilir.',
+  'settings.sso.requireButton': 'Tek oturum açmayı zorunlu kıl',
+  'settings.sso.requiring': 'Zorunlu kılınıyor…',
+  'settings.sso.requireErrorFallback': 'Tek oturum açma zorunlu kılınamadı.',
+  'settings.sso.removeModalTitle': '{name} kaldırılsın mı?',
+  'settings.sso.removeModalDescription':
+    'Bu bağlantı üzerinden oturum açan herkes o yolu hemen kaybeder. Bu geri alınamaz.',
+  'settings.sso.removeConfirmButton': 'Bağlantıyı kaldır',
+  'settings.sso.removing': 'Kaldırılıyor…',
+  'settings.scim.title': 'SCIM provizyonu',
+  'settings.scim.description':
+    'Kimlik sağlayıcınızın SCIM bağlayıcısı için taşıyıcı jetonlar. Bir jeton yalnızca oluşturulduğunda bir kez gösterilir, sonra bir daha asla.',
+  'settings.scim.loadError': 'Provizyon jetonları yüklenemedi.',
+  'settings.scim.tokenNameLabel': 'Jeton adı',
+  'settings.scim.tokenNameError': 'Bu jetona bir ad verin.',
+  'settings.scim.expiresInLabel': 'Şu sürede sona erer (gün)',
+  'settings.scim.createButton': 'Jeton oluştur',
+  'settings.scim.creating': 'Oluşturuluyor…',
+  'settings.scim.expiryRangeError': 'Son kullanma, 1 ile 365 arasında tam bir gün sayısı olmalı.',
+  'settings.scim.empty.title': 'Provizyon jetonu yok',
+  'settings.scim.empty.description':
+    'Kimlik sağlayıcınızın SCIM bağlayıcısına yapıştırmak için bir tane oluşturun.',
+  'settings.scim.untitledToken': 'Adsız jeton',
+  'settings.scim.lastUsed': 'Son kullanım {date}',
+  'settings.scim.neverUsed': 'Hiç kullanılmadı',
+  'settings.scim.expires': 'Son kullanma {date}',
+  'settings.scim.noExpiry': 'Son kullanma tarihi yok',
+  'settings.scim.revokeButton': 'İptal et',
+  'settings.scim.revokeModalTitle': '{name} iptal edilsin mi?',
+  'settings.scim.revokeModalDefaultName': 'bu jeton',
+  'settings.scim.revokeModalDescription':
+    'Kimlik sağlayıcınızın bağlayıcısı, bu işlem geçerli olduğu anda kullanıcı provizyonu yapamaz veya kaldıramaz hâle gelir. Bu geri alınamaz.',
+  'settings.scim.revokeConfirmButton': 'Jetonu iptal et',
+  'settings.scim.revoking': 'İptal ediliyor…',
+  'settings.scim.tokenCreatedTitle': '{name} oluşturuldu',
+  'settings.scim.defaultTokenName': 'Jeton',
+  'settings.scim.tokenCreatedDescription':
+    'Bunu şimdi kimlik sağlayıcınızın SCIM bağlayıcısına yapıştırın.',
+  'settings.scim.bearerTokenLabel': 'Taşıyıcı jeton',
+  'settings.scim.tokenWarning': 'Bu jeton bir daha gösterilmeyecek — şimdi saklayın.',
+  'settings.scim.doneButton': 'Tamam',
+
+  // Veri bölgesi + HIPAA/BAA — Compliance.tsx
+  'settings.compliance.title': 'Veri bölgesi ve uyumluluk',
+  'settings.compliance.description':
+    'Bu çalışma alanının verilerinin bulunduğu yer ve HIPAA İş Ortağı Sözleşmesi durumu.',
+  'settings.compliance.loadError': 'Uyumluluk ayarları yüklenemedi.',
+  'settings.compliance.regionLabel': 'Veri bölgesi',
+  'settings.compliance.regionFixedNote':
+    'Kayıt sırasında sabitlenir — bir çalışma alanının bölgesi asla değiştirilemez.',
+  'settings.compliance.region.eu': 'Avrupa Birliği',
+  'settings.compliance.region.us': 'Amerika Birleşik Devletleri',
+  'settings.compliance.baaLabel': 'HIPAA İş Ortağı Sözleşmesi',
+  'settings.compliance.baaSigned': 'İmzalandı',
+  'settings.compliance.baaNotSigned': 'İmzalanmadı',
+  'settings.compliance.baaAcceptedOn': '{date} tarihinde kabul edildi.',
+  'settings.compliance.baaUnavailable':
+    "HIPAA kapsamı yalnızca Amerika Birleşik Devletleri'nde barındırılan çalışma alanları için kullanılabilir.",
+  'settings.compliance.baaRestricted': "BAA'yı yalnızca çalışma alanı sahibi kabul edebilir.",
+  'settings.compliance.acceptButton': "BAA'yı kabul et",
+  'settings.compliance.accepting': 'Kabul ediliyor…',
+
+  // SIEM dışa aktarımı — SiemExport.tsx
+  'settings.siemExport.title': 'SIEM dışa aktarımı',
+  'settings.siemExport.description':
+    'Bu çalışma alanının denetim izini bir zamanlamayla bir SIEM hedefine gönderin (SOC 2 / ISO 27001).',
+  'settings.siemExport.loadError': 'SIEM dışa aktarım yapılandırması yüklenemedi.',
+  'settings.siemExport.gapTitle': 'Denetim izinde bir boşluk bulundu.',
+  'settings.siemExport.gapBody':
+    'Denetim girdileri zincirinde bir parça eksik — kaydın bir kısmı hesaba katılamıyor. Teslimat çalışmaya devam ediyor; bunun araştırılması gerekiyor.',
+  'settings.siemExport.enableLabel': 'Dışa aktarımı etkinleştir',
+  'settings.siemExport.enableHint':
+    'Açıkken, zamanlanmış bir iş yeni denetim girdilerini aşağıdaki hedefe gönderir.',
+  'settings.siemExport.destinationLabel': 'Hedef',
+  'settings.siemExport.target.file': 'Dosya (.data/siem alıcısı)',
+  'settings.siemExport.lastExport': 'Son dışa aktarım',
+  'settings.siemExport.lastRun': 'Son çalıştırma',
+  'settings.siemExport.delivered': 'Teslim edildi',
+  'settings.siemExport.pending': 'Bekliyor',
+
+  // SLA — SlaPolicy.tsx
+  'settings.sla.title': 'SLA',
+  'settings.sla.description':
+    'Bir müşterinin ilk yanıt için ve bir vakanın tamamlanması için ne kadar bekleyebileceği. Ölçülür ve işaretlenir, asla zorunlu kılınmaz — burada hiçbir şey bir sohbeti yeniden yönlendirmez veya yeniden önceliklendirmez.',
+  'settings.sla.loadError': 'SLA hedefleri yüklenemedi.',
+  'settings.sla.minutesError':
+    '1-{max} arasında tam bir dakika sayısı girin veya hedef olmaması için boş bırakın.',
+  'settings.sla.statusLabel': 'Durum',
+  'settings.sla.active': 'Etkin',
+  'settings.sla.notActive': 'Etkin değil',
+  'settings.sla.downgradeNote':
+    'Hedefler kaydedildi ama şu anda ölçülmüyor — bu plan SLA takibini içermiyor. Yükseltme, aşağıdaki sayılara karşı ölçümü değişmeden geri getirir.',
+  'settings.sla.firstResponseLabel': 'İlk yanıt hedefi (dakika)',
+  'settings.sla.resolutionLabel': 'Çözüm hedefi (dakika)',
+  'settings.sla.noTargetPlaceholder': 'Hedef yok',
+  'settings.sla.businessHoursLabel': 'Yalnızca mesai saatlerini say',
+  'settings.sla.businessHoursHint':
+    'Temsilcilerin kayıtlı çalışma programlarına göre ölçülür. Hiçbir yerde kayıtlı program yoksa, saatler kesintisiz işler.',
+  'settings.sla.entitlementError':
+    'SLA hedefleri bir Enterprise özelliğidir. Buradaki değişiklikleri kaydetmek için planı yükseltin.',
+  'settings.sla.savedNotePrefix': 'Kaydedildi. Kaçırılanlar şurada görünür:',
+  'settings.sla.savedNoteLink': 'Raporlar → Genel Bakış → SLA ihlalleri',
+  'settings.sla.savedNoteSuffix': '.',
+
+  // Sandbox — Sandbox.tsx
+  'settings.sandbox.title': 'Sandbox',
+  'settings.sandbox.description':
+    'Entegrasyonları test etmek veya yeni bir işe alımı katmak için ikinci, bağlantısız bir çalışma alanı — asla faturalandırılmaz, bir koltuğa karşı asla sayılmaz ve üretimden görünmez.',
+  'settings.sandbox.loadError': 'Sandbox yüklenemedi.',
+  'settings.sandbox.isSandboxLabel': 'Bu bir sandbox',
+  'settings.sandbox.isSandboxNote':
+    'Bu çalışma alanındaki her şey üretimden bağlantısızdır — burada hiçbir şey faturalandırılmaz veya sayılmaz ve burada gerçek müşteri verisi yoktur.',
+  'settings.sandbox.resetButton': "Sandbox'ı sıfırla",
+  'settings.sandbox.resetting': 'Sıfırlanıyor…',
+  'settings.sandbox.resetRestricted': "Bu sandbox'ı yalnızca çalışma alanı sahibi sıfırlayabilir.",
+  'settings.sandbox.notAvailable': 'Kullanılamıyor',
+  'settings.sandbox.entitlementNote':
+    'Sandbox bir Enterprise özelliğidir. Bir tane oluşturmak için planı yükseltin.',
+  'settings.sandbox.createdLabel': 'Sandbox oluşturuldu',
+  'settings.sandbox.createdSummary': '{created} tarihinde oluşturuldu. Son sıfırlama: {reset}.',
+  'settings.sandbox.createdUnknown': 'bilinmiyor',
+  'settings.sandbox.resetNever': 'hiç',
+  'settings.sandbox.resetFromInsideNote':
+    "Sandbox'ın kendisine oturum açarak sıfırlayın — bir üretim kimlik bilgisi onu silemez.",
+  'settings.sandbox.emptyNote': "Bu çalışma alanının henüz bir sandbox'ı yok.",
+  'settings.sandbox.createButton': 'Sandbox oluştur',
+  'settings.sandbox.creating': 'Oluşturuluyor…',
+  'settings.sandbox.createRestricted': "Bir sandbox'ı yalnızca çalışma alanı sahibi oluşturabilir.",
+  'settings.sandbox.resetModalTitle': 'Bu sandbox sıfırlansın mı?',
+  'settings.sandbox.resetModalDescription':
+    'İçindeki her sohbet, kişi ve ayar silinir. Bu geri alınamaz ve oturumunuz kapatılır.',
+
+  // Zamanlanmış dışa aktarımlar — ScheduledExports.tsx
+  'settings.scheduledExports.title': 'Zamanlanmış dışa aktarımlar',
+  'settings.scheduledExports.description':
+    'Bir rapor grubunu ekibinize zamanlayıcıyla e-postalayın — günlük, haftalık veya aylık, CSV olarak.',
+  'settings.scheduledExports.loadError': 'Zamanlanmış dışa aktarımlar yüklenemedi.',
+  'settings.scheduledExports.reportLabel': 'Rapor',
+  'settings.scheduledExports.reportPlaceholder': 'Bir rapor seçin…',
+  'settings.scheduledExports.frequencyLabel': 'Sıklık',
+  'settings.scheduledExports.frequency.daily': 'Günlük',
+  'settings.scheduledExports.frequency.weekly': 'Haftalık',
+  'settings.scheduledExports.frequency.monthly': 'Aylık',
+  'settings.scheduledExports.scheduleButton': 'Dışa aktarımı zamanla',
+  'settings.scheduledExports.scheduling': 'Zamanlanıyor…',
+  'settings.scheduledExports.recipientsLegend': 'Alıcılar',
+  'settings.scheduledExports.noActiveAgents': 'Bildirilecek etkin temsilci yok.',
+  'settings.scheduledExports.groupError': 'Bir rapor grubu seçin.',
+  'settings.scheduledExports.recipientsError': 'En az bir alıcı seçin.',
+  'settings.scheduledExports.empty.title': 'Zamanlanmış dışa aktarım yok',
+  'settings.scheduledExports.empty.description':
+    'Yukarıdan bir rapor grubu zamanlayın, otomatik olarak ekibinizin gelen kutusuna düşer.',
+  'settings.scheduledExports.neverRun': 'Hiç çalışmadı',
+  'settings.scheduledExports.delivered': 'Teslim edildi',
+  'settings.scheduledExports.failed': 'Başarısız',
+  'settings.scheduledExports.running': 'Çalışıyor',
+  'settings.scheduledExports.checking': 'Kontrol ediliyor…',
+  'settings.scheduledExports.recipientCount.one': '{count} alıcı',
+  'settings.scheduledExports.recipientCount.other': '{count} alıcı',
+  'settings.scheduledExports.summary': '{frequency} · {recipients}',
+  'settings.scheduledExports.cancelConfirm': 'Bu dışa aktarım iptal edilsin mi?',
+  'settings.scheduledExports.confirmCancelButton': 'İptali onayla',
+  'settings.scheduledExports.keepButton': 'Koru',
+  'settings.scheduledExports.cancelAriaLabel': '{group} dışa aktarımını iptal et',
+
+  // Engellenen IP adresleri — BannedCustomerIps.tsx
+  'settings.bannedIps.title': 'Engellenen IP adresleri',
+  'settings.bannedIps.description':
+    "Bu adreslerden birindeki bir ziyaretçi, taze bir oturumdan bile olsa bir sohbet için reddedilir. Bunun yerine adlı bir kişiyi yasaklamak için Müşteriler'de profilindeki engelleme eylemini kullanın.",
+  'settings.bannedIps.loadError': 'Engellenen adresler yüklenemedi.',
+  'settings.bannedIps.ipLabel': 'IP adresi',
+  'settings.bannedIps.ipHint':
+    'Bir IPv4 veya IPv6 adresi. Siz burada kaldırana kadar ziyaretçi engellenir.',
+  'settings.bannedIps.blockButton': 'Adresi engelle',
+  'settings.bannedIps.empty.title': 'Engellenen adres yok',
+  'settings.bannedIps.empty.description':
+    'Ondan gelen sohbetleri reddetmek için bir IP adresi ekleyin. Siz eklemedikçe hiçbir şey engellenmez.',
+
+  // Denetim günlüğü kapısı — AuditLog.tsx (sayfanın kendisi `audit.*` ad alanında)
+  'settings.auditLog.title': 'Denetim günlüğü',
+  'settings.auditLog.description':
+    'Oturum açmalar, rol değişiklikleri, silmeler ve webhook değişiklikleri — son 30 gün, her planda saklanır.',
+  'settings.auditLog.body': 'Bu çalışma alanında kimin ne yaptığını inceleyin.',
+  'settings.auditLog.openButton': 'Denetim günlüğünü aç',
+
+  // Dosya paylaşımı — FileSharing.tsx
+  'settings.fileSharing.title': 'Dosya paylaşımı',
+  'settings.fileSharing.description':
+    'Hem temsilcilerden hem müşterilerden gelen eklere uygulanır. Bu kuralların dışındaki her şey reddedilir.',
+  'settings.fileSharing.loadError': 'Dosya paylaşımı kuralları yüklenemedi.',
+  'settings.fileSharing.allowLabel': 'Dosya paylaşımına izin ver',
+  'settings.fileSharing.allowHint': 'Bunu kapatmak, kim gönderirse göndersin her eki reddeder.',
+  'settings.fileSharing.allowedTypesLabel': 'İzin verilen türler',
+  'settings.fileSharing.allowedTypesHint':
+    'MIME türleri, virgülle ayrılmış — bir tarayıcının bir dosyayı etiketlediği biçim.',
+  'settings.fileSharing.maxSizeLabel': 'Maksimum boyut (MB)',
+
+  // Yetenekler (uzmanlık kataloğu) — Skills.tsx
+  'settings.skills.title': 'Yetenekler',
+  'settings.skills.description':
+    "Uzmanlık alanları. Bir yönlendirme kuralında birini zorunlu kılın veya Ekip'te bir temsilciye atayın.",
+  'settings.skills.loadError': 'Yetenekler yüklenemedi.',
+  'settings.skills.nameLabel': 'Yetenek',
+  'settings.skills.nameError': 'Yeteneğe bir ad verin.',
+  'settings.skills.addButton': 'Yetenek ekle',
+  'settings.skills.empty.title': 'Henüz yetenek yok',
+  'settings.skills.empty.description':
+    "Bir yönlendirme kuralında zorunlu kılmak veya Ekip'te bir temsilciye atamak için bir yetenek ekleyin.",
+  'settings.skills.deleteAriaLabel': '{name} yeteneğini sil',
+
+  // Yönlendirme kuralları — RoutingRules.tsx
+  'settings.routing.title': 'Yönlendirme',
+  'settings.routing.description':
+    'Sırayla kontrol edilir. Koşullarının tümü eşleşen ilk kural ekibi belirler.',
+  'settings.routing.loadError': 'Yönlendirme kuralları yüklenemedi.',
+  'settings.routing.empty.title': 'Yönlendirme kuralı yok',
+  'settings.routing.empty.description':
+    'Bir yedek kural olmadan, sohbetlerin gidecek bir yeri olmaz.',
+  'settings.routing.fallbackBadge': 'yedek',
+  'settings.routing.everythingElse': 'Geri kalan her şey',
+  'settings.routing.ruleLabel': 'Kural',
+  'settings.routing.noTeam': 'ekip yok',
+  'settings.routing.fallbackDisabledTitle': 'Yedek kural devre dışı bırakılamaz',
+  'settings.routing.anything': 'Herhangi biri',
+  'settings.routing.conditionSkill': 'yetenek {names}',
+
+  // Talep kuralları — TicketRules.tsx
+  'settings.ticketRules.title': 'Talep kuralları',
+  'settings.ticketRules.description':
+    'Bir talep açıldığında, ilk eşleşen kural önceliğini belirler veya bir etiket uygular.',
+  'settings.ticketRules.loadError': 'Talep kuralları yüklenemedi.',
+  'settings.ticketRules.ruleNameLabel': 'Kural adı',
+  'settings.ticketRules.ruleNameError': 'Kurala bir ad verin.',
+  'settings.ticketRules.subjectLabel': 'Konu şunu içerdiğinde',
+  'settings.ticketRules.subjectError': 'Konunun içermesi gereken metni girin.',
+  'settings.ticketRules.thenLabel': 'O zaman',
+  'settings.ticketRules.setPriorityOption': 'Öncelik belirle',
+  'settings.ticketRules.addTagOption': 'Etiket ekle',
+  'settings.ticketRules.priorityLabel': 'Öncelik',
+  'settings.ticketRules.tagLabel': 'Etiket',
+  'settings.ticketRules.valueError': 'Eylem için bir değer girin.',
+  'settings.ticketRules.priorityWholeNumberError': '0 veya daha büyük tam bir sayı girin.',
+  'settings.ticketRules.addButton': 'Kural ekle',
+  'settings.ticketRules.empty.title': 'Talep kuralı yok',
+  'settings.ticketRules.empty.description':
+    'Talepleri açıldıkları anda otomatik ata, önceliklendir veya etiketle.',
+  'settings.ticketRules.deleteAriaLabel': '{name} kuralını sil',
+  'settings.ticketRules.subjectContains': 'konu “{text}” içeriyor',
+  'settings.ticketRules.fromSource': '{source} kaynağından',
+  'settings.ticketRules.anyTicket': 'herhangi bir talep',
+  'settings.ticketRules.assignAgent': 'bir temsilciye ata',
+  'settings.ticketRules.assignTeam': 'bir ekibe ata',
+  'settings.ticketRules.setPriorityAction': 'önceliği {priority} yap',
+  'settings.ticketRules.addTagAction': '“{tag}” etiketini ekle',
+  'settings.ticketRules.doNothing': 'hiçbir şey yapma',
 };

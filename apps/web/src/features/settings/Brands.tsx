@@ -11,9 +11,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 interface Brand {
   id: string;
@@ -25,6 +26,7 @@ interface Brand {
 }
 
 export function Brands({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -45,27 +47,22 @@ export function Brands({ canEdit }: { canEdit: boolean }): ReactElement {
   // is present (FR-EK-A.1).
   const form = useForm({
     initial: { name: '' },
-    validators: { name: required('Enter a brand name.') },
+    validators: { name: required(t('settings.brands.nameError')) },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
         await add.mutateAsync({ name: values.name.trim() });
         reset();
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiClientError ? error.message : 'Could not add that brand.',
-        );
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
   const nameError = form.errorFor('name');
 
   return (
-    <Section
-      title="Brands"
-      description="Run several brands under one subscription. Each has its own channels, websites and widget appearance, selected from the brand switcher."
-    >
+    <Section title={t('settings.brands.title')} description={t('settings.brands.description')}>
       {list.error ? (
-        <ErrorNotice message="Could not load your brands." />
+        <ErrorNotice message={t('settings.brands.loadError')} />
       ) : (
         <Card>
           {canEdit && (
@@ -76,7 +73,7 @@ export function Brands({ canEdit }: { canEdit: boolean }): ReactElement {
             >
               <label htmlFor="new-brand-name" className="flex min-w-56 flex-1 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Brand name
+                  {t('settings.brands.nameLabel')}
                 </span>
                 <input
                   id="new-brand-name"
@@ -96,7 +93,7 @@ export function Brands({ canEdit }: { canEdit: boolean }): ReactElement {
                 disabled={!form.canSubmit}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {form.isSubmitting ? 'Adding…' : 'Add brand'}
+                {form.isSubmitting ? t('settings.adding') : t('settings.brands.addButton')}
               </button>
 
               {form.submitError && (
@@ -108,11 +105,11 @@ export function Brands({ canEdit }: { canEdit: boolean }): ReactElement {
           )}
 
           {list.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : list.data.items.length === 0 ? (
             <EmptyState
-              title="No brands yet"
-              description="Add a brand to run a second storefront or support line under this subscription."
+              title={t('settings.brands.empty.title')}
+              description={t('settings.brands.empty.description')}
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -143,6 +140,7 @@ function BrandRow({
   canEdit: boolean;
   onChanged: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const [name, setName] = useState(brand.name);
 
@@ -172,7 +170,7 @@ function BrandRow({
     <li className="flex flex-col gap-1.5 px-4 py-3">
       <div className="flex items-center gap-3">
         <label htmlFor={`brand-name-${brand.id}`} className="sr-only">
-          {brand.name} name
+          {t('settings.brands.nameFieldAriaLabel', { name: brand.name })}
         </label>
         <input
           id={`brand-name-${brand.id}`}
@@ -189,7 +187,7 @@ function BrandRow({
 
         {brand.is_default && (
           <span className="rounded-full border border-border px-2 py-0.5 text-2xs text-content-tertiary">
-            Default
+            {t('settings.brands.default')}
           </span>
         )}
 
@@ -198,19 +196,15 @@ function BrandRow({
             type="button"
             onClick={() => remove.mutate()}
             disabled={remove.isPending}
-            aria-label={`Remove ${brand.name}`}
+            aria-label={t('settings.brands.removeAriaLabel', { name: brand.name })}
             className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
           >
-            Remove
+            {t('settings.remove')}
           </button>
         )}
       </div>
 
-      {error && (
-        <ErrorNotice
-          message={error instanceof ApiClientError ? error.message : 'Could not update that brand.'}
-        />
-      )}
+      {error && <ErrorNotice message={t(errorMessageKey(error))} />}
     </li>
   );
 }

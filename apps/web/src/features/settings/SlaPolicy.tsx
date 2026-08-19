@@ -21,9 +21,10 @@ import { Link } from 'react-router-dom';
 import { SLA_MAX_TARGET_MINUTES } from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, useForm, type Validator } from '../../lib/form.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 interface SlaPolicyView {
   first_response_minutes: number | null;
@@ -43,18 +44,19 @@ type FormValues = Record<
  * A target in minutes, or blank for "do not measure this clock" — both are
  * valid policies, so an empty field is not `required()`'s job to reject.
  */
-function slaMinutes(): Validator {
+function slaMinutes(t: TFunction): Validator {
   return (value) => {
     const trimmed = value.trim();
     if (trimmed === '') return null;
     const minutes = Number(trimmed);
     return Number.isInteger(minutes) && minutes > 0 && minutes <= SLA_MAX_TARGET_MINUTES
       ? null
-      : `Enter a whole number of minutes, 1-${SLA_MAX_TARGET_MINUTES}, or leave blank for no target.`;
+      : t('settings.sla.minutesError', { max: SLA_MAX_TARGET_MINUTES });
   };
 }
 
 export function SlaPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -63,17 +65,17 @@ export function SlaPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
     queryFn: () => api.get<SlaPolicyView>('/settings/sla'),
   });
 
-  if (settings.error) return <ErrorNotice message="Could not load the SLA targets." />;
+  if (settings.error) return <ErrorNotice message={t('settings.sla.loadError')} />;
 
   return (
     <Section
       id="section-sla"
-      title="SLA"
-      description="How long a customer may wait for a first reply and for a case to be finished. Measured and marked, never enforced — nothing here re-routes or re-prioritises a conversation."
+      title={t('settings.sla.title')}
+      description={t('settings.sla.description')}
     >
       <Card>
         {settings.isPending ? (
-          <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
         ) : (
           <SlaPolicyForm
             policy={settings.data}
@@ -101,6 +103,7 @@ function SlaPolicyForm({
   canEdit: boolean;
   onSaved: (data: SlaPolicyView) => void;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
 
   const save = useMutation({
@@ -121,8 +124,8 @@ function SlaPolicyForm({
       business_hours_only: String(policy.business_hours_only),
     },
     validators: {
-      first_response_minutes: slaMinutes(),
-      resolution_minutes: slaMinutes(),
+      first_response_minutes: slaMinutes(t),
+      resolution_minutes: slaMinutes(t),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
@@ -138,10 +141,8 @@ function SlaPolicyForm({
       } catch (error) {
         setSubmitError(
           error instanceof ApiClientError && error.details?.['entitlement'] === 'sla'
-            ? 'SLA targets are an Enterprise feature. Upgrade the plan to save changes here.'
-            : error instanceof ApiClientError
-              ? error.message
-              : 'Could not save the SLA targets.',
+            ? t('settings.sla.entitlementError')
+            : t(errorMessageKey(error)),
         );
       }
     },
@@ -158,17 +159,14 @@ function SlaPolicyForm({
   return (
     <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-5 p-4">
       <div className="flex items-center gap-2 text-sm font-medium">
-        Status
+        {t('settings.sla.statusLabel')}
         <StatusDot
           tone={policy.active ? 'success' : 'neutral'}
-          label={policy.active ? 'Active' : 'Not active'}
+          label={policy.active ? t('settings.sla.active') : t('settings.sla.notActive')}
         />
       </div>
       {!policy.active && configured && (
-        <p className="text-2xs text-content-tertiary">
-          Targets are saved but not being measured right now — this plan does not include SLA
-          tracking. Upgrading restores measurement against the numbers below, unchanged.
-        </p>
+        <p className="text-2xs text-content-tertiary">{t('settings.sla.downgradeNote')}</p>
       )}
 
       <fieldset disabled={!canEdit} className="flex flex-col gap-5 border-0 p-0">
@@ -178,14 +176,14 @@ function SlaPolicyForm({
               htmlFor="sla-first-response"
               className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
             >
-              First response target (minutes)
+              {t('settings.sla.firstResponseLabel')}
             </label>
             <input
               id="sla-first-response"
               type="number"
               min={1}
               max={SLA_MAX_TARGET_MINUTES}
-              placeholder="No target"
+              placeholder={t('settings.sla.noTargetPlaceholder')}
               value={form.values.first_response_minutes}
               onChange={(event) => form.setValue('first_response_minutes', event.target.value)}
               onBlur={() => form.blur('first_response_minutes')}
@@ -201,14 +199,14 @@ function SlaPolicyForm({
               htmlFor="sla-resolution"
               className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
             >
-              Resolution target (minutes)
+              {t('settings.sla.resolutionLabel')}
             </label>
             <input
               id="sla-resolution"
               type="number"
               min={1}
               max={SLA_MAX_TARGET_MINUTES}
-              placeholder="No target"
+              placeholder={t('settings.sla.noTargetPlaceholder')}
               value={form.values.resolution_minutes}
               onChange={(event) => form.setValue('resolution_minutes', event.target.value)}
               onBlur={() => form.blur('resolution_minutes')}
@@ -227,10 +225,9 @@ function SlaPolicyForm({
             onChange={(event) => form.setValue('business_hours_only', String(event.target.checked))}
           />
           <span className="text-sm">
-            Count only business hours
+            {t('settings.sla.businessHoursLabel')}
             <span className="block text-2xs text-content-tertiary">
-              Measured against the agents' saved work schedules. With no saved schedule anywhere,
-              clocks run continuously.
+              {t('settings.sla.businessHoursHint')}
             </span>
           </span>
         </label>
@@ -243,7 +240,7 @@ function SlaPolicyForm({
             disabled={!form.canSubmit || !form.isDirty}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
           >
-            {form.isSubmitting ? 'Saving…' : 'Save'}
+            {form.isSubmitting ? t('settings.saving') : t('settings.save')}
           </button>
 
           {form.submitError && (
@@ -254,11 +251,11 @@ function SlaPolicyForm({
 
           {justSaved && (
             <p className="text-2xs text-content-tertiary">
-              Saved. Misses show up as{' '}
+              {t('settings.sla.savedNotePrefix')}{' '}
               <Link to="/app/reports" className="text-content-brand hover:underline">
-                Reports → Overview → SLA breaches
+                {t('settings.sla.savedNoteLink')}
               </Link>
-              .
+              {t('settings.sla.savedNoteSuffix')}
             </p>
           )}
         </div>

@@ -198,8 +198,8 @@ describe('PreChatFormSettings validation (FR-MOD-08.7.7)', () => {
 });
 
 /**
- * One sentinel per component this file's DoD claims translated (I18N-i, tm
- * 133.9) — `Skills`/`TicketRules` are I18N-j's (tm 133.10) and stay English.
+ * One sentinel per component this file's DoD claims translated: the first
+ * five from I18N-i (tm 133.9), `Skills`/`TicketRules` from I18N-j (tm 133.10).
  */
 describe('Settings forms localisation (NFR-I18N2)', () => {
   function renderLocalized(ui: ReactElement): void {
@@ -234,5 +234,15 @@ describe('Settings forms localisation (NFR-I18N2)', () => {
   it('paints Pre-chat form in Turkish when that is the active locale', () => {
     renderLocalized(<PreChatFormSettings canEdit />);
     expect(screen.getByRole('region', { name: 'Sohbet öncesi form' })).toBeInTheDocument();
+  });
+
+  it('paints Skills in Turkish when that is the active locale', () => {
+    renderLocalized(<Skills canEdit />);
+    expect(screen.getByRole('region', { name: 'Yetenekler' })).toBeInTheDocument();
+  });
+
+  it('paints Ticket rules in Turkish when that is the active locale', () => {
+    renderLocalized(<TicketRules canEdit />);
+    expect(screen.getByRole('region', { name: 'Talep kuralları' })).toBeInTheDocument();
   });
 });

@@ -19,9 +19,10 @@ import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import type { ScheduledExport, ScheduledExportFrequency, ScheduledExportRun } from '@nexa/types';
 
 interface ReportGroupOption {
@@ -35,17 +36,14 @@ interface AgentOption {
   email: string;
 }
 
-const FREQUENCIES: Array<{ value: ScheduledExportFrequency; label: string }> = [
-  { value: 'daily', label: 'Daily' },
-  { value: 'weekly', label: 'Weekly' },
-  { value: 'monthly', label: 'Monthly' },
-];
+const FREQUENCIES: readonly ScheduledExportFrequency[] = ['daily', 'weekly', 'monthly'];
 
-function describeFrequency(frequency: ScheduledExportFrequency): string {
-  return FREQUENCIES.find((option) => option.value === frequency)?.label ?? frequency;
+function frequencyLabel(t: TFunction, frequency: ScheduledExportFrequency): string {
+  return t(`settings.scheduledExports.frequency.${frequency}`);
 }
 
 export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -98,8 +96,8 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
       // Left empty whenever `/reports/groups` grants nothing selectable — the
       // permission-based visibility this form owes: no group to pick, no
       // schedule to submit.
-      group: required('Select a report group.'),
-      recipients: (value) => (value.trim() ? null : 'Select at least one recipient.'),
+      group: required(t('settings.scheduledExports.groupError')),
+      recipients: (value) => (value.trim() ? null : t('settings.scheduledExports.recipientsError')),
     },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
@@ -110,9 +108,7 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
         });
         reset();
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiClientError ? error.message : 'Could not schedule that export.',
-        );
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
@@ -132,11 +128,11 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
 
   return (
     <Section
-      title="Scheduled exports"
-      description="Mail a report group to your team on a timer — daily, weekly or monthly, as a CSV."
+      title={t('settings.scheduledExports.title')}
+      description={t('settings.scheduledExports.description')}
     >
       {list.error ? (
-        <ErrorNotice message="Could not load scheduled exports." />
+        <ErrorNotice message={t('settings.scheduledExports.loadError')} />
       ) : (
         <Card>
           {canEdit && (
@@ -148,7 +144,7 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
               <div className="flex flex-wrap items-end gap-3">
                 <label htmlFor="scheduled-export-group" className="flex min-w-48 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Report
+                    {t('settings.scheduledExports.reportLabel')}
                   </span>
                   <select
                     id="scheduled-export-group"
@@ -159,7 +155,7 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
                     aria-describedby={groupError ? 'scheduled-export-group-error' : undefined}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
                   >
-                    <option value="">Select a report…</option>
+                    <option value="">{t('settings.scheduledExports.reportPlaceholder')}</option>
                     {groupOptions.map((group) => (
                       <option key={group.id} value={group.id}>
                         {group.label}
@@ -171,7 +167,7 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
 
                 <label htmlFor="scheduled-export-frequency" className="flex w-32 flex-col gap-1">
                   <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                    Frequency
+                    {t('settings.scheduledExports.frequencyLabel')}
                   </span>
                   <select
                     id="scheduled-export-frequency"
@@ -179,9 +175,9 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
                     onChange={(event) => form.setValue('frequency', event.target.value)}
                     className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
                   >
-                    {FREQUENCIES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
+                    {FREQUENCIES.map((value) => (
+                      <option key={value} value={value}>
+                        {frequencyLabel(t, value)}
                       </option>
                     ))}
                   </select>
@@ -192,16 +188,20 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
                   disabled={!form.canSubmit}
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                 >
-                  {form.isSubmitting ? 'Scheduling…' : 'Schedule export'}
+                  {form.isSubmitting
+                    ? t('settings.scheduledExports.scheduling')
+                    : t('settings.scheduledExports.scheduleButton')}
                 </button>
               </div>
 
               <fieldset className="flex flex-col gap-1.5">
                 <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Recipients
+                  {t('settings.scheduledExports.recipientsLegend')}
                 </legend>
                 {agentOptions.length === 0 ? (
-                  <p className="text-2xs text-content-tertiary">No active agents to notify.</p>
+                  <p className="text-2xs text-content-tertiary">
+                    {t('settings.scheduledExports.noActiveAgents')}
+                  </p>
                 ) : (
                   <div className="flex flex-wrap gap-x-4 gap-y-1.5">
                     {agentOptions.map((agent) => (
@@ -228,11 +228,11 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
           )}
 
           {list.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : list.data.items.length === 0 ? (
             <EmptyState
-              title="No scheduled exports"
-              description="Schedule a report group above and it lands in your team's inbox automatically."
+              title={t('settings.scheduledExports.empty.title')}
+              description={t('settings.scheduledExports.empty.description')}
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -257,11 +257,16 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
   );
 }
 
-function describeLastRun(run: ScheduledExportRun | undefined): { tone: StatusTone; label: string } {
-  if (!run) return { tone: 'neutral', label: 'Never run' };
-  if (run.status === 'delivered') return { tone: 'success', label: 'Delivered' };
-  if (run.status === 'failed') return { tone: 'danger', label: 'Failed' };
-  return { tone: 'warning', label: 'Running' };
+function describeLastRun(
+  t: TFunction,
+  run: ScheduledExportRun | undefined,
+): { tone: StatusTone; label: string } {
+  if (!run) return { tone: 'neutral', label: t('settings.scheduledExports.neverRun') };
+  if (run.status === 'delivered')
+    return { tone: 'success', label: t('settings.scheduledExports.delivered') };
+  if (run.status === 'failed')
+    return { tone: 'danger', label: t('settings.scheduledExports.failed') };
+  return { tone: 'warning', label: t('settings.scheduledExports.running') };
 }
 
 function ScheduledExportRow({
@@ -277,6 +282,7 @@ function ScheduledExportRow({
   onCancel: () => void;
   cancelling: boolean;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const [confirming, setConfirming] = useState(false);
 
@@ -293,16 +299,20 @@ function ScheduledExportRow({
   });
 
   const badge = lastRun.isPending
-    ? { tone: 'neutral' as const, label: 'Checking…' }
-    : describeLastRun(lastRun.data?.items[0]);
+    ? { tone: 'neutral' as const, label: t('settings.scheduledExports.checking') }
+    : describeLastRun(t, lastRun.data?.items[0]);
 
   return (
     <li className="flex items-center gap-3 px-4 py-3">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">{groupLabel}</p>
         <p className="truncate text-2xs text-content-tertiary">
-          {describeFrequency(scheduledExport.frequency)} · {scheduledExport.recipients.length}{' '}
-          recipient{scheduledExport.recipients.length === 1 ? '' : 's'}
+          {t('settings.scheduledExports.summary', {
+            frequency: frequencyLabel(t, scheduledExport.frequency),
+            recipients: t('settings.scheduledExports.recipientCount', {
+              count: scheduledExport.recipients.length,
+            }),
+          })}
         </p>
       </div>
 
@@ -311,31 +321,33 @@ function ScheduledExportRow({
       {canEdit &&
         (confirming ? (
           <span className="flex items-center gap-2">
-            <span className="text-2xs text-content-secondary">Cancel this export?</span>
+            <span className="text-2xs text-content-secondary">
+              {t('settings.scheduledExports.cancelConfirm')}
+            </span>
             <button
               type="button"
               disabled={cancelling}
               onClick={onCancel}
               className="rounded-md border border-border px-2 py-1 text-2xs text-danger transition-colors hover:bg-surface-2 disabled:opacity-40"
             >
-              Confirm cancel
+              {t('settings.scheduledExports.confirmCancelButton')}
             </button>
             <button
               type="button"
               onClick={() => setConfirming(false)}
               className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
             >
-              Keep
+              {t('settings.scheduledExports.keepButton')}
             </button>
           </span>
         ) : (
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            aria-label={`Cancel ${groupLabel} export`}
+            aria-label={t('settings.scheduledExports.cancelAriaLabel', { group: groupLabel })}
             className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
           >
-            Cancel
+            {t('settings.cancel')}
           </button>
         ))}
     </li>

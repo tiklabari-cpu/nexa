@@ -14,6 +14,7 @@ import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 interface McpToolDescriptor {
   name: string;
@@ -28,10 +29,8 @@ interface McpManifest {
   tools: McpToolDescriptor[];
 }
 
-/** rapor-1 §Integrations — the sample question shown beside the connection details. */
-const EXAMPLE_PROMPT = 'Find all tickets where customers ask about bulk orders';
-
 export function McpConnection(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const [copied, setCopied] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
@@ -56,25 +55,25 @@ export function McpConnection(): ReactElement {
 
   return (
     <Section
-      title="MCP server"
-      description="Ask AI assistants about your Nexa data. Works with Claude, ChatGPT, and any MCP-compatible tool."
+      title={t('settings.mcpConnection.title')}
+      description={t('settings.mcpConnection.description')}
     >
       {manifest.error ? (
-        <ErrorNotice message="Could not load the MCP server details." />
+        <ErrorNotice message={t('settings.mcpConnection.loadError')} />
       ) : (
         <Card>
           {manifest.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : (
             <div className="flex flex-col gap-4 p-4">
               <div className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  MCP server URL
+                  {t('settings.mcpConnection.serverUrlLabel')}
                 </span>
                 <div className="flex items-center gap-2">
                   <input
                     readOnly
-                    aria-label="MCP server URL"
+                    aria-label={t('settings.mcpConnection.serverUrlLabel')}
                     value={manifest.data.server.url}
                     onFocus={(event) => event.target.select()}
                     className="flex-1 rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none"
@@ -84,7 +83,7 @@ export function McpConnection(): ReactElement {
                     onClick={() => copy(manifest.data.server.url)}
                     className="shrink-0 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
                   >
-                    {copied ? 'Copied' : 'Copy'}
+                    {copied ? t('settings.copied') : t('settings.copy')}
                   </button>
                 </div>
               </div>
@@ -96,42 +95,39 @@ export function McpConnection(): ReactElement {
                   onClick={() => setSetupOpen((open) => !open)}
                   className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium"
                 >
-                  Claude setup
+                  {t('settings.mcpConnection.claudeSetup')}
                   <span aria-hidden="true" className="text-content-tertiary">
                     {setupOpen ? '−' : '+'}
                   </span>
                 </button>
                 {setupOpen && (
                   <ol className="list-inside list-decimal border-t border-border px-3 py-3 text-sm text-content-secondary [&>li]:py-0.5">
-                    <li>Open Claude, then go to Settings → Connectors.</li>
-                    <li>Choose “Add custom connector”.</li>
-                    <li>Paste the MCP server URL above.</li>
-                    <li>
-                      Sign in with your Nexa account when prompted, and approve the scopes it
-                      requests.
-                    </li>
-                    <li>Ask a question about your workspace — see the example below.</li>
+                    <li>{t('settings.mcpConnection.step1')}</li>
+                    <li>{t('settings.mcpConnection.step2')}</li>
+                    <li>{t('settings.mcpConnection.step3')}</li>
+                    <li>{t('settings.mcpConnection.step4')}</li>
+                    <li>{t('settings.mcpConnection.step5')}</li>
                   </ol>
                 )}
               </div>
 
               <div className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Example prompt
+                  {t('settings.mcpConnection.examplePromptLabel')}
                 </span>
                 <p className="rounded-md border border-border bg-inset px-3 py-2 font-mono text-sm text-content-secondary">
-                  “{EXAMPLE_PROMPT}”
+                  “{t('settings.mcpConnection.examplePrompt')}”
                 </p>
               </div>
 
               <div className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Available tools
+                  {t('settings.mcpConnection.availableToolsLabel')}
                 </span>
                 {manifest.data.tools.length === 0 ? (
                   <EmptyState
-                    title="No tools published yet"
-                    description="Tools appear here as they are connected to this server."
+                    title={t('settings.mcpConnection.empty.title')}
+                    description={t('settings.mcpConnection.empty.description')}
                   />
                 ) : (
                   <ul className="divide-y divide-border rounded-md border border-border">

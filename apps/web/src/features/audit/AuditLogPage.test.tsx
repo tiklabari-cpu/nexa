@@ -16,9 +16,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
 
@@ -190,5 +191,29 @@ describe('AuditLogPage', () => {
     expect(screen.getByLabelText('Filter by action')).toHaveValue('auth.login');
     expect(screen.getByLabelText('From date')).toHaveValue('2026-07-01');
     expect(screen.getByLabelText('To date')).toHaveValue('2026-07-15');
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('AuditLogPage localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the audit log in Turkish when that is the active locale', async () => {
+    api.get.mockResolvedValue(ENTRIES);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <MemoryRouter>
+        <QueryClientProvider client={queryClient}>
+          <AuditLogPage />
+        </QueryClientProvider>
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Denetim günlüğü' }),
+    ).toBeInTheDocument();
   });
 });

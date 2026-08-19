@@ -1,5 +1,6 @@
 import { mergeNamespaces, type Messages, type Namespace } from '../merge.js';
 import { apps } from './apps.js';
+import { audit } from './audit.js';
 import { auth } from './auth.js';
 import { billing } from './billing.js';
 import { common } from './common.js';
@@ -15,6 +16,7 @@ import { team } from './team.js';
 /** The Turkish catalogue, one entry per namespace file. */
 export const trNamespaces: Record<Namespace, Messages> = {
   apps,
+  audit,
   auth,
   billing,
   common,

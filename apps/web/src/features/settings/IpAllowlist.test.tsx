@@ -10,10 +10,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -160,7 +161,7 @@ describe('IpAllowlist', () => {
     );
   });
 
-  it('shows a server rejection of the policy save as an alert', async () => {
+  it('answers a policy-save rejection through the ADR-06 catalogue', async () => {
     api.patch.mockRejectedValue(
       new ApiClientError({
         type: 'validation',
@@ -175,7 +176,7 @@ describe('IpAllowlist', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /Enforce the IP allowlist/ }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Enter a value of 1 or more.');
+    expect(alert).toHaveTextContent('Check the highlighted fields and try again.');
   });
 
   it('offers no edit controls to a read-only viewer', async () => {
@@ -187,5 +188,24 @@ describe('IpAllowlist', () => {
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.getByText('Idle timeout: Off')).toBeInTheDocument();
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('IpAllowlist localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints IP allowlist in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <IpAllowlist canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('region', { name: 'IP izin listesi' })).toBeInTheDocument();
   });
 });

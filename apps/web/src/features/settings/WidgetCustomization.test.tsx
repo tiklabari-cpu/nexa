@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WidgetCustomization } from './WidgetCustomization.js';
 import { useAuth, useBrandStore } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const DEFAULTS = {
   primary_color: '#2d67fa',
@@ -117,6 +118,25 @@ describe('WidgetCustomization', () => {
   it('titles the section plainly when no brand is selected', async () => {
     renderWidget();
     expect(await screen.findByRole('heading', { name: 'Widget appearance' })).toBeInTheDocument();
+  });
+});
+
+/** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
+describe('WidgetCustomization localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Widget appearance in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <WidgetCustomization canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Widget görünümü' })).toBeInTheDocument();
   });
 });
 

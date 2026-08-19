@@ -14,9 +14,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import type { Region } from '@nexa/types';
 
 interface ComplianceSettings {
@@ -25,10 +26,9 @@ interface ComplianceSettings {
   hipaa_baa_signed_at: string | null;
 }
 
-const REGION_LABELS: Record<Region, string> = {
-  eu: 'European Union',
-  us: 'United States',
-};
+function regionLabel(t: TFunction, region: Region): string {
+  return t(`settings.compliance.region.${region}`);
+}
 
 /**
  * Mirrors the server's `minimumRole: 'admin'` gate on `GET
@@ -60,6 +60,7 @@ function ComplianceCard({
   /** Scope allows writing but the role does not — explain the missing button, not just omit it. */
   restricted: boolean;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -75,47 +76,53 @@ function ComplianceCard({
 
   return (
     <Section
-      title="Data region and compliance"
-      description="Where this workspace's data lives, and its HIPAA Business Associate Agreement status."
+      title={t('settings.compliance.title')}
+      description={t('settings.compliance.description')}
     >
       {settings.error ? (
-        <ErrorNotice message="Could not load compliance settings." />
+        <ErrorNotice message={t('settings.compliance.loadError')} />
       ) : (
         <Card>
           {settings.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : (
             <div className="flex flex-col gap-4 p-4">
               <div>
-                <p className="text-sm font-medium">Data region</p>
+                <p className="text-sm font-medium">{t('settings.compliance.regionLabel')}</p>
                 <p className="text-sm text-content-secondary">
-                  {REGION_LABELS[settings.data!.region]}
+                  {regionLabel(t, settings.data!.region)}
                 </p>
                 <p className="text-2xs text-content-tertiary">
-                  Fixed at signup — a workspace's region can never be changed.
+                  {t('settings.compliance.regionFixedNote')}
                 </p>
               </div>
 
               <div>
                 <p className="flex items-center gap-2 text-sm font-medium">
-                  HIPAA Business Associate Agreement
+                  {t('settings.compliance.baaLabel')}
                   <StatusDot
                     tone={settings.data!.hipaa_baa_signed_at ? 'success' : 'neutral'}
-                    label={settings.data!.hipaa_baa_signed_at ? 'Signed' : 'Not signed'}
+                    label={
+                      settings.data!.hipaa_baa_signed_at
+                        ? t('settings.compliance.baaSigned')
+                        : t('settings.compliance.baaNotSigned')
+                    }
                   />
                 </p>
 
                 {settings.data!.hipaa_baa_signed_at ? (
                   <p className="text-sm text-content-secondary">
-                    Accepted {formatDate(settings.data!.hipaa_baa_signed_at)}.
+                    {t('settings.compliance.baaAcceptedOn', {
+                      date: formatDate(settings.data!.hipaa_baa_signed_at) ?? '',
+                    })}
                   </p>
                 ) : !settings.data!.baa_available ? (
                   <p className="text-2xs text-content-tertiary">
-                    HIPAA cover is only available to workspaces hosted in the United States.
+                    {t('settings.compliance.baaUnavailable')}
                   </p>
                 ) : restricted ? (
                   <p className="text-2xs text-content-tertiary">
-                    Only the workspace owner can accept the BAA.
+                    {t('settings.compliance.baaRestricted')}
                   </p>
                 ) : canAccept ? (
                   <div className="mt-1 flex flex-col gap-2">
@@ -125,13 +132,13 @@ function ComplianceCard({
                       disabled={accept.isPending}
                       className="self-start rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
                     >
-                      {accept.isPending ? 'Accepting…' : 'Accept the BAA'}
+                      {accept.isPending
+                        ? t('settings.compliance.accepting')
+                        : t('settings.compliance.acceptButton')}
                     </button>
                     {accept.isError && (
                       <p role="alert" className="text-2xs text-danger">
-                        {accept.error instanceof ApiClientError
-                          ? accept.error.message
-                          : 'Could not accept the agreement.'}
+                        {t(errorMessageKey(accept.error))}
                       </p>
                     )}
                   </div>

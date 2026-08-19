@@ -9,6 +9,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api, auth } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
@@ -54,6 +55,7 @@ beforeEach(() => {
   api.get.mockResolvedValue(SOURCES);
   api.post.mockResolvedValue(SOURCES.items[0]);
   api.delete.mockResolvedValue(undefined);
+  resetLocale();
 });
 
 describe('CopilotKnowledge', () => {
@@ -112,5 +114,22 @@ describe('CopilotKnowledge', () => {
 
     expect(screen.getByText('No access to Copilot knowledge')).toBeInTheDocument();
     expect(api.get).not.toHaveBeenCalled();
+  });
+
+  it('paints the section in Turkish when that is the active locale', async () => {
+    auth.scopes = ['agents-bot--all:rw'];
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <CopilotKnowledge />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Refund policy')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Copilot bilgisi' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Kaynak ekle' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sil' })).toBeInTheDocument();
+    expect(screen.getByLabelText('İçerik')).toBeInTheDocument();
   });
 });

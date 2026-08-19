@@ -18,6 +18,7 @@
  * rather than throwing.
  */
 import { useState, type ReactElement, type ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n.js';
 import { cn } from './cn.js';
 
 export type BannerTone = 'info' | 'success' | 'warning' | 'danger' | 'brand' | 'neutral';
@@ -113,6 +114,7 @@ interface BannerProps {
   role?: 'status' | 'alert';
   /** Replace the tone glyph, or pass `false` to omit the icon. */
   icon?: ReactNode | false;
+  /** Accessible name for the dismiss control; defaults to the catalogue's "Dismiss". */
   dismissLabel?: string;
   className?: string;
 }
@@ -127,9 +129,10 @@ export function Banner({
   onDismiss,
   role,
   icon,
-  dismissLabel = 'Dismiss',
+  dismissLabel,
   className,
 }: BannerProps): ReactElement | null {
+  const t = useTranslate();
   const [dismissed, setDismissed] = useState<boolean>(() => readDismissed(id));
   const style = TONES[tone];
 
@@ -167,7 +170,7 @@ export function Banner({
         <button
           type="button"
           onClick={dismiss}
-          aria-label={dismissLabel}
+          aria-label={dismissLabel ?? t('common.actions.dismiss')}
           className="-mr-1 shrink-0 rounded-md p-1 text-content-tertiary hover:bg-black/5 hover:text-content dark:hover:bg-white/10"
         >
           <span aria-hidden="true">×</span>

@@ -52,4 +52,8 @@ export const common: Messages = {
   'common.errors.validation': 'Check the highlighted fields and try again.',
   'common.errors.website_exists': 'That website is already connected.',
   'common.errors.wrong_product_version': 'This page is out of date — reload and try again.',
+  // The design-system primitives' own defaults — a caller that passes no label
+  // still gets one in the agent's language (Banner.tsx, Panel.tsx).
+  'common.actions.dismiss': 'Dismiss',
+  'common.actions.collapsePanel': 'Collapse panel',
 };

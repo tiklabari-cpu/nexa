@@ -289,6 +289,8 @@ export const settings: Messages = {
   'settings.widgetCustomization.poweredByLabel': '“Powered by Nexa” yazısını göster',
   'settings.widgetCustomization.poweredByHint':
     'Widget altbilgisinde küçük bir ibare. Kaldırmak için kapatın.',
+  'settings.widgetCustomization.entitlementError':
+    'Nexa rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.saveButton': 'Görünümü kaydet',
   'settings.widgetCustomization.resetButton': 'Sıfırla',
   'settings.widgetCustomization.previewLabel': 'Önizleme',

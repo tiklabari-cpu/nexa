@@ -119,6 +119,46 @@ describe('WidgetCustomization', () => {
     renderWidget();
     expect(await screen.findByRole('heading', { name: 'Widget appearance' })).toBeInTheDocument();
   });
+
+  // The plan gate refuses with `not_allowed`, whose ADR-06 sentence is the
+  // deliberately vague "That is not allowed here." — correct for the taxonomy
+  // and wrong for this screen, where the refusal is the upsell. Between I18N-j
+  // and I18N-l it was exactly that sentence, and only `entitlements.spec.ts`
+  // noticed; this pins it a layer down.
+  it('names the tier when the plan refuses the badge, not the generic refusal', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).endsWith('/settings/widget') && (init?.method ?? 'GET') === 'PUT') {
+          return {
+            ok: false,
+            status: 403,
+            headers: { get: () => null },
+            json: async () => ({
+              error: {
+                type: 'not_allowed',
+                message:
+                  'Removing Nexa branding from the widget is not included in the growth plan.',
+                request_id: 'req-test',
+                details: { entitlement: 'white_label', plan: 'growth' },
+              },
+            }),
+          } as unknown as Response;
+        }
+        return okJson(DEFAULTS);
+      }),
+    );
+
+    renderWidget();
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Powered by Nexa/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save appearance' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Removing the Nexa badge is an Enterprise feature/);
+    expect(alert).not.toHaveTextContent('That is not allowed here.');
+    // And the server's own English prose still never reaches the screen.
+    expect(alert).not.toHaveTextContent(/growth plan/);
+  });
 });
 
 /** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */

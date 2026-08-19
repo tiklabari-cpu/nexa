@@ -10,6 +10,7 @@
  * rhythm come from here.
  */
 import type { ReactElement, ReactNode } from 'react';
+import { useTranslate } from '../../lib/i18n.js';
 import { cn } from './cn.js';
 
 interface PanelProps {
@@ -20,6 +21,7 @@ interface PanelProps {
   children: ReactNode;
   /** When present, the header shows a control that hides the panel. */
   onCollapse?: () => void;
+  /** Accessible name for the collapse control; defaults to the catalogue's "Collapse panel". */
   collapseLabel?: string;
   /** Header control(s) shown before the collapse affordance. */
   headerAction?: ReactNode;
@@ -32,10 +34,12 @@ export function Panel({
   title,
   children,
   onCollapse,
-  collapseLabel = 'Collapse panel',
+  collapseLabel,
   headerAction,
   className,
 }: PanelProps): ReactElement {
+  const t = useTranslate();
+
   return (
     <aside aria-label={label} className={cn('flex flex-col bg-surface', className)}>
       <header className="flex h-topbar items-center justify-between border-b border-border px-4">
@@ -47,7 +51,7 @@ export function Panel({
               <button
                 type="button"
                 onClick={onCollapse}
-                aria-label={collapseLabel}
+                aria-label={collapseLabel ?? t('common.actions.collapsePanel')}
                 className="rounded-md p-1 text-content-tertiary hover:bg-surface-2 hover:text-content"
               >
                 <span aria-hidden="true">⇥</span>

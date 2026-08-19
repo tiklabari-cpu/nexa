@@ -38,4 +38,7 @@ export const common: Messages = {
   'common.errors.validation': 'İşaretli alanları kontrol edip yeniden deneyin.',
   'common.errors.website_exists': 'Bu web sitesi zaten bağlı.',
   'common.errors.wrong_product_version': 'Bu sayfa güncel değil — yenileyip tekrar deneyin.',
+  // The design-system primitives' own defaults (Banner.tsx, Panel.tsx).
+  'common.actions.dismiss': 'Kapat',
+  'common.actions.collapsePanel': 'Paneli daralt',
 };

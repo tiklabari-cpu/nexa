@@ -10,6 +10,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api, auth } = vi.hoisted(() => ({
   api: { get: vi.fn() },
@@ -99,6 +100,7 @@ function renderTeamPerf(ui: ReactElement): void {
 beforeEach(() => {
   api.get.mockReset();
   auth.scopes = [];
+  resetLocale();
 });
 
 describe('TeamAiPerformance', () => {
@@ -167,5 +169,23 @@ describe('TeamAiPerformance', () => {
     renderTeamPerf(<TeamAiPerformance />);
 
     expect(await screen.findByText(/historical figures/i)).toBeInTheDocument();
+  });
+
+  it('paints the section in Turkish when that is the active locale', async () => {
+    auth.scopes = ['reports_read'];
+    mockApi();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <TeamAiPerformance />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Nova')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'AI temsilci performansı' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Performansı aç' })).toHaveLength(2);
   });
 });

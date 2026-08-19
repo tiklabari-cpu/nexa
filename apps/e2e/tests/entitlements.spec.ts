@@ -153,9 +153,17 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
 
       await branding.uncheck();
       await save.click();
-      // The refusal reaches the person who asked, naming the plan — which is
-      // what lets this be an upsell rather than an unexplained failure.
-      await expect(appearance.getByRole('alert')).toContainText(/not included in the growth plan/i);
+      // The refusal reaches the person who asked, naming the tier that would
+      // grant it — which is what lets this be an upsell rather than an
+      // unexplained failure. It is the console's own sentence rather than the
+      // server's: ADR-06 keeps the API's English prose off the screen, so the
+      // screen recognises `details.entitlement` and says this in the agent's
+      // language (`settings.widgetCustomization.entitlementError`). Between
+      // I18N-j and I18N-l it said "That is not allowed here." instead — the
+      // upsell lost, and only this test could see it.
+      await expect(appearance.getByRole('alert')).toContainText(
+        /Removing the Nexa badge is an Enterprise feature/i,
+      );
 
       // Nothing was half-applied: the visitor's widget is still branded.
       await openWidget(page, organizationId);

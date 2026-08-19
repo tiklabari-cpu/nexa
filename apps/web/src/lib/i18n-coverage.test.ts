@@ -123,14 +123,47 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/SsoConnection.tsx',
   'src/features/settings/TicketRules.tsx',
   'src/features/settings/WidgetCustomization.tsx',
+  'src/features/team/CopilotKnowledge.tsx',
+  'src/features/team/TeamAiPerformance.tsx',
+  'src/components/ui/Banner.tsx',
+  'src/components/ui/Panel.tsx',
+];
+
+/**
+ * Screen files that carry no user-facing text of their own (I18N-l, tm 133.12).
+ *
+ * The budget below could only ever reach zero if every screen file were either
+ * translated or accounted for, and nine of them cannot be translated because
+ * there is nothing in them to translate: the design-system primitives take every
+ * word they render from a caller (`<EmptyState title={t(…)} />`). Registering
+ * them as translated would be a lie the file above already refuses — a
+ * registered file must call `t()` — so they are claimed here instead, and the
+ * claim is checked: a primitive that grows a sentence, or hard-codes the default
+ * of a label-shaped prop the way `Banner` and `Panel` did until this task, fails
+ * the tests below and has to move up into `TRANSLATED_FILES`.
+ */
+const TEXT_FREE_FILES: readonly string[] = [
+  'src/components/EmptyState.tsx',
+  'src/components/Page.tsx',
+  'src/components/Skeleton.tsx',
+  'src/components/StatusDot.tsx',
+  'src/components/VirtualList.tsx',
+  'src/components/ui/Dropdown.tsx',
+  'src/components/ui/Modal.tsx',
 ];
 
 /**
  * How many screen files are still untranslated. Measured, not guessed — lower it
  * when you translate files, and never raise it. A new untranslated screen fails
  * here, which is the point: the debt has to be paid down, not added to.
+ *
+ * It reached **zero** in I18N-l (tm 133.12), which turns the ratchet into the
+ * wall it could not be while thirteen tasks were still landing: from here every
+ * screen file is either translated or proven text-free, and a new untranslated
+ * one is a failure on the commit that adds it rather than a number someone has
+ * to notice drifting.
  */
-const REMAINING_BUDGET = 11;
+const REMAINING_BUDGET = 0;
 
 /** Every `.tsx` under the screen roots that is not a test, repo-relative and posix-slashed. */
 function screenFiles(): string[] {
@@ -242,6 +275,20 @@ function rawServerMessages(original: string): number[] {
 
 const SCREENS = screenFiles();
 const REGISTERED = new Set(TRANSLATED_FILES);
+const TEXT_FREE = new Set(TEXT_FREE_FILES);
+
+/**
+ * A string literal handed to an attribute a user can read or hear.
+ *
+ * `className` and friends are deliberately not in the list: the point is text
+ * that reaches a person, not every literal in the file.
+ */
+const LITERAL_LABEL_ATTRIBUTE =
+  /\b(?:aria-label|aria-description|title|placeholder|alt|label|caption)\s*=\s*(?:["'`]|\{\s*["'`])/g;
+
+/** A label-shaped prop given a hard-coded default in a destructuring pattern. */
+const LITERAL_LABEL_DEFAULT =
+  /\b\w*(?:Label|Title|Text|Description|Placeholder|Caption)\s*=\s*["'`]/g;
 
 function keysOf(locale: 'en' | 'tr'): string[] {
   return NAMESPACES.flatMap((namespace) => Object.keys(NAMESPACED_CATALOGUES[locale][namespace]));
@@ -339,14 +386,50 @@ describe('screen coverage', () => {
     ).toEqual([]);
   });
 
+  it('names no file twice and no file that is gone', () => {
+    const claimed = [...TRANSLATED_FILES, ...TEXT_FREE_FILES];
+    const duplicated = claimed.filter((file, index) => claimed.indexOf(file) !== index);
+    expect(duplicated, 'claimed both translated and text-free').toEqual([]);
+
+    const onDisk = new Set(SCREENS);
+    expect(
+      claimed.filter((file) => !onDisk.has(file)).sort(),
+      'claimed but no longer a screen file — delete the entry',
+    ).toEqual([]);
+  });
+
+  it('lets no user-facing text into a file claimed text-free', () => {
+    const offenders: string[] = [];
+    for (const file of TEXT_FREE_FILES) {
+      const original = read(file);
+      const source = stripComments(original);
+      const waived = waivedLines(original);
+
+      for (const hit of englishProse(original)) {
+        offenders.push(`${file}:${hit.line} — prose: ${hit.text}`);
+      }
+      for (const pattern of [LITERAL_LABEL_ATTRIBUTE, LITERAL_LABEL_DEFAULT]) {
+        for (const match of source.matchAll(pattern)) {
+          const line = lineOf(source, match.index);
+          if (!waived.has(line)) offenders.push(`${file}:${line} — literal: ${match[0].trim()}`);
+        }
+      }
+    }
+    expect(
+      offenders,
+      'a primitive claimed text-free now ships words of its own — translate it and register it',
+    ).toEqual([]);
+  });
+
   it('reports how much of the console is still untranslated', () => {
-    const remaining = SCREENS.filter((file) => !REGISTERED.has(file));
+    const remaining = SCREENS.filter((file) => !REGISTERED.has(file) && !TEXT_FREE.has(file));
 
     // The one line this suite prints. The number is the point of the whole file:
     // "the console is translated" is a claim, and this is its measurement.
     console.warn(
       `[i18n] ${remaining.length}/${SCREENS.length} console files not translated yet ` +
-        `(budget ${REMAINING_BUDGET}); ${TRANSLATED_FILES.length} registered.`,
+        `(budget ${REMAINING_BUDGET}); ${TRANSLATED_FILES.length} registered, ` +
+        `${TEXT_FREE_FILES.length} text-free.`,
     );
 
     expect(

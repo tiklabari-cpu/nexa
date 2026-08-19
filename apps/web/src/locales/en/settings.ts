@@ -296,6 +296,8 @@ export const settings: Messages = {
   'settings.widgetCustomization.poweredByLabel': 'Show “Powered by Nexa”',
   'settings.widgetCustomization.poweredByHint':
     'A small credit in the widget footer. Turn it off to remove it.',
+  'settings.widgetCustomization.entitlementError':
+    'Removing the Nexa badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.saveButton': 'Save appearance',
   'settings.widgetCustomization.resetButton': 'Reset',
   'settings.widgetCustomization.previewLabel': 'Preview',

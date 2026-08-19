@@ -23,7 +23,7 @@ import {
   type WidgetTheme,
 } from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useBrand } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 
@@ -178,7 +178,15 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                   )}
                   {save.isError && (
                     <p role="alert" className="text-2xs text-danger">
-                      {t(errorMessageKey(save.error))}
+                      {/* The plan gate answers `not_allowed` with
+                          `details.entitlement` (api `entitlementDenied`), and ADR-06's
+                          generic sentence for that type — "That is not allowed here." —
+                          turns an upsell into an unexplained refusal. Named here the way
+                          Sandbox.tsx and SlaPolicy.tsx already name theirs. */}
+                      {save.error instanceof ApiClientError &&
+                      save.error.details?.['entitlement'] === 'white_label'
+                        ? t('settings.widgetCustomization.entitlementError')
+                        : t(errorMessageKey(save.error))}
                     </p>
                   )}
                 </div>

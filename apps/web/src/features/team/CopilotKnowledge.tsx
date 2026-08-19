@@ -16,6 +16,7 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 interface CopilotSource {
   id: string;
@@ -33,9 +34,9 @@ interface CopilotSource {
  * Copilot's base never re-treads that boundary.
  */
 const SOURCE_TYPES = [
-  { value: 'article', label: 'Article' },
-  { value: 'faq', label: 'FAQ' },
-  { value: 'file', label: 'File' },
+  { value: 'article', labelKey: 'team.copilot.type.article' },
+  { value: 'faq', labelKey: 'team.copilot.type.faq' },
+  { value: 'file', labelKey: 'team.copilot.type.file' },
 ] as const;
 
 const STATUS_TONE: Record<string, StatusTone> = {
@@ -45,6 +46,7 @@ const STATUS_TONE: Record<string, StatusTone> = {
 };
 
 export function CopilotKnowledge(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const client = useQueryClient();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
@@ -83,14 +85,11 @@ export function CopilotKnowledge(): ReactElement {
   // say so plainly rather than render an empty base as if it were curated.
   if (!canRead) {
     return (
-      <Section
-        title="Copilot knowledge"
-        description="What Copilot may quote when it assists an agent (FR-MOD-12.2)."
-      >
+      <Section title={t('team.copilot.title')} description={t('team.copilot.shortDescription')}>
         <Card>
           <EmptyState
-            title="No access to Copilot knowledge"
-            description="Managing the Copilot knowledge base needs the AI agent permission. Ask an owner to grant it."
+            title={t('team.copilot.noAccess.title')}
+            description={t('team.copilot.noAccess.description')}
           />
         </Card>
       </Section>
@@ -103,35 +102,28 @@ export function CopilotKnowledge(): ReactElement {
   const canAdd = canEdit && trimmedName.length > 0 && trimmedContent.length > 0 && !add.isPending;
 
   return (
-    <Section
-      title="Copilot knowledge"
-      description="What Copilot may quote when it assists an agent. Kept apart from the customer-facing AI agent's knowledge, and never shown to a customer (FR-MOD-12.2)."
-    >
+    <Section title={t('team.copilot.title')} description={t('team.copilot.description')}>
       <Card>
         {sources.error ? (
-          <ErrorNotice message="Could not load the Copilot knowledge base. Check that the API is reachable." />
+          <ErrorNotice message={t('team.copilot.loadError')} />
         ) : sources.isPending ? (
           <ListSkeleton rows={2} />
         ) : items.length === 0 ? (
           <EmptyState
-            title="No Copilot sources yet"
-            description={
-              canEdit
-                ? 'Add an article or FAQ below so Copilot can draw on it while assisting.'
-                : 'An admin has not added any Copilot knowledge yet.'
-            }
+            title={t('team.copilot.empty.title')}
+            description={t(canEdit ? 'team.copilot.empty.canEdit' : 'team.copilot.empty.readOnly')}
           />
         ) : (
           <table className="w-full text-sm">
-            <caption className="sr-only">Copilot knowledge sources</caption>
+            <caption className="sr-only">{t('team.copilot.table.caption')}</caption>
             <thead>
               <tr className="border-b border-border text-left">
-                <Th>Name</Th>
-                <Th>Type</Th>
-                <Th>Status</Th>
-                <Th align="right">Chunks</Th>
-                <Th>Updated</Th>
-                {canEdit && <Th align="right">Manage</Th>}
+                <Th>{t('team.page.table.name')}</Th>
+                <Th>{t('team.copilot.table.type')}</Th>
+                <Th>{t('team.page.botTable.status')}</Th>
+                <Th align="right">{t('team.copilot.table.chunks')}</Th>
+                <Th>{t('team.copilot.table.updated')}</Th>
+                {canEdit && <Th align="right">{t('team.page.table.manage')}</Th>}
               </tr>
             </thead>
             <tbody>
@@ -159,7 +151,7 @@ export function CopilotKnowledge(): ReactElement {
                         disabled={remove.isPending}
                         className="text-xs text-danger underline disabled:opacity-40"
                       >
-                        Delete
+                        {t('team.copilot.deleteButton')}
                       </button>
                     </td>
                   )}
@@ -178,10 +170,10 @@ export function CopilotKnowledge(): ReactElement {
               add.mutate({ name: trimmedName, type, content: trimmedContent });
             }}
           >
-            <h3 className="mb-3 text-sm font-medium">Add a source</h3>
+            <h3 className="mb-3 text-sm font-medium">{t('team.copilot.add.title')}</h3>
             {add.isError && (
               <p role="alert" className="mb-3 text-sm text-danger">
-                Could not add that source. Check the name and content and try again.
+                {t('team.copilot.add.error')}
               </p>
             )}
 
@@ -191,7 +183,7 @@ export function CopilotKnowledge(): ReactElement {
                   htmlFor="copilot-source-name"
                   className="mb-1 block text-2xs font-medium text-content-secondary"
                 >
-                  Name
+                  {t('team.page.table.name')}
                 </label>
                 <input
                   id="copilot-source-name"
@@ -205,7 +197,7 @@ export function CopilotKnowledge(): ReactElement {
                   htmlFor="copilot-source-type"
                   className="mb-1 block text-2xs font-medium text-content-secondary"
                 >
-                  Type
+                  {t('team.copilot.table.type')}
                 </label>
                 <select
                   id="copilot-source-type"
@@ -215,7 +207,7 @@ export function CopilotKnowledge(): ReactElement {
                 >
                   {SOURCE_TYPES.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {t(option.labelKey)}
                     </option>
                   ))}
                 </select>
@@ -226,7 +218,7 @@ export function CopilotKnowledge(): ReactElement {
               htmlFor="copilot-source-content"
               className="mb-1 mt-3 block text-2xs font-medium text-content-secondary"
             >
-              Content
+              {t('team.copilot.add.contentLabel')}
             </label>
             <textarea
               id="copilot-source-content"
@@ -242,7 +234,7 @@ export function CopilotKnowledge(): ReactElement {
                 disabled={!canAdd}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
               >
-                {add.isPending ? 'Adding…' : 'Add source'}
+                {add.isPending ? t('team.copilot.add.submitting') : t('team.copilot.add.submit')}
               </button>
             </div>
           </form>

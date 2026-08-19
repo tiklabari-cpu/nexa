@@ -18,10 +18,12 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { AiPerformance } from '../playbook/AiPerformance.js';
 import type { AiAgent } from '../playbook/types.js';
 
 export function TeamAiPerformance(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const canViewReports = scopes.includes('reports_read');
@@ -38,10 +40,7 @@ export function TeamAiPerformance(): ReactElement {
   const anyActive = items.some((agent) => agent.active);
 
   return (
-    <Section
-      title="AI agent performance"
-      description="How the AI is handling conversations, and the agents on this workspace. Open one to manage its skills, knowledge and profile."
-    >
+    <Section title={t('team.ai.title')} description={t('team.ai.description')}>
       <div className="flex flex-col gap-3">
         {/* Combined performance — the same cards, honesties and permission gate as
             the Playbook's Performance tab, reused rather than reimplemented. */}
@@ -49,23 +48,23 @@ export function TeamAiPerformance(): ReactElement {
 
         <Card>
           {agents.error ? (
-            <ErrorNotice message="Could not load the AI agents. Check that the API is reachable." />
+            <ErrorNotice message={t('team.ai.loadError')} />
           ) : agents.isPending ? (
             <ListSkeleton rows={2} />
           ) : items.length === 0 ? (
             <EmptyState
-              title="No AI agents yet"
-              description="Create an AI agent in the Playbook to answer common questions automatically."
+              title={t('team.ai.empty.title')}
+              description={t('team.ai.empty.description')}
             />
           ) : (
             <table className="w-full text-sm">
-              <caption className="sr-only">AI agents on this licence</caption>
+              <caption className="sr-only">{t('team.ai.table.caption')}</caption>
               <thead>
                 <tr className="border-b border-border text-left">
-                  <Th>Name</Th>
-                  <Th>Availability</Th>
-                  <Th align="right">Skills</Th>
-                  <Th align="right">Manage</Th>
+                  <Th>{t('team.page.table.name')}</Th>
+                  <Th>{t('team.page.table.availability')}</Th>
+                  <Th align="right">{t('team.page.table.skills')}</Th>
+                  <Th align="right">{t('team.page.table.manage')}</Th>
                 </tr>
               </thead>
               <tbody>
@@ -75,7 +74,7 @@ export function TeamAiPerformance(): ReactElement {
                     <td className="px-4 py-2.5">
                       <StatusDot
                         tone={agent.active ? 'success' : 'neutral'}
-                        label={agent.active ? 'On' : 'Off'}
+                        label={agent.active ? t('team.status.on') : t('team.status.off')}
                       />
                     </td>
                     <td className="tabular px-4 py-2.5 text-right text-content-secondary">
@@ -83,7 +82,7 @@ export function TeamAiPerformance(): ReactElement {
                     </td>
                     <td className="px-4 py-2.5 text-right">
                       <Link to="/app/playbook" className="text-xs text-content-brand underline">
-                        Open performance
+                        {t('team.ai.openPerformance')}
                       </Link>
                     </td>
                   </tr>

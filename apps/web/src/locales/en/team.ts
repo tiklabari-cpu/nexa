@@ -175,4 +175,42 @@ export const team: Messages = {
   'team.notifications.email.label': 'Email notifications',
   'team.notifications.email.hint':
     'Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed. Not affected by the switch above — email is the fallback for when you are away.',
+  // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
+  'team.ai.title': 'AI agent performance',
+  'team.ai.description':
+    'How the AI is handling conversations, and the agents on this workspace. Open one to manage its skills, knowledge and profile.',
+  'team.ai.loadError': 'Could not load the AI agents. Check that the API is reachable.',
+  'team.ai.empty.title': 'No AI agents yet',
+  'team.ai.empty.description':
+    'Create an AI agent in the Playbook to answer common questions automatically.',
+  'team.ai.table.caption': 'AI agents on this licence',
+  'team.ai.openPerformance': 'Open performance',
+
+  // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
+  'team.copilot.title': 'Copilot knowledge',
+  'team.copilot.description':
+    "What Copilot may quote when it assists an agent. Kept apart from the customer-facing AI agent's knowledge, and never shown to a customer (FR-MOD-12.2).",
+  'team.copilot.shortDescription': 'What Copilot may quote when it assists an agent (FR-MOD-12.2).',
+  'team.copilot.noAccess.title': 'No access to Copilot knowledge',
+  'team.copilot.noAccess.description':
+    'Managing the Copilot knowledge base needs the AI agent permission. Ask an owner to grant it.',
+  'team.copilot.loadError':
+    'Could not load the Copilot knowledge base. Check that the API is reachable.',
+  'team.copilot.empty.title': 'No Copilot sources yet',
+  'team.copilot.empty.canEdit':
+    'Add an article or FAQ below so Copilot can draw on it while assisting.',
+  'team.copilot.empty.readOnly': 'An admin has not added any Copilot knowledge yet.',
+  'team.copilot.table.caption': 'Copilot knowledge sources',
+  'team.copilot.table.type': 'Type',
+  'team.copilot.table.chunks': 'Chunks',
+  'team.copilot.table.updated': 'Updated',
+  'team.copilot.type.article': 'Article',
+  'team.copilot.type.faq': 'FAQ',
+  'team.copilot.type.file': 'File',
+  'team.copilot.deleteButton': 'Delete',
+  'team.copilot.add.title': 'Add a source',
+  'team.copilot.add.error': 'Could not add that source. Check the name and content and try again.',
+  'team.copilot.add.contentLabel': 'Content',
+  'team.copilot.add.submit': 'Add source',
+  'team.copilot.add.submitting': 'Adding…',
 };

@@ -168,4 +168,43 @@ export const team: Messages = {
   'team.notifications.email.label': 'E-posta bildirimleri',
   'team.notifications.email.hint':
     'Size atanmış bir sohbete bir ziyaretçi yazdığında, Nexa kapalı olsa bile e-posta gönderilir. Yukarıdaki anahtardan etkilenmez — e-posta uzakta olduğunuzda yedek kanaldır.',
+  // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
+  'team.ai.title': 'AI temsilci performansı',
+  'team.ai.description':
+    'AI’ın sohbetleri nasıl yürüttüğü ve bu çalışma alanındaki temsilciler. Yeteneklerini, bilgisini ve profilini yönetmek için birini açın.',
+  'team.ai.loadError': 'AI temsilciler yüklenemedi. API’ye erişilebildiğini kontrol edin.',
+  'team.ai.empty.title': 'Henüz AI temsilci yok',
+  'team.ai.empty.description':
+    'Sık sorulan soruları otomatik yanıtlaması için Playbook’ta bir AI temsilci oluşturun.',
+  'team.ai.table.caption': 'Bu lisanstaki AI temsilciler',
+  'team.ai.openPerformance': 'Performansı aç',
+
+  // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
+  'team.copilot.title': 'Copilot bilgisi',
+  'team.copilot.description':
+    'Copilot bir temsilciye yardım ederken neleri aktarabileceği. Müşteriye bakan AI temsilcinin bilgisinden ayrı tutulur ve hiçbir zaman bir müşteriye gösterilmez (FR-MOD-12.2).',
+  'team.copilot.shortDescription':
+    'Copilot bir temsilciye yardım ederken neleri aktarabileceği (FR-MOD-12.2).',
+  'team.copilot.noAccess.title': 'Copilot bilgisine erişim yok',
+  'team.copilot.noAccess.description':
+    'Copilot bilgi tabanını yönetmek AI temsilci iznini gerektirir. Bir sahipten vermesini isteyin.',
+  'team.copilot.loadError':
+    'Copilot bilgi tabanı yüklenemedi. API’ye erişilebildiğini kontrol edin.',
+  'team.copilot.empty.title': 'Henüz Copilot kaynağı yok',
+  'team.copilot.empty.canEdit':
+    'Copilot yardım ederken yararlanabilsin diye aşağıya bir makale veya SSS ekleyin.',
+  'team.copilot.empty.readOnly': 'Bir yönetici henüz Copilot bilgisi eklemedi.',
+  'team.copilot.table.caption': 'Copilot bilgi kaynakları',
+  'team.copilot.table.type': 'Tür',
+  'team.copilot.table.chunks': 'Parça',
+  'team.copilot.table.updated': 'Güncellendi',
+  'team.copilot.type.article': 'Makale',
+  'team.copilot.type.faq': 'SSS',
+  'team.copilot.type.file': 'Dosya',
+  'team.copilot.deleteButton': 'Sil',
+  'team.copilot.add.title': 'Kaynak ekle',
+  'team.copilot.add.error': 'Bu kaynak eklenemedi. Adı ve içeriği kontrol edip tekrar deneyin.',
+  'team.copilot.add.contentLabel': 'İçerik',
+  'team.copilot.add.submit': 'Kaynak ekle',
+  'team.copilot.add.submitting': 'Ekleniyor…',
 };

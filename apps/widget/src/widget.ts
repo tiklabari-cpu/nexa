@@ -10,7 +10,12 @@
  */
 import type { PreChatFormField, WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
-import { createTranslator, type WidgetTranslate } from './i18n.js';
+import {
+  createTranslator,
+  isRtlLocale,
+  resolveWidgetLocale,
+  type WidgetTranslate,
+} from './i18n.js';
 
 const LAUNCHER_SIZE = 84;
 const PANEL = { width: 380, height: 620 } as const;
@@ -96,7 +101,14 @@ export function mount(doc: Document = document, win: Window = window): void {
   // The visitor's locale is fixed for the page load — the embedding site chose it
   // via `data-language` and the loader forwarded it. Bind one translator now and
   // thread it through every string the widget writes to the DOM (I18N1).
+  const locale = resolveWidgetLocale(config.language);
   const t = createTranslator(config.language);
+  // NFR-I18N1: direction is as fixed as the locale it comes from. Set once on
+  // the document element so the whole panel — laid out with logical CSS
+  // (`inset-inline-*`, flexbox `flex-start`/`flex-end`), not `left`/`right` —
+  // mirrors correctly for Arabic instead of staying pinned to its LTR corner.
+  doc.documentElement.lang = locale;
+  doc.documentElement.dir = isRtlLocale(locale) ? 'rtl' : 'ltr';
   const api = new WidgetApi(config.apiBaseUrl, config.organizationId, config.hostOrigin);
 
   const state: State = {
@@ -1260,7 +1272,9 @@ body {
   color: var(--nx-text);
 }
 .nx-launcher {
-  position: fixed; right: 10px; bottom: 10px;
+  /* Logical, not right/bottom (NFR-I18N1): mirrors to the visual left under
+     dir="rtl" instead of staying pinned to the physical right for Arabic. */
+  position: fixed; inset-inline-end: 10px; inset-block-end: 10px;
   width: 64px; height: 64px; border: 0; border-radius: 9999px;
   background: var(--nx-brand); color: #fff;
   font: inherit; font-weight: 600; cursor: pointer;
@@ -1339,7 +1353,8 @@ body {
 .nx-attachment-file { display: inline-block; margin-top: 4px; color: inherit; text-decoration: underline; word-break: break-all; }
 .nx-row--customer .nx-attachment-file { color: #fff; }
 .nx-greeting {
-  position: fixed; right: 10px; bottom: 82px; width: 300px;
+  /* Logical, same reasoning as .nx-launcher above (NFR-I18N1). */
+  position: fixed; inset-inline-end: 10px; inset-block-end: 82px; width: 300px;
   background: var(--nx-surface); color: var(--nx-text);
   border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
   box-shadow: 0 8px 24px rgb(16 24 40 / .18);
@@ -1377,9 +1392,11 @@ body {
 .nx-powered-link { color: inherit; text-decoration: none; }
 .nx-powered-link:hover { text-decoration: underline; }
 /* Left-corner placement (FR-MOD-11.7): mirror the launcher and greeting to the
-   edge the loader anchored the iframe to. */
-.nx-left .nx-launcher { left: 10px; right: auto; }
-.nx-left .nx-greeting { left: 10px; right: auto; }
+   edge the loader anchored the iframe to. Logical here too, so a workspace's
+   explicit corner choice and the visitor's reading direction compose instead
+   of one silently overriding the other. */
+.nx-left .nx-launcher { inset-inline-start: 10px; inset-inline-end: auto; }
+.nx-left .nx-greeting { inset-inline-start: 10px; inset-inline-end: auto; }
 /* Mobile fullscreen: on a phone the loader gives the frame the whole viewport,
    so the panel drops its floating-card inset and fills it edge-to-edge. */
 @media (max-width: 480px) {

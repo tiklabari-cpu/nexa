@@ -9,9 +9,10 @@
  */
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TemplateGallery } from './TemplateGallery.js';
 import { SKILL_TEMPLATES } from './templates.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 describe('TemplateGallery', () => {
   it('renders nothing while closed', () => {
@@ -150,5 +151,21 @@ describe('TemplateGallery', () => {
     const backdrop = dialog.parentElement as HTMLElement;
     await user.click(backdrop);
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TemplateGallery localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the gallery — including a translated template card — in Turkish', () => {
+    renderWithLocale(
+      <TemplateGallery open onClose={() => {}} onUse={() => {}} pendingId={null} />,
+      'tr',
+    );
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByText('Şablonlara göz at')).toBeInTheDocument();
+    expect(within(dialog).getByText('Siparişim nerede?')).toBeInTheDocument();
   });
 });

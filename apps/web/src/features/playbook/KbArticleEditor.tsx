@@ -20,10 +20,11 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Banner, Modal } from '../../components/ui/index.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import type { KbArticle, KbCategory } from './types.js';
 import { deriveKbSlug, kbSlugError } from './kb-slug.js';
 
@@ -69,6 +70,20 @@ function buildPublicKbUrl(workspaceSlug: string, articleSlug: string): string {
   return `${PUBLIC_KB_BASE}/public/kb/${workspaceSlug}/${articleSlug}`;
 }
 
+/**
+ * `kb-slug.ts`'s `kbSlugError` stays untouched (its own unit test pins the
+ * three exact English messages) — this translates by matching which of its
+ * three fixed branches fired, rather than threading a translate function
+ * into a tested, non-React module.
+ */
+function kbSlugErrorText(slug: string, t: TFunction): string | null {
+  const message = kbSlugError(slug);
+  if (message === null) return null;
+  if (message.includes('permanent address')) return t('playbook.kbEditor.slugRequired');
+  if (message.includes('lower-case letters')) return t('playbook.kbEditor.slugPattern');
+  return t('playbook.kbEditor.slugReserved', { slug: slug.trim() });
+}
+
 interface KbSettings {
   enabled: boolean;
   public_slug: string | null;
@@ -91,6 +106,7 @@ export function KbArticleEditor({
   /** Called after a content save, a category creation, or a publish toggle. */
   onSaved: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const isNew = article === null;
 
@@ -122,13 +138,13 @@ export function KbArticleEditor({
       category: article?.category_id ?? '',
     },
     validators: {
-      title: required('Give the article a title.'),
-      slug: kbSlugError,
-      body: required('Write the article body — it cannot be empty.'),
+      title: required(t('playbook.kbEditor.titleRequired')),
+      slug: (value) => kbSlugErrorText(value, t),
+      body: required(t('playbook.kbEditor.bodyRequired')),
     },
     onSubmit: async (values, { setFieldError, setSubmitError }) => {
       if (!isNew && !current) {
-        setSubmitError('Something went wrong — reopen this article and try again.');
+        setSubmitError(t('playbook.kbEditor.reopenError'));
         return;
       }
 
@@ -136,16 +152,14 @@ export function KbArticleEditor({
       if (values.category === NEW_CATEGORY_VALUE) {
         const name = (newCategoryName ?? '').trim();
         if (!name) {
-          setSubmitError('Name the new category, or pick an existing one.');
+          setSubmitError(t('playbook.kbEditor.nameCategoryError'));
           return;
         }
         try {
           const created = await api.post<KbCategory>('/kb-categories', { name });
           categoryId = created.id;
         } catch (failure) {
-          setSubmitError(
-            failure instanceof ApiClientError ? failure.message : 'Could not create that category.',
-          );
+          setSubmitError(t(errorMessageKey(failure)));
           return;
         }
       } else {
@@ -164,7 +178,8 @@ export function KbArticleEditor({
 
       try {
         const saved = isNew
-          ? await api.post<KbArticle>('/kb-articles', payload)
+          ? // i18n-ignore: TS generic call signature, not prose (mirrors PublicPages.tsx's trustDomain() waiver).
+            await api.post<KbArticle>('/kb-articles', payload)
           : await api.patch<KbArticle>(`/kb-articles/${current!.id}`, payload);
         setCurrent(saved);
         setSlugEdited(true);
@@ -172,15 +187,19 @@ export function KbArticleEditor({
         onSaved();
       } catch (failure) {
         if (failure instanceof ApiClientError && failure.type === 'validation') {
+          // i18n-ignore: read only to route the error to its field, not shown.
           const field = fieldFromMessage(failure.message);
           if (field) {
+            // Server names the exact colliding value (e.g. the slug already
+            // in use); KbArticleEditor.test.tsx's "backend slug collision"
+            // case pins this text, and errorMessageKey()'s generic bucket
+            // would lose which value collided.
+            // i18n-ignore: see the note above.
             setFieldError(field, failure.message);
             return;
           }
         }
-        setSubmitError(
-          failure instanceof ApiClientError ? failure.message : 'Could not save the article.',
-        );
+        setSubmitError(t(errorMessageKey(failure)));
       }
     },
   });
@@ -200,7 +219,7 @@ export function KbArticleEditor({
   // silently throw it away (FR-EK-A.2 / T5-a).
   const close = useCloseGuard({
     isDirty: form.isDirty,
-    message: 'Discard your unsaved changes?',
+    message: t('playbook.kbEditor.discardConfirm'),
     onClose,
   });
 
@@ -228,15 +247,14 @@ export function KbArticleEditor({
   return (
     <Modal
       onClose={close}
-      title={isNew ? 'New article' : 'Edit article'}
+      title={isNew ? t('playbook.kbEditor.newTitle') : t('playbook.kbEditor.editTitle')}
       align="top"
       className="max-w-2xl"
     >
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
         {kbDisabled && (
-          <Banner tone="warning" title="KB disabled">
-            KB kapalı — link çalışmaz. Turn it on in KB settings before sharing an article's
-            address.
+          <Banner tone="warning" title={t('playbook.kbEditor.disabledBannerTitle')}>
+            {t('playbook.kbEditor.disabledBannerBody')}
           </Banner>
         )}
 
@@ -255,7 +273,7 @@ export function KbArticleEditor({
             htmlFor="kb-title"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Title
+            {t('playbook.kbEditor.title')}
           </label>
           <input
             id="kb-title"
@@ -280,7 +298,7 @@ export function KbArticleEditor({
             htmlFor="kb-slug"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Slug
+            {t('playbook.kbEditor.slug')}
           </label>
           <input
             id="kb-slug"
@@ -305,7 +323,7 @@ export function KbArticleEditor({
             htmlFor="kb-category"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Category
+            {t('playbook.kbEditor.category')}
           </label>
           <select
             id="kb-category"
@@ -314,18 +332,20 @@ export function KbArticleEditor({
             onChange={(event) => form.setValue('category', event.target.value)}
             className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
           >
-            <option value="">No category</option>
+            <option value="">{t('playbook.kbEditor.noCategory')}</option>
             {categories.map((category) => (
               <option key={category.id} value={category.id}>
                 {category.name}
               </option>
             ))}
-            <option value={NEW_CATEGORY_VALUE}>+ New category…</option>
+            <option value={NEW_CATEGORY_VALUE}>{t('playbook.kbEditor.newCategoryOption')}</option>
           </select>
 
           {form.values.category === NEW_CATEGORY_VALUE && (
             <label htmlFor="kb-new-category" className="mt-1 flex flex-col gap-1">
-              <span className="text-2xs text-content-tertiary">New category name</span>
+              <span className="text-2xs text-content-tertiary">
+                {t('playbook.kbEditor.newCategoryLabel')}
+              </span>
               <input
                 id="kb-new-category"
                 value={newCategoryName ?? ''}
@@ -342,7 +362,7 @@ export function KbArticleEditor({
             htmlFor="kb-body"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Body
+            {t('playbook.kbEditor.body')}
           </label>
           <textarea
             id="kb-body"
@@ -356,8 +376,7 @@ export function KbArticleEditor({
             className="resize-y rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none disabled:opacity-60"
           />
           <p id="kb-body-help" className="text-2xs text-content-tertiary">
-            Supports ## and ### headings, - bullet lists, **bold**, `code`, and [text](url) links.
-            Paragraphs are separated by a blank line. No raw HTML.
+            {t('playbook.kbEditor.bodyHelp')}
           </p>
           <FieldError id="kb-body-error" message={bodyError} />
         </div>
@@ -367,7 +386,7 @@ export function KbArticleEditor({
             htmlFor="kb-excerpt"
             className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
           >
-            Excerpt
+            {t('playbook.kbEditor.excerpt')}
           </label>
           <textarea
             id="kb-excerpt"
@@ -387,10 +406,10 @@ export function KbArticleEditor({
               htmlFor="kb-seo-title"
               className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
             >
-              SEO title
+              {t('playbook.kbEditor.seoTitle')}
             </label>
             <span className="text-2xs text-content-tertiary">
-              {form.values.seo_title.length}/60 recommended
+              {t('playbook.kbEditor.seoTitleHint', { count: form.values.seo_title.length })}
             </span>
           </div>
           <input
@@ -408,10 +427,12 @@ export function KbArticleEditor({
               htmlFor="kb-seo-description"
               className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
             >
-              SEO description
+              {t('playbook.kbEditor.seoDescription')}
             </label>
             <span className="text-2xs text-content-tertiary">
-              {form.values.seo_description.length}/155 recommended
+              {t('playbook.kbEditor.seoDescriptionHint', {
+                count: form.values.seo_description.length,
+              })}
             </span>
           </div>
           <textarea
@@ -428,7 +449,11 @@ export function KbArticleEditor({
           <div className="flex items-center gap-3 border-t border-border pt-3">
             <StatusDot
               tone={current.status === 'published' ? 'success' : 'neutral'}
-              label={current.status === 'published' ? 'Published' : 'Draft'}
+              label={
+                current.status === 'published'
+                  ? t('playbook.kbEditor.statusPublished')
+                  : t('playbook.kbEditor.statusDraft')
+              }
             />
             {canEdit && (
               <button
@@ -440,10 +465,10 @@ export function KbArticleEditor({
                 className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
               >
                 {publish.isPending
-                  ? 'Saving…'
+                  ? t('playbook.kbEditor.saving')
                   : current.status === 'published'
-                    ? 'Unpublish'
-                    : 'Publish'}
+                    ? t('playbook.kbEditor.unpublish')
+                    : t('playbook.kbEditor.publish')}
               </button>
             )}
           </div>
@@ -451,7 +476,7 @@ export function KbArticleEditor({
 
         {publish.isError && (
           <p role="alert" className="text-2xs text-danger">
-            Could not change the publish status.
+            {t('playbook.kbEditor.publishError')}
           </p>
         )}
 
@@ -470,7 +495,7 @@ export function KbArticleEditor({
               onClick={copyLink}
               className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
             >
-              {linkCopied ? 'Copied' : 'Copy'}
+              {linkCopied ? t('playbook.kbEditor.copied') : t('playbook.kbEditor.copy')}
             </button>
           </div>
         )}
@@ -481,7 +506,7 @@ export function KbArticleEditor({
             onClick={close}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            {canEdit ? 'Cancel' : 'Close'}
+            {canEdit ? t('playbook.kbEditor.cancel') : t('playbook.kbEditor.close')}
           </button>
           {canEdit && (
             <button
@@ -489,7 +514,11 @@ export function KbArticleEditor({
               disabled={!form.canSubmit}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {form.isSubmitting ? 'Saving…' : isNew ? 'Create article' : 'Save changes'}
+              {form.isSubmitting
+                ? t('playbook.kbEditor.saving')
+                : isNew
+                  ? t('playbook.kbEditor.createArticle')
+                  : t('playbook.kbEditor.saveChanges')}
             </button>
           )}
         </div>

@@ -12,8 +12,9 @@ import { useMutation } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, required } from '../../lib/form.js';
 import type { AiAgent, AnswerLength } from './types.js';
 
@@ -25,13 +26,12 @@ const LANGUAGE_OPTIONS: [string, string][] = [
   ['es', 'Español'],
 ];
 
-const ANSWER_LENGTHS: [AnswerLength, string][] = [
-  ['short', 'Short'],
-  ['medium', 'Medium'],
-  ['long', 'Long'],
-];
-
-const nameValidator = required('Give the assistant a name — the widget shows it to visitors.');
+const ANSWER_LENGTH_LABEL_KEYS: Record<AnswerLength, string> = {
+  short: 'playbook.profile.lengthShort',
+  medium: 'playbook.profile.lengthMedium',
+  long: 'playbook.profile.lengthLong',
+};
+const ANSWER_LENGTHS: AnswerLength[] = ['short', 'medium', 'long'];
 
 export function ProfileForm({
   agent,
@@ -42,6 +42,7 @@ export function ProfileForm({
   canEdit: boolean;
   onSaved: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
 
   const [name, setName] = useState(agent.name);
@@ -63,7 +64,7 @@ export function ProfileForm({
     onSuccess: onSaved,
   });
 
-  const nameError = nameValidator(name);
+  const nameError = required(t('playbook.profile.nameRequired'))(name);
   // Dirty is measured against the live agent prop, so a successful save (which
   // refetches the agent) settles the form back to clean with no manual reset.
   const dirty =
@@ -93,7 +94,7 @@ export function ProfileForm({
         >
           <label htmlFor="persona-name" className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-              Name
+              {t('playbook.profile.name')}
             </span>
             <input
               id="persona-name"
@@ -110,35 +111,35 @@ export function ProfileForm({
 
           <label htmlFor="persona-avatar" className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-              Avatar URL
+              {t('playbook.profile.avatarUrl')}
             </span>
             <input
               id="persona-avatar"
               value={avatarUrl}
               disabled={!canEdit}
               onChange={(event) => setAvatarUrl(event.target.value)}
-              placeholder="https://…"
+              placeholder={t('playbook.profile.avatarPlaceholder')}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
             />
           </label>
 
           <label htmlFor="persona-tone" className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-              Tone
+              {t('playbook.profile.tone')}
             </span>
             <input
               id="persona-tone"
               value={tone}
               disabled={!canEdit}
               onChange={(event) => setTone(event.target.value)}
-              placeholder="friendly, professional…"
+              placeholder={t('playbook.profile.tonePlaceholder')}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
             />
           </label>
 
           <fieldset className="flex flex-col gap-1.5" disabled={!canEdit}>
             <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-              Languages
+              {t('playbook.profile.languages')}
             </legend>
             <div className="flex flex-wrap gap-1.5">
               {LANGUAGE_OPTIONS.map(([code, label]) => {
@@ -171,7 +172,7 @@ export function ProfileForm({
               htmlFor="persona-length"
               className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
             >
-              Answer length
+              {t('playbook.profile.answerLength')}
             </label>
             <select
               id="persona-length"
@@ -180,10 +181,10 @@ export function ProfileForm({
               onChange={(event) => setAnswerLength(event.target.value as AnswerLength | '')}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
             >
-              <option value="">No preference</option>
-              {ANSWER_LENGTHS.map(([value, label]) => (
+              <option value="">{t('playbook.profile.noPreference')}</option>
+              {ANSWER_LENGTHS.map((value) => (
                 <option key={value} value={value}>
-                  {label}
+                  {t(ANSWER_LENGTH_LABEL_KEYS[value])}
                 </option>
               ))}
             </select>
@@ -196,11 +197,11 @@ export function ProfileForm({
                 disabled={!canSave}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {save.isPending ? 'Saving…' : 'Save profile'}
+                {save.isPending ? t('playbook.profile.saving') : t('playbook.profile.save')}
               </button>
               {save.isError && (
                 <span role="alert" className="text-2xs text-danger">
-                  {save.error instanceof ApiClientError ? save.error.message : 'Could not save.'}
+                  {t(errorMessageKey(save.error))}
                 </span>
               )}
             </div>
@@ -233,19 +234,20 @@ function PersonaPreview({
   languages: string[];
   answerLength: AnswerLength | '';
 }): ReactElement {
+  const t = useTranslate();
   const trimmed = name.trim();
   const initial = (trimmed || '?').charAt(0).toUpperCase();
   return (
     <Card>
       <div className="p-4">
         <p className="mb-3 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          Preview
+          {t('playbook.profile.previewTitle')}
         </p>
         <div className="flex items-center gap-3 rounded-lg border border-border bg-inset p-3">
           {avatarUrl.trim() ? (
             <img
               src={avatarUrl}
-              alt={trimmed || 'AI assistant'}
+              alt={trimmed || t('playbook.profile.aiAssistant')}
               className="h-10 w-10 rounded-full object-cover"
             />
           ) : (
@@ -257,21 +259,27 @@ function PersonaPreview({
             </span>
           )}
           <div className="min-w-0">
-            <p className="truncate text-sm font-medium">{trimmed || 'Unnamed assistant'}</p>
+            <p className="truncate text-sm font-medium">
+              {trimmed || t('playbook.profile.unnamedAssistant')}
+            </p>
             <p className="text-2xs text-content-tertiary">
-              {tone.trim() ? tone.trim() : 'AI assistant'}
+              {tone.trim() ? tone.trim() : t('playbook.profile.aiAssistant')}
             </p>
           </div>
-          <StatusDot tone="success" label="Online" />
+          <StatusDot tone="success" label={t('playbook.profile.online')} />
         </div>
         <dl className="mt-3 flex flex-col gap-1 text-2xs text-content-secondary">
           <div className="flex justify-between gap-2">
-            <dt className="text-content-tertiary">Languages</dt>
-            <dd>{languages.length > 0 ? languages.join(', ') : 'None yet'}</dd>
+            <dt className="text-content-tertiary">{t('playbook.profile.languages')}</dt>
+            <dd>{languages.length > 0 ? languages.join(', ') : t('playbook.profile.noneYet')}</dd>
           </div>
           <div className="flex justify-between gap-2">
-            <dt className="text-content-tertiary">Answer length</dt>
-            <dd>{answerLength || 'No preference'}</dd>
+            <dt className="text-content-tertiary">{t('playbook.profile.answerLength')}</dt>
+            <dd>
+              {answerLength
+                ? t(ANSWER_LENGTH_LABEL_KEYS[answerLength])
+                : t('playbook.profile.noPreference')}
+            </dd>
           </div>
         </dl>
       </div>

@@ -15,9 +15,10 @@ import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
 import { ProfileForm } from './ProfileForm.js';
@@ -53,24 +54,25 @@ import {
  * from the AI's own `knowledge` (what it answers a customer from).
  */
 type PlaybookView = 'performance' | 'profile' | 'skills' | 'knowledge' | 'kb';
-const VIEW_TABS: { id: PlaybookView; label: string }[] = [
-  { id: 'performance', label: 'Performance' },
-  { id: 'profile', label: 'Profile' },
-  { id: 'skills', label: 'Skills' },
-  { id: 'knowledge', label: 'Knowledge' },
-  { id: 'kb', label: 'Public KB' },
-];
+const VIEW_TABS: readonly PlaybookView[] = ['performance', 'profile', 'skills', 'knowledge', 'kb'];
+const VIEW_TAB_LABEL_KEYS: Record<PlaybookView, string> = {
+  performance: 'playbook.tabs.performance',
+  profile: 'playbook.tabs.profile',
+  skills: 'playbook.tabs.skills',
+  knowledge: 'playbook.tabs.knowledge',
+  kb: 'playbook.tabs.kb',
+};
 
 /**
  * The tabs split the list the way an admin reasons about it: what the AI runs
  * (✦), what a workspace automation runs (⚡), and what is not on yet (Drafts).
  * The glyphs are decorative — the visible word is what a screen reader reads.
  */
-const SKILL_TABS: { id: SkillTab; label: string; glyph?: string }[] = [
-  { id: 'all', label: 'All' },
-  { id: 'ai', label: 'AI', glyph: '✦' },
-  { id: 'workspace', label: 'Workspace', glyph: '⚡' },
-  { id: 'drafts', label: 'Drafts' },
+const SKILL_TABS: { id: SkillTab; labelKey: string; glyph?: string }[] = [
+  { id: 'all', labelKey: 'playbook.skillTabs.all' },
+  { id: 'ai', labelKey: 'playbook.skillTabs.ai', glyph: '✦' },
+  { id: 'workspace', labelKey: 'playbook.skillTabs.workspace', glyph: '⚡' },
+  { id: 'drafts', labelKey: 'playbook.skillTabs.drafts' },
 ];
 
 /**
@@ -78,14 +80,25 @@ const SKILL_TABS: { id: SkillTab; label: string; glyph?: string }[] = [
  * has none. `all` is only ever non-empty here (if there are skills at all, the
  * All tab holds them), so its copy is a never-reached fallback.
  */
-const EMPTY_BY_TAB: Record<SkillTab, string> = {
-  all: 'No skills match.',
-  ai: 'No AI skills are on yet. Turn a skill on to have the agent run it.',
-  workspace: 'No workspace automations yet.',
-  drafts: 'No drafts — every skill here is on.',
+const EMPTY_BY_TAB_KEY: Record<SkillTab, string> = {
+  all: 'playbook.skillsEmpty.all',
+  ai: 'playbook.skillsEmpty.ai',
+  workspace: 'playbook.skillsEmpty.workspace',
+  drafts: 'playbook.skillsEmpty.drafts',
+};
+
+/** Static English labels `skillOwnerOptions` (skill-filter.ts) mints — mapped to
+ * catalog keys here rather than touched at the source, since that file also
+ * carries the dynamic, untranslatable agent names and its own pinned-English
+ * test. */
+const OWNER_LABEL_KEYS: Record<string, string> = {
+  'All owners': 'playbook.skills.filterOwnerAll',
+  Unassigned: 'playbook.skills.filterOwnerUnassigned',
+  'Unknown agent': 'playbook.skills.filterOwnerUnknown',
 };
 
 export function PlaybookPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
@@ -236,8 +249,8 @@ export function PlaybookPage(): ReactElement {
 
   return (
     <Page
-      title="AI Agent"
-      description="Persona, the skills it runs, what it answers from, and how it is doing."
+      title={t('playbook.page.title')}
+      description={t('playbook.page.description')}
       actions={
         canEdit && view === 'skills' ? (
           <div className="flex items-center gap-2">
@@ -246,7 +259,7 @@ export function PlaybookPage(): ReactElement {
               onClick={() => setGalleryOpen(true)}
               className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
             >
-              Browse templates
+              {t('playbook.actions.browseTemplates')}
             </button>
             <button
               type="button"
@@ -254,14 +267,16 @@ export function PlaybookPage(): ReactElement {
               onClick={() => createSkill.mutate(`New skill ${items.length + 1}`)}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
             >
-              {createSkill.isPending ? 'Creating…' : 'New skill'}
+              {createSkill.isPending
+                ? t('playbook.actions.creating')
+                : t('playbook.actions.newSkill')}
             </button>
           </div>
         ) : undefined
       }
     >
       {skills.error || agents.error ? (
-        <ErrorNotice message="Could not load the playbook. Check that the API is reachable." />
+        <ErrorNotice message={t('playbook.page.loadError')} />
       ) : (
         <>
           {aiAgent && (
@@ -270,58 +285,64 @@ export function PlaybookPage(): ReactElement {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">{aiAgent.name}</p>
                   <p className="text-2xs text-content-tertiary">
-                    {aiAgent.skills_count} skill{aiAgent.skills_count === 1 ? '' : 's'}
+                    {t('playbook.agent.skillsCount', { count: aiAgent.skills_count })}
                     {aiAgent.tone ? ` · ${aiAgent.tone}` : ''}
                   </p>
                 </div>
                 <StatusDot
                   tone={aiAgent.active ? 'success' : 'neutral'}
-                  label={aiAgent.active ? 'Answering' : 'Paused'}
+                  label={
+                    aiAgent.active ? t('playbook.agent.answering') : t('playbook.agent.paused')
+                  }
                 />
                 {canEdit && (
                   <button
                     type="button"
                     disabled={blockActivation}
-                    title={blockActivation ? (readiness.reason ?? undefined) : undefined}
+                    title={blockActivation ? t('playbook.agent.notReady') : undefined}
                     onClick={() => toggleAgent.mutate({ id: aiAgent.id, active: !aiAgent.active })}
                     className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
                   >
-                    {aiAgent.active ? 'Pause all skills' : 'Resume'}
+                    {aiAgent.active ? t('playbook.agent.pauseAll') : t('playbook.agent.resume')}
                   </button>
                 )}
               </div>
               {!aiAgent.active && !blockActivation && (
                 <p className="border-t border-border px-4 py-2 text-2xs text-warning">
-                  Paused — no skill runs, whatever its own switch says.
+                  {t('playbook.agent.pausedNote')}
                 </p>
               )}
               {blockActivation && (
                 <p role="alert" className="border-t border-border px-4 py-2 text-2xs text-warning">
-                  Not ready to turn on. {readiness.reason}
+                  {t('playbook.agent.notReady')}
                 </p>
               )}
             </Card>
           )}
 
-          <div role="tablist" aria-label="AI Agent" className="flex gap-1 border-b border-border">
-            {VIEW_TABS.map((t) => {
-              const active = view === t.id;
+          <div
+            role="tablist"
+            aria-label={t('playbook.page.tabsLabel')}
+            className="flex gap-1 border-b border-border"
+          >
+            {VIEW_TABS.map((tabId) => {
+              const active = view === tabId;
               return (
                 <button
-                  key={t.id}
+                  key={tabId}
                   type="button"
                   role="tab"
-                  id={`ai-tab-${t.id}`}
+                  id={`ai-tab-${tabId}`}
                   aria-selected={active}
                   aria-controls="ai-tabpanel"
-                  onClick={() => setView(t.id)}
+                  onClick={() => setView(tabId)}
                   className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? 'border-brand-500 text-content'
                       : 'border-transparent text-content-secondary hover:text-content'
                   }`}
                 >
-                  {t.label}
+                  {t(VIEW_TAB_LABEL_KEYS[tabId])}
                 </button>
               );
             })}
@@ -343,8 +364,8 @@ export function PlaybookPage(): ReactElement {
               ) : (
                 <Card>
                   <EmptyState
-                    title="No AI agent"
-                    description="Once an AI agent exists on this workspace, its persona is edited here."
+                    title={t('playbook.profile.noAgentTitle')}
+                    description={t('playbook.profile.noAgentDescription')}
                   />
                 </Card>
               ))}
@@ -364,38 +385,38 @@ export function PlaybookPage(): ReactElement {
                 )}
 
                 <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,360px)_1fr]">
-                  <Section title="Skills">
+                  <Section title={t('playbook.skills.title')}>
                     {items.length > 0 && (
                       <div
                         role="tablist"
-                        aria-label="Skills"
+                        aria-label={t('playbook.skills.title')}
                         className="flex gap-1 border-b border-border"
                       >
-                        {SKILL_TABS.map((t) => {
-                          const active = tab === t.id;
+                        {SKILL_TABS.map((skillTab) => {
+                          const active = tab === skillTab.id;
                           return (
                             <button
-                              key={t.id}
+                              key={skillTab.id}
                               type="button"
                               role="tab"
-                              id={`skills-tab-${t.id}`}
+                              id={`skills-tab-${skillTab.id}`}
                               aria-selected={active}
                               aria-controls="skills-tabpanel"
-                              onClick={() => setTab(t.id)}
+                              onClick={() => setTab(skillTab.id)}
                               className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                                 active
                                   ? 'border-brand-500 text-content'
                                   : 'border-transparent text-content-secondary hover:text-content'
                               }`}
                             >
-                              {t.glyph && (
+                              {skillTab.glyph && (
                                 <span aria-hidden="true" className="text-content-brand">
-                                  {t.glyph}
+                                  {skillTab.glyph}
                                 </span>
                               )}
-                              <span>{t.label}</span>
+                              <span>{t(skillTab.labelKey)}</span>
                               <span className="text-2xs text-content-tertiary">
-                                {tabCounts[t.id]}
+                                {tabCounts[skillTab.id]}
                               </span>
                             </button>
                           );
@@ -406,53 +427,59 @@ export function PlaybookPage(): ReactElement {
                     {items.length > 0 && (
                       <div className="mt-2 flex flex-col gap-2">
                         <label className="flex items-center">
-                          <span className="sr-only">Search skills</span>
+                          <span className="sr-only">{t('playbook.skills.searchLabel')}</span>
                           <input
                             type="search"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Search skills…"
+                            placeholder={t('playbook.skills.searchPlaceholder')}
                             className="w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                           />
                         </label>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
                           <FilterSelect
-                            label="Type"
+                            label={t('playbook.skills.filterType')}
                             value={type}
                             onChange={setType}
                             options={[
-                              ['all', 'All types'],
-                              ['ai', 'AI'],
-                              ['workspace', 'Workspace'],
+                              ['all', t('playbook.skills.filterTypeAll')],
+                              ['ai', t('playbook.skills.filterTypeAi')],
+                              ['workspace', t('playbook.skills.filterTypeWorkspace')],
                             ]}
                           />
                           <FilterSelect
-                            label="Status"
+                            label={t('playbook.skills.filterStatus')}
                             value={status}
                             onChange={setStatus}
                             options={[
-                              ['all', 'Any status'],
-                              ['on', 'On'],
-                              ['off', 'Off'],
+                              ['all', t('playbook.skills.filterStatusAny')],
+                              ['on', t('playbook.skills.on')],
+                              ['off', t('playbook.skills.off')],
                             ]}
                           />
                           <FilterSelect
-                            label="Owner"
+                            label={t('playbook.skills.filterOwner')}
                             value={owner}
                             onChange={setOwner}
                             options={ownerOptions.map(
-                              (option) => [option.value, option.label] as const,
+                              (option) =>
+                                [
+                                  option.value,
+                                  OWNER_LABEL_KEYS[option.label]
+                                    ? t(OWNER_LABEL_KEYS[option.label]!)
+                                    : option.label,
+                                ] as const,
                             )}
                           />
                           <FilterSelect
-                            label="Sort"
+                            label={t('playbook.skills.filterSort')}
                             value={sort}
                             onChange={setSort}
                             options={[
-                              ['name-asc', 'Name A–Z'],
-                              ['name-desc', 'Name Z–A'],
-                              ['recent', 'Recently updated'],
-                              ['runs', 'Most used'],
+                              ['name-asc', t('playbook.skills.sortNameAsc')],
+                              ['name-desc', t('playbook.skills.sortNameDesc')],
+                              ['recent', t('playbook.skills.sortRecent')],
+                              ['runs', t('playbook.skills.sortRuns')],
                             ]}
                           />
                           {hasActiveSkillFilters(controls) && (
@@ -461,7 +488,7 @@ export function PlaybookPage(): ReactElement {
                               onClick={clearFilters}
                               className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                             >
-                              Clear
+                              {t('playbook.skills.clear')}
                             </button>
                           )}
                         </div>
@@ -475,25 +502,30 @@ export function PlaybookPage(): ReactElement {
                         aria-labelledby={`skills-tab-${tab}`}
                       >
                         {skills.isPending ? (
-                          <p className="p-4 text-sm text-content-secondary">Loading…</p>
+                          <p className="p-4 text-sm text-content-secondary">
+                            {t('playbook.skills.loading')}
+                          </p>
                         ) : items.length === 0 ? (
                           <EmptyState
-                            title="No skills yet"
-                            description="A skill decides what the AI does with an incoming message."
+                            title={t('playbook.skills.emptyTitle')}
+                            description={t('playbook.skills.emptyDescription')}
                           />
                         ) : tabItems.length === 0 ? (
-                          <EmptyState title="Nothing here" description={EMPTY_BY_TAB[tab]} />
+                          <EmptyState
+                            title={t('playbook.skills.nothingHereTitle')}
+                            description={t(EMPTY_BY_TAB_KEY[tab])}
+                          />
                         ) : visibleItems.length === 0 ? (
                           <EmptyState
-                            title="No skills match"
-                            description="Try a different search, or clear the filters to see them all."
+                            title={t('playbook.skills.noMatchTitle')}
+                            description={t('playbook.skills.noMatchDescription')}
                             action={
                               <button
                                 type="button"
                                 onClick={clearFilters}
                                 className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
                               >
-                                Clear filters
+                                {t('playbook.skills.clearFilters')}
                               </button>
                             }
                           />
@@ -522,14 +554,21 @@ export function PlaybookPage(): ReactElement {
                                       {skill.name}
                                     </span>
                                     <span className="block text-2xs text-content-tertiary">
-                                      {skill.steps.length} step{skill.steps.length === 1 ? '' : 's'}{' '}
-                                      · {skill.runs_count} run{skill.runs_count === 1 ? '' : 's'}
+                                      {t('playbook.skills.stepsCount', {
+                                        count: skill.steps.length,
+                                      })}{' '}
+                                      ·{' '}
+                                      {t('playbook.skills.runsCount', { count: skill.runs_count })}
                                     </span>
                                   </button>
 
                                   <StatusDot
                                     tone={skill.active ? 'success' : 'neutral'}
-                                    label={skill.active ? 'On' : 'Off'}
+                                    label={
+                                      skill.active
+                                        ? t('playbook.skills.on')
+                                        : t('playbook.skills.off')
+                                    }
                                   />
 
                                   {canEdit && (
@@ -541,14 +580,16 @@ export function PlaybookPage(): ReactElement {
                                       }
                                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
                                     >
-                                      {skill.active ? 'Disable' : 'Enable'}
+                                      {skill.active
+                                        ? t('playbook.skills.disable')
+                                        : t('playbook.skills.enable')}
                                     </button>
                                   )}
                                 </div>
 
                                 {!skill.active && skill.steps.length === 0 && (
                                   <p className="px-4 pb-2 text-2xs text-content-tertiary">
-                                    Needs at least one step before it can be turned on.
+                                    {t('playbook.skills.needsStep')}
                                   </p>
                                 )}
                               </div>
@@ -560,14 +601,12 @@ export function PlaybookPage(): ReactElement {
 
                     {toggleSkill.isError && (
                       <p role="alert" className="text-2xs text-danger">
-                        {toggleSkill.error instanceof ApiClientError
-                          ? toggleSkill.error.message
-                          : 'Could not change that skill.'}
+                        {t(errorMessageKey(toggleSkill.error))}
                       </p>
                     )}
                   </Section>
 
-                  <Section title={selected ? selected.name : 'Editor'}>
+                  <Section title={selected ? selected.name : t('playbook.skills.editorTitle')}>
                     {selected ? (
                       <SkillEditor
                         key={selected.id}
@@ -578,8 +617,8 @@ export function PlaybookPage(): ReactElement {
                     ) : (
                       <Card>
                         <EmptyState
-                          title="No skill selected"
-                          description="Pick a skill to write its instruction and preview what it does."
+                          title={t('playbook.skills.noSelectionTitle')}
+                          description={t('playbook.skills.noSelectionDescription')}
                         />
                       </Card>
                     )}
@@ -588,9 +627,7 @@ export function PlaybookPage(): ReactElement {
 
                 {createFromTemplate.isError && (
                   <p role="alert" className="text-2xs text-danger">
-                    {createFromTemplate.error instanceof ApiClientError
-                      ? createFromTemplate.error.message
-                      : 'Could not start a skill from that template.'}
+                    {t(errorMessageKey(createFromTemplate.error))}
                   </p>
                 )}
               </div>
@@ -618,19 +655,19 @@ export function PlaybookPage(): ReactElement {
 }
 
 /** Labels for the knowledge sub-tabs (FR-MOD-06.3.1). */
-const KNOWLEDGE_TAB_LABELS: Record<KnowledgeTab, string> = {
-  all: 'All',
-  website: 'Websites',
-  file: 'Files',
-  article: 'Articles',
-  faq: 'FAQ',
+const KNOWLEDGE_TAB_LABEL_KEYS: Record<KnowledgeTab, string> = {
+  all: 'playbook.knowledge.tabAll',
+  website: 'playbook.knowledge.tabWebsite',
+  file: 'playbook.knowledge.tabFile',
+  article: 'playbook.knowledge.tabArticle',
+  faq: 'playbook.knowledge.tabFaq',
 };
 
-const KNOWLEDGE_TYPE_LABELS: Record<KnowledgeType, string> = {
-  website: 'Website',
-  file: 'File',
-  article: 'Article',
-  faq: 'FAQ',
+const KNOWLEDGE_TYPE_LABEL_KEYS: Record<KnowledgeType, string> = {
+  website: 'playbook.knowledge.typeWebsite',
+  file: 'playbook.knowledge.typeFile',
+  article: 'playbook.knowledge.typeArticle',
+  faq: 'playbook.knowledge.typeFaq',
 };
 
 function KnowledgePanel({
@@ -640,6 +677,7 @@ function KnowledgePanel({
   canEdit: boolean;
   aiAgentId: string | null;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
@@ -687,8 +725,8 @@ function KnowledgePanel({
 
   return (
     <Section
-      title="Knowledge"
-      description="What the AI answers from. Indexed on save, so it is answerable immediately."
+      title={t('playbook.knowledge.title')}
+      description={t('playbook.knowledge.description')}
     >
       <Card>
         {canEdit && aiAgentId && (
@@ -702,13 +740,13 @@ function KnowledgePanel({
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <label htmlFor="source-name" className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Title
+                  {t('playbook.knowledge.formTitle')}
                 </span>
                 <input
                   id="source-name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="Delivery and returns"
+                  placeholder={t('playbook.knowledge.formTitlePlaceholder')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
               </label>
@@ -721,7 +759,7 @@ function KnowledgePanel({
                   htmlFor="source-type"
                   className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
                 >
-                  Type
+                  {t('playbook.knowledge.formType')}
                 </label>
                 <select
                   id="source-type"
@@ -729,9 +767,9 @@ function KnowledgePanel({
                   onChange={(event) => setSourceType(event.target.value as KnowledgeType)}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
                 >
-                  {KNOWLEDGE_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {KNOWLEDGE_TYPE_LABELS[t]}
+                  {KNOWLEDGE_TYPES.map((knowledgeType) => (
+                    <option key={knowledgeType} value={knowledgeType}>
+                      {t(KNOWLEDGE_TYPE_LABEL_KEYS[knowledgeType])}
                     </option>
                   ))}
                 </select>
@@ -741,30 +779,30 @@ function KnowledgePanel({
             {isWebsite ? (
               <label htmlFor="source-url" className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Website URL
+                  {t('playbook.knowledge.formUrl')}
                 </span>
                 <input
                   id="source-url"
                   value={sourceUrl}
                   onChange={(event) => setSourceUrl(event.target.value)}
-                  placeholder="https://example.com/help/delivery"
+                  placeholder={t('playbook.knowledge.formUrlPlaceholder')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
                 <span className="text-2xs text-content-tertiary">
-                  Crawled and indexed on save. Private and internal addresses are refused.
+                  {t('playbook.knowledge.formUrlHelp')}
                 </span>
               </label>
             ) : (
               <label htmlFor="source-content" className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Content
+                  {t('playbook.knowledge.formContent')}
                 </span>
                 <textarea
                   id="source-content"
                   value={content}
                   onChange={(event) => setContent(event.target.value)}
                   rows={4}
-                  placeholder="Standard delivery takes 3 to 5 working days…"
+                  placeholder={t('playbook.knowledge.formContentPlaceholder')}
                   className="resize-y rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
               </label>
@@ -776,13 +814,15 @@ function KnowledgePanel({
                 disabled={!canAdd || create.isPending}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {create.isPending ? (isWebsite ? 'Crawling…' : 'Indexing…') : 'Add source'}
+                {create.isPending
+                  ? isWebsite
+                    ? t('playbook.knowledge.crawling')
+                    : t('playbook.knowledge.indexing')
+                  : t('playbook.knowledge.addSource')}
               </button>
               {create.isError && (
                 <span role="alert" className="text-2xs text-danger">
-                  {create.error instanceof ApiClientError
-                    ? create.error.message
-                    : 'Could not add that source.'}
+                  {t(errorMessageKey(create.error))}
                 </span>
               )}
             </div>
@@ -794,26 +834,26 @@ function KnowledgePanel({
         {allItems.length > 0 && (
           <div
             role="tablist"
-            aria-label="Knowledge types"
+            aria-label={t('playbook.knowledge.tabsLabel')}
             className="flex flex-wrap gap-1 border-b border-border px-2"
           >
-            {(['all', ...KNOWLEDGE_TYPES] as KnowledgeTab[]).map((t) => {
-              const active = subtab === t;
+            {(['all', ...KNOWLEDGE_TYPES] as KnowledgeTab[]).map((knowledgeTab) => {
+              const active = subtab === knowledgeTab;
               return (
                 <button
-                  key={t}
+                  key={knowledgeTab}
                   type="button"
                   role="tab"
                   aria-selected={active}
-                  onClick={() => setSubtab(t)}
+                  onClick={() => setSubtab(knowledgeTab)}
                   className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? 'border-brand-500 text-content'
                       : 'border-transparent text-content-secondary hover:text-content'
                   }`}
                 >
-                  <span>{KNOWLEDGE_TAB_LABELS[t]}</span>
-                  <span className="text-2xs text-content-tertiary">{counts[t]}</span>
+                  <span>{t(KNOWLEDGE_TAB_LABEL_KEYS[knowledgeTab])}</span>
+                  <span className="text-2xs text-content-tertiary">{counts[knowledgeTab]}</span>
                 </button>
               );
             })}
@@ -821,16 +861,18 @@ function KnowledgePanel({
         )}
 
         {sources.isPending ? (
-          <p className="p-4 text-sm text-content-secondary">Loading…</p>
+          <p className="p-4 text-sm text-content-secondary">{t('playbook.knowledge.loading')}</p>
         ) : allItems.length === 0 ? (
           <EmptyState
-            title="Nothing indexed"
-            description="Without knowledge, a skill can only send fixed replies."
+            title={t('playbook.knowledge.emptyTitle')}
+            description={t('playbook.knowledge.emptyDescription')}
           />
         ) : visible.length === 0 ? (
           <EmptyState
-            title="Nothing here"
-            description={`No ${KNOWLEDGE_TAB_LABELS[subtab].toLowerCase()} sources yet.`}
+            title={t('playbook.skills.nothingHereTitle')}
+            description={t('playbook.knowledge.noneInTab', {
+              type: t(KNOWLEDGE_TAB_LABEL_KEYS[subtab]),
+            })}
           />
         ) : (
           <ul className="divide-y divide-border">
@@ -839,23 +881,30 @@ function KnowledgePanel({
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{source.name}</p>
                   <p className="truncate text-2xs text-content-tertiary">
-                    {source.type} · {source.chunk_count} chunk
-                    {source.chunk_count === 1 ? '' : 's'} · {formatDate(source.updated_at)}
+                    {KNOWLEDGE_TYPE_LABEL_KEYS[source.type as KnowledgeType]
+                      ? t(KNOWLEDGE_TYPE_LABEL_KEYS[source.type as KnowledgeType])
+                      : source.type}{' '}
+                    · {t('playbook.knowledge.chunkCount', { count: source.chunk_count })} ·{' '}
+                    {formatDate(source.updated_at)}
                     {source.source_url ? ` · ${source.source_url}` : ''}
                   </p>
                 </div>
                 <StatusDot
                   tone={source.chunk_count > 0 ? 'success' : 'warning'}
-                  label={source.chunk_count > 0 ? 'Indexed' : 'Empty'}
+                  label={
+                    source.chunk_count > 0
+                      ? t('playbook.knowledge.indexed')
+                      : t('playbook.knowledge.empty')
+                  }
                 />
                 {canEdit && (
                   <button
                     type="button"
-                    aria-label={`Delete ${source.name}`}
+                    aria-label={t('playbook.knowledge.deleteLabel', { name: source.name })}
                     onClick={() => remove.mutate(source.id)}
                     className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                   >
-                    Delete
+                    {t('playbook.knowledge.delete')}
                   </button>
                 )}
               </li>

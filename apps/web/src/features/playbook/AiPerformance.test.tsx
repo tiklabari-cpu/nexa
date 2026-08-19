@@ -5,9 +5,10 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
 
@@ -101,5 +102,22 @@ describe('AiPerformance', () => {
     renderPerf(<AiPerformance agentActive canRead={false} />);
     expect(screen.getByText('No access to performance')).toBeInTheDocument();
     expect(api.get).not.toHaveBeenCalled();
+  });
+});
+
+describe('AiPerformance localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the no-access state in Turkish when that is the active locale', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <AiPerformance agentActive canRead={false} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByText('Performansa erişim yok')).toBeInTheDocument();
   });
 });

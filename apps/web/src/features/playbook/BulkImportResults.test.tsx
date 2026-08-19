@@ -8,8 +8,9 @@
  * `<tr>`s.
  */
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { BulkImportResults } from './BulkImportResults.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { KnowledgeBulkRowResult } from './types.js';
 
 function row(overrides: Partial<KnowledgeBulkRowResult> = {}): KnowledgeBulkRowResult {
@@ -90,5 +91,19 @@ describe('BulkImportResults', () => {
     expect(rendered.length).toBeLessThan(60);
     expect(screen.getByText('Row 0')).toBeInTheDocument();
     expect(screen.queryByText('Row 199')).not.toBeInTheDocument();
+  });
+});
+
+describe('BulkImportResults localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the empty state in Turkish when that is the active locale', () => {
+    renderWithLocale(
+      <BulkImportResults title="Preview" imported={0} failed={0} results={[]} />,
+      'tr',
+    );
+    expect(screen.getByText('Henüz gösterilecek bir şey yok')).toBeInTheDocument();
   });
 });

@@ -17,6 +17,7 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Banner } from '../../components/ui/Banner.js';
 import { VirtualTable } from '../../components/VirtualList.js';
+import { useTranslate } from '../../lib/i18n.js';
 import type { KnowledgeBulkRowResult } from './types.js';
 
 const ROW_HEIGHT = 40;
@@ -33,11 +34,13 @@ export function BulkImportResults({
   failed: number;
   results: KnowledgeBulkRowResult[];
 }): ReactElement {
+  const t = useTranslate();
+
   if (results.length === 0) {
     return (
       <EmptyState
-        title="Nothing to show yet"
-        description="Pick a CSV file with at least one data row to see its rows here."
+        title={t('playbook.bulk.results.emptyTitle')}
+        description={t('playbook.bulk.results.emptyDescription')}
       />
     );
   }
@@ -45,7 +48,7 @@ export function BulkImportResults({
   return (
     <div className="flex flex-col gap-2">
       <Banner tone={failed > 0 ? 'warning' : 'success'} title={title}>
-        {imported} imported · {failed} skipped
+        {t('playbook.bulk.results.summary', { imported, failed })}
       </Banner>
 
       <VirtualTable
@@ -56,11 +59,11 @@ export function BulkImportResults({
         head={
           <thead>
             <tr className="border-b border-border text-left">
-              <Th align="right">Row</Th>
-              <Th>Title</Th>
-              <Th>Type</Th>
-              <Th>Status</Th>
-              <Th>Reason</Th>
+              <Th align="right">{t('playbook.bulk.results.colRow')}</Th>
+              <Th>{t('playbook.bulk.results.colTitle')}</Th>
+              <Th>{t('playbook.bulk.results.colType')}</Th>
+              <Th>{t('playbook.bulk.results.colStatus')}</Th>
+              <Th>{t('playbook.bulk.results.colReason')}</Th>
             </tr>
           </thead>
         }
@@ -72,7 +75,11 @@ export function BulkImportResults({
             <td className="px-4 py-2">
               <StatusDot
                 tone={row.status === 'imported' ? 'success' : 'warning'}
-                label={row.status === 'imported' ? 'Imported' : 'Skipped'}
+                label={
+                  row.status === 'imported'
+                    ? t('playbook.bulk.results.imported')
+                    : t('playbook.bulk.results.skipped')
+                }
               />
             </td>
             <td className="px-4 py-2 text-content-secondary">{row.error ?? '—'}</td>

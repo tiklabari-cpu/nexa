@@ -6,9 +6,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { KbArticle, KbCategory } from './types.js';
 
 const { api } = vi.hoisted(() => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
@@ -226,5 +227,23 @@ describe('KbArticleList', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Edit article' });
     expect(within(dialog).getByLabelText('Title')).toHaveValue('Delivery times');
+  });
+});
+
+describe('KbArticleList localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the empty state in Turkish when that is the active locale', async () => {
+    mockKb([]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <KbArticleList />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(await screen.findByText('Henüz makale yok')).toBeInTheDocument();
   });
 });

@@ -9,8 +9,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { Skill, SkillStep } from './types.js';
 
 const { api } = vi.hoisted(() => ({ api: { post: vi.fn(), patch: vi.fn() } }));
@@ -122,5 +123,27 @@ describe('SkillEditor — keyboard reorder', () => {
   it('offers no reorder controls without edit permission', () => {
     renderEditor(makeSkill(steps), false);
     expect(screen.queryByRole('button', { name: 'Move step 1 down' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SkillEditor localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the editor — including a step description — in Turkish', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <SkillEditor
+          skill={makeSkill([{ type: 'tag', tag: 'shipping' }])}
+          canEdit
+          onSaved={() => {}}
+        />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByText('Adımlar')).toBeInTheDocument();
+    expect(screen.getByText('Sohbeti “shipping” olarak etiketle')).toBeInTheDocument();
   });
 });

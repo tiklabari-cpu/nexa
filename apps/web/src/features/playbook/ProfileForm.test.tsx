@@ -6,8 +6,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { AiAgent } from './types.js';
 
 const { api } = vi.hoisted(() => ({ api: { patch: vi.fn() } }));
@@ -108,5 +109,22 @@ describe('ProfileForm', () => {
     // The preview still renders so a viewer sees the current persona.
     const previews = screen.getAllByText('Ada');
     expect(previews.length).toBeGreaterThan(0);
+  });
+});
+
+describe('ProfileForm localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the form in Turkish when that is the active locale', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <ProfileForm agent={AGENT} canEdit onSaved={() => {}} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByRole('button', { name: 'Profili kaydet' })).toBeInTheDocument();
   });
 });

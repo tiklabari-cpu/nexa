@@ -8,8 +8,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { KbArticle, KbCategory } from './types.js';
 
 const { api } = vi.hoisted(() => ({
@@ -189,7 +190,7 @@ describe('KbArticleEditor', () => {
     });
     renderEditor({ article: article({}) });
 
-    expect(await screen.findByText(/KB kapalı/)).toBeInTheDocument();
+    expect(await screen.findByText(/KB is off/)).toBeInTheDocument();
   });
 
   it('shows a backend slug collision under the Slug field, not a generic toast', async () => {
@@ -268,5 +269,28 @@ describe('KbArticleEditor', () => {
     ]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+  });
+});
+
+describe('KbArticleEditor localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the editor in Turkish when that is the active locale', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <KbArticleEditor
+          article={null}
+          categories={CATEGORIES}
+          canEdit
+          onClose={() => {}}
+          onSaved={() => {}}
+        />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByRole('button', { name: 'Makale oluştur' })).toBeInTheDocument();
   });
 });

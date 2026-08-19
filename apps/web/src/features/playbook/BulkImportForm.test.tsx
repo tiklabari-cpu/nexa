@@ -10,9 +10,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { KnowledgeBulkResult, KnowledgeBulkRowResult } from './types.js';
 
 const { api } = vi.hoisted(() => ({ api: { post: vi.fn() } }));
@@ -222,5 +223,22 @@ describe('BulkImportForm', () => {
       'aria-expanded',
       'false',
     );
+  });
+});
+
+describe('BulkImportForm localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the toggle in Turkish when that is the active locale', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <BulkImportForm canEdit aiAgentId={AI_AGENT_ID} onImported={() => {}} />
+      </QueryClientProvider>,
+      'tr',
+    );
+    expect(screen.getByRole('button', { name: 'Toplu içe aktarma' })).toBeInTheDocument();
   });
 });

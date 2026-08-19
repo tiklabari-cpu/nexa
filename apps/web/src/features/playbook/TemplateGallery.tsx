@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { EmptyState } from '../../components/EmptyState.js';
 import { VirtualList } from '../../components/VirtualList.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import {
   findCategoryMeta,
   SKILL_TEMPLATES,
@@ -34,6 +35,15 @@ import {
 
 type GalleryCategoryFilter = TemplateCategory | 'all';
 
+/** Catalogue keys for a template's name/summary — `templates.ts`'s own English
+ * values stay put (server-shaped seed data, `templateToDraft` reads them
+ * directly), this only decides what the gallery/recommended cards *show*. */
+const CATEGORY_LABEL_KEYS: Record<TemplateCategory, string> = {
+  prebuilt: 'playbook.category.prebuilt',
+  ai: 'playbook.category.ai',
+  trending: 'playbook.category.trending',
+};
+
 /** Fixed row height (px) the `VirtualList` spacer maths are built on — every row must render at exactly this height. */
 const ROW_HEIGHT = 88;
 
@@ -41,12 +51,21 @@ const ROW_HEIGHT = 88;
 const CATEGORY_COUNTS: Record<TemplateCategory, number> = { prebuilt: 0, ai: 0, trending: 0 };
 for (const template of SKILL_TEMPLATES) CATEGORY_COUNTS[template.category] += 1;
 
-/** Case-insensitive substring match against a card's visible text (name or summary). */
-function templateMatchesQuery(template: SkillTemplate, query: string): boolean {
+/** The catalogue's own English name/summary, translated for display and search. */
+function templateName(template: SkillTemplate, t: TFunction): string {
+  return t(`playbook.template.${template.id}.name`);
+}
+function templateSummary(template: SkillTemplate, t: TFunction): string {
+  return t(`playbook.template.${template.id}.summary`);
+}
+
+/** Case-insensitive substring match against a card's visible (translated) text. */
+function templateMatchesQuery(template: SkillTemplate, query: string, t: TFunction): boolean {
   const needle = query.trim().toLowerCase();
   if (!needle) return true;
   return (
-    template.name.toLowerCase().includes(needle) || template.summary.toLowerCase().includes(needle)
+    templateName(template, t).toLowerCase().includes(needle) ||
+    templateSummary(template, t).toLowerCase().includes(needle)
   );
 }
 
@@ -62,6 +81,7 @@ export function TemplateGallery({
   /** Id of the template currently being turned into a skill, if any. */
   pendingId: string | null;
 }): ReactElement | null {
+  const t = useTranslate();
   const closeRef = useRef<HTMLButtonElement>(null);
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
@@ -93,8 +113,12 @@ export function TemplateGallery({
   if (!open) return null;
 
   const categoryTemplates =
-    category === 'all' ? SKILL_TEMPLATES : SKILL_TEMPLATES.filter((t) => t.category === category);
-  const visibleTemplates = categoryTemplates.filter((t) => templateMatchesQuery(t, query));
+    category === 'all'
+      ? SKILL_TEMPLATES
+      : SKILL_TEMPLATES.filter((template) => template.category === category);
+  const visibleTemplates = categoryTemplates.filter((template) =>
+    templateMatchesQuery(template, query, t),
+  );
   const hasActiveFilters = query.trim() !== '' || category !== 'all';
 
   const clearFilters = (): void => {
@@ -118,11 +142,9 @@ export function TemplateGallery({
         <header className="flex items-center justify-between gap-4 border-b border-border px-5 py-3">
           <div>
             <h2 id="template-gallery-title" className="text-sm font-semibold">
-              Browse templates
+              {t('playbook.gallery.title')}
             </h2>
-            <p className="text-2xs text-content-tertiary">
-              Pick a starting point — it opens in the editor, yours to change.
-            </p>
+            <p className="text-2xs text-content-tertiary">{t('playbook.gallery.subtitle')}</p>
           </div>
           <button
             ref={closeRef}
@@ -130,14 +152,14 @@ export function TemplateGallery({
             onClick={onClose}
             className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
           >
-            Close
+            {t('playbook.gallery.close')}
           </button>
         </header>
 
         <div className="flex flex-col gap-3 p-5">
           <div
             role="tablist"
-            aria-label="Template category"
+            aria-label={t('playbook.gallery.categoryTablistLabel')}
             className="flex flex-wrap gap-1 border-b border-border"
           >
             <button
@@ -153,7 +175,7 @@ export function TemplateGallery({
                   : 'border-transparent text-content-secondary hover:text-content'
               }`}
             >
-              <span>All</span>
+              <span>{t('playbook.gallery.all')}</span>
               <span className="text-2xs text-content-tertiary">{SKILL_TEMPLATES.length}</span>
             </button>
             {TEMPLATE_CATEGORIES.map((meta) => {
@@ -176,7 +198,7 @@ export function TemplateGallery({
                   <span aria-hidden="true" className="text-content-brand">
                     {meta.icon}
                   </span>
-                  <span>{meta.label}</span>
+                  <span>{t(CATEGORY_LABEL_KEYS[meta.id])}</span>
                   <span className="text-2xs text-content-tertiary">{CATEGORY_COUNTS[meta.id]}</span>
                 </button>
               );
@@ -184,12 +206,12 @@ export function TemplateGallery({
           </div>
 
           <label className="flex items-center">
-            <span className="sr-only">Search templates</span>
+            <span className="sr-only">{t('playbook.gallery.searchLabel')}</span>
             <input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search templates…"
+              placeholder={t('playbook.gallery.searchPlaceholder')}
               className="w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
             />
           </label>
@@ -202,8 +224,8 @@ export function TemplateGallery({
           >
             {visibleTemplates.length === 0 ? (
               <EmptyState
-                title="No templates match"
-                description="Try a different search, or clear the filters to see them all."
+                title={t('playbook.gallery.noMatchTitle')}
+                description={t('playbook.gallery.noMatchDescription')}
                 action={
                   hasActiveFilters && (
                     <button
@@ -211,7 +233,7 @@ export function TemplateGallery({
                       onClick={clearFilters}
                       className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
                     >
-                      Clear filters
+                      {t('playbook.gallery.clearFilters')}
                     </button>
                   )
                 }
@@ -220,7 +242,7 @@ export function TemplateGallery({
               <VirtualList
                 items={visibleTemplates}
                 rowHeight={ROW_HEIGHT}
-                label="Templates"
+                label={t('playbook.gallery.templatesListLabel')}
                 maxHeight="55vh"
                 renderRow={(template) => (
                   <TemplateRow
@@ -248,6 +270,7 @@ function TemplateRow({
   pending: boolean;
   onUse: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const category = findCategoryMeta(template.category);
 
   return (
@@ -262,11 +285,11 @@ function TemplateRow({
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{template.name}</p>
-        <p className="truncate text-2xs text-content-secondary">{template.summary}</p>
+        <p className="truncate text-sm font-medium">{templateName(template, t)}</p>
+        <p className="truncate text-2xs text-content-secondary">{templateSummary(template, t)}</p>
         {template.requiresIntegration ? (
           <p className="truncate text-2xs text-warning">
-            Needs the {template.requiresIntegration} app connected.
+            {t('playbook.common.needsIntegration', { app: template.requiresIntegration })}
           </p>
         ) : (
           // Reserves the same line every other row spends on the integration
@@ -283,7 +306,7 @@ function TemplateRow({
         onClick={onUse}
         className="shrink-0 self-center rounded-md bg-brand-500 px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {pending ? 'Opening…' : 'Use template'}
+        {pending ? t('playbook.common.opening') : t('playbook.gallery.useTemplate')}
       </button>
     </div>
   );

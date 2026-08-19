@@ -14,11 +14,22 @@ import { Card, ErrorNotice, Kpi, KpiGrid } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatCount, formatRate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { performanceKpis, type AiAgentReport, type SatisfactionSummary } from './performance.js';
 
 interface OverviewResponse {
   satisfaction: SatisfactionSummary;
 }
+
+/** `performanceKpis` (performance.ts) still returns its own English `label` —
+ * left untouched (data-shaped, feeds an untranslated module) — this maps the
+ * stable `key` each card carries to what is actually shown. */
+const KPI_LABEL_KEYS: Record<string, string> = {
+  resolution_rate: 'playbook.performance.kpiResolutionRate',
+  ai_resolutions: 'playbook.performance.kpiAiResolutions',
+  csat: 'playbook.performance.kpiCsat',
+  transfer_rate: 'playbook.performance.kpiTransferRate',
+};
 
 export function AiPerformance({
   agentActive,
@@ -27,6 +38,7 @@ export function AiPerformance({
   agentActive: boolean;
   canRead: boolean;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
 
   const report = useQuery({
@@ -44,23 +56,21 @@ export function AiPerformance({
     return (
       <Card>
         <EmptyState
-          title="No access to performance"
-          description="Viewing AI performance needs the reports permission. Ask an owner to grant it."
+          title={t('playbook.performance.noAccessTitle')}
+          description={t('playbook.performance.noAccessDescription')}
         />
       </Card>
     );
   }
 
   if (report.error || overview.error) {
-    return (
-      <ErrorNotice message="Could not load AI performance. Check that the API is reachable." />
-    );
+    return <ErrorNotice message={t('playbook.performance.loadError')} />;
   }
 
   if (report.isPending || overview.isPending) {
     return (
       <Card>
-        <p className="p-4 text-sm text-content-secondary">Loading…</p>
+        <p className="p-4 text-sm text-content-secondary">{t('playbook.performance.loading')}</p>
       </Card>
     );
   }
@@ -75,8 +85,7 @@ export function AiPerformance({
           role="status"
           className="rounded-md border border-border bg-inset px-4 py-2 text-2xs text-content-secondary"
         >
-          The AI is off — these are historical figures. No new chats are being handled while it is
-          paused.
+          {t('playbook.performance.offNotice')}
         </p>
       )}
 
@@ -85,22 +94,23 @@ export function AiPerformance({
           kpi.kind === 'rate' ? (
             <Kpi
               key={kpi.key}
-              label={kpi.label}
+              label={t(KPI_LABEL_KEYS[kpi.key] ?? kpi.key)}
               value={formatRate(kpi.rate)}
               tone={kpi.lowBase ? 'warn' : 'neutral'}
-              hint={kpi.lowBase ? 'Based on few chats — treat as indicative.' : undefined}
+              hint={kpi.lowBase ? t('playbook.performance.lowBaseHint') : undefined}
             />
           ) : (
-            <Kpi key={kpi.key} label={kpi.label} value={formatCount(kpi.count)} />
+            <Kpi
+              key={kpi.key}
+              label={t(KPI_LABEL_KEYS[kpi.key] ?? kpi.key)}
+              value={formatCount(kpi.count)}
+            />
           ),
         )}
       </KpiGrid>
 
       {anyLowBase && (
-        <p className="text-2xs text-content-tertiary">
-          A percentage over a handful of chats swings on a single case. The warned cards will settle
-          as more conversations close.
-        </p>
+        <p className="text-2xs text-content-tertiary">{t('playbook.performance.lowBaseFooter')}</p>
       )}
     </div>
   );

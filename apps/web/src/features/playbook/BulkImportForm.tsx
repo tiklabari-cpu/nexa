@@ -22,15 +22,39 @@ import { Banner } from '../../components/ui/Banner.js';
 import { Skeleton } from '../../components/Skeleton.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { FieldError } from '../../lib/form.js';
 import { BulkImportResults } from './BulkImportResults.js';
-import { readBulkFile } from './bulk-file.js';
+import { BULK_FILE_MAX_BYTES, readBulkFile, type BulkFileRejectionReason } from './bulk-file.js';
 import { BULK_TEMPLATE_FILENAME, toTemplateBlob } from './bulk-template.js';
 import type { KnowledgeBulkResult } from './types.js';
 
-function errorMessage(error: unknown): string | null {
+const BULK_FILE_REJECTION_KEYS: Record<BulkFileRejectionReason, string> = {
+  invalid_type: 'playbook.bulk.rejectInvalidType',
+  empty_file: 'playbook.bulk.rejectEmptyFile',
+  too_large: 'playbook.bulk.rejectTooLarge',
+};
+
+/** The field-level precheck rejection, translated by its stable `reason` — see
+ * `bulk-file.ts`'s own English `.message`, left untouched (its own unit test
+ * pins those exact sentences). */
+function rejectionMessage(reason: BulkFileRejectionReason, t: TFunction): string {
+  return t(BULK_FILE_REJECTION_KEYS[reason], {
+    size: Math.round(BULK_FILE_MAX_BYTES / (1024 * 1024)),
+  });
+}
+
+/**
+ * A dry-run/import refusal's server message, shown verbatim. The server names
+ * the specific row/column that failed (e.g. "csv: too many rows.") and
+ * BulkImportForm.test.tsx pins that exact text — folding it into the generic
+ * ADR-06 bucket would lose the detail the message exists to carry (mirrors
+ * Composer.tsx's upload-error waiver).
+ */
+function errorMessage(error: unknown, t: TFunction): string | null {
   if (!error) return null;
-  return error instanceof ApiClientError ? error.message : 'Could not process that file.';
+  // i18n-ignore: server-specific validation detail, see the note above.
+  return error instanceof ApiClientError ? error.message : t('playbook.bulk.processError');
 }
 
 function downloadTemplate(): void {
@@ -53,6 +77,7 @@ export function BulkImportForm({
   aiAgentId: string | null;
   onImported: () => void;
 }): ReactElement | null {
+  const t = useTranslate();
   const api = useApiClient();
   const [open, setOpen] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -106,7 +131,7 @@ export function BulkImportForm({
 
     const result = await readBulkFile(file);
     if (!result.ok) {
-      setFieldError(result.message);
+      setFieldError(rejectionMessage(result.reason, t));
       return;
     }
     setFileName(file.name);
@@ -117,7 +142,7 @@ export function BulkImportForm({
   // EK-A.1: Import stays disabled until the dry run names at least one row
   // it would actually write.
   const canImport = csv !== null && (dryRun.data?.imported ?? 0) > 0 && !runImport.isPending;
-  const message = errorMessage(dryRun.error ?? runImport.error);
+  const message = errorMessage(dryRun.error ?? runImport.error, t);
 
   return (
     <div className="border-b border-border p-4">
@@ -127,7 +152,7 @@ export function BulkImportForm({
         onClick={() => setOpen((current) => !current)}
         className="rounded-md border border-border px-3 py-1.5 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2"
       >
-        Bulk import
+        {t('playbook.bulk.toggle')}
       </button>
 
       {open && (
@@ -135,7 +160,7 @@ export function BulkImportForm({
           {runImport.isSuccess && runImport.data ? (
             <>
               <BulkImportResults
-                title="Import complete"
+                title={t('playbook.bulk.importComplete')}
                 imported={runImport.data.imported}
                 failed={runImport.data.failed}
                 results={runImport.data.results}
@@ -145,27 +170,25 @@ export function BulkImportForm({
                 onClick={resetPanel}
                 className="self-start rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
               >
-                Done
+                {t('playbook.bulk.done')}
               </button>
             </>
           ) : (
             <>
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-2xs text-content-tertiary">
-                  Import many sources at once from a CSV file — name, type, content, source_url.
-                </p>
+                <p className="text-2xs text-content-tertiary">{t('playbook.bulk.description')}</p>
                 <button
                   type="button"
                   onClick={downloadTemplate}
                   className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                 >
-                  Download template
+                  {t('playbook.bulk.downloadTemplate')}
                 </button>
               </div>
 
               <label htmlFor="bulk-import-file" className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  CSV file
+                  {t('playbook.bulk.fileLabel')}
                 </span>
                 <input
                   id="bulk-import-file"
@@ -193,7 +216,11 @@ export function BulkImportForm({
 
               {dryRun.data && !dryRun.isPending && (
                 <BulkImportResults
-                  title={fileName ? `Preview — ${fileName}` : 'Preview'}
+                  title={
+                    fileName
+                      ? t('playbook.bulk.previewNamed', { name: fileName })
+                      : t('playbook.bulk.preview')
+                  }
                   imported={dryRun.data.imported}
                   failed={dryRun.data.failed}
                   results={dryRun.data.results}
@@ -208,7 +235,7 @@ export function BulkImportForm({
                 }}
                 className="self-start rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {runImport.isPending ? 'Importing…' : 'Import'}
+                {runImport.isPending ? t('playbook.bulk.importing') : t('playbook.bulk.import')}
               </button>
             </>
           )}

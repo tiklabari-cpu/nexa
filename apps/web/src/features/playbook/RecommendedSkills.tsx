@@ -14,7 +14,21 @@
  */
 import type { ReactElement } from 'react';
 import { Section } from '../../components/Page.js';
-import { findCategoryMeta, recommendedTemplates, type SkillTemplate } from './templates.js';
+import { useTranslate } from '../../lib/i18n.js';
+import {
+  findCategoryMeta,
+  recommendedTemplates,
+  type SkillTemplate,
+  type TemplateCategory,
+} from './templates.js';
+
+/** Mirrors TemplateGallery.tsx's own copy — see that file's note on why the
+ * small Record is duplicated rather than shared. */
+const CATEGORY_LABEL_KEYS: Record<TemplateCategory, string> = {
+  prebuilt: 'playbook.category.prebuilt',
+  ai: 'playbook.category.ai',
+  trending: 'playbook.category.trending',
+};
 
 export function RecommendedSkills({
   onTry,
@@ -28,16 +42,17 @@ export function RecommendedSkills({
   /** Id of the template currently being turned into a skill, if any. */
   pendingId: string | null;
 }): ReactElement {
+  const t = useTranslate();
   const templates = recommendedTemplates();
 
   return (
     <Section
-      title="Recommended skills"
-      description="Ready-made starting points — try one, then make it yours."
+      title={t('playbook.recommended.title')}
+      description={t('playbook.recommended.description')}
     >
       <div
         role="list"
-        aria-label="Recommended skills"
+        aria-label={t('playbook.recommended.listLabel')}
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3"
       >
         {templates.map((template) => (
@@ -55,7 +70,7 @@ export function RecommendedSkills({
         onClick={onBrowseAll}
         className="self-start rounded-md border border-border px-3 py-1.5 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2"
       >
-        See more
+        {t('playbook.recommended.seeMore')}
       </button>
     </Section>
   );
@@ -70,6 +85,7 @@ function RecommendedCard({
   pending: boolean;
   onTry: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const category = findCategoryMeta(template.category);
 
   return (
@@ -82,18 +98,20 @@ function RecommendedCard({
           <span aria-hidden="true" className="text-content-brand">
             {category.icon}
           </span>
-          {category.label}
+          {t(CATEGORY_LABEL_KEYS[category.id])}
         </span>
       )}
 
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">{template.name}</p>
-        <p className="mt-0.5 text-2xs text-content-secondary">{template.summary}</p>
+        <p className="text-sm font-medium">{t(`playbook.template.${template.id}.name`)}</p>
+        <p className="mt-0.5 text-2xs text-content-secondary">
+          {t(`playbook.template.${template.id}.summary`)}
+        </p>
       </div>
 
       {template.requiresIntegration && (
         <p className="text-2xs text-warning">
-          Needs the {template.requiresIntegration} app connected.
+          {t('playbook.common.needsIntegration', { app: template.requiresIntegration })}
         </p>
       )}
 
@@ -103,7 +121,7 @@ function RecommendedCard({
         onClick={onTry}
         className="self-start rounded-md bg-brand-500 px-3 py-1.5 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {pending ? 'Opening…' : 'Try this'}
+        {pending ? t('playbook.common.opening') : t('playbook.recommended.tryThis')}
       </button>
     </div>
   );

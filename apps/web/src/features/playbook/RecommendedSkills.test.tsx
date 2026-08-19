@@ -8,9 +8,10 @@
  */
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RecommendedSkills } from './RecommendedSkills.js';
 import { recommendedTemplates } from './templates.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 describe('RecommendedSkills', () => {
   it('labels its cards by category — Prebuilt, AI and Trending are all present', () => {
@@ -61,5 +62,19 @@ describe('RecommendedSkills', () => {
     const others = screen.getAllByRole('button', { name: 'Try this' });
     expect(others.length).toBeGreaterThan(0);
     for (const button of others) expect(button).toBeEnabled();
+  });
+});
+
+describe('RecommendedSkills localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the strip in Turkish when that is the active locale', () => {
+    renderWithLocale(
+      <RecommendedSkills onTry={() => {}} onBrowseAll={() => {}} pendingId={null} />,
+      'tr',
+    );
+    expect(screen.getByRole('heading', { name: 'Önerilen beceriler' })).toBeInTheDocument();
   });
 });

@@ -18,6 +18,7 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import type { KbArticle, KbCategory } from './types.js';
 import { KbArticleEditor } from './KbArticleEditor.js';
 import {
@@ -30,10 +31,10 @@ import {
   type KbTab,
 } from './kb-tabs.js';
 
-const TAB_LABELS: Record<KbTab, string> = {
-  all: 'All',
-  published: 'Published',
-  draft: 'Drafts',
+const TAB_LABEL_KEYS: Record<KbTab, string> = {
+  all: 'playbook.kb.tabAll',
+  published: 'playbook.kb.tabPublished',
+  draft: 'playbook.kb.tabDraft',
 };
 
 /**
@@ -41,13 +42,14 @@ const TAB_LABELS: Record<KbTab, string> = {
  * tab has none. `all` is only ever non-empty here (if there are articles at
  * all, the All tab holds them), so its copy is a never-reached fallback.
  */
-const EMPTY_BY_TAB: Record<KbTab, string> = {
-  all: 'No articles match.',
-  published: 'Nothing published yet — an article goes here once it is published.',
-  draft: 'No drafts — every article here is published.',
+const EMPTY_BY_TAB_KEY: Record<KbTab, string> = {
+  all: 'playbook.kb.emptyByTabAll',
+  published: 'playbook.kb.emptyByTabPublished',
+  draft: 'playbook.kb.emptyByTabDraft',
 };
 
 export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -97,16 +99,11 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
   };
 
   if (articles.error || categories.error) {
-    return (
-      <ErrorNotice message="Could not load the knowledge base articles. Check that the API is reachable." />
-    );
+    return <ErrorNotice message={t('playbook.kb.loadError')} />;
   }
 
   return (
-    <Section
-      title="Public KB"
-      description="The self-service articles a visitor can read once published."
-    >
+    <Section title={t('playbook.kb.title')} description={t('playbook.kb.description')}>
       {canEdit && (
         <div className="flex justify-end">
           <button
@@ -114,7 +111,7 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
             onClick={() => setEditing('new')}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
           >
-            New article
+            {t('playbook.kb.newArticle')}
           </button>
         </div>
       )}
@@ -126,36 +123,36 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
       ) : items.length === 0 ? (
         <Card>
           <EmptyState
-            title="No articles yet"
-            description="An article filed here can be published to the public knowledge base."
+            title={t('playbook.kb.emptyTitle')}
+            description={t('playbook.kb.emptyDescription')}
           />
         </Card>
       ) : (
         <>
           <div
             role="tablist"
-            aria-label="KB article status"
+            aria-label={t('playbook.kb.statusLabel')}
             className="flex gap-1 border-b border-border"
           >
-            {KB_TABS.map((t) => {
-              const active = tab === t;
+            {KB_TABS.map((kbTab) => {
+              const active = tab === kbTab;
               return (
                 <button
-                  key={t}
+                  key={kbTab}
                   type="button"
                   role="tab"
-                  id={`kb-tab-${t}`}
+                  id={`kb-tab-${kbTab}`}
                   aria-selected={active}
                   aria-controls="kb-tabpanel"
-                  onClick={() => setTab(t)}
+                  onClick={() => setTab(kbTab)}
                   className={`-mb-px flex items-center gap-1 border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                     active
                       ? 'border-brand-500 text-content'
                       : 'border-transparent text-content-secondary hover:text-content'
                   }`}
                 >
-                  <span>{TAB_LABELS[t]}</span>
-                  <span className="text-2xs text-content-tertiary">{tabCounts[t]}</span>
+                  <span>{t(TAB_LABEL_KEYS[kbTab])}</span>
+                  <span className="text-2xs text-content-tertiary">{tabCounts[kbTab]}</span>
                 </button>
               );
             })}
@@ -163,31 +160,31 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
 
           <div className="mt-2 flex flex-col gap-2">
             <label className="flex items-center">
-              <span className="sr-only">Search articles</span>
+              <span className="sr-only">{t('playbook.kb.searchLabel')}</span>
               <input
                 type="search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search articles…"
+                placeholder={t('playbook.kb.searchPlaceholder')}
                 className="w-full rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
               />
             </label>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <span className="inline-flex items-center gap-1.5 text-2xs text-content-tertiary">
-                <label htmlFor="kb-filter-category">Category</label>
+                <label htmlFor="kb-filter-category">{t('playbook.kb.category')}</label>
                 <select
                   id="kb-filter-category"
                   value={category}
                   onChange={(event) => setCategory(event.target.value)}
                   className="rounded-md border border-border bg-inset px-2 py-1 text-xs text-content outline-none"
                 >
-                  <option value="all">All categories</option>
+                  <option value="all">{t('playbook.kb.allCategories')}</option>
                   {categoryList.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.name}
                     </option>
                   ))}
-                  <option value="none">Uncategorized</option>
+                  <option value="none">{t('playbook.kb.uncategorized')}</option>
                 </select>
               </span>
               {hasActiveKbFilters(controls) && (
@@ -196,7 +193,7 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
                   onClick={clearFilters}
                   className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                 >
-                  Clear
+                  {t('playbook.kb.clear')}
                 </button>
               )}
             </div>
@@ -205,29 +202,37 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
           <Card>
             <div role="tabpanel" id="kb-tabpanel" aria-labelledby={`kb-tab-${tab}`}>
               {tabItems.length === 0 ? (
-                <EmptyState title="Nothing here" description={EMPTY_BY_TAB[tab]} />
+                <EmptyState
+                  title={t('playbook.kb.nothingHereTitle')}
+                  description={t(EMPTY_BY_TAB_KEY[tab])}
+                />
               ) : visibleItems.length === 0 ? (
                 <EmptyState
-                  title="No articles match"
-                  description="Try a different search, or clear the filters to see them all."
+                  title={t('playbook.kb.noMatchTitle')}
+                  description={t('playbook.kb.noMatchDescription')}
                   action={
                     <button
                       type="button"
                       onClick={clearFilters}
                       className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
                     >
-                      Clear filters
+                      {t('playbook.kb.clearFilters')}
                     </button>
                   }
                 />
               ) : (
-                <ul role="list" aria-label="KB articles" className="divide-y divide-border">
+                <ul
+                  role="list"
+                  aria-label={t('playbook.kb.title')}
+                  className="divide-y divide-border"
+                >
                   {visibleItems.map((article) => {
                     const meta = (
                       <p className="truncate text-2xs text-content-tertiary">
                         {article.category_id
-                          ? (categoryNameById.get(article.category_id) ?? 'Unknown category')
-                          : 'Uncategorized'}
+                          ? (categoryNameById.get(article.category_id) ??
+                            t('playbook.kb.unknownCategory'))
+                          : t('playbook.kb.uncategorized')}
                         {' · '}
                         {formatDate(article.updated_at)}
                       </p>
@@ -251,7 +256,11 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
                         )}
                         <StatusDot
                           tone={article.status === 'published' ? 'success' : 'neutral'}
-                          label={article.status === 'published' ? 'Published' : 'Draft'}
+                          label={
+                            article.status === 'published'
+                              ? t('playbook.kb.statusPublished')
+                              : t('playbook.kb.statusDraft')
+                          }
                         />
                       </li>
                     );

@@ -81,6 +81,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/home/HomePage.tsx',
   'src/features/settings/NotificationSettings.tsx',
   'src/features/reports/ReportsPage.tsx',
+  'src/features/billing/BillingPage.tsx',
 ];
 
 /**
@@ -88,7 +89,7 @@ const TRANSLATED_FILES: readonly string[] = [
  * when you translate files, and never raise it. A new untranslated screen fails
  * here, which is the point: the debt has to be paid down, not added to.
  */
-const REMAINING_BUDGET = 40;
+const REMAINING_BUDGET = 39;
 
 /** Every `.tsx` under the screen roots that is not a test, repo-relative and posix-slashed. */
 function screenFiles(): string[] {

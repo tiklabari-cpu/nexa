@@ -12,9 +12,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), put: vi.fn(), getBlob: vi.fn() },
@@ -640,5 +641,26 @@ describe('BillingPage — API package purchase history (FR-MOD-09.3)', () => {
     const row = await screen.findByTestId('api-package-purchase-row');
     expect(row).toHaveTextContent('Essential');
     expect(screen.queryByTestId('api-package-purchases-empty')).not.toBeInTheDocument();
+  });
+});
+
+describe('BillingPage localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the page in Turkish when that is the active locale', async () => {
+    mockBilling({});
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <BillingPage />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Planı yönet' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Faturalandırma', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Faturalar' })).toBeInTheDocument();
   });
 });

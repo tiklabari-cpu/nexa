@@ -21,6 +21,7 @@ import {
 } from '../../components/Page.js';
 import { Banner } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
 
 interface UsageSummary {
@@ -121,6 +122,7 @@ interface ApiPackagePurchaseResult {
 const CARD_BRANDS = ['visa', 'mastercard', 'amex', 'discover'] as const;
 
 export function BillingPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
 
   const subscription = useQuery({
@@ -144,15 +146,15 @@ export function BillingPage(): ReactElement {
 
   if (subscription.error || usage.error) {
     return (
-      <Page title="Billing">
-        <ErrorNotice message="Could not load billing. Check that the API is reachable and try again." />
+      <Page title={t('billing.page.title')}>
+        <ErrorNotice message={t('billing.page.loadError')} />
       </Page>
     );
   }
 
   if (subscription.isPending || usage.isPending) {
     return (
-      <Page title="Billing">
+      <Page title={t('billing.page.title')}>
         <CardSkeleton rows={2} />
         <CardSkeleton rows={3} />
       </Page>
@@ -176,42 +178,50 @@ export function BillingPage(): ReactElement {
   const packPriceCents = ai.overage_unit * ai.overage_unit_price_cents;
 
   return (
-    <Page title="Billing" description={`Plan, usage and charges for period ${use.period_label}.`}>
+    <Page
+      title={t('billing.page.title')}
+      description={t('billing.page.description', { period: use.period_label })}
+    >
       {sub.access === 'read_only' && (
-        <Banner tone="warning" role="alert" title="This workspace is read-only.">
-          The trial has ended. Existing conversations stay readable and exportable and nothing has
-          been deleted — but new conversations cannot be started until a plan is active.
+        <Banner tone="warning" role="alert" title={t('billing.readOnly.title')}>
+          {t('billing.readOnly.description')}
         </Banner>
       )}
 
       {sub.access === 'trialing' && sub.trial.days_remaining !== null && (
         <div role="status" className="rounded-lg border border-border bg-surface p-4">
           <p className="text-sm font-medium">
-            {sub.trial.days_remaining} day{sub.trial.days_remaining === 1 ? '' : 's'} left in your
-            trial
+            {t('billing.trial.daysLeft', { count: sub.trial.days_remaining })}
           </p>
           <p className="mt-1 text-sm text-content-secondary">
-            Nothing is billed during the trial
-            {sub.trial.ends_at ? `, which ends on ${formatDate(sub.trial.ends_at)}` : ''}.
+            {sub.trial.ends_at
+              ? t('billing.trial.noticeWithEnd', { date: formatDate(sub.trial.ends_at) ?? '' })
+              : t('billing.trial.notice')}
           </p>
         </div>
       )}
 
-      <Section title="Plan">
+      <Section title={t('billing.plan.title')}>
         <KpiGrid>
-          <Kpi label="Plan" value={sub.plan} hint={sub.billing_cycle} />
+          <Kpi label={t('billing.plan.kpi.plan')} value={sub.plan} hint={sub.billing_cycle} />
           <Kpi
-            label="Seats"
+            label={t('billing.plan.kpi.seats')}
             value={formatCount(sub.seats)}
-            hint={`${formatMoney(sub.unit_price_cents)} per seat`}
+            hint={t('billing.plan.kpi.seatsHint', {
+              price: formatMoney(sub.unit_price_cents) ?? '',
+            })}
           />
           <Kpi
-            label="Estimated total"
+            label={t('billing.plan.kpi.estimatedTotal')}
             value={formatMoney(sub.estimated_total_cents)}
-            hint={sub.access === 'trialing' ? 'Nothing billed during the trial' : 'This period'}
+            hint={
+              sub.access === 'trialing'
+                ? t('billing.plan.kpi.estimatedTotalHintTrial')
+                : t('billing.plan.kpi.estimatedTotalHintPeriod')
+            }
           />
           <Kpi
-            label="Status"
+            label={t('billing.plan.kpi.status')}
             value={sub.status}
             tone={
               sub.access === 'active' ? 'good' : sub.access === 'read_only' ? 'warn' : 'neutral'
@@ -222,10 +232,7 @@ export function BillingPage(): ReactElement {
 
       <ManagePlan sub={sub} onChange={change.mutate} pending={change.isPending} />
 
-      <Section
-        title="AI resolutions"
-        description="A conversation an AI closed without a human ever replying."
-      >
+      <Section title={t('billing.aiMeter.title')} description={t('billing.aiMeter.description')}>
         {/* Proactive warning from 80% (PRD §8.3 flow 5, KR2.3): the quota is
             surfaced before it is exceeded. A limit that only announces itself at
             100% arrives as a support ticket — the "surprise overage" complaint
@@ -238,22 +245,21 @@ export function BillingPage(): ReactElement {
           >
             <p className="text-sm font-medium text-warning">
               {aiOver
-                ? 'Past your included AI resolutions'
-                : `You have used ${quotaPercent}% of your AI resolutions`}
+                ? t('billing.aiMeter.pastIncluded')
+                : t('billing.aiMeter.percentUsedWarning', { percent: quotaPercent })}
             </p>
             <p className="mt-1 text-sm text-content-secondary">
-              {aiOver ? (
-                <>
-                  {formatCount(ai.overage)} beyond the included {formatCount(ai.included)} this
-                  period. Each extra resolution bills at {formatMoney(ai.overage_unit_price_cents)}{' '}
-                  — no surprise on the invoice.
-                </>
-              ) : (
-                <>
-                  {formatCount(ai.used)} of {formatCount(ai.included)} used. Beyond the allowance,
-                  resolutions bill at {formatMoney(ai.overage_unit_price_cents)} each.
-                </>
-              )}
+              {aiOver
+                ? t('billing.aiMeter.overageDetail', {
+                    overage: formatCount(ai.overage) ?? '',
+                    included: formatCount(ai.included) ?? '',
+                    price: formatMoney(ai.overage_unit_price_cents) ?? '',
+                  })
+                : t('billing.aiMeter.usedDetail', {
+                    used: formatCount(ai.used) ?? '',
+                    included: formatCount(ai.included) ?? '',
+                    price: formatMoney(ai.overage_unit_price_cents) ?? '',
+                  })}
             </p>
           </div>
         )}
@@ -266,12 +272,14 @@ export function BillingPage(): ReactElement {
                 <span className="text-base font-normal text-content-tertiary">
                   {' / '}
                   {formatCount(ai.included)}{' '}
-                  <span data-testid="quota-percent">({quotaPercent}% used)</span>
+                  <span data-testid="quota-percent">
+                    ({t('billing.aiMeter.percentUsed', { percent: quotaPercent })})
+                  </span>
                 </span>
               </span>
               {use.quota_warning && (
                 <span className="text-xs font-medium text-warning">
-                  {aiOver ? 'Over the included allowance' : 'Nearing the limit'}
+                  {aiOver ? t('billing.aiMeter.overAllowance') : t('billing.aiMeter.nearingLimit')}
                 </span>
               )}
             </div>
@@ -280,11 +288,10 @@ export function BillingPage(): ReactElement {
 
             {aiOver && (
               <p className="mt-3 text-sm text-content-secondary">
-                {formatCount(ai.overage)} beyond the included allowance —{' '}
-                <span className="tabular font-medium text-content">
-                  {formatMoney(ai.overage_cents)}
-                </span>{' '}
-                this period.
+                {t('billing.aiMeter.overageNotice', {
+                  overage: formatCount(ai.overage) ?? '',
+                  amount: formatMoney(ai.overage_cents) ?? '',
+                })}
               </p>
             )}
           </div>
@@ -299,19 +306,19 @@ export function BillingPage(): ReactElement {
             className="flex flex-wrap items-baseline justify-between gap-2 p-4"
           >
             <div className="min-w-0">
-              <p className="text-sm font-medium">Overage package</p>
+              <p className="text-sm font-medium">{t('billing.aiMeter.overagePackageTitle')}</p>
               <p className="mt-0.5 text-sm text-content-secondary">
-                Beyond the included {formatCount(ai.included)}, AI resolutions bill at{' '}
-                <span className="font-medium text-content">
-                  {formatMoney(ai.overage_unit_price_cents)}
-                </span>{' '}
-                each — sold in packs of {formatCount(ai.overage_unit)} (
-                {formatMoney(packPriceCents)} per pack).
+                {t('billing.aiMeter.overagePackageDetail', {
+                  included: formatCount(ai.included) ?? '',
+                  price: formatMoney(ai.overage_unit_price_cents) ?? '',
+                  unit: formatCount(ai.overage_unit) ?? '',
+                  packPrice: formatMoney(packPriceCents) ?? '',
+                })}
               </p>
             </div>
             <div className="text-right">
               <p className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                This period
+                {t('billing.aiMeter.periodLabel')}
               </p>
               <p data-testid="overage-charge" className="tabular text-lg font-semibold">
                 {formatMoney(ai.overage_cents)}
@@ -325,36 +332,35 @@ export function BillingPage(): ReactElement {
           lands on the invoice (aşım faturaya). Billed by the block — $29.50 per
           100,000 over the allowance — with the price shown before any is spent,
           the same up-front honesty as the AI meter. */}
-      <Section
-        title="API calls"
-        description="Requests your integrations make with a personal access token, metered per call."
-      >
+      <Section title={t('billing.apiCalls.title')} description={t('billing.apiCalls.description')}>
         <Card>
           <div className="p-4">
             <KpiGrid>
               <Kpi
-                label="Used"
+                label={t('billing.apiCalls.used')}
                 value={formatCount(apiCalls.used)}
-                hint={`of ${formatCount(apiCalls.included)} included`}
+                hint={t('billing.apiCalls.usedHint', {
+                  included: formatCount(apiCalls.included) ?? '',
+                })}
               />
-              <Kpi label="Included" value={formatCount(apiCalls.included)} />
+              <Kpi label={t('billing.apiCalls.included')} value={formatCount(apiCalls.included)} />
               <Kpi
-                label="Overage"
+                label={t('billing.apiCalls.overage')}
                 value={formatCount(apiCalls.overage)}
                 tone={apiOver ? 'warn' : 'neutral'}
               />
               <Kpi
-                label="Overage charge"
+                label={t('billing.apiCalls.overageCharge')}
                 value={formatMoney(apiCalls.overage_cents)}
-                hint="this period"
+                hint={t('billing.apiCalls.overageChargeHint')}
               />
             </KpiGrid>
             <p data-testid="api-overage-terms" className="mt-3 text-2xs text-content-tertiary">
-              Beyond the included {formatCount(apiCalls.included)}, API calls bill at{' '}
-              <span className="font-medium text-content">
-                {formatMoney(apiCalls.overage_unit_price_cents)}
-              </span>{' '}
-              per {formatCount(apiCalls.overage_unit)} — billed by the block.
+              {t('billing.apiCalls.overageTerms', {
+                included: formatCount(apiCalls.included) ?? '',
+                price: formatMoney(apiCalls.overage_unit_price_cents) ?? '',
+                unit: formatCount(apiCalls.overage_unit) ?? '',
+              })}
             </p>
           </div>
         </Card>
@@ -369,8 +375,7 @@ export function BillingPage(): ReactElement {
       <InvoicesSection />
 
       <p className="text-2xs text-content-tertiary">
-        Payment provider: {sub.provider}. No external charge is made — usage figures and the
-        arithmetic above are real.
+        {t('billing.page.providerNotice', { provider: sub.provider })}
       </p>
     </Page>
   );
@@ -384,6 +389,7 @@ export function BillingPage(): ReactElement {
  * customer finds out about it on the invoice instead.
  */
 function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean }): ReactElement {
+  const t = useTranslate();
   const percent = Math.round(fraction * 100);
   return (
     <div
@@ -391,7 +397,7 @@ function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean })
       aria-valuenow={percent}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-label="Included AI resolutions used"
+      aria-label={t('billing.aiMeter.quotaBarAriaLabel')}
       className="h-2 w-full overflow-hidden rounded-full bg-inset"
     >
       <div
@@ -423,8 +429,9 @@ function ManagePlan({
   onChange: (body: { billing_cycle?: string; seats?: number }) => void;
   pending: boolean;
 }): ReactElement {
+  const t = useTranslate();
   const annual = sub.billing_cycle === 'annual';
-  const cycleUnit = annual ? 'year' : 'month';
+  const cycleUnit = t(`billing.managePlan.cycleUnit.${annual ? 'year' : 'month'}`);
   const trialing = sub.access === 'trialing';
 
   // Client-side preview of the recurring charge and the annual saving, matching
@@ -442,15 +449,21 @@ function ManagePlan({
 
   return (
     <Section
-      title="Manage plan"
-      description="Billing is mocked — nothing is charged. Changes save as you make them."
+      title={t('billing.managePlan.title')}
+      description={t('billing.managePlan.description')}
     >
       <Card>
         <div className="flex flex-col gap-5 p-4">
           {/* Billing cycle (FR-MOD-10.1.2) */}
           <div>
-            <p className="mb-2 text-xs font-medium text-content-secondary">Billing cycle</p>
-            <div className="flex gap-2" role="group" aria-label="Billing cycle">
+            <p className="mb-2 text-xs font-medium text-content-secondary">
+              {t('billing.managePlan.cycleLabel')}
+            </p>
+            <div
+              className="flex gap-2"
+              role="group"
+              aria-label={t('billing.managePlan.cycleLabel')}
+            >
               <button
                 type="button"
                 aria-pressed={!annual}
@@ -458,7 +471,7 @@ function ManagePlan({
                 onClick={() => onChange({ billing_cycle: 'monthly' })}
                 className={cycleButton(!annual)}
               >
-                Monthly
+                {t('billing.managePlan.monthly')}
               </button>
               <button
                 type="button"
@@ -467,9 +480,11 @@ function ManagePlan({
                 onClick={() => onChange({ billing_cycle: 'annual' })}
                 className={cycleButton(annual)}
               >
-                Annual
+                {t('billing.managePlan.annual')}
                 <span className="ml-1 font-normal opacity-90">
-                  · save {formatMoney(annualSavingsCents)}/yr
+                  {t('billing.managePlan.annualSaveHint', {
+                    amount: formatMoney(annualSavingsCents) ?? '',
+                  })}
                 </span>
               </button>
             </div>
@@ -477,11 +492,13 @@ function ManagePlan({
 
           {/* Users stepper (FR-MOD-10.1.3) */}
           <div>
-            <p className="mb-2 text-xs font-medium text-content-secondary">Seats</p>
+            <p className="mb-2 text-xs font-medium text-content-secondary">
+              {t('billing.managePlan.seatsLabel')}
+            </p>
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                aria-label="Remove a seat"
+                aria-label={t('billing.managePlan.removeSeat')}
                 disabled={pending || sub.seats <= sub.min_seats}
                 onClick={() => onChange({ seats: sub.seats - 1 })}
                 className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
@@ -496,7 +513,7 @@ function ManagePlan({
               </span>
               <button
                 type="button"
-                aria-label="Add a seat"
+                aria-label={t('billing.managePlan.addSeat')}
                 disabled={pending}
                 onClick={() => onChange({ seats: sub.seats + 1 })}
                 className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
@@ -504,11 +521,13 @@ function ManagePlan({
                 +
               </button>
               <span className="text-sm text-content-secondary">
-                {formatMoney(sub.unit_price_cents)} / user / month
+                {t('billing.managePlan.pricePerUser', {
+                  price: formatMoney(sub.unit_price_cents) ?? '',
+                })}
               </span>
             </div>
             <p className="mt-1 text-2xs text-content-tertiary">
-              Minimum {sub.min_seats} — you cannot buy fewer seats than your active agents.
+              {t('billing.managePlan.minSeatsNotice', { min: sub.min_seats })}
             </p>
           </div>
 
@@ -517,25 +536,28 @@ function ManagePlan({
             {trialing ? (
               <>
                 <p>
-                  Billed now <span className="font-semibold">{formatMoney(0)}</span> during the
-                  trial.
+                  {t('billing.managePlan.billedNowPrefix')}{' '}
+                  <span className="font-semibold">{formatMoney(0)}</span>{' '}
+                  {t('billing.managePlan.billedNowSuffix')}
                 </p>
                 <p className="text-content-secondary">
-                  After the trial:{' '}
+                  {t('billing.managePlan.afterTrialPrefix')}{' '}
                   <span className="font-semibold text-content">{formatMoney(recurringCents)}</span>{' '}
                   / {cycleUnit}
                 </p>
               </>
             ) : (
               <p>
-                Total:{' '}
+                {t('billing.managePlan.totalPrefix')}{' '}
                 <span className="font-semibold">{formatMoney(sub.estimated_total_cents)}</span> /{' '}
                 {cycleUnit}
               </p>
             )}
             {annual && (
               <p className="mt-1 text-2xs text-success">
-                Saving {formatMoney(annualSavingsCents)} a year versus monthly billing.
+                {t('billing.managePlan.annualSavingsNotice', {
+                  amount: formatMoney(annualSavingsCents) ?? '',
+                })}
               </p>
             )}
           </div>
@@ -564,6 +586,7 @@ function ManagePlan({
  * trial comes back.
  */
 function ApiPackagesSection(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
@@ -586,12 +609,11 @@ function ApiPackagesSection(): ReactElement {
     },
   });
 
-  const description =
-    "One-off top-ups on top of your plan's included API calls. Billing is mocked (ADR-13) — buying a package charges no card.";
+  const description = t('billing.apiPackages.description');
 
   if (catalog.isPending) {
     return (
-      <Section title="API packages" description={description}>
+      <Section title={t('billing.apiPackages.title')} description={description}>
         <CardSkeleton rows={2} />
       </Section>
     );
@@ -599,8 +621,8 @@ function ApiPackagesSection(): ReactElement {
 
   if (catalog.error) {
     return (
-      <Section title="API packages" description={description}>
-        <ErrorNotice message="Could not load the API package catalogue." />
+      <Section title={t('billing.apiPackages.title')} description={description}>
+        <ErrorNotice message={t('billing.apiPackages.loadError')} />
       </Section>
     );
   }
@@ -608,16 +630,16 @@ function ApiPackagesSection(): ReactElement {
   const items = catalog.data.items;
 
   return (
-    <Section title="API packages" description={description}>
+    <Section title={t('billing.apiPackages.title')} description={description}>
       {buy.isError && (
-        <Banner tone="danger" role="alert" title="Could not buy the package.">
-          The purchase did not go through — your quota is unchanged. Try again.
+        <Banner tone="danger" role="alert" title={t('billing.apiPackages.buyErrorTitle')}>
+          {t('billing.apiPackages.buyErrorDescription')}
         </Banner>
       )}
 
       {items.length === 0 ? (
         <p data-testid="api-packages-empty" className="text-sm text-content-secondary">
-          No API packages are available to buy right now.
+          {t('billing.apiPackages.empty')}
         </p>
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
@@ -659,13 +681,16 @@ function ApiPackageCard({
   onCancel: () => void;
   onConfirm: () => void;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <Card>
       <div data-testid={`api-package-${pkg.id}`} className="flex h-full flex-col gap-1 p-4">
         <span className="text-sm font-medium">{pkg.name}</span>
         <span className="tabular text-xl font-bold">
           {formatCount(pkg.api_calls)}
-          <span className="ml-1 text-2xs font-normal text-content-tertiary">calls</span>
+          <span className="ml-1 text-2xs font-normal text-content-tertiary">
+            {t('billing.apiPackages.callsUnit')}
+          </span>
         </span>
         <span className="tabular text-sm text-content-secondary">
           {formatMoney(pkg.price_cents)}
@@ -674,17 +699,22 @@ function ApiPackageCard({
         {confirming ? (
           <div className="mt-2 flex flex-col gap-2">
             <p className="text-2xs text-content-secondary">
-              Buy {pkg.name} for {formatMoney(pkg.price_cents)}? No card is charged (mock billing).
+              {t('billing.apiPackages.confirmPrompt', {
+                name: pkg.name,
+                price: formatMoney(pkg.price_cents) ?? '',
+              })}
             </p>
             <div className="flex gap-2">
               <button
                 type="button"
-                aria-label={`Confirm buying ${pkg.name}`}
+                aria-label={t('billing.apiPackages.confirmAriaLabel', { name: pkg.name })}
                 disabled={pending}
                 onClick={onConfirm}
                 className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {pending ? 'Buying…' : 'Confirm purchase'}
+                {pending
+                  ? t('billing.apiPackages.buying')
+                  : t('billing.apiPackages.confirmPurchase')}
               </button>
               <button
                 type="button"
@@ -692,18 +722,18 @@ function ApiPackageCard({
                 onClick={onCancel}
                 className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
               >
-                Cancel
+                {t('billing.apiPackages.cancel')}
               </button>
             </div>
           </div>
         ) : (
           <button
             type="button"
-            aria-label={`Buy ${pkg.name}`}
+            aria-label={t('billing.apiPackages.buyAriaLabel', { name: pkg.name })}
             onClick={onBuyClick}
             className="mt-2 self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
           >
-            Buy
+            {t('billing.apiPackages.buy')}
           </button>
         )}
       </div>
@@ -722,6 +752,7 @@ function ApiPackageCard({
  * purchase appears here without a manual refresh.
  */
 function ApiPackagePurchasesSection(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
 
   const query = useQuery({
@@ -729,19 +760,19 @@ function ApiPackagePurchasesSection(): ReactElement {
     queryFn: () => api.get<{ items: ApiPackagePurchase[] }>('/billing/api-packages/purchases'),
   });
 
-  const description = 'Every API package this workspace has bought, newest first.';
+  const description = t('billing.purchaseHistory.description');
 
   if (query.isPending) {
     return (
-      <Section title="Purchase history" description={description}>
+      <Section title={t('billing.purchaseHistory.title')} description={description}>
         <CardSkeleton rows={2} />
       </Section>
     );
   }
   if (query.error) {
     return (
-      <Section title="Purchase history" description={description}>
-        <ErrorNotice message="Could not load the purchase history." />
+      <Section title={t('billing.purchaseHistory.title')} description={description}>
+        <ErrorNotice message={t('billing.purchaseHistory.loadError')} />
       </Section>
     );
   }
@@ -749,10 +780,10 @@ function ApiPackagePurchasesSection(): ReactElement {
   const purchases = query.data.items;
 
   return (
-    <Section title="Purchase history" description={description}>
+    <Section title={t('billing.purchaseHistory.title')} description={description}>
       {purchases.length === 0 ? (
         <p data-testid="api-package-purchases-empty" className="text-sm text-content-secondary">
-          You have not bought an API package yet — buy one above to raise this period's allowance.
+          {t('billing.purchaseHistory.empty')}
         </p>
       ) : (
         <Card>
@@ -760,10 +791,18 @@ function ApiPackagePurchasesSection(): ReactElement {
             <table className="w-full text-sm" data-testid="api-package-purchases-table">
               <thead>
                 <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-content-tertiary">
-                  <th className="px-4 py-2 font-medium">Date</th>
-                  <th className="px-4 py-2 font-medium">Package</th>
-                  <th className="px-4 py-2 text-right font-medium">Quota</th>
-                  <th className="px-4 py-2 text-right font-medium">Amount</th>
+                  <th className="px-4 py-2 font-medium">
+                    {t('billing.purchaseHistory.table.date')}
+                  </th>
+                  <th className="px-4 py-2 font-medium">
+                    {t('billing.purchaseHistory.table.package')}
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium">
+                    {t('billing.purchaseHistory.table.quota')}
+                  </th>
+                  <th className="px-4 py-2 text-right font-medium">
+                    {t('billing.purchaseHistory.table.amount')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -809,6 +848,7 @@ function ApiPackagePurchasesSection(): ReactElement {
  * part of how an expired trial comes back.
  */
 function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [editing, setEditing] = useState(false);
@@ -832,20 +872,19 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
     },
   });
 
-  const description =
-    'Billing is mocked — no card is charged and no full card number is collected.';
+  const description = t('billing.paymentMethod.description');
 
   if (query.isPending) {
     return (
-      <Section title="Payment method" description={description}>
+      <Section title={t('billing.paymentMethod.title')} description={description}>
         <CardSkeleton rows={1} />
       </Section>
     );
   }
   if (query.error) {
     return (
-      <Section title="Payment method" description={description}>
-        <ErrorNotice message="Could not load the payment method." />
+      <Section title={t('billing.paymentMethod.title')} description={description}>
+        <ErrorNotice message={t('billing.paymentMethod.loadError')} />
       </Section>
     );
   }
@@ -853,21 +892,25 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
   const method = query.data.payment_method;
 
   return (
-    <Section title="Payment method" description={description}>
+    <Section title={t('billing.paymentMethod.title')} description={description}>
       <Card>
         <div className="flex flex-col gap-4 p-4">
           {method ? (
             <div data-testid="payment-method" className="flex flex-wrap items-center gap-2 text-sm">
               <span className="font-medium capitalize">{method.brand}</span>
-              <span className="text-content-secondary">ending {method.last4}</span>
+              <span className="text-content-secondary">
+                {t('billing.paymentMethod.ending', { last4: method.last4 })}
+              </span>
               <span className="text-content-tertiary">
-                · expires {String(method.exp_month).padStart(2, '0')}/{method.exp_year}
+                {t('billing.paymentMethod.expires', {
+                  date: `${String(method.exp_month).padStart(2, '0')}/${method.exp_year}`,
+                })}
               </span>
               <span className="text-content-tertiary">· {method.holder_name}</span>
             </div>
           ) : (
             <p data-testid="payment-method-empty" className="text-sm text-content-secondary">
-              No payment method on file yet.
+              {t('billing.paymentMethod.empty')}
             </p>
           )}
 
@@ -875,7 +918,7 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
             <PaymentMethodForm
               method={method}
               pending={save.isPending}
-              error={save.error ? 'Could not save the payment method. Check the details.' : null}
+              error={save.error ? t('billing.paymentMethod.form.saveError') : null}
               onCancel={() => setEditing(false)}
               onSubmit={(body) => save.mutate(body)}
             />
@@ -886,11 +929,13 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
                 onClick={() => setEditing(true)}
                 className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600"
               >
-                {method ? 'Update payment method' : 'Add payment method'}
+                {method
+                  ? t('billing.paymentMethod.updateButton')
+                  : t('billing.paymentMethod.addButton')}
               </button>
               {readOnly && (
                 <p className="mt-2 text-2xs text-content-tertiary">
-                  You can still update your payment method while the workspace is read-only.
+                  {t('billing.paymentMethod.readOnlyNotice')}
                 </p>
               )}
             </div>
@@ -924,6 +969,7 @@ function PaymentMethodForm({
     holder_name: string;
   }) => void;
 }): ReactElement {
+  const t = useTranslate();
   const thisYear = new Date().getFullYear();
   const [brand, setBrand] = useState(method?.brand ?? 'visa');
   const [last4, setLast4] = useState(method?.last4 ?? '');
@@ -956,12 +1002,12 @@ function PaymentMethodForm({
       data-testid="payment-form"
       onSubmit={submit}
       role="group"
-      aria-label="Payment method"
+      aria-label={t('billing.paymentMethod.title')}
       className="flex flex-col gap-3 rounded-md border border-border p-3"
     >
       <div className="flex flex-col gap-1">
         <label htmlFor="pm-brand" className="text-2xs font-medium text-content-secondary">
-          Card brand
+          {t('billing.paymentMethod.form.brandLabel')}
         </label>
         <select
           id="pm-brand"
@@ -979,7 +1025,7 @@ function PaymentMethodForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="pm-last4" className="text-2xs font-medium text-content-secondary">
-          Last 4 digits
+          {t('billing.paymentMethod.form.last4Label')}
         </label>
         <input
           id="pm-last4"
@@ -987,16 +1033,18 @@ function PaymentMethodForm({
           maxLength={4}
           value={last4}
           onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
-          placeholder="4242"
+          placeholder={t('billing.paymentMethod.form.last4Placeholder')}
           className={`w-24 ${field}`}
         />
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-2xs font-medium text-content-secondary">Expiry</span>
+        <span className="text-2xs font-medium text-content-secondary">
+          {t('billing.paymentMethod.form.expiryLabel')}
+        </span>
         <div className="flex gap-2">
           <select
-            aria-label="Expiry month"
+            aria-label={t('billing.paymentMethod.form.expiryMonthLabel')}
             value={expMonth}
             onChange={(e) => setExpMonth(e.target.value)}
             className={`w-20 ${field}`}
@@ -1008,7 +1056,7 @@ function PaymentMethodForm({
             ))}
           </select>
           <select
-            aria-label="Expiry year"
+            aria-label={t('billing.paymentMethod.form.expiryYearLabel')}
             value={expYear}
             onChange={(e) => setExpYear(e.target.value)}
             className={`w-28 ${field}`}
@@ -1024,13 +1072,13 @@ function PaymentMethodForm({
 
       <div className="flex flex-col gap-1">
         <label htmlFor="pm-holder" className="text-2xs font-medium text-content-secondary">
-          Cardholder name
+          {t('billing.paymentMethod.form.holderLabel')}
         </label>
         <input
           id="pm-holder"
           value={holder}
           onChange={(e) => setHolder(e.target.value)}
-          placeholder="Jane Doe"
+          placeholder={t('billing.paymentMethod.form.holderPlaceholder')}
           className={field}
         />
       </div>
@@ -1041,7 +1089,7 @@ function PaymentMethodForm({
         </p>
       )}
       <p className="text-2xs text-content-tertiary">
-        A real Stripe card element would mount here. Only the masked details are stored.
+        {t('billing.paymentMethod.form.stripeNotice')}
       </p>
 
       <div className="flex gap-2">
@@ -1050,25 +1098,32 @@ function PaymentMethodForm({
           disabled={!canSubmit}
           className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-40"
         >
-          {pending ? 'Saving…' : 'Save'}
+          {pending ? t('billing.paymentMethod.form.saving') : t('billing.paymentMethod.form.save')}
         </button>
         <button
           type="button"
           onClick={onCancel}
           className="rounded-md border border-border px-3 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-2"
         >
-          Cancel
+          {t('billing.paymentMethod.form.cancel')}
         </button>
       </div>
     </form>
   );
 }
 
-/** How each invoice status reads and colours in the list. */
-const INVOICE_STATUS: Record<Invoice['status'], { label: string; className: string }> = {
-  paid: { label: 'Paid', className: 'text-success' },
-  open: { label: 'Open', className: 'text-content-secondary' },
-  trial: { label: 'Trial', className: 'text-content-tertiary' },
+/** How each invoice status colours in the list — the label comes from the catalogue. */
+const INVOICE_STATUS_CLASS: Record<Invoice['status'], string> = {
+  paid: 'text-success',
+  open: 'text-content-secondary',
+  trial: 'text-content-tertiary',
+};
+
+/** Catalogue key for each invoice status's label. */
+const INVOICE_STATUS_KEY: Record<Invoice['status'], string> = {
+  paid: 'billing.invoices.status.paid',
+  open: 'billing.invoices.status.open',
+  trial: 'billing.invoices.status.trial',
 };
 
 /**
@@ -1084,6 +1139,7 @@ const INVOICE_STATUS: Record<Invoice['status'], { label: string; className: stri
  * moved unexplainable without leaving the screen.
  */
 function InvoicesSection(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const [downloading, setDownloading] = useState<string | null>(null);
 
@@ -1111,15 +1167,21 @@ function InvoicesSection(): ReactElement {
 
   if (query.isPending) {
     return (
-      <Section title="Invoices" description="Your billing statements.">
+      <Section
+        title={t('billing.invoices.title')}
+        description={t('billing.invoices.loadingDescription')}
+      >
         <CardSkeleton rows={3} />
       </Section>
     );
   }
   if (query.error) {
     return (
-      <Section title="Invoices" description="Your billing statements.">
-        <ErrorNotice message="Could not load invoices." />
+      <Section
+        title={t('billing.invoices.title')}
+        description={t('billing.invoices.loadingDescription')}
+      >
+        <ErrorNotice message={t('billing.invoices.loadError')} />
       </Section>
     );
   }
@@ -1127,24 +1189,26 @@ function InvoicesSection(): ReactElement {
   const invoices = query.data.invoices;
 
   return (
-    <Section title="Invoices" description="Your billing statements, newest first.">
+    <Section title={t('billing.invoices.title')} description={t('billing.invoices.description')}>
       <Card>
         <div className="overflow-x-auto">
           <table className="w-full text-sm" data-testid="invoices-table">
             <thead>
               <tr className="border-b border-border text-left text-2xs uppercase tracking-wide text-content-tertiary">
-                <th className="px-4 py-2 font-medium">Invoice</th>
-                <th className="px-4 py-2 font-medium">Issued</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 text-right font-medium">Amount</th>
+                <th className="px-4 py-2 font-medium">{t('billing.invoices.table.invoice')}</th>
+                <th className="px-4 py-2 font-medium">{t('billing.invoices.table.issued')}</th>
+                <th className="px-4 py-2 font-medium">{t('billing.invoices.table.status')}</th>
                 <th className="px-4 py-2 text-right font-medium">
-                  <span className="sr-only">Download</span>
+                  {t('billing.invoices.table.amount')}
+                </th>
+                <th className="px-4 py-2 text-right font-medium">
+                  <span className="sr-only">{t('billing.invoices.table.download')}</span>
                 </th>
               </tr>
             </thead>
             <tbody>
               {invoices.map((invoice) => {
-                const status = INVOICE_STATUS[invoice.status];
+                const statusClass = INVOICE_STATUS_CLASS[invoice.status];
                 return (
                   <tr
                     key={invoice.period}
@@ -1178,19 +1242,25 @@ function InvoicesSection(): ReactElement {
                     <td className="px-4 py-2 text-content-secondary">
                       {formatDate(invoice.issued_at)}
                     </td>
-                    <td className={`px-4 py-2 font-medium ${status.className}`}>{status.label}</td>
+                    <td className={`px-4 py-2 font-medium ${statusClass}`}>
+                      {t(INVOICE_STATUS_KEY[invoice.status])}
+                    </td>
                     <td data-testid="invoice-total" className="tabular px-4 py-2 text-right">
                       {formatMoney(invoice.total_cents, invoice.currency.toUpperCase())}
                     </td>
                     <td className="px-4 py-2 text-right">
                       <button
                         type="button"
-                        aria-label={`Download invoice ${invoice.number}`}
+                        aria-label={t('billing.invoices.downloadAriaLabel', {
+                          number: invoice.number,
+                        })}
                         disabled={downloading === invoice.period}
                         onClick={() => void download(invoice)}
                         className="rounded-md border border-border px-2 py-1 text-2xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
                       >
-                        {downloading === invoice.period ? 'Downloading…' : 'Download'}
+                        {downloading === invoice.period
+                          ? t('billing.invoices.downloading')
+                          : t('billing.invoices.table.download')}
                       </button>
                     </td>
                   </tr>

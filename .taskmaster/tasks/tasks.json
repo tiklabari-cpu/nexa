@@ -6360,7 +6360,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-19T10:17:45.446Z",
+        "updatedAt": "2026-08-19T11:42:41.561Z",
         "subtasks": [
           {
             "id": 1,
@@ -6483,13 +6483,13 @@
             "description": "Ayarların ikinci yarısı + audit log ekranı katalogdan gelir.",
             "details": "NE YAPILACAK: `features/settings/*` kalan bölümler (133.9'un HANDOFF listesinden devam) + `features/audit/AuditLogPage.tsx` (362) → `locales/{en,tr}/settings.ts` (aynı dosyaya ekle) + `audit.ts`; güvenlik ekranlarının uyarı metinleri (break-glass, SSO zorunlu kılma) anlam kaybetmeden çevrilir.\nDOSYALAR: `features/settings/*.tsx` (ikinci yarı) · `features/audit/*.tsx` · `locales/{en,tr}/{settings,audit}.ts`.\nORTAK KURALLAR (tm 133'ün her sayfa alt-görevi için — 133.1 altyapıyı kurar, sen onu KULLAN):\n- Katalog: `apps/web/src/locales/{en,tr}/<ad-alanı>.ts` (133.1'in düzeni; anahtar biçimi\n  `<sayfa>.<bölüm>.<anlam>`, değer değil anlam — \"save\" değil \"actions.save\"); `useTranslate()` →\n  `t('inbox.list.empty')`; sayı/tarih/para `lib/format.ts` (locale'e bağlı; §D82 pinleme dersi —\n  runtime locale'i ürün davranışına sızdırma; testler locale'i açıkça kurar).\n- Türkçe metinler GERÇEK çeviri (makine-kalitesinde değil): kısa, ürün dili tutarlı (\"Sohbet\",\n  \"Müşteri\", \"Takım\", \"Playbook\" (özel ad), \"Faturalama\", \"Ayarlar\", \"Raporlar\", \"Gelen kutusu\");\n  ⌘K/AppShell'in mevcut `tr` kataloğu (`lib/i18n.ts`) sözlük emsalidir.\n- Testler: sayfanın mevcut `*.test.tsx`'leri metin arıyorsa (`getByText('Save')`) → anahtarla\n  eşleşen İngilizce değer üzerinden ya da `t()`'nin test yardımcısıyla (133.1 sağlar) — assert\n  sayısı AZALMAZ; +1 test: `tr` locale'de sayfanın en az bir sentinel metni Türkçe.\n- 133.1'in nöbetçisi (`i18n-coverage.test.ts`) sayfa dosyanı \"çevrilmiş\" listesine ALIR — listeyi\n  güncellemek bu alt-görevin işidir; nöbetçi ayrıca en/tr anahtar kümelerinin EŞİT olduğunu doğrular\n  (eksik tr anahtarı kırmızı).\n- `aria-label`/`title`/placeholder da çevrilir (a11y metinleri sabit İngilizce kalmasın).\n- Kapsam dışı: sunucu tarafı metinler (hata mesajları ADR-06 `type`'ından istemcide çevrilir —\n  `lib/api-client.ts`'in hata eşlemesi 133.1'de) · e-posta şablonları · widget (133.13).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **NFR-I18N2 panel i18n (+ I18N1 widget · I18N5 yerelleştirme)**. Gereksinim satırı: `grep -n '| I18N1/2' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KI18N1-2' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web süiti exit 0 · typecheck/lint · nöbetçi listesine SettingsPage + AuditLogPage · PLAN: KI18N1-2'ye madde.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "133.1",
               "133.9"
             ],
             "parentId": "133",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-19T11:42:41.561Z"
           },
           {
             "id": 11,
@@ -7033,7 +7033,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-19T10:17:45.450Z",
+      "lastModified": "2026-08-19T11:42:41.563Z",
       "taskCount": 143,
       "completedCount": 132,
       "tags": [

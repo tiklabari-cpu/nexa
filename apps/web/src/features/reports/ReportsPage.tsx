@@ -27,8 +27,16 @@ import {
 import { EmptyState } from '../../components/EmptyState.js';
 import { Banner, Dropdown } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
-import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
-import { formatCount, formatDuration, formatMoney, formatRate } from '../../lib/format.js';
+import { errorMessageKey, type ApiClient } from '../../lib/api-client.js';
+import {
+  formatCount,
+  formatDuration,
+  formatMoney,
+  formatRate,
+  formatWeekday,
+  type Weekday,
+} from '../../lib/format.js';
+import { getLocale, useTranslate, type TFunction } from '../../lib/i18n.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import {
   SAVED_REPORT_VIEW_NAME_MAX,
@@ -256,18 +264,33 @@ interface StaffingForecast {
 }
 
 const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'ai-agent', label: 'AI Agent' },
-  { id: 'reviews', label: 'Reviews' },
-  { id: 'breakdown', label: 'Breakdown' },
-  { id: 'staffing', label: 'Staffing' },
-  { id: 'topics', label: 'Chat topics' },
-  { id: 'cases', label: 'Cases' },
-  { id: 'leads', label: 'Leads' },
-  { id: 'sales', label: 'Sales' },
-  { id: 'team-performance', label: 'Team performance' },
+  { id: 'overview' },
+  { id: 'ai-agent' },
+  { id: 'reviews' },
+  { id: 'breakdown' },
+  { id: 'staffing' },
+  { id: 'topics' },
+  { id: 'cases' },
+  { id: 'leads' },
+  { id: 'sales' },
+  { id: 'team-performance' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
+
+/** `TabId` → its catalogue key. Module-level data, not JSX, so it carries no
+ * English fallback text — the render site resolves it through `t()`. */
+const TAB_LABEL_KEYS: Record<TabId, string> = {
+  overview: 'reports.tabs.overview',
+  'ai-agent': 'reports.tabs.aiAgent',
+  reviews: 'reports.tabs.reviews',
+  breakdown: 'reports.tabs.breakdown',
+  staffing: 'reports.tabs.staffing',
+  topics: 'reports.tabs.topics',
+  cases: 'reports.tabs.cases',
+  leads: 'reports.tabs.leads',
+  sales: 'reports.tabs.sales',
+  'team-performance': 'reports.tabs.teamPerformance',
+};
 
 /**
  * Tabs whose visibility follows `GET /reports/groups` (07.7-i) rather than
@@ -304,23 +327,24 @@ const TOPICS_PROMO_BANNER_ID = 'reports-topics-promo';
  * own persistent dismiss (`dismissLabel`) rather than a second control.
  */
 function TopicsPromoBanner({ onSeeTopics }: { onSeeTopics: () => void }): ReactElement {
+  const t = useTranslate();
   return (
     <Banner
       tone="brand"
       id={TOPICS_PROMO_BANNER_ID}
       dismissible
-      dismissLabel="Remind me later"
+      dismissLabel={t('reports.topicsPromo.dismiss')}
       cta={
         <button
           type="button"
           onClick={onSeeTopics}
           className="rounded-md bg-brand-500 px-2.5 py-1 text-xs font-medium text-white transition-colors hover:bg-brand-600"
         >
-          See chat topics
+          {t('reports.topicsPromo.cta')}
         </button>
       }
     >
-      Top chat topics in one place
+      {t('reports.topicsPromo.text')}
     </Banner>
   );
 }
@@ -364,6 +388,7 @@ function reportQuery(range: { from: string; to: string }, baseline: ReportBaseli
 }
 
 export function ReportsPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data: groupsData } = useReportGroups(api);
   const visibleGroupIds = new Set((groupsData?.groups ?? []).map((group) => group.id));
@@ -403,8 +428,8 @@ export function ReportsPage(): ReactElement {
 
   return (
     <Page
-      title="Reports"
-      description="Conversation volume, responsiveness and satisfaction."
+      title={t('reports.page.title')}
+      description={t('reports.page.description')}
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <SavedViewsControl
@@ -425,7 +450,11 @@ export function ReportsPage(): ReactElement {
         </div>
       }
     >
-      <div role="tablist" aria-label="Report" className="flex gap-1 border-b border-border">
+      <div
+        role="tablist"
+        aria-label={t('reports.page.tabsAriaLabel')}
+        className="flex gap-1 border-b border-border"
+      >
         {visibleTabs.map((tabDef) => {
           const selected = tab === tabDef.id;
           return (
@@ -443,7 +472,7 @@ export function ReportsPage(): ReactElement {
                   : 'border-transparent text-content-secondary hover:text-content'
               }`}
             >
-              {tabDef.label}
+              {t(TAB_LABEL_KEYS[tabDef.id])}
             </button>
           );
         })}
@@ -458,8 +487,8 @@ export function ReportsPage(): ReactElement {
         {mode === 'custom' && range === null ? (
           <Card>
             <EmptyState
-              title="Pick a date range"
-              description="Choose a start and end date. The end date cannot be before the start."
+              title={t('reports.emptyRange.title')}
+              description={t('reports.emptyRange.description')}
             />
           </Card>
         ) : tab === 'overview' ? (
@@ -513,13 +542,12 @@ function useReport<T>(kind: string, api: ApiClient, { rangeKey, range, baseline 
 }
 
 function OverviewTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsOverview>('overview', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load reports. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.overview.error')} />;
   }
   if (isPending) {
     return (
@@ -534,34 +562,42 @@ function OverviewTab(props: TabProps): ReactElement {
 
   return (
     <>
-      <Section title="Volume" description="Conversations and tickets in the selected window.">
+      <Section
+        title={t('reports.common.volume')}
+        description={t('reports.overview.volume.description')}
+      >
         <KpiGrid>
           <Kpi
-            label="Conversations"
+            label={t('reports.overview.kpi.conversations')}
             value={formatCount(data.totals.chats)}
             delta={<CountDelta current={data.totals.chats} previous={prev.chats} />}
           />
           <Kpi
-            label="Total cases"
+            label={t('reports.overview.kpi.totalCases')}
             value={formatCount(data.totals.total_cases)}
             delta={<CountDelta current={data.totals.total_cases} previous={prev.total_cases} />}
-            hint={`${formatCount(data.totals.chats)} chats + ${formatCount(
-              data.totals.tickets,
-            )} tickets`}
+            hint={t('reports.overview.kpi.totalCasesHint', {
+              chats: formatCount(data.totals.chats) ?? data.totals.chats,
+              tickets: formatCount(data.totals.tickets) ?? data.totals.tickets,
+            })}
           />
           <Kpi
-            label="Closed"
+            label={t('reports.common.closed')}
             value={formatCount(data.totals.closed)}
             delta={<CountDelta current={data.totals.closed} previous={prev.closed} />}
           />
           <Kpi
-            label="In queue now"
+            label={t('reports.overview.kpi.queuedNow')}
             value={formatCount(data.totals.queued_now)}
             tone={data.totals.queued_now > 0 ? 'warn' : 'neutral'}
-            hint={data.totals.queued_now > 0 ? 'Waiting for an agent' : 'Nobody waiting'}
+            hint={
+              data.totals.queued_now > 0
+                ? t('reports.overview.queue.waiting')
+                : t('reports.overview.queue.empty')
+            }
           />
           <Kpi
-            label="Achieved goals"
+            label={t('reports.overview.kpi.achievedGoals')}
             value={formatCount(data.totals.achieved_goals)}
             delta={
               <CountDelta current={data.totals.achieved_goals} previous={prev.achieved_goals} />
@@ -571,60 +607,60 @@ function OverviewTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="Resolution"
-        description="How closed conversations were handled (PRD §7.3.2). Manual, assisted and automated add up to every closed case."
+        title={t('reports.overview.resolution.title')}
+        description={t('reports.overview.resolution.description')}
       >
         <KpiGrid>
           <Kpi
-            label="Manual"
+            label={t('reports.common.resolution.manual')}
             value={formatCount(data.totals.manual)}
             delta={<CountDelta current={data.totals.manual} previous={prev.manual} />}
-            hint={closedShare(data.totals.manual_rate)}
+            hint={closedShare(t, data.totals.manual_rate)}
           />
           <Kpi
-            label="Assisted"
+            label={t('reports.common.resolution.assisted')}
             value={formatCount(data.totals.assisted)}
             delta={<CountDelta current={data.totals.assisted} previous={prev.assisted} />}
-            hint={closedShare(data.totals.assisted_rate)}
+            hint={closedShare(t, data.totals.assisted_rate)}
             tone="good"
           />
           <Kpi
-            label="Automated"
+            label={t('reports.common.resolution.automated')}
             value={formatCount(data.totals.automated)}
             delta={<CountDelta current={data.totals.automated} previous={prev.automated} />}
-            hint={closedShare(data.totals.automated_rate)}
+            hint={closedShare(t, data.totals.automated_rate)}
             tone="good"
           />
         </KpiGrid>
       </Section>
 
       <Section
-        title="Chats"
-        description="How fast the AI clears conversations and how long they run (PRD §7.3.3)."
+        title={t('reports.overview.chats.title')}
+        description={t('reports.overview.chats.description')}
       >
         <KpiGrid>
           <Kpi
-            label="Automated chats / hour"
+            label={t('reports.overview.kpi.automatedPerHour')}
             value={formatCount(data.chats.automated_per_hour)}
-            hint="AI resolutions per hour across the window"
+            hint={t('reports.overview.kpi.automatedPerHourHint')}
           />
           <Kpi
-            label="Automated chat duration"
+            label={t('reports.common.kpi.automatedChatDuration')}
             value={formatDuration(data.chats.automated_avg_duration_seconds)}
-            hint="Average, open to close"
+            hint={t('reports.common.hint.averageOpenToClose')}
           />
           <Kpi
-            label="Total chat duration"
+            label={t('reports.overview.kpi.totalDuration')}
             value={formatDuration(data.chats.total_duration_seconds)}
-            hint="Every closed conversation, summed"
+            hint={t('reports.overview.kpi.totalDurationHint')}
           />
         </KpiGrid>
       </Section>
 
-      <Section title="Responsiveness">
+      <Section title={t('reports.overview.responsiveness.title')}>
         <KpiGrid>
           <Kpi
-            label="First response"
+            label={t('reports.overview.kpi.firstResponse')}
             value={formatDuration(data.response_times.avg_first_response_seconds)}
             delta={
               <DurationDelta
@@ -632,10 +668,10 @@ function OverviewTab(props: TabProps): ReactElement {
                 previous={prev.avg_first_response_seconds}
               />
             }
-            hint="Average time to the first agent reply"
+            hint={t('reports.overview.kpi.firstResponseHint')}
           />
           <Kpi
-            label="Conversation length"
+            label={t('reports.overview.kpi.conversationLength')}
             value={formatDuration(data.response_times.avg_duration_seconds)}
             delta={
               <DurationDelta
@@ -643,20 +679,18 @@ function OverviewTab(props: TabProps): ReactElement {
                 previous={prev.avg_duration_seconds}
               />
             }
-            hint="Average from open to close"
+            hint={t('reports.overview.kpi.conversationLengthHint')}
           />
           <Kpi
-            label="Satisfaction"
+            label={t('reports.overview.kpi.satisfaction')}
             value={formatRate(data.satisfaction.score)}
             delta={
               <RateDelta current={data.satisfaction.score} previous={prev.satisfaction_score} />
             }
             hint={
               data.satisfaction.responses === 0
-                ? 'No ratings yet'
-                : `${formatCount(data.satisfaction.responses)} rating${
-                    data.satisfaction.responses === 1 ? '' : 's'
-                  }`
+                ? t('reports.common.noRatingsYet')
+                : t('reports.common.ratingCount', { count: data.satisfaction.responses })
             }
             tone={
               data.satisfaction.score === null
@@ -667,12 +701,12 @@ function OverviewTab(props: TabProps): ReactElement {
             }
           />
           <Kpi
-            label="Negative ratings"
+            label={t('reports.overview.kpi.negativeRatings')}
             value={formatCount(data.satisfaction.bad)}
             tone={data.satisfaction.bad > 0 ? 'warn' : 'neutral'}
           />
           <Kpi
-            label="SLA breaches"
+            label={t('reports.overview.kpi.slaBreaches')}
             value={data.sla.active ? formatCount(data.sla.breaches) : null}
             delta={
               data.sla.active ? (
@@ -682,48 +716,53 @@ function OverviewTab(props: TabProps): ReactElement {
             tone={data.sla.active && data.sla.breaches > 0 ? 'warn' : 'neutral'}
             hint={
               !data.sla.active
-                ? 'Set targets in Settings → SLA to track this'
+                ? t('reports.overview.sla.notConfigured')
                 : data.sla.low_confidence
-                  ? 'Not enough cases yet to read much into this'
+                  ? t('reports.overview.sla.lowConfidence')
                   : undefined
             }
           />
         </KpiGrid>
       </Section>
 
-      <Section title="By agent" description="Conversations handled in the selected window.">
+      <Section
+        title={t('reports.common.byAgent')}
+        description={t('reports.overview.byAgent.description')}
+      >
         <Card>
           {data.by_agent.length === 0 ? (
             <EmptyState
-              title="No assigned conversations"
-              description="Once conversations are routed to agents, their volume shows up here."
+              title={t('reports.common.noAssignedConversations')}
+              description={t('reports.overview.byAgent.emptyDescription')}
             />
           ) : (
             <table className="w-full text-sm">
-              <caption className="sr-only">Conversations handled per agent</caption>
+              <caption className="sr-only">{t('reports.overview.byAgent.caption')}</caption>
               <thead>
                 <tr className="border-b border-border text-left">
                   <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-                    Agent
+                    {t('reports.common.agentColumn')}
                   </th>
                   <th
                     scope="col"
                     className="w-32 px-4 py-2 text-right text-xs font-medium text-content-secondary"
                   >
-                    Conversations
+                    {t('reports.overview.kpi.conversations')}
                   </th>
                   <th
                     scope="col"
                     className="w-2/5 px-4 py-2 text-xs font-medium text-content-secondary"
                   >
-                    Share
+                    {t('reports.overview.byAgent.shareColumn')}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {data.by_agent.map((row) => (
                   <tr key={row.agent_id} className="border-b border-border last:border-0">
-                    <td className="truncate px-4 py-2">{row.name ?? 'Unknown agent'}</td>
+                    <td className="truncate px-4 py-2">
+                      {row.name ?? t('reports.common.unknownAgent')}
+                    </td>
                     <td className="tabular px-4 py-2 text-right">{formatCount(row.chats)}</td>
                     <td className="px-4 py-2">
                       <ShareBar value={row.chats} total={data.by_agent[0]?.chats ?? 1} />
@@ -736,12 +775,15 @@ function OverviewTab(props: TabProps): ReactElement {
         </Card>
       </Section>
 
-      <Section title="Top tags" description="What conversations were about.">
+      <Section
+        title={t('reports.overview.topTags.title')}
+        description={t('reports.overview.topTags.description')}
+      >
         {data.top_tags.length === 0 ? (
           <Card>
             <EmptyState
-              title="No tags applied"
-              description="Tag conversations from the details panel to see what drives contact volume."
+              title={t('reports.overview.topTags.emptyTitle')}
+              description={t('reports.overview.topTags.emptyDescription')}
             />
           </Card>
         ) : (
@@ -763,13 +805,12 @@ function OverviewTab(props: TabProps): ReactElement {
 }
 
 function AiAgentTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsAiAgent>('ai-agent', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the AI Agent report. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.aiAgent.error')} />;
   }
   if (isPending) {
     return (
@@ -783,42 +824,46 @@ function AiAgentTab(props: TabProps): ReactElement {
   return (
     <>
       <Section
-        title="AI resolution"
-        description="What the AI Agent handled without a human (ADR-09) — the same figure the invoice bills."
+        title={t('reports.aiAgent.resolution.title')}
+        description={t('reports.aiAgent.resolution.description')}
       >
         <KpiGrid>
-          <Kpi label="AI resolutions" value={formatCount(data.resolutions)} tone="good" />
           <Kpi
-            label="Resolution rate"
-            value={formatRate(data.resolution_rate)}
-            hint={closedShare(data.resolution_rate)}
+            label={t('reports.aiAgent.kpi.resolutions')}
+            value={formatCount(data.resolutions)}
             tone="good"
           />
           <Kpi
-            label="Automated chat duration"
+            label={t('reports.aiAgent.kpi.resolutionRate')}
+            value={formatRate(data.resolution_rate)}
+            hint={closedShare(t, data.resolution_rate)}
+            tone="good"
+          />
+          <Kpi
+            label={t('reports.common.kpi.automatedChatDuration')}
             value={formatDuration(data.avg_automated_duration_seconds)}
-            hint="Average, open to close"
+            hint={t('reports.common.hint.averageOpenToClose')}
           />
         </KpiGrid>
       </Section>
 
       <Section
-        title="Deflection"
-        description="How often the AI handed a conversation to a human, and how many skills ran."
+        title={t('reports.aiAgent.deflection.title')}
+        description={t('reports.aiAgent.deflection.description')}
       >
         <KpiGrid>
-          <Kpi label="Transfers to a human" value={formatCount(data.transfers)} />
+          <Kpi label={t('reports.aiAgent.kpi.transfers')} value={formatCount(data.transfers)} />
           <Kpi
-            label="Transfer rate"
+            label={t('reports.aiAgent.kpi.transferRate')}
             value={formatRate(data.transfer_rate)}
             hint={
               data.transfer_rate === null
-                ? 'The AI finished nothing in this window'
-                : 'Share of AI-finished chats handed off'
+                ? t('reports.aiAgent.transferRate.empty')
+                : t('reports.aiAgent.transferRate.hint')
             }
             tone={data.transfer_rate !== null && data.transfer_rate >= 0.5 ? 'warn' : 'neutral'}
           />
-          <Kpi label="Skills run" value={formatCount(data.skill_runs)} />
+          <Kpi label={t('reports.aiAgent.kpi.skillsRun')} value={formatCount(data.skill_runs)} />
         </KpiGrid>
       </Section>
     </>
@@ -836,13 +881,12 @@ function AiAgentTab(props: TabProps): ReactElement {
  * wired, never a fabricated figure.
  */
 function ReviewsTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsReviews>('reviews', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the Reviews report. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.reviews.error')} />;
   }
   if (isPending) {
     return (
@@ -859,28 +903,36 @@ function ReviewsTab(props: TabProps): ReactElement {
   return (
     <>
       <Section
-        title="Satisfaction (CSAT)"
-        description="Rated good as a share of all ratings (PRD §7.8). Null, never 0%, when nobody rated."
+        title={t('reports.reviews.csat.title')}
+        description={t('reports.reviews.csat.description')}
       >
         <Card>
           {csat.responses === 0 ? (
             <EmptyState
-              title="No ratings yet"
-              description="Once customers rate their conversations, the good / bad split shows up here."
+              title={t('reports.common.noRatingsYet')}
+              description={t('reports.reviews.csat.emptyDescription')}
             />
           ) : (
             <div className="flex flex-wrap items-center gap-8 p-2">
               <CsatDonut good={csat.good} bad={csat.bad} score={csat.score} />
               <div className="flex min-w-[11rem] flex-col gap-2 text-sm">
-                <CsatLegend swatch="bg-success" label="Rated good" value={csat.good} />
-                <CsatLegend swatch="bg-danger" label="Rated bad" value={csat.bad} />
+                <CsatLegend
+                  swatch="bg-success"
+                  label={t('reports.reviews.csat.good')}
+                  value={csat.good}
+                />
+                <CsatLegend
+                  swatch="bg-danger"
+                  label={t('reports.reviews.csat.bad')}
+                  value={csat.bad}
+                />
                 <p className="pt-1 text-content-secondary">
-                  {formatCount(csat.responses)} rating{csat.responses === 1 ? '' : 's'}
+                  {t('reports.common.ratingCount', { count: csat.responses })}
                 </p>
                 <p className="text-2xs text-content-tertiary">
                   {prev.score === null
-                    ? 'No ratings in the previous period'
-                    : `vs ${formatRate(prev.score)} previous period`}
+                    ? t('reports.reviews.csat.noPreviousRatings')
+                    : t('reports.reviews.csat.vsPrevious', { rate: formatRate(prev.score) ?? '' })}
                 </p>
               </div>
             </div>
@@ -889,14 +941,14 @@ function ReviewsTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="Ratings by day"
-        description="Daily rating volume, good vs bad, over each UTC day in the window."
+        title={t('reports.reviews.byDay.title')}
+        description={t('reports.reviews.byDay.description')}
       >
         <Card>
           {data.by_day.length === 0 ? (
             <EmptyState
-              title="No ratings in this window"
-              description="Once customers rate conversations, each day's ratings show up here."
+              title={t('reports.reviews.byDay.emptyTitle')}
+              description={t('reports.reviews.byDay.emptyDescription')}
             />
           ) : (
             <DailyBar rows={data.by_day} />
@@ -905,15 +957,18 @@ function ReviewsTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="Ecommerce"
-        description="Sales attributed to supported conversations (PRD §7.8, tracked sales §13.5)."
+        title={t('reports.reviews.ecommerce.title')}
+        description={t('reports.reviews.ecommerce.description')}
       >
         <Card>
           {data.ecommerce.configured ? (
             <KpiGrid>
-              <Kpi label="Tracked sales" value={formatCount(data.ecommerce.tracked_sales)} />
               <Kpi
-                label="Attributed revenue"
+                label={t('reports.common.kpi.trackedSales')}
+                value={formatCount(data.ecommerce.tracked_sales)}
+              />
+              <Kpi
+                label={t('reports.common.kpi.attributedRevenue')}
                 value={formatMoney(
                   data.ecommerce.attributed_revenue_cents,
                   data.ecommerce.currency,
@@ -923,14 +978,14 @@ function ReviewsTab(props: TabProps): ReactElement {
             </KpiGrid>
           ) : (
             <EmptyState
-              title="Sales tracking not set up"
-              description="Connect a sales source to attribute revenue to supported conversations."
+              title={t('reports.common.salesNotConfigured')}
+              description={t('reports.reviews.ecommerce.emptyDescription')}
               action={
                 <Link
                   to="/app/settings#section-sales-tracker"
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
                 >
-                  Configure sales platforms
+                  {t('reports.reviews.ecommerce.cta')}
                 </Link>
               }
             />
@@ -955,11 +1010,16 @@ function CsatDonut({
   bad: number;
   score: number | null;
 }): ReactElement {
+  const t = useTranslate();
   const responses = good + bad;
   const radius = 52;
   const circumference = 2 * Math.PI * radius;
   const goodLength = responses > 0 ? (good / responses) * circumference : 0;
-  const label = `CSAT ${formatRate(score) ?? 'unknown'}: ${good} of ${responses} rated good.`;
+  const label = t('reports.reviews.csat.donutLabel', {
+    rate: formatRate(score) ?? t('reports.reviews.csat.donutUnknown'),
+    good,
+    responses,
+  });
 
   return (
     <svg viewBox="0 0 120 120" className="h-36 w-36 shrink-0" role="img" aria-label={label}>
@@ -1014,27 +1074,28 @@ function CsatLegend({
  * not the total, keeps a quiet day's bar legible next to a busy one.
  */
 function DailyBar({ rows }: { rows: Array<CsatSummary & { date: string }> }): ReactElement {
+  const t = useTranslate();
   const max = Math.max(1, ...rows.map((row) => row.responses));
   const numeric = 'w-20 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">Ratings per day, split good and bad</caption>
+      <caption className="sr-only">{t('reports.reviews.byDay.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-            Day
+            {t('reports.common.dayColumn')}
           </th>
           <th scope="col" className="w-2/5 px-4 py-2 text-xs font-medium text-content-secondary">
-            Ratings
+            {t('reports.reviews.byDay.ratingsColumn')}
           </th>
           <th scope="col" className={numeric}>
-            Good
+            {t('reports.reviews.byDay.goodColumn')}
           </th>
           <th scope="col" className={numeric}>
-            Bad
+            {t('reports.reviews.byDay.badColumn')}
           </th>
           <th scope="col" className={numeric}>
-            CSAT
+            {t('reports.common.csatColumn')}
           </th>
         </tr>
       </thead>
@@ -1071,13 +1132,12 @@ function DayBar({ good, bad, max }: { good: number; bad: number; max: number }):
 }
 
 function BreakdownTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsBreakdown>('breakdown', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the breakdown. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.breakdown.error')} />;
   }
   if (isPending) {
     return (
@@ -1091,39 +1151,42 @@ function BreakdownTab(props: TabProps): ReactElement {
   return (
     <>
       <Section
-        title="By day"
-        description="The resolution split (PRD §7.3.2) resolved over each UTC day in the window."
+        title={t('reports.common.byDay')}
+        description={t('reports.breakdown.byDay.description')}
       >
         <Card>
           {data.by_day.length === 0 ? (
             <EmptyState
-              title="No conversations yet"
-              description="Once conversations happen in this window, their daily split shows up here."
+              title={t('reports.breakdown.byDay.emptyTitle')}
+              description={t('reports.breakdown.byDay.emptyDescription')}
             />
           ) : (
             <SplitTable
-              caption="Resolution split per day"
-              firstColumn="Day"
+              caption={t('reports.breakdown.byDay.caption')}
+              firstColumn={t('reports.common.dayColumn')}
               rows={data.by_day.map((row) => ({ key: row.date, label: row.date, ...row }))}
             />
           )}
         </Card>
       </Section>
 
-      <Section title="By agent" description="The same split resolved over each assigned agent.">
+      <Section
+        title={t('reports.common.byAgent')}
+        description={t('reports.breakdown.byAgent.description')}
+      >
         <Card>
           {data.by_agent.length === 0 ? (
             <EmptyState
-              title="No assigned conversations"
-              description="Once conversations are routed to agents, their split shows up here."
+              title={t('reports.common.noAssignedConversations')}
+              description={t('reports.breakdown.byAgent.emptyDescription')}
             />
           ) : (
             <SplitTable
-              caption="Resolution split per agent"
-              firstColumn="Agent"
+              caption={t('reports.breakdown.byAgent.caption')}
+              firstColumn={t('reports.common.agentColumn')}
               rows={data.by_agent.map((row) => ({
                 key: row.agent_id,
-                label: row.name ?? 'Unknown agent',
+                label: row.name ?? t('reports.common.unknownAgent'),
                 ...row,
               }))}
             />
@@ -1132,19 +1195,19 @@ function BreakdownTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="By hour"
-        description="The same split resolved over each UTC hour, summed across the window."
+        title={t('reports.breakdown.byHour.title')}
+        description={t('reports.breakdown.byHour.description')}
       >
         <Card>
           {(data.by_hour ?? []).length === 0 ? (
             <EmptyState
-              title="No hourly data yet"
-              description="Once conversations happen in this window, their hourly split shows up here."
+              title={t('reports.breakdown.byHour.emptyTitle')}
+              description={t('reports.breakdown.byHour.emptyDescription')}
             />
           ) : (
             <SplitTable
-              caption="Resolution split per hour"
-              firstColumn="Hour"
+              caption={t('reports.breakdown.byHour.caption')}
+              firstColumn={t('reports.breakdown.byHour.column')}
               rows={(data.by_hour ?? []).map((row) => ({
                 key: String(row.hour),
                 label: `${String(row.hour).padStart(2, '0')}:00`,
@@ -1156,26 +1219,26 @@ function BreakdownTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="By team"
+        title={t('reports.breakdown.byTeam.title')}
         description={
           data.overlapping
-            ? "The same split resolved over each team a conversation is visible to. A conversation open to more than one team is counted in every one of them, so row totals can exceed the window's total chats."
-            : 'The same split resolved over each team a conversation is visible to.'
+            ? t('reports.breakdown.byTeam.descriptionOverlap')
+            : t('reports.breakdown.byTeam.description')
         }
       >
         <Card>
           {(data.by_team ?? []).length === 0 ? (
             <EmptyState
-              title="No team data yet"
-              description="Once conversations are visible to a team, their split shows up here."
+              title={t('reports.breakdown.byTeam.emptyTitle')}
+              description={t('reports.breakdown.byTeam.emptyDescription')}
             />
           ) : (
             <SplitTable
-              caption="Resolution split per team"
-              firstColumn="Team"
+              caption={t('reports.breakdown.byTeam.caption')}
+              firstColumn={t('reports.breakdown.byTeam.column')}
               rows={(data.by_team ?? []).map((row) => ({
                 key: String(row.team_id ?? 'unassigned'),
-                label: row.name ?? 'Unassigned',
+                label: row.name ?? t('reports.breakdown.byTeam.unassigned'),
                 ...row,
               }))}
             />
@@ -1184,19 +1247,19 @@ function BreakdownTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="By channel"
-        description="The same split resolved over each channel the conversation started on."
+        title={t('reports.breakdown.byChannel.title')}
+        description={t('reports.breakdown.byChannel.description')}
       >
         <Card>
           {(data.by_channel ?? []).length === 0 ? (
             <EmptyState
-              title="No channel data yet"
-              description="Once conversations happen in this window, their channel split shows up here."
+              title={t('reports.breakdown.byChannel.emptyTitle')}
+              description={t('reports.breakdown.byChannel.emptyDescription')}
             />
           ) : (
             <SplitTable
-              caption="Resolution split per channel"
-              firstColumn="Channel"
+              caption={t('reports.breakdown.byChannel.caption')}
+              firstColumn={t('reports.breakdown.byChannel.column')}
               rows={(data.by_channel ?? []).map((row) => ({
                 key: row.channel,
                 label: row.channel,
@@ -1220,6 +1283,7 @@ function SplitTable({
   firstColumn: string;
   rows: Array<SplitRow & { key: string; label: string }>;
 }): ReactElement {
+  const t = useTranslate();
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
     <table className="w-full text-sm">
@@ -1230,16 +1294,16 @@ function SplitTable({
             {firstColumn}
           </th>
           <th scope="col" className={numeric}>
-            Chats
+            {t('reports.common.resolution.chats')}
           </th>
           <th scope="col" className={numeric}>
-            Manual
+            {t('reports.common.resolution.manual')}
           </th>
           <th scope="col" className={numeric}>
-            Assisted
+            {t('reports.common.resolution.assisted')}
           </th>
           <th scope="col" className={numeric}>
-            Automated
+            {t('reports.common.resolution.automated')}
           </th>
         </tr>
       </thead>
@@ -1262,7 +1326,16 @@ function SplitTable({
   );
 }
 
-const STAFFING_DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+/** `day_of_week` 0 (Sunday) … 6 (Saturday) → the `Weekday` `formatWeekday` understands. */
+const STAFFING_DAY_OF_WEEK: readonly Weekday[] = [
+  'sunday',
+  'monday',
+  'tuesday',
+  'wednesday',
+  'thursday',
+  'friday',
+  'saturday',
+];
 const STAFFING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
 
 /**
@@ -1277,13 +1350,12 @@ const STAFFING_HOURS = Array.from({ length: 24 }, (_, hour) => hour);
  * and "we don't know" are different facts, and only one of them is good news.
  */
 function StaffingTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<StaffingForecast>('staffing-forecast', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the staffing forecast. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.staffing.error')} />;
   }
   if (isPending) {
     return <CardSkeleton rows={7} />;
@@ -1292,26 +1364,23 @@ function StaffingTab(props: TabProps): ReactElement {
   const totalObserved = data.cells.reduce((sum, cell) => sum + cell.observed_chats, 0);
 
   return (
-    <Section
-      title="Staffing"
-      description="Required vs scheduled agents per UTC weekday and hour, from observed volume and the presence log (PRD §5.3). Gaps are the shortfall to close; a cell with too little history shows '—', never a guessed number."
-    >
+    <Section title={t('reports.tabs.staffing')} description={t('reports.staffing.description')}>
       <Card>
         {totalObserved === 0 ? (
           <EmptyState
-            title="No staffing data in this window"
-            description="Once conversations happen in this window, the required-vs-scheduled forecast shows up here."
+            title={t('reports.staffing.emptyTitle')}
+            description={t('reports.staffing.emptyDescription')}
           />
         ) : (
           <>
             {!data.coverage_known && (
               <p className="border-b border-border px-4 py-2 text-2xs text-warning">
-                No presence data in this window — scheduled coverage and every gap are unknown.
+                {t('reports.staffing.noPresenceData')}
               </p>
             )}
             {!data.roster_known && (
               <p className="border-b border-border px-4 py-2 text-2xs text-content-secondary">
-                No agent has a saved work schedule yet — rostered coverage is unknown.
+                {t('reports.staffing.noRoster')}
               </p>
             )}
             <StaffingGrid cells={data.cells} />
@@ -1324,6 +1393,8 @@ function StaffingTab(props: TabProps): ReactElement {
 
 /** The 7 × 24 grid itself: one row per UTC weekday (0 = Sunday), one column per UTC hour. */
 function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
+  const t = useTranslate();
+  const locale = getLocale();
   const byKey = new Map<string, StaffingCell>();
   for (const cell of cells) {
     byKey.set(`${cell.day_of_week}-${cell.hour}`, cell);
@@ -1332,11 +1403,11 @@ function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
-        <caption className="sr-only">Required vs scheduled agents per UTC weekday and hour</caption>
+        <caption className="sr-only">{t('reports.staffing.gridCaption')}</caption>
         <thead>
           <tr className="border-b border-border text-left">
             <th scope="col" className="px-2 py-1.5 text-2xs font-medium text-content-secondary">
-              Day
+              {t('reports.common.dayColumn')}
             </th>
             {STAFFING_HOURS.map((hour) => (
               <th
@@ -1350,13 +1421,13 @@ function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
           </tr>
         </thead>
         <tbody>
-          {STAFFING_DAY_LABELS.map((label, dayOfWeek) => (
-            <tr key={label} className="border-b border-border last:border-0">
+          {STAFFING_DAY_OF_WEEK.map((day, dayOfWeek) => (
+            <tr key={day} className="border-b border-border last:border-0">
               <th
                 scope="row"
                 className="px-2 py-1.5 text-left text-2xs font-medium text-content-secondary"
               >
-                {label}
+                {formatWeekday(day, locale, 'short')}
               </th>
               {STAFFING_HOURS.map((hour) => (
                 <StaffingCellView key={hour} cell={byKey.get(`${dayOfWeek}-${hour}`)} />
@@ -1371,6 +1442,7 @@ function StaffingGrid({ cells }: { cells: StaffingCell[] }): ReactElement {
 
 /** One grid cell: the gap, or "—" when the cell (or an input it depends on) is unknown. */
 function StaffingCellView({ cell }: { cell: StaffingCell | undefined }): ReactElement {
+  const t = useTranslate();
   if (
     !cell ||
     cell.gap === null ||
@@ -1378,7 +1450,10 @@ function StaffingCellView({ cell }: { cell: StaffingCell | undefined }): ReactEl
     cell.scheduled_agents === null
   ) {
     return (
-      <td title="Not enough data" className="tabular px-1 py-1.5 text-center text-content-tertiary">
+      <td
+        title={t('reports.staffing.cellUnknown')}
+        className="tabular px-1 py-1.5 text-center text-content-tertiary"
+      >
         —
       </td>
     );
@@ -1386,7 +1461,11 @@ function StaffingCellView({ cell }: { cell: StaffingCell | undefined }): ReactEl
 
   const { gap, required_agents, scheduled_agents } = cell;
   const highlight = gap > 0;
-  const title = `Required ${required_agents} · Scheduled ${formatScheduled(scheduled_agents)} · Gap ${formatGap(gap)}`;
+  const title = t('reports.staffing.cellTitle', {
+    required: required_agents,
+    scheduled: formatScheduled(scheduled_agents),
+    gap: formatGap(gap),
+  });
 
   return (
     <td
@@ -1419,28 +1498,27 @@ function formatGap(gap: number): string {
  * fabricated topic, and never an empty rectangle (EK-B.1).
  */
 function TopicsTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsTopics>('topics', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load chat topics. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.topics.error')} />;
   }
   if (isPending) {
     return <CardSkeleton rows={4} />;
   }
 
   return (
-    <Section
-      title="Chat topics"
-      description="Conversations in this window, grouped into topics by AI clustering."
-    >
+    <Section title={t('reports.tabs.topics')} description={t('reports.topics.description')}>
       <Card>
         {!data.sufficient_data || data.topics.length === 0 ? (
           <EmptyState
-            title="Not enough conversations yet"
-            description={`Chat topics needs at least ${data.min_conversations} conversations in this window — ${data.analyzed} so far.`}
+            title={t('reports.topics.emptyTitle')}
+            description={t('reports.topics.emptyDescription', {
+              min: data.min_conversations,
+              analyzed: data.analyzed,
+            })}
           />
         ) : (
           <TopicsTable topics={data.topics} />
@@ -1452,23 +1530,24 @@ function TopicsTab(props: TabProps): ReactElement {
 
 /** The topics table: label, volume, share of analyzed conversations and trend. */
 function TopicsTable({ topics }: { topics: TopicRow[] }): ReactElement {
+  const t = useTranslate();
   const numeric = 'w-28 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">Chat topics, most voluminous first</caption>
+      <caption className="sr-only">{t('reports.topics.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-            Topic
+            {t('reports.topics.topicColumn')}
           </th>
           <th scope="col" className={numeric}>
-            Volume
+            {t('reports.common.volume')}
           </th>
           <th scope="col" className={numeric}>
-            Share
+            {t('reports.common.shareColumn')}
           </th>
           <th scope="col" className={numeric}>
-            Trend
+            {t('reports.topics.trendColumn')}
           </th>
         </tr>
       </thead>
@@ -1495,8 +1574,11 @@ function TopicsTable({ topics }: { topics: TopicRow[] }): ReactElement {
  * not appear in the previous window, so its trend is genuinely unknown.
  */
 function TopicTrend({ trend }: { trend: number | null }): ReactElement {
+  const t = useTranslate();
   if (trend === null) return <span className="text-content-tertiary">—</span>;
-  if (trend === 0) return <span className="text-content-tertiary">No change</span>;
+  if (trend === 0) {
+    return <span className="text-content-tertiary">{t('reports.topics.noChange')}</span>;
+  }
   return (
     <span>
       {trend > 0 ? '↑' : '↓'} {formatRate(Math.abs(trend))}
@@ -1511,13 +1593,12 @@ function TopicTrend({ trend }: { trend: number | null }): ReactElement {
  * CSV/PDF export, so a download can never disagree with the tab beside it.
  */
 function CasesTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsCases>('cases', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the Cases report. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.cases.error')} />;
   }
   if (isPending) {
     return (
@@ -1536,33 +1617,36 @@ function CasesTab(props: TabProps): ReactElement {
 
   return (
     <>
-      <Section title="Volume" description="Tickets in the selected window, by current status.">
+      <Section
+        title={t('reports.common.volume')}
+        description={t('reports.cases.volume.description')}
+      >
         <KpiGrid>
           <Kpi
-            label="Open"
+            label={t('reports.cases.kpi.open')}
             value={formatCount(totals.open)}
             delta={<CountDelta current={totals.open} previous={prev.open} />}
           />
           <Kpi
-            label="Closed"
+            label={t('reports.common.closed')}
             value={formatCount(totals.closed)}
             delta={<CountDelta current={totals.closed} previous={prev.closed} />}
             tone="good"
           />
           <Kpi
-            label="Total"
+            label={t('reports.cases.kpi.total')}
             value={formatCount(totals.total)}
             delta={<CountDelta current={totals.total} previous={prev.total} />}
           />
         </KpiGrid>
       </Section>
 
-      <Section title="By day" description="Tickets created per UTC day, split open and closed.">
+      <Section title={t('reports.common.byDay')} description={t('reports.cases.byDay.description')}>
         <Card>
           {data.by_day.length === 0 ? (
             <EmptyState
-              title="No cases in this window"
-              description="Once a ticket is created in this window, its daily split shows up here."
+              title={t('reports.cases.byDay.emptyTitle')}
+              description={t('reports.cases.byDay.emptyDescription')}
             />
           ) : (
             <CasesDailyTable rows={data.by_day} />
@@ -1571,14 +1655,14 @@ function CasesTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="By status"
-        description="Tickets in the window, grouped by their current status."
+        title={t('reports.cases.byStatus.title')}
+        description={t('reports.cases.byStatus.description')}
       >
         <Card>
           {data.by_status.length === 0 ? (
             <EmptyState
-              title="No status data yet"
-              description="Once a ticket is created in this window, its status breakdown shows up here."
+              title={t('reports.cases.byStatus.emptyTitle')}
+              description={t('reports.cases.byStatus.emptyDescription')}
             />
           ) : (
             <CasesStatusTable rows={data.by_status} />
@@ -1587,14 +1671,14 @@ function CasesTab(props: TabProps): ReactElement {
       </Section>
 
       <Section
-        title="By priority"
-        description="Tickets in the window, grouped by their stored queue priority (highest first)."
+        title={t('reports.cases.byPriority.title')}
+        description={t('reports.cases.byPriority.description')}
       >
         <Card>
           {data.by_priority.length === 0 ? (
             <EmptyState
-              title="No priority data yet"
-              description="Once a ticket is created in this window, its priority breakdown shows up here."
+              title={t('reports.cases.byPriority.emptyTitle')}
+              description={t('reports.cases.byPriority.emptyDescription')}
             />
           ) : (
             <CasesPriorityTable rows={data.by_priority} />
@@ -1622,23 +1706,24 @@ function sumCaseSplit(rows: ReportsCases['by_day']): {
 }
 
 function CasesDailyTable({ rows }: { rows: ReportsCases['by_day'] }): ReactElement {
+  const t = useTranslate();
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">Tickets per day, split open and closed</caption>
+      <caption className="sr-only">{t('reports.cases.byDay.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-            Day
+            {t('reports.common.dayColumn')}
           </th>
           <th scope="col" className={numeric}>
-            Open
+            {t('reports.cases.kpi.open')}
           </th>
           <th scope="col" className={numeric}>
-            Closed
+            {t('reports.common.closed')}
           </th>
           <th scope="col" className={numeric}>
-            Total
+            {t('reports.cases.kpi.total')}
           </th>
         </tr>
       </thead>
@@ -1657,19 +1742,20 @@ function CasesDailyTable({ rows }: { rows: ReportsCases['by_day'] }): ReactEleme
 }
 
 function CasesStatusTable({ rows }: { rows: ReportsCases['by_status'] }): ReactElement {
+  const t = useTranslate();
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">Tickets by current status</caption>
+      <caption className="sr-only">{t('reports.cases.byStatus.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-            Status
+            {t('reports.cases.byStatus.column')}
           </th>
           <th
             scope="col"
             className="w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary"
           >
-            Tickets
+            {t('reports.common.ticketsColumn')}
           </th>
         </tr>
       </thead>
@@ -1686,19 +1772,20 @@ function CasesStatusTable({ rows }: { rows: ReportsCases['by_status'] }): ReactE
 }
 
 function CasesPriorityTable({ rows }: { rows: ReportsCases['by_priority'] }): ReactElement {
+  const t = useTranslate();
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">Tickets by stored queue priority</caption>
+      <caption className="sr-only">{t('reports.cases.byPriority.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-            Priority
+            {t('reports.cases.byPriority.column')}
           </th>
           <th
             scope="col"
             className="w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary"
           >
-            Tickets
+            {t('reports.common.ticketsColumn')}
           </th>
         </tr>
       </thead>
@@ -1721,13 +1808,12 @@ function CasesPriorityTable({ rows }: { rows: ReportsCases['by_priority'] }): Re
  * (NFR-S4; see the API's isolation note on `ReportsLeads`).
  */
 function LeadsTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsLeads>('leads', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the Leads report. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.leads.error')} />;
   }
   if (isPending) {
     return (
@@ -1743,24 +1829,24 @@ function LeadsTab(props: TabProps): ReactElement {
   return (
     <>
       <Section
-        title="Volume"
-        description="Customers flagged as leads, counted by the UTC day they first touched this license."
+        title={t('reports.common.volume')}
+        description={t('reports.leads.volume.description')}
       >
         <KpiGrid>
           <Kpi
-            label="New leads"
+            label={t('reports.leads.kpi.newLeads')}
             value={formatCount(data.totals.leads)}
             delta={<CountDelta current={data.totals.leads} previous={prev.leads} />}
           />
         </KpiGrid>
       </Section>
 
-      <Section title="By day" description="New leads per UTC day in the window.">
+      <Section title={t('reports.common.byDay')} description={t('reports.leads.byDay.description')}>
         <Card>
           {data.by_day.length === 0 ? (
             <EmptyState
-              title="No new leads in this window"
-              description="Once a customer's first chat or ticket with this license lands, they show up here."
+              title={t('reports.leads.byDay.emptyTitle')}
+              description={t('reports.leads.byDay.emptyDescription')}
             />
           ) : (
             <LeadsDailyTable rows={data.by_day} />
@@ -1772,19 +1858,20 @@ function LeadsTab(props: TabProps): ReactElement {
 }
 
 function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactElement {
+  const t = useTranslate();
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">New leads per day</caption>
+      <caption className="sr-only">{t('reports.leads.byDay.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-            Day
+            {t('reports.common.dayColumn')}
           </th>
           <th
             scope="col"
             className="w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary"
           >
-            New leads
+            {t('reports.leads.kpi.newLeads')}
           </th>
         </tr>
       </thead>
@@ -1808,34 +1895,36 @@ function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactEleme
  * figure here is ever a fabricated 0 (FR-EK-B.1, null ≠ 0).
  */
 function SalesTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsSales>('sales', api, props);
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the Sales report. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.sales.error')} />;
   }
   if (isPending) {
     return <CardSkeleton rows={3} />;
   }
 
   return (
-    <Section title="Sales" description="Sales attributed to supported conversations.">
+    <Section title={t('reports.tabs.sales')} description={t('reports.sales.description')}>
       <Card>
         {data.configured ? (
           <KpiGrid>
-            <Kpi label="Tracked sales" value={formatCount(data.tracked_sales)} />
             <Kpi
-              label="Attributed revenue"
+              label={t('reports.common.kpi.trackedSales')}
+              value={formatCount(data.tracked_sales)}
+            />
+            <Kpi
+              label={t('reports.common.kpi.attributedRevenue')}
               value={formatMoney(data.attributed_revenue_cents, data.currency ?? undefined) ?? '—'}
             />
-            <Kpi label="Conversions" value={formatCount(data.conversions)} />
+            <Kpi label={t('reports.sales.kpi.conversions')} value={formatCount(data.conversions)} />
           </KpiGrid>
         ) : (
           <EmptyState
-            title="Sales tracking not set up"
-            description="Connect a sales source to attribute revenue to supported conversations. The Sales tracker (FR-MOD-13.5) is not available yet."
+            title={t('reports.common.salesNotConfigured')}
+            description={t('reports.sales.emptyDescription')}
           />
         )}
       </Card>
@@ -1851,6 +1940,7 @@ function SalesTab(props: TabProps): ReactElement {
  * window to appear here at all.
  */
 function TeamPerformanceTab(props: TabProps): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { data, isPending, error } = useReport<ReportsTeamPerformance>(
     'team-performance',
@@ -1859,9 +1949,7 @@ function TeamPerformanceTab(props: TabProps): ReactElement {
   );
 
   if (error) {
-    return (
-      <ErrorNotice message="Could not load the Team performance report. Check that the API is reachable and try again." />
-    );
+    return <ErrorNotice message={t('reports.teamPerformance.error')} />;
   }
   if (isPending) {
     return <CardSkeleton rows={4} />;
@@ -1869,14 +1957,14 @@ function TeamPerformanceTab(props: TabProps): ReactElement {
 
   return (
     <Section
-      title="Team performance"
-      description="Per-agent chats, resolution split, first-response time and CSAT for the window."
+      title={t('reports.tabs.teamPerformance')}
+      description={t('reports.teamPerformance.description')}
     >
       <Card>
         {data.agents.length === 0 ? (
           <EmptyState
-            title="No agent activity in this window"
-            description="Once conversations are assigned to agents, their per-agent performance shows up here."
+            title={t('reports.teamPerformance.emptyTitle')}
+            description={t('reports.teamPerformance.emptyDescription')}
           />
         ) : (
           <TeamPerformanceTable rows={data.agents} />
@@ -1892,44 +1980,43 @@ function TeamPerformanceTab(props: TabProps): ReactElement {
  * `score` is already `null` for that case, so this only has to defer to it.
  */
 function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }): ReactElement {
+  const t = useTranslate();
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">
-        Per-agent chats, resolution split, response time and CSAT
-      </caption>
+      <caption className="sr-only">{t('reports.teamPerformance.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th scope="col" className="px-4 py-2 text-xs font-medium text-content-secondary">
-            Agent
+            {t('reports.common.agentColumn')}
           </th>
           <th scope="col" className={numeric}>
-            Chats
+            {t('reports.common.resolution.chats')}
           </th>
           <th scope="col" className={numeric}>
-            Closed
+            {t('reports.common.closed')}
           </th>
           <th scope="col" className={numeric}>
-            Automated
+            {t('reports.common.resolution.automated')}
           </th>
           <th scope="col" className={numeric}>
-            Assisted
+            {t('reports.common.resolution.assisted')}
           </th>
           <th scope="col" className={numeric}>
-            Manual
+            {t('reports.common.resolution.manual')}
           </th>
           <th scope="col" className={numeric}>
-            Avg first response
+            {t('reports.teamPerformance.avgFirstResponseColumn')}
           </th>
           <th scope="col" className={numeric}>
-            CSAT
+            {t('reports.common.csatColumn')}
           </th>
         </tr>
       </thead>
       <tbody>
         {rows.map((row) => (
           <tr key={row.agent_id} className="border-b border-border last:border-0">
-            <td className="truncate px-4 py-2">{row.name ?? 'Unknown agent'}</td>
+            <td className="truncate px-4 py-2">{row.name ?? t('reports.common.unknownAgent')}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.chats)}</td>
             <td className="tabular px-4 py-2 text-right">{formatCount(row.closed)}</td>
             <td className="tabular px-4 py-2 text-right text-success">
@@ -1975,6 +2062,7 @@ function ExportControl({
   range: { from: string; to: string } | null;
   visible: boolean;
 }): ReactElement | null {
+  const t = useTranslate();
   const api = useApiClient();
   const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
   const [pending, setPending] = useState(false);
@@ -2002,7 +2090,7 @@ function ExportControl({
       link.remove();
       URL.revokeObjectURL(url);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : 'Could not export this report.');
+      setError(t(errorMessageKey(cause)));
     } finally {
       setPending(false);
     }
@@ -2012,7 +2100,7 @@ function ExportControl({
     <div className="flex flex-col items-end gap-1">
       <div className="flex items-center gap-1.5">
         <label className="sr-only" htmlFor="export-format">
-          Export format
+          {t('reports.export.formatLabel')}
         </label>
         <select
           id="export-format"
@@ -2020,8 +2108,8 @@ function ExportControl({
           onChange={(event) => setFormat(event.target.value as 'csv' | 'pdf')}
           className="rounded-md border border-border bg-inset px-2 py-1.5 text-xs text-content"
         >
-          <option value="csv">CSV</option>
-          <option value="pdf">PDF</option>
+          <option value="csv">{t('reports.export.csv')}</option>
+          <option value="pdf">{t('reports.export.pdf')}</option>
         </select>
         <button
           type="button"
@@ -2029,7 +2117,7 @@ function ExportControl({
           onClick={() => void download()}
           className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
         >
-          {pending ? 'Exporting…' : 'Export'}
+          {pending ? t('reports.export.pending') : t('reports.export.cta')}
         </button>
       </div>
       {error && (
@@ -2059,10 +2147,11 @@ function SavedViewsControl({
   onAdd: (name: string) => SavedReportView | null;
   onRemove: (id: string) => void;
 }): ReactElement {
+  const t = useTranslate();
   return (
     <Dropdown
-      label="Saved views"
-      trigger="Views"
+      label={t('reports.savedViews.ariaLabel')}
+      trigger={t('reports.savedViews.trigger')}
       triggerClassName="rounded-md border border-border bg-inset px-2.5 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:text-content"
       panelClassName="right-0 top-full mt-1 w-64 p-2"
     >
@@ -2088,7 +2177,7 @@ function SavedViewsControl({
                   <button
                     type="button"
                     onClick={() => onRemove(view.id)}
-                    aria-label={`Remove saved view ${view.name}`}
+                    aria-label={t('reports.savedViews.remove', { name: view.name })}
                     className="shrink-0 rounded-md px-1.5 py-1 text-2xs text-content-tertiary opacity-0 transition-opacity hover:text-danger focus:opacity-100 group-hover:opacity-100"
                   >
                     ✕
@@ -2115,12 +2204,13 @@ function SaveCurrentView({
 }: {
   onAdd: (name: string) => SavedReportView | null;
 }): ReactElement {
+  const t = useTranslate();
   const form = useForm({
     initial: { name: '' },
-    validators: { name: required('Enter a name for this view.') },
+    validators: { name: required(t('reports.savedViews.nameError')) },
     onSubmit: (values, { reset, setSubmitError }) => {
       if (!onAdd(values.name)) {
-        setSubmitError('Enter a name for this view.');
+        setSubmitError(t('reports.savedViews.nameError'));
         return;
       }
       reset();
@@ -2138,7 +2228,7 @@ function SaveCurrentView({
         htmlFor="save-report-view-name"
         className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
       >
-        Save this view
+        {t('reports.savedViews.saveLabel')}
       </label>
       <input
         id="save-report-view-name"
@@ -2146,7 +2236,7 @@ function SaveCurrentView({
         onChange={(event) => form.setValue('name', event.target.value)}
         onBlur={() => form.blur('name')}
         maxLength={SAVED_REPORT_VIEW_NAME_MAX}
-        placeholder="Name this view"
+        placeholder={t('reports.savedViews.namePlaceholder')}
         aria-invalid={nameError ? true : undefined}
         aria-describedby={nameError ? 'save-report-view-name-error' : undefined}
         className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
@@ -2157,7 +2247,7 @@ function SaveCurrentView({
         disabled={!form.canSubmit}
         className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {form.isSubmitting ? 'Saving…' : 'Save'}
+        {form.isSubmitting ? t('reports.savedViews.submitPending') : t('reports.savedViews.submit')}
       </button>
     </form>
   );
@@ -2179,6 +2269,7 @@ function RangeControls({
   onCustomFrom: (value: string) => void;
   onCustomTo: (value: string) => void;
 }): ReactElement {
+  const t = useTranslate();
   const chip = (active: boolean): string =>
     `rounded-md border px-2 py-1 text-xs font-medium transition-colors ${
       active
@@ -2188,7 +2279,11 @@ function RangeControls({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1" role="group" aria-label="Range">
+      <div
+        className="flex items-center gap-1"
+        role="group"
+        aria-label={t('reports.range.groupAriaLabel')}
+      >
         {PRESETS.map((days) => (
           <button
             key={days}
@@ -2197,7 +2292,7 @@ function RangeControls({
             onClick={() => onMode(days)}
             className={chip(mode === days)}
           >
-            {days} days
+            {t('reports.range.presetDays', { days })}
           </button>
         ))}
         <button
@@ -2206,13 +2301,13 @@ function RangeControls({
           onClick={() => onMode('custom')}
           className={chip(mode === 'custom')}
         >
-          Custom
+          {t('reports.range.custom')}
         </button>
       </div>
       {mode === 'custom' && (
         <div className="flex items-center gap-1 text-xs text-content-secondary">
           <label className="flex items-center gap-1">
-            <span className="sr-only">Start date</span>
+            <span className="sr-only">{t('reports.range.startDate')}</span>
             <input
               type="date"
               value={customFrom}
@@ -2223,7 +2318,7 @@ function RangeControls({
           </label>
           <span aria-hidden="true">→</span>
           <label className="flex items-center gap-1">
-            <span className="sr-only">End date</span>
+            <span className="sr-only">{t('reports.range.endDate')}</span>
             <input
               type="date"
               value={customTo}
@@ -2254,14 +2349,18 @@ function Delta({
   previous: number | null | undefined;
   format: (value: number | null | undefined) => string | null;
 }): ReactElement | null {
+  const t = useTranslate();
   if (current == null || previous == null) return null;
   const diff = Math.round((current - previous) * 1000) / 1000;
   if (diff === 0) {
-    return <span className="text-2xs text-content-tertiary">No change vs previous</span>;
+    return (
+      <span className="text-2xs text-content-tertiary">{t('reports.common.delta.noChange')}</span>
+    );
   }
   return (
-    <span className="text-2xs text-content-tertiary" title="Compared with the previous period">
-      {diff > 0 ? '↑' : '↓'} {format(Math.abs(diff))} vs previous
+    <span className="text-2xs text-content-tertiary" title={t('reports.common.delta.tooltip')}>
+      {diff > 0 ? '↑' : '↓'}{' '}
+      {t('reports.common.delta.suffix', { value: format(Math.abs(diff)) ?? '' })}
     </span>
   );
 }
@@ -2292,8 +2391,10 @@ function RateDelta(props: {
  * note when nothing closed. A rate is null (not 0%) for an empty window, and
  * "0% of closed" would read as a failure rather than as an absence of data.
  */
-function closedShare(rate: number | null): string {
-  return rate === null ? 'Nothing closed in this window' : `${formatRate(rate)} of closed`;
+function closedShare(t: TFunction, rate: number | null): string {
+  return rate === null
+    ? t('reports.common.closedShare.none')
+    : t('reports.common.closedShare.value', { rate: formatRate(rate) ?? '' });
 }
 
 /**

@@ -57,6 +57,12 @@ describe('explicit locale argument', () => {
     expect(formatWeekday('monday', 'tr')).toBe('Pazartesi');
     expect(formatWeekday('sunday', 'tr')).toBe('Pazar');
   });
+
+  it('abbreviates the weekday when asked for the short style, for a compact row header', () => {
+    expect(formatWeekday('monday', 'en', 'short')).toBe('Mon');
+    expect(formatWeekday('sunday', 'en', 'short')).toBe('Sun');
+    expect(formatWeekday('monday', 'tr', 'short')).toBe('Pzt');
+  });
 });
 
 describe('active locale binding', () => {

@@ -121,8 +121,16 @@ const WEEKDAY_OFFSET: Record<Weekday, number> = {
   sunday: 6,
 };
 
-/** `'monday'` → `"Monday"` (or `"Pazartesi"` in Turkish) — the long weekday name. */
-export function formatWeekday(day: Weekday, locale: string | undefined = activeLocale): string {
+/**
+ * `'monday'` → `"Monday"` (or `"Pazartesi"` in Turkish) — the long weekday name.
+ * `style: 'short'` gives the abbreviated form (`"Mon"` / `"Pzt"`), for a
+ * compact row header (the Staffing grid) rather than prose.
+ */
+export function formatWeekday(
+  day: Weekday,
+  locale: string | undefined = activeLocale,
+  style: 'long' | 'short' = 'long',
+): string {
   const reference = new Date(Date.UTC(2024, 0, 1 + WEEKDAY_OFFSET[day]));
-  return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(reference);
+  return new Intl.DateTimeFormat(locale, { weekday: style, timeZone: 'UTC' }).format(reference);
 }

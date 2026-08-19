@@ -13,10 +13,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({ api: { get: vi.fn(), getFile: vi.fn() } }));
 
@@ -1612,8 +1613,11 @@ describe('ReportsPage — Export control (07.7-k)', () => {
     await screen.findByText('Conversations', { exact: true });
     await user.click(await screen.findByRole('button', { name: 'Export' }));
 
+    // ADR-06 (I18N-f, tm 133.6): the catalogue sentence for the error's `type`,
+    // never the server's own wording — the mock's `message` above is
+    // deliberately never asserted, the same as every other translated screen.
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      'This token cannot export the overview report.',
+      'You do not have permission to do that.',
     );
   });
 });
@@ -1795,5 +1799,26 @@ describe('ReportsPage — Save view (KK-derived from 07.7-h)', () => {
 
     await user.click(screen.getByRole('button', { name: 'Remove saved view Temp view' }));
     expect(screen.queryByRole('button', { name: 'Temp view' })).not.toBeInTheDocument();
+  });
+});
+
+describe('ReportsPage — Turkish locale (I18N-f)', () => {
+  afterEach(resetLocale);
+
+  it('paints the Overview tab in Turkish when that is the active locale', async () => {
+    mockReports({ resolutions: 0 });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ReportsPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Raporlar', level: 1 })).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Genel Bakış' })).toBeInTheDocument();
+    expect(await screen.findByText('Ulaşılan hedefler')).toBeInTheDocument();
   });
 });

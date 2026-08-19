@@ -27,5 +27,13 @@ export const tr: Record<string, string> = {
   'attachment.alt': 'Ek',
   'typing.named': '{name} yazıyor…',
   'typing.generic': 'Yazıyor…',
+  'rating.menuLabel': 'Diğer seçenekler',
+  'rating.menuItem': 'Bu sohbeti değerlendir',
+  'rating.group': 'Bu sohbeti değerlendir',
+  'rating.prompt': 'Bu sohbet nasıldı?',
+  'rating.good': 'İyi',
+  'rating.bad': 'İyi değil',
+  'rating.thanks': 'Geri bildiriminiz için teşekkürler!',
+  'rating.dismiss': 'Kapat',
   poweredBy: 'Nexa ile güçlendirilmiştir',
 };

@@ -28,5 +28,13 @@ export const de: Record<string, string> = {
   'attachment.alt': 'Anhang',
   'typing.named': '{name} schreibt gerade…',
   'typing.generic': 'Schreibt gerade…',
+  'rating.menuLabel': 'Weitere Optionen',
+  'rating.menuItem': 'Diesen Chat bewerten',
+  'rating.group': 'Diesen Chat bewerten',
+  'rating.prompt': 'Wie war dieser Chat?',
+  'rating.good': 'Gut',
+  'rating.bad': 'Nicht gut',
+  'rating.thanks': 'Danke für Ihr Feedback!',
+  'rating.dismiss': 'Schließen',
   poweredBy: 'Bereitgestellt von Nexa',
 };

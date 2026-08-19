@@ -28,5 +28,13 @@ export const fr: Record<string, string> = {
   'attachment.alt': 'Pièce jointe',
   'typing.named': "{name} est en train d'écrire…",
   'typing.generic': "En train d'écrire…",
+  'rating.menuLabel': "Plus d'options",
+  'rating.menuItem': 'Évaluer ce chat',
+  'rating.group': 'Évaluer ce chat',
+  'rating.prompt': 'Comment était ce chat ?',
+  'rating.good': 'Bien',
+  'rating.bad': 'Pas bien',
+  'rating.thanks': 'Merci pour votre avis !',
+  'rating.dismiss': 'Fermer',
   poweredBy: 'Propulsé par Nexa',
 };

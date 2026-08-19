@@ -91,6 +91,15 @@ interface State {
   /** A file the visitor picked and we uploaded, waiting to be sent. */
   pendingAttachment: { fileUrl: string; name: string } | null;
   uploading: boolean;
+  /**
+   * The CSAT prompt (FR-MOD-07.8/11): `chatId` is whichever chat it targets —
+   * the one that just closed, or the current one when opened early from the
+   * header menu. `value` is null until the vote round-trips, which flips the
+   * prompt to a "thanks" state; voting again still posts (the server neither
+   * blocks nor dedupes a second rating, so the UI does not either).
+   */
+  rating: { chatId: string; value: 'good' | 'bad' | null } | null;
+  ratingSubmitting: boolean;
 }
 
 export function mount(doc: Document = document, win: Window = window): void {
@@ -129,6 +138,8 @@ export function mount(doc: Document = document, win: Window = window): void {
     sending: false,
     pendingAttachment: null,
     uploading: false,
+    rating: null,
+    ratingSubmitting: false,
   };
 
   const ui = buildUi(doc, t);
@@ -188,6 +199,10 @@ export function mount(doc: Document = document, win: Window = window): void {
    * initial otherwise — `textContent` throughout so a name can never be markup.
    */
   function renderHeader(): void {
+    // The "Rate this chat" menu (FR-MOD-07.8-b) only makes sense once a
+    // conversation exists — before the first message, and again once one
+    // closes, the automatic rating prompt (see `refresh`) is the only way in.
+    ui.menuWrap.hidden = state.chatId === null;
     const agent = state.agent;
     ui.title.textContent = agent?.name ?? t('title.default');
     ui.avatar.replaceChildren();
@@ -242,6 +257,54 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.typing.textContent = state.agent
       ? t('typing.named', { name: state.agent.name })
       : t('typing.generic');
+  }
+
+  // --- Rating (FR-MOD-07.8-b / 08.7.7 / 11.4) -------------------------------
+
+  /** The header's "⋮" dropdown, closed by default and on every outside click. */
+  let menuOpen = false;
+
+  function renderMenu(): void {
+    ui.menu.hidden = !menuOpen;
+    ui.menuButton.setAttribute('aria-expanded', String(menuOpen));
+  }
+
+  /**
+   * Not voted: the prompt + both buttons. Voted: a "thanks" line instead of the
+   * prompt, buttons left enabled — the server does not reject a second rating
+   * (`routes/customer.ts` creates a fresh row every time), so neither does this:
+   * the visitor can change their mind and it simply posts again.
+   */
+  function renderRating(): void {
+    const rating = state.rating;
+    ui.rating.hidden = rating === null;
+    if (!rating) return;
+    const voted = rating.value !== null;
+    ui.ratingPrompt.hidden = voted;
+    ui.ratingThanks.hidden = !voted;
+    ui.ratingGood.setAttribute('aria-pressed', String(rating.value === 'good'));
+    ui.ratingBad.setAttribute('aria-pressed', String(rating.value === 'bad'));
+    ui.ratingGood.disabled = state.ratingSubmitting;
+    ui.ratingBad.disabled = state.ratingSubmitting;
+  }
+
+  async function vote(value: 'good' | 'bad'): Promise<void> {
+    const chatId = state.rating?.chatId;
+    if (!chatId || state.ratingSubmitting) return;
+    state.ratingSubmitting = true;
+    renderRating();
+    try {
+      await api.rate(value);
+      state.rating = { chatId, value };
+    } catch (error) {
+      // Fire-and-forget from the visitor's perspective, like `typing`/`trackSale`
+      // above — a dropped vote is not worth surfacing as a chat-blocking error,
+      // and the buttons staying live below means they can just try again.
+      console.warn('nexa widget: rate failed', error);
+    } finally {
+      state.ratingSubmitting = false;
+      renderRating();
+    }
   }
 
   // --- Outbound typing (sneak-peek) ----------------------------------------
@@ -484,6 +547,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderStatus();
       renderHeader();
       renderTyping();
+      renderRating();
       startPolling();
     } catch (error) {
       state.error = t('error.connect');
@@ -643,9 +707,23 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (!state.connected) return;
     try {
       const snapshot = await api.state();
+      const previousChatId = state.chatId;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
+
+      // The widget holds no socket (see `startPolling` below), so this poll is
+      // the only signal that a conversation just ended — agent archive or the
+      // idle-timeout sweep alike. Offer to rate the chat that just closed. A
+      // rating already open for that same chat (started early from the header
+      // menu, possibly already voted) is left alone rather than reset; one left
+      // over for an older chat — or the moment a fresh conversation starts — is
+      // cleared, since lingering over the new composer would be confusing.
+      if (previousChatId && !state.chatId && state.rating?.chatId !== previousChatId) {
+        state.rating = { chatId: previousChatId, value: null };
+      } else if (state.rating && state.chatId && state.rating.chatId !== state.chatId) {
+        state.rating = null;
+      }
 
       // Replace wholesale: the server's view is authoritative and includes the
       // real ids for anything sent optimistically.
@@ -658,6 +736,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderStatus();
       renderHeader();
       renderTyping();
+      renderRating();
     } catch (error) {
       console.warn('nexa widget: refresh failed', error);
     }
@@ -716,7 +795,43 @@ export function mount(doc: Document = document, win: Window = window): void {
   // Leaving the field ends the draft-in-progress the agent was previewing.
   ui.input.addEventListener('blur', () => stopTyping());
 
+  // Header "⋮" menu → "Rate this chat" (FR-MOD-07.8-b): an optional early vote
+  // on a conversation that is still open, alongside the automatic prompt
+  // `refresh` raises once one closes.
+  ui.menuButton.addEventListener('click', () => {
+    menuOpen = !menuOpen;
+    renderMenu();
+  });
+  ui.menuRate.addEventListener('click', () => {
+    menuOpen = false;
+    renderMenu();
+    if (!state.chatId) return;
+    // Reopen for the current chat without discarding an existing vote for it.
+    state.rating =
+      state.rating?.chatId === state.chatId ? state.rating : { chatId: state.chatId, value: null };
+    renderRating();
+  });
+  ui.ratingGood.addEventListener('click', () => void vote('good'));
+  ui.ratingBad.addEventListener('click', () => void vote('bad'));
+  ui.ratingDismiss.addEventListener('click', () => {
+    state.rating = null;
+    renderRating();
+  });
+
+  doc.addEventListener('click', (event) => {
+    if (menuOpen && !ui.menuWrap.contains(event.target as Node)) {
+      menuOpen = false;
+      renderMenu();
+    }
+  });
+
   doc.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && menuOpen) {
+      menuOpen = false;
+      renderMenu();
+      ui.menuButton.focus();
+      return;
+    }
     // On the Chat page there is nothing to close to, so Escape must not blank it.
     if (event.key === 'Escape' && state.open && !config.chatPage) {
       setOpen(false);
@@ -768,6 +883,18 @@ interface Ui {
   close: HTMLButtonElement;
   avatar: HTMLElement;
   title: HTMLElement;
+  /** Header "⋮" dropdown (FR-MOD-07.8-b): early "Rate this chat" access. */
+  menuWrap: HTMLElement;
+  menuButton: HTMLButtonElement;
+  menu: HTMLElement;
+  menuRate: HTMLButtonElement;
+  /** The CSAT prompt itself — shown automatically on close, or from the menu. */
+  rating: HTMLElement;
+  ratingPrompt: HTMLElement;
+  ratingGood: HTMLButtonElement;
+  ratingBad: HTMLButtonElement;
+  ratingThanks: HTMLElement;
+  ratingDismiss: HTMLButtonElement;
   greeting: HTMLElement;
   greetChat: HTMLButtonElement;
   greetBrowse: HTMLButtonElement;
@@ -811,12 +938,37 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   title.className = 'nx-title';
   title.textContent = t('title.default');
   identity.append(avatar, title);
+
+  // "⋮" menu (FR-MOD-07.8-b): today a single item, "Rate this chat". Hidden
+  // until a conversation exists — `renderHeader` toggles it.
+  const menuWrap = doc.createElement('div');
+  menuWrap.className = 'nx-menu-wrap';
+  menuWrap.hidden = true;
+  const menuButton = doc.createElement('button');
+  menuButton.type = 'button';
+  menuButton.className = 'nx-menu-btn';
+  menuButton.setAttribute('aria-haspopup', 'true');
+  menuButton.setAttribute('aria-expanded', 'false');
+  menuButton.setAttribute('aria-label', t('rating.menuLabel'));
+  menuButton.textContent = '⋮';
+  const menu = doc.createElement('div');
+  menu.className = 'nx-menu';
+  menu.hidden = true;
+  menu.setAttribute('role', 'menu');
+  const menuRate = doc.createElement('button');
+  menuRate.type = 'button';
+  menuRate.className = 'nx-menu-rate';
+  menuRate.setAttribute('role', 'menuitem');
+  menuRate.textContent = t('rating.menuItem');
+  menu.append(menuRate);
+  menuWrap.append(menuButton, menu);
+
   const close = doc.createElement('button');
   close.type = 'button';
   close.className = 'nx-close';
   close.setAttribute('aria-label', t('launcher.close'));
   close.textContent = '×';
-  header.append(identity, close);
+  header.append(identity, menuWrap, close);
 
   const transcript = doc.createElement('div');
   transcript.className = 'nx-transcript';
@@ -837,6 +989,42 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   const status = doc.createElement('p');
   status.className = 'nx-status';
   status.setAttribute('role', 'status');
+
+  // CSAT prompt (FR-MOD-07.8-b). One group, `role=group` + a named label so a
+  // screen-reader visitor hears what the two buttons below belong to; hidden
+  // until `renderRating` has something to show.
+  const rating = doc.createElement('div');
+  rating.className = 'nx-rating';
+  rating.hidden = true;
+  rating.setAttribute('role', 'group');
+  rating.setAttribute('aria-label', t('rating.group'));
+  const ratingPrompt = doc.createElement('p');
+  ratingPrompt.className = 'nx-rating-prompt';
+  ratingPrompt.textContent = t('rating.prompt');
+  const ratingThanks = doc.createElement('p');
+  ratingThanks.className = 'nx-rating-thanks';
+  ratingThanks.hidden = true;
+  ratingThanks.setAttribute('role', 'status');
+  ratingThanks.textContent = t('rating.thanks');
+  const ratingActions = doc.createElement('div');
+  ratingActions.className = 'nx-rating-actions';
+  const ratingGood = doc.createElement('button');
+  ratingGood.type = 'button';
+  ratingGood.className = 'nx-rating-good';
+  ratingGood.setAttribute('aria-pressed', 'false');
+  // Text-labeled, not emoji-only — the glyph is decoration (NFR-a11y).
+  ratingGood.textContent = `👍 ${t('rating.good')}`;
+  const ratingBad = doc.createElement('button');
+  ratingBad.type = 'button';
+  ratingBad.className = 'nx-rating-bad';
+  ratingBad.setAttribute('aria-pressed', 'false');
+  ratingBad.textContent = `👎 ${t('rating.bad')}`;
+  ratingActions.append(ratingGood, ratingBad);
+  const ratingDismiss = doc.createElement('button');
+  ratingDismiss.type = 'button';
+  ratingDismiss.className = 'nx-rating-dismiss';
+  ratingDismiss.textContent = t('rating.dismiss');
+  rating.append(ratingPrompt, ratingThanks, ratingActions, ratingDismiss);
 
   // Shows the picked file before it is sent; hidden until there is one.
   const chip = doc.createElement('div');
@@ -921,7 +1109,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   poweredLink.textContent = t('poweredBy');
   poweredBy.append(poweredLink);
 
-  panel.append(header, transcript, typing, status, prechat, chip, form, poweredBy);
+  panel.append(header, transcript, typing, status, rating, prechat, chip, form, poweredBy);
 
   // Greeting card — the proactive nudge that sits above a closed launcher.
   const greeting = doc.createElement('div');
@@ -960,6 +1148,16 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     close,
     avatar,
     title,
+    menuWrap,
+    menuButton,
+    menu,
+    menuRate,
+    rating,
+    ratingPrompt,
+    ratingGood,
+    ratingBad,
+    ratingThanks,
+    ratingDismiss,
     greeting,
     greetChat,
     greetBrowse,
@@ -1308,6 +1506,24 @@ body {
   border: 0; background: transparent; color: #fff;
   font-size: 22px; line-height: 1; cursor: pointer; padding: 0 4px;
 }
+.nx-menu-wrap { position: relative; }
+.nx-menu-btn {
+  border: 0; background: transparent; color: #fff;
+  font-size: 18px; line-height: 1; cursor: pointer; padding: 0 6px;
+}
+.nx-menu {
+  position: absolute; inset-inline-end: 0; top: 100%; margin-top: 4px;
+  min-width: 170px; padding: 4px; z-index: 1;
+  background: var(--nx-surface); color: var(--nx-text);
+  border: 1px solid var(--nx-border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(16 24 40 / .18);
+}
+.nx-menu-rate {
+  display: block; width: 100%; text-align: start;
+  border: 0; border-radius: 6px; background: transparent; color: inherit;
+  font: inherit; padding: 8px 10px; cursor: pointer;
+}
+.nx-menu-rate:hover { background: var(--nx-customer); }
 .nx-transcript {
   flex: 1; overflow-y: auto; padding: 14px;
   display: flex; flex-direction: column; gap: 10px;
@@ -1326,6 +1542,25 @@ body {
 .nx-status { margin: 0; padding: 0 14px 8px; font-size: 12px; color: var(--nx-muted); }
 .nx-status[data-tone="error"] { color: #c42a2a; }
 .nx-typing { margin: 0; padding: 0 14px 6px; font-size: 12px; font-style: italic; color: var(--nx-muted); }
+.nx-rating {
+  margin: 0 12px 10px; padding: 10px 12px;
+  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.nx-rating-prompt, .nx-rating-thanks { margin: 0; font-size: 12px; color: var(--nx-muted); }
+.nx-rating-actions { display: flex; gap: 8px; }
+.nx-rating-good, .nx-rating-bad {
+  flex: 1; border: 1px solid var(--nx-border); border-radius: 8px; padding: 6px 8px;
+  background: transparent; color: inherit; font: inherit; font-size: 12px; cursor: pointer;
+}
+.nx-rating-good[aria-pressed="true"], .nx-rating-bad[aria-pressed="true"] {
+  border-color: var(--nx-brand); background: var(--nx-customer);
+}
+.nx-rating-good:disabled, .nx-rating-bad:disabled { opacity: .6; cursor: default; }
+.nx-rating-dismiss {
+  align-self: flex-end; border: 0; background: transparent; color: var(--nx-muted);
+  font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; padding: 0;
+}
 .nx-form { display: flex; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--nx-border); }
 .nx-input {
   flex: 1; resize: none; font: inherit; color: inherit;

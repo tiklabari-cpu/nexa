@@ -27,5 +27,13 @@ export const pt: Record<string, string> = {
   'attachment.alt': 'Anexo',
   'typing.named': '{name} está digitando…',
   'typing.generic': 'Digitando…',
+  'rating.menuLabel': 'Mais opções',
+  'rating.menuItem': 'Avaliar esta conversa',
+  'rating.group': 'Avaliar esta conversa',
+  'rating.prompt': 'Como foi esta conversa?',
+  'rating.good': 'Boa',
+  'rating.bad': 'Não boa',
+  'rating.thanks': 'Obrigado pelo seu feedback!',
+  'rating.dismiss': 'Fechar',
   poweredBy: 'Desenvolvido por Nexa',
 };

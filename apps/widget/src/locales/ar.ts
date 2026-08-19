@@ -28,5 +28,13 @@ export const ar: Record<string, string> = {
   'attachment.alt': 'مرفق',
   'typing.named': '{name} يكتب الآن…',
   'typing.generic': 'يكتب الآن…',
+  'rating.menuLabel': 'خيارات أخرى',
+  'rating.menuItem': 'قيّم هذه المحادثة',
+  'rating.group': 'قيّم هذه المحادثة',
+  'rating.prompt': 'كيف كانت هذه المحادثة؟',
+  'rating.good': 'جيدة',
+  'rating.bad': 'غير جيدة',
+  'rating.thanks': 'شكرًا لملاحظاتك!',
+  'rating.dismiss': 'إغلاق',
   poweredBy: 'مقدَّم من Nexa',
 };

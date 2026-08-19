@@ -1,0 +1,163 @@
+/**
+ * Settings → Tag library (FR-MOD-08.7.1).
+ *
+ * Its own file rather than a section inside `SettingsPage.tsx` (I18N-i, tm
+ * 133.9) — `NotificationSettings.tsx`'s precedent (I18N-e, tm 133.5): the i18n
+ * coverage sentinel claims a whole *file* as translated, and `SettingsPage.tsx`
+ * still carries sections I18N-j (tm 133.10) owns in English.
+ *
+ * The workspace's curated tags. Chat-level tagging already worked — an agent
+ * could type any word — but nothing agreed the vocabulary, so a team ended up
+ * with `vip`, `VIP` and `v.i.p.` for one idea. This library is that agreement:
+ * the inbox reads the same list to suggest tags, and `usage_count` shows which
+ * labels are actually earning their place.
+ */
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ReactElement } from 'react';
+import { Card, ErrorNotice, Section } from '../../components/Page.js';
+import { EmptyState } from '../../components/EmptyState.js';
+import { errorMessageKey } from '../../lib/api-client.js';
+import { useApiClient } from '../../lib/auth-store.js';
+import { FieldError, required, useForm } from '../../lib/form.js';
+import { useTranslate } from '../../lib/i18n.js';
+
+interface Tag {
+  id: string;
+  name: string;
+  group_ids: number[];
+  author_id: string | null;
+  usage_count: number;
+  created_at: string;
+}
+
+export function Tags({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+
+  const list = useQuery({
+    queryKey: ['settings', 'tags'],
+    queryFn: () => api.get<{ items: Tag[] }>('/settings/tags'),
+  });
+
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: ['settings', 'tags'] });
+    // The inbox suggests tags from this same list; leaving its cache alone would
+    // keep a new tag hidden from the composer until the agent reloads.
+    void queryClient.invalidateQueries({ queryKey: ['tag-library'] });
+  };
+
+  const create = useMutation({
+    mutationFn: (body: { name: string }) => api.post<Tag>('/settings/tags', body),
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/settings/tags/${id}`),
+    onSuccess: invalidate,
+  });
+
+  // The one validation primitive: a name is required, Submit disabled until it
+  // is present, the field cleared on success (FR-EK-A.1).
+  const form = useForm({
+    initial: { name: '' },
+    validators: { name: required(t('settings.tags.nameError')) },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await create.mutateAsync({ name: values.name.trim() });
+        reset();
+      } catch (error) {
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+  const nameError = form.errorFor('name');
+
+  return (
+    <Section title={t('settings.tags.title')} description={t('settings.tags.description')}>
+      {list.error ? (
+        <ErrorNotice message={t('settings.tags.loadError')} />
+      ) : (
+        <Card>
+          {canEdit && (
+            <form
+              onSubmit={form.handleSubmit}
+              noValidate
+              className="flex flex-col gap-3 border-b border-border p-4"
+            >
+              <div className="flex flex-wrap items-end gap-3">
+                <label htmlFor="new-tag-name" className="flex min-w-56 flex-1 flex-col gap-1">
+                  <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                    {t('settings.tags.tagLabel')}
+                  </span>
+                  <input
+                    id="new-tag-name"
+                    value={form.values.name}
+                    onChange={(event) => form.setValue('name', event.target.value)}
+                    onBlur={() => form.blur('name')}
+                    aria-invalid={nameError ? true : undefined}
+                    aria-describedby={nameError ? 'new-tag-name-error' : undefined}
+                    placeholder="vip"
+                    maxLength={64}
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                  />
+                  <FieldError id="new-tag-name-error" message={nameError} />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={!form.canSubmit}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {form.isSubmitting ? t('settings.adding') : t('settings.tags.addButton')}
+                </button>
+              </div>
+
+              {form.submitError && (
+                <p role="alert" className="text-2xs text-danger">
+                  {form.submitError}
+                </p>
+              )}
+            </form>
+          )}
+
+          {list.isPending ? (
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
+          ) : list.data.items.length === 0 ? (
+            <EmptyState
+              title={t('settings.tags.empty.title')}
+              description={t('settings.tags.empty.description')}
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {list.data.items.map((tag) => (
+                <li key={tag.id} className="flex items-center gap-3 px-4 py-2.5">
+                  <span className="inline-flex items-center rounded-sm bg-inset px-2 py-0.5 font-mono text-2xs">
+                    {tag.name}
+                  </span>
+                  <span className="flex-1 text-2xs text-content-tertiary">
+                    {tag.group_ids.length === 0
+                      ? t('settings.tags.allTeams')
+                      : t('settings.tags.teamCount', { count: tag.group_ids.length })}
+                    {' · '}
+                    {t('settings.tags.inUse', { count: tag.usage_count })}
+                  </span>
+                  {canEdit && (
+                    <button
+                      type="button"
+                      onClick={() => remove.mutate(tag.id)}
+                      aria-label={t('settings.tags.deleteAriaLabel', { name: tag.name })}
+                      className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+                    >
+                      {t('settings.delete')}
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+      )}
+    </Section>
+  );
+}

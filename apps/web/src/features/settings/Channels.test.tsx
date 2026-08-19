@@ -10,6 +10,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { channelNotifiedKey, ChannelsGrid } from './Channels.js';
 import { useAuth, useBrandStore } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function okJson(body: unknown): Response {
   return {
@@ -279,5 +280,35 @@ describe('Get notified — persistence', () => {
     expect(within(card).getByText(/let you know/i)).toBeInTheDocument();
 
     setItem.mockRestore();
+  });
+});
+
+describe('Channels localisation (NFR-I18N2)', () => {
+  beforeEach(() => stubFetch({}));
+
+  afterEach(() => {
+    resetLocale();
+  });
+
+  function renderLocalized() {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    return renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <ChannelsGrid />
+      </QueryClientProvider>,
+      'tr',
+    );
+  }
+
+  it('paints the section title in Turkish when that is the active locale', () => {
+    renderLocalized();
+    expect(screen.getByRole('region', { name: 'Kanallar' })).toBeInTheDocument();
+  });
+
+  it("paints a channel card's name and call to action in Turkish", async () => {
+    renderLocalized();
+    const card = await screen.findByTestId('channel-website');
+    expect(within(card).getByText("Web sitesi widget'ı")).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'Bağlan' })).toBeInTheDocument();
   });
 });

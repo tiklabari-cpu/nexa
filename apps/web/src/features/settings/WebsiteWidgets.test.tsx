@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { useAuth, useBrandStore } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function okJson(body: unknown): Response {
   return {
@@ -170,5 +171,26 @@ describe('WebsiteWidgets brand scoping', () => {
     expect(await screen.findByText('b.example')).toBeInTheDocument();
     expect(screen.queryByText('a.example')).toBeNull();
     expect(screen.getByRole('heading', { name: /Website widgets/ })).toHaveTextContent('Beta Line');
+  });
+});
+
+describe('WebsiteWidgets localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the section title and Add button in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <WebsiteWidgets canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(
+      await screen.findByRole('heading', { name: "Web sitesi widget'ları" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Web sitesi ekle' })).toBeInTheDocument();
   });
 });

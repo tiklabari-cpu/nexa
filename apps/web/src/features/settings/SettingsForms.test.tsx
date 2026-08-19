@@ -7,9 +7,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
@@ -193,5 +194,45 @@ describe('PreChatFormSettings validation (FR-MOD-08.7.7)', () => {
     await userEvent.click(label);
     await userEvent.tab(); // blur the empty field
     expect(screen.getByText('Name the field.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * One sentinel per component this file's DoD claims translated (I18N-i, tm
+ * 133.9) — `Skills`/`TicketRules` are I18N-j's (tm 133.10) and stay English.
+ */
+describe('Settings forms localisation (NFR-I18N2)', () => {
+  function renderLocalized(ui: ReactElement): void {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>, 'tr');
+  }
+
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints Saved replies in Turkish when that is the active locale', () => {
+    renderLocalized(<CannedResponses canEdit />);
+    expect(screen.getByRole('region', { name: 'Kayıtlı yanıtlar' })).toBeInTheDocument();
+  });
+
+  it('paints Tags in Turkish when that is the active locale', () => {
+    renderLocalized(<Tags canEdit />);
+    expect(screen.getByRole('region', { name: 'Etiketler' })).toBeInTheDocument();
+  });
+
+  it('paints Ticket email templates in Turkish when that is the active locale', () => {
+    renderLocalized(<TicketEmailTemplates canEdit />);
+    expect(screen.getByRole('region', { name: 'Talep e-posta şablonları' })).toBeInTheDocument();
+  });
+
+  it('paints Custom fields in Turkish when that is the active locale', () => {
+    renderLocalized(<CustomFieldsSettings canEdit />);
+    expect(screen.getByRole('region', { name: 'Özel alanlar' })).toBeInTheDocument();
+  });
+
+  it('paints Pre-chat form in Turkish when that is the active locale', () => {
+    renderLocalized(<PreChatFormSettings canEdit />);
+    expect(screen.getByRole('region', { name: 'Sohbet öncesi form' })).toBeInTheDocument();
   });
 });

@@ -7,16 +7,25 @@
  * data (FR-MOD-08.5.2), so writing a fixed "Connected" here would be a lie a
  * test is written to catch. Channels that do not exist yet say "Coming soon"
  * and offer to notify, rather than pretending to be one click away.
+ *
+ * `channelsFor()` and its `Channel` records stay in English on purpose
+ * (I18N-i, tm 133.9): `channels.test.ts` pins their `name`/`description`/`cta`
+ * as plain data (it is a pure function, called with no locale), and it is not
+ * this task's file to rewrite. The render layer below translates by looking
+ * the channel's `id`/`status`/`cta` up in `CHANNEL_COPY`/`STATUS_META`/
+ * `CTA_KEYS` instead — the same id-to-key mapping 133.3/133.4 used for ticket
+ * status and priority.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth, useBrand } from '../../lib/auth-store.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { useConnectedChannels, type ConnectedChannel } from '../inbox/useInbox.js';
 import { canReadChannels } from '../inbox/views.js';
 
@@ -51,12 +60,63 @@ export interface Channel {
   address?: string | null;
 }
 
-const STATUS_META: Record<ChannelStatus, { tone: StatusTone; label: string }> = {
-  connected: { tone: 'success', label: 'Connected' },
-  ready: { tone: 'info', label: 'Ready' },
-  not_connected: { tone: 'warning', label: 'Not connected' },
-  coming_soon: { tone: 'neutral', label: 'Coming soon' },
+const STATUS_META: Record<ChannelStatus, { tone: StatusTone; labelKey: string }> = {
+  connected: { tone: 'success', labelKey: 'settings.channels.status.connected' },
+  ready: { tone: 'info', labelKey: 'settings.channels.status.ready' },
+  not_connected: { tone: 'warning', labelKey: 'settings.channels.status.not_connected' },
+  coming_soon: { tone: 'neutral', labelKey: 'settings.channels.status.coming_soon' },
 };
+
+/** `channel.id` → the catalogue keys for its translated name/description. */
+const CHANNEL_COPY: Record<string, { nameKey: string; descriptionKey: string }> = {
+  website: {
+    nameKey: 'settings.channels.website.name',
+    descriptionKey: 'settings.channels.website.description',
+  },
+  'chat-page': {
+    nameKey: 'settings.channels.chatPage.name',
+    descriptionKey: 'settings.channels.chatPage.description',
+  },
+  email: {
+    nameKey: 'settings.channels.email.name',
+    descriptionKey: 'settings.channels.email.description',
+  },
+  messenger: {
+    nameKey: 'settings.channels.messenger.name',
+    descriptionKey: 'settings.channels.messenger.description',
+  },
+  whatsapp: {
+    nameKey: 'settings.channels.whatsapp.name',
+    descriptionKey: 'settings.channels.whatsapp.description',
+  },
+  sms: {
+    nameKey: 'settings.channels.sms.name',
+    descriptionKey: 'settings.channels.sms.description',
+  },
+  instagram: {
+    nameKey: 'settings.channels.instagram.name',
+    descriptionKey: 'settings.channels.instagram.description',
+  },
+  telegram: {
+    nameKey: 'settings.channels.telegram.name',
+    descriptionKey: 'settings.channels.telegram.description',
+  },
+};
+
+/** `channel.cta`'s fixed English verb → the catalogue key it translates to. */
+const CTA_KEYS: Record<string, string> = {
+  Connect: 'settings.channels.cta.connect',
+  Manage: 'settings.channels.cta.manage',
+  'Get link': 'settings.channels.cta.getLink',
+  'Get address': 'settings.channels.cta.getAddress',
+  'Get notified': 'settings.channels.cta.getNotified',
+  Disconnect: 'settings.channels.cta.disconnect',
+};
+
+function ctaText(t: TFunction, cta: string): string {
+  const key = CTA_KEYS[cta];
+  return key ? t(key) : cta;
+}
 
 const NOTIFIED_STORE_PREFIX = 'nexa.channels.notified.';
 
@@ -182,6 +242,7 @@ function telegramChannel(connectedChannels: ConnectedChannel[]): Channel {
  * URL so it can be read or shared either way.
  */
 function ChatPageLink({ label }: { label: string }): ReactElement {
+  const t = useTranslate();
   const orgId = useAuth((s) => s.agent?.organization_id ?? null);
   const [copied, setCopied] = useState(false);
   const url = orgId ? `${WIDGET_URL}/chat.html?organization_id=${orgId}` : '';
@@ -205,7 +266,7 @@ function ChatPageLink({ label }: { label: string }): ReactElement {
         disabled={!url}
         className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {copied ? 'Copied' : label}
+        {copied ? t('settings.copied') : label}
       </button>
       {url && (
         <code data-testid="chat-page-url" className="truncate text-2xs text-content-tertiary">
@@ -223,6 +284,7 @@ function ChatPageLink({ label }: { label: string }): ReactElement {
  * into a mail provider's forwarding rule either way.
  */
 function EmailForwardingAddress({ label }: { label: string }): ReactElement {
+  const t = useTranslate();
   const orgId = useAuth((s) => s.agent?.organization_id ?? null);
   const [copied, setCopied] = useState(false);
   const address = orgId ? `${orgId}@${INBOUND_EMAIL_DOMAIN}` : '';
@@ -246,7 +308,7 @@ function EmailForwardingAddress({ label }: { label: string }): ReactElement {
         disabled={!address}
         className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {copied ? 'Copied' : label}
+        {copied ? t('settings.copied') : label}
       </button>
       {address && (
         <code
@@ -261,6 +323,7 @@ function EmailForwardingAddress({ label }: { label: string }): ReactElement {
 }
 
 export function ChannelsGrid(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const { brandId } = useBrand();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
@@ -289,11 +352,15 @@ export function ChannelsGrid(): ReactElement {
   return (
     <Section
       id="section-channels"
-      title={brandName ? `Channels · ${brandName}` : 'Channels'}
-      description="Everywhere your customers can reach you. Connect the ones you use; we will let you know as the rest arrive."
+      title={
+        brandName
+          ? t('settings.channels.titleWithBrand', { brand: brandName })
+          : t('settings.channels.title')
+      }
+      description={t('settings.channels.description')}
     >
       {websites.error || connectedChannels.error ? (
-        <ErrorNotice message="Could not load channel statuses." />
+        <ErrorNotice message={t('settings.channels.loadError')} />
       ) : (
         <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3">
           {channels.map((channel) => (
@@ -319,10 +386,12 @@ function ChannelCardView({
   websitesLoading: boolean;
   channelsLoading: boolean;
 }): ReactElement {
+  const t = useTranslate();
   // Lazy-init reads the persisted flag once per mount; the card is keyed by
   // channel.id (see ChannelsGrid), so a remount always re-derives the same id.
   const [notified, setNotified] = useState<boolean>(() => readNotified(channel.id));
   const meta = STATUS_META[channel.status];
+  const copy = CHANNEL_COPY[channel.id];
   // The Website/Instagram/Telegram status is unknown until its query
   // resolves; do not flash a wrong badge in the meantime. `channelsLoading`
   // is false while the /channels request is gated off (canReadChannels), so
@@ -331,6 +400,8 @@ function ChannelCardView({
     !(websitesLoading && channel.id === 'website') &&
     !(channelsLoading && (channel.id === 'instagram' || channel.id === 'telegram'));
 
+  const cta = ctaText(t, channel.cta);
+
   return (
     <Card>
       <div data-testid={`channel-${channel.id}`} className="flex h-full flex-col gap-2 p-4">
@@ -338,15 +409,21 @@ function ChannelCardView({
           <span aria-hidden="true" className="text-xl">
             {channel.icon}
           </span>
-          <span className="min-w-0 flex-1 truncate text-sm font-medium">{channel.name}</span>
-          {showStatus && <StatusDot tone={meta.tone} label={meta.label} />}
+          <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            {copy ? t(copy.nameKey) : channel.name}
+          </span>
+          {showStatus && <StatusDot tone={meta.tone} label={t(meta.labelKey)} />}
         </div>
 
-        <p className="flex-1 text-2xs text-content-secondary">{channel.description}</p>
+        <p className="flex-1 text-2xs text-content-secondary">
+          {copy ? t(copy.descriptionKey) : channel.description}
+        </p>
 
         {channel.status === 'coming_soon' ? (
           notified ? (
-            <span className="text-2xs text-content-tertiary">We&rsquo;ll let you know.</span>
+            <span className="text-2xs text-content-tertiary">
+              {t('settings.channels.notifiedAck')}
+            </span>
           ) : (
             <button
               type="button"
@@ -356,23 +433,23 @@ function ChannelCardView({
               }}
               className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
             >
-              {channel.cta}
+              {cta}
             </button>
           )
         ) : channel.id === 'chat-page' ? (
-          <ChatPageLink label={channel.cta} />
+          <ChatPageLink label={cta} />
         ) : channel.id === 'email' ? (
-          <EmailForwardingAddress label={channel.cta} />
+          <EmailForwardingAddress label={cta} />
         ) : channel.id === 'instagram' ? (
-          <InstagramChannelAction channel={channel} />
+          <InstagramChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'telegram' ? (
-          <TelegramChannelAction channel={channel} />
+          <TelegramChannelAction channel={channel} cta={cta} />
         ) : (
           <a
             href={channel.href}
             className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
           >
-            {channel.cta}
+            {cta}
           </a>
         )}
       </div>
@@ -387,7 +464,8 @@ function ChannelCardView({
  * Disconnect asks first: it stops inbound DMs at once and is not undoable
  * from this button.
  */
-function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement {
+function InstagramChannelAction({ channel, cta }: { channel: Channel; cta: string }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -406,8 +484,8 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
   const form = useForm({
     initial: { code: '', ig_user_id: '' },
     validators: {
-      code: required('Enter the authorization code.'),
-      ig_user_id: required('Enter the Instagram user id.'),
+      code: required(t('settings.channels.instagram.codeError')),
+      ig_user_id: required(t('settings.channels.instagram.userIdError')),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
@@ -417,16 +495,14 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
         // A 4xx (e.g. that address already belongs to another workspace) is
         // shown as a form-level notice; the query cache is untouched, so the
         // card cannot flip to Connected on a failed attempt.
-        setSubmitError(
-          failure instanceof ApiClientError ? failure.message : 'Could not connect Instagram.',
-        );
+        setSubmitError(t(errorMessageKey(failure)));
       }
     },
   });
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
-    message: 'Discard this connection attempt?',
+    message: t('settings.channels.discardConnectionConfirm'),
     onClose: () => {
       setOpen(false);
       form.reset();
@@ -443,18 +519,14 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
         <button
           type="button"
           onClick={() => {
-            if (
-              window.confirm(
-                'Disconnect Instagram? Direct messages will stop arriving until you reconnect.',
-              )
-            ) {
+            if (window.confirm(t('settings.channels.instagram.disconnectConfirm'))) {
               disconnect.mutate();
             }
           }}
           disabled={disconnect.isPending}
           className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
         >
-          {disconnect.isPending ? 'Disconnecting…' : channel.cta}
+          {disconnect.isPending ? t('settings.channels.disconnecting') : cta}
         </button>
       </div>
     );
@@ -467,7 +539,7 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
         onClick={() => setOpen(true)}
         className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
       >
-        {channel.cta}
+        {cta}
       </button>
     );
   }
@@ -475,8 +547,8 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
   return (
     <Modal
       onClose={close}
-      title="Connect Instagram"
-      description="Mock authorization for this build — any code and user id complete the handshake."
+      title={t('settings.channels.instagram.connectTitle')}
+      description={t('settings.channels.instagram.connectDescription')}
     >
       <form onSubmit={form.handleSubmit} noValidate>
         {form.submitError && (
@@ -486,7 +558,7 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
         )}
 
         <label htmlFor="instagram-code" className="mb-1.5 block text-sm font-medium">
-          Authorization code
+          {t('settings.channels.instagram.codeLabel')}
         </label>
         <input
           id="instagram-code"
@@ -501,7 +573,7 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
         <FieldError id="instagram-code-error" message={form.errorFor('code')} />
 
         <label htmlFor="instagram-ig-user-id" className="mb-1.5 mt-3 block text-sm font-medium">
-          Instagram user id
+          {t('settings.channels.instagram.userIdLabel')}
         </label>
         <input
           id="instagram-ig-user-id"
@@ -520,14 +592,16 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
             onClick={close}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            Cancel
+            {t('settings.cancel')}
           </button>
           <button
             type="submit"
             disabled={!form.canSubmit}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            {form.isSubmitting ? 'Connecting…' : 'Connect'}
+            {form.isSubmitting
+              ? t('settings.channels.connecting')
+              : t('settings.channels.cta.connect')}
           </button>
         </div>
       </form>
@@ -546,7 +620,8 @@ function InstagramChannelAction({ channel }: { channel: Channel }): ReactElement
  * connected. Disconnect asks first, same as Instagram: it stops inbound
  * messages at once and is not undoable from this button.
  */
-function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement {
+function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -565,8 +640,8 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
   const form = useForm({
     initial: { bot_token: '', bot_username: '' },
     validators: {
-      bot_token: required('Enter the bot token.'),
-      bot_username: required('Enter the bot username.'),
+      bot_token: required(t('settings.channels.telegram.tokenError')),
+      bot_username: required(t('settings.channels.telegram.usernameError')),
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
@@ -576,16 +651,14 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
         // A 4xx (e.g. that address already belongs to another workspace) is
         // shown as a form-level notice; the query cache is untouched, so the
         // card cannot flip to Connected on a failed attempt.
-        setSubmitError(
-          failure instanceof ApiClientError ? failure.message : 'Could not connect Telegram.',
-        );
+        setSubmitError(t(errorMessageKey(failure)));
       }
     },
   });
 
   const close = useCloseGuard({
     isDirty: form.isDirty,
-    message: 'Discard this connection attempt?',
+    message: t('settings.channels.discardConnectionConfirm'),
     onClose: () => {
       setOpen(false);
       form.reset();
@@ -602,18 +675,14 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
         <button
           type="button"
           onClick={() => {
-            if (
-              window.confirm(
-                'Disconnect Telegram? Messages will stop arriving until you reconnect.',
-              )
-            ) {
+            if (window.confirm(t('settings.channels.telegram.disconnectConfirm'))) {
               disconnect.mutate();
             }
           }}
           disabled={disconnect.isPending}
           className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
         >
-          {disconnect.isPending ? 'Disconnecting…' : channel.cta}
+          {disconnect.isPending ? t('settings.channels.disconnecting') : cta}
         </button>
       </div>
     );
@@ -626,7 +695,7 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
         onClick={() => setOpen(true)}
         className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
       >
-        {channel.cta}
+        {cta}
       </button>
     );
   }
@@ -634,8 +703,8 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
   return (
     <Modal
       onClose={close}
-      title="Connect Telegram"
-      description="Enter the bot token from @BotFather and its username to receive Telegram messages here."
+      title={t('settings.channels.telegram.connectTitle')}
+      description={t('settings.channels.telegram.connectDescription')}
     >
       <form onSubmit={form.handleSubmit} noValidate>
         {form.submitError && (
@@ -645,7 +714,7 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
         )}
 
         <label htmlFor="telegram-bot-token" className="mb-1.5 block text-sm font-medium">
-          Bot token
+          {t('settings.channels.telegram.tokenLabel')}
         </label>
         <input
           id="telegram-bot-token"
@@ -660,7 +729,7 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
         <FieldError id="telegram-bot-token-error" message={form.errorFor('bot_token')} />
 
         <label htmlFor="telegram-bot-username" className="mb-1.5 mt-3 block text-sm font-medium">
-          Bot username
+          {t('settings.channels.telegram.usernameLabel')}
         </label>
         <input
           id="telegram-bot-username"
@@ -681,14 +750,16 @@ function TelegramChannelAction({ channel }: { channel: Channel }): ReactElement 
             onClick={close}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            Cancel
+            {t('settings.cancel')}
           </button>
           <button
             type="submit"
             disabled={!form.canSubmit}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            {form.isSubmitting ? 'Connecting…' : 'Connect'}
+            {form.isSubmitting
+              ? t('settings.channels.connecting')
+              : t('settings.channels.cta.connect')}
           </button>
         </div>
       </form>

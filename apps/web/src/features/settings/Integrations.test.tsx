@@ -6,7 +6,8 @@
  */
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 // Imported from the settings module; the entry uses no data client, so — unlike
 // the other settings forms — it needs no mocked API, only a router for the link.
@@ -22,5 +23,23 @@ describe('Settings → Integrations entry', () => {
 
     const link = screen.getByRole('link', { name: 'Open marketplace' });
     expect(link).toHaveAttribute('href', '/app/apps');
+  });
+});
+
+describe('Integrations localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the section in Turkish when that is the active locale', () => {
+    renderWithLocale(
+      <MemoryRouter>
+        <Integrations />
+      </MemoryRouter>,
+      'tr',
+    );
+
+    expect(screen.getByRole('region', { name: 'Entegrasyonlar' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Mağazayı aç' })).toHaveAttribute('href', '/app/apps');
   });
 });

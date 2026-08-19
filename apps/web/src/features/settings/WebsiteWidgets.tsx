@@ -17,9 +17,10 @@ import { useEffect, useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
-import { ApiClientError, type ApiClient } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import { useApiClient, useBrand } from '../../lib/auth-store.js';
 import { FieldError, compose, domain as domainRule, required, useForm } from '../../lib/form.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 interface Website {
   id: string;
@@ -31,24 +32,14 @@ interface Website {
   snippet: string;
 }
 
-/**
- * Documentation only (FR-MOD-13.5, 13.5-g) — shown alongside the install
- * snippet so a developer wiring up the checkout confirmation page sees the
- * call right next to where the widget itself is pasted in. `nexa` is the
- * general command surface the loader exposes once pasted above; calling it
- * before the widget has finished loading queues the call rather than losing
- * it.
- */
-const TRACK_SALE_EXAMPLE =
-  "nexa('trackSale', { external_order_id: 'order-123', amount_cents: 4999, currency: 'USD' });";
-
-const STATUS: Record<Website['status'], { tone: StatusTone; label: string }> = {
-  connected: { tone: 'success', label: 'Connected' },
-  pending: { tone: 'warning', label: 'Waiting for first message' },
-  error: { tone: 'danger', label: 'Error' },
+const STATUS_KEYS: Record<Website['status'], { tone: StatusTone; labelKey: string }> = {
+  connected: { tone: 'success', labelKey: 'settings.websiteWidgets.status.connected' },
+  pending: { tone: 'warning', labelKey: 'settings.websiteWidgets.status.pending' },
+  error: { tone: 'danger', labelKey: 'settings.websiteWidgets.status.error' },
 };
 
 export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const { brandId } = useBrand();
@@ -104,15 +95,18 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
   // The one validation primitive owns "is this a domain?" and "may I submit?".
   const form = useForm({
     initial: { domain: '' },
-    validators: { domain: compose(required('Enter a website domain.'), domainRule()) },
+    validators: {
+      domain: compose(
+        required(t('settings.websiteWidgets.domainRequiredError')),
+        domainRule(t('settings.websiteWidgets.domainInvalidError')),
+      ),
+    },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
         await add.mutateAsync({ domain: values.domain.trim(), setup });
         reset();
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiClientError ? error.message : 'Could not add that website.',
-        );
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
@@ -121,11 +115,15 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
   return (
     <Section
       id="section-website-widgets"
-      title={brandName ? `Website widgets · ${brandName}` : 'Website widgets'}
-      description="Install the chat widget on your sites. Adding one here also trusts its domain, so the widget can start conversations there right away."
+      title={
+        brandName
+          ? t('settings.websiteWidgets.titleWithBrand', { brand: brandName })
+          : t('settings.websiteWidgets.title')
+      }
+      description={t('settings.websiteWidgets.description')}
     >
       {list.error ? (
-        <ErrorNotice message="Could not load your websites." />
+        <ErrorNotice message={t('settings.websiteWidgets.loadError')} />
       ) : (
         <Card>
           {canEdit && (
@@ -136,7 +134,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
             >
               <label htmlFor="new-website" className="flex min-w-56 flex-1 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Website domain
+                  {t('settings.websiteWidgets.domainLabel')}
                 </span>
                 <input
                   id="new-website"
@@ -153,7 +151,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
 
               <label htmlFor="new-website-setup" className="flex w-44 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  Install method
+                  {t('settings.websiteWidgets.installMethodLabel')}
                 </span>
                 <select
                   id="new-website-setup"
@@ -161,8 +159,12 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                   onChange={(event) => setSetup(event.target.value as Website['setup'])}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
                 >
-                  <option value="manual">Paste code manually</option>
-                  <option value="platform">Platform (Shopify / WordPress / GTM)</option>
+                  <option value="manual">
+                    {t('settings.websiteWidgets.installMethod.manual')}
+                  </option>
+                  <option value="platform">
+                    {t('settings.websiteWidgets.installMethod.platform')}
+                  </option>
                 </select>
               </label>
 
@@ -171,7 +173,7 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                 disabled={!form.canSubmit}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {form.isSubmitting ? 'Adding…' : 'Add website'}
+                {form.isSubmitting ? t('settings.adding') : t('settings.websiteWidgets.addButton')}
               </button>
 
               {form.submitError && (
@@ -183,11 +185,11 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
           )}
 
           {list.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('settings.loading')}</p>
           ) : list.data.items.length === 0 ? (
             <EmptyState
-              title="No websites yet"
-              description="Add the site you want the widget on, then paste the snippet before its closing body tag."
+              title={t('settings.websiteWidgets.empty.title')}
+              description={t('settings.websiteWidgets.empty.description')}
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -199,12 +201,12 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
 
                     <span className="flex flex-col items-end">
                       <StatusDot
-                        tone={STATUS[site.status].tone}
-                        label={STATUS[site.status].label}
+                        tone={STATUS_KEYS[site.status].tone}
+                        label={t(STATUS_KEYS[site.status].labelKey)}
                       />
                       {site.status === 'connected' && (
                         <span className="text-2xs text-content-tertiary">
-                          Test message received
+                          {t('settings.websiteWidgets.testMessageReceived')}
                         </span>
                       )}
                     </span>
@@ -215,17 +217,21 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
                       onClick={() => setOpenSnippet(openSnippet === site.id ? null : site.id)}
                       className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                     >
-                      {openSnippet === site.id ? 'Hide code' : 'Get code'}
+                      {openSnippet === site.id
+                        ? t('settings.websiteWidgets.hideCode')
+                        : t('settings.websiteWidgets.getCode')}
                     </button>
 
                     {canEdit && (
                       <button
                         type="button"
                         onClick={() => remove.mutate(site.id)}
-                        aria-label={`Remove ${site.domain}`}
+                        aria-label={t('settings.websiteWidgets.removeAriaLabel', {
+                          domain: site.domain,
+                        })}
                         className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                       >
-                        Remove
+                        {t('settings.remove')}
                       </button>
                     )}
                   </div>
@@ -240,13 +246,14 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
 
           <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5">
             <p className="text-2xs text-content-tertiary">
-              Paste the snippet immediately before <code>&lt;/body&gt;</code> on every page.
+              {t('settings.websiteWidgets.footerHintPrefix')} <code>&lt;/body&gt;</code>{' '}
+              {t('settings.websiteWidgets.footerHintSuffix')}
             </p>
             <a
               href="#widget-customization"
               className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
             >
-              Customize widget
+              {t('settings.websiteWidgets.customizeWidget')}
             </a>
           </div>
         </Card>
@@ -256,11 +263,23 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
 }
 
 /**
+ * Documentation only (FR-MOD-13.5, 13.5-g) — shown alongside the install
+ * snippet so a developer wiring up the checkout confirmation page sees the
+ * call right next to where the widget itself is pasted in. `nexa` is the
+ * general command surface the loader exposes once pasted above; calling it
+ * before the widget has finished loading queues the call rather than losing
+ * it.
+ */
+const TRACK_SALE_EXAMPLE =
+  "nexa('trackSale', { external_order_id: 'order-123', amount_cents: 4999, currency: 'USD' });";
+
+/**
  * The code to paste, plus the two ways to hand it off: copy it, or mail it to a
  * developer. The mail is composed as a `mailto:` so it is the admin's own mail
  * client that sends it, never us.
  */
 function SnippetPanel({ snippet, domain }: { snippet: string; domain: string }): ReactElement {
+  const t = useTranslate();
   const [copied, setCopied] = useState(false);
 
   const copy = (): void => {
@@ -274,10 +293,8 @@ function SnippetPanel({ snippet, domain }: { snippet: string; domain: string }):
   };
 
   const mailto = `mailto:?subject=${encodeURIComponent(
-    `Install our chat widget on ${domain}`,
-  )}&body=${encodeURIComponent(
-    `Please paste this snippet immediately before the closing </body> tag on ${domain}:\n\n${snippet}`,
-  )}`;
+    t('settings.websiteWidgets.mailtoSubject', { domain }),
+  )}&body=${encodeURIComponent(t('settings.websiteWidgets.mailtoBody', { domain, snippet }))}`;
 
   return (
     <div className="rounded-md border border-border bg-inset">
@@ -289,7 +306,7 @@ function SnippetPanel({ snippet, domain }: { snippet: string; domain: string }):
       </pre>
       <div className="border-t border-border px-3 py-2">
         <p className="text-2xs text-content-tertiary">
-          To report a sale once checkout completes, call the tracking code from your own script:
+          {t('settings.websiteWidgets.snippet.reportSale')}
         </p>
         <pre
           data-testid="website-snippet-track-sale"
@@ -304,13 +321,13 @@ function SnippetPanel({ snippet, domain }: { snippet: string; domain: string }):
           onClick={copy}
           className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
         >
-          {copied ? 'Copied' : 'Copy code'}
+          {copied ? t('settings.copied') : t('settings.websiteWidgets.snippet.copyCode')}
         </button>
         <a
           href={mailto}
           className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
         >
-          Invite developer
+          {t('settings.websiteWidgets.snippet.inviteDeveloper')}
         </a>
       </div>
     </div>
@@ -318,9 +335,13 @@ function SnippetPanel({ snippet, domain }: { snippet: string; domain: string }):
 }
 
 function PlatformIcon({ setup }: { setup: Website['setup'] }): ReactElement {
+  const t = useTranslate();
   // The schema stores only manual vs platform (PRD §8.4), so the icon marks the
   // install method rather than the specific platform brand.
-  const label = setup === 'platform' ? 'Platform install' : 'Manual install';
+  const label =
+    setup === 'platform'
+      ? t('settings.websiteWidgets.platformInstall')
+      : t('settings.websiteWidgets.manualInstall');
   return (
     <span
       aria-label={label}

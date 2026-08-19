@@ -23,6 +23,7 @@ import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from '
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationSettings } from './SettingsPage.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const AGENT = {
   account_id: 'acc-1',
@@ -133,5 +134,18 @@ describe('NotificationSettings', () => {
     expect(checkbox(/Enable notifications/)).toBeChecked();
     expect(checkbox(/Mobile push notifications/)).toBeChecked();
     expect(checkbox(/Email notifications/)).toBeChecked();
+  });
+});
+
+describe('NotificationSettings localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the notification section in Turkish when that is the active locale', () => {
+    renderWithLocale(<NotificationSettings />, 'tr');
+
+    expect(screen.getByRole('region', { name: 'Bildirimler' })).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /Bildirimleri etkinleştir/ })).toBeChecked();
   });
 });

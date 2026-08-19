@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 export interface Expertise {
   id: number;
@@ -29,6 +30,7 @@ interface AgentSkillsProps {
 }
 
 export function AgentSkills({ agent, canEdit }: AgentSkillsProps): ReactElement {
+  const t = useTranslate();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
 
@@ -73,26 +75,26 @@ export function AgentSkills({ agent, canEdit }: AgentSkillsProps): ReactElement 
       <button
         type="button"
         onClick={openModal}
-        aria-label={`Manage skills for ${agent.name}`}
+        aria-label={t('team.skills.manageAriaLabel', { name: agent.name })}
         className="text-xs text-content-secondary underline"
       >
-        {currentNames || 'No skills'}
+        {currentNames || t('team.skills.noSkills')}
       </button>
 
       {open && (
         <Modal
           onClose={() => setOpen(false)}
-          title={`Skills — ${agent.name}`}
-          description="Skill-based routing only assigns this agent conversations that require every skill they hold."
+          title={t('team.skills.dialogTitle', { name: agent.name })}
+          description={t('team.skills.dialogDescription')}
         >
           {catalog.isPending ? (
-            <p className="text-sm text-content-secondary">Loading…</p>
+            <p className="text-sm text-content-secondary">{t('team.skills.loading')}</p>
           ) : catalog.error ? (
-            <p className="text-sm text-danger">Could not load the skill catalogue.</p>
+            <p className="text-sm text-danger">{t('team.skills.loadError')}</p>
           ) : items.length === 0 ? (
             <EmptyState
-              title="No skills in the catalogue yet"
-              description="Add a skill in Settings → Skills before assigning one to an agent here."
+              title={t('team.skills.empty.title')}
+              description={t('team.skills.empty.description')}
             />
           ) : (
             <ul className="max-h-72 space-y-2 overflow-y-auto">
@@ -114,7 +116,7 @@ export function AgentSkills({ agent, canEdit }: AgentSkillsProps): ReactElement 
 
           {save.isError && (
             <p role="alert" className="mt-3 text-sm text-danger">
-              Could not save that agent's skills.
+              {t('team.skills.saveError')}
             </p>
           )}
 
@@ -124,7 +126,7 @@ export function AgentSkills({ agent, canEdit }: AgentSkillsProps): ReactElement 
               onClick={() => setOpen(false)}
               className="rounded-md border border-border px-3 py-1.5 text-sm"
             >
-              {canEdit ? 'Cancel' : 'Close'}
+              {canEdit ? t('team.skills.cancel') : t('team.skills.close')}
             </button>
             {canEdit && items.length > 0 && (
               <button
@@ -133,7 +135,7 @@ export function AgentSkills({ agent, canEdit }: AgentSkillsProps): ReactElement 
                 disabled={save.isPending}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
               >
-                {save.isPending ? 'Saving…' : 'Save'}
+                {save.isPending ? t('team.skills.saving') : t('team.skills.saveButton')}
               </button>
             )}
           </div>

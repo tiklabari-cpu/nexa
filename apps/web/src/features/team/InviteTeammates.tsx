@@ -16,6 +16,7 @@ import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, emailList, splitList, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { Modal } from '../../components/ui/index.js';
 
 interface Invitation {
@@ -45,6 +46,7 @@ export function useRevokeInvitation() {
 }
 
 export function InviteTeammates(): ReactElement {
+  const t = useTranslate();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<'admin' | 'agent'>('admin');
   const [copied, setCopied] = useState<string | null>(null);
@@ -77,14 +79,17 @@ export function InviteTeammates(): ReactElement {
         if (failure instanceof ApiClientError && failure.type === 'validation') {
           const bad = failure.details?.['invalid_emails'];
           if (Array.isArray(bad)) {
-            setFieldError('emails', `Not a valid address: ${(bad as string[]).join(', ')}`);
+            setFieldError(
+              'emails',
+              t('team.invite.error.invalidEmails', { emails: (bad as string[]).join(', ') }),
+            );
             return;
           }
         }
         setSubmitError(
           failure instanceof ApiClientError && failure.type === 'authorization'
-            ? 'You cannot invite someone above your own role.'
-            : 'Could not send those invitations.',
+            ? t('team.invite.error.aboveRole')
+            : t('team.invite.error.generic'),
         );
       }
     },
@@ -98,7 +103,7 @@ export function InviteTeammates(): ReactElement {
   // (or already-sent) form close without nagging (FR-EK-A.2).
   const close = useCloseGuard({
     isDirty: form.isDirty,
-    message: 'Discard the addresses you have typed?',
+    message: t('team.invite.discardConfirm'),
     onClose: () => {
       setOpen(false);
       setRole('admin');
@@ -115,7 +120,7 @@ export function InviteTeammates(): ReactElement {
         onClick={() => setOpen(true)}
         className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white"
       >
-        Invite teammates
+        {t('team.invite.title')}
       </button>
     );
   }
@@ -123,8 +128,8 @@ export function InviteTeammates(): ReactElement {
   return (
     <Modal
       onClose={close}
-      title="Invite teammates"
-      description="One address per line, or separated by commas."
+      title={t('team.invite.title')}
+      description={t('team.invite.description')}
     >
       <form onSubmit={form.handleSubmit} noValidate>
         {form.submitError && (
@@ -134,7 +139,7 @@ export function InviteTeammates(): ReactElement {
         )}
 
         <label htmlFor="invite-emails" className="mb-1.5 block text-sm font-medium">
-          Email addresses
+          {t('team.invite.emailsLabel')}
         </label>
         <textarea
           id="invite-emails"
@@ -150,7 +155,7 @@ export function InviteTeammates(): ReactElement {
         <FieldError id="invite-emails-error" message={emailsError} />
 
         <label htmlFor="invite-role" className="mb-1.5 mt-3 block text-sm font-medium">
-          Role
+          {t('team.invite.roleLabel')}
         </label>
         <select
           id="invite-role"
@@ -158,21 +163,21 @@ export function InviteTeammates(): ReactElement {
           onChange={(event) => setRole(event.target.value as 'admin')}
           className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
         >
-          <option value="admin">Admin</option>
-          <option value="agent">Agent</option>
+          <option value="admin">{t('team.role.admin')}</option>
+          <option value="agent">{t('team.role.agent')}</option>
         </select>
 
         {copied && (
           <div className="mb-4 rounded-md border border-border bg-inset p-3">
             <p role="status" className="mb-2 text-xs text-content-secondary">
-              Invitations sent. This link works once and lasts seven days — it is not shown again.
+              {t('team.invite.linkSentNotice')}
             </p>
             <button
               type="button"
               onClick={() => void navigator.clipboard?.writeText(copied)}
               className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
             >
-              Copy invite link
+              {t('team.invite.copyLink')}
             </button>
           </div>
         )}
@@ -183,14 +188,18 @@ export function InviteTeammates(): ReactElement {
             onClick={close}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            {copied ? 'Done' : 'Cancel'}
+            {copied ? t('team.invite.done') : t('team.invite.cancel')}
           </button>
           <button
             type="submit"
             disabled={!form.canSubmit}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
           >
-            {form.isSubmitting ? 'Sending…' : `Invite ${emailCount || ''}`.trim()}
+            {form.isSubmitting
+              ? t('team.invite.sending')
+              : emailCount > 0
+                ? t('team.invite.submitCount', { count: emailCount })
+                : t('team.invite.submit')}
           </button>
         </div>
       </form>
@@ -199,6 +208,7 @@ export function InviteTeammates(): ReactElement {
 }
 
 export function PendingInvitations(): ReactElement | null {
+  const t = useTranslate();
   const invitations = usePendingInvitations();
   const revoke = useRevokeInvitation();
   const items = invitations.data?.items ?? [];
@@ -207,17 +217,17 @@ export function PendingInvitations(): ReactElement | null {
 
   return (
     <table className="w-full text-sm">
-      <caption className="sr-only">Invitations not yet accepted</caption>
+      <caption className="sr-only">{t('team.invite.pending.caption')}</caption>
       <thead>
         <tr className="border-b border-border text-left">
           <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Email
+            {t('team.invite.pending.email')}
           </th>
           <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Role
+            {t('team.invite.pending.role')}
           </th>
           <th className="px-4 py-2 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Invited by
+            {t('team.invite.pending.invitedBy')}
           </th>
           <th className="px-4 py-2" />
         </tr>
@@ -226,7 +236,7 @@ export function PendingInvitations(): ReactElement | null {
         {items.map((invite) => (
           <tr key={invite.id} className="border-b border-border last:border-0">
             <td className="px-4 py-2.5">{invite.email}</td>
-            <td className="px-4 py-2.5 text-content-secondary">{invite.role}</td>
+            <td className="px-4 py-2.5 text-content-secondary">{t(`team.role.${invite.role}`)}</td>
             <td className="px-4 py-2.5 text-content-secondary">{invite.invited_by_name ?? '—'}</td>
             <td className="px-4 py-2.5 text-right">
               <button
@@ -235,7 +245,7 @@ export function PendingInvitations(): ReactElement | null {
                 disabled={revoke.isPending}
                 className="text-xs text-danger underline"
               >
-                Revoke
+                {t('team.invite.pending.revoke')}
               </button>
             </td>
           </tr>

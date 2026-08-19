@@ -7,9 +7,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { DEFAULT_WORK_SCHEDULE } from '@nexa/types';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), put: vi.fn() },
@@ -229,5 +230,28 @@ describe('WorkSchedule — editor', () => {
     expect(confirmSpy).not.toHaveBeenCalled();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     confirmSpy.mockRestore();
+  });
+});
+
+describe('WorkSchedule localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the section and the editor in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <WorkSchedule agents={AGENTS} currentAgentId="agent-1" canManage={true} loading={false} />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('region', { name: 'Çalışma programı' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Programı düzenle' }));
+    expect(
+      await screen.findByRole('dialog', { name: `Çalışma programı — ${AGENTS[0]!.name}` }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Pazartesi' })).toBeInTheDocument();
   });
 });

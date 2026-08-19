@@ -8,8 +8,9 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), put: vi.fn() },
@@ -96,5 +97,29 @@ describe('AgentSkills', () => {
     expect(screen.getByRole('checkbox', { name: 'Technical support' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+  });
+});
+
+describe('AgentSkills localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the skills dialog in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <AgentSkills agent={AGENT} canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ada Lovelace için yetenekleri yönet' }));
+
+    expect(
+      await screen.findByRole('dialog', { name: 'Yetenekler — Ada Lovelace' }),
+    ).toBeInTheDocument();
+    await screen.findByRole('checkbox', { name: 'Billing' });
+    expect(screen.getByRole('button', { name: 'Kaydet' })).toBeInTheDocument();
   });
 });

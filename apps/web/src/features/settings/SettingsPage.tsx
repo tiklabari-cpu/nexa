@@ -7,7 +7,7 @@
  * missing configuration.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { useState, type FormEvent, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -38,12 +38,9 @@ import { SiemExport } from './SiemExport.js';
 import { SlaPolicy } from './SlaPolicy.js';
 import { Sandbox } from './Sandbox.js';
 import { ScheduledExports } from './ScheduledExports.js';
-import { type Permission } from '../notifications/notifications.js';
-import { readNotificationPreferences, type NotificationPreferences } from '@nexa/types';
-import {
-  currentPermission,
-  requestNotificationPermission,
-} from '../notifications/useNotifications.js';
+import { NotificationSettings } from './NotificationSettings.js';
+
+export { NotificationSettings } from './NotificationSettings.js';
 
 interface TrustedDomain {
   id: string;
@@ -197,182 +194,6 @@ export function Integrations(): ReactElement {
           >
             Open marketplace
           </Link>
-        </div>
-      </Card>
-    </Section>
-  );
-}
-
-// --- Notifications -----------------------------------------------------------
-
-/**
- * Per-agent alert preferences (FR-MOD-13.8).
- *
- * All five channels live on the account, per workspace, since 13.7-c. They used
- * to be split — e-mail on the account, sound/desktop/master in this browser's
- * `localStorage` — on the reasoning that a speaker and an OS permission are
- * properties of a device rather than a person. Push ended that argument: the
- * server chooses which handset to deliver to, so a preference it cannot read
- * does not apply to the one channel that reaches somebody who has closed this
- * laptop. Keeping two homes for one question would have meant a "notifications
- * off" that silenced the tab while the phone went on buzzing.
- *
- * The browser still owns one thing, and only one: whether it has been *granted*
- * permission to raise a desktop notification. That is not a preference, it is a
- * capability, and no server can hold it.
- */
-export function NotificationSettings(): ReactElement {
-  const [permission, setPermission] = useState<Permission>('default');
-  const [busy, setBusy] = useState(false);
-  const [failed, setFailed] = useState(false);
-
-  // Selected as the stored reference and normalised outside the selector. Zustand
-  // v5 compares the selector's result with `Object.is`, so building the object
-  // inside it would hand back a new identity on every render — an infinite loop
-  // that takes the whole Settings page down, not a stale value.
-  const stored = useAuth((s) => s.agent?.notification_preferences);
-  const prefs = useMemo(() => readNotificationPreferences(stored), [stored]);
-  const setPreferences = useAuth((s) => s.setNotificationPreferences);
-
-  // The permission is read once on mount — `Notification.permission` is a
-  // browser global, not a render-time value.
-  useEffect(() => {
-    setPermission(currentPermission());
-  }, []);
-
-  function update(patch: Partial<NotificationPreferences>): void {
-    setBusy(true);
-    setFailed(false);
-    void setPreferences(patch)
-      .catch(() => setFailed(true))
-      .finally(() => setBusy(false));
-  }
-
-  async function enableDesktop(): Promise<void> {
-    const result = await requestNotificationPermission();
-    setPermission(result);
-    // Turning the desktop toggle on is pointless if the browser refuses; keep
-    // the stored preference honest about what will actually happen.
-    if (result === 'granted') update({ desktop: true });
-  }
-
-  const desktopBlocked = permission === 'denied' || permission === 'unsupported';
-
-  return (
-    <Section
-      title="Notifications"
-      description="How you are alerted to new messages. These follow your account on this workspace; whether this browser may show desktop notifications is its own setting."
-    >
-      <Card>
-        <div className="divide-y divide-border">
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.enabled}
-              onChange={(event) => update({ enabled: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              Enable notifications
-              <span className="block text-2xs text-content-tertiary">
-                {failed
-                  ? 'Could not save — please try again.'
-                  : 'Turning this off silences sound, desktop, push and tab alerts alike. Email still reaches you.'}
-              </span>
-            </span>
-            <StatusDot
-              tone={prefs.enabled ? 'success' : 'neutral'}
-              label={prefs.enabled ? 'On' : 'Off'}
-            />
-          </label>
-
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.sound}
-              disabled={!prefs.enabled}
-              onChange={(event) => update({ sound: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              Play a sound
-              <span className="block text-2xs text-content-tertiary">
-                A short chime when a visitor writes in.
-              </span>
-            </span>
-          </label>
-
-          <div className="flex flex-wrap items-center gap-3 p-4">
-            <label className="flex flex-1 items-center gap-3">
-              <input
-                type="checkbox"
-                checked={prefs.desktop && permission === 'granted'}
-                disabled={!prefs.enabled || desktopBlocked}
-                onChange={(event) => update({ desktop: event.target.checked })}
-              />
-              <span className="text-sm">
-                Desktop notifications
-                <span className="block text-2xs text-content-tertiary">
-                  {permission === 'granted'
-                    ? 'Shown even when this tab is in the background.'
-                    : permission === 'denied'
-                      ? 'Blocked in your browser — allow notifications for this site to use them.'
-                      : permission === 'unsupported'
-                        ? 'This browser does not support desktop notifications.'
-                        : 'Ask your browser for permission to show these.'}
-                </span>
-              </span>
-            </label>
-
-            {prefs.enabled && permission !== 'granted' && permission !== 'unsupported' && (
-              <button
-                type="button"
-                onClick={() => void enableDesktop()}
-                disabled={permission === 'denied'}
-                className="rounded-md border border-border px-3 py-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
-              >
-                Enable desktop notifications
-              </button>
-            )}
-          </div>
-
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.push}
-              disabled={!prefs.enabled || busy}
-              onChange={(event) => update({ push: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              Mobile push notifications
-              <span className="block text-2xs text-content-tertiary">
-                Sent to the Nexa app on any phone you have signed in on. Which handsets those are is
-                managed from the app itself.
-              </span>
-            </span>
-            <StatusDot
-              tone={prefs.enabled && prefs.push ? 'success' : 'neutral'}
-              label={prefs.enabled && prefs.push ? 'On' : 'Off'}
-            />
-          </label>
-
-          <label className="flex items-center gap-3 p-4">
-            <input
-              type="checkbox"
-              checked={prefs.email}
-              disabled={busy}
-              onChange={(event) => update({ email: event.target.checked })}
-            />
-            <span className="flex-1 text-sm">
-              Email notifications
-              <span className="block text-2xs text-content-tertiary">
-                Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed.
-                Not affected by the switch above — email is the fallback for when you are away.
-              </span>
-            </span>
-            <StatusDot
-              tone={prefs.email ? 'success' : 'neutral'}
-              label={prefs.email ? 'On' : 'Off'}
-            />
-          </label>
         </div>
       </Card>
     </Section>

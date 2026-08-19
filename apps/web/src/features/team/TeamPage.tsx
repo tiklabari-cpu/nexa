@@ -23,6 +23,7 @@ import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
+import { useTranslate } from '../../lib/i18n.js';
 import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
 import { TeamAiPerformance } from './TeamAiPerformance.js';
 import { CopilotKnowledge } from './CopilotKnowledge.js';
@@ -85,10 +86,11 @@ export function useSuspension() {
   });
 }
 
-const STATUS_LABEL: Record<Agent['routing_status'], string> = {
-  accepting_chats: 'Accepting chats',
-  not_accepting_chats: 'Not accepting',
-  offline: 'Offline',
+/** Translation key for each routing status — the text itself lives in the catalogue. */
+const STATUS_KEY: Record<Agent['routing_status'], string> = {
+  accepting_chats: 'team.status.acceptingChats',
+  not_accepting_chats: 'team.status.notAccepting',
+  offline: 'team.status.offline',
 };
 
 const STATUS_TONE: Record<Agent['routing_status'], StatusTone> = {
@@ -101,6 +103,7 @@ const STATUS_TONE: Record<Agent['routing_status'], StatusTone> = {
 const PRIORITY_ORDER = ['primary', 'first', 'normal', 'last'] as const;
 
 export function TeamPage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const currentAgentId = useAuth((s) => s.agent?.account_id ?? null);
   const currentRole = useAuth((s) => s.agent?.role ?? null);
@@ -147,9 +150,9 @@ export function TeamPage(): ReactElement {
     roleAtLeast(currentRole, agent.role);
 
   return (
-    <Page title="Team" description="Teammates, availability and the teams routing sends work to.">
+    <Page title={t('team.page.title')} description={t('team.page.description')}>
       {agents.error || groups.error ? (
-        <ErrorNotice message="Could not load the team. Check that the API is reachable and try again." />
+        <ErrorNotice message={t('team.page.loadError')} />
       ) : (
         <>
           <div className="mb-6 flex justify-end">
@@ -157,57 +160,60 @@ export function TeamPage(): ReactElement {
           </div>
 
           <KpiGrid>
-            <Kpi label="Teammates" value={formatCount(items.length)} />
+            <Kpi label={t('team.page.kpi.teammates')} value={formatCount(items.length)} />
             <Kpi
-              label="Accepting chats"
+              label={t('team.page.kpi.acceptingChats')}
               value={formatCount(accepting)}
               tone={accepting === 0 ? 'warn' : 'good'}
-              hint={accepting === 0 ? 'Nobody can be assigned work' : undefined}
+              hint={accepting === 0 ? t('team.page.kpi.acceptingChatsHint') : undefined}
             />
             <Kpi
-              label="Combined capacity"
+              label={t('team.page.kpi.combinedCapacity')}
               value={formatCount(capacity)}
-              hint="Concurrent conversations before queueing"
+              hint={t('team.page.kpi.combinedCapacityHint')}
             />
-            <Kpi label="Teams" value={formatCount(groups.data?.items.length ?? null)} />
             <Kpi
-              label="Chatbots"
+              label={t('team.page.kpi.teams')}
+              value={formatCount(groups.data?.items.length ?? null)}
+            />
+            <Kpi
+              label={t('team.page.kpi.chatbots')}
               value={formatCount(chatbots.data ? botItems.length : null)}
-              hint="Free — bots never use a seat"
+              hint={t('team.page.kpi.chatbotsHint')}
             />
           </KpiGrid>
 
-          <Section title="Pending invitations">
+          <Section title={t('team.page.pendingInvitationsTitle')}>
             <Card>
               <PendingInvitations />
             </Card>
           </Section>
 
-          <Section title="Teammates">
+          <Section title={t('team.page.teammatesTitle')}>
             <Card>
               {agents.isPending ? (
                 <ListSkeleton rows={4} />
               ) : items.length === 0 ? (
                 <EmptyState
-                  title="No teammates yet"
-                  description="Invite colleagues so conversations can be shared out."
+                  title={t('team.page.empty.noTeammatesTitle')}
+                  description={t('team.page.empty.noTeammatesDescription')}
                 />
               ) : (
                 <VirtualTable
                   items={items}
                   rowHeight={56}
-                  caption="Agents on this licence"
+                  caption={t('team.page.table.caption')}
                   colSpan={canManage ? 7 : 6}
                   head={
                     <thead>
                       <tr className="border-b border-border text-left">
-                        <Th>Name</Th>
-                        <Th>Role</Th>
-                        <Th>Availability</Th>
-                        <Th align="right">Chat limit</Th>
-                        <Th>2FA</Th>
-                        <Th>Skills</Th>
-                        {canManage && <Th align="right">Manage</Th>}
+                        <Th>{t('team.page.table.name')}</Th>
+                        <Th>{t('team.page.table.role')}</Th>
+                        <Th>{t('team.page.table.availability')}</Th>
+                        <Th align="right">{t('team.page.table.chatLimit')}</Th>
+                        <Th>{t('team.page.table.twoFactor')}</Th>
+                        <Th>{t('team.page.table.skills')}</Th>
+                        {canManage && <Th align="right">{t('team.page.table.manage')}</Th>}
                       </tr>
                     </thead>
                   }
@@ -220,20 +226,22 @@ export function TeamPage(): ReactElement {
                             <p className="truncate font-medium">
                               {agent.name}
                               {agent.id === currentAgentId && (
-                                <span className="ml-1.5 text-2xs text-content-tertiary">you</span>
+                                <span className="ml-1.5 text-2xs text-content-tertiary">
+                                  {t('team.page.you')}
+                                </span>
                               )}
                             </p>
                             <p className="truncate text-2xs text-content-tertiary">{agent.email}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-4 py-2.5 capitalize text-content-secondary">
-                        {agent.role}
+                      <td className="px-4 py-2.5 text-content-secondary">
+                        {t(`team.role.${agent.role}`)}
                       </td>
                       <td className="px-4 py-2.5">
                         <StatusDot
                           tone={STATUS_TONE[agent.routing_status]}
-                          label={STATUS_LABEL[agent.routing_status]}
+                          label={t(STATUS_KEY[agent.routing_status])}
                         />
                       </td>
                       <td className="tabular px-4 py-2.5 text-right">
@@ -243,7 +251,9 @@ export function TeamPage(): ReactElement {
                         {/* Absence of 2FA is worth surfacing, not just its presence. */}
                         <StatusDot
                           tone={agent.two_factor_enabled ? 'success' : 'warning'}
-                          label={agent.two_factor_enabled ? 'On' : 'Off'}
+                          label={
+                            agent.two_factor_enabled ? t('team.status.on') : t('team.status.off')
+                          }
                         />
                       </td>
                       <td className="px-4 py-2.5">
@@ -258,7 +268,7 @@ export function TeamPage(): ReactElement {
                               disabled={suspension.isPending}
                               className="text-xs text-danger underline disabled:opacity-40"
                             >
-                              Suspend
+                              {t('team.page.suspendButton')}
                             </button>
                           )}
                         </td>
@@ -278,26 +288,26 @@ export function TeamPage(): ReactElement {
           />
 
           <Section
-            title="Chatbots"
-            description="Bot accounts answer on their own. They are free — a bot never uses a seat (FR-MOD-04.6)."
+            title={t('team.page.chatbots.title')}
+            description={t('team.page.chatbots.description')}
           >
             <Card>
               {chatbots.isPending ? (
                 <ListSkeleton rows={2} />
               ) : botItems.length === 0 ? (
                 <EmptyState
-                  title="No chatbots yet"
-                  description="Create an AI agent in the Playbook to answer common questions automatically."
+                  title={t('team.page.empty.noChatbotsTitle')}
+                  description={t('team.page.empty.noChatbotsDescription')}
                 />
               ) : (
                 <table className="w-full text-sm">
-                  <caption className="sr-only">Bot accounts on this licence</caption>
+                  <caption className="sr-only">{t('team.page.botTable.caption')}</caption>
                   <thead>
                     <tr className="border-b border-border text-left">
-                      <Th>Name</Th>
-                      <Th>Status</Th>
-                      <Th align="right">Skills</Th>
-                      <Th align="right">Seat cost</Th>
+                      <Th>{t('team.page.table.name')}</Th>
+                      <Th>{t('team.page.botTable.status')}</Th>
+                      <Th align="right">{t('team.page.table.skills')}</Th>
+                      <Th align="right">{t('team.page.botTable.seatCost')}</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -307,14 +317,14 @@ export function TeamPage(): ReactElement {
                         <td className="px-4 py-2.5">
                           <StatusDot
                             tone={bot.active ? 'success' : 'neutral'}
-                            label={bot.active ? 'Active' : 'Off'}
+                            label={bot.active ? t('team.page.botActive') : t('team.status.off')}
                           />
                         </td>
                         <td className="tabular px-4 py-2.5 text-right text-content-secondary">
                           {formatCount(bot.skills_count)}
                         </td>
                         <td className="px-4 py-2.5 text-right text-2xs font-medium text-success">
-                          Free
+                          {t('team.page.free')}
                         </td>
                       </tr>
                     ))}
@@ -331,25 +341,25 @@ export function TeamPage(): ReactElement {
           <CopilotKnowledge />
 
           <Section
-            title="Suspended"
-            description="Suspended agents keep their teams and history but cannot sign in, take chats or use a seat until reinstated."
+            title={t('team.page.suspended.title')}
+            description={t('team.page.suspended.description')}
           >
             <Card>
               {suspended.isPending ? (
                 <ListSkeleton rows={2} />
               ) : suspendedItems.length === 0 ? (
                 <EmptyState
-                  title="Nobody is suspended"
-                  description="Suspend a teammate from the list above when they should no longer be assigned work."
+                  title={t('team.page.empty.nobodySuspendedTitle')}
+                  description={t('team.page.empty.nobodySuspendedDescription')}
                 />
               ) : (
                 <table className="w-full text-sm">
-                  <caption className="sr-only">Suspended agents</caption>
+                  <caption className="sr-only">{t('team.page.suspendedTable.caption')}</caption>
                   <thead>
                     <tr className="border-b border-border text-left">
-                      <Th>Name</Th>
-                      <Th>Role</Th>
-                      {canManage && <Th align="right">Manage</Th>}
+                      <Th>{t('team.page.table.name')}</Th>
+                      <Th>{t('team.page.table.role')}</Th>
+                      {canManage && <Th align="right">{t('team.page.table.manage')}</Th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -366,8 +376,8 @@ export function TeamPage(): ReactElement {
                             </div>
                           </div>
                         </td>
-                        <td className="px-4 py-2.5 capitalize text-content-secondary">
-                          {agent.role}
+                        <td className="px-4 py-2.5 text-content-secondary">
+                          {t(`team.role.${agent.role}`)}
                         </td>
                         {canManage && (
                           <td className="px-4 py-2.5 text-right">
@@ -380,7 +390,7 @@ export function TeamPage(): ReactElement {
                                 disabled={suspension.isPending}
                                 className="text-xs text-content-brand underline disabled:opacity-40"
                               >
-                                Reinstate
+                                {t('team.page.reinstateButton')}
                               </button>
                             )}
                           </td>
@@ -394,16 +404,16 @@ export function TeamPage(): ReactElement {
           </Section>
 
           <Section
-            title="Teams"
-            description="Routing fills the highest priority tier that still has capacity, then the next."
+            title={t('team.page.teams.title')}
+            description={t('team.page.teams.description')}
           >
             {groups.isPending ? (
               <CardSkeleton rows={3} />
             ) : (groups.data?.items.length ?? 0) === 0 ? (
               <Card>
                 <EmptyState
-                  title="No teams yet"
-                  description="Teams decide which conversations an agent can see and who gets them first."
+                  title={t('team.page.empty.noTeamsTitle')}
+                  description={t('team.page.empty.noTeamsDescription')}
                 />
               </Card>
             ) : (
@@ -413,15 +423,13 @@ export function TeamPage(): ReactElement {
                     <div className="border-b border-border px-4 py-2.5">
                       <h3 className="text-sm font-medium">{group.name}</h3>
                       <p className="text-2xs text-content-tertiary">
-                        {group.agents.length} member{group.agents.length === 1 ? '' : 's'} ·{' '}
+                        {t('team.page.memberCount', { count: group.agents.length })} ·{' '}
                         {group.language_code.toUpperCase()}
                       </p>
                     </div>
 
                     {group.agents.length === 0 ? (
-                      <p className="px-4 py-3 text-xs text-warning">
-                        No members — conversations routed here fall through to the fallback team.
-                      </p>
+                      <p className="px-4 py-3 text-xs text-warning">{t('team.page.noMembers')}</p>
                     ) : (
                       <ul className="divide-y divide-border">
                         {[...group.agents]
@@ -436,10 +444,10 @@ export function TeamPage(): ReactElement {
                               className="flex items-center gap-2 px-4 py-2 text-sm"
                             >
                               <span className="min-w-0 flex-1 truncate">
-                                {byId.get(member.agent_id)?.name ?? 'Former teammate'}
+                                {byId.get(member.agent_id)?.name ?? t('team.page.formerTeammate')}
                               </span>
-                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs capitalize text-content-secondary">
-                                {member.priority}
+                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
+                                {t(`team.priority.${member.priority}`)}
                               </span>
                             </li>
                           ))}

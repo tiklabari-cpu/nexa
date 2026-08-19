@@ -11,11 +11,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type { HomeDashboard } from '@nexa/types';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
 
@@ -133,5 +134,27 @@ describe('HomePage', () => {
 
     expect(await screen.findByText('Dashboard not available')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Go to inbox' })).toBeInTheDocument();
+  });
+});
+
+describe('HomePage localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the dashboard in Turkish when that is the active locale', async () => {
+    api.get.mockResolvedValue(DASHBOARD);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <HomePage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByRole('heading', { name: 'Ana Sayfa', level: 1 })).toBeInTheDocument();
+    expect(await screen.findByText('Bir ekip arkadaşı davet edin')).toBeInTheDocument();
   });
 });

@@ -13,6 +13,7 @@ import {
   formatDateTime,
   formatMoney,
   formatRate,
+  formatWeekday,
   setFormatLocale,
 } from './format.js';
 
@@ -48,6 +49,13 @@ describe('explicit locale argument', () => {
     expect(formatDateTime(iso, 'en')).not.toBe(formatDate(iso, 'en'));
     expect(formatDateTime(null, 'en')).toBeNull();
     expect(formatDateTime('not a date', 'en')).toBeNull();
+  });
+
+  it('names every weekday from a single reference date, in each locale’s own words', () => {
+    expect(formatWeekday('monday', 'en')).toBe('Monday');
+    expect(formatWeekday('sunday', 'en')).toBe('Sunday');
+    expect(formatWeekday('monday', 'tr')).toBe('Pazartesi');
+    expect(formatWeekday('sunday', 'tr')).toBe('Pazar');
   });
 });
 

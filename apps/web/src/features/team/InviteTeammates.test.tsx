@@ -5,9 +5,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { InviteTeammates } from './InviteTeammates.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function renderInvite() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -53,5 +54,25 @@ describe('InviteTeammates validation', () => {
     await userEvent.type(screen.getByLabelText('Email addresses'), 'robin@example.com');
     expect(screen.getByRole('button', { name: /^Invite/ })).toBeEnabled();
     expect(screen.queryByText(/Not a valid address/)).not.toBeInTheDocument();
+  });
+});
+
+describe('InviteTeammates localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the invite modal in Turkish when that is the active locale', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <InviteTeammates />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Ekip arkadaşı davet et' }));
+    expect(screen.getByRole('dialog', { name: 'Ekip arkadaşı davet et' })).toBeInTheDocument();
+    expect(screen.getByLabelText('E-posta adresleri')).toBeInTheDocument();
   });
 });

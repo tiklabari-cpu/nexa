@@ -1,48 +1,25 @@
 /**
  * Pure view-model logic for the Home dashboard (FR-MOD-13.1).
  *
- * Dependency-free (no React, no fetch, no formatting locale) so the card
- * arithmetic — which counter shows what, and how a week-over-week delta reads —
- * can be unit-tested on its own, the same discipline `reports-metrics.ts`
- * follows for the reports rates. The component turns these plain values into
- * formatted, coloured cards; nothing here renders.
+ * Dependency-free (no React, no fetch, no formatting locale, no i18n) so the
+ * card arithmetic — which counter shows what, and how a week-over-week delta
+ * reads — can be unit-tested on its own, the same discipline
+ * `reports-metrics.ts` follows for the reports rates. The component turns
+ * these plain values into formatted, translated, coloured cards; nothing here
+ * renders or names a piece of display text — a module-level `t()` call would
+ * freeze at import time and never follow a locale switch (I18N-e, tm 133.5),
+ * so the label/description strings live in `locales/{en,tr}/home.ts`, keyed by
+ * the same `ActivationStepKey`/live-counter key this file already carries.
  */
 import type { ActivationStepKey, HomeDashboard } from '@nexa/types';
 
-/** Display copy for each activation step, and where the "do it" link points. */
-export interface ActivationStepCopy {
-  label: string;
-  description: string;
-  /** The module that completes this step. */
-  to: string;
-}
-
-export const ACTIVATION_COPY: Record<ActivationStepKey, ActivationStepCopy> = {
-  install_widget: {
-    label: 'Install the chat widget',
-    description: 'Add your website so the widget can go live on it.',
-    to: '/app/settings',
-  },
-  invite_teammate: {
-    label: 'Invite a teammate',
-    description: 'Bring the rest of your team into the workspace.',
-    to: '/app/team',
-  },
-  customize_widget: {
-    label: 'Customize your widget',
-    description: 'Match the widget’s colour, theme and position to your brand.',
-    to: '/app/settings#section-widget',
-  },
-  add_canned_response: {
-    label: 'Create a canned response',
-    description: 'Save a reply your team can drop in with #.',
-    to: '/app/playbook',
-  },
-  set_up_ai_agent: {
-    label: 'Set up an AI Agent',
-    description: 'Let the AI answer the easy questions before a human steps in.',
-    to: '/app/playbook',
-  },
+/** Where each activation step's "do it" link points. */
+export const ACTIVATION_STEP_ROUTE: Record<ActivationStepKey, string> = {
+  install_widget: '/app/settings',
+  invite_teammate: '/app/team',
+  customize_widget: '/app/settings#section-widget',
+  add_canned_response: '/app/playbook',
+  set_up_ai_agent: '/app/playbook',
 };
 
 export interface ActivationSummary {
@@ -65,32 +42,15 @@ export function activationSummary(activation: HomeDashboard['activation']): Acti
 
 export interface LiveCardModel {
   key: keyof HomeDashboard['live'];
-  label: string;
   value: number;
-  hint: string;
 }
 
-/** The three live counters, in display order, with their labels. */
+/** The three live counters, in display order. */
 export function liveCards(live: HomeDashboard['live']): LiveCardModel[] {
   return [
-    {
-      key: 'visitors_online',
-      label: 'Visitors online',
-      value: live.visitors_online,
-      hint: 'On the site right now',
-    },
-    {
-      key: 'ongoing_chats',
-      label: 'Ongoing chats',
-      value: live.ongoing_chats,
-      hint: 'Open conversations',
-    },
-    {
-      key: 'agents_online',
-      label: 'Agents online',
-      value: live.agents_online,
-      hint: 'Accepting chats',
-    },
+    { key: 'visitors_online', value: live.visitors_online },
+    { key: 'ongoing_chats', value: live.ongoing_chats },
+    { key: 'agents_online', value: live.agents_online },
   ];
 }
 

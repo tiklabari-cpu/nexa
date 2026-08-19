@@ -101,3 +101,28 @@ export function formatDateTime(
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(date);
 }
+
+/** A weekday key, in `WorkScheduleDay`'s own spelling — Monday first. */
+export type Weekday =
+  'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
+
+/**
+ * `Weekday` → its offset from Monday, so the name can be read off a single
+ * known Monday (2024-01-01, UTC) rather than hard-coding seven strings per
+ * locale — the day name becomes whatever `Intl` says that weekday is called.
+ */
+const WEEKDAY_OFFSET: Record<Weekday, number> = {
+  monday: 0,
+  tuesday: 1,
+  wednesday: 2,
+  thursday: 3,
+  friday: 4,
+  saturday: 5,
+  sunday: 6,
+};
+
+/** `'monday'` → `"Monday"` (or `"Pazartesi"` in Turkish) — the long weekday name. */
+export function formatWeekday(day: Weekday, locale: string | undefined = activeLocale): string {
+  const reference = new Date(Date.UTC(2024, 0, 1 + WEEKDAY_OFFSET[day]));
+  return new Intl.DateTimeFormat(locale, { weekday: 'long', timeZone: 'UTC' }).format(reference);
+}

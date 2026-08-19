@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
-  ACTIVATION_COPY,
+  ACTIVATION_STEP_ROUTE,
   activationSummary,
   countDelta,
   liveCards,
@@ -37,7 +37,7 @@ describe('activationSummary', () => {
     });
   });
 
-  it('has copy and a destination for every step key', () => {
+  it('has a destination for every step key', () => {
     for (const key of [
       'install_widget',
       'invite_teammate',
@@ -45,18 +45,16 @@ describe('activationSummary', () => {
       'add_canned_response',
       'set_up_ai_agent',
     ] as const) {
-      expect(ACTIVATION_COPY[key].label).toBeTruthy();
-      expect(ACTIVATION_COPY[key].to).toMatch(/^\/app\//);
+      expect(ACTIVATION_STEP_ROUTE[key]).toMatch(/^\/app\//);
     }
   });
 });
 
 describe('liveCards', () => {
-  it('maps the three counters, in order, to their labels and values', () => {
+  it('maps the three counters, in order, to their keys and values', () => {
     const cards = liveCards({ visitors_online: 7, ongoing_chats: 3, agents_online: 2 });
     expect(cards.map((c) => c.key)).toEqual(['visitors_online', 'ongoing_chats', 'agents_online']);
     expect(cards.map((c) => c.value)).toEqual([7, 3, 2]);
-    expect(cards[0]?.label).toBe('Visitors online');
   });
 });
 

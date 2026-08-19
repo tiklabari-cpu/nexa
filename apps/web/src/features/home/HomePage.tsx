@@ -27,8 +27,9 @@ import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { formatCount, formatRate } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import {
-  ACTIVATION_COPY,
+  ACTIVATION_STEP_ROUTE,
   activationSummary,
   countDelta,
   liveCards,
@@ -37,6 +38,7 @@ import {
 } from './dashboard.js';
 
 export function HomePage(): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const query = useQuery({
     queryKey: ['home'],
@@ -44,7 +46,7 @@ export function HomePage(): ReactElement {
   });
 
   return (
-    <Page title="Home" description="Your workspace at a glance">
+    <Page title={t('home.page.title')} description={t('home.page.description')}>
       {query.isPending ? (
         <KpiGrid>
           <CardSkeleton />
@@ -54,25 +56,25 @@ export function HomePage(): ReactElement {
       ) : query.isError ? (
         query.error instanceof ApiClientError && query.error.status === 403 ? (
           <EmptyState
-            title="Dashboard not available"
-            description="The Home dashboard is available to admins and owners. Head to your inbox to start working."
+            title={t('home.page.notAvailable.title')}
+            description={t('home.page.notAvailable.description')}
             action={
               <NavLink
                 to="/app/inbox"
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
               >
-                Go to inbox
+                {t('home.page.goToInbox')}
               </NavLink>
             }
           />
         ) : (
-          <ErrorNotice message="The dashboard could not be loaded. Please try again." />
+          <ErrorNotice message={t('home.page.loadError')} />
         )
       ) : (
         <>
-          <ActivationChecklist activation={query.data.activation} />
-          <LiveNow live={query.data.live} />
-          <WeeklyPerformance weekly={query.data.weekly} />
+          <ActivationChecklist activation={query.data.activation} t={t} />
+          <LiveNow live={query.data.live} t={t} />
+          <WeeklyPerformance weekly={query.data.weekly} t={t} />
         </>
       )}
     </Page>
@@ -85,18 +87,20 @@ export function HomePage(): ReactElement {
 
 function ActivationChecklist({
   activation,
+  t,
 }: {
   activation: HomeDashboard['activation'];
+  t: TFunction;
 }): ReactElement {
   const summary = activationSummary(activation);
 
   return (
     <Section
-      title="Get started"
+      title={t('home.activation.title')}
       description={
         summary.allDone
-          ? 'Your workspace is fully set up.'
-          : `${summary.completed} of ${summary.total} steps complete`
+          ? t('home.activation.allDone')
+          : t('home.activation.progress', { completed: summary.completed, total: summary.total })
       }
     >
       <Card>
@@ -106,7 +110,7 @@ function ActivationChecklist({
             aria-valuenow={summary.completed}
             aria-valuemin={0}
             aria-valuemax={summary.total}
-            aria-label="Activation progress"
+            aria-label={t('home.activation.progressAriaLabel')}
             className="h-2 overflow-hidden rounded-full bg-canvas"
           >
             <div
@@ -117,7 +121,9 @@ function ActivationChecklist({
         </div>
         <ul className="divide-y divide-border">
           {activation.steps.map((step) => {
-            const copy = ACTIVATION_COPY[step.key];
+            const label = t(`home.activation.${step.key}.label`);
+            const description = t(`home.activation.${step.key}.description`);
+            const to = ACTIVATION_STEP_ROUTE[step.key];
             return (
               <li key={step.key} className="flex items-center gap-3 p-4">
                 <span
@@ -136,19 +142,21 @@ function ActivationChecklist({
                       step.done ? 'text-content-secondary line-through' : 'text-content'
                     }`}
                   >
-                    {copy.label}
-                    <span className="sr-only">{step.done ? ' (done)' : ' (to do)'}</span>
+                    {label}
+                    <span className="sr-only">
+                      {step.done
+                        ? t('home.activation.doneSuffix')
+                        : t('home.activation.todoSuffix')}
+                    </span>
                   </p>
-                  {!step.done && (
-                    <p className="text-xs text-content-secondary">{copy.description}</p>
-                  )}
+                  {!step.done && <p className="text-xs text-content-secondary">{description}</p>}
                 </div>
                 {!step.done && (
                   <NavLink
-                    to={copy.to}
+                    to={to}
                     className="shrink-0 text-xs font-medium text-content-brand hover:underline"
                   >
-                    Set up
+                    {t('home.activation.setUp')}
                   </NavLink>
                 )}
               </li>
@@ -164,12 +172,17 @@ function ActivationChecklist({
 // Live counters
 // ---------------------------------------------------------------------------
 
-function LiveNow({ live }: { live: HomeDashboard['live'] }): ReactElement {
+function LiveNow({ live, t }: { live: HomeDashboard['live']; t: TFunction }): ReactElement {
   return (
-    <Section title="Right now" description="Live activity across your workspace">
+    <Section title={t('home.live.title')} description={t('home.live.description')}>
       <KpiGrid>
         {liveCards(live).map((card) => (
-          <Kpi key={card.key} label={card.label} value={formatCount(card.value)} hint={card.hint} />
+          <Kpi
+            key={card.key}
+            label={t(`home.live.${card.key}.label`)}
+            value={formatCount(card.value)}
+            hint={t(`home.live.${card.key}.hint`)}
+          />
         ))}
       </KpiGrid>
     </Section>
@@ -180,43 +193,58 @@ function LiveNow({ live }: { live: HomeDashboard['live'] }): ReactElement {
 // Weekly performance
 // ---------------------------------------------------------------------------
 
-function WeeklyPerformance({ weekly }: { weekly: HomeDashboard['weekly'] }): ReactElement {
+function WeeklyPerformance({
+  weekly,
+  t,
+}: {
+  weekly: HomeDashboard['weekly'];
+  t: TFunction;
+}): ReactElement {
   const chats = countDelta(weekly.chats, weekly.previous.chats);
   const resolved = countDelta(weekly.resolved, weekly.previous.resolved);
   const csat = scoreDelta(weekly.satisfaction.score, weekly.previous.satisfaction_score);
 
   return (
-    <Section title="This week" description="The last 7 days, compared with the 7 before">
+    <Section title={t('home.weekly.title')} description={t('home.weekly.description')}>
       <KpiGrid>
         <Kpi
-          label="New chats"
+          label={t('home.weekly.newChats')}
           value={formatCount(weekly.chats)}
           delta={
             <DeltaNote
               direction={chats.direction}
-              text={`${formatCount(Math.abs(chats.change))} vs last week`}
+              text={t('home.weekly.vsLastWeek', {
+                count: formatCount(Math.abs(chats.change)) ?? 0,
+              })}
+              t={t}
             />
           }
         />
         <Kpi
-          label="Resolved"
+          label={t('home.weekly.resolved')}
           value={formatCount(weekly.resolved)}
           delta={
             <DeltaNote
               direction={resolved.direction}
-              text={`${formatCount(Math.abs(resolved.change))} vs last week`}
+              text={t('home.weekly.vsLastWeek', {
+                count: formatCount(Math.abs(resolved.change)) ?? 0,
+              })}
+              t={t}
             />
           }
         />
         <Kpi
-          label="Satisfaction"
+          label={t('home.weekly.satisfaction')}
           value={formatRate(weekly.satisfaction.score)}
-          hint={`${formatCount(weekly.satisfaction.responses)} rated`}
+          hint={t('home.weekly.ratedCount', {
+            count: formatCount(weekly.satisfaction.responses) ?? 0,
+          })}
           delta={
             csat ? (
               <DeltaNote
                 direction={csat.direction}
-                text={`${Math.abs(csat.points)} pts vs last week`}
+                text={t('home.weekly.ptsVsLastWeek', { points: Math.abs(csat.points) })}
+                t={t}
               />
             ) : undefined
           }
@@ -236,15 +264,17 @@ function WeeklyPerformance({ weekly }: { weekly: HomeDashboard['weekly'] }): Rea
 function DeltaNote({
   direction,
   text,
+  t,
 }: {
   direction: DeltaDirection;
   text: ReactNode;
+  t: TFunction;
 }): ReactElement {
   if (direction === 'flat') {
-    return <span className="text-2xs text-content-tertiary">No change vs last week</span>;
+    return <span className="text-2xs text-content-tertiary">{t('home.weekly.noChange')}</span>;
   }
   return (
-    <span className="text-2xs text-content-tertiary" title="Compared with the previous week">
+    <span className="text-2xs text-content-tertiary" title={t('home.weekly.comparedHint')}>
       {direction === 'up' ? '↑' : '↓'} {text}
     </span>
   );

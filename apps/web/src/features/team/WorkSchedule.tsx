@@ -36,20 +36,12 @@ import { Card, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
-
-const DAY_LABEL: Record<WorkScheduleDay, string> = {
-  monday: 'Monday',
-  tuesday: 'Tuesday',
-  wednesday: 'Wednesday',
-  thursday: 'Thursday',
-  friday: 'Friday',
-  saturday: 'Saturday',
-  sunday: 'Sunday',
-};
+import { formatWeekday } from '../../lib/format.js';
+import { getLocale, useTranslate } from '../../lib/i18n.js';
 
 /**
  * `Intl.supportedValuesOf('timeZone')` does not include the `UTC` alias on
@@ -86,6 +78,7 @@ export function WorkSchedule({
   canManage,
   loading,
 }: WorkScheduleProps): ReactElement {
+  const t = useTranslate();
   const selectable = useMemo(
     () => (canManage ? agents : agents.filter((agent) => agent.id === currentAgentId)),
     [agents, canManage, currentAgentId],
@@ -102,24 +95,21 @@ export function WorkSchedule({
   const activeAgent = selectable.find((agent) => agent.id === activeId) ?? null;
 
   return (
-    <Section
-      title="Work schedule"
-      description="Each teammate's standing weekly hours — what the staffing forecast reads to predict coverage gaps."
-    >
+    <Section title={t('team.workSchedule.title')} description={t('team.workSchedule.description')}>
       <Card>
         {loading ? (
           <ListSkeleton rows={2} />
         ) : selectable.length === 0 ? (
           <EmptyState
-            title="No one to schedule yet"
-            description="Invite teammates before setting up a work schedule."
+            title={t('team.workSchedule.empty.title')}
+            description={t('team.workSchedule.empty.description')}
           />
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-3 p-4">
             {selectable.length > 1 ? (
               <div className="flex items-center gap-2 text-sm">
                 <label htmlFor="work-schedule-agent" className="text-content-secondary">
-                  Teammate
+                  {t('team.workSchedule.teammateLabel')}
                 </label>
                 <select
                   id="work-schedule-agent"
@@ -129,14 +119,18 @@ export function WorkSchedule({
                 >
                   {selectable.map((agent) => (
                     <option key={agent.id} value={agent.id}>
-                      {agent.id === currentAgentId ? `${agent.name} (you)` : agent.name}
+                      {agent.id === currentAgentId
+                        ? t('team.workSchedule.optionYou', { name: agent.name })
+                        : agent.name}
                     </option>
                   ))}
                 </select>
               </div>
             ) : (
               <p className="text-sm">
-                {activeAgent?.id === currentAgentId ? 'Your weekly hours' : activeAgent?.name}
+                {activeAgent?.id === currentAgentId
+                  ? t('team.workSchedule.yourWeeklyHours')
+                  : activeAgent?.name}
               </p>
             )}
 
@@ -146,7 +140,7 @@ export function WorkSchedule({
                 onClick={() => setOpen(true)}
                 className="rounded-md border border-border px-3 py-1.5 text-sm font-medium"
               >
-                Edit schedule
+                {t('team.workSchedule.editButton')}
               </button>
             )}
           </div>
@@ -176,6 +170,7 @@ function WorkScheduleModal({
   agentName: string;
   onClose: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [edits, setEdits] = useState<Edits>({});
@@ -222,9 +217,9 @@ function WorkScheduleModal({
     const startOk = WORK_SCHEDULE_TIME_PATTERN.test(slot.start);
     const endOk = WORK_SCHEDULE_TIME_PATTERN.test(slot.end);
     if (!startOk || !endOk) {
-      dayErrors[day] = 'Enter a 24-hour time, like 09:00.';
+      dayErrors[day] = t('team.workSchedule.error.badTime');
     } else if (slot.start >= slot.end) {
-      dayErrors[day] = 'End must be after start.';
+      dayErrors[day] = t('team.workSchedule.error.endBeforeStart');
     }
   }
   const hasErrors = Object.keys(dayErrors).length > 0;
@@ -248,21 +243,21 @@ function WorkScheduleModal({
 
   const close = useCloseGuard({
     isDirty: dirty,
-    message: 'Discard your unsaved schedule changes?',
+    message: t('team.workSchedule.discardConfirm'),
     onClose,
   });
 
   return (
     <Modal
       onClose={close}
-      title={`Work schedule — ${agentName}`}
-      description="Standing weekly hours, in this teammate's own timezone. An off day keeps its configured hours, just switched off."
+      title={t('team.workSchedule.modalTitle', { name: agentName })}
+      description={t('team.workSchedule.modalDescription')}
       className="max-w-lg"
     >
       {query.isPending ? (
-        <p className="text-sm text-content-secondary">Loading…</p>
+        <p className="text-sm text-content-secondary">{t('team.workSchedule.loading')}</p>
       ) : query.error ? (
-        <p className="text-sm text-danger">Could not load this schedule.</p>
+        <p className="text-sm text-danger">{t('team.workSchedule.loadError')}</p>
       ) : (
         <form
           onSubmit={(event) => {
@@ -271,7 +266,7 @@ function WorkScheduleModal({
           }}
         >
           <label htmlFor="work-schedule-timezone" className="mb-1.5 block text-sm font-medium">
-            Timezone
+            {t('team.workSchedule.timezoneLabel')}
           </label>
           <select
             id="work-schedule-timezone"
@@ -293,6 +288,7 @@ function WorkScheduleModal({
             {WORK_SCHEDULE_DAYS.map((day) => {
               const slot = slotFor(day);
               const error = dayErrors[day] ?? null;
+              const dayLabel = formatWeekday(day, getLocale());
               return (
                 <div key={day} className="flex flex-col gap-1">
                   <div className="flex items-center gap-3">
@@ -302,13 +298,13 @@ function WorkScheduleModal({
                         checked={slot.enabled}
                         onChange={(event) => setSlot(day, { enabled: event.target.checked })}
                       />
-                      {DAY_LABEL[day]}
+                      {dayLabel}
                     </label>
                     <input
                       type="text"
                       inputMode="numeric"
                       placeholder="09:00"
-                      aria-label={`${DAY_LABEL[day]} start time`}
+                      aria-label={t('team.workSchedule.startTimeAriaLabel', { day: dayLabel })}
                       value={slot.start}
                       disabled={!slot.enabled}
                       onChange={(event) => setSlot(day, { start: event.target.value })}
@@ -323,7 +319,7 @@ function WorkScheduleModal({
                       type="text"
                       inputMode="numeric"
                       placeholder="18:00"
-                      aria-label={`${DAY_LABEL[day]} end time`}
+                      aria-label={t('team.workSchedule.endTimeAriaLabel', { day: dayLabel })}
                       value={slot.end}
                       disabled={!slot.enabled}
                       onChange={(event) => setSlot(day, { end: event.target.value })}
@@ -340,9 +336,7 @@ function WorkScheduleModal({
 
           {save.isError && (
             <p role="alert" className="mt-3 text-sm text-danger">
-              {save.error instanceof ApiClientError
-                ? save.error.message
-                : 'Could not save this schedule.'}
+              {t(errorMessageKey(save.error))}
             </p>
           )}
 
@@ -352,14 +346,14 @@ function WorkScheduleModal({
               onClick={close}
               className="rounded-md border border-border px-3 py-1.5 text-sm"
             >
-              Cancel
+              {t('team.workSchedule.cancel')}
             </button>
             <button
               type="submit"
               disabled={!dirty || hasErrors || save.isPending}
               className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
             >
-              {save.isPending ? 'Saving…' : 'Save schedule'}
+              {save.isPending ? t('team.workSchedule.saving') : t('team.workSchedule.saveButton')}
             </button>
           </div>
         </form>

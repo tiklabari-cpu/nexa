@@ -7,9 +7,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
@@ -225,5 +226,26 @@ describe('IntegrationManifestReference', () => {
     expect(screen.getByText('/chats/{chatId}/events')).toBeInTheDocument();
     expect(screen.getByText('/webhooks')).toBeInTheDocument();
     expect(screen.getByText('/webhooks/{webhookId}')).toBeInTheDocument();
+  });
+});
+
+describe('WebhookSubscriptions localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the webhooks tab in Turkish when that is the active locale', async () => {
+    mockList([]);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <WebhookSubscriptions canEdit />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Henüz webhook aboneliği yok')).toBeInTheDocument();
+    expect(screen.getByText('Olay')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abone ol' })).toBeInTheDocument();
   });
 });

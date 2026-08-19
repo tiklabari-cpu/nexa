@@ -46,6 +46,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { chunkIntoRows, columnsForWidth } from './app-grid.js';
 
 const APPS_KEY = ['settings', 'apps'] as const;
@@ -53,16 +54,16 @@ const APPS_KEY = ['settings', 'apps'] as const;
 /** Where a channel-typed card sends you to set the channel up (09.2 cross-link). */
 const CHANNELS_HREF = '/app/settings#section-channels';
 
-/** Human labels for the category chip. */
-const CATEGORY_LABEL: Record<AppListItem['category'], string> = {
-  crm: 'CRM',
-  support: 'Support',
-  ecommerce: 'E-commerce',
-  payments: 'Payments',
-  marketing: 'Marketing',
-  productivity: 'Productivity',
-  analytics: 'Analytics',
-  channels: 'Channels',
+/** The category chip's translation key, keyed by the catalogue's own category id. */
+const CATEGORY_KEY: Record<AppListItem['category'], string> = {
+  crm: 'apps.marketplace.category.crm',
+  support: 'apps.marketplace.category.support',
+  ecommerce: 'apps.marketplace.category.ecommerce',
+  payments: 'apps.marketplace.category.payments',
+  marketing: 'apps.marketplace.category.marketing',
+  productivity: 'apps.marketplace.category.productivity',
+  analytics: 'apps.marketplace.category.analytics',
+  channels: 'apps.marketplace.category.channels',
 };
 
 /** "All" plus the catalogue's categories, in the fixed order the chip row shows them. */
@@ -129,6 +130,7 @@ function useGridColumns(): { containerRef: RefObject<HTMLDivElement>; columns: n
 
 export function AppsMarketplace(): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
 
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
@@ -165,22 +167,23 @@ export function AppsMarketplace(): ReactElement {
   }, [apps.hasNextPage, apps.isFetchingNextPage, apps.fetchNextPage]);
 
   return (
-    <Section
-      title="Marketplace"
-      description="Connect the tools your team already uses. Connected apps show their data right inside a conversation."
-    >
+    <Section title={t('apps.marketplace.title')} description={t('apps.marketplace.description')}>
       <label className="flex items-center gap-2">
-        <span className="sr-only">Search apps</span>
+        <span className="sr-only">{t('apps.marketplace.searchLabel')}</span>
         <input
           type="search"
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search apps…"
+          placeholder={t('apps.marketplace.searchPlaceholder')}
           className="w-64 rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
         />
       </label>
 
-      <div role="group" aria-label="Filter by category" className="flex flex-wrap gap-1">
+      <div
+        role="group"
+        aria-label={t('apps.marketplace.filterByCategory')}
+        className="flex flex-wrap gap-1"
+      >
         {CATEGORY_FILTERS.map((filter) => {
           const active = category === filter;
           return (
@@ -195,7 +198,7 @@ export function AppsMarketplace(): ReactElement {
                   : 'text-content-secondary hover:bg-surface-2'
               }`}
             >
-              {filter === 'all' ? 'All' : CATEGORY_LABEL[filter]}
+              {filter === 'all' ? t('apps.marketplace.category.all') : t(CATEGORY_KEY[filter])}
             </button>
           );
         })}
@@ -207,7 +210,7 @@ export function AppsMarketplace(): ReactElement {
           at one column. */}
       <div ref={containerRef} className="flex flex-col gap-3">
         {apps.error ? (
-          <ErrorNotice message="Could not load the apps marketplace." />
+          <ErrorNotice message={t('apps.marketplace.loadError')} />
         ) : apps.isPending ? (
           <div className={GRID_CLASS}>
             {Array.from({ length: 8 }, (_, i) => (
@@ -216,23 +219,28 @@ export function AppsMarketplace(): ReactElement {
           </div>
         ) : items.length === 0 ? (
           <EmptyState
-            title={hasActiveFilter ? 'No apps match' : 'No apps yet'}
+            title={
+              hasActiveFilter
+                ? t('apps.marketplace.empty.noMatchTitle')
+                : t('apps.marketplace.empty.noneTitle')
+            }
             description={
               hasActiveFilter
-                ? 'Try a shorter search, or a different category.'
-                : 'Connect the tools your team already uses from the marketplace.'
+                ? t('apps.marketplace.empty.noMatchDescription')
+                : t('apps.marketplace.empty.noneDescription')
             }
           />
         ) : (
           <VirtualList
             items={rows}
             rowHeight={ROW_HEIGHT}
-            label="Apps"
+            label={t('apps.marketplace.listLabel')}
             renderRow={(row, index) => (
               <AppCardRow
                 key={row[0]?.id ?? index}
                 row={row}
                 columns={columns}
+                t={t}
                 // Infinite scroll: only the last row asks for more, and it only
                 // mounts once the window reaches it.
                 onReachEnd={index === rows.length - 1 ? loadMore : undefined}
@@ -249,7 +257,9 @@ export function AppsMarketplace(): ReactElement {
               disabled={apps.isFetchingNextPage}
               className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content disabled:opacity-60"
             >
-              {apps.isFetchingNextPage ? 'Loading…' : 'Load more'}
+              {apps.isFetchingNextPage
+                ? t('apps.marketplace.loadingMore')
+                : t('apps.marketplace.loadMore')}
             </button>
           </div>
         )}
@@ -273,10 +283,12 @@ export function AppsMarketplace(): ReactElement {
 function AppCardRow({
   row,
   columns,
+  t,
   onReachEnd,
 }: {
   row: AppListItem[];
   columns: number;
+  t: TFunction;
   onReachEnd?: (() => void) | undefined;
 }): ReactElement {
   useEffect(() => {
@@ -291,7 +303,7 @@ function AppCardRow({
     >
       {row.map((app) => (
         <div key={app.id} role="listitem" className="min-w-0">
-          <AppCard app={app} />
+          <AppCard app={app} t={t} />
         </div>
       ))}
     </div>
@@ -303,8 +315,8 @@ function AppCardRow({
  * channel-typed app, 09.2). The split keeps the OAuth hooks off the channel
  * path, which has no connection of its own to manage.
  */
-function AppCard({ app }: { app: AppListItem }): ReactElement {
-  return app.channel ? <ChannelAppCard app={app} /> : <DataAppCard app={app} />;
+function AppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactElement {
+  return app.channel ? <ChannelAppCard app={app} t={t} /> : <DataAppCard app={app} t={t} />;
 }
 
 /**
@@ -313,7 +325,7 @@ function AppCard({ app }: { app: AppListItem }): ReactElement {
  * there instead of offering Connect (KK 09.2 "kanal-tipli olanlar Channels'ta
  * da yönetilir").
  */
-function ChannelAppCard({ app }: { app: AppListItem }): ReactElement {
+function ChannelAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactElement {
   return (
     <Card className="h-full">
       <div data-testid={`app-${app.id}`} className="flex h-full flex-col gap-2 p-4">
@@ -322,11 +334,11 @@ function ChannelAppCard({ app }: { app: AppListItem }): ReactElement {
             {app.icon}
           </span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.name}</span>
-          <StatusDot tone="info" label="In Channels" />
+          <StatusDot tone="info" label={t('apps.marketplace.card.inChannels')} />
         </div>
 
         <span className="self-start rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
-          {CATEGORY_LABEL[app.category]}
+          {t(CATEGORY_KEY[app.category])}
         </span>
 
         {/* Clamped: the row height is fixed, so a long description shortens
@@ -337,14 +349,14 @@ function ChannelAppCard({ app }: { app: AppListItem }): ReactElement {
           to={CHANNELS_HREF}
           className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
         >
-          Manage in Channels
+          {t('apps.marketplace.card.manageInChannels')}
         </Link>
       </div>
     </Card>
   );
 }
 
-function DataAppCard({ app }: { app: AppListItem }): ReactElement {
+function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [consenting, setConsenting] = useState(false);
@@ -382,12 +394,16 @@ function DataAppCard({ app }: { app: AppListItem }): ReactElement {
           <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.name}</span>
           <StatusDot
             tone={app.installed ? 'success' : 'neutral'}
-            label={app.installed ? 'Connected' : 'Not connected'}
+            label={
+              app.installed
+                ? t('apps.marketplace.card.connected')
+                : t('apps.marketplace.card.notConnected')
+            }
           />
         </div>
 
         <span className="self-start rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
-          {CATEGORY_LABEL[app.category]}
+          {t(CATEGORY_KEY[app.category])}
         </span>
 
         {/* Clamped: the row height is fixed, so a long description shortens
@@ -410,7 +426,9 @@ function DataAppCard({ app }: { app: AppListItem }): ReactElement {
               disabled={disconnect.isPending}
               className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
             >
-              {disconnect.isPending ? 'Disconnecting…' : 'Disconnect'}
+              {disconnect.isPending
+                ? t('apps.marketplace.card.disconnecting')
+                : t('apps.marketplace.card.disconnect')}
             </button>
           </div>
         ) : (
@@ -419,7 +437,7 @@ function DataAppCard({ app }: { app: AppListItem }): ReactElement {
             onClick={() => setConsenting(true)}
             className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
           >
-            Connect
+            {t('apps.marketplace.card.connect')}
           </button>
         )}
       </div>
@@ -427,6 +445,7 @@ function DataAppCard({ app }: { app: AppListItem }): ReactElement {
       {consenting && (
         <ConsentDialog
           app={app}
+          t={t}
           pending={connect.isPending}
           failed={connect.isError}
           onAuthorize={() => connect.mutate()}
@@ -443,12 +462,14 @@ function DataAppCard({ app }: { app: AppListItem }): ReactElement {
  */
 function ConsentDialog({
   app,
+  t,
   pending,
   failed,
   onAuthorize,
   onCancel,
 }: {
   app: AppListItem;
+  t: TFunction;
   pending: boolean;
   failed: boolean;
   onAuthorize: () => void;
@@ -457,8 +478,8 @@ function ConsentDialog({
   return (
     <Modal
       onClose={onCancel}
-      title={`Connect ${app.name}`}
-      description="This app is asking for the following permissions:"
+      title={t('apps.marketplace.consent.title', { name: app.name })}
+      description={t('apps.marketplace.consent.description')}
       className="w-[26rem]"
     >
       <ul className="mt-1 flex flex-col gap-1.5">
@@ -472,7 +493,7 @@ function ConsentDialog({
         ))}
       </ul>
 
-      {failed && <ErrorNotice message="Could not connect the app. Try again." />}
+      {failed && <ErrorNotice message={t('apps.marketplace.consent.error')} />}
 
       <div className="mt-4 flex justify-end gap-2">
         <button
@@ -480,7 +501,7 @@ function ConsentDialog({
           onClick={onCancel}
           className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
         >
-          Cancel
+          {t('apps.common.cancel')}
         </button>
         <button
           type="button"
@@ -488,7 +509,9 @@ function ConsentDialog({
           disabled={pending}
           className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
         >
-          {pending ? 'Connecting…' : 'Authorize'}
+          {pending
+            ? t('apps.marketplace.consent.connecting')
+            : t('apps.marketplace.consent.authorize')}
         </button>
       </div>
     </Modal>
@@ -497,8 +520,12 @@ function ConsentDialog({
 
 /** The routed page: the marketplace under the standard module chrome. */
 export function AppsMarketplacePage(): ReactElement {
+  const t = useTranslate();
   return (
-    <Page title="Apps" description="Third-party integrations for your workspace.">
+    <Page
+      title={t('apps.marketplace.page.title')}
+      description={t('apps.marketplace.page.description')}
+    >
       <AppsMarketplace />
     </Page>
   );

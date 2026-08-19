@@ -82,6 +82,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/CannedResponses.tsx',
   'src/features/settings/Channels.tsx',
   'src/features/settings/CustomFieldsSettings.tsx',
+  'src/features/developers/DeveloperPortal.tsx',
+  'src/features/developers/WebhookSubscriptions.tsx',
   'src/features/settings/Integrations.tsx',
   'src/features/settings/NotificationSettings.tsx',
   'src/features/settings/PreChatFormSettings.tsx',
@@ -101,6 +103,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/playbook/BulkImportResults.tsx',
   'src/features/playbook/KbArticleList.tsx',
   'src/features/playbook/KbArticleEditor.tsx',
+  'src/features/apps/AppsMarketplace.tsx',
   'src/features/audit/AuditLogPage.tsx',
   'src/features/settings/AuditLog.tsx',
   'src/features/settings/BannedCustomerIps.tsx',
@@ -127,7 +130,7 @@ const TRANSLATED_FILES: readonly string[] = [
  * when you translate files, and never raise it. A new untranslated screen fails
  * here, which is the point: the debt has to be paid down, not added to.
  */
-const REMAINING_BUDGET = 14;
+const REMAINING_BUDGET = 11;
 
 /** Every `.tsx` under the screen roots that is not a test, repo-relative and posix-slashed. */
 function screenFiles(): string[] {

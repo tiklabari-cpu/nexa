@@ -31,10 +31,11 @@ import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { useTranslate } from '../../lib/i18n.js';
 
 const WEBHOOKS_KEY = ['developers', 'webhooks'] as const;
 const MANIFEST_KEY = ['developers', 'integration-manifest'] as const;
@@ -73,6 +74,7 @@ function useIntegrationManifest() {
 
 export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
   const manifest = useIntegrationManifest();
   const [newSubscription, setNewSubscription] = useState<WebhookRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Webhook | null>(null);
@@ -87,11 +89,11 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
 
   return (
     <Section
-      title="Webhooks"
-      description="Subscribe a URL to be POSTed when something happens here — the same REST Hooks model Zapier and Make use."
+      title={t('apps.developers.webhooks.title')}
+      description={t('apps.developers.webhooks.description')}
     >
       {list.error ? (
-        <ErrorNotice message="Could not load your webhooks." />
+        <ErrorNotice message={t('apps.developers.webhooks.loadError')} />
       ) : (
         <Card>
           {canEdit && (
@@ -102,11 +104,11 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
           )}
 
           {list.isPending ? (
-            <p className="p-4 text-sm text-content-secondary">Loading…</p>
+            <p className="p-4 text-sm text-content-secondary">{t('apps.common.loading')}</p>
           ) : list.data.items.length === 0 ? (
             <EmptyState
-              title="No webhook subscriptions yet"
-              description="Subscribe a URL to be notified the moment a chat starts, a message comes in, or a ticket opens."
+              title={t('apps.developers.webhooks.emptyTitle')}
+              description={t('apps.developers.webhooks.emptyDescription')}
             />
           ) : (
             <ul className="divide-y divide-border">
@@ -122,16 +124,20 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
                     </span>
                     <StatusDot
                       tone={webhook.enabled ? 'success' : 'neutral'}
-                      label={webhook.enabled ? 'Enabled' : 'Disabled'}
+                      label={
+                        webhook.enabled
+                          ? t('apps.developers.webhooks.enabled')
+                          : t('apps.developers.webhooks.disabled')
+                      }
                     />
                     {canEdit && (
                       <button
                         type="button"
                         onClick={() => setDeleteTarget(webhook)}
-                        aria-label={`Delete webhook for ${webhook.url}`}
+                        aria-label={t('apps.developers.webhooks.deleteFor', { url: webhook.url })}
                         className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
                       >
-                        Delete
+                        {t('apps.developers.delete')}
                       </button>
                     )}
                   </div>
@@ -140,7 +146,11 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
                     <span className="rounded-sm bg-inset px-1.5 py-0.5">
                       {triggerLabel(webhook.action)}
                     </span>
-                    <span>{webhook.type === 'bot' ? 'Bot-scoped' : 'Workspace-wide'}</span>
+                    <span>
+                      {webhook.type === 'bot'
+                        ? t('apps.developers.webhooks.botScoped')
+                        : t('apps.developers.webhooks.workspaceWide')}
+                    </span>
                     <span>{formatDateTime(webhook.created_at)}</span>
                   </div>
                 </li>
@@ -174,6 +184,7 @@ function SubscribeForm({
   onSubscribed: (registration: WebhookRegistration) => void;
 }): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
   const queryClient = useQueryClient();
 
   const subscribe = useMutation({
@@ -187,8 +198,8 @@ function SubscribeForm({
   const form = useForm({
     initial: { url: '', action: '' },
     validators: {
-      url: required('Enter the URL to receive the webhook.'),
-      action: required('Choose an event.'),
+      url: required(t('apps.developers.webhooks.form.urlRequired')),
+      action: required(t('apps.developers.webhooks.form.eventRequired')),
     },
     onSubmit: async (values, { setFieldError, setSubmitError, reset }) => {
       try {
@@ -203,12 +214,11 @@ function SubscribeForm({
         // reported as a validation error naming the URL — pin it under the
         // field the person was looking at rather than a generic banner.
         if (error instanceof ApiClientError && error.type === 'validation') {
+          // i18n-ignore: server names the exact SSRF/shape rejection, see the note above.
           setFieldError('url', error.message);
           return;
         }
-        setSubmitError(
-          error instanceof ApiClientError ? error.message : 'Could not subscribe that webhook.',
-        );
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
@@ -224,7 +234,7 @@ function SubscribeForm({
     >
       <label htmlFor="webhook-url" className="flex min-w-56 flex-1 flex-col gap-1">
         <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          URL
+          {t('apps.developers.webhooks.form.urlLabel')}
         </span>
         <input
           id="webhook-url"
@@ -241,7 +251,7 @@ function SubscribeForm({
 
       <label htmlFor="webhook-action" className="flex w-52 flex-col gap-1">
         <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          Event
+          {t('apps.developers.webhooks.form.eventLabel')}
         </span>
         <select
           id="webhook-action"
@@ -254,7 +264,9 @@ function SubscribeForm({
           className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none disabled:opacity-50"
         >
           <option value="" disabled>
-            {manifestTriggers.length === 0 ? 'Loading events…' : 'Select an event…'}
+            {manifestTriggers.length === 0
+              ? t('apps.developers.webhooks.form.loadingEvents')
+              : t('apps.developers.webhooks.form.selectEvent')}
           </option>
           {manifestTriggers.map((trigger) => (
             <option key={trigger.action} value={trigger.action}>
@@ -270,7 +282,9 @@ function SubscribeForm({
         disabled={!form.canSubmit}
         className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {form.isSubmitting ? 'Subscribing…' : 'Subscribe'}
+        {form.isSubmitting
+          ? t('apps.developers.webhooks.form.subscribing')
+          : t('apps.developers.webhooks.form.subscribe')}
       </button>
 
       {form.submitError && (
@@ -294,6 +308,7 @@ function WebhookSecretPanel({
   registration: WebhookRegistration;
   onClose: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const [copied, setCopied] = useState(false);
 
   function copy(): void {
@@ -309,14 +324,14 @@ function WebhookSecretPanel({
   return (
     <Modal
       onClose={onClose}
-      title="Webhook subscribed"
-      description="Save this signing secret now."
+      title={t('apps.developers.webhooks.secret.title')}
+      description={t('apps.developers.webhooks.secret.description')}
       className="w-[28rem]"
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            URL
+            {t('apps.developers.webhooks.secret.url')}
           </span>
           <code className="truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs">
             {registration.url}
@@ -325,7 +340,7 @@ function WebhookSecretPanel({
 
         <div className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Signing secret
+            {t('apps.developers.webhooks.secret.signingSecret')}
           </span>
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs">
@@ -336,11 +351,11 @@ function WebhookSecretPanel({
               onClick={copy}
               className="shrink-0 rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
             >
-              {copied ? 'Copied' : 'Copy'}
+              {copied ? t('apps.common.copied') : t('apps.common.copy')}
             </button>
           </div>
           <p role="alert" className="text-2xs text-warning">
-            This secret will not be shown again — every delivery is signed with it.
+            {t('apps.developers.webhooks.secret.warning')}
           </p>
         </div>
 
@@ -350,7 +365,7 @@ function WebhookSecretPanel({
             onClick={onClose}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            Done
+            {t('apps.common.done')}
           </button>
         </div>
       </div>
@@ -366,6 +381,7 @@ function DeleteWebhookModal({
   onClose: () => void;
 }): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
   const queryClient = useQueryClient();
 
   const remove = useMutation({
@@ -379,25 +395,17 @@ function DeleteWebhookModal({
   return (
     <Modal
       onClose={onClose}
-      title={`Delete webhook for ${webhook.url}?`}
-      description="Deliveries to this URL stop immediately. This cannot be undone."
+      title={t('apps.developers.webhooks.deleteModal.title', { url: webhook.url })}
+      description={t('apps.developers.webhooks.deleteModal.description')}
     >
-      {remove.isError && (
-        <ErrorNotice
-          message={
-            remove.error instanceof ApiClientError
-              ? remove.error.message
-              : 'Could not delete that webhook.'
-          }
-        />
-      )}
+      {remove.isError && <ErrorNotice message={t(errorMessageKey(remove.error))} />}
       <div className="mt-4 flex justify-end gap-2">
         <button
           type="button"
           onClick={onClose}
           className="rounded-md border border-border px-3 py-1.5 text-sm"
         >
-          Cancel
+          {t('apps.common.cancel')}
         </button>
         <button
           type="button"
@@ -405,7 +413,9 @@ function DeleteWebhookModal({
           disabled={remove.isPending}
           className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
         >
-          {remove.isPending ? 'Deleting…' : 'Delete webhook'}
+          {remove.isPending
+            ? t('apps.common.deleting')
+            : t('apps.developers.webhooks.deleteModal.confirm')}
         </button>
       </div>
     </Modal>
@@ -421,13 +431,14 @@ function DeleteWebhookModal({
  * screen makes on the caller's behalf.
  */
 export function IntegrationManifestReference(): ReactElement {
+  const t = useTranslate();
   const manifest = useIntegrationManifest();
 
   if (manifest.error) {
-    return <ErrorNotice message="Could not load the integration manifest." />;
+    return <ErrorNotice message={t('apps.developers.manifest.loadError')} />;
   }
   if (manifest.isPending) {
-    return <p className="p-4 text-sm text-content-secondary">Loading…</p>;
+    return <p className="p-4 text-sm text-content-secondary">{t('apps.common.loading')}</p>;
   }
 
   const { triggers, actions, subscribe, unsubscribe } = manifest.data;
@@ -435,8 +446,8 @@ export function IntegrationManifestReference(): ReactElement {
   return (
     <div className="flex flex-col gap-6">
       <Section
-        title="Triggers"
-        description="Workspace events a Zapier/Make trigger can subscribe to — one per webhook action."
+        title={t('apps.developers.manifest.triggersTitle')}
+        description={t('apps.developers.manifest.triggersDescription')}
       >
         <Card>
           <ul className="divide-y divide-border">
@@ -454,8 +465,8 @@ export function IntegrationManifestReference(): ReactElement {
       </Section>
 
       <Section
-        title="Actions"
-        description="Existing write endpoints a Zapier/Make action step may call — no new endpoint or scope."
+        title={t('apps.developers.manifest.actionsTitle')}
+        description={t('apps.developers.manifest.actionsDescription')}
       >
         <Card>
           <ul className="divide-y divide-border">
@@ -469,7 +480,9 @@ export function IntegrationManifestReference(): ReactElement {
                   <span className="text-sm font-medium">{action.label}</span>
                 </div>
                 <p className="text-2xs text-content-tertiary">
-                  Requires: {action.required_scopes.join(' or ')}
+                  {t('apps.developers.manifest.requires', {
+                    scopes: action.required_scopes.join(t('apps.developers.manifest.orJoiner')),
+                  })}
                 </p>
               </li>
             ))}
@@ -478,8 +491,8 @@ export function IntegrationManifestReference(): ReactElement {
       </Section>
 
       <Section
-        title="Subscribe / unsubscribe"
-        description="Where a REST Hooks integration registers and removes a subscription."
+        title={t('apps.developers.manifest.subscribeTitle')}
+        description={t('apps.developers.manifest.subscribeDescription')}
       >
         <Card>
           <ul className="divide-y divide-border">

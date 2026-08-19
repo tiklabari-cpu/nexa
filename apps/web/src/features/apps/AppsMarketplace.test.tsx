@@ -8,10 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AppListItem, AppListResponse } from '@nexa/types';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
@@ -436,5 +437,28 @@ describe('AppsMarketplace', () => {
       expect(screen.queryByText('first 0')).toBeNull();
       expect(api.get.mock.calls.at(-1)?.[0]).not.toContain('page_id');
     });
+  });
+});
+
+describe('AppsMarketplace localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the marketplace in Turkish when that is the active locale', async () => {
+    api.get.mockResolvedValue({ items: [notConnected] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <AppsMarketplace />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Bağlı değil')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Mağaza' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bağlan' })).toBeInTheDocument();
   });
 });

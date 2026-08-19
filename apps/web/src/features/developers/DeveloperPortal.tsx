@@ -25,20 +25,22 @@ import { SCOPES } from '@nexa/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { FieldError, required, splitList, useForm, type Validator } from '../../lib/form.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { IntegrationManifestReference, WebhookSubscriptions } from './WebhookSubscriptions.js';
 
 const PARTNER_APPS_KEY = ['developers', 'partner-apps'] as const;
 
-const TABS = [
-  { id: 'apps', label: 'Apps' },
-  { id: 'webhooks', label: 'Webhooks' },
-  { id: 'manifest', label: 'Manifest' },
-] as const;
-type TabId = (typeof TABS)[number]['id'];
+const TAB_LABEL_KEYS = {
+  apps: 'apps.developers.tabs.apps',
+  webhooks: 'apps.developers.tabs.webhooks',
+  manifest: 'apps.developers.tabs.manifest',
+} as const;
+const TABS = ['apps', 'webhooks', 'manifest'] as const;
+type TabId = (typeof TABS)[number];
 
 type PartnerAppClientType = 'public' | 'confidential';
 
@@ -66,25 +68,24 @@ interface PartnerAppSecretRotation extends PartnerApp {
 /** The textarea holds one redirect URI per line; at least one is required.
  *  The URI's own shape (absolute, https, canonical form…) is the server's
  *  call — `validateRedirectUri` — so this only checks something was entered. */
-function redirectUrisRequired(
-  message = 'Enter at least one redirect URI, one per line.',
-): Validator {
+function redirectUrisRequired(message: string): Validator {
   return (value) => (splitList(value).length > 0 ? null : message);
 }
 
 export function DeveloperPortalPage(): ReactElement {
+  const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const canManage = scopes.includes('access_rules:rw');
 
   if (!canManage) {
     return (
       <Page
-        title="Developers"
-        description="Register OAuth apps that can act on this workspace through the API."
+        title={t('apps.developers.page.title')}
+        description={t('apps.developers.page.description')}
       >
         <EmptyState
-          title="Developer portal not available"
-          description="Registering apps is limited to owners and admins with write access to this workspace's access rules."
+          title={t('apps.developers.notAvailable.title')}
+          description={t('apps.developers.notAvailable.description')}
         />
       </Page>
     );
@@ -95,6 +96,7 @@ export function DeveloperPortalPage(): ReactElement {
 
 function DeveloperPortalContent(): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
   const [tab, setTab] = useState<TabId>('apps');
   const [registerOpen, setRegisterOpen] = useState(false);
   const [newRegistration, setNewRegistration] = useState<PartnerAppRegistration | null>(null);
@@ -113,39 +115,39 @@ function DeveloperPortalContent(): ReactElement {
       onClick={() => setRegisterOpen(true)}
       className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
     >
-      Register app
+      {t('apps.developers.registerApp')}
     </button>
   );
 
   return (
     <Page
-      title="Developers"
-      description="Register OAuth apps that can act on this workspace through the API."
+      title={t('apps.developers.page.title')}
+      description={t('apps.developers.page.description')}
       actions={tab === 'apps' ? registerButton : undefined}
     >
       <div
         role="tablist"
-        aria-label="Developer portal"
+        aria-label={t('apps.developers.tablistLabel')}
         className="flex gap-1 border-b border-border"
       >
-        {TABS.map((tabDef) => {
-          const selected = tab === tabDef.id;
+        {TABS.map((tabId) => {
+          const selected = tab === tabId;
           return (
             <button
-              key={tabDef.id}
+              key={tabId}
               type="button"
               role="tab"
-              id={`developer-portal-tab-${tabDef.id}`}
+              id={`developer-portal-tab-${tabId}`}
               aria-selected={selected}
-              aria-controls={`developer-portal-panel-${tabDef.id}`}
-              onClick={() => setTab(tabDef.id)}
+              aria-controls={`developer-portal-panel-${tabId}`}
+              onClick={() => setTab(tabId)}
               className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
                 selected
                   ? 'border-brand-500 text-content'
                   : 'border-transparent text-content-secondary hover:text-content'
               }`}
             >
-              {tabDef.label}
+              {t(TAB_LABEL_KEYS[tabId])}
             </button>
           );
         })}
@@ -159,19 +161,19 @@ function DeveloperPortalContent(): ReactElement {
       >
         {tab === 'apps' && (
           <Section
-            title="Partner apps"
-            description="Apps your team has registered, and what each one may do on this workspace."
+            title={t('apps.developers.partnerApps.title')}
+            description={t('apps.developers.partnerApps.description')}
           >
             {list.error ? (
-              <ErrorNotice message="Could not load your partner apps." />
+              <ErrorNotice message={t('apps.developers.partnerApps.loadError')} />
             ) : (
               <Card>
                 {list.isPending ? (
-                  <p className="p-4 text-sm text-content-secondary">Loading…</p>
+                  <p className="p-4 text-sm text-content-secondary">{t('apps.common.loading')}</p>
                 ) : list.data.items.length === 0 ? (
                   <EmptyState
-                    title="No partner apps yet"
-                    description="Register an OAuth client to let a script, a Zap, or a service you build call the Nexa API on this workspace's behalf."
+                    title={t('apps.developers.partnerApps.emptyTitle')}
+                    description={t('apps.developers.partnerApps.emptyDescription')}
                   />
                 ) : (
                   <ul className="divide-y divide-border">
@@ -179,6 +181,7 @@ function DeveloperPortalContent(): ReactElement {
                       <AppRow
                         key={app.client_id}
                         app={app}
+                        t={t}
                         onDelete={() => setDeleteTarget(app)}
                         onRotate={() => setRotateTarget(app)}
                       />
@@ -208,7 +211,9 @@ function DeveloperPortalContent(): ReactElement {
           just the dialog — there is no other copy to leak. */}
       {newRegistration && (
         <SecretOncePanel
-          title={`${newRegistration.display_name} registered`}
+          title={t('apps.developers.secret.registeredTitle', {
+            name: newRegistration.display_name,
+          })}
           registration={newRegistration}
           onClose={() => setNewRegistration(null)}
         />
@@ -230,7 +235,7 @@ function DeveloperPortalContent(): ReactElement {
       {/* Same one-render discipline as a fresh registration's secret. */}
       {newSecretRotation && (
         <SecretOncePanel
-          title={`${newSecretRotation.display_name} secret rotated`}
+          title={t('apps.developers.secret.rotatedTitle', { name: newSecretRotation.display_name })}
           registration={newSecretRotation}
           onClose={() => setNewSecretRotation(null)}
         />
@@ -241,10 +246,12 @@ function DeveloperPortalContent(): ReactElement {
 
 function AppRow({
   app,
+  t,
   onDelete,
   onRotate,
 }: {
   app: PartnerApp;
+  t: TFunction;
   onDelete: () => void;
   onRotate: () => void;
 }): ReactElement {
@@ -253,7 +260,9 @@ function AppRow({
       <div className="flex flex-wrap items-center gap-3">
         <span className="min-w-0 flex-1 truncate text-sm font-medium">{app.display_name}</span>
         <span className="self-start rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
-          {app.client_type === 'confidential' ? 'Confidential' : 'Public'}
+          {app.client_type === 'confidential'
+            ? t('apps.developers.clientType.confidential')
+            : t('apps.developers.clientType.public')}
         </span>
         {/* A public client authenticates with PKCE alone and has no secret to
             reissue (server 400s it) — hiding the button here is a known,
@@ -262,19 +271,19 @@ function AppRow({
           <button
             type="button"
             onClick={onRotate}
-            aria-label={`Rotate secret for ${app.display_name}`}
+            aria-label={t('apps.developers.rotateSecretFor', { name: app.display_name })}
             className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
           >
-            Rotate secret
+            {t('apps.developers.rotateSecret')}
           </button>
         )}
         <button
           type="button"
           onClick={onDelete}
-          aria-label={`Delete ${app.display_name}`}
+          aria-label={t('apps.developers.deleteFor', { name: app.display_name })}
           className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
         >
-          Delete
+          {t('apps.developers.delete')}
         </button>
       </div>
 
@@ -283,11 +292,9 @@ function AppRow({
       </code>
 
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-2xs text-content-tertiary">
-        <span>
-          {app.redirect_uris.length} redirect URI{app.redirect_uris.length === 1 ? '' : 's'}
-        </span>
+        <span>{t('apps.developers.redirectUriCount', { count: app.redirect_uris.length })}</span>
         <span className="truncate" title={app.scopes.join(', ')}>
-          {app.scopes.length} scope{app.scopes.length === 1 ? '' : 's'}
+          {t('apps.developers.scopeCount', { count: app.scopes.length })}
         </span>
         <span>{formatDateTime(app.created_at)}</span>
       </div>
@@ -303,6 +310,7 @@ function RegisterAppModal({
   onRegistered: (registration: PartnerAppRegistration) => void;
 }): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
   const queryClient = useQueryClient();
   const [clientType, setClientType] = useState<PartnerAppClientType>('public');
   const [scopes, setScopes] = useState<Set<string>>(new Set());
@@ -322,8 +330,8 @@ function RegisterAppModal({
   const form = useForm({
     initial: { display_name: '', redirect_uris: '' },
     validators: {
-      display_name: required('Enter a name for this app.'),
-      redirect_uris: redirectUrisRequired(),
+      display_name: required(t('apps.developers.form.nameRequired')),
+      redirect_uris: redirectUrisRequired(t('apps.developers.form.redirectUrisRequired')),
     },
     onSubmit: async (values, { setSubmitError }) => {
       // The one rule this screen enforces itself rather than round-tripping to
@@ -331,7 +339,7 @@ function RegisterAppModal({
       // `narrowScopes` refuses it there — a client with no scopes is unbounded,
       // not restricted, so it is never a state Submit should allow reaching.
       if (scopes.size === 0) {
-        setSubmitError('Select at least one scope.');
+        setSubmitError(t('apps.developers.form.selectScope'));
         return;
       }
       try {
@@ -343,9 +351,16 @@ function RegisterAppModal({
         });
         onRegistered(registration);
       } catch (error) {
-        setSubmitError(
-          error instanceof ApiClientError ? error.message : 'Could not register that app.',
-        );
+        // The server names exactly which redirect URI or scope was rejected and
+        // why (validation only) — the ADR-06 general validation sentence would
+        // lose that detail, so it is shown as-is (Composer.tsx/IpAllowlist.tsx
+        // precedent). Any other failure funnels through the catalogue as usual.
+        if (error instanceof ApiClientError && error.type === 'validation') {
+          // i18n-ignore: server-specific validation detail, see the note above.
+          setSubmitError(error.message);
+          return;
+        }
+        setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
@@ -366,14 +381,14 @@ function RegisterAppModal({
   return (
     <Modal
       onClose={onClose}
-      title="Register app"
-      description="Register an OAuth client that can act on this workspace through the API."
+      title={t('apps.developers.registerModal.title')}
+      description={t('apps.developers.registerModal.description')}
       className="w-[30rem]"
     >
       <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
         <label htmlFor="partner-app-name" className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            App name
+            {t('apps.developers.form.appName')}
           </span>
           <input
             id="partner-app-name"
@@ -382,7 +397,7 @@ function RegisterAppModal({
             onBlur={() => form.blur('display_name')}
             aria-invalid={nameError ? true : undefined}
             aria-describedby={nameError ? 'partner-app-name-error' : undefined}
-            placeholder="Acme Zap Connector"
+            placeholder={t('apps.developers.form.appNamePlaceholder')}
             className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
           />
           <FieldError id="partner-app-name-error" message={nameError} />
@@ -390,7 +405,7 @@ function RegisterAppModal({
 
         <label htmlFor="partner-app-client-type" className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Client type
+            {t('apps.developers.form.clientType')}
           </span>
           <select
             id="partner-app-client-type"
@@ -398,14 +413,14 @@ function RegisterAppModal({
             onChange={(event) => setClientType(event.target.value as PartnerAppClientType)}
             className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
           >
-            <option value="public">Public (PKCE, no secret)</option>
-            <option value="confidential">Confidential (issues a secret)</option>
+            <option value="public">{t('apps.developers.form.clientTypePublic')}</option>
+            <option value="confidential">{t('apps.developers.form.clientTypeConfidential')}</option>
           </select>
         </label>
 
         <label htmlFor="partner-app-redirect-uris" className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Redirect URIs
+            {t('apps.developers.form.redirectUris')}
           </span>
           <textarea
             id="partner-app-redirect-uris"
@@ -424,15 +439,15 @@ function RegisterAppModal({
             stop matching), the same reason InviteTeammates keeps its hint
             text out of the label too. */}
         <FieldError id="partner-app-redirect-uris-error" message={urisError} />
-        <p className="-mt-2 text-2xs text-content-tertiary">One URI per line.</p>
+        <p className="-mt-2 text-2xs text-content-tertiary">
+          {t('apps.developers.form.oneUriPerLine')}
+        </p>
 
         <fieldset className="flex flex-col gap-1">
           <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Scopes
+            {t('apps.developers.form.scopes')}
           </legend>
-          <p className="text-2xs text-content-tertiary">
-            Only scopes your own session already holds can be granted to the app.
-          </p>
+          <p className="text-2xs text-content-tertiary">{t('apps.developers.form.scopesHint')}</p>
           <ul className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-border p-2">
             {SCOPES.map((scope) => (
               <li key={scope}>
@@ -461,14 +476,16 @@ function RegisterAppModal({
             onClick={onClose}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            Cancel
+            {t('apps.common.cancel')}
           </button>
           <button
             type="submit"
             disabled={!canSubmit}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
           >
-            {form.isSubmitting ? 'Registering…' : 'Register'}
+            {form.isSubmitting
+              ? t('apps.developers.form.registering')
+              : t('apps.developers.form.register')}
           </button>
         </div>
       </form>
@@ -493,6 +510,7 @@ function SecretOncePanel({
   registration: PartnerAppRegistration;
   onClose: () => void;
 }): ReactElement {
+  const t = useTranslate();
   const [copied, setCopied] = useState(false);
 
   function copy(): void {
@@ -510,13 +528,13 @@ function SecretOncePanel({
     <Modal
       onClose={onClose}
       title={title}
-      description="Save these credentials now."
+      description={t('apps.developers.secret.description')}
       className="w-[28rem]"
     >
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-            Client ID
+            {t('apps.developers.secret.clientId')}
           </span>
           <code className="truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs">
             {registration.client_id}
@@ -526,7 +544,7 @@ function SecretOncePanel({
         {registration.client_secret && (
           <div className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-              Client secret
+              {t('apps.developers.secret.clientSecret')}
             </span>
             <div className="flex items-center gap-2">
               <code className="flex-1 truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs">
@@ -537,11 +555,11 @@ function SecretOncePanel({
                 onClick={copy}
                 className="shrink-0 rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
               >
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? t('apps.common.copied') : t('apps.common.copy')}
               </button>
             </div>
             <p role="alert" className="text-2xs text-warning">
-              This secret will not be shown again — store it now.
+              {t('apps.developers.secret.warning')}
             </p>
           </div>
         )}
@@ -552,7 +570,7 @@ function SecretOncePanel({
             onClick={onClose}
             className="rounded-md border border-border px-3 py-1.5 text-sm"
           >
-            Done
+            {t('apps.common.done')}
           </button>
         </div>
       </div>
@@ -562,6 +580,7 @@ function SecretOncePanel({
 
 function DeleteAppModal({ app, onClose }: { app: PartnerApp; onClose: () => void }): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
   const queryClient = useQueryClient();
 
   const remove = useMutation({
@@ -575,25 +594,17 @@ function DeleteAppModal({ app, onClose }: { app: PartnerApp; onClose: () => void
   return (
     <Modal
       onClose={onClose}
-      title={`Delete ${app.display_name}?`}
-      description="Any live tokens this app holds stop working immediately. This cannot be undone."
+      title={t('apps.developers.deleteModal.title', { name: app.display_name })}
+      description={t('apps.developers.deleteModal.description')}
     >
-      {remove.isError && (
-        <ErrorNotice
-          message={
-            remove.error instanceof ApiClientError
-              ? remove.error.message
-              : 'Could not delete that app.'
-          }
-        />
-      )}
+      {remove.isError && <ErrorNotice message={t(errorMessageKey(remove.error))} />}
       <div className="mt-4 flex justify-end gap-2">
         <button
           type="button"
           onClick={onClose}
           className="rounded-md border border-border px-3 py-1.5 text-sm"
         >
-          Cancel
+          {t('apps.common.cancel')}
         </button>
         <button
           type="button"
@@ -601,7 +612,7 @@ function DeleteAppModal({ app, onClose }: { app: PartnerApp; onClose: () => void
           disabled={remove.isPending}
           className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
         >
-          {remove.isPending ? 'Deleting…' : 'Delete app'}
+          {remove.isPending ? t('apps.common.deleting') : t('apps.developers.deleteModal.confirm')}
         </button>
       </div>
     </Modal>
@@ -625,6 +636,7 @@ function RotateSecretModal({
   onRotated: (rotation: PartnerAppSecretRotation) => void;
 }): ReactElement {
   const api = useApiClient();
+  const t = useTranslate();
 
   const rotate = useMutation({
     mutationFn: () =>
@@ -635,25 +647,17 @@ function RotateSecretModal({
   return (
     <Modal
       onClose={onClose}
-      title={`Rotate secret for ${app.display_name}?`}
-      description="The current secret stops working immediately. Update every integration that uses it with the new one."
+      title={t('apps.developers.rotateModal.title', { name: app.display_name })}
+      description={t('apps.developers.rotateModal.description')}
     >
-      {rotate.isError && (
-        <ErrorNotice
-          message={
-            rotate.error instanceof ApiClientError
-              ? rotate.error.message
-              : 'Could not rotate that secret.'
-          }
-        />
-      )}
+      {rotate.isError && <ErrorNotice message={t(errorMessageKey(rotate.error))} />}
       <div className="mt-4 flex justify-end gap-2">
         <button
           type="button"
           onClick={onClose}
           className="rounded-md border border-border px-3 py-1.5 text-sm"
         >
-          Cancel
+          {t('apps.common.cancel')}
         </button>
         <button
           type="button"
@@ -661,7 +665,9 @@ function RotateSecretModal({
           disabled={rotate.isPending}
           className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
         >
-          {rotate.isPending ? 'Rotating…' : 'Rotate secret'}
+          {rotate.isPending
+            ? t('apps.developers.rotateModal.rotating')
+            : t('apps.developers.rotateSecret')}
         </button>
       </div>
     </Modal>

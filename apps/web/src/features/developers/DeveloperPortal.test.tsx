@@ -8,10 +8,11 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { FOOTER, isNavVisible } from '../../components/navigation.js';
+import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
   api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
@@ -292,5 +293,29 @@ describe('DeveloperPortal', () => {
       expect(isNavVisible(dest!, [])).toBe(false);
       expect(isNavVisible(dest!, ['access_rules:rw'])).toBe(true);
     });
+  });
+});
+
+describe('DeveloperPortal localisation (NFR-I18N2)', () => {
+  afterEach(() => {
+    resetLocale();
+  });
+
+  it('paints the portal in Turkish when that is the active locale', async () => {
+    currentScopes = ['access_rules:rw'];
+    api.get.mockResolvedValue({ items: [] });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <DeveloperPortalPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    expect(await screen.findByText('Henüz ortak uygulama yok')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Geliştiriciler' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Uygulama kaydet' })).toBeInTheDocument();
   });
 });

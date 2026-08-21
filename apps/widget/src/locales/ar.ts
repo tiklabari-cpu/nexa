@@ -36,5 +36,13 @@ export const ar: Record<string, string> = {
   'rating.bad': 'غير جيدة',
   'rating.thanks': 'شكرًا لملاحظاتك!',
   'rating.dismiss': 'إغلاق',
+  'chat.end.menuItem': 'إنهاء المحادثة',
+  'chat.end.confirmLabel': 'إنهاء هذه المحادثة؟',
+  'chat.end.confirmMessage': 'هل أنت متأكد من رغبتك في إنهاء هذه المحادثة؟',
+  'chat.end.confirmButton': 'إنهاء المحادثة',
+  'chat.end.cancelButton': 'إلغاء',
+  'chat.end.closedMessage': 'انتهت المحادثة.',
+  'chat.end.startNew': 'بدء محادثة جديدة',
+  'error.close': 'تعذّر إنهاء المحادثة. يرجى المحاولة مرة أخرى.',
   poweredBy: 'مقدَّم من Nexa',
 };

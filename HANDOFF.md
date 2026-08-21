@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 134.2 — 11.4-b: widget "sohbeti bitir" — başlık menüsü → onay → POST /customer/chat/close → kapanış durumu — done — 2026-08-21 UTC
+
+- **Yapıldı:** Başlık "⋮" menüsüne "End chat" eklendi → odaklanan `role=dialog` onayı → `api.close()` → composer "Sohbet bitti · Yeni sohbet başlat" bandosuna döner, 134.1'in CSAT davetini aynı tetikleyiciyle (`noteChatClosed`) açar; başarısız close sohbeti kapalı saymaz. i18n `chat.end.*` 8 katalogun hepsine, yeni `widget.close.test.ts` (5 test, widget süiti 103→108/108).
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · format:check · `pnpm -w test` (widget 14/108, mobil 45/506, web 117/1268, rtm 9/104, diğerleri taban) · api `test:unit` 64/995 · api `test:integration` 96 dosya/2445 üç shard'da (taban ile birebir) · `pnpm -w build` 8/8 · hedefli e2e `widget.spec.ts` 14/14. Kontrat/migration dokunulmadı.
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:** bu pencere, önceki bir pencerenin kapanışı tamamlamadan öldüğü koddan devraldı (uncommitted değişiklikler, Task Master zaten in-progress) — kod okunup doğrulandı. Docker Desktop kapalıydı, ilk test turu bu yüzden takıldı (rtm ECONNREFUSED döngüsü) — başlatılıp `docker compose up -d` ile çözüldü. Sırada 08.7.7-b (post-chat form, tm 134.3) ve uçtan uca `csat.spec.ts` (07.8-c, tm 134.4).
+
 ## 134.1 — 07.8-b: widget rating kontrolü — kapanışta otomatik + başlık menüsünden erken oy — done — 2026-08-19 UTC
 
 - **Yapıldı:** `api.ts#rate()` artık gerçek çağıran aldı (§D113/K8'in `.rate(` yarısı kapandı). `widget.ts`: 4 sn'lik poll'un `chatId` dolu→null geçişi (soket yok, tek algılama yolu) transcript altına "Bu sohbet nasıldı?" + 👍/👎 (`role=group`+`aria-label`, metin etiketli) çıkarır → `POST /customer/chat/rating` → "Teşekkürler"; ikinci oy sunucu kuralına uydu (`ratings` her seferinde yeni satır, ne idempotent ne reddeden) — düğmeler oy sonrası etkin kalır, değişen oy yeniden POST eder. Başlık "⋮" menüsü açık sohbette erken oy sunar (server aktif/kapalı ayrımı yapmıyor), sohbet yokken gizli; dışa tıklama/Escape kapatır, ayrı "Dismiss" oylamadan gizler. i18n `rating.*` (8 anahtar) 133.13'ün kurduğu 8 katalogun hepsine eklendi.

@@ -36,5 +36,13 @@ export const fr: Record<string, string> = {
   'rating.bad': 'Pas bien',
   'rating.thanks': 'Merci pour votre avis !',
   'rating.dismiss': 'Fermer',
+  'chat.end.menuItem': 'Terminer le chat',
+  'chat.end.confirmLabel': 'Terminer ce chat ?',
+  'chat.end.confirmMessage': 'Voulez-vous vraiment terminer ce chat ?',
+  'chat.end.confirmButton': 'Terminer le chat',
+  'chat.end.cancelButton': 'Annuler',
+  'chat.end.closedMessage': 'Chat terminé.',
+  'chat.end.startNew': 'Démarrer un nouveau chat',
+  'error.close': 'Impossible de terminer le chat. Merci de réessayer.',
   poweredBy: 'Propulsé par Nexa',
 };

@@ -36,5 +36,13 @@ export const de: Record<string, string> = {
   'rating.bad': 'Nicht gut',
   'rating.thanks': 'Danke für Ihr Feedback!',
   'rating.dismiss': 'Schließen',
+  'chat.end.menuItem': 'Chat beenden',
+  'chat.end.confirmLabel': 'Diesen Chat beenden?',
+  'chat.end.confirmMessage': 'Möchten Sie diesen Chat wirklich beenden?',
+  'chat.end.confirmButton': 'Chat beenden',
+  'chat.end.cancelButton': 'Abbrechen',
+  'chat.end.closedMessage': 'Chat beendet.',
+  'chat.end.startNew': 'Neuen Chat starten',
+  'error.close': 'Der Chat konnte nicht beendet werden. Bitte versuchen Sie es erneut.',
   poweredBy: 'Bereitgestellt von Nexa',
 };

@@ -35,5 +35,13 @@ export const tr: Record<string, string> = {
   'rating.bad': 'İyi değil',
   'rating.thanks': 'Geri bildiriminiz için teşekkürler!',
   'rating.dismiss': 'Kapat',
+  'chat.end.menuItem': 'Sohbeti bitir',
+  'chat.end.confirmLabel': 'Bu sohbeti bitir?',
+  'chat.end.confirmMessage': 'Bu sohbeti bitirmek istediğinizden emin misiniz?',
+  'chat.end.confirmButton': 'Sohbeti bitir',
+  'chat.end.cancelButton': 'Vazgeç',
+  'chat.end.closedMessage': 'Sohbet sona erdi.',
+  'chat.end.startNew': 'Yeni bir sohbet başlat',
+  'error.close': 'Sohbet bitirilemedi. Lütfen tekrar deneyin.',
   poweredBy: 'Nexa ile güçlendirilmiştir',
 };

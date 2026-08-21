@@ -35,5 +35,13 @@ export const en: Record<string, string> = {
   'rating.bad': 'Not good',
   'rating.thanks': 'Thanks for your feedback!',
   'rating.dismiss': 'Dismiss',
+  'chat.end.menuItem': 'End chat',
+  'chat.end.confirmLabel': 'End this chat?',
+  'chat.end.confirmMessage': 'Are you sure you want to end this chat?',
+  'chat.end.confirmButton': 'End chat',
+  'chat.end.cancelButton': 'Cancel',
+  'chat.end.closedMessage': 'Chat ended.',
+  'chat.end.startNew': 'Start a new chat',
+  'error.close': 'Could not end the chat. Please try again.',
   poweredBy: 'Powered by Nexa',
 };

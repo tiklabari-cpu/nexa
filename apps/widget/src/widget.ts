@@ -100,6 +100,13 @@ interface State {
    */
   rating: { chatId: string; value: 'good' | 'bad' | null } | null;
   ratingSubmitting: boolean;
+  /**
+   * The visitor's chat has ended — by their own "End chat" (FR-MOD-11.4-b) or
+   * by `refresh` noticing an agent archive / idle-timeout sweep — and they have
+   * not yet started a new one. Swaps the composer for a "chat ended" banner;
+   * "Start a new chat" only clears this, it does not call anything itself.
+   */
+  closed: boolean;
 }
 
 export function mount(doc: Document = document, win: Window = window): void {
@@ -140,6 +147,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     uploading: false,
     rating: null,
     ratingSubmitting: false,
+    closed: false,
   };
 
   const ui = buildUi(doc, t);
@@ -304,6 +312,65 @@ export function mount(doc: Document = document, win: Window = window): void {
     } finally {
       state.ratingSubmitting = false;
       renderRating();
+    }
+  }
+
+  // --- End chat (FR-MOD-11.4-b) ---------------------------------------------
+
+  /** The "End chat" confirmation, closed by default. */
+  let endConfirmOpen = false;
+
+  /** Shown as a `role=dialog`, focused on open — cancelling sends nothing. */
+  function renderEndConfirm(): void {
+    ui.endConfirm.hidden = !endConfirmOpen;
+    if (endConfirmOpen) ui.endConfirmCancel.focus();
+  }
+
+  /**
+   * The composer swapped for a "chat ended" banner, whenever `state.closed` is
+   * set — by `endChat` below or by `refresh` noticing the chat is gone. "Start
+   * a new chat" only clears the flag; the next message the visitor sends opens
+   * a fresh chat through the same path any first message would (`send` below
+   * never checks for an existing chat id) — there is no second way in.
+   */
+  function renderClosed(): void {
+    ui.closedBanner.hidden = !state.closed;
+    ui.input.disabled = state.closed;
+    ui.send.disabled = state.closed || state.sending;
+    ui.attach.disabled = state.closed || state.uploading;
+  }
+
+  /**
+   * Shared by `refresh`'s poll-based detection and `endChat`'s explicit
+   * request: raise 134.1's CSAT prompt for the chat that just ended. A rating
+   * already open for that same chat — voted early from the header menu — is
+   * left alone rather than reset (07.8-b's rule, unchanged here).
+   */
+  function noteChatClosed(previousChatId: string): void {
+    state.closed = true;
+    if (state.rating?.chatId !== previousChatId) {
+      state.rating = { chatId: previousChatId, value: null };
+    }
+  }
+
+  async function endChat(): Promise<void> {
+    const chatId = state.chatId;
+    if (!chatId) return;
+    try {
+      await api.close();
+      state.chatId = null;
+      state.queuePosition = null;
+      noteChatClosed(chatId);
+      renderHeader();
+      renderStatus();
+      renderRating();
+      renderClosed();
+    } catch (error) {
+      // Unlike `rate`/`typing`, a failed close is worth surfacing: the visitor
+      // asked for something to happen and nothing did.
+      state.error = t('error.close');
+      renderStatus();
+      console.warn('nexa widget: close failed', error);
     }
   }
 
@@ -548,6 +615,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderHeader();
       renderTyping();
       renderRating();
+      renderClosed();
       startPolling();
     } catch (error) {
       state.error = t('error.connect');
@@ -714,15 +782,18 @@ export function mount(doc: Document = document, win: Window = window): void {
 
       // The widget holds no socket (see `startPolling` below), so this poll is
       // the only signal that a conversation just ended — agent archive or the
-      // idle-timeout sweep alike. Offer to rate the chat that just closed. A
-      // rating already open for that same chat (started early from the header
-      // menu, possibly already voted) is left alone rather than reset; one left
-      // over for an older chat — or the moment a fresh conversation starts — is
-      // cleared, since lingering over the new composer would be confusing.
-      if (previousChatId && !state.chatId && state.rating?.chatId !== previousChatId) {
-        state.rating = { chatId: previousChatId, value: null };
-      } else if (state.rating && state.chatId && state.rating.chatId !== state.chatId) {
-        state.rating = null;
+      // idle-timeout sweep alike, same as the visitor's own "End chat"
+      // (`endChat` above uses `noteChatClosed` directly instead of waiting for
+      // this poll to notice). One left over for an older chat — or the moment a
+      // fresh conversation starts — is cleared, since lingering over the new
+      // composer would be confusing.
+      if (previousChatId && !state.chatId) {
+        noteChatClosed(previousChatId);
+      } else if (state.chatId) {
+        state.closed = false;
+        if (state.rating && state.rating.chatId !== state.chatId) {
+          state.rating = null;
+        }
       }
 
       // Replace wholesale: the server's view is authoritative and includes the
@@ -737,6 +808,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderHeader();
       renderTyping();
       renderRating();
+      renderClosed();
     } catch (error) {
       console.warn('nexa widget: refresh failed', error);
     }
@@ -818,6 +890,31 @@ export function mount(doc: Document = document, win: Window = window): void {
     renderRating();
   });
 
+  // Header "⋮" menu → "End chat" (FR-MOD-11.4-b): menu → confirm → request.
+  // Cancelling closes the dialog without sending anything.
+  ui.menuEnd.addEventListener('click', () => {
+    menuOpen = false;
+    renderMenu();
+    if (!state.chatId) return;
+    endConfirmOpen = true;
+    renderEndConfirm();
+  });
+  ui.endConfirmCancel.addEventListener('click', () => {
+    endConfirmOpen = false;
+    renderEndConfirm();
+    ui.menuButton.focus();
+  });
+  ui.endConfirmConfirm.addEventListener('click', () => {
+    endConfirmOpen = false;
+    renderEndConfirm();
+    void endChat();
+  });
+  ui.closedRestart.addEventListener('click', () => {
+    state.closed = false;
+    renderClosed();
+    ui.input.focus();
+  });
+
   doc.addEventListener('click', (event) => {
     if (menuOpen && !ui.menuWrap.contains(event.target as Node)) {
       menuOpen = false;
@@ -826,6 +923,12 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
 
   doc.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && endConfirmOpen) {
+      endConfirmOpen = false;
+      renderEndConfirm();
+      ui.menuButton.focus();
+      return;
+    }
     if (event.key === 'Escape' && menuOpen) {
       menuOpen = false;
       renderMenu();
@@ -888,6 +991,15 @@ interface Ui {
   menuButton: HTMLButtonElement;
   menu: HTMLElement;
   menuRate: HTMLButtonElement;
+  /** Header "⋮" → "End chat" (FR-MOD-11.4-b). */
+  menuEnd: HTMLButtonElement;
+  /** The "End chat" confirmation dialog — `role=dialog`, focused on open. */
+  endConfirm: HTMLElement;
+  endConfirmCancel: HTMLButtonElement;
+  endConfirmConfirm: HTMLButtonElement;
+  /** Shown instead of an active composer once the chat has ended. */
+  closedBanner: HTMLElement;
+  closedRestart: HTMLButtonElement;
   /** The CSAT prompt itself — shown automatically on close, or from the menu. */
   rating: HTMLElement;
   ratingPrompt: HTMLElement;
@@ -939,7 +1051,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   title.textContent = t('title.default');
   identity.append(avatar, title);
 
-  // "⋮" menu (FR-MOD-07.8-b): today a single item, "Rate this chat". Hidden
+  // "⋮" menu (FR-MOD-07.8-b / 11.4-b): "Rate this chat" and "End chat". Hidden
   // until a conversation exists — `renderHeader` toggles it.
   const menuWrap = doc.createElement('div');
   menuWrap.className = 'nx-menu-wrap';
@@ -960,8 +1072,37 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   menuRate.className = 'nx-menu-rate';
   menuRate.setAttribute('role', 'menuitem');
   menuRate.textContent = t('rating.menuItem');
-  menu.append(menuRate);
+  const menuEnd = doc.createElement('button');
+  menuEnd.type = 'button';
+  menuEnd.className = 'nx-menu-end';
+  menuEnd.setAttribute('role', 'menuitem');
+  menuEnd.textContent = t('chat.end.menuItem');
+  menu.append(menuRate, menuEnd);
   menuWrap.append(menuButton, menu);
+
+  // "End chat" confirmation (FR-MOD-11.4-b): a modal card over the panel,
+  // focused on open. Cancelling closes it without sending a request.
+  const endConfirm = doc.createElement('div');
+  endConfirm.className = 'nx-end-confirm';
+  endConfirm.hidden = true;
+  endConfirm.setAttribute('role', 'dialog');
+  endConfirm.setAttribute('aria-modal', 'true');
+  endConfirm.setAttribute('aria-label', t('chat.end.confirmLabel'));
+  const endConfirmMsg = doc.createElement('p');
+  endConfirmMsg.className = 'nx-end-confirm-msg';
+  endConfirmMsg.textContent = t('chat.end.confirmMessage');
+  const endConfirmActions = doc.createElement('div');
+  endConfirmActions.className = 'nx-end-confirm-actions';
+  const endConfirmCancel = doc.createElement('button');
+  endConfirmCancel.type = 'button';
+  endConfirmCancel.className = 'nx-end-confirm-cancel';
+  endConfirmCancel.textContent = t('chat.end.cancelButton');
+  const endConfirmConfirm = doc.createElement('button');
+  endConfirmConfirm.type = 'button';
+  endConfirmConfirm.className = 'nx-end-confirm-confirm';
+  endConfirmConfirm.textContent = t('chat.end.confirmButton');
+  endConfirmActions.append(endConfirmCancel, endConfirmConfirm);
+  endConfirm.append(endConfirmMsg, endConfirmActions);
 
   const close = doc.createElement('button');
   close.type = 'button';
@@ -1025,6 +1166,20 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   ratingDismiss.className = 'nx-rating-dismiss';
   ratingDismiss.textContent = t('rating.dismiss');
   rating.append(ratingPrompt, ratingThanks, ratingActions, ratingDismiss);
+
+  // "Chat ended" banner (FR-MOD-11.4-b): shown instead of an active composer
+  // once `state.closed` is set; "Start a new chat" just clears it.
+  const closedBanner = doc.createElement('div');
+  closedBanner.className = 'nx-closed';
+  closedBanner.hidden = true;
+  const closedMsg = doc.createElement('p');
+  closedMsg.className = 'nx-closed-msg';
+  closedMsg.textContent = t('chat.end.closedMessage');
+  const closedRestart = doc.createElement('button');
+  closedRestart.type = 'button';
+  closedRestart.className = 'nx-closed-restart';
+  closedRestart.textContent = t('chat.end.startNew');
+  closedBanner.append(closedMsg, closedRestart);
 
   // Shows the picked file before it is sent; hidden until there is one.
   const chip = doc.createElement('div');
@@ -1109,7 +1264,19 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   poweredLink.textContent = t('poweredBy');
   poweredBy.append(poweredLink);
 
-  panel.append(header, transcript, typing, status, rating, prechat, chip, form, poweredBy);
+  panel.append(
+    header,
+    endConfirm,
+    transcript,
+    typing,
+    status,
+    rating,
+    closedBanner,
+    prechat,
+    chip,
+    form,
+    poweredBy,
+  );
 
   // Greeting card — the proactive nudge that sits above a closed launcher.
   const greeting = doc.createElement('div');
@@ -1152,6 +1319,12 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     menuButton,
     menu,
     menuRate,
+    menuEnd,
+    endConfirm,
+    endConfirmCancel,
+    endConfirmConfirm,
+    closedBanner,
+    closedRestart,
     rating,
     ratingPrompt,
     ratingGood,
@@ -1523,7 +1696,37 @@ body {
   border: 0; border-radius: 6px; background: transparent; color: inherit;
   font: inherit; padding: 8px 10px; cursor: pointer;
 }
-.nx-menu-rate:hover { background: var(--nx-customer); }
+.nx-menu-rate:hover, .nx-menu-end:hover { background: var(--nx-customer); }
+.nx-menu-end {
+  display: block; width: 100%; text-align: start;
+  border: 0; border-radius: 6px; background: transparent; color: inherit;
+  font: inherit; padding: 8px 10px; cursor: pointer;
+}
+.nx-end-confirm {
+  position: absolute; inset: 40px 16px auto; z-index: 2;
+  background: var(--nx-surface); color: var(--nx-text);
+  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
+  box-shadow: 0 12px 32px rgb(16 24 40 / .18);
+  padding: 16px; display: flex; flex-direction: column; gap: 12px; text-align: center;
+}
+.nx-end-confirm-msg { margin: 0; font-size: 13px; }
+.nx-end-confirm-actions { display: flex; gap: 8px; }
+.nx-end-confirm-cancel, .nx-end-confirm-confirm {
+  flex: 1; border-radius: 8px; padding: 8px 10px; font: inherit; cursor: pointer;
+}
+.nx-end-confirm-cancel { border: 1px solid var(--nx-border); background: transparent; color: var(--nx-muted); }
+.nx-end-confirm-confirm { border: 0; background: var(--nx-brand); color: #fff; font-weight: 600; }
+.nx-closed {
+  margin: 0 12px 10px; padding: 10px 12px;
+  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  font-size: 12px; color: var(--nx-muted);
+}
+.nx-closed-msg { margin: 0; }
+.nx-closed-restart {
+  border: 0; background: transparent; color: var(--nx-brand);
+  font: inherit; font-weight: 600; cursor: pointer; padding: 0;
+}
 .nx-transcript {
   flex: 1; overflow-y: auto; padding: 14px;
   display: flex; flex-direction: column; gap: 10px;

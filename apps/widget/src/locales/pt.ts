@@ -35,5 +35,13 @@ export const pt: Record<string, string> = {
   'rating.bad': 'Não boa',
   'rating.thanks': 'Obrigado pelo seu feedback!',
   'rating.dismiss': 'Fechar',
+  'chat.end.menuItem': 'Encerrar conversa',
+  'chat.end.confirmLabel': 'Encerrar esta conversa?',
+  'chat.end.confirmMessage': 'Tem certeza de que deseja encerrar esta conversa?',
+  'chat.end.confirmButton': 'Encerrar conversa',
+  'chat.end.cancelButton': 'Cancelar',
+  'chat.end.closedMessage': 'Conversa encerrada.',
+  'chat.end.startNew': 'Iniciar uma nova conversa',
+  'error.close': 'Não foi possível encerrar a conversa. Tente novamente.',
   poweredBy: 'Desenvolvido por Nexa',
 };

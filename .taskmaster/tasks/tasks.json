@@ -6551,7 +6551,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-19T14:30:13.855Z",
+        "updatedAt": "2026-08-21T18:32:20.707Z",
         "subtasks": [
           {
             "id": 1,
@@ -6570,12 +6570,12 @@
             "description": "Ziyaretçi sohbeti kendisi bitirebilir.",
             "details": "NE YAPILACAK: `widget.ts` başlık alanına menü/düğme \"End chat\" → onay (\"Bu sohbeti bitirmek istiyor\nmusun?\") → `api.close()` (`api.ts:189`, `POST /customer/chat/close`, `routes/customer.ts:599`) →\nkapanış durumu (\"Sohbet bitti · Yeni sohbet başlat\") → 134.1'in değerlendirme bloğu tetiklenir;\nkapalıyken composer pasif; yeni sohbet başlatma mevcut akış (token/yeni chat) — ikinci bir yol AÇMA,\nwidget'ın \"yeni mesaj → yeni chat\" mantığı neyse onu çağır. i18n `chat.end.*`. a11y: düğme adı, onay\ndiyaloğu `role=dialog`+odak.\nNEDEN: §D113/K8 — `close()` ölü kod; ziyaretçi sohbeti bitiremiyor.\nDOSYALAR: `apps/widget/src/{widget.ts, i18n.ts, styles}` + testler.\nREFERANS: 134.1'in kapanış durumu · `routes/customer.ts:599` close semantiği (kapalı sohbete mesaj → ?).\nKK: menü → onay → istek → kapalı durum; iptal etkisiz; a11y adları.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-07.8 Reviews/Ratings (widget kaynağı) · FR-MOD-08.7.7 post-chat form · FR-MOD-11.4 composer/kontroller**. Gereksinim satırı: `grep -n '| 07\\.8 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K07.8' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- widget test exit 0 (+≥3) · build bütçe · e2e widget spec regresyonsuz.\n- Ölçülebilir: `grep -rn \"\\.close(\" apps/widget/src --include=*.ts | grep -v test` ≥ 1.\n- PLAN: K11.4 bloğu yoksa aç (`#### K11.4 — 11.4 · Composer (widget)`) ve madde ekle; satır ✅ kalır.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "134.1"
             ],
             "parentId": "134",
-            "updatedAt": "2026-08-19T14:30:13.855Z"
+            "updatedAt": "2026-08-21T18:32:20.707Z"
           },
           {
             "id": 3,
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-19T14:30:13.856Z",
+      "lastModified": "2026-08-21T18:32:20.709Z",
       "taskCount": 144,
       "completedCount": 133,
       "tags": [

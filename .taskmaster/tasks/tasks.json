@@ -6551,7 +6551,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-21T19:18:05.860Z",
+        "updatedAt": "2026-08-21T23:02:22.298Z",
         "subtasks": [
           {
             "id": 1,
@@ -6597,14 +6597,14 @@
             "description": "Üç uygulamalı zincir Playwright ile kanıtlanır.",
             "details": "NE YAPILACAK: `apps/e2e/tests/csat.spec.ts`: mevcut `demo-flow.spec.ts` akışını (visitor → routing →\nagent reply → archive) temel al; arşiv sonrası widget'ta form + rating; ardından agent Reports →\nReviews sekmesi → oy görünür (donut/sayaç) → `kanit/csat-*.png`. Ayrıca ziyaretçinin kendisinin\n\"End chat\" ile bitirdiği varyant. §6A tablosunda kalem ✅; K07.8'e uçtan uca maddesi.\nDOSYALAR: `apps/e2e/tests/csat.spec.ts` · `apps/e2e/kanit/csat-*.png` · PLAN.md.\nREFERANS: `demo-flow.spec.ts` · `widget.spec.ts` (visitorSends) · `reports.spec.ts`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-07.8 Reviews/Ratings (widget kaynağı) · FR-MOD-08.7.7 post-chat form · FR-MOD-11.4 composer/kontroller**. Gereksinim satırı: `grep -n '| 07\\.8 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K07.8' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w test:e2e` exit 0 (csat.spec ≥ 2 test; tam süit regresyonsuz; kanıt PNG commit'te).\n- PLAN §6A tablosunda kalem ✅; K07.8 maddesi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "134.1",
               "134.2",
               "134.3"
             ],
             "parentId": "134",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-21T23:02:22.298Z"
           }
         ]
       },
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-21T19:18:05.862Z",
+      "lastModified": "2026-08-21T23:02:22.299Z",
       "taskCount": 144,
       "completedCount": 133,
       "tags": [

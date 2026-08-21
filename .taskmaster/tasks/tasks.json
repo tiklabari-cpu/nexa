@@ -6551,7 +6551,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-21T18:33:39.777Z",
+        "updatedAt": "2026-08-21T19:18:05.860Z",
         "subtasks": [
           {
             "id": 1,
@@ -6583,13 +6583,13 @@
             "description": "Forms builder’ın \"post-chat\" yerleşimi uçtan uca gelir (contract-first).",
             "details": "NE YAPILACAK (contract-first sıra): (1) `packages/contract`: `FORM_PLACEMENTS`/`CustomFieldDefinition.\nform_placement` enum'una `post_chat` (katkısal) + `/customer/token` yanıtına `post_chat_form` (pre_chat_form\nyanında) + `POST /customer/chat/form-response`? — ÖNCE mevcut pre-chat cevabının nasıl yazıldığına bak\n(K08.7.7: pre-chat alanı = contact custom-field'ı, cevap yeni chat isteğiyle mi geliyor?); post-chat\ncevabı için aynı contact custom-field yazma yolunu kullan (`checkCustomFieldValue` doğrulaması) —\nyeni uç yalnız gerekiyorsa; (2) migration: `20260726210000`'ın CHECK'i (`pre_chat` yalnız\n`entity='contact'`) → `post_chat` de `contact`; `db:check-drift` temiz; RLS değişmez; (3)\n`custom-field-service.ts`: `listPostChatForm`; (4) web Settings forms builder: yerleşim seçici\n`pre_chat|post_chat`; (5) widget: kapanışta (134.2/agent arşivi/auto-close) form varsa alanları\ngöster → gönder → teşekkür; 134.1'in değerlendirmesiyle aynı ekranda (sıra: form → rating);\n(6) testler: integration (token yanıtında post_chat_form · cevap contact'a yazılır · doğrulama ·\ncross-tenant), web (builder seçici), widget (kapanışta form).\nNEDEN: PRD 08.7.7 \"pre-chat/post-chat\" — yalnız pre_chat teslim edilmişti (K08.7.7 dürüstçe yazmış);\nCSAT döngüsünün doğal parçası.\nDOSYALAR: `packages/contract/openapi/{components,paths/customer.yaml}` · `packages/types` ·\n`apps/api/prisma/migrations/<ts>_post_chat_form` · `schema.prisma` (CHECK) · `services/custom-fields/\ncustom-field-service.ts` · `routes/customer.ts` · `apps/web/src/features/settings/Forms*.tsx` ·\n`apps/widget/src/widget.ts` · testler.\nREFERANS: K08.7.7 pre-chat zinciri (tm 51 makinesi) — birebir aynı yol, ikinci yerleşim.\nKK (birebir PRD): \"En az bir alan; tip validasyon; widget'ta gösterim → contact/ticket'a yazma\".\nKAPSAM DIŞI: ticket/prospect yerleşimleri (ayrı iş) · e-posta.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-07.8 Reviews/Ratings (widget kaynağı) · FR-MOD-08.7.7 post-chat form · FR-MOD-11.4 composer/kontroller**. Gereksinim satırı: `grep -n '| 07\\.8 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K07.8' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w contract:generate` diff temiz · `pnpm -w db:check-drift` temiz · api integration (+≥5) · web + widget unit · e2e widget regresyonsuz · typecheck/lint/build.\n- PLAN: K08.7.7'ye madde + satır 560 damgası ◐ → ✅ (post_chat payı geldiğinde; ◐'yi §D114 koydu).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "134.1",
               "134.2"
             ],
             "parentId": "134",
-            "updatedAt": "2026-08-21T18:33:39.777Z"
+            "updatedAt": "2026-08-21T19:18:05.860Z"
           },
           {
             "id": 4,
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-21T18:33:39.777Z",
+      "lastModified": "2026-08-21T19:18:05.862Z",
       "taskCount": 144,
       "completedCount": 133,
       "tags": [

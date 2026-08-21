@@ -57,6 +57,14 @@ customFields:
               required:
                 type: boolean
                 description: Whether a value may be left blank. Defaults to false.
+              form_placement:
+                type: string
+                enum: [pre_chat, post_chat]
+                nullable: true
+                description: |
+                  Also ask this field as a widget form (FR-MOD-08.7.7) — before
+                  the conversation starts, or once it ends. Only a `contact`
+                  field may carry a placement; a `ticket` one is a 400.
     responses:
       "201":
         description: Created
@@ -93,6 +101,13 @@ customField:
             properties:
               label: { type: string, minLength: 1, maxLength: 120 }
               required: { type: boolean }
+              form_placement:
+                type: string
+                enum: [pre_chat, post_chat]
+                nullable: true
+                description: |
+                  Move the field between the widget forms, or null to stop
+                  asking it and keep it as a CRM-only field (FR-MOD-08.7.7).
     responses:
       "200":
         description: Updated

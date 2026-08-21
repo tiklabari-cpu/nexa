@@ -82,6 +82,18 @@ const rateSchema = z.object({
   comment: z.string().trim().max(1000).optional(),
 });
 
+/**
+ * Post-chat form answers (FR-MOD-08.7.7): a map of contact custom-field id →
+ * value, the same shape the pre-chat answers ride the first message in. The
+ * placement is not in the body — this endpoint *is* the post-chat placement, so
+ * a visitor cannot ask to write against a form they were never shown.
+ */
+const formResponseSchema = z
+  .object({
+    custom_fields: z.record(z.string().max(5000).nullable()),
+  })
+  .strict();
+
 const typingSchema = z.object({
   is_typing: z.boolean(),
   // The in-progress text shown to the agent as a sneak-peek. Capped here as well
@@ -611,6 +623,49 @@ export default async function customerRoutes(
       if (!chat) throw ApiError.chatInactive('There is no open conversation.');
 
       await chats.deactivate(request.tenant(), principal, chat.id);
+      return reply.status(204).send();
+    },
+  );
+
+  /**
+   * Post-chat form answers (FR-MOD-08.7.7), written to the contact.
+   *
+   * Its own endpoint because there is nothing left to ride along with. The
+   * pre-chat answers travel on the first message — the request that opens the
+   * conversation — but by the time the post-chat form is answered the
+   * conversation is over and the visitor sends nothing else; hanging the
+   * answers off `/rating` instead would tie one to the other and lose the form
+   * whenever somebody declines to vote.
+   *
+   * Deliberately not tied to a chat at all. The answers are the *contact's*,
+   * like every other custom-field value, so they are as valid from a visitor
+   * whose chat an agent archived seconds ago as from one who ended it
+   * themselves — and demanding a chat here would drop the answer in exactly the
+   * race the widget is most likely to hit.
+   */
+  app.post(
+    '/customer/chat/form-response',
+    { config: { principals: ['customer'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+
+      const body = parse(formResponseSchema, request.body);
+      const tenant = request.tenant();
+
+      // Visitor free text on its way to the database — masked at the source
+      // (FR-MOD-08.9.5), exactly as the pre-chat answers are above.
+      const masked = Object.fromEntries(
+        Object.entries(body.custom_fields).map(([key, value]) => [key, maskOptional(value)]),
+      );
+
+      // `setFormValues`, not `setValues`: only a field the workspace actually
+      // asks after the chat may be written from here. Type validation and the
+      // required rule are the same ones the CRM and the pre-chat path apply.
+      await request.withTenant((tx) =>
+        customFields.setFormValues(tx, tenant, principal.customerId, 'post_chat', masked),
+      );
+
       return reply.status(204).send();
     },
   );

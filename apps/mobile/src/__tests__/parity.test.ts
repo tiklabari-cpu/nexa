@@ -762,7 +762,10 @@ describe('module parity matrix — what is still owed', () => {
       // paths is what "screen parity, not endpoint parity" (§C-A28) costs, and
       // the number moving is a prompt to re-read this matrix rather than a failure.
       endpointsCalled: 26,
-      contractEndpoints: 183,
+      // 183 → 184 with `/customer/chat/form-response` (08.7.7-b, tm 134.3).
+      // A visitor-facing route: the widget posts the post-chat form answers to
+      // it, and the phone is an agent app — nothing here to re-scope.
+      contractEndpoints: 184,
       scopeBoundaries: 1,
     });
   });

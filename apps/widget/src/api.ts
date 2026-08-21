@@ -6,7 +6,7 @@
  * retry policy and typed routes it will never use.
  */
 
-import type { PreChatFormField, WidgetAppearance } from '@nexa/types';
+import type { WidgetFormField, WidgetAppearance } from '@nexa/types';
 
 export interface WidgetEvent {
   id: string;
@@ -38,7 +38,8 @@ export interface WidgetState {
 export class WidgetApi {
   #token: string | null = null;
   #appearance: WidgetAppearance | null = null;
-  #preChatForm: PreChatFormField[] = [];
+  #preChatForm: WidgetFormField[] = [];
+  #postChatForm: WidgetFormField[] = [];
 
   /**
    * The workspace's widget appearance from the last token mint (FR-MOD-11.7), or
@@ -56,8 +57,19 @@ export class WidgetApi {
    * The widget renders one input per field and rides the answers along with the
    * visitor's first message.
    */
-  get preChatForm(): PreChatFormField[] {
+  get preChatForm(): WidgetFormField[] {
     return this.#preChatForm;
+  }
+
+  /**
+   * The workspace's post-chat form fields from the last token mint
+   * (FR-MOD-08.7.7), or an empty list before connect / when none are configured.
+   * Delivered at mint rather than fetched when the conversation ends: the widget
+   * learns a chat closed from a poll it does not control, and the form has to be
+   * on screen at that moment, not a round-trip later.
+   */
+  get postChatForm(): WidgetFormField[] {
+    return this.#postChatForm;
   }
 
   constructor(
@@ -96,15 +108,18 @@ export class WidgetApi {
     });
     if (!response.ok) throw new WidgetApiError(await describe(response));
 
-    const { token, customer_id, widget, pre_chat_form } = (await response.json()) as {
-      token: string;
-      customer_id: string;
-      widget?: WidgetAppearance;
-      pre_chat_form?: PreChatFormField[];
-    };
+    const { token, customer_id, widget, pre_chat_form, post_chat_form } =
+      (await response.json()) as {
+        token: string;
+        customer_id: string;
+        widget?: WidgetAppearance;
+        pre_chat_form?: WidgetFormField[];
+        post_chat_form?: WidgetFormField[];
+      };
     this.#token = token;
     if (widget) this.#appearance = widget;
     this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
+    this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
     safeSetItem('nexa.customer_id', customer_id);
 
     return this.state();
@@ -184,6 +199,17 @@ export class WidgetApi {
 
   async rate(value: 'good' | 'bad'): Promise<void> {
     await this.#request('POST', '/customer/chat/rating', { value });
+  }
+
+  /**
+   * Post-chat form answers (FR-MOD-08.7.7): contact custom-field id → value,
+   * stored on the contact. Unlike the pre-chat half — which rides the first
+   * message — this has its own request, because the conversation is over and
+   * there is no message left to carry it. Rejects on a 400 so the caller can
+   * keep the form on screen rather than claim an answer was saved.
+   */
+  async submitPostChatForm(values: Record<string, string>): Promise<void> {
+    await this.#request('POST', '/customer/chat/form-response', { custom_fields: values });
   }
 
   async close(): Promise<void> {

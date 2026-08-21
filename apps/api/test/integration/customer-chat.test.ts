@@ -936,6 +936,159 @@ describe('customer chat api', () => {
     });
   });
 
+  // The other half of the forms builder (FR-MOD-08.7.7): the fields a workspace
+  // asks once the conversation ends. They ride the token to the widget the same
+  // way the pre-chat ones do, but the answers come back on their own request —
+  // by then there is no message left to carry them.
+  describe('post-chat form', () => {
+    async function contactField(
+      label: string,
+      placement: 'pre_chat' | 'post_chat' | null,
+      type: 'text' | 'number' = 'text',
+      required = false,
+    ): Promise<string> {
+      const created = await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          entity: 'contact',
+          label,
+          type,
+          required,
+          formPlacement: placement,
+        },
+        select: { id: true },
+      });
+      return created.id;
+    }
+
+    it('delivers the post-chat fields on the widget token, apart from the pre-chat ones', async () => {
+      await contactField('Order number', 'pre_chat');
+      await contactField('Anything else?', 'post_chat');
+      await contactField('KYC status', null);
+
+      const response = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        { origin: `https://${fx.a.trustedDomain}` },
+      );
+      const body = response.json() as {
+        pre_chat_form: Array<{ label: string }>;
+        post_chat_form: Array<{ definition_id: string; label: string; required: boolean }>;
+      };
+      // Each form carries its own fields and nothing else — a CRM-only field is
+      // in neither, and the two placements do not bleed into one another.
+      expect(body.pre_chat_form.map((field) => field.label)).toEqual(['Order number']);
+      expect(body.post_chat_form.map((field) => field.label)).toEqual(['Anything else?']);
+    });
+
+    it('writes an answer to the contact (KK "contact’a yazma")', async () => {
+      const fieldId = await contactField('Anything else?', 'post_chat', 'text', true);
+      const { token, customer_id } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/form-response',
+        { custom_fields: { [fieldId]: 'The courier was great' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(204);
+
+      // On the contact, readable by an agent through the CRM detail — the same
+      // place the pre-chat answers land, no parallel store.
+      const detail = await server.get(`/customers/${customer_id}`, auth(agentToken));
+      expect(detail.statusCode).toBe(200);
+      const stored = (
+        detail.json() as { custom_fields: Array<{ definition_id: string; value: string | null }> }
+      ).custom_fields.find((field) => field.definition_id === fieldId);
+      expect(stored?.value).toBe('The courier was great');
+    });
+
+    it('rejects an answer of the wrong type and stores nothing (KK "tip validasyon")', async () => {
+      const fieldId = await contactField('Order total', 'post_chat', 'number');
+      const { token } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/form-response',
+        { custom_fields: { [fieldId]: 'not-a-number' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(400);
+      expect((sent.json() as { error: { type: string } }).error.type).toBe('validation');
+      expect(await owner.customFieldValue.count()).toBe(0);
+    });
+
+    it('rejects a blank answer on a required field', async () => {
+      const fieldId = await contactField('Anything else?', 'post_chat', 'text', true);
+      const { token } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/form-response',
+        { custom_fields: { [fieldId]: '   ' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(400);
+      expect(await owner.customFieldValue.count()).toBe(0);
+    });
+
+    it('refuses a contact field the post-chat form does not ask', async () => {
+      // A visitor may answer what they were asked and nothing else: a CRM-only
+      // field the workspace keeps for itself is not writable from the widget,
+      // and neither is a pre-chat field once the chat is over.
+      const crmOnly = await contactField('KYC status', null);
+      const preChat = await contactField('Order number', 'pre_chat');
+      const { token } = await widgetToken();
+
+      for (const fieldId of [crmOnly, preChat]) {
+        const sent = await server.post(
+          '/customer/chat/form-response',
+          { custom_fields: { [fieldId]: 'approved' } },
+          auth(token),
+        );
+        expect(sent.statusCode).toBe(400);
+      }
+      expect(await owner.customFieldValue.count()).toBe(0);
+    });
+
+    it("refuses another tenant's field id", async () => {
+      const foreign = await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          entity: 'contact',
+          label: 'Secret',
+          type: 'text',
+          formPlacement: 'post_chat',
+        },
+        select: { id: true },
+      });
+      const { token } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/form-response',
+        { custom_fields: { [foreign.id]: 'x' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(400);
+      expect(await owner.customFieldValue.count()).toBe(0);
+    });
+
+    it('masks a card number in an answer (FR-MOD-08.9.5)', async () => {
+      const fieldId = await contactField('Anything else?', 'post_chat');
+      const { token, customer_id } = await widgetToken();
+
+      const sent = await server.post(
+        '/customer/chat/form-response',
+        { custom_fields: { [fieldId]: 'my card is 4111 1111 1111 1111' } },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(204);
+
+      const detail = await server.get(`/customers/${customer_id}`, auth(agentToken));
+      const stored = (
+        detail.json() as { custom_fields: Array<{ definition_id: string; value: string | null }> }
+      ).custom_fields.find((field) => field.definition_id === fieldId);
+      expect(stored?.value).not.toContain('4111 1111 1111 1111');
+    });
+  });
+
   // =========================================================================
   // Banned IPs (FR-MOD-08.9.2)
   //

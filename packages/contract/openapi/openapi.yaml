@@ -194,6 +194,8 @@ paths:
     $ref: "./paths/customer-chat.yaml#/typing"
   /customer/chat/close:
     $ref: "./paths/customer-chat.yaml#/close"
+  /customer/chat/form-response:
+    $ref: "./paths/customer-chat.yaml#/formResponse"
   /customer/chat/rating:
     $ref: "./paths/customer-chat.yaml#/rating"
   /customer/chat/sale:
@@ -2960,8 +2962,32 @@ components:
         required:
           type: boolean
           description: When true, a value may not be left blank.
+        form_placement:
+          type: string
+          enum: [pre_chat, post_chat]
+          nullable: true
+          description: |
+            Where this field is also asked as a widget form (FR-MOD-08.7.7):
+            `pre_chat` before the conversation starts, `post_chat` once it ends,
+            or null for a CRM-only field. Only a `contact` field may carry one.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    WidgetFormField:
+      type: object
+      description: |
+        One row of a widget form (FR-MOD-08.7.7) as the widget needs to render
+        it: the label to prompt with, the `type` that picks the input and
+        validates the answer, whether it is required, and the definition id the
+        answer is written back under. The same shape for both placements.
+      required: [definition_id, label, type, required]
+      properties:
+        definition_id: { type: string, format: uuid }
+        label: { type: string }
+        type:
+          type: string
+          enum: [text, number, boolean, date]
+        required: { type: boolean }
 
     CustomFieldValue:
       type: object

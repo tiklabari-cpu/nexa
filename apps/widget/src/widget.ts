@@ -8,7 +8,7 @@
  * with `textContent`. Never `innerHTML` — the eslint config bans it outright
  * rather than relying on anyone remembering (NFR-S6).
  */
-import type { PreChatFormField, WidgetAppearance } from '@nexa/types';
+import type { WidgetFormField, WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
 import {
   createTranslator,
@@ -83,9 +83,22 @@ interface State {
   /** Pre-chat details to attach to the first message the visitor sends. */
   pendingDetails: { name?: string; email?: string } | null;
   /** The workspace's configurable pre-chat form fields (FR-MOD-08.7.7). */
-  preChatFields: PreChatFormField[];
+  preChatFields: WidgetFormField[];
   /** Pre-chat form answers (field id → value) riding the first message. */
   pendingCustomFields: Record<string, string> | null;
+  /** The workspace's configurable post-chat form fields (FR-MOD-08.7.7). */
+  postChatFields: WidgetFormField[];
+  /**
+   * The post-chat form (FR-MOD-08.7.7), raised for the chat named by `chatId`
+   * once it ends — above the CSAT prompt, on the same screen. `submitted` flips
+   * once the answers reach the contact, which swaps the inputs for a thank-you.
+   * Null when the workspace configures no post-chat fields, or once a new
+   * conversation starts.
+   */
+  postChat: { chatId: string; submitted: boolean } | null;
+  postChatSubmitting: boolean;
+  /** The last submit failed — the answers are still on screen to retry. */
+  postChatError: boolean;
   error: string | null;
   sending: boolean;
   /** A file the visitor picked and we uploaded, waiting to be sent. */
@@ -141,6 +154,10 @@ export function mount(doc: Document = document, win: Window = window): void {
     pendingDetails: null,
     preChatFields: [],
     pendingCustomFields: null,
+    postChatFields: [],
+    postChat: null,
+    postChatSubmitting: false,
+    postChatError: false,
     error: null,
     sending: false,
     pendingAttachment: null,
@@ -315,6 +332,65 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
   }
 
+  // --- Post-chat form (FR-MOD-08.7.7) --------------------------------------
+
+  /**
+   * The workspace's post-chat questions, shown once the conversation ends and
+   * above the CSAT prompt — one screen, form first: the questions are what the
+   * workspace asked for, and a visitor who votes and closes the panel would
+   * never see them if the order were reversed.
+   *
+   * Nothing to show when the workspace configures no post-chat fields; the
+   * closing experience is then exactly 134.1's, unchanged.
+   */
+  function renderPostChat(): void {
+    const postChat = state.postChat;
+    ui.postchat.hidden = postChat === null;
+    if (!postChat) return;
+    const done = postChat.submitted;
+    ui.postchatIntro.hidden = done;
+    ui.postchatFields.hidden = done;
+    ui.postchatSubmit.hidden = done;
+    ui.postchatThanks.hidden = !done;
+    ui.postchatSubmit.disabled = state.postChatSubmitting;
+    ui.postchatError.hidden = !state.postChatError;
+  }
+
+  /** Rebuilt whenever the mint reports the fields — `replaceChildren` inside. */
+  function renderPostChatFields(): void {
+    renderFormFields(doc, ui.postchatFields, state.postChatFields);
+  }
+
+  async function submitPostChat(): Promise<void> {
+    const postChat = state.postChat;
+    if (!postChat || postChat.submitted || state.postChatSubmitting) return;
+
+    // A required question must be answered; an empty optional one is left out
+    // rather than sent blank. Types are validated authoritatively server-side,
+    // by the same rule the CRM and the pre-chat answers go through.
+    const answers = readFormAnswers(ui.postchatFields);
+    if (!answers) return; // a required field was empty and now has focus
+
+    state.postChatSubmitting = true;
+    state.postChatError = false;
+    renderPostChat();
+    try {
+      await api.submitPostChatForm(answers);
+      // Re-read: a new conversation may have started mid-request, in which case
+      // `refresh` has already cleared the form and there is nothing to thank.
+      if (state.postChat === postChat) state.postChat = { ...postChat, submitted: true };
+    } catch (error) {
+      // Surfaced, unlike the rating (`vote` above swallows a failure): the
+      // visitor typed answers, and silently dropping them would leave them
+      // believing the workspace has details it never received.
+      state.postChatError = true;
+      console.warn('nexa widget: post-chat form failed', error);
+    } finally {
+      state.postChatSubmitting = false;
+      renderPostChat();
+    }
+  }
+
   // --- End chat (FR-MOD-11.4-b) ---------------------------------------------
 
   /** The "End chat" confirmation, closed by default. */
@@ -351,6 +427,15 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (state.rating?.chatId !== previousChatId) {
       state.rating = { chatId: previousChatId, value: null };
     }
+    // The post-chat form (FR-MOD-08.7.7) rides the same trigger, so it appears
+    // however the conversation ended — the visitor's own "End chat", an agent
+    // archiving it, or the idle sweep. Only when the workspace asks something;
+    // an already-open form for this chat is left as it is rather than reset,
+    // which would wipe answers a visitor is midway through typing.
+    if (state.postChatFields.length > 0 && state.postChat?.chatId !== previousChatId) {
+      state.postChat = { chatId: previousChatId, submitted: false };
+      state.postChatError = false;
+    }
   }
 
   async function endChat(): Promise<void> {
@@ -363,6 +448,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       noteChatClosed(chatId);
       renderHeader();
       renderStatus();
+      renderPostChat();
       renderRating();
       renderClosed();
     } catch (error) {
@@ -488,41 +574,12 @@ export function mount(doc: Document = document, win: Window = window): void {
 
   /**
    * Build the workspace's configurable pre-chat fields (FR-MOD-08.7.7) into the
-   * form. Rebuilt whenever the mint reports them; `replaceChildren` keeps it
-   * idempotent so a re-connect does not stack duplicates. Each input carries its
-   * definition id and type so `submitPrechat` can read the answers back.
+   * form. Rebuilt whenever the mint reports them; the shared builder's
+   * `replaceChildren` keeps it idempotent so a re-connect does not stack
+   * duplicates.
    */
   function renderPreChatFields(): void {
-    ui.prechatFields.replaceChildren();
-    for (const field of state.preChatFields) {
-      const marked = field.required ? `${field.label} *` : field.label;
-
-      if (field.type === 'boolean') {
-        const wrap = doc.createElement('label');
-        wrap.className = 'nx-prechat-check';
-        const box = doc.createElement('input');
-        box.type = 'checkbox';
-        box.dataset.defId = field.definition_id;
-        box.dataset.fieldType = field.type;
-        box.setAttribute('aria-label', field.label);
-        const span = doc.createElement('span');
-        span.textContent = marked;
-        wrap.append(box, span);
-        ui.prechatFields.append(wrap);
-        continue;
-      }
-
-      const input = doc.createElement('input');
-      input.className = 'nx-prechat-input';
-      input.type = field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
-      input.placeholder = marked;
-      input.setAttribute('aria-label', field.label);
-      input.dataset.defId = field.definition_id;
-      input.dataset.fieldType = field.type;
-      if (field.required) input.required = true;
-      if (field.type === 'text') input.maxLength = 5000;
-      ui.prechatFields.append(input);
-    }
+    renderFormFields(doc, ui.prechatFields, state.preChatFields);
   }
 
   function submitPrechat(): void {
@@ -531,27 +588,9 @@ export function mount(doc: Document = document, win: Window = window): void {
 
     // The configurable fields (FR-MOD-08.7.7). A required one must be answered
     // before the chat can start; types are validated authoritatively server-side
-    // when the answers ride the first message. An empty optional field is left
-    // out rather than sent blank.
-    const custom: Record<string, string> = {};
-    const inputs = ui.prechatFields.querySelectorAll<HTMLInputElement>('input[data-def-id]');
-    for (const el of inputs) {
-      const id = el.dataset.defId ?? '';
-      if (!id) continue;
-      if (el.dataset.fieldType === 'boolean') {
-        custom[id] = el.checked ? 'true' : 'false';
-        continue;
-      }
-      const value = el.value.trim();
-      if (!value) {
-        if (el.required) {
-          el.focus();
-          return;
-        }
-        continue;
-      }
-      custom[id] = value;
-    }
+    // when the answers ride the first message.
+    const custom = readFormAnswers(ui.prechatFields);
+    if (!custom) return; // a required field was empty and now has focus
 
     const email = ui.prechatEmail.value.trim();
     state.pendingDetails = { name, ...(email ? { email } : {}) };
@@ -597,6 +636,9 @@ export function mount(doc: Document = document, win: Window = window): void {
       // an empty list leaves the fixed name/email form untouched.
       state.preChatFields = api.preChatForm;
       renderPreChatFields();
+      // …and the post-chat form, held until a conversation ends (FR-MOD-08.7.7).
+      state.postChatFields = api.postChatForm;
+      renderPostChatFields();
       state.connected = true;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
@@ -614,6 +656,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderStatus();
       renderHeader();
       renderTyping();
+      renderPostChat();
       renderRating();
       renderClosed();
       startPolling();
@@ -794,6 +837,12 @@ export function mount(doc: Document = document, win: Window = window): void {
         if (state.rating && state.rating.chatId !== state.chatId) {
           state.rating = null;
         }
+        // A new conversation is underway — the previous one's questions no
+        // longer belong on screen, answered or not.
+        if (state.postChat && state.postChat.chatId !== state.chatId) {
+          state.postChat = null;
+          state.postChatError = false;
+        }
       }
 
       // Replace wholesale: the server's view is authoritative and includes the
@@ -807,6 +856,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderStatus();
       renderHeader();
       renderTyping();
+      renderPostChat();
       renderRating();
       renderClosed();
     } catch (error) {
@@ -882,6 +932,10 @@ export function mount(doc: Document = document, win: Window = window): void {
     state.rating =
       state.rating?.chatId === state.chatId ? state.rating : { chatId: state.chatId, value: null };
     renderRating();
+  });
+  ui.postchat.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitPostChat();
   });
   ui.ratingGood.addEventListener('click', () => void vote('good'));
   ui.ratingBad.addEventListener('click', () => void vote('bad'));
@@ -971,6 +1025,79 @@ export function mount(doc: Document = document, win: Window = window): void {
 
 // ---------------------------------------------------------------------------
 
+/**
+ * Build one input per configurable form field into `host` (FR-MOD-08.7.7).
+ *
+ * Shared by both placements because they render identically — a pre-chat and a
+ * post-chat question differ only in *when* they are asked. `replaceChildren`
+ * makes it idempotent, so a re-connect replaces the rows instead of stacking
+ * duplicates. Each input carries its definition id and type in `dataset`, which
+ * is how `readFormAnswers` gets the answers back out without a parallel model.
+ */
+function renderFormFields(doc: Document, host: HTMLElement, fields: WidgetFormField[]): void {
+  host.replaceChildren();
+  for (const field of fields) {
+    const marked = field.required ? `${field.label} *` : field.label;
+
+    if (field.type === 'boolean') {
+      const wrap = doc.createElement('label');
+      wrap.className = 'nx-prechat-check';
+      const box = doc.createElement('input');
+      box.type = 'checkbox';
+      box.dataset.defId = field.definition_id;
+      box.dataset.fieldType = field.type;
+      box.setAttribute('aria-label', field.label);
+      const span = doc.createElement('span');
+      span.textContent = marked;
+      wrap.append(box, span);
+      host.append(wrap);
+      continue;
+    }
+
+    const input = doc.createElement('input');
+    input.className = 'nx-prechat-input';
+    input.type = field.type === 'number' ? 'number' : field.type === 'date' ? 'date' : 'text';
+    input.placeholder = marked;
+    input.setAttribute('aria-label', field.label);
+    input.dataset.defId = field.definition_id;
+    input.dataset.fieldType = field.type;
+    if (field.required) input.required = true;
+    if (field.type === 'text') input.maxLength = 5000;
+    host.append(input);
+  }
+}
+
+/**
+ * The answers currently typed into a field host, keyed by definition id — or
+ * `null` when a required field is empty, in which case it is focused first so
+ * the visitor is taken to what is missing.
+ *
+ * An empty optional field is left out rather than sent blank: the server reads
+ * a blank as "clear this field", and a visitor who skipped a question did not
+ * ask to erase an answer they gave earlier. A checkbox always has an answer.
+ */
+function readFormAnswers(host: HTMLElement): Record<string, string> | null {
+  const answers: Record<string, string> = {};
+  for (const el of host.querySelectorAll<HTMLInputElement>('input[data-def-id]')) {
+    const id = el.dataset.defId ?? '';
+    if (!id) continue;
+    if (el.dataset.fieldType === 'boolean') {
+      answers[id] = el.checked ? 'true' : 'false';
+      continue;
+    }
+    const value = el.value.trim();
+    if (!value) {
+      if (el.required) {
+        el.focus();
+        return null;
+      }
+      continue;
+    }
+    answers[id] = value;
+  }
+  return answers;
+}
+
 interface Ui {
   launcher: HTMLButtonElement;
   panel: HTMLElement;
@@ -1000,6 +1127,13 @@ interface Ui {
   /** Shown instead of an active composer once the chat has ended. */
   closedBanner: HTMLElement;
   closedRestart: HTMLButtonElement;
+  /** The post-chat form (FR-MOD-08.7.7) — above the CSAT prompt once a chat ends. */
+  postchat: HTMLFormElement;
+  postchatIntro: HTMLElement;
+  postchatFields: HTMLDivElement;
+  postchatSubmit: HTMLButtonElement;
+  postchatThanks: HTMLElement;
+  postchatError: HTMLElement;
   /** The CSAT prompt itself — shown automatically on close, or from the menu. */
   rating: HTMLElement;
   ratingPrompt: HTMLElement;
@@ -1130,6 +1264,36 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   const status = doc.createElement('p');
   status.className = 'nx-status';
   status.setAttribute('role', 'status');
+
+  // Post-chat form (FR-MOD-08.7.7): the workspace's questions, asked once the
+  // conversation ends. Hidden until `renderPostChat` has something to show —
+  // which is never, for a workspace that configures no post-chat fields.
+  const postchat = doc.createElement('form');
+  postchat.className = 'nx-postchat';
+  postchat.hidden = true;
+  postchat.setAttribute('aria-label', t('postchat.label'));
+  const postchatIntro = doc.createElement('p');
+  postchatIntro.className = 'nx-postchat-intro';
+  postchatIntro.textContent = t('postchat.intro');
+  const postchatFields = doc.createElement('div');
+  postchatFields.className = 'nx-prechat-fields';
+  const postchatSubmit = doc.createElement('button');
+  postchatSubmit.type = 'submit';
+  postchatSubmit.className = 'nx-postchat-submit';
+  postchatSubmit.textContent = t('postchat.submit');
+  const postchatThanks = doc.createElement('p');
+  postchatThanks.className = 'nx-postchat-thanks';
+  postchatThanks.hidden = true;
+  postchatThanks.setAttribute('role', 'status');
+  postchatThanks.textContent = t('postchat.thanks');
+  // Announced as an alert: the answers are still on screen and the visitor has
+  // to press the button again for them to go anywhere.
+  const postchatError = doc.createElement('p');
+  postchatError.className = 'nx-postchat-error';
+  postchatError.hidden = true;
+  postchatError.setAttribute('role', 'alert');
+  postchatError.textContent = t('postchat.error');
+  postchat.append(postchatIntro, postchatFields, postchatSubmit, postchatThanks, postchatError);
 
   // CSAT prompt (FR-MOD-07.8-b). One group, `role=group` + a named label so a
   // screen-reader visitor hears what the two buttons below belong to; hidden
@@ -1270,6 +1434,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     transcript,
     typing,
     status,
+    // Form before rating: the workspace's own questions come first, so a
+    // visitor who votes and closes the panel has still been asked them.
+    postchat,
     rating,
     closedBanner,
     prechat,
@@ -1325,6 +1492,12 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     endConfirmConfirm,
     closedBanner,
     closedRestart,
+    postchat,
+    postchatIntro,
+    postchatFields,
+    postchatSubmit,
+    postchatThanks,
+    postchatError,
     rating,
     ratingPrompt,
     ratingGood,
@@ -1826,6 +1999,22 @@ body {
   border: 0; border-radius: 8px; padding: 9px 12px;
   background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
 }
+/* Post-chat form (FR-MOD-08.7.7). Framed like the rating block it sits above,
+   so the two read as one closing screen rather than two stacked panels; the
+   inputs and checkbox rows are the pre-chat ones, shared by renderFormFields. */
+.nx-postchat {
+  margin: 0 12px 10px; padding: 10px 12px;
+  border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
+  display: flex; flex-direction: column; gap: 8px;
+}
+.nx-postchat-intro, .nx-postchat-thanks { margin: 0; font-size: 12px; color: var(--nx-muted); }
+.nx-postchat-error { margin: 0; font-size: 12px; color: #c42a2a; }
+.nx-postchat-submit {
+  align-self: flex-start; border: 0; border-radius: 8px; padding: 6px 10px;
+  background: var(--nx-brand); color: #fff; font: inherit; font-size: 12px;
+  font-weight: 600; cursor: pointer;
+}
+.nx-postchat-submit:disabled { opacity: .6; cursor: default; }
 .nx-powered { margin: 0; padding: 6px 12px 10px; text-align: center; font-size: 11px; color: var(--nx-muted); }
 .nx-powered-link { color: inherit; text-decoration: none; }
 .nx-powered-link:hover { text-decoration: underline; }

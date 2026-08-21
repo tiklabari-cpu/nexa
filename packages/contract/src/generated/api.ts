@@ -897,6 +897,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/chat/form-response': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer the post-chat form
+     * @description The second half of the forms builder (FR-MOD-08.7.7). The fields to ask
+     *     arrive as `post_chat_form` on the token response; the answers come back
+     *     here and are stored on the contact, where an agent reads them in the CRM
+     *     alongside every other custom field — there is no parallel form store.
+     *
+     *     Its own endpoint because by this point the visitor sends nothing else to
+     *     hang the answers off: the pre-chat ones ride the first message, but the
+     *     post-chat form is answered after the conversation has ended.
+     *
+     *     Only a field the workspace actually asks *after* the chat may be written.
+     *     An id that is CRM-only, another workspace's, or invented is refused with
+     *     the same 400 either way, so the surface says nothing about what exists.
+     *     Values are validated against their definition — a wrong type or a blank
+     *     on a required field is a 400 and nothing is stored.
+     *
+     *     Not tied to a conversation: the answers belong to the contact, so this
+     *     works the same whether the visitor ended the chat themselves or an agent
+     *     archived it a moment earlier.
+     */
+    post: operations['submitCustomerFormResponse'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customer/chat/rating': {
     parameters: {
       query?: never;
@@ -7602,10 +7639,31 @@ export interface components {
       type: 'text' | 'number' | 'boolean' | 'date';
       /** @description When true, a value may not be left blank. */
       required: boolean;
+      /**
+       * @description Where this field is also asked as a widget form (FR-MOD-08.7.7):
+       *     `pre_chat` before the conversation starts, `post_chat` once it ends,
+       *     or null for a CRM-only field. Only a `contact` field may carry one.
+       * @enum {string|null}
+       */
+      form_placement?: 'pre_chat' | 'post_chat' | null;
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
       updated_at: string;
+    };
+    /**
+     * @description One row of a widget form (FR-MOD-08.7.7) as the widget needs to render
+     *     it: the label to prompt with, the `type` that picks the input and
+     *     validates the answer, whether it is required, and the definition id the
+     *     answer is written back under. The same shape for both placements.
+     */
+    WidgetFormField: {
+      /** Format: uuid */
+      definition_id: string;
+      label: string;
+      /** @enum {string} */
+      type: 'text' | 'number' | 'boolean' | 'date';
+      required: boolean;
     };
     /**
      * @description A custom field as it appears on one entity (FR-MOD-08.7.6): the
@@ -10355,6 +10413,21 @@ export interface operations {
             customer_id: string;
             /** Format: uuid */
             organization_id: string;
+            /**
+             * @description The workspace's pre-chat form (FR-MOD-08.7.7) — the fields
+             *     the widget asks before the conversation starts. Empty when
+             *     none are configured; the answers ride the first message as
+             *     `custom_fields` on `/customer/chat/events`.
+             */
+            pre_chat_form?: components['schemas']['WidgetFormField'][];
+            /**
+             * @description The workspace's post-chat form (FR-MOD-08.7.7) — the fields
+             *     the widget asks once the conversation ends, on the same
+             *     screen as the rating prompt. Delivered here rather than
+             *     fetched at closing time, so the widget already has it; the
+             *     answers go to `/customer/chat/form-response`.
+             */
+            post_chat_form?: components['schemas']['WidgetFormField'][];
           };
         };
       };
@@ -10906,6 +10979,18 @@ export interface operations {
           name?: string;
           /** Format: email */
           email?: string;
+          /**
+           * @description Answers to the workspace's pre-chat form (FR-MOD-08.7.7):
+           *     contact custom-field id → value, as delivered in the token
+           *     response's `pre_chat_form`. Each is validated against its
+           *     definition (type + required) and written to the contact; a
+           *     bad answer is a 400 and no conversation is opened. A null
+           *     clears a field. The post-chat half posts separately, to
+           *     `/customer/chat/form-response`.
+           */
+          custom_fields?: {
+            [key: string]: string | null;
+          };
           idempotency_key?: string;
         };
       };
@@ -11007,6 +11092,37 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  submitCustomerFormResponse: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Contact custom-field id → value; null clears a field. */
+          custom_fields: {
+            [key: string]: string | null;
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description Answers stored on the contact */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };
@@ -14412,6 +14528,13 @@ export interface operations {
           type: 'text' | 'number' | 'boolean' | 'date';
           /** @description Whether a value may be left blank. Defaults to false. */
           required?: boolean;
+          /**
+           * @description Also ask this field as a widget form (FR-MOD-08.7.7) — before
+           *     the conversation starts, or once it ends. Only a `contact`
+           *     field may carry a placement; a `ticket` one is a 400.
+           * @enum {string|null}
+           */
+          form_placement?: 'pre_chat' | 'post_chat' | null;
         };
       };
     };
@@ -14469,6 +14592,12 @@ export interface operations {
         'application/json': {
           label?: string;
           required?: boolean;
+          /**
+           * @description Move the field between the widget forms, or null to stop
+           *     asking it and keep it as a CRM-only field (FR-MOD-08.7.7).
+           * @enum {string|null}
+           */
+          form_placement?: 'pre_chat' | 'post_chat' | null;
         };
       };
     };

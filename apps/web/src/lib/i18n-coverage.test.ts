@@ -86,7 +86,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/developers/WebhookSubscriptions.tsx',
   'src/features/settings/Integrations.tsx',
   'src/features/settings/NotificationSettings.tsx',
-  'src/features/settings/PreChatFormSettings.tsx',
+  'src/features/settings/ChatFormsSettings.tsx',
   'src/features/settings/Tags.tsx',
   'src/features/settings/TicketEmailTemplates.tsx',
   'src/features/settings/TrustedDomains.tsx',

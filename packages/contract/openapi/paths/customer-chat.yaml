@@ -85,6 +85,20 @@ events:
                   null and the agent's panel simply says nothing.
               name: { type: string, maxLength: 120, description: Pre-chat form value. }
               email: { type: string, format: email, maxLength: 320 }
+              custom_fields:
+                type: object
+                description: |
+                  Answers to the workspace's pre-chat form (FR-MOD-08.7.7):
+                  contact custom-field id → value, as delivered in the token
+                  response's `pre_chat_form`. Each is validated against its
+                  definition (type + required) and written to the contact; a
+                  bad answer is a 400 and no conversation is opened. A null
+                  clears a field. The post-chat half posts separately, to
+                  `/customer/chat/form-response`.
+                additionalProperties:
+                  type: string
+                  nullable: true
+                  maxLength: 5000
               idempotency_key: { type: string, maxLength: 128 }
     responses:
       "200":
@@ -165,6 +179,53 @@ close:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+formResponse:
+  post:
+    tags: [Customer]
+    operationId: submitCustomerFormResponse
+    summary: Answer the post-chat form
+    description: |
+      The second half of the forms builder (FR-MOD-08.7.7). The fields to ask
+      arrive as `post_chat_form` on the token response; the answers come back
+      here and are stored on the contact, where an agent reads them in the CRM
+      alongside every other custom field — there is no parallel form store.
+
+      Its own endpoint because by this point the visitor sends nothing else to
+      hang the answers off: the pre-chat ones ride the first message, but the
+      post-chat form is answered after the conversation has ended.
+
+      Only a field the workspace actually asks *after* the chat may be written.
+      An id that is CRM-only, another workspace's, or invented is refused with
+      the same 400 either way, so the surface says nothing about what exists.
+      Values are validated against their definition — a wrong type or a blank
+      on a required field is a 400 and nothing is stored.
+
+      Not tied to a conversation: the answers belong to the contact, so this
+      works the same whether the visitor ended the chat themselves or an agent
+      archived it a moment earlier.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [custom_fields]
+            properties:
+              custom_fields:
+                type: object
+                description: Contact custom-field id → value; null clears a field.
+                additionalProperties:
+                  type: string
+                  nullable: true
+                  maxLength: 5000
+    responses:
+      "204":
+        description: Answers stored on the contact
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 sale:

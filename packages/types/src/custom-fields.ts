@@ -22,12 +22,14 @@ export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
 /**
  * Where a contact field is also asked as a form in the widget (FR-MOD-08.7.7,
  * "Forms builder (pre/post-chat)"). `pre_chat` shows the field on the widget's
- * pre-chat form, before the conversation starts; a `null` placement is a plain
- * CRM field that is never asked in the widget. Only `contact` fields may carry a
- * placement — there is no ticket to hang a value on before a chat exists — which
- * a CHECK in the migration enforces. `post_chat` is reserved for a later slice.
+ * pre-chat form, before the conversation starts; `post_chat` asks it once the
+ * conversation ends, on the same screen as the CSAT prompt; a `null` placement
+ * is a plain CRM field that is never asked in the widget. Only `contact` fields
+ * may carry a placement — there is no ticket to hang a value on before a chat
+ * exists, and the post-chat answers land on the same contact the pre-chat ones
+ * do — which a CHECK in the migration enforces.
  */
-export const FORM_PLACEMENTS = ['pre_chat'] as const;
+export const FORM_PLACEMENTS = ['pre_chat', 'post_chat'] as const;
 export type FormPlacement = (typeof FORM_PLACEMENTS)[number];
 
 /**
@@ -56,13 +58,16 @@ export interface CustomFieldDefinition {
 }
 
 /**
- * A contact field as the widget needs it to render one row of the pre-chat form
+ * A contact field as the widget needs it to render one row of a form
  * (FR-MOD-08.7.7): the label to prompt with, the `type` that picks the input and
  * validates the answer, whether it is `required`, and the `definition_id` the
- * answer is written back under. The widget imports this type-only; the answer it
- * collects rides along with the first message and is stored on the contact.
+ * answer is written back under. One shape for both placements — the widget
+ * renders a pre-chat and a post-chat field identically; only *when* it asks
+ * differs, and with it how the answer travels (pre-chat rides the first message,
+ * post-chat posts to `/customer/chat/form-response`). Either way it is stored on
+ * the contact. The widget imports this type-only.
  */
-export interface PreChatFormField {
+export interface WidgetFormField {
   definition_id: string;
   label: string;
   type: CustomFieldType;

@@ -432,6 +432,23 @@ customerToken:
                 expires_in: { type: integer }
                 customer_id: { type: string, format: uuid }
                 organization_id: { type: string, format: uuid }
+                pre_chat_form:
+                  type: array
+                  description: |
+                    The workspace's pre-chat form (FR-MOD-08.7.7) — the fields
+                    the widget asks before the conversation starts. Empty when
+                    none are configured; the answers ride the first message as
+                    `custom_fields` on `/customer/chat/events`.
+                  items: { $ref: "../openapi.yaml#/components/schemas/WidgetFormField" }
+                post_chat_form:
+                  type: array
+                  description: |
+                    The workspace's post-chat form (FR-MOD-08.7.7) — the fields
+                    the widget asks once the conversation ends, on the same
+                    screen as the rating prompt. Delivered here rather than
+                    fetched at closing time, so the widget already has it; the
+                    answers go to `/customer/chat/form-response`.
+                  items: { $ref: "../openapi.yaml#/components/schemas/WidgetFormField" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "421": { $ref: "../openapi.yaml#/components/responses/MisdirectedRequest" }

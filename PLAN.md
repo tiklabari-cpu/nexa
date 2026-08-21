@@ -557,7 +557,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 08.7.4 | Chat transcripts (e-posta) | Should (v1) | ✅ → K08.7.4 |
 | 08.7.5 | Ticket email templates | Should (v1) | ✅ → K08.7.5 |
 | 08.7.6 | Custom fields | Should (v1) | ✅ → K08.7.6 |
-| 08.7.7 | Forms builder (pre/post-chat) | Should (v1) | ◐ → K08.7.7 |
+| 08.7.7 | Forms builder (pre/post-chat) | Should (v1) | ✅ → K08.7.7 |
 | 08.8.1 | Apps (marketplace) girişi | Should (v1) | ✅ → K08.8.1 |
 | 09.1 | Entegrasyon kartları gridi | Should (v1) | ✅ → K09.1 |
 | 09.2 | Entegrasyon listesi (15–20) | Should (v1) | ✅ → K09.2 |
@@ -2660,6 +2660,8 @@ daraltmayı zaten dürüstçe yazıyordu ama satır tamı iddia ediyordu — `13
 **Düzeltme (§D114 · 2026-08-17):** `08.7.7` bu listeden ÇIKTI — `✅` → `◐`. Satırın kendi başlığı
 "(pre/post-chat)" iki yerleşim vaat ediyor, `post_chat` depoda hiç yok (0 eşleşme) ve K08.7.7 ertelemeyi
 zaten dürüstçe yazıyordu; yani üç `✅ → ◐` satırıyla aynı sınıf. Borcun sahibi tm 134.3.
+**Kapandı (tm 134.3 · 2026-08-21):** `08.7.7` `◐` → `✅` — `post_chat` artık sözleşmeden widget'a
+uçtan uca var (kanıt K08.7.7'de). Faz-4'te `◐` kalan tek satır `A11Y1–6` (tm 137).
 Sekiz türetilmiş NFR satırı `⬜` açıldı. Kapalı görevler (tm 1–127) **geri açılmaz** (BUILD-BLUEPRINT K1).
 
 **Öncelik (CONVENTIONS §4.1):** `high` = tm 128 (uygulama girilemiyor) · 129 (kapı objektif değil) · 130 (ürün
@@ -2677,7 +2679,7 @@ KULLANILMADI (panel akışına rezerve). Etiketler §5.1.1 matrisi: güvenlik/e�
 | 4 | M-ENV | Env paritesi (env.ts ↔ .env.example ↔ turbo) + sağlayıcı seçim dikişleri (MAIL/PUSH/STRIPE/STORAGE/SIEM) + RTM health PG | medium | ✅ → KM-ENV | 131 | 3 | 4 |
 | 5 | M-CI | CI drift kapısı · README/CONVENTIONS/TASK-RUNNER gerçekle hizalı · depo hijyeni + `scripts/audit` · playbook/health integration testleri | medium | ✅ → KM-CI | 132 | 5 | 5 |
 | 6 | I18N1/2 | Konsol sayfa gövdeleri çevrilir (10 sayfa grubu) + nöbetçi + e2e kanıt + widget çok-dil/RTL | medium | ✅ → KI18N1-2 | 133 | 13 | 18 |
-| 7 | 07.8 · 08.7.7 · 11.4 | Widget CSAT döngüsü — değerlendirme · sohbeti bitir · post-chat form · e2e (Reports Reviews gerçek veri) | medium | 07.8 · 11.4 ✅ (dikiş) · 08.7.7 ◐ (§D114) → K07.8 / K08.7.7 / K11.4 | 134 | 4 | 6 |
+| 7 | 07.8 · 08.7.7 · 11.4 | Widget CSAT döngüsü — değerlendirme · sohbeti bitir · post-chat form · e2e (Reports Reviews gerçek veri) | medium | 07.8 · 11.4 ✅ (dikiş) · 08.7.7 ✅ (tm 134.3) → K07.8 / K08.7.7 / K11.4 | 134 | 4 | 6 |
 | 8 | 08.5.4–.6 | Settings → Channels kartları canlı (Messenger/WhatsApp/SMS) + e2e; "Get notified" ölü yolu kalkar | medium | satırlar ✅ (dikiş) → K08.5.4/.5/.6 | 135 | 4 | 5 |
 | 9 | M-UI-GAP | İstemcisiz dört uç ekranını kazanır — chat-timeout · rol · seen · onboarding state | medium | ⬜ → KM-UI-GAP | 136 | 4 | 4 |
 | 10 | A11Y1–6 | axe kapsamı kalan 13 rotaya, iki tema; ihlaller kaynağında | medium | ◐ → KA11Y | 137 | 3 | 3 |
@@ -2795,7 +2797,7 @@ A11Y1–6 (tm 137) hâlâ ◐ + açık görev.]**
 
 #### 6A.1.7 · Widget CSAT döngüsü — değerlendirme · sohbeti bitir · post-chat form · tm 134 · `medium` · dilim V4-3
 
-**4 atomik alt-görev · ~6 pencere** — `SONNET-XHIGH` ×2 · `OPUS-XHIGH` ×2. Damga: `07.8 · 11.4 ✅ (dikiş) · 08.7.7 ◐ (§D114) → K07.8/K08.7.7/K11.4`. Tam alan detayı (bulgu · dosya:satır · kapsam · tuzaklar · KK · testler · PLAN kapanış talimatı) **Task Master `details`/`testStrategy` alanındadır** (§D98 kuralı — companion dosya yok).
+**4 atomik alt-görev · ~6 pencere** — `SONNET-XHIGH` ×2 · `OPUS-XHIGH` ×2. Damga: `07.8 · 11.4 ✅ (dikiş) · 08.7.7 ✅ (tm 134.3) → K07.8/K08.7.7/K11.4`. Tam alan detayı (bulgu · dosya:satır · kapsam · tuzaklar · KK · testler · PLAN kapanış talimatı) **Task Master `details`/`testStrategy` alanındadır** (§D98 kuralı — companion dosya yok).
 
 | ID | Başlık | Etiket | Bağımlılık | Pen |
 | --- | --- | --- | --- | :-: |
@@ -5190,6 +5192,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 ✅ pre-chat form builder — alan(label/tip/required) → widget'ta gösterim → contact'a yazma (KK birebir): pre-chat alanı = `form_placement='pre_chat'` işaretli **contact** custom-field'ı (tm 51 makinesini yeniden kullanır) → yanıt tipine göre doğrulanır (`checkCustomFieldValue`) + CRM'de görünür, ayrı depo yok · migration `20260726210000` `form_placement` kolonu + CHECK (`pre_chat` yalnız `entity='contact'`; drift temiz) · `@nexa/types` `FORM_PLACEMENTS`/`PreChatFormField` + `CustomFieldDefinition.form_placement` · servis `custom-field-service.ts` (`listPreChatForm` + create/update `formPlacement`) · token mint `/customer/token` yanıtına `pre_chat_form` (best-effort, appearance emsali) · `/customer/chat/events` gövdesine `custom_fields` → ilk mesajla `setValues('contact')` (geçersiz tip/zorunlu-boş → 400, sohbet açılmadan) · web Settings "Pre-chat form" builder (`PreChatFormSettings`) · widget pre-chat formuna dinamik alanlar (`renderPreChatFields`; yanıtlar ilk mesajla gider; alan yoksa sabit 11.2 formu değişmez) · yeni API yolu yok (contract-parity 5/5) · widget `widget.prechat.test.ts`(4) + web `SettingsForms.test.tsx`(+2) + integration `customer-chat.test.ts`(+4) · **pre-chat teslim; post-chat placement modellenebilir ama widget render'ı ertelendi** · tm 52 · §D47
 
 ◐ post-chat yerleşimi TESLİM EDİLMEDİ — satır `✅` → `◐` (§D114 · 2026-08-17 çelişki denetimi, kod okundu, ürün kodu yazılmadı): `grep -rn "post_chat\|postChat" apps/widget/src apps/api/src apps/web/src packages/contract` → **0 eşleşme**; `FORM_PLACEMENTS` yalnız `['pre_chat']` (§D47), migration `20260726210000` CHECK'i `form_placement IN ('pre_chat')`, `custom-field-service.ts`'te `listPostChatForm` yok, `/customer/token` yanıtında `post_chat_form` yok, widget kapanışta form göstermiyor. Yukarıdaki pre-chat maddesi bu ertelemeyi zaten yazmıştı ("post-chat placement modellenebilir ama widget render'ı ertelendi") — eksik olan iş değil damganın dürüstlüğüydü: satır başlığı "(pre/post-chat)" iki yerleşim vaat ediyor, biri yok. Borcun sahibi **tm 134.3** (`08.7.7-b`, sözleşme + migration CHECK genişletme + servis + Settings seçici + widget kapanış render'ı); o iş yeşil kapıdan geçince satır `◐` → `✅`. Pre-chat payı bu turda yeniden doğrulandı ve YERİNDE: `widget.prechat.test.ts`(4) · `SettingsForms.test.tsx` · integration `customer-chat.test.ts` — geri alınan bir şey yok. · tm 134 · §D114
+
+✅ post-chat yerleşimi TESLİM EDİLDİ — satır `◐` → `✅` (§D114'ün borcu kapandı): `FORM_PLACEMENTS` artık `['pre_chat','post_chat']` · migration `20260821100000_post_chat_form` CHECK'i genişletti (kolon/veri/RLS değişmedi, drift temiz) · `custom-field-service.ts` `listFormFields(placement)` + `listPostChatForm` + **`setFormValues`** (yalnız o yerleşimde SORULAN alan yazılabilir — CRM-only/pre_chat/başka kiracı hepsi aynı 400) · `/customer/token` yanıtına `post_chat_form` (pre_chat_form'un yanında, tek transaction, best-effort emsali korundu) · yeni uç **`POST /customer/chat/form-response`** (204; sohbete bağlı değil — yanıt contact'ın, ajan arşivlediyse de yazılır; kart maskeleme pre-chat yolundaki gibi) · widget kapanışta (`noteChatClosed` — kendi bitirmesi de ajan arşivi de aynı tetikleyici) formu **rating'in ÜSTÜNDE** gösterir → gönderim → teşekkür; alan yoksa kapanış ekranı 134.1/134.2'nin aynısı · `renderFormFields`/`readFormAnswers` iki yerleşimde paylaşıldı (pre-chat render'ı davranış değiştirmeden buraya taşındı) · web `PreChatFormSettings.tsx` → **`ChatFormsSettings.tsx`** ("Sohbet formları") + yerleşim seçici `pre_chat|post_chat` + listede rozet; `settings.preChatForm.*` → `settings.chatForms.*` (en+tr) · widget i18n `postchat.*` 8 kataloğun hepsine · kontrat: `CustomFieldDefinition.form_placement` + `WidgetFormField` şeması + token yanıtındaki iki form + events gövdesindeki `custom_fields` belgelendi (üçü de kodda vardı, kontratta yoktu) · integration `customer-chat.test.ts` +7 (82→89: iki form ayrı teslim · contact'a yazma · tip reddi · zorunlu-boş reddi · sorulmayan alan reddi (CRM-only + pre_chat) · cross-tenant · kart maskeleme) · widget `widget.postchat.test.ts`(7) · web `SettingsForms.test.tsx`(+3) · mobil `parity.test.ts` kontrat sayacı 183→184 (ziyaretçi ucu, telefon kapsamı değişmedi) · tm 134.3
 
 #### K08.8.1 — 08.8.1 · Apps (marketplace) girişi
 

@@ -10,7 +10,7 @@
  * builder configured still gets exactly that, unchanged.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { PreChatFormField } from '@nexa/types';
+import type { WidgetFormField } from '@nexa/types';
 import { mount } from './widget.js';
 
 interface FetchCall {
@@ -19,7 +19,7 @@ interface FetchCall {
 }
 
 let calls: FetchCall[] = [];
-let preChatForm: PreChatFormField[] = [];
+let preChatForm: WidgetFormField[] = [];
 
 function jsonResponse(data: unknown): Response {
   return {

@@ -23,7 +23,7 @@ import {
   type CustomFieldType,
   type CustomFieldValue,
   type FormPlacement,
-  type PreChatFormField,
+  type WidgetFormField,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
@@ -34,7 +34,7 @@ export interface DefinitionInput {
   label: string;
   type: CustomFieldType;
   required?: boolean;
-  /** Ask this contact field on the widget's pre-chat form (FR-MOD-08.7.7). */
+  /** Ask this contact field on one of the widget's forms (FR-MOD-08.7.7). */
   formPlacement?: FormPlacement | null;
 }
 
@@ -123,11 +123,10 @@ export class CustomFieldService {
       throw ApiError.validation(`type: must be one of ${CUSTOM_FIELD_TYPES.join(', ')}.`);
     }
     // A form placement only makes sense on a contact field: the pre-chat form
-    // runs before any ticket exists, so a ticket field has nothing to write to.
+    // runs before any ticket exists, and the post-chat one asks the visitor —
+    // whose identity is the contact — so a ticket field has nothing to write to.
     if (input.formPlacement && input.entity !== 'contact') {
-      throw ApiError.validation(
-        'form_placement: only a contact field can be a pre-chat form field.',
-      );
+      throw ApiError.validation('form_placement: only a contact field can be a widget form field.');
     }
 
     try {
@@ -177,7 +176,7 @@ export class CustomFieldService {
     if (patch.formPlacement !== undefined) {
       if (patch.formPlacement && existing.entity !== 'contact') {
         throw ApiError.validation(
-          'form_placement: only a contact field can be a pre-chat form field.',
+          'form_placement: only a contact field can be a widget form field.',
         );
       }
       data.formPlacement = patch.formPlacement;
@@ -214,14 +213,19 @@ export class CustomFieldService {
   }
 
   /**
-   * The workspace's pre-chat form (FR-MOD-08.7.7): the contact fields flagged
-   * `pre_chat`, in creation order, shaped for the widget to render one input per
-   * row. Read on every widget token mint, so it stays a single indexed query and
-   * returns only what the widget needs — never the whole definition.
+   * One of the workspace's widget forms (FR-MOD-08.7.7): the contact fields
+   * flagged with this placement, in creation order, shaped for the widget to
+   * render one input per row. Read on every widget token mint, so it stays a
+   * single indexed query and returns only what the widget needs — never the
+   * whole definition.
    */
-  async listPreChatForm(tx: TenantClient, tenant: TenantContext): Promise<PreChatFormField[]> {
+  async listFormFields(
+    tx: TenantClient,
+    tenant: TenantContext,
+    placement: FormPlacement,
+  ): Promise<WidgetFormField[]> {
     const rows = await tx.customFieldDefinition.findMany({
-      where: { licenseId: tenant.licenseId, entity: 'contact', formPlacement: 'pre_chat' },
+      where: { licenseId: tenant.licenseId, entity: 'contact', formPlacement: placement },
       orderBy: [{ createdAt: 'asc' }],
       select: { id: true, label: true, type: true, required: true },
     });
@@ -231,6 +235,16 @@ export class CustomFieldService {
       type: row.type as CustomFieldType,
       required: row.required,
     }));
+  }
+
+  /** The fields asked before the conversation starts. */
+  listPreChatForm(tx: TenantClient, tenant: TenantContext): Promise<WidgetFormField[]> {
+    return this.listFormFields(tx, tenant, 'pre_chat');
+  }
+
+  /** The fields asked once it ends, alongside the CSAT prompt. */
+  listPostChatForm(tx: TenantClient, tenant: TenantContext): Promise<WidgetFormField[]> {
+    return this.listFormFields(tx, tenant, 'post_chat');
   }
 
   // --- Values ----------------------------------------------------------------
@@ -247,6 +261,42 @@ export class CustomFieldService {
     entityId: string,
   ): Promise<CustomFieldValue[]> {
     return readCustomFieldValues(tx, tenant.licenseId, entity, entityId);
+  }
+
+  /**
+   * Answers to one of the widget's forms (FR-MOD-08.7.7), written to the
+   * contact.
+   *
+   * The narrowing over `setValues` is the point: the party filling this in is a
+   * visitor, not an agent, so it may only answer what it was actually *asked*.
+   * A contact custom field the workspace keeps for internal use — a KYC status,
+   * an account tier — is a contact field like any other and `setValues` would
+   * happily take it; here an id without this placement reads as unknown and is
+   * refused. A required field left blank is refused by `setValues` below, the
+   * same rule the pre-chat path applies.
+   */
+  async setFormValues(
+    tx: TenantClient,
+    tenant: TenantContext,
+    customerId: string,
+    placement: FormPlacement,
+    values: Record<string, string | null>,
+  ): Promise<void> {
+    const asked = await tx.customFieldDefinition.findMany({
+      where: { licenseId: tenant.licenseId, entity: 'contact', formPlacement: placement },
+      select: { id: true },
+    });
+    const askedIds = new Set(asked.map((row) => row.id));
+
+    for (const definitionId of Object.keys(values)) {
+      if (!askedIds.has(definitionId)) {
+        // Same wording whether the id is another tenant's, a CRM-only field or
+        // pure invention: the visitor learns nothing about what exists.
+        throw ApiError.validation('Unknown field for this form.');
+      }
+    }
+
+    await this.setValues(tx, tenant, 'contact', customerId, values);
   }
 
   /**

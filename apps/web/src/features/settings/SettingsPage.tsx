@@ -34,7 +34,7 @@ import { CannedResponses } from './CannedResponses.js';
 import { Tags } from './Tags.js';
 import { TicketEmailTemplates } from './TicketEmailTemplates.js';
 import { CustomFieldsSettings } from './CustomFieldsSettings.js';
-import { PreChatFormSettings } from './PreChatFormSettings.js';
+import { ChatFormsSettings } from './ChatFormsSettings.js';
 import { BannedCustomerIps } from './BannedCustomerIps.js';
 import { AuditLog } from './AuditLog.js';
 import { FileSharing } from './FileSharing.js';
@@ -49,7 +49,7 @@ export { CannedResponses } from './CannedResponses.js';
 export { Tags } from './Tags.js';
 export { TicketEmailTemplates } from './TicketEmailTemplates.js';
 export { CustomFieldsSettings } from './CustomFieldsSettings.js';
-export { PreChatFormSettings } from './PreChatFormSettings.js';
+export { ChatFormsSettings } from './ChatFormsSettings.js';
 export { BannedCustomerIps } from './BannedCustomerIps.js';
 export { AuditLog } from './AuditLog.js';
 export { Skills } from './Skills.js';
@@ -93,7 +93,7 @@ export function SettingsPage(): ReactElement {
       <TicketRules canEdit={canManageTicketRules} />
       <TicketEmailTemplates canEdit={canManageTicketRules} />
       <CustomFieldsSettings canEdit={canManageAccess} />
-      <PreChatFormSettings canEdit={canManageAccess} />
+      <ChatFormsSettings canEdit={canManageAccess} />
       <ScheduledExports canEdit={canManageScheduledExports} />
     </Page>
   );

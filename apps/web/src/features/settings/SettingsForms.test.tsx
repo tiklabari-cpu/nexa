@@ -5,7 +5,7 @@
  * which lives inside the not-errored branch — renders in isolation.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
@@ -29,7 +29,7 @@ const {
   TicketRules,
   TicketEmailTemplates,
   CustomFieldsSettings,
-  PreChatFormSettings,
+  ChatFormsSettings,
 } = await import('./SettingsPage.js');
 
 function renderComponent(ui: ReactElement): void {
@@ -40,6 +40,7 @@ function renderComponent(ui: ReactElement): void {
 beforeEach(() => {
   api.get.mockReset();
   api.get.mockResolvedValue({ items: [] });
+  api.post.mockReset();
 });
 
 describe('CannedResponses validation', () => {
@@ -178,9 +179,9 @@ describe('CustomFieldsSettings validation (FR-MOD-08.7.6)', () => {
   });
 });
 
-describe('PreChatFormSettings validation (FR-MOD-08.7.7)', () => {
+describe('ChatFormsSettings validation (FR-MOD-08.7.7)', () => {
   it('keeps Add field disabled until a label is entered', async () => {
-    renderComponent(<PreChatFormSettings canEdit />);
+    renderComponent(<ChatFormsSettings canEdit />);
     const submit = await screen.findByRole('button', { name: 'Add field' });
     expect(submit).toBeDisabled();
 
@@ -189,11 +190,79 @@ describe('PreChatFormSettings validation (FR-MOD-08.7.7)', () => {
   });
 
   it('shows a field-under error when the label is left empty', async () => {
-    renderComponent(<PreChatFormSettings canEdit />);
+    renderComponent(<ChatFormsSettings canEdit />);
     const label = await screen.findByPlaceholderText('Order number');
     await userEvent.click(label);
     await userEvent.tab(); // blur the empty field
     expect(screen.getByText('Name the field.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * The placement selector (08.7.7-b, tm 134.3) — the one property that decides
+ * whether a question is asked before the conversation or after it, and so the
+ * only thing standing between "pre-chat only" and the requirement's
+ * "pre/post-chat".
+ */
+describe('ChatFormsSettings placement (FR-MOD-08.7.7)', () => {
+  it('defaults to pre-chat and offers both placements', async () => {
+    renderComponent(<ChatFormsSettings canEdit />);
+    const placement = await screen.findByLabelText('Asked');
+    expect(placement).toHaveValue('pre_chat');
+    expect(
+      Array.from((placement as HTMLSelectElement).options).map((option) => option.value),
+    ).toEqual(['pre_chat', 'post_chat']);
+  });
+
+  it('creates a post-chat field with form_placement: post_chat', async () => {
+    api.post.mockResolvedValue({ id: 'cf-1' });
+    renderComponent(<ChatFormsSettings canEdit />);
+
+    await userEvent.type(await screen.findByPlaceholderText('Order number'), 'How did we do?');
+    await userEvent.selectOptions(screen.getByLabelText('Asked'), 'post_chat');
+    await userEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post).toHaveBeenCalledWith('/settings/custom-fields', {
+      entity: 'contact',
+      label: 'How did we do?',
+      type: 'text',
+      required: false,
+      form_placement: 'post_chat',
+    });
+  });
+
+  it('lists the fields of both forms, each badged with when it is asked, and no CRM-only field', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        {
+          id: 'a',
+          label: 'Order number',
+          type: 'text',
+          required: false,
+          form_placement: 'pre_chat',
+        },
+        {
+          id: 'b',
+          label: 'Anything else?',
+          type: 'text',
+          required: false,
+          form_placement: 'post_chat',
+        },
+        { id: 'c', label: 'KYC status', type: 'text', required: false, form_placement: null },
+      ],
+    });
+    renderComponent(<ChatFormsSettings canEdit />);
+
+    expect(await screen.findByText('Order number')).toBeInTheDocument();
+    expect(screen.getByText('Anything else?')).toBeInTheDocument();
+    // A plain CRM field is not a form question and must not appear here.
+    expect(screen.queryByText('KYC status')).not.toBeInTheDocument();
+    // Scoped to the list: the same two words are also the selector's options,
+    // and a document-wide query would pass on those alone.
+    const rows = within(screen.getByRole('list'));
+    expect(rows.getByText('Before the chat')).toBeInTheDocument();
+    expect(rows.getByText('After the chat')).toBeInTheDocument();
   });
 });
 
@@ -231,9 +300,9 @@ describe('Settings forms localisation (NFR-I18N2)', () => {
     expect(screen.getByRole('region', { name: 'Özel alanlar' })).toBeInTheDocument();
   });
 
-  it('paints Pre-chat form in Turkish when that is the active locale', () => {
-    renderLocalized(<PreChatFormSettings canEdit />);
-    expect(screen.getByRole('region', { name: 'Sohbet öncesi form' })).toBeInTheDocument();
+  it('paints Chat forms in Turkish when that is the active locale', () => {
+    renderLocalized(<ChatFormsSettings canEdit />);
+    expect(screen.getByRole('region', { name: 'Sohbet formları' })).toBeInTheDocument();
   });
 
   it('paints Skills in Turkish when that is the active locale', () => {

@@ -5,7 +5,7 @@ import {
   isScope,
   normalizeWidgetAppearance,
   servesRegion,
-  type PreChatFormField,
+  type WidgetFormField,
   type Region,
   type Scope,
   type WidgetAppearance,
@@ -790,13 +790,16 @@ export default async function authRoutes(
 
     // The widget's appearance (FR-MOD-11.7), so the hosted Chat page — which has
     // no snippet to bake it into — and any embed running a stale snippet theme
-    // themselves from the server as the source of truth. Alongside it, the
-    // pre-chat form (FR-MOD-08.7.7): the fields the widget asks before the chat
-    // starts. Both best-effort — the widget falls back to the shipped look and no
-    // extra fields, so a read failure must never deny a token.
-    const [widget, preChatForm] = await Promise.all([
+    // themselves from the server as the source of truth. Alongside it, both
+    // widget forms (FR-MOD-08.7.7): the fields asked before the chat starts and
+    // the ones asked once it ends. Delivered together at mint because the widget
+    // has no second fetch — the post-chat form must already be in hand when the
+    // conversation closes, which is exactly when a round-trip is least welcome.
+    // All best-effort — the widget falls back to the shipped look and no extra
+    // fields, so a read failure must never deny a token.
+    const [widget, forms] = await Promise.all([
       widgetAppearance(app.db, tenant, request),
-      readPreChatForm(app.db, tenant, request),
+      readWidgetForms(app.db, tenant, request),
     ]);
 
     reply.header('Cache-Control', 'no-store');
@@ -806,7 +809,8 @@ export default async function authRoutes(
       customer_id: customerId,
       organization_id: match.organization_id,
       widget,
-      pre_chat_form: preChatForm,
+      pre_chat_form: forms.pre_chat,
+      post_chat_form: forms.post_chat,
     });
   });
 }
@@ -852,21 +856,26 @@ async function widgetAppearance(
 }
 
 /**
- * The workspace's pre-chat form fields (FR-MOD-08.7.7), or an empty list when
- * none are configured or the read fails. Guarded like the appearance so a form
- * lookup never breaks token issuance — the widget simply shows no extra fields.
+ * Both of the workspace's widget forms (FR-MOD-08.7.7), or empty lists when none
+ * are configured or the read fails. One transaction for the pair: they are the
+ * same table filtered two ways, and the pre-chat form is on the critical path of
+ * opening the panel. Guarded like the appearance so a form lookup never breaks
+ * token issuance — the widget simply shows no extra fields.
  */
-async function readPreChatForm(
+async function readWidgetForms(
   db: PrismaClient,
   tenant: TenantContext,
   request: FastifyRequest,
-): Promise<PreChatFormField[]> {
+): Promise<{ pre_chat: WidgetFormField[]; post_chat: WidgetFormField[] }> {
   try {
     const fields = new CustomFieldService();
-    return await withTenant(db, tenant, (tx) => fields.listPreChatForm(tx, tenant));
+    return await withTenant(db, tenant, async (tx) => ({
+      pre_chat: await fields.listPreChatForm(tx, tenant),
+      post_chat: await fields.listPostChatForm(tx, tenant),
+    }));
   } catch (error) {
-    request.log.warn({ err: error }, 'failed to read pre-chat form');
-    return [];
+    request.log.warn({ err: error }, 'failed to read widget forms');
+    return { pre_chat: [], post_chat: [] };
   }
 }
 

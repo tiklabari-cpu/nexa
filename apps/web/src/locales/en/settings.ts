@@ -123,19 +123,22 @@ export const settings: Messages = {
     'Add fields your team needs on tickets and contacts, like a player id or a KYC status.',
   'settings.customFields.deleteAriaLabel': 'Delete field {label}',
 
-  // Pre-chat form — PreChatFormSettings.tsx
-  'settings.preChatForm.title': 'Pre-chat form',
-  'settings.preChatForm.description':
-    'Ask visitors for details before the chat starts. Answers are saved to the contact and shown in the CRM.',
-  'settings.preChatForm.loadError': 'Could not load the pre-chat form.',
-  'settings.preChatForm.labelLabel': 'Label',
-  'settings.preChatForm.labelError': 'Name the field.',
-  'settings.preChatForm.typeLabel': 'Type',
-  'settings.preChatForm.addButton': 'Add field',
-  'settings.preChatForm.empty.title': 'No pre-chat questions',
-  'settings.preChatForm.empty.description':
-    'Add a field to ask visitors for details — an order number, an account id — before they start chatting.',
-  'settings.preChatForm.deleteAriaLabel': 'Delete field {label}',
+  // Chat forms (pre/post-chat) — ChatFormsSettings.tsx
+  'settings.chatForms.title': 'Chat forms',
+  'settings.chatForms.description':
+    'Ask visitors for details before the chat starts, or once it ends. Answers are saved to the contact and shown in the CRM.',
+  'settings.chatForms.loadError': 'Could not load the chat forms.',
+  'settings.chatForms.labelLabel': 'Label',
+  'settings.chatForms.labelError': 'Name the field.',
+  'settings.chatForms.typeLabel': 'Type',
+  'settings.chatForms.placementLabel': 'Asked',
+  'settings.chatForms.placement.preChat': 'Before the chat',
+  'settings.chatForms.placement.postChat': 'After the chat',
+  'settings.chatForms.addButton': 'Add field',
+  'settings.chatForms.empty.title': 'No chat questions',
+  'settings.chatForms.empty.description':
+    'Add a field to ask visitors for details — an order number, an account id — before they start chatting or once the chat ends.',
+  'settings.chatForms.deleteAriaLabel': 'Delete field {label}',
 
   // Channels — Channels.tsx
   'settings.channels.title': 'Channels',

@@ -114,19 +114,22 @@ export const settings: Messages = {
     'Ekibinizin talep ve kişilerde ihtiyaç duyduğu alanları ekleyin — bir oyuncu kimliği ya da KYC durumu gibi.',
   'settings.customFields.deleteAriaLabel': '{label} alanını sil',
 
-  // Sohbet öncesi form — PreChatFormSettings.tsx
-  'settings.preChatForm.title': 'Sohbet öncesi form',
-  'settings.preChatForm.description':
-    "Sohbet başlamadan önce ziyaretçilerden bilgi isteyin. Yanıtlar kişiye kaydedilir ve CRM'de gösterilir.",
-  'settings.preChatForm.loadError': 'Sohbet öncesi form yüklenemedi.',
-  'settings.preChatForm.labelLabel': 'Etiket',
-  'settings.preChatForm.labelError': 'Alana bir ad verin.',
-  'settings.preChatForm.typeLabel': 'Tür',
-  'settings.preChatForm.addButton': 'Alan ekle',
-  'settings.preChatForm.empty.title': 'Henüz sohbet öncesi soru yok',
-  'settings.preChatForm.empty.description':
-    'Ziyaretçiler sohbete başlamadan önce onlardan bilgi istemek için bir alan ekleyin — bir sipariş numarası, bir hesap kimliği gibi.',
-  'settings.preChatForm.deleteAriaLabel': '{label} alanını sil',
+  // Sohbet formları (öncesi/sonrası) — ChatFormsSettings.tsx
+  'settings.chatForms.title': 'Sohbet formları',
+  'settings.chatForms.description':
+    "Sohbet başlamadan önce ya da bittikten sonra ziyaretçilerden bilgi isteyin. Yanıtlar kişiye kaydedilir ve CRM'de gösterilir.",
+  'settings.chatForms.loadError': 'Sohbet formları yüklenemedi.',
+  'settings.chatForms.labelLabel': 'Etiket',
+  'settings.chatForms.labelError': 'Alana bir ad verin.',
+  'settings.chatForms.typeLabel': 'Tür',
+  'settings.chatForms.placementLabel': 'Sorulma anı',
+  'settings.chatForms.placement.preChat': 'Sohbetten önce',
+  'settings.chatForms.placement.postChat': 'Sohbetten sonra',
+  'settings.chatForms.addButton': 'Alan ekle',
+  'settings.chatForms.empty.title': 'Henüz sohbet sorusu yok',
+  'settings.chatForms.empty.description':
+    'Ziyaretçiler sohbete başlamadan önce ya da sohbet bittikten sonra onlardan bilgi istemek için bir alan ekleyin — bir sipariş numarası, bir hesap kimliği gibi.',
+  'settings.chatForms.deleteAriaLabel': '{label} alanını sil',
 
   // Kanallar — Channels.tsx
   'settings.channels.title': 'Kanallar',

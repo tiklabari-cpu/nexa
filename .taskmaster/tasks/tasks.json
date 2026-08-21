@@ -6548,10 +6548,10 @@
         "description": "2026-08-17 denetimi: `apps/widget/src/api.ts:185 rate()` ve `:189 close()` hiçbir yerden çağrılmıyor — widget’ta değerlendirme kontrolü ve \"sohbeti bitir\" düğmesi yok; backend `POST /customer/chat/rating` ve `/customer/chat/close` canlı ve testli (`routes/customer.ts:599,620`); `ReportsPage.tsx:829` Reviews/CSAT bölümü \"read back from the ratings the widget collects\" diyor ama widget hiç toplamıyor → üretimde panel sonsuza kadar \"No ratings yet\". 08.7.7 forms builder yalnız `pre_chat` yerleşimini teslim etti (K08.7.7); PRD \"pre-chat/post-chat\" der. Bu görev üç uçlu zinciri kapatır: widget → API → Reports.",
         "details": "BULGU (§D113/K8): `grep -rn \"\\.rate(\\|\\.close(\" apps/widget/src --include=*.ts | grep -v test` → 0\nçağıran (yalnız tanımlar `api.ts:185,189`); widget öğe envanteri (`nx-launcher`, `nx-prechat`,\n`nx-attach`, `nx-send`, …) değerlendirme/kapatma kontrolü içermiyor. `grep -rn \"post.\\?chat\" apps/widget/src\napps/api/src` → 0 (yalnız pre_chat: `form_placement='pre_chat'` CHECK'i K08.7.7). Reports 07.8 ✅\n(CSAT donut) ama kaynak akış yok — üç uygulama arasında kopuk zincir.\nKIRILIM: 134.1 rating UI (SONNET) → 134.2 sohbeti bitir (SONNET) → 134.3 post-chat form (OPUS-XHIGH,\nsözleşme+migration+widget) → 134.4 e2e (OPUS-XHIGH). Damgalar (§D114 · 2026-08-17 çelişki denetimi ile GÜNCELLENDİ): 07.8 ve 11.4 satırları ✅ KALIR\n(KK'ları rapor/composer payını karşılıyor — koda karşı doğrulandı), AMA 08.7.7 satırı (PLAN.md:560)\nartık ◐ → K08.7.7: post_chat depoda hiç yok, satır başlığı \"(pre/post-chat)\" iki yerleşim vaat ediyor.\n134.3 bitince o satır ◐ → ✅ ÇEVRİLİR (bu görevin kapanış işlerinden biri); K bloklarına \"widget kaynağı bağlandı\"\nmaddeleri eklenir; §6A tablosunda bu kalem ✅ olur.\n\nFAZ-4'ÜN KONUSU KALEM DEĞİL DİKİŞTİR (§D113): Faz 0–3 kalemleri tek tek ✅ ama bütün, bir kullanıcının\ngözünden bir yerde kopuyor. Bu görev o kopukluğu kapatır; kapatırken YENİ bir kalem/özellik AÇMAZ,\nmevcut sözleşme + servis + ekranı birbirine bağlar. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-07.8 Reviews/Ratings (widget kaynağı) · FR-MOD-08.7.7 post-chat form · FR-MOD-11.4 composer/kontroller**. Gereksinim satırı: `grep -n '| 07\\.8 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K07.8' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\nBu görev üç PRD koduna dokunur: kapanışta K07.8 (rating kaynağı), K08.7.7 (post_chat yerleşimi), K11.4 yoksa K11.4 aç (sohbeti bitir) — her birine kendi maddesi; tablo damgaları ✅ kalır.\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Dört alt-görev `done` olunca; ayrıca `pnpm -w test:e2e` (`widget.spec.ts` + yeni `csat.spec.ts`: ziyaretçi değerlendirir → Reports Reviews'ta görünür, kanıt PNG) · widget/api/web unit + integration yeşil · widget bundle < 50 KB gzip; §6A tablosunda kalem ✅.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-21T23:02:22.298Z",
+        "updatedAt": "2026-08-21T23:49:45.982Z",
         "subtasks": [
           {
             "id": 1,
@@ -6597,14 +6597,14 @@
             "description": "Üç uygulamalı zincir Playwright ile kanıtlanır.",
             "details": "NE YAPILACAK: `apps/e2e/tests/csat.spec.ts`: mevcut `demo-flow.spec.ts` akışını (visitor → routing →\nagent reply → archive) temel al; arşiv sonrası widget'ta form + rating; ardından agent Reports →\nReviews sekmesi → oy görünür (donut/sayaç) → `kanit/csat-*.png`. Ayrıca ziyaretçinin kendisinin\n\"End chat\" ile bitirdiği varyant. §6A tablosunda kalem ✅; K07.8'e uçtan uca maddesi.\nDOSYALAR: `apps/e2e/tests/csat.spec.ts` · `apps/e2e/kanit/csat-*.png` · PLAN.md.\nREFERANS: `demo-flow.spec.ts` · `widget.spec.ts` (visitorSends) · `reports.spec.ts`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-07.8 Reviews/Ratings (widget kaynağı) · FR-MOD-08.7.7 post-chat form · FR-MOD-11.4 composer/kontroller**. Gereksinim satırı: `grep -n '| 07\\.8 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K07.8' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w test:e2e` exit 0 (csat.spec ≥ 2 test; tam süit regresyonsuz; kanıt PNG commit'te).\n- PLAN §6A tablosunda kalem ✅; K07.8 maddesi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "134.1",
               "134.2",
               "134.3"
             ],
             "parentId": "134",
-            "updatedAt": "2026-08-21T23:02:22.298Z"
+            "updatedAt": "2026-08-21T23:49:45.982Z"
           }
         ]
       },
@@ -7044,9 +7044,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-21T23:02:22.299Z",
+      "lastModified": "2026-08-21T23:49:45.986Z",
       "taskCount": 144,
-      "completedCount": 133,
+      "completedCount": 134,
       "tags": [
         "master"
       ]

@@ -7,7 +7,7 @@
  * treating widget traffic as an agent (I4 — a customer token must never reach
  * beyond the Customer Chat API).
  */
-import type { AgentRole, Scope } from '@nexa/types';
+import type { AgentRole } from '@nexa/types';
 import type { TenantContext } from '../../lib/tenant.js';
 
 export interface AgentPrincipal {
@@ -92,75 +92,19 @@ export function scopesOf(principal: Principal): string[] {
 }
 
 /**
- * Roles are coarse ("can this person administer the workspace"); scopes are
- * fine ("may this token write chats"). Both are enforced — a route that only
- * checked scopes would let an Agent-role user with a broad PAT act as an admin.
+ * Role rank and the scope ceiling each role carries.
+ *
+ * Defined in `@nexa/types` (`role-scopes.ts`) and re-exported here so the
+ * existing call sites keep one import, and so the RTM gateway — a separate
+ * process resolving the same credentials — reads the same list rather than a
+ * copy of it (tm 145: a rule spelled twice is a rule that eventually disagrees
+ * with itself).
  */
-export const ROLE_RANK: Record<AgentRole, number> = {
-  owner: 3,
-  viceowner: 2,
-  admin: 1,
-  agent: 0,
-};
-
-export function roleAtLeast(role: AgentRole, minimum: AgentRole): boolean {
-  return ROLE_RANK[role] >= ROLE_RANK[minimum];
-}
-
-/** Scopes granted to a newly created PAT when the caller does not narrow them. */
-export const DEFAULT_AGENT_SCOPES: Scope[] = [
-  'accounts--my:ro',
-  'agents--my:rw',
-  'chats--access:rw',
-  'tickets--access:rw',
-  'customers:ro',
-  'groups--my:ro',
-  'tags--groups:ro',
-  // Reading the brand catalogue (Multibrand, PRD §5.3): an agent picks the brand
-  // they are working under, so they read brands but do not create or rename them.
-  'brands--all:ro',
-];
-
-/** An owner or admin gets the tenant-wide set. */
-export const ADMIN_SCOPES: Scope[] = [
-  'accounts--all:rw',
-  'agents--all:rw',
-  // Managing AI agents, skills and knowledge. Owners and admins configure the
-  // automation; ordinary agents work alongside it and do not reconfigure it
-  // mid-shift.
-  'agents-bot--all:rw',
-  'chats--all:rw',
-  'tickets--all:rw',
-  'customers:rw',
-  'customers.ban:rw',
-  'groups--all:rw',
-  'tags--all:rw',
-  'canned_responses--all:rw',
-  'webhooks--all:rw',
-  // Connecting Messenger/SMS/WhatsApp and sending through them is workspace
-  // configuration — owners and admins do it, ordinary agents work the inbox.
-  'channels--all:rw',
-  'access_rules:rw',
-  // Managing the brand catalogue (Multibrand, PRD §5.3) — creating, renaming and
-  // removing brands is workspace configuration, an owner/admin power.
-  'brands--all:rw',
-  'properties.configuration:rw',
-  // Reading the security trail (NFR-S12) is an owner/admin power — the route
-  // pairs this scope with `minimumRole: admin`, and an ordinary agent gets
-  // neither.
-  'audit_log--all:ro',
-  // Streaming that trail to a SIEM (NFR-C6 · C6-b). Here for the same reason
-  // the reading scope is, and it is worth saying why the separation between the
-  // two survives it: this list is the *default* a session or an un-narrowed PAT
-  // gets, and a holder of it can already walk the whole log page by page, so
-  // withholding the export scope here would cost effort, not access. What the
-  // separation actually binds is the narrowed token — an integration granted
-  // `audit_log--all:ro` for a dashboard does not thereby get the firehose.
-  'audit_log--export:ro',
-  'reports_read',
-  // Defining a scheduled export (PRD §5.3-Reports) mails workspace data out on a
-  // timer, so it is an owner/admin power and stops here — `DEFAULT_AGENT_SCOPES`
-  // deliberately does not carry it, exactly as it carries no reports scope at all.
-  'reports_manage',
-  'billing_manage',
-];
+export {
+  ROLE_RANK,
+  roleAtLeast,
+  DEFAULT_AGENT_SCOPES,
+  ADMIN_SCOPES,
+  defaultScopesForRole,
+  scopesWithinRole,
+} from '@nexa/types';

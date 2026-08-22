@@ -65,7 +65,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
 
   app.post(
     '/settings/custom-fields',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(createBody, request.body);
       const tenant = request.tenant();
@@ -84,7 +84,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
 
   app.patch<{ Params: { fieldId: string } }>(
     '/settings/custom-fields/:fieldId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(fieldIdSchema, request.params.fieldId);
       const body = parse(updateBody, request.body);
@@ -102,7 +102,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
 
   app.delete<{ Params: { fieldId: string } }>(
     '/settings/custom-fields/:fieldId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(fieldIdSchema, request.params.fieldId);
       const tenant = request.tenant();

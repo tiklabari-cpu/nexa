@@ -576,6 +576,84 @@ describe('rtm gateway', () => {
       expect(outsider.pushes('incoming_event')).toHaveLength(0);
     });
 
+    /**
+     * `chats--all` is what widens a socket from "my teams" to the whole
+     * workspace, and on a session that scope is granted because of the holder's
+     * rank. Until tm 146 this gateway read the scope list straight off the token
+     * row, so an admin demoted to agent kept being pushed every team's traffic
+     * over the socket even after the REST surface had stopped answering them —
+     * the "refused over HTTP, live over the socket" split the residency check a
+     * few lines above exists to prevent.
+     */
+    it('stops widening a session once the rank behind it is gone', async () => {
+      // The outsider belongs to no team, so team traffic reaches them only if
+      // the credential is unrestricted.
+      const promote = (role: 'admin' | 'agent') =>
+        db.agentMembership.update({
+          where: {
+            licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.outsiderAccountId },
+          },
+          data: { role },
+        });
+      await promote('admin');
+      const token = await grantToken(db, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.outsiderAccountId,
+        scopes: ['chats--all:rw'],
+        kind: 'oauth',
+      });
+      const login = async () => {
+        const socket = await connect(fx.a);
+        const response = await socket.request('login', {
+          token: `Bearer ${token}`,
+          pushes: { '3.6': AGENT_PUSHES },
+        });
+        expect(response.success).toBe(true);
+        return socket;
+      };
+
+      const asAdmin = await login();
+      await publish(fx.a, 'incoming_event', { groupIds: [Number(fx.a.supportGroupId)] }, {});
+      await asAdmin.waitForPush('incoming_event');
+
+      await promote('agent');
+
+      // Same credential, same socket handshake — only the rank moved. The reach
+      // is decided at login, as suspension already is, so this is a fresh one.
+      const asAgent = await login();
+      const insider = await loginAgent(fx.a, fx.a.agentAccountId);
+      await publish(fx.a, 'incoming_event', { groupIds: [Number(fx.a.supportGroupId)] }, {});
+
+      await insider.waitForPush('incoming_event');
+      await settle();
+      expect(asAgent.pushes('incoming_event')).toHaveLength(0);
+    });
+
+    it('leaves a personal access token as broad as it was granted', async () => {
+      // The other half of the same rule: a named credential keeps the list
+      // somebody deliberately gave it, and what binds an over-broad one is the
+      // role gate on the routes it can reach — not a silent narrowing here.
+      const token = await grantToken(db, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.outsiderAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      const socket = await connect(fx.a);
+      expect(
+        (
+          await socket.request('login', {
+            token: `Bearer ${token}`,
+            pushes: { '3.6': AGENT_PUSHES },
+          })
+        ).success,
+      ).toBe(true);
+
+      await publish(fx.a, 'incoming_event', { groupIds: [Number(fx.a.supportGroupId)] }, {});
+      await socket.waitForPush('incoming_event');
+    });
+
     it('never crosses a tenant boundary', async () => {
       const acme = await loginAgent(fx.a, fx.a.agentAccountId);
       const northwind = await loginAgent(fx.b, fx.b.agentAccountId);

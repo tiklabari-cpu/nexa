@@ -13,7 +13,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { AgentRole, Region } from '@nexa/types';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import { withTenant, type TenantClient } from '../../lib/tenant.js';
-import type { Principal } from './principal.js';
+import { scopesWithinRole, type Principal } from './principal.js';
 
 /** v2-03 §8.6: at most 25 live access tokens per (client, user). */
 export const MAX_ACTIVE_TOKENS_PER_OWNER = 25;
@@ -132,6 +132,12 @@ export class TokenService {
     // they next sign in. The same transaction also enforces the idle-session
     // policy for oauth tokens, so reading `last_used_at` and revoking on expiry
     // commit together.
+    //
+    // Until tm 146 that promise was only half kept. The role below was read
+    // fresh; `scopes` was not, and every admin route protected by scope alone
+    // stayed open to a demoted admin's live session — including the one that
+    // switches off IP allow-listing and the 2FA requirement. `scopesWithinRole`
+    // closes the other half, a few lines down.
     const context = { licenseId: row.license_id, organizationId: row.organization_id };
     const check = await withTenant(
       this.db,
@@ -170,7 +176,12 @@ export class TokenService {
         licenseId: row.license_id,
         organizationId: row.organization_id,
         role: check.role,
-        scopes: row.scopes,
+        // A session's scopes are role-derived at mint, so they are re-derived
+        // here against the role we have just read; a personal access token is a
+        // named credential with a list somebody chose, and keeps it. Why the
+        // two kinds are treated differently — and what binds a stale PAT
+        // instead — is written out on `scopesWithinRole` (SEC-2, tm 146).
+        scopes: row.kind === 'oauth' ? scopesWithinRole(check.role, row.scopes) : row.scopes,
         tokenId: row.id,
         tokenKind: row.kind,
       },

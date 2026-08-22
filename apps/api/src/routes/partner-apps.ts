@@ -136,48 +136,52 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
     },
   );
 
-  app.post('/partner/apps', { config: { scopes: ['access_rules:rw'] } }, async (request, reply) => {
-    const body = parse(registerBody, request.body);
-    const principal = request.requirePrincipal();
-    const tenant = request.tenant();
+  app.post(
+    '/partner/apps',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(registerBody, request.body);
+      const principal = request.requirePrincipal();
+      const tenant = request.tenant();
 
-    // Both validations run before anything is written, and each throws the error
-    // that fits: a bad redirect URI is a 400, an over-broad scope set is a 403.
-    const uris = validateRedirectUris(body.redirect_uris);
-    const granted = narrowScopes(body.scopes, scopesOf(principal));
+      // Both validations run before anything is written, and each throws the error
+      // that fits: a bad redirect URI is a 400, an over-broad scope set is a 403.
+      const uris = validateRedirectUris(body.redirect_uris);
+      const granted = narrowScopes(body.scopes, scopesOf(principal));
 
-    const registration = await request.withTenant(async (tx) => {
-      const created = await partnerApps.register(tx, tenant, {
-        displayName: body.display_name,
-        clientType: body.client_type,
-        redirectUris: uris,
-        scopes: granted,
+      const registration = await request.withTenant(async (tx) => {
+        const created = await partnerApps.register(tx, tenant, {
+          displayName: body.display_name,
+          clientType: body.client_type,
+          redirectUris: uris,
+          scopes: granted,
+        });
+        // Same transaction as the insert, so the trail can never disagree with
+        // the registry: either both land or neither. What is recorded is what
+        // bounds the client — its type and the scopes it may ever carry — plus
+        // how many callbacks it declared. Not the callbacks themselves (a URI can
+        // embed a token) and, obviously, not the secret in the response below.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'partner_app.created',
+          target: auditTarget(created.client_id),
+          metadata: {
+            client_type: created.client_type,
+            scopes: created.scopes,
+            redirect_uri_count: created.redirect_uris.length,
+          },
+        });
+        return created;
       });
-      // Same transaction as the insert, so the trail can never disagree with
-      // the registry: either both land or neither. What is recorded is what
-      // bounds the client — its type and the scopes it may ever carry — plus
-      // how many callbacks it declared. Not the callbacks themselves (a URI can
-      // embed a token) and, obviously, not the secret in the response below.
-      await writeAuditEntry(tx, request.auditContext(), {
-        action: 'partner_app.created',
-        target: auditTarget(created.client_id),
-        metadata: {
-          client_type: created.client_type,
-          scopes: created.scopes,
-          redirect_uri_count: created.redirect_uris.length,
-        },
-      });
-      return created;
-    });
 
-    // The secret is in this body and will never be in another one.
-    reply.header('Cache-Control', 'no-store');
-    return reply.status(201).send(registration);
-  });
+      // The secret is in this body and will never be in another one.
+      reply.header('Cache-Control', 'no-store');
+      return reply.status(201).send(registration);
+    },
+  );
 
   app.patch<{ Params: { clientId: string } }>(
     '/partner/apps/:clientId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const clientId = parse(clientIdSchema, request.params.clientId);
       const body = parse(patchBody, request.body);
@@ -225,7 +229,7 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
 
   app.delete<{ Params: { clientId: string } }>(
     '/partner/apps/:clientId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const clientId = parse(clientIdSchema, request.params.clientId);
 
@@ -263,7 +267,7 @@ export default async function partnerAppRoutes(app: FastifyInstance): Promise<vo
    */
   app.post<{ Params: { clientId: string } }>(
     '/partner/apps/:clientId/rotate-secret',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const clientId = parse(clientIdSchema, request.params.clientId);
 

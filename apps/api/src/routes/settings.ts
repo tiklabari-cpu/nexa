@@ -595,7 +595,7 @@ export default async function settingsRoutes(
 
   app.post(
     '/settings/trusted-domains',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(addDomainBody, request.body);
       const tenant = request.tenant();
@@ -647,7 +647,7 @@ export default async function settingsRoutes(
 
   app.delete<{ Params: { domainId: string } }>(
     '/settings/trusted-domains/:domainId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const domainId = parse(uuid, request.params.domainId);
 
@@ -699,7 +699,7 @@ export default async function settingsRoutes(
 
   app.post(
     '/settings/ip-allowlist',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(addIpAllowlistBody, request.body);
       const tenant = request.tenant();
@@ -768,7 +768,7 @@ export default async function settingsRoutes(
 
   app.delete<{ Params: { entryId: string } }>(
     '/settings/ip-allowlist/:entryId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const entryId = parse(uuid, request.params.entryId);
 
@@ -1390,7 +1390,7 @@ export default async function settingsRoutes(
 
   app.patch(
     '/settings/security',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(updateSecurityBody, request.body);
       const tenant = request.tenant();
@@ -1576,7 +1576,7 @@ export default async function settingsRoutes(
 
   app.put(
     '/settings/sla',
-    { config: { scopes: ['access_rules:rw'], entitlement: 'sla' } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin', entitlement: 'sla' } },
     async (request, reply) => {
       const body = parse(updateSlaBody, request.body);
       const tenant = request.tenant();
@@ -1827,7 +1827,7 @@ export default async function settingsRoutes(
 
   app.put(
     '/settings/chat-timeout',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(updateChatTimeoutBody, request.body);
       const tenant = request.tenant();
@@ -1899,7 +1899,7 @@ export default async function settingsRoutes(
 
   app.put(
     '/settings/widget',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(updateWidgetBody, request.body);
       const tenant = request.tenant();
@@ -1976,7 +1976,7 @@ export default async function settingsRoutes(
 
   app.put(
     '/settings/sales-tracker',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(updateSalesTrackerBody, request.body);
       const tenant = request.tenant();
@@ -2056,7 +2056,7 @@ export default async function settingsRoutes(
 
   app.patch<{ Params: { ruleId: string } }>(
     '/settings/routing-rules/:ruleId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const ruleId = parse(uuid, request.params.ruleId);
       const body = parse(updateRuleBody, request.body);

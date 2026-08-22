@@ -107,7 +107,7 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
 
   app.post(
     '/reports/scheduled-exports',
-    { config: { scopes: ['reports_manage'] } },
+    { config: { scopes: ['reports_manage'], minimumRole: 'admin' } },
     async (request, reply) => {
       const body = parse(createBody, request.body);
       const tenant = request.tenant();
@@ -158,7 +158,7 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
 
   app.patch<{ Params: { scheduledExportId: string } }>(
     '/reports/scheduled-exports/:scheduledExportId',
-    { config: { scopes: ['reports_manage'] } },
+    { config: { scopes: ['reports_manage'], minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(scheduledExportIdSchema, request.params.scheduledExportId);
       const body = parse(updateBody, request.body);
@@ -216,7 +216,7 @@ export default async function scheduledReportRoutes(app: FastifyInstance): Promi
 
   app.delete<{ Params: { scheduledExportId: string } }>(
     '/reports/scheduled-exports/:scheduledExportId',
-    { config: { scopes: ['reports_manage'] } },
+    { config: { scopes: ['reports_manage'], minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(scheduledExportIdSchema, request.params.scheduledExportId);
       const tenant = request.tenant();

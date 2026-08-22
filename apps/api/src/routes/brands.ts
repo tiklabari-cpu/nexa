@@ -131,33 +131,37 @@ export default async function brandRoutes(app: FastifyInstance): Promise<void> {
     },
   );
 
-  app.post('/brands', { config: { scopes: ['brands--all:rw'] } }, async (request, reply) => {
-    const body = parse(createBody, request.body);
-    const tenant = request.tenant();
+  app.post(
+    '/brands',
+    { config: { scopes: ['brands--all:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(createBody, request.body);
+      const tenant = request.tenant();
 
-    const wanted = body.slug ?? slugify(body.name);
-    if (!wanted) {
-      throw ApiError.validation('Could not derive a slug from the name; provide one explicitly.');
-    }
+      const wanted = body.slug ?? slugify(body.name);
+      if (!wanted) {
+        throw ApiError.validation('Could not derive a slug from the name; provide one explicitly.');
+      }
 
-    try {
-      const created = await run(request, (tx) =>
-        // A new brand is never the default — the license keeps the one it has.
-        tx.brand.create({
-          data: {
-            licenseId: tenant.licenseId,
-            name: body.name,
-            slug: wanted,
-            logoUrl: body.logo_url ?? null,
-          },
-        }),
-      );
-      return reply.status(201).send(serialise(created));
-    } catch (error) {
-      if (isUniqueViolation(error)) throw brandExists(wanted);
-      throw error;
-    }
-  });
+      try {
+        const created = await run(request, (tx) =>
+          // A new brand is never the default — the license keeps the one it has.
+          tx.brand.create({
+            data: {
+              licenseId: tenant.licenseId,
+              name: body.name,
+              slug: wanted,
+              logoUrl: body.logo_url ?? null,
+            },
+          }),
+        );
+        return reply.status(201).send(serialise(created));
+      } catch (error) {
+        if (isUniqueViolation(error)) throw brandExists(wanted);
+        throw error;
+      }
+    },
+  );
 
   app.get<{ Params: { brandId: string } }>(
     '/brands/:brandId',
@@ -174,7 +178,7 @@ export default async function brandRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch<{ Params: { brandId: string } }>(
     '/brands/:brandId',
-    { config: { scopes: ['brands--all:rw'] } },
+    { config: { scopes: ['brands--all:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(uuid, request.params.brandId);
       const body = parse(patchBody, request.body);
@@ -203,7 +207,7 @@ export default async function brandRoutes(app: FastifyInstance): Promise<void> {
 
   app.delete<{ Params: { brandId: string } }>(
     '/brands/:brandId',
-    { config: { scopes: ['brands--all:rw'] } },
+    { config: { scopes: ['brands--all:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       const id = parse(uuid, request.params.brandId);
 

@@ -13,6 +13,7 @@
  *     source platform uses.
  */
 import type { PrismaClient } from '@prisma/client';
+import type { AgentRole } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import {
   constantTimeEqual,
@@ -24,6 +25,7 @@ import {
 } from '../../lib/crypto.js';
 import { withTenant } from '../../lib/tenant.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
+import { scopesWithinRole } from './principal.js';
 import { TokenService } from './token-service.js';
 
 /** The only failure reasons C6-a2 records — see `#auditTokenFailure`. */
@@ -453,6 +455,33 @@ export class OauthService {
 
   // --- Internals -----------------------------------------------------------
 
+  /**
+   * The role this account holds in this workspace right now, for the scope
+   * ceiling above.
+   *
+   * Fails closed. A membership that has been removed, suspended or is still
+   * awaiting approval yields `agent` — the least authority — rather than
+   * whatever the credential used to carry. Such a grant is refused outright on
+   * the next request anyway (`token-service.resolve` answers
+   * `membership_missing`), so this is not the gate; it is the answer given to a
+   * question that must not be allowed to fall back to "whatever was asked for".
+   */
+  async #currentRole(
+    licenseId: bigint,
+    organizationId: string,
+    accountId: string,
+  ): Promise<AgentRole> {
+    const role = await withTenant(this.db, { licenseId, organizationId }, async (tx) => {
+      const membership = await tx.agentMembership.findUnique({
+        where: { licenseId_agentId: { licenseId, agentId: accountId } },
+        select: { role: true, suspended: true, awaitingApproval: true },
+      });
+      if (!membership || membership.suspended || membership.awaitingApproval) return null;
+      return membership.role as AgentRole;
+    });
+    return role ?? 'agent';
+  }
+
   async #authenticateClient(clientId: string, clientSecret?: string): Promise<OauthClientRecord> {
     const client = await this.findClient(clientId);
     if (!client) throw oauthError('invalid_client', 'Unknown client.');
@@ -479,12 +508,30 @@ export class OauthService {
   }): Promise<TokenGrant> {
     const familyId = input.familyId ?? crypto.randomUUID();
 
+    // Re-derive the ceiling from the role the account holds *now* (SEC-2, tm
+    // 146). Both grants funnel through here, so both are covered by one read:
+    // the authorization-code exchange, where the code was minted moments ago
+    // and the role has barely had time to move, and the refresh rotation, where
+    // it has had thirty days — and where copying `record.scopes` forward
+    // verbatim is what let a demoted admin keep an admin session for as long as
+    // their client kept refreshing.
+    //
+    // `token-service.resolve` applies the same ceiling on every request, so
+    // this is not what makes the session safe; what it makes is the *record*
+    // honest. The scope list on the row, the `scope` in this response and the
+    // one carried into the next rotation now say what the credential can
+    // actually do, rather than what it could do when its family began.
+    const scopes = scopesWithinRole(
+      await this.#currentRole(input.licenseId, input.organizationId, input.accountId),
+      input.scopes,
+    );
+
     const access = await this.#tokens.issue({
       licenseId: input.licenseId,
       organizationId: input.organizationId,
       ownerId: input.accountId,
       kind: 'oauth',
-      scopes: input.scopes,
+      scopes,
       clientId: input.clientId,
       familyId,
       ttlSeconds: this.config.accessTokenTtl,
@@ -502,7 +549,7 @@ export class OauthService {
             accountId: input.accountId,
             licenseId: input.licenseId,
             organizationId: input.organizationId,
-            scopes: input.scopes,
+            scopes,
             familyId,
             expiresAt: new Date(Date.now() + this.config.refreshTokenTtl * 1000),
           },
@@ -526,7 +573,7 @@ export class OauthService {
       token_type: 'Bearer',
       expires_in: this.config.accessTokenTtl,
       refresh_token: refreshToken,
-      scope: input.scopes.join(','),
+      scope: scopes.join(','),
       account_id: input.accountId,
       license_id: input.licenseId.toString(),
       organization_id: input.organizationId,

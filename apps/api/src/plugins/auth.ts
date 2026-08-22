@@ -383,6 +383,16 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     }
 
     // --- Role -------------------------------------------------------------
+    // The second of the two gates, and the one that answers *who* is asking
+    // rather than *what the credential may do*. It is read from the membership
+    // on every request, so a demotion lands on a live session immediately —
+    // which is why every workspace-configuration write carries it as well as a
+    // scope (tm 146). Before that, routes like `PATCH /settings/security` were
+    // held by scope alone, and a demoted admin's credential still carried the
+    // admin scope it was minted with: enough to switch off IP allow-listing and
+    // the 2FA requirement. `scopesWithinRole` closed the session half of that;
+    // this is what binds a personal access token minted while its holder was
+    // still an admin.
     if (config.minimumRole) {
       if (principal.kind !== 'agent' || !roleAtLeast(principal.role, config.minimumRole)) {
         throw ApiError.authorization(`This action requires the ${config.minimumRole} role.`);

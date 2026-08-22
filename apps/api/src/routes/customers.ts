@@ -163,7 +163,7 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
 
   app.post<{ Params: { customerId: string } }>(
     '/customers/:customerId/ban',
-    { config: { scopes: ['customers.ban:rw'] } },
+    { config: { scopes: ['customers.ban:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       return reply.send(await setBanned(request, customers, true));
     },
@@ -171,7 +171,7 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
 
   app.delete<{ Params: { customerId: string } }>(
     '/customers/:customerId/ban',
-    { config: { scopes: ['customers.ban:rw'] } },
+    { config: { scopes: ['customers.ban:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       return reply.send(await setBanned(request, customers, false));
     },

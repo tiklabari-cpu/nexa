@@ -50,7 +50,7 @@ import {
 import { withTenant } from '../lib/tenant.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
 import { OauthService } from '../services/auth/oauth-service.js';
-import { defaultScopesForRole } from './auth.js';
+import { defaultScopesForRole } from '../services/auth/principal.js';
 
 /**
  * How long a started login may sit unfinished.

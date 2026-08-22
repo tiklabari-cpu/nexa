@@ -1780,7 +1780,7 @@ export default async function reportRoutes(
     // Writable while read-only: subscribing is exactly how an expired trial
     // comes back (ADR-10). `reports_read` is a read scope and so is not accepted
     // here — changing the bill needs a billing scope.
-    { config: { scopes: BILLING_WRITE_SCOPES, allowWhenReadOnly: true } },
+    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
     async (request, reply) => {
       const body = parse(updateSubscriptionBody, request.body);
       const tenant = request.tenant();
@@ -1896,7 +1896,7 @@ export default async function reportRoutes(
     // Writable while read-only, like the subscription PATCH: putting a card on
     // file is part of how an expired trial comes back, so the trial gate must
     // not block it. Changing the payment method still needs a billing scope.
-    { config: { scopes: BILLING_WRITE_SCOPES, allowWhenReadOnly: true } },
+    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
     async (request, reply) => {
       const body = parse(paymentMethodBody, request.body);
       const tenant = request.tenant();
@@ -1945,7 +1945,7 @@ export default async function reportRoutes(
     // method PUT: a workspace that has run out of capacity is exactly the one
     // that needs to buy some, and the trial gate must not be what stops it.
     // `reports_read` still cannot get in here — reading prices is not spending.
-    { config: { scopes: BILLING_WRITE_SCOPES, allowWhenReadOnly: true } },
+    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
     async (request, reply) => {
       const body = parse(purchaseApiPackageBody, request.body);
       const tenant = request.tenant();

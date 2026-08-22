@@ -7,7 +7,6 @@ import {
   servesRegion,
   type WidgetFormField,
   type Region,
-  type Scope,
   type WidgetAppearance,
 } from '@nexa/types';
 import type { Env } from '../config/env.js';
@@ -28,12 +27,7 @@ import {
   serialiseNotificationPreferences,
 } from '../services/notifications/preferences.js';
 import { markWebsiteConnected } from '../services/websites/website-service.js';
-import {
-  ADMIN_SCOPES,
-  DEFAULT_AGENT_SCOPES,
-  roleAtLeast,
-  type AgentPrincipal,
-} from '../services/auth/principal.js';
+import { defaultScopesForRole, type AgentPrincipal } from '../services/auth/principal.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(320);
 const passwordSchema = z.string().min(1).max(512);
@@ -901,17 +895,4 @@ function passwordLoginAvailable(membership: {
   sso_enforced_connection_id: string | null;
 }): boolean {
   return membership.sso_enforced_connection_id === null || membership.role === 'owner';
-}
-
-/**
- * The scopes a session gets when the caller asks for none.
- *
- * Exported because the SAML ACS (`routes/saml.ts`, S11-d) has to answer the
- * same question for a federated sign-in. Restating it there would let the two
- * doors into the product drift apart on what an `admin` is allowed to do.
- */
-export function defaultScopesForRole(role: string): Scope[] {
-  return roleAtLeast(role as never, 'admin')
-    ? [...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES]
-    : [...DEFAULT_AGENT_SCOPES];
 }

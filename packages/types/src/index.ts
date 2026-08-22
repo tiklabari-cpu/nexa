@@ -7,6 +7,7 @@ export * from './entitlements.js';
 export * from './integrations.js';
 export * from './errors.js';
 export * from './scopes.js';
+export * from './role-scopes.js';
 export * from './siem.js';
 export * from './access-review.js';
 export * from './rtm.js';

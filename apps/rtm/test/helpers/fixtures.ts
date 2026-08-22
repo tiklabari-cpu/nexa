@@ -149,6 +149,12 @@ export async function grantToken(
     organizationId: string;
     ownerId: string;
     scopes: string[];
+    /**
+     * Defaults to a personal access token. A session (`oauth`) is a different
+     * credential here, not merely a different label: its scopes are capped
+     * against the holder's current role at login (SEC-2, tm 146).
+     */
+    kind?: 'pat' | 'oauth';
     revokedAt?: Date;
     expiresAt?: Date;
   },
@@ -159,7 +165,7 @@ export async function grantToken(
       licenseId: input.licenseId,
       organizationId: input.organizationId,
       ownerId: input.ownerId,
-      kind: 'pat',
+      kind: input.kind ?? 'pat',
       tokenHash: createHash('sha256').update(token, 'utf8').digest('base64url'),
       scopes: input.scopes,
       ...(input.revokedAt ? { revokedAt: input.revokedAt } : {}),

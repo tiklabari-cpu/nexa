@@ -12,7 +12,7 @@
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { REGIONS, servesRegion, type Region } from '@nexa/types';
+import { REGIONS, scopesWithinRole, servesRegion, type AgentRole, type Region } from '@nexa/types';
 
 export interface SocketPrincipal {
   kind: 'agent' | 'bot' | 'customer';
@@ -122,17 +122,31 @@ export class SocketAuthenticator {
     }
     if (row.license_status === 'canceled') return { ok: false, reason: 'expired' };
 
-    const unrestricted = row.scopes.some((s) => s === 'chats--all:ro' || s === 'chats--all:rw');
+    // Role and suspension live on the membership, so a suspended agent's
+    // existing socket credential stops working at once — and, since tm 146, so
+    // does a demoted one's reach. Read before the visibility decision below,
+    // which now depends on it; it used to run after, which cost a needless
+    // group query for a credential that was about to be refused anyway.
+    let role: AgentRole | null = null;
+    if (row.kind !== 'bot') {
+      role = await this.#membershipRole(row.license_id, row.organization_id, row.owner_id);
+      if (!role) return { ok: false, reason: 'membership_missing' };
+    }
+
+    // `chats--all` is what widens a socket from "my teams" to "the whole
+    // workspace", and on a session it is a role-derived scope. The REST edge
+    // caps those against the role the account holds now
+    // (`services/auth/token-service.ts`), so the socket does the same, through
+    // the same shared function: an admin demoted to agent who is refused the
+    // workspace's chats over HTTP must not keep being pushed them over the
+    // socket. A personal access token keeps its list here for the same reason
+    // it does there — see `scopesWithinRole` (@nexa/types).
+    const scopes = role && row.kind === 'oauth' ? scopesWithinRole(role, row.scopes) : row.scopes;
+
+    const unrestricted = scopes.some((s) => s === 'chats--all:ro' || s === 'chats--all:rw');
     const groupIds = unrestricted
       ? []
       : await this.#groupsFor(row.license_id, row.organization_id, row.owner_id);
-
-    if (row.kind !== 'bot') {
-      // Role and suspension live on the membership, so a suspended agent's
-      // existing socket credential stops working at once.
-      const membership = await this.#membership(row.license_id, row.organization_id, row.owner_id);
-      if (!membership) return { ok: false, reason: 'membership_missing' };
-    }
 
     return {
       ok: true,
@@ -141,7 +155,7 @@ export class SocketAuthenticator {
         actorId: row.owner_id,
         licenseId: row.license_id.toString(),
         organizationId: row.organization_id,
-        scopes: row.scopes,
+        scopes,
         groupIds,
         unrestricted,
       },
@@ -202,19 +216,29 @@ export class SocketAuthenticator {
     };
   }
 
-  async #membership(licenseId: bigint, organizationId: string, agentId: string): Promise<boolean> {
+  /**
+   * The role behind a live membership, or `null` when there is none to speak
+   * of — removed, suspended, or still awaiting approval. One read answers both
+   * questions the login needs (may this credential connect at all, and how far
+   * may it see), so the two can never be answered from different rows.
+   */
+  async #membershipRole(
+    licenseId: bigint,
+    organizationId: string,
+    agentId: string,
+  ): Promise<AgentRole | null> {
     const rows = await this.#scoped(
       licenseId,
       organizationId,
       (tx) =>
-        tx.$queryRaw<Array<{ ok: boolean }>>`
-        SELECT true AS ok FROM agent_memberships
+        tx.$queryRaw<Array<{ role: string }>>`
+        SELECT role FROM agent_memberships
         WHERE license_id = ${licenseId} AND agent_id = ${agentId}::uuid
           AND NOT suspended AND NOT awaiting_approval
         LIMIT 1
       `,
     );
-    return rows.length > 0;
+    return (rows[0]?.role as AgentRole | undefined) ?? null;
   }
 
   async #groupsFor(licenseId: bigint, organizationId: string, agentId: string): Promise<number[]> {

@@ -5,8 +5,15 @@
  * status and one call-to-action each. The statuses are not decoration and are
  * not made up — the Website card reads its status from the live `/websites`
  * data (FR-MOD-08.5.2), so writing a fixed "Connected" here would be a lie a
- * test is written to catch. Channels that do not exist yet say "Coming soon"
- * and offer to notify, rather than pretending to be one click away.
+ * test is written to catch.
+ *
+ * Every card is live now. The grid used to carry a fourth, unbuilt-channel
+ * status whose button offered to notify an admin when the channel arrived,
+ * remembered in `localStorage`. WhatsApp (08.5.6-b) was the last card off that
+ * list, which left the status unreachable and the button unrenderable — dead
+ * code claiming a state no channel can be in. It was removed in 08.5-c; if a
+ * channel is ever announced before it is built, the status and its button come
+ * back with it (K08.5.1).
  *
  * `channelsFor()` and its `Channel` records stay in English on purpose
  * (I18N-i, tm 133.9): `channels.test.ts` pins their `name`/`description`/`cta`
@@ -45,7 +52,7 @@ interface WebsiteStatusRow {
   status: string;
 }
 
-export type ChannelStatus = 'connected' | 'ready' | 'not_connected' | 'coming_soon';
+export type ChannelStatus = 'connected' | 'ready' | 'not_connected';
 
 export interface Channel {
   id: string;
@@ -64,7 +71,6 @@ const STATUS_META: Record<ChannelStatus, { tone: StatusTone; labelKey: string }>
   connected: { tone: 'success', labelKey: 'settings.channels.status.connected' },
   ready: { tone: 'info', labelKey: 'settings.channels.status.ready' },
   not_connected: { tone: 'warning', labelKey: 'settings.channels.status.not_connected' },
-  coming_soon: { tone: 'neutral', labelKey: 'settings.channels.status.coming_soon' },
 };
 
 /** `channel.id` → the catalogue keys for its translated name/description. */
@@ -109,7 +115,6 @@ const CTA_KEYS: Record<string, string> = {
   Manage: 'settings.channels.cta.manage',
   'Get link': 'settings.channels.cta.getLink',
   'Get address': 'settings.channels.cta.getAddress',
-  'Get notified': 'settings.channels.cta.getNotified',
   Disconnect: 'settings.channels.cta.disconnect',
   'Connect with Facebook (mock)': 'settings.channels.messenger.connectCta',
 };
@@ -119,39 +124,15 @@ function ctaText(t: TFunction, cta: string): string {
   return key ? t(key) : cta;
 }
 
-const NOTIFIED_STORE_PREFIX = 'nexa.channels.notified.';
-
-/** The `localStorage` key a channel's "Get notified" click is remembered under. */
-export function channelNotifiedKey(channelId: string): string {
-  return `${NOTIFIED_STORE_PREFIX}${channelId}`;
-}
-
-/** Mirrors Banner.tsx's readDismissed/persistDismissed — storage can throw (private mode). */
-function readNotified(channelId: string): boolean {
-  if (typeof localStorage === 'undefined') return false;
-  try {
-    return localStorage.getItem(channelNotifiedKey(channelId)) === '1';
-  } catch {
-    return false;
-  }
-}
-
-function persistNotified(channelId: string): void {
-  try {
-    localStorage.setItem(channelNotifiedKey(channelId), '1');
-  } catch {
-    // Storage unavailable — the click still holds for this session via state.
-  }
-}
-
 /**
  * Build the grid from the live website data.
  *
- * Only the Website card moves with data: no sites → Not connected (Connect),
+ * The Website card moves with `/websites`: no sites → Not connected (Connect),
  * sites installed but none handshaked → Ready (Manage), any connected →
  * Connected (Manage). The Chat page (08.5.9) and Email (08.5.3) are Ready: each
- * hands out a ready-to-use address rather than needing a connection step. What
- * remains is a fixed "Coming soon" until its own slice lands.
+ * hands out a ready-to-use address rather than needing a connection step. The
+ * five adapter channels below derive theirs from `/channels` the same way —
+ * nothing in this grid is a fixed label any more.
  */
 export function channelsFor(
   websites: WebsiteStatusRow[],
@@ -220,7 +201,7 @@ function messengerChannel(connectedChannels: ConnectedChannel[]): Channel {
 /**
  * WhatsApp connect/disconnect (FR-MOD-08.5.6), same derivation as
  * `messengerChannel`/`smsChannel`: status/address come from the live
- * `/channels` list, not a fixed "Coming soon" label. There is no mock OAuth
+ * `/channels` list, not a fixed label. There is no mock OAuth
  * exchange or secret credential here (unlike Messenger/Twilio) — just the
  * WhatsApp Business Account id and the business phone number, which becomes
  * the channel address.
@@ -448,9 +429,6 @@ function ChannelCardView({
   channelsLoading: boolean;
 }): ReactElement {
   const t = useTranslate();
-  // Lazy-init reads the persisted flag once per mount; the card is keyed by
-  // channel.id (see ChannelsGrid), so a remount always re-derives the same id.
-  const [notified, setNotified] = useState<boolean>(() => readNotified(channel.id));
   const meta = STATUS_META[channel.status];
   const copy = CHANNEL_COPY[channel.id];
   // The Website/Messenger/SMS/Instagram/Telegram status is unknown until its
@@ -488,24 +466,7 @@ function ChannelCardView({
           {copy ? t(copy.descriptionKey) : channel.description}
         </p>
 
-        {channel.status === 'coming_soon' ? (
-          notified ? (
-            <span className="text-2xs text-content-tertiary">
-              {t('settings.channels.notifiedAck')}
-            </span>
-          ) : (
-            <button
-              type="button"
-              onClick={() => {
-                setNotified(true);
-                persistNotified(channel.id);
-              }}
-              className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-            >
-              {cta}
-            </button>
-          )
-        ) : channel.id === 'chat-page' ? (
+        {channel.id === 'chat-page' ? (
           <ChatPageLink label={cta} />
         ) : channel.id === 'email' ? (
           <EmailForwardingAddress label={cta} />

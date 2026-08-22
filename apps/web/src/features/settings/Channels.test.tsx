@@ -1,8 +1,9 @@
 /**
  * Render behaviour that a pure-function test cannot show. channels.test.ts
  * covers the status derivation (not_connected/connected/address) as data; this
- * file covers Instagram's connect form + connected-card actions (FR-MOD-08.5.7-e)
- * and the "Get notified" click's localStorage persistence (FR-MOD-08.5.7-f).
+ * file covers each live card's connect form and connected-card actions —
+ * Messenger (FR-MOD-08.5.4), SMS (08.5.5), WhatsApp (08.5.6), Instagram
+ * (08.5.7-e) and Telegram (08.5.8-d).
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
@@ -489,13 +490,13 @@ describe('Telegram card — connected', () => {
   });
 });
 
-// "Get notified" persistence (channelNotifiedKey/readNotified/persistNotified)
-// had its render-level coverage here as long as a card was still on the fixed
-// "Coming soon" list. whatsapp (08.5.6-b) was the last one — every card is
-// now live-derived, so `coming_soon`/"Get notified" are unreachable through
-// the UI (the storage helpers stay wired but nothing calls them). tm 135.4
-// removes that dead code path per its own test strategy; this render-level
-// suite is retired here rather than exercising code no card can reach.
+// The notify-me persistence suite that used to sit here is gone with the code
+// it covered: whatsapp (08.5.6-b) was the last card off the unbuilt-channel
+// list, and 08.5-c removed the status, the localStorage helpers and the button
+// they rendered (K08.5.1). What replaces it as a guard is channels.test.ts's
+// empty-set claim — no card in the grid is unbuilt, and none is in a fourth
+// status — which fails the moment an unbuilt card is added back without the
+// UI to render it.
 
 describe('Channels localisation (NFR-I18N2)', () => {
   beforeEach(() => stubFetch({}));

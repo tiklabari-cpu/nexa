@@ -42,12 +42,13 @@ describe('channelsFor', () => {
     expect(email.cta).toBe('Get address');
   });
 
-  it('has no unbuilt channels left — whatsapp (08.5.6-b) was the last one off "Coming soon"', () => {
+  it('has no unbuilt channels left — every card in the grid is a live one', () => {
     // messenger (08.5.4-b), whatsapp (08.5.6-b), sms (08.5.5-b), instagram
     // (08.5.7-e) and telegram (08.5.8-d) are all built — their status is
     // derived from /channels, not fixed — so the whole grid is live now.
-    // `coming_soon`/"Get notified" are unreachable dead code as a result;
-    // tm 135.4 removes them (K08.5.1 note).
+    // The unbuilt-channel status and its notify button were removed with the
+    // last card off that list (08.5-c, K08.5.1); this is the empty-set claim
+    // that keeps them gone — add an unbuilt card and it fails.
     const built = new Set([
       'website',
       'chat-page',
@@ -62,13 +63,32 @@ describe('channelsFor', () => {
     expect(rest).toHaveLength(0);
   });
 
-  it('represents three statuses, each driven by state — coming_soon is unreachable now that every channel is built', () => {
+  it('represents three statuses, each driven by state — and no fourth one to be in', () => {
+    const three = new Set(['not_connected', 'connected', 'ready']);
     const seen = new Set([
       website([]).status,
       website([{ status: 'connected' }]).status,
       channelsFor([]).find((c) => c.id === 'chat-page')!.status, // ready
     ]);
-    expect(seen).toEqual(new Set(['not_connected', 'connected', 'ready']));
+    expect(seen).toEqual(three);
+
+    // And nothing in the grid is in a fourth state. `ChannelStatus` has only
+    // these three members since 08.5-c removed the unbuilt-channel one, so a
+    // card reaching for a status that no longer renders fails here as well as
+    // at the type level.
+    const statuses = channelsFor(
+      [{ status: 'connected' }],
+      [
+        {
+          type: 'telegram',
+          status: 'connected',
+          address: '@acme_bot',
+          connected: true,
+          created_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    ).map((c) => c.status);
+    expect(statuses.filter((status) => !three.has(status))).toEqual([]);
   });
 });
 

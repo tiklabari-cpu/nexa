@@ -6617,7 +6617,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-22T01:16:32.061Z",
+        "updatedAt": "2026-08-22T01:20:44.603Z",
         "subtasks": [
           {
             "id": 1,
@@ -6658,14 +6658,14 @@
             "description": "Üç kanalın konsoldan bağlanıp mesaj akıttığı Playwright ile kanıtlanır; ölü CTA kaldırılır.",
             "details": "NE YAPILACAK: (a) `apps/e2e/tests/channels.spec.ts`: Settings → Channels → üç kart bağla → Inbox\nViews grubunda üç görünüm → mock inbound (`POST /channels/{type}/messages` webhook'u — telegram.spec/\ninstagram.spec'in yaptığı gibi) → agent yanıtlar → outbound kaydı (kanıt PNG); (b) `Channels.tsx`:\n`comingSoon()` + `persistNotified` + \"Get notified\" CTA + `coming_soon` durumu (tip birliğinde kalabilir\nama üretici yoksa sil) KALDIRILIR — 08.5.1 KK'sındaki \"Coming soon/Get notified\" durumu için K08.5.1'e\nnot: \"gelmemiş kanal kalmadı; durum boş küme, kod kaldırıldı — yeni bir kanal duyurulacaksa geri\ngelir\"; testleri güncelle; (c) §6A tablosunda kalem ✅.\nDOSYALAR: `apps/e2e/tests/channels.spec.ts` · `kanit/channels-*.png` · `Channels.tsx` (+test) · PLAN.md.\nREFERANS: `apps/e2e/tests/{telegram,instagram}.spec.ts`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-08.5.4 Messenger · 08.5.5 Twilio SMS · 08.5.6 WhatsApp (konsol connect kartları) · 08.5.1 kart gridi**. Gereksinim satırı: `grep -n '| 08\\.5\\.[456]' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K08.5.4' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w test:e2e` exit 0 (channels.spec ≥ 3; tam süit regresyonsuz) · web test · typecheck/lint/build.\n- Ölçülebilir: `grep -c \"coming_soon\\|Get notified\\|persistNotified\" Channels.tsx` = 0.\n- PLAN: K08.5.1 notu; §6A kalemi ✅.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "135.1",
               "135.2",
               "135.3"
             ],
             "parentId": "135",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T01:20:44.603Z"
           }
         ]
       },
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T01:16:32.062Z",
+      "lastModified": "2026-08-22T01:20:44.603Z",
       "taskCount": 144,
       "completedCount": 134,
       "tags": [

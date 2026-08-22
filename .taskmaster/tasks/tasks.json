@@ -6736,10 +6736,10 @@
         "description": "2026-08-17 denetimi: `a11y.spec.ts` sign-in/inbox/customers/reports/team/settings/apps + widget + public KB tarar; ölçülmeyen: /app/home, /app/customers/{real-time,campaigns,goals}, /app/billing, /app/playbook, /app/settings/audit-log, /app/developers, /app/onboarding ve dört public auth sayfası (signup/forgot/reset/join). WCAG AA \"widget + panel\" iddiası panelin yarısı için ölçülmemiş → §7.2 satırı bu turda ◐. Bu görev kalan rotaları ölçer ve ihlalleri kaynağında düzeltir.",
         "details": "BULGU (§D113/K11): KA11Y kendisi \"9 yüzey\" der; ölçülmeyen 13 rota. Üç alt-görev (rota grupları),\nher biri: rotayı a11y.spec'e ekle → koştur → ihlalleri düzelt → yeşil. §7.2 `A11Y1–6` satırı bu turda\n`◐ → KA11Y`; 137.3 bitince `✅`.\nORTAK: `apps/e2e/tests/a11y.spec.ts` + `a11y.ts` (axe-core, wcag2a/2aa/21a/21aa, serious/critical = kapı,\nIKI TEMA, focus/hover kapıları) mevcut desenle rota ekle; bulunan ihlaller (çoğunlukla `color-contrast`\ntoken katmanında — KA11Y'nin ilk ölçümü 7/8 ekranı düşürmüştü) KAYNAĞINDA düzeltilir (token/bileşen),\ntestte muaf tutulmaz; `aria-label`/isim eksikleri bileşende. Kanıt: kanit PNG gerekmez (a11y.spec üretmiyor);\nHANDOFF'a ihlal sayısı önce/sonra.\n\nFAZ-4'ÜN KONUSU KALEM DEĞİL DİKİŞTİR (§D113): Faz 0–3 kalemleri tek tek ✅ ama bütün, bir kullanıcının\ngözünden bir yerde kopuyor. Bu görev o kopukluğu kapatır; kapatırken YENİ bir kalem/özellik AÇMAZ,\nmevcut sözleşme + servis + ekranı birbirine bağlar. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **NFR-A11Y1–6 (WCAG 2.1 AA — panel yarısı ölçülmemiş)**. Gereksinim satırı: `grep -n '| A11Y1–6' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KA11Y' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Üç alt-görev `done`; `pnpm -w test:e2e` (a11y.spec tüm rotalar, iki tema, exit 0) · web unit regresyonsuz · typecheck/lint/build; PLAN §7.2 `A11Y1–6` `✅ → KA11Y`; KA11Y'de üç madde (rota + önce/sonra ihlal sayısı).",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-22T05:28:07.534Z",
+        "updatedAt": "2026-08-22T06:19:59.217Z",
         "subtasks": [
           {
             "id": 1,
@@ -6769,13 +6769,13 @@
             "description": "Kalan dört rota ölçülür; NFR-A11Y satırı kapanır.",
             "details": "NE YAPILACAK: 4 rota (+ SkillEditor açık hâli, DeveloperPortal PAT oluşturma diyaloğu); ihlalleri düzelt;\na11y.spec'in \"tüm uygulama rotaları\" iddiasını bir listeyle pinle (App.tsx rotaları ↔ spec rotaları eşitliği\n— yeni rota eklenince test uyarır); PLAN §7.2 `A11Y1–6` → `✅ → KA11Y`. ORTAK: `apps/e2e/tests/a11y.spec.ts` + `a11y.ts` (axe-core, wcag2a/2aa/21a/21aa, serious/critical = kapı,\nIKI TEMA, focus/hover kapıları) mevcut desenle rota ekle; bulunan ihlaller (çoğunlukla `color-contrast`\ntoken katmanında — KA11Y'nin ilk ölçümü 7/8 ekranı düşürmüştü) KAYNAĞINDA düzeltilir (token/bileşen),\ntestte muaf tutulmaz; `aria-label`/isim eksikleri bileşende. Kanıt: kanit PNG gerekmez (a11y.spec üretmiyor);\nHANDOFF'a ihlal sayısı önce/sonra.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **NFR-A11Y1–6 (WCAG 2.1 AA — panel yarısı ölçülmemiş)**. Gereksinim satırı: `grep -n '| A11Y1–6' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KA11Y' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- e2e a11y exit 0; rota-eşitlik testi; HANDOFF önce/sonra; PLAN §7.2 `A11Y1–6` `✅`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "137.1",
               "137.2"
             ],
             "parentId": "137",
-            "updatedAt": "2026-08-22T05:28:07.534Z"
+            "updatedAt": "2026-08-22T06:19:59.217Z"
           }
         ]
       },
@@ -7044,9 +7044,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T05:28:07.535Z",
+      "lastModified": "2026-08-22T06:19:59.217Z",
       "taskCount": 144,
-      "completedCount": 136,
+      "completedCount": 137,
       "tags": [
         "master"
       ]

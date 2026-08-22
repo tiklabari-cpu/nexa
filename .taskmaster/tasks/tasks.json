@@ -6905,10 +6905,10 @@
         "description": "2026-08-17 denetimi: yalnız dev `docker-compose.yml` (db+redis) var; hiçbir uygulama konteynerize değil, Dockerfile/prod-benzeri compose yok. \"Bir bütün içinde hazır\" ürün, geliştirici makinesi dışında da tek komutla ayağa kalkabilmeli. CLAUDE.md sınırı korunur: production deploy/DNS/TLS/gerçek secret YOK — bu görev yalnız yerelde koşan imajlar + compose + duman testi üretir.",
         "details": "SINIR (CLAUDE.md/MASTER-PROMPT): deploy YOK. Burada üretilen her şey `docker compose -f docker-compose.full.yml up`\nile YEREL makinede koşar; secret'lar dev değerleridir (`.env.example`), TLS/DNS yok. Amaç §F.1/9'un\n\"yalnızca geliştirme makinesinde çalışan sistem çalışmıyor sayılır\" ölçütünü konteynerle karşılamak.\nKIRILIM: 140.1 api+rtm imajları (SONNET) → 140.2 web+widget statik imajları (SONNET) → 140.3 compose +\n`make demo` + duman testi (OPUS-XHIGH). PLAN §7.2 `M-CONTAINER` satırı bu turda `⬜ → KM-CONTAINER`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-CONTAINER (türetilmiş — MASTER-PROMPT \"Teslim Paketi: çalışan monorepo + docker-compose\"; §F.1/9 temiz kurulum provası)**. Gereksinim satırı: `grep -n '| M-CONTAINER' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-CONTAINER' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Üç alt-görev `done`; `make demo` (ya da `docker compose -f docker-compose.full.yml up --build -d`) sonrası duman script'i exit 0 (health 200 × 2, web 200, widget demo 200, seed'li giriş 200); imaj boyutları HANDOFF'a; `pnpm -w format:check`; PLAN §7.2 `M-CONTAINER` `✅`.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-17T16:00:00.000Z",
+        "updatedAt": "2026-08-22T18:48:40.973Z",
         "subtasks": [
           {
             "id": 1,
@@ -6916,10 +6916,10 @@
             "description": "API ve RTM konteyner imajları.",
             "details": "NE YAPILACAK: `apps/api/Dockerfile`, `apps/rtm/Dockerfile` (Node 24 alpine/slim; `corepack` pnpm 11.15.1;\n`pnpm fetch` + `pnpm install --frozen-lockfile --filter @nexa/api...` deploy; build; runtime aşaması yalnız\ndist + prisma engine); api entrypoint: `prisma migrate deploy` (DATABASE_URL owner) → `node dist/index.js`\n(DATABASE_APP_URL runtime — README \"table owner ile bağlanmaz\" kuralı korunur); `HEALTHCHECK` curl health;\nnon-root user; kök `.dockerignore` (node_modules, .data, dist hariç tutma stratejisi). Yerelde\n`docker build` iki imaj başarılı; boyutlar HANDOFF'a.\nDOSYALAR: `apps/api/Dockerfile` · `apps/rtm/Dockerfile` · `.dockerignore`.\nREFERANS: `apps/api/package.json` scripts (build/db:migrate) · `infra/db/init/00-extensions.sql` (DB tarafı zaten\ncompose'da).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-CONTAINER (türetilmiş — MASTER-PROMPT \"Teslim Paketi: çalışan monorepo + docker-compose\"; §F.1/9 temiz kurulum provası)**. Gereksinim satırı: `grep -n '| M-CONTAINER' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-CONTAINER' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `docker build -f apps/api/Dockerfile .` ve rtm exit 0; imajlar `docker run` ile `/health` 200 (compose'daki db/redis'e bağlanarak).\n- PLAN: KM-CONTAINER'a madde.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "140",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T18:48:40.973Z"
           },
           {
             "id": 2,
@@ -7087,7 +7087,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T17:23:51.700Z",
+      "lastModified": "2026-08-22T18:48:40.974Z",
       "taskCount": 147,
       "completedCount": 144,
       "tags": [

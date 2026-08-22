@@ -9,12 +9,18 @@
  * Section layout follows `IpAllowlist.tsx`; the role gate follows
  * `SsoConnection.tsx`, whose two read routes carry the same
  * `minimumRole: 'admin'` `GET /settings/compliance` does.
+ *
+ * HIPAA cover is Enterprise-only (`entitlement: 'hipaa'`, FR-MOD-11.5), so
+ * accepting can 403 with `details.entitlement` on a workspace that has never
+ * upgraded — read here to show the upsell instead of ADR-06's generic
+ * `not_allowed` sentence, the same pattern `Sandbox.tsx`/`SlaPolicy.tsx` use
+ * (tm 133.12's finding, closed here for this screen — tm 144).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
@@ -138,7 +144,10 @@ function ComplianceCard({
                     </button>
                     {accept.isError && (
                       <p role="alert" className="text-2xs text-danger">
-                        {t(errorMessageKey(accept.error))}
+                        {accept.error instanceof ApiClientError &&
+                        accept.error.details?.['entitlement'] === 'hipaa'
+                          ? t('settings.compliance.entitlementError')
+                          : t(errorMessageKey(accept.error))}
                       </p>
                     )}
                   </div>

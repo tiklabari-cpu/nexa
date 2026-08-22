@@ -420,6 +420,8 @@ export const settings: Messages = {
   'settings.sso.verifyHint':
     'Biçimi doğrula, sertifikayı, varlık kimliğini ve URL’yi yalnızca yerel olarak kontrol eder — kimlik sağlayıcıyla asla iletişime geçmez.',
   'settings.sso.verifyOk': 'Doğru biçimlendirilmiş görünüyor.',
+  'settings.sso.entitlementError':
+    'Tek oturum açma bir Enterprise özelliğidir. Bir bağlantı eklemek için planı yükseltin.',
   'settings.sso.empty.title': 'SSO bağlantısı yok',
   'settings.sso.empty.description':
     'Üyelerinin SAML ile oturum açmasına izin vermek için kimlik sağlayıcınızın meta verilerini ekleyin.',
@@ -495,6 +497,8 @@ export const settings: Messages = {
   'settings.compliance.baaRestricted': "BAA'yı yalnızca çalışma alanı sahibi kabul edebilir.",
   'settings.compliance.acceptButton': "BAA'yı kabul et",
   'settings.compliance.accepting': 'Kabul ediliyor…',
+  'settings.compliance.entitlementError':
+    'HIPAA kapsamı bir Enterprise özelliğidir. Sözleşmeyi kabul etmek için planı yükseltin.',
 
   // SIEM dışa aktarımı — SiemExport.tsx
   'settings.siemExport.title': 'SIEM dışa aktarımı',
@@ -508,6 +512,8 @@ export const settings: Messages = {
   'settings.siemExport.enableHint':
     'Açıkken, zamanlanmış bir iş yeni denetim girdilerini aşağıdaki hedefe gönderir.',
   'settings.siemExport.destinationLabel': 'Hedef',
+  'settings.siemExport.entitlementError':
+    'SIEM dışa aktarımı bir Enterprise özelliğidir. Açmak için planı yükseltin.',
   'settings.siemExport.target.file': 'Dosya (.data/siem alıcısı)',
   'settings.siemExport.lastExport': 'Son dışa aktarım',
   'settings.siemExport.lastRun': 'Son çalıştırma',

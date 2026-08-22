@@ -458,6 +458,25 @@ describe('SsoConnection', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('Check the highlighted fields and try again.');
   });
+
+  it('shows the Enterprise upsell message on a 403 naming the sso entitlement', async () => {
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'Single sign-on and directory provisioning is not included in the growth plan.',
+        requestId: '-',
+        details: { entitlement: 'sso', plan: 'growth' },
+      }),
+    );
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await fillValidSsoForm();
+    await userEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Enterprise feature/);
+  });
 });
 
 /** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */

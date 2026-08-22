@@ -132,6 +132,26 @@ describe('Compliance', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('That is not allowed here.');
   });
+
+  it('shows the Enterprise upsell message on a 403 naming the hipaa entitlement', async () => {
+    currentRole = 'owner';
+    api.get.mockResolvedValue(US_UNSIGNED);
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'HIPAA cover is not included in the growth plan.',
+        requestId: '-',
+        details: { entitlement: 'hipaa', plan: 'growth' },
+      }),
+    );
+    renderComponent(<Compliance canEdit />);
+
+    await screen.findByText('United States');
+    await userEvent.click(screen.getByRole('button', { name: 'Accept the BAA' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Enterprise feature/);
+  });
 });
 
 /** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */

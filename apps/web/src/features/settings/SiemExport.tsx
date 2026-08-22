@@ -14,13 +14,19 @@
  * contract: `null` (no chain yet — not answerable) and `false` (checked, clean)
  * both render nothing; only `true` warns. Folding `null` into "no gap" would be
  * exactly the false assurance the flag was built to avoid.
+ *
+ * The write is Enterprise-only (`entitlement: 'siem_export'`, FR-MOD-11.5), so
+ * a PATCH can 403 with `details.entitlement` on a workspace that has never
+ * upgraded — read here to show the upsell instead of ADR-06's generic
+ * `not_allowed` sentence, the same pattern `Sandbox.tsx`/`SlaPolicy.tsx` use
+ * (tm 133.12's finding, closed here for this screen — tm 144).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { Banner } from '../../components/ui/index.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDateTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
@@ -143,7 +149,10 @@ function SiemExportCard({ canEdit }: { canEdit: boolean }): ReactElement {
 
                 {save.isError && (
                   <p role="alert" className="w-full text-2xs text-danger">
-                    {t(errorMessageKey(save.error))}
+                    {save.error instanceof ApiClientError &&
+                    save.error.details?.['entitlement'] === 'siem_export'
+                      ? t('settings.siemExport.entitlementError')
+                      : t(errorMessageKey(save.error))}
                   </p>
                 )}
               </div>

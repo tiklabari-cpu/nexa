@@ -422,6 +422,8 @@ export const settings: Messages = {
   'settings.sso.verifyHint':
     'Verify format checks the certificate, entity id and URL locally — it never contacts the identity provider.',
   'settings.sso.verifyOk': 'Looks well-formed.',
+  'settings.sso.entitlementError':
+    'Single sign-on is an Enterprise feature. Upgrade the plan to add a connection.',
   'settings.sso.empty.title': 'No SSO connections',
   'settings.sso.empty.description':
     "Add your identity provider's metadata to let its members sign in with SAML.",
@@ -497,6 +499,8 @@ export const settings: Messages = {
   'settings.compliance.baaRestricted': 'Only the workspace owner can accept the BAA.',
   'settings.compliance.acceptButton': 'Accept the BAA',
   'settings.compliance.accepting': 'Accepting…',
+  'settings.compliance.entitlementError':
+    'HIPAA cover is an Enterprise feature. Upgrade the plan to accept the agreement.',
 
   // SIEM export — SiemExport.tsx
   'settings.siemExport.title': 'SIEM export',
@@ -510,6 +514,8 @@ export const settings: Messages = {
   'settings.siemExport.enableHint':
     'When on, a scheduled job ships new audit entries to the destination below.',
   'settings.siemExport.destinationLabel': 'Destination',
+  'settings.siemExport.entitlementError':
+    'SIEM export is an Enterprise feature. Upgrade the plan to turn it on.',
   'settings.siemExport.target.file': 'File (.data/siem sink)',
   'settings.siemExport.lastExport': 'Last export',
   'settings.siemExport.lastRun': 'Last run',

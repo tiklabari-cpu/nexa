@@ -483,3 +483,127 @@ test.describe('SLA targets (11.5-d · 11.5-e)', () => {
     }
   });
 });
+
+// ===========================================================================
+// sso — federation is Enterprise, and the refusal says so (tm 144)
+// ===========================================================================
+
+test.describe('single sign-on (FR-MOD-11.5 · S11-g)', () => {
+  test('adding a connection is refused with the upsell sentence on the tier that does not include it', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    try {
+      await setPlan(request, token, 'growth');
+
+      await agentPage.goto('/app/settings');
+      const section = agentPage.getByRole('region', { name: 'Single sign-on' });
+      await expect(section).toBeVisible();
+
+      // Non-empty is all the client-side validator asks of these — the
+      // entitlement gate is a `preHandler` hook and answers before the route
+      // handler ever parses the body, so the certificate never has to be real
+      // for this refusal to be the one that fires.
+      // Exact: plain "Name" is a substring of "Name attribute (optional)" too.
+      await section.getByLabel('Name', { exact: true }).fill(`Okta ${stamp()}`);
+      await section.getByLabel('IdP entity id').fill('http://www.okta.com/exk1a2b3c4');
+      await section.getByLabel('Sign-on URL').fill('https://corp.okta.com/app/exk1/sso/saml');
+      await section
+        .getByLabel('IdP signing certificate (PEM)')
+        .fill(
+          '-----BEGIN CERTIFICATE-----\nZTJlLWVudGl0bGVtZW50LWZpeHR1cmU=\n-----END CERTIFICATE-----',
+        );
+      await section.getByRole('button', { name: 'Add connection' }).click();
+
+      // The console's own sentence, not the server's — ADR-06 keeps the API's
+      // English prose off the screen. Between I18N-j and tm 144 this fell
+      // through to "That is not allowed here." instead, and no e2e drove this
+      // screen to see it (tm 133.12's finding).
+      await expect(section.getByRole('alert')).toContainText(/Enterprise feature/i);
+    } finally {
+      await setPlan(request, token, 'enterprise');
+    }
+  });
+});
+
+// ===========================================================================
+// siem_export — shipping the audit trail out is Enterprise, and says so
+// ===========================================================================
+
+test.describe('SIEM export (NFR-C6 · C6-f)', () => {
+  test('turning the export on is refused with the upsell sentence on the tier that does not include it', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    try {
+      await setPlan(request, token, 'growth');
+
+      await agentPage.goto('/app/settings');
+      const section = agentPage.getByRole('region', { name: 'SIEM export' });
+      await expect(section).toBeVisible();
+
+      // Whatever `siem.spec.ts` left the switch at (that file enables export
+      // and never turns it back off) — the point here is that the click does
+      // not move it, not which way it starts.
+      const enable = section.getByRole('checkbox', { name: /Enable export/ });
+      const before = await enable.isChecked();
+      await enable.click();
+
+      // Same ADR-06 substitution as the SSO and SLA screens: the console
+      // recognises `details.entitlement` and answers in its own catalogue
+      // sentence rather than repeating the server's English prose or falling
+      // through to the generic refusal.
+      await expect(section.getByRole('alert')).toContainText(/Enterprise feature/i);
+      // Nothing was half-applied: the write never took, and the screen has no
+      // optimistic state to roll back, so the switch reads exactly as it did.
+      expect(await enable.isChecked()).toBe(before);
+    } finally {
+      await setPlan(request, token, 'enterprise');
+    }
+  });
+});
+
+// ===========================================================================
+// hipaa — the BAA accept, at the contract the console reads
+// ===========================================================================
+
+test.describe('HIPAA cover (NFR-C4 · C4-d · C4-f)', () => {
+  test('accepting the BAA is refused with the entitlement the console’s upsell keys on', async ({
+    request,
+  }) => {
+    // Deliberately request-level, not a click through `Compliance.tsx` — and
+    // that gap is the environment's, not this proof's. The Accept button only
+    // renders when `baa_available` (region === 'us'); the seeded Acme tenant is
+    // `eu`, and the deployment's one `us` workspace (`STATESIDE_OWNER`) is
+    // refused at the region gate for every authenticated call, including this
+    // one (`compliance.spec.ts`'s "refused at every door") — there is no
+    // workspace on this single-region deployment that can both reach the
+    // button and lack the entitlement. What is provable here, and what the
+    // console's upsell actually depends on, is the contract: the entitlement
+    // gate is a route-level `preHandler` and answers before the handler's own
+    // region check, so a downgraded workspace 403s on the capability rather
+    // than on residency, with the same `details.entitlement` shape the other
+    // two screens key their upsell on. `Compliance.test.tsx` proves the
+    // rendering side against that shape in a `us`-shaped fixture jsdom can
+    // mint but this deployment cannot.
+    const token = await ownerAccessTokenFor(request, ACME_OWNER);
+    try {
+      await setPlan(request, token, 'growth');
+
+      const refused = await request.post(`${API_BASE}/settings/compliance/baa`, {
+        headers: auth(token),
+        data: { accepted: true },
+      });
+      expect(refused.status()).toBe(403);
+      const body = (await refused.json()) as {
+        error: { type: string; details?: { entitlement?: string; plan?: string } };
+      };
+      expect(body.error.type).toBe('not_allowed');
+      expect(body.error.details).toMatchObject({ entitlement: 'hipaa', plan: 'growth' });
+    } finally {
+      await setPlan(request, token, 'enterprise');
+    }
+  });
+});

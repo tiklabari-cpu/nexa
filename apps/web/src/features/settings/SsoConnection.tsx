@@ -26,6 +26,14 @@
  * `problems` verbatim) — kept untranslated on purpose, the same "kapsam dışı"
  * precedent `ticket-priority.ts` (I18N-c) and `kbSlugError` (I18N-h) set for a
  * pure logic module whose own tests pin exact English output.
+ *
+ * Federation is Enterprise-only (`entitlement: 'sso'`, FR-MOD-11.5), so adding
+ * a connection can 403 with `details.entitlement` on a workspace that has
+ * never upgraded. Read here to show the upsell, named the way `Sandbox.tsx`
+ * and `SlaPolicy.tsx` already name theirs, rather than ADR-06's generic
+ * `not_allowed` sentence (tm 133.12's finding — I18N-l's e2e run caught the
+ * regression in `WidgetCustomization.tsx`; this screen had the same gap and
+ * no e2e drove it, tm 144).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -302,7 +310,11 @@ function SsoConnections({
         setEnabledOnCreate(false);
         setVerifyResult(null);
       } catch (error) {
-        setSubmitError(t(errorMessageKey(error)));
+        setSubmitError(
+          error instanceof ApiClientError && error.details?.['entitlement'] === 'sso'
+            ? t('settings.sso.entitlementError')
+            : t(errorMessageKey(error)),
+        );
       }
     },
   });

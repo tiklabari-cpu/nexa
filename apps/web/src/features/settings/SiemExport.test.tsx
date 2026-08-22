@@ -171,6 +171,24 @@ describe('SiemExport', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('That is not allowed here.');
   });
+
+  it('shows the Enterprise upsell message on a 403 naming the siem_export entitlement', async () => {
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'SIEM export is not included in the growth plan.',
+        requestId: '-',
+        details: { entitlement: 'siem_export', plan: 'growth' },
+      }),
+    );
+    renderComponent(<SiemExport canEdit />);
+    const checkbox = await screen.findByRole('checkbox', { name: /Enable export/ });
+
+    await userEvent.click(checkbox);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Enterprise feature/);
+  });
 });
 
 /** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */

@@ -6957,7 +6957,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-22T20:25:44.600Z",
+        "updatedAt": "2026-08-22T21:07:11.046Z",
         "subtasks": [
           {
             "id": 1,
@@ -6965,10 +6965,10 @@
             "description": "Campaigns/Tickets/Reviews demo’da dolu açılır.",
             "details": "NE YAPILACAK: `seed.ts`'e (acme, richDemo bloğu) 2 kampanya (biri aktif greeting, biri taslak — `CampaignService`\nşekli), 5 ticket (open/pending/solved, öncelikler, biri mevcut sohbetten `merge`/köprü ile — 13.6 servisiyle),\nmüşterilere custom field değerleri (08.7.6 tanımları varsa), 3 rating (07.8: good/good/bad, farklı günler).\nServis fonksiyonlarını KULLAN (ham insert değil) ki invariant'lar korunsun; idempotent (var mı kontrolü).\nDOSYALAR: `apps/api/prisma/seed.ts` (+ varsa `seed.test.ts`).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SEED (türetilmiş — MASTER-PROMPT \"Seed veriyle demo akışı\"; PRD §11.2 Q12 onboarding tohum verisi)**. Gereksinim satırı: `grep -n '| M-SEED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SEED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w db:seed` iki kez exit 0 · e2e regresyonsuz · Campaigns/Tickets/Reviews ekranları demo'da dolu (HANDOFF'a ekran notu).\n- PLAN: KM-SEED'e madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "141",
-            "updatedAt": "2026-08-22T20:25:44.600Z"
+            "updatedAt": "2026-08-22T21:07:11.046Z"
           },
           {
             "id": 2,
@@ -7087,7 +7087,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T20:25:44.601Z",
+      "lastModified": "2026-08-22T21:07:11.046Z",
       "taskCount": 147,
       "completedCount": 145,
       "tags": [

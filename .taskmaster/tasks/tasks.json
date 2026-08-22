@@ -6820,10 +6820,10 @@
         "description": "§F.2 final raporunun \"bilinçli yapılmayanlar\" listesinde sekiz FR-MOD satırı 🔒 (Should/Could) kaldı: 01.1.1/.4/.5, 01.4, 01.5, 01.1.2, 02.2.3, 07.2. Kod tarandı (2026-08-17): AppShell’de nav daraltma/unpin, presence avatarları, Invite düğmesi, Take tour/promosyon banner’ı, onboarding survey — hiçbiri yok. Hepsi küçük kabuk işleri; Faz-4 hepsini alır ki PRD süpürmesi Should/Could’da da 0 🔒 ile bitsin (yalnız ⛔ kalır).",
         "details": "BULGU: `grep -rn -i \"collapse\\|unpin\\|pinned\\|invite\" apps/web/src/components/AppShell.tsx` → 0;\n`grep -rln -i \"presence\" apps/web/src/components` → yalnız CommandPalette; \"take tour\"/\"what are you\ntracking\" → 0. PRD KK'ları (urun-gereksinim-dokumani-PRD.md:483-491, 506, 584) alt-görevlerde birebir.\nAltı SONNET/OPUS nanotask; birbirinden bağımsız (01.4 banner'ı 02.2.3 \"Take tour\"u da kapsar).\nNOT (damga): bu satırlar Faz 0–3 boyunca `🔒` idi (Should/Could, hiçbir fazın sayacına girmedi — §F.2/3).\nFaz-4 onları alır: kapanışta ilgili PLAN §3 satırının hücresi `🔒` → `✅ → K<kod>` (K bloğu yoksa aç); §6A\ntablosundaki \"PRD 🔒 kalanları\" kalemi altı alt-görevin altısı bitince ✅ (139.6 yapar).\n\nFAZ-4'ÜN KONUSU KALEM DEĞİL DİKİŞTİR (§D113): Faz 0–3 kalemleri tek tek ✅ ama bütün, bir kullanıcının\ngözünden bir yerde kopuyor. Bu görev o kopukluğu kapatır; kapatırken YENİ bir kalem/özellik AÇMAZ,\nmevcut sözleşme + servis + ekranı birbirine bağlar. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-01.1.1 · 01.1.2 · 01.1.4 · 01.1.5 · 01.4 · 01.5 · 02.2.3 · 07.2 (🔒 kalanları)**. Gereksinim satırı: `grep -n '🔒' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K01.1' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\nÜst görev alt-görevlerin toplamıdır; her alt-görev kendi satır/K bloğu bilgisini taşır (details içinde).\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Altı alt-görev `done`; web unit (+≥18) · e2e `shell.spec.ts` (yeni: unpin/pin · presence · invite · leads pill · banner dismiss kalıcı · survey tek sefer) · a11y.spec kabuk değişikliğiyle yeşil · typecheck/lint/build; PLAN §3 satırları `🔒` → `✅`; §6A kalemi ✅.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-22T16:24:37.727Z",
+        "updatedAt": "2026-08-22T17:23:51.695Z",
         "subtasks": [
           {
             "id": 1,
@@ -6890,12 +6890,12 @@
             "description": "İlk girişte tek seferlik anket; cevap onboarding durumuna yazılır.",
             "details": "NE YAPILACAK: Reports (07.2 PRD \"Onboarding survey popover\") ilk açılışta popover: \"What are you tracking?\"\n5 seçenek (PRD kaynak: sales/leads/support/… — PRD:584 \"5 seçenek\"; metinleri ürün diline uygun seç, K'ye yaz)\n+ Skip; cevap `POST /onboarding/complete` gövdesinde `survey`? — sözleşmede alan yoksa KATKISAL alan ekle\n(`onboarding.yaml` complete body + `onboarding_state` sütunu? önce `OnboardingState` şemasına bak; sütun\ngerekiyorsa küçük migration, drift temiz) — kişiselleştirme sinyali = Home checklist sırası (13.1) onu okur\n(basit: seçilen alanı öne al). Tek sefer: state'te `survey_answered_at`. Testler: göster · skip · cevap →\nistek · ikinci açılışta yok. Sonra satır 235 (`07.2`) `🔒` → `✅ → K07.2`; §6A \"PRD 🔒 kalanları\" kalemi ✅.\nKK (PRD 07.2): \"Tek sefer, atlanabilir; kişiselleştirme sinyali\".\nDOSYALAR: `features/reports/SurveyPopover.tsx` (+test) · `features/onboarding/*` · sözleşme/migration\ngerekirse · PLAN.md.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-07.2**. Gereksinim satırı: `grep -n '| 07\\.2 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K07.2' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test exit 0 (+4) · sözleşme değiştiyse `contract:generate` diff temiz + api integration (+2) · migration varsa drift temiz · typecheck/lint/build.\n- PLAN: satır 235 → `✅ → K07.2`; §6A kalemi ✅.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "139.5"
             ],
             "parentId": "139",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T17:23:51.695Z"
           }
         ]
       },
@@ -7087,9 +7087,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T16:24:37.728Z",
+      "lastModified": "2026-08-22T17:23:51.700Z",
       "taskCount": 147,
-      "completedCount": 143,
+      "completedCount": 144,
       "tags": [
         "master"
       ]

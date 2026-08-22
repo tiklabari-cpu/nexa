@@ -25,6 +25,15 @@ export const shell: Messages = {
   'shell.nav.expand': 'Gezinmeyi genişlet',
   'shell.nav.collapse': 'Gezinmeyi daralt',
 
+  // Presence (FR-MOD-01.1.4). Both plural categories are written out for the
+  // reason the trial countdown above states.
+  'shell.presence.label': 'Çevrimiçi ekip arkadaşları',
+  'shell.presence.accepting': 'sohbet kabul ediyor',
+  'shell.presence.away': 'çevrimiçi, sohbet kabul etmiyor',
+  'shell.presence.member': '{name} — {status}',
+  'shell.presence.more.one': '{count} kişi daha çevrimiçi: {names}',
+  'shell.presence.more.other': '{count} kişi daha çevrimiçi: {names}',
+
   // Navigation
   'nav.home': 'Ana Sayfa',
   'nav.inbox': 'Gelen Kutusu',

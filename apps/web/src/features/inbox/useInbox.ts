@@ -9,6 +9,7 @@
  */
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { ROUTING_STATUSES } from '@nexa/types';
 import { RtmClient, type PushHandler, type RtmStatus } from '../../lib/realtime.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
@@ -347,6 +348,34 @@ export function applyPush(
         agents.push({ agentId, since });
       }
       useConflictStore.getState().note(chatId, agents, detectedAt);
+      return;
+    }
+
+    case 'routing_status_set': {
+      // Presence (FR-MOD-01.1.4). This action has been subscribed to since the
+      // socket existed and until now landed in `default:` — nothing consumed
+      // it. The shell's avatar group reads the licence roster from the shared
+      // `['agents']` key, so folding the push into that cache is the whole of
+      // what makes presence live; no new RTM action was opened for it.
+      //
+      // Written in place rather than invalidated: the push already carries the
+      // new value, and a refetch would spend a request to learn what it just
+      // said — on every teammate's screen, every time anyone flips their
+      // availability.
+      const agentId = payload['agent_id'];
+      const status = payload['status'];
+      if (typeof agentId !== 'string' || typeof status !== 'string') return;
+      if (!(ROUTING_STATUSES as readonly string[]).includes(status)) return;
+
+      queryClient.setQueryData<{ items: Array<{ id: string; routing_status: string }> }>(
+        ['agents'],
+        (current) =>
+          current && {
+            items: current.items.map((agent) =>
+              agent.id === agentId ? { ...agent, routing_status: status } : agent,
+            ),
+          },
+      );
       return;
     }
 

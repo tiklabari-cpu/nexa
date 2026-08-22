@@ -294,6 +294,68 @@ describe('sandbox badge', () => {
   });
 });
 
+describe('presence group (FR-MOD-01.1.4)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Placement, not behaviour — `PresenceAvatars.test.tsx` owns what the group
+   * shows. What only the shell can prove is that the group is mounted inside
+   * the labelled rail and sits above the account trigger, which is the whole of
+   * the wiring this file adds.
+   */
+  it('mounts the online teammates inside the rail, above the account avatar', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input).includes('/agents')) {
+          return jsonResponse({
+            items: [
+              {
+                id: 'a-2',
+                name: 'Sam Rivera',
+                email: 'sam@acme.localhost',
+                avatar_url: null,
+                role: 'admin',
+                routing_status: 'accepting_chats',
+                concurrent_chats_limit: 6,
+              },
+            ],
+          });
+        }
+        return {
+          ok: false,
+          status: 404,
+          headers: { get: () => null },
+          json: async () => ({
+            error: { type: 'not_found', message: 'Not found.', request_id: '-' },
+          }),
+        } as unknown as Response;
+      }),
+    );
+
+    renderShell();
+
+    const rail = screen.getByRole('navigation', { name: 'Modules' });
+    const group = await within(rail).findByRole('list', { name: 'Teammates online' });
+    expect(within(group).getByRole('img', { name: 'Sam Rivera — accepting chats' })).toBeVisible();
+
+    const account = within(rail).getByRole('button', { name: 'Account' });
+    // DOCUMENT_POSITION_FOLLOWING: the account trigger comes after the group.
+    expect(group.compareDocumentPosition(account) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('leaves the rail unchanged when nobody else is online', async () => {
+    // The unstubbed 404 above stands in for both "no roster" and "refused
+    // roster": either way the rail is one group shorter, never broken.
+    renderShell();
+
+    await screen.findByText('Inbox module');
+    expect(screen.queryByRole('list', { name: 'Teammates online' })).toBeNull();
+  });
+});
+
 describe('brand switcher', () => {
   beforeEach(() => {
     localStorage.removeItem(BRAND_KEY);

@@ -48,6 +48,7 @@ const SCREEN_ROOTS = ['src/features', 'src/components'];
 const TRANSLATED_FILES: readonly string[] = [
   'src/components/AppShell.tsx',
   'src/components/CommandPalette.tsx',
+  'src/components/PresenceAvatars.tsx',
   'src/features/auth/AuthCallbackPage.tsx',
   'src/features/auth/PublicPages.tsx',
   'src/features/auth/SignInPage.tsx',

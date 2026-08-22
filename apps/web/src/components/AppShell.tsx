@@ -18,6 +18,7 @@ import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
 import { CommandPalette } from './CommandPalette.js';
+import { PresenceAvatars } from './PresenceAvatars.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
 import { Dropdown } from './ui/index.js';
 
@@ -155,6 +156,9 @@ function IconRail(): ReactElement {
       ))}
 
       <div className={`mt-auto flex flex-col gap-1 ${pinned ? 'items-stretch' : 'items-center'}`}>
+        {/* Online teammates (FR-MOD-01.1.4) — above the account avatar, so the
+            rail ends with "who else is here" and then "who I am". */}
+        <PresenceAvatars pinned={pinned} />
         {FOOTER.filter((item) => isNavVisible(item, scopes)).map((item) => (
           <RailButton key={item.to} item={item} pinned={pinned} />
         ))}

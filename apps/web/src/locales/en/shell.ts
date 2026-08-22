@@ -23,6 +23,15 @@ export const shell: Messages = {
   'shell.nav.expand': 'Expand navigation',
   'shell.nav.collapse': 'Collapse navigation',
 
+  // Presence (FR-MOD-01.1.4). The status word is part of each avatar's
+  // accessible name because the ring colour alone would not carry it (A11Y2).
+  'shell.presence.label': 'Teammates online',
+  'shell.presence.accepting': 'accepting chats',
+  'shell.presence.away': 'online, not accepting chats',
+  'shell.presence.member': '{name} — {status}',
+  'shell.presence.more.one': '{count} more online: {names}',
+  'shell.presence.more.other': '{count} more online: {names}',
+
   // Navigation (rail + command palette)
   'nav.home': 'Home',
   'nav.inbox': 'Inbox',

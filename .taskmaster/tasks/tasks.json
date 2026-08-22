@@ -6823,7 +6823,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-22T14:45:02.805Z",
+        "updatedAt": "2026-08-22T15:22:20.842Z",
         "subtasks": [
           {
             "id": 1,
@@ -6864,10 +6864,10 @@
             "description": "Topbar’da nitelikli lead sayacı.",
             "details": "NE YAPILACAK: `AppShell.tsx` topbar'a pill: kaynak `/customers?segment=leads` toplamı (mevcut uç; sayfalama\n`total` alanı yoksa `/reports/overview`'daki lead sayısı — hangisi PRD \"nitelikli lead\" tanımına uyuyorsa;\nkararı K'ye yaz; YENİ uç AÇMA), 60 s'de bir yenile ya da RTM olayıyla; 0 iken gizli; tıklama →\n`/app/customers?segment=leads`. Testler: 0 gizli · N görünür · tıklama rota.\nKK (PRD 01.1.2): \"Sayı>0 iken görünür; tıklama lead görünümü/rapora götürür\". §D107: bu kod PLAN'a hiç\naktarılmamıştı, tm 126'da 🔒 olarak eklendi (satır 180) — kapanışta `🔒` → `✅ → K01.1.2`.\nDOSYALAR: `components/AppShell.tsx` (+test) · `features/customers` segment link'i.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-01.1.2**. Gereksinim satırı: `grep -n '| 01\\.1\\.2 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K01.1.2' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test exit 0 (+3) · typecheck/lint/build.\n- PLAN: satır 180 `🔒` → `✅ → K01.1.2` + K bloğu.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "139",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T15:22:20.842Z"
           },
           {
             "id": 5,
@@ -7087,7 +7087,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T14:45:02.806Z",
+      "lastModified": "2026-08-22T15:22:20.844Z",
       "taskCount": 147,
       "completedCount": 143,
       "tags": [

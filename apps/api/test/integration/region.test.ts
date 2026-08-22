@@ -596,6 +596,103 @@ describe('region (C4-a)', () => {
       expect(response.statusCode).toBe(200);
     });
 
+    it('refuses a caller who names the workspace region at a deployment that does not hold it', async () => {
+      // The scenario the gate exists for, and the one nothing measured until
+      // now: the two tests above both run where the workspace already lives, so
+      // "the header agrees with the workspace" and "the header agrees with this
+      // deployment" are the same sentence there and the difference between them
+      // is invisible. Here they come apart. The header can only *narrow* —
+      // naming the workspace's own home does not make this process that home.
+      //
+      // Before tm 145 the header was the left-hand side of the comparison, so
+      // this exact request answered 200: the caller supplied one half of a
+      // residency check and satisfied it with the other half, which the
+      // credential hands them.
+      const token = await tokenForA();
+
+      const response = await usServer.get('/auth/me', {
+        authorization: `Bearer ${token}`,
+        'x-region': 'eu',
+      });
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.type).toBe('misdirected_request');
+      expect(response.json().error.details.region).toBe('eu');
+    });
+
+    it('records that refusal too, naming the region the header asked for', async () => {
+      // The bypass was silent as well as permissive. A request that walked
+      // through wrote no `security.region_rejected`, so the one trail that would
+      // have shown a European workspace being served from America did not exist.
+      const token = await tokenForA();
+
+      await usServer.get('/auth/me', {
+        authorization: `Bearer ${token}`,
+        'x-region': 'eu',
+      });
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'security.region_rejected' },
+      });
+      expect(entries).toHaveLength(1);
+      // What the caller asked for, which is the fact worth keeping: an `eu`
+      // request arrived at the `us` door.
+      expect(entries[0]!.metadata).toMatchObject({ requested_region: 'eu' });
+    });
+
+    it('refuses a header that disagrees with this deployment even when the workspace lives here', async () => {
+      // The other direction, and the reason the header is read at all: the
+      // workspace is genuinely served by this process, so only the header is
+      // wrong. Deleting the header check would make this a 200 and quietly
+      // retire the correction a client with a stale address depends on.
+      const us = await seedUsTenant();
+
+      const response = await usServer.get('/auth/me', {
+        authorization: `Bearer ${us.token}`,
+        'x-region': 'eu',
+      });
+
+      expect(response.statusCode).toBe(421);
+      expect(response.json().error.details.region).toBe('us');
+    });
+
+    it('cannot be widened by a header at any door this process holds', async () => {
+      // C4-b is one rule (`servesRegion`) spelled at four doors, and the claim
+      // in its doc-comment — that four spellings eventually disagree — is
+      // carried by this test rather than by good intentions. Three of the doors
+      // run in this process; the fourth is the RTM `login`, a separate process
+      // with its own suite (`apps/rtm/test/integration/region.test.ts`), which
+      // reads no header at all. The same widening attempt is made at each one:
+      // "I am the region that holds this workspace."
+      const before = await owner.customer.count();
+
+      const rest = await usServer.get('/auth/me', {
+        authorization: `Bearer ${await tokenForA()}`,
+        'x-region': 'eu',
+      });
+      const mint = await usServer.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        { origin: `https://${fx.a.trustedDomain}`, 'x-region': 'eu' },
+      );
+      const signup = await usServer.post(
+        '/auth/signup',
+        {
+          email: 'founder@widen.test',
+          password: STRONG_PASSWORD,
+          name: 'Founder',
+          organization_name: 'Widen NewCo',
+          region: 'eu',
+        },
+        { 'x-region': 'eu' },
+      );
+
+      expect([rest.statusCode, mint.statusCode, signup.statusCode]).toEqual([421, 421, 421]);
+      // And none of them wrote on the way to saying no.
+      expect(await owner.customer.count()).toBe(before);
+      expect(await regionOf('Widen NewCo')).toBeUndefined();
+    });
+
     // --- The widget token mint ----------------------------------------------
 
     it('refuses to mint a widget token for a workspace kept in another region', async () => {

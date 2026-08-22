@@ -171,11 +171,20 @@ export const DEFAULT_REGION: Region = 'eu';
  * are at the wrong address, and the answer tells them which one is theirs.
  *
  * One comparison, deliberately in the shared package, because the same answer
- * has to come out of three separate doors — the REST edge, the RTM `login` and
- * the widget token mint — and one of those runs in a *different process*. A
- * rule spelled out three times is a rule that eventually disagrees with itself,
- * and the shape of that disagreement ("REST refuses but the socket accepts") is
- * exactly what a data-residency guarantee is sold to prevent.
+ * has to come out of four separate doors — the REST edge, the RTM `login`, the
+ * widget token mint and signup — and one of those runs in a *different
+ * process*. A rule spelled out four times is a rule that eventually disagrees
+ * with itself, and the shape of that disagreement ("REST refuses but the socket
+ * accepts") is exactly what a data-residency guarantee is sold to prevent.
+ *
+ * Sharing the function was not enough on its own, so the invariant is written
+ * here as well: **`serving` is always the calling process's own configuration**,
+ * never a value the caller supplied. The REST edge once passed `X-Region`
+ * instead, which let a caller who named the workspace's own home region compare
+ * that region against itself and walk through (tm 145). A header may narrow the
+ * answer — that is a separate refusal — but it is never one side of this
+ * comparison. `apps/api/test/integration/region.test.ts` ("cannot be widened by
+ * a header at any door this process holds") is what keeps the four in step now.
  */
 export function servesRegion(serving: string, home: string): boolean {
   return serving === home;

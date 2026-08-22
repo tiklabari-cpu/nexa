@@ -222,21 +222,36 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     // behalf — including the brand lookup immediately below, which is already
     // that workspace's data.
     //
-    // The right-hand side is the *workspace's* region, carried by the
-    // credential. It used to be this process's own configuration, which made
-    // the check a tautology: `X-Region` was compared against the only value
-    // the process could ever hold, so it could correct a confused client and
-    // nothing more. The left-hand side is where the caller believes they are —
-    // `X-Region` when they say so, otherwise the region this process serves.
+    // Both halves of the comparison are out of the caller's reach: the left is
+    // this deployment's own configuration, the right is `organizations.region`
+    // carried by the credential. That is the order the other three doors use —
+    // the widget token mint (`routes/auth.ts`), signup
+    // (`routes/account-lifecycle.ts`) and the RTM `login` (`apps/rtm/src/auth.ts`,
+    // a separate process) — and writing it any other way here is what
+    // `servesRegion`'s doc-comment warns about: a rule spelled four times is a
+    // rule that eventually disagrees with itself. It did. The left-hand side
+    // used to be `X-Region` whenever the caller sent it, so a caller who named
+    // the workspace's own home region compared that region against itself and
+    // turned the 421 below into a 200 — while writing no audit entry on the way
+    // past (tm 145).
+    //
+    // `X-Region` is still read, and can still only *narrow*. It says where the
+    // caller believes they are; believing wrongly is its own misdirection, and
+    // a client that followed a stale address is corrected rather than served.
+    // What it can never do is make this deployment a region it is not.
     //
     // After the principal-kind gate on purpose. A customer token that reached
     // an agent route has already been answered 404 above and must stay 404:
     // 421 would confirm the credential is real and merely at the wrong
     // address, which is exactly what that 404 declines to say.
     const requestedRegion = request.headers['x-region'];
-    const targetRegion = typeof requestedRegion === 'string' ? requestedRegion : env.NEXA_REGION;
+    const claimedRegion = typeof requestedRegion === 'string' ? requestedRegion : env.NEXA_REGION;
 
-    if (!servesRegion(targetRegion, resolved.region)) {
+    // Two ways to be at the wrong door, one refusal and one trail, so neither
+    // branch can be the one somebody forgets to record:
+    //   - the workspace does not live here — the rule itself;
+    //   - the caller named a region this deployment is not — the narrowing.
+    if (!servesRegion(env.NEXA_REGION, resolved.region) || claimedRegion !== env.NEXA_REGION) {
       // Record that a request for this workspace arrived at the wrong door
       // (K5-4). Deliberately thin — the licence and the region that was asked
       // for, nothing else. Not the address, not the token, not who held it:
@@ -251,7 +266,7 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
           {
             action: 'security.region_rejected',
             target: `license:${principal.licenseId}`,
-            metadata: { requested_region: targetRegion },
+            metadata: { requested_region: claimedRegion },
           },
         ),
       );

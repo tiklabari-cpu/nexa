@@ -100,10 +100,14 @@ export default async function accountLifecycleRoutes(
     // is not reporting it.
     //
     // `X-Region` is deliberately NOT honoured here, unlike the authenticated
-    // gate. There the header can only narrow — the right-hand side is read from
-    // the database and no header can move it. Here no row exists yet, so a
-    // header would *become* the right-hand side and any caller could reinstate
-    // this exact bug by asserting the region it wanted.
+    // gate. There the header can only narrow, and the reason is that *neither*
+    // side of the comparison is anything the caller wrote: the left is the
+    // process's own configuration, the right is read from the database. It was
+    // not always so — the header used to be the left-hand side, which made
+    // naming the workspace's own region a way straight through, and the
+    // right-hand side being safe was no help at all (tm 145). Here no row exists
+    // yet, so a header would become the right-hand side and any caller could
+    // reinstate this exact bug by asserting the region it wanted.
     const region = body.region ?? env.NEXA_REGION;
     if (!servesRegion(env.NEXA_REGION, region)) {
       // Regions only. Not the address, not the email, not the workspace name:

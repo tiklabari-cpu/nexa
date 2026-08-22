@@ -13,6 +13,56 @@
 
 ## Task log (newest-first)
 
+## 148 — FIX-PLAN-F0-SAYAC · Faz-0 özet satırındaki bayat `✅` sayacı (54 → 58) — done — 2026-08-23 UTC
+
+- **Yapıldı:** Panelin sağlık taraması `PLAN.md:20`'nin `54 ✅` rakamını §3'ün gerçek damga sayımıyla
+  çelişkili buldu. §3.0–§3.10'un **61 damgalı satırı tek tek sayıldı** → **`58 ✅ · 3 🔒 · 0 ◐ · 0 ⬜`**;
+  panel haklıydı. **SEBEP git ile kanıtlandı (tahmin değil): satır EKLENMEDİ, damga GERİLEMEDİ** —
+  Faz-4'ün `tm 139.1–139.6` turları **dört gruplu `Should`/`Could` satırını `🔒` → `✅` çevirdi**.
+  Ölçüm: `ada46de^` (tm 139.1 öncesi) §3 = **54 ✅ + 7 🔒**, `dda5b1d` (GL-10 sonrası) §3 = **58 ✅ + 3 🔒**,
+  satır sayısı iki uçta da **61** (54+7 = 58+3). Çevrilen satırlar: **180** `01.1.1/.4/.5, 01.4, 01.5`
+  → `✅ → K01.1` (tm 139.1–.3, .5) · **181** `01.1.2` → `✅ → K01.1.2` (tm 139.4) · **199** `02.2.3`
+  → `✅ → K02.2.3` (tm 139.5) · **236** `07.2` → `✅ → K07.2` (tm 139.6). Üçünün kanıt bloğu çevirmeyi
+  zaten yazmıştı (_"Satır 180 artık `🔒` değil"_ · _"Satır 199 artık `🔒` değil"_ · _"Satır 236 `🔒` → `✅`"_)
+  — **damga tarafı doğruydu, yalnız özet bayat kaldı**: satır 20'ye en son `1f50ce56` (GL-3, 2026-07-31)
+  dokunulmuştu, 23 gün. tm 139.x aynı commit'lerde §2 matrisini ve §6A satır 12'yi güncelledi, **§1'i atladı**.
+  **Düzeltme yalnız özet hücresinde:** `54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e` →
+  `58 ✅ · 0 ◐ · 3 gruplu-🔒 (§3, **sayılarak** 2026-08-23 — §D123)`. Aynı hücredeki _"gruplu-🔒 **v1'e**"_
+  ifadesi de bayattı (§D121: v1 2026-07-31'de kapandı, o dört PRD kodu hiçbir v1 satırına taşınmadı) —
+  hücre artık faz iddiası taşımıyor, yalnız **sayı** veriyor. Sebep + ölçüm komutu + kalıcı kural **§D123**'e yazıldı.
+- **KAPANIŞ KARARI DEĞİŞMEDİ (önemli):** çevrilen dört satırın dördü de `Should`/`Could`, **`Must` sayacına
+  girmez**. §3'ün `Must` satırları bu turda da **sayılarak** `48 ✅ · 0 ◐ · 0 ⬜` (+ §7.1'de 3 EK = **51 ✅**)
+  → `**51 ✅ · 0 ◐ · 0 ⬜**` kapı hücresi **doğruydu ve DEĞİŞTİRİLMEDİ**. Faz-0 `✅ KAPALI` kalıyor.
+  **GEREKSİNİM SATIRLARINA DOKUNULMADI** — damgalar `## K.` kanıt bloklarına dayalı; bu tur onları
+  yeniden ölçmedi, yalnız **saydı**.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` **12/12** · `pnpm -w lint` **9/9** ·
+  `pnpm -w format:check` temiz (PLAN/HANDOFF düzenlemelerinden sonra — prettier `**/*.md`'yi de kapsıyor) ·
+  `npx turbo run test --filter=!@nexa/e2e --filter=!@nexa/api` **9/9** (web **1392**/125 · mobil **506** ·
+  rtm **106** · ai-mock **136** · types **131** · widget **115**) · api `test:unit` **995**/64 ·
+  `npx turbo run test:integration --concurrency=1` → api **2477**/97 dosya + rtm **64**/3 ·
+  `pnpm -w build` **8/8** · `pnpm -w test:e2e` TAM süit ****205 passed / 0 failed (12,0 dk)** — taban 205 ile birebir**. Her sayı tm 143 tabanıyla **birebir**
+  — ürün kodu değişmediği için beklenen sonuç budur ve ölçüldü. Kontrat/migration dokunulmadı →
+  `contract:generate` / `db:check-drift` gereksiz (CONVENTIONS §1'in koşullu maddeleri).
+- **Varsayımlar:** (1) **Sayım tanımı:** "damga taşıyan satır" = §3.0–§3.10 aralığındaki `^|` satırlarının
+  5. borulu alanı boş/ayraç/başlık değil olanlar; `→ Kxx` eki kırpılır. §3.11 dilim planı, §3.13 kırılım
+  başlıkları ve §G düz tablosu **sayıma girmez** (gereksinim satırı değiller). Aralık `^## 3\. FAZ 0` …
+  `^### 3\.11 ` ile sınırlandı; komut §D123'e bırakıldı ki sonraki tur aynı sayıyı üretebilsin.
+  (2) **`turbo` bu turda cache'ten döndü** (`FULL TURBO`) — ürün kodu diff'i **0** olduğu için girdi hash'i
+  değişmedi; `--force` KOŞULMADI çünkü bu tur bir determinizm turu değil, bir **doküman sayım** turu
+  (§D112'nin 3-ardışık kuralı damga çeviren/kod yazan turlar için). Yine de web/api/mobil sayıları
+  yukarıda tek tek okundu ve tabanla eşleşiyor.
+  (3) **Tam e2e koşusu her zamanki gibi `apps/e2e/kanit/*.png` kanıtlarını yeniden yazdı**; bu turun kabul
+  kriteri "ürün kodu diff'i 0" dediği için PNG'ler `git restore` ile HEAD'e geri alındı — aynı yeşil akışın
+  yeniden çekimi, semantik fark yok (tm 143'ün aynı kararı).
+- **Sonraki pencereye not:** **`run-loop.sh` çalışma alanında `M` (commit'siz) duruyor ve bu pencere ona
+  DOKUNMADI** — panelin nazik durdurma kapısı (`STOP-REQUESTED` → `STOP-HONORED`), bu pencereden ÖNCE
+  yapılmış bir koşum-aracı değişikliği. Kapsam dışı olduğu için commit edilmedi (CONVENTIONS §5);
+  **sahibi panel/kullanıcıdır**, sonraki tarama onu yine "kirli" olarak görecektir. · Task Master kuyruğu
+  148 ile yeniden boşalıyor (148 görev, hepsi `done`). §D121'in üç `Should` payı (`02.2.1` sıralama ·
+  `03.1.2` "Add more channels" CTA · `04.3.2` Teammates arama/filtre) ve **§D122** (NFR-P3 widget bundle
+  bütçesi CI'da sessizce atlanıyor) hâlâ açık aday; §F.3 gereği açılmaları kullanıcının seçimi.
+
+
 ## 143 — GL-10 · F4-KAPAT: Faz-4 §F.00 kapanış turu + §F.2 proje geneli final rapor (ikinci) — done — 2026-08-23 UTC
 
 - **Yapıldı:** Faz-4 **kapatıldı** (§F.00 kalem kuralı **sayılarak**: §6A tablosunun GL-10 dışındaki

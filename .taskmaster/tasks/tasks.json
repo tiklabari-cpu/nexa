@@ -6908,7 +6908,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-22T18:50:10.529Z",
+        "updatedAt": "2026-08-22T19:28:49.408Z",
         "subtasks": [
           {
             "id": 1,
@@ -6927,10 +6927,10 @@
             "description": "Web ve widget statik imajları.",
             "details": "NE YAPILACAK: `apps/web/Dockerfile`, `apps/widget/Dockerfile`: build aşaması Vite; nginx alpine sunum; web'in\nAPI tabanı bugün \"/api/v1 aynı host\" ise nginx'te `/api` ve `/v1/agent/rtm` proxy'si (compose iç ağı) — ya da\nbuild-time env; hangisiyse dokümante et; SPA fallback (`try_files`); widget `loader.js` + iframe belgesi\ndoğru origin'de (`WIDGET_BASE_URL`); cache başlıkları (hash'li asset'ler uzun, html no-cache).\nDOSYALAR: `apps/web/{Dockerfile,nginx.conf}` · `apps/widget/{Dockerfile,nginx.conf}`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-CONTAINER (türetilmiş — MASTER-PROMPT \"Teslim Paketi: çalışan monorepo + docker-compose\"; §F.1/9 temiz kurulum provası)**. Gereksinim satırı: `grep -n '| M-CONTAINER' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-CONTAINER' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- iki imaj build exit 0; `docker run` ile 200 (index.html) ve asset'ler.\n- PLAN: KM-CONTAINER'a madde.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "140",
-            "updatedAt": "2026-08-22T18:50:10.529Z"
+            "updatedAt": "2026-08-22T19:28:49.408Z"
           },
           {
             "id": 3,
@@ -7087,7 +7087,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T18:50:10.533Z",
+      "lastModified": "2026-08-22T19:28:49.408Z",
       "taskCount": 147,
       "completedCount": 144,
       "tags": [

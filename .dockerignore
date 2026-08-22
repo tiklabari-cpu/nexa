@@ -1,0 +1,59 @@
+# Nexa — Docker build context excludes (tm 140.1).
+#
+# Multi-stage builds (apps/api, apps/rtm, …) need the *whole* pnpm workspace
+# in the build context — `pnpm install --frozen-lockfile` validates every
+# member listed in pnpm-workspace.yaml against pnpm-lock.yaml, so no
+# apps/* or packages/* source tree can be dropped here. Only build output,
+# dependency caches and local/dev-only artifacts are excluded.
+
+# --- Dependencies / build output (reinstalled + rebuilt inside the image) ---
+**/node_modules/
+**/dist/
+**/build/
+**/.vite/
+**/coverage/
+**/*.tsbuildinfo
+**/.turbo/
+**/.cache/
+**/.eslintcache
+
+# --- Secrets / env (never enter an image layer) ---
+.env
+.env.*
+!.env.example
+
+# --- VCS / editor / OS ---
+.git/
+.gitignore
+.idea/
+.vscode/
+.DS_Store
+*.log
+
+# --- Mobile (Expo) — irrelevant to api/rtm/web/widget images ---
+apps/mobile/.expo/
+apps/mobile/ios/
+apps/mobile/android/
+
+# --- Test / e2e artefacts ---
+playwright-report/
+test-results/
+.playwright-mcp/
+apps/e2e/
+
+# --- Autonomous loop / Task Master local state ---
+.loop-logs/
+.taskmaster/**/*.log
+.taskmaster/reports/
+.taskmaster/config.local.json
+.taskmaster/tmp-*
+
+# --- Local dev runtime data ---
+.data/
+
+# --- Reference docs / images (large, not needed to build or run) ---
+v2-derin-analiz/
+gorseller/
+images/
+*.md
+!README.md

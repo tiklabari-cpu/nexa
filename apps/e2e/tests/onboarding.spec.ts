@@ -8,26 +8,7 @@
  * this never collides with the seeded demo tenant, which ships pre-onboarded and
  * must never see the wizard.
  */
-import { expect, test } from './fixtures.js';
-import type { Page } from '@playwright/test';
-
-const PASSWORD = 'onboarding-e2e-password';
-
-/** A fresh workspace through the public signup form; lands on the wizard. */
-async function signUpFreshOwner(page: Page): Promise<void> {
-  const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
-  await page.goto('/signup');
-  await page.getByLabel('Workspace name').fill(`Onboarding Co ${unique}`);
-  await page.getByLabel('Your name').fill('Robin Owner');
-  await page.getByLabel('Email').fill(`owner-${unique}@onboarding.test`);
-  await page.getByLabel('Password').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Create workspace' }).click();
-
-  // Auto-signed-in, and because the workspace is empty the shell sends the new
-  // owner to the wizard rather than the inbox.
-  await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toBeVisible();
-  await expect(page).toHaveURL(/\/app\/onboarding/);
-}
+import { expect, signUpFreshOwner, test } from './fixtures.js';
 
 test.describe('onboarding wizard (FR-MOD-00.4)', () => {
   test('a brand-new workspace opens on the wizard, not an empty inbox', async ({ page }) => {

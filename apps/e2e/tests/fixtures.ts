@@ -224,6 +224,31 @@ export async function signIn(page: Page): Promise<void> {
   await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
 }
 
+const ONBOARDING_PASSWORD = 'onboarding-e2e-password';
+
+/**
+ * A fresh workspace through the public signup form; lands on the wizard.
+ *
+ * Shared between `onboarding.spec.ts` (drives the flow) and `a11y.spec.ts`
+ * (scans it): a signup creates a brand-new workspace every time (unique
+ * email), so this never collides with the seeded demo tenant, which ships
+ * pre-onboarded and must never see the wizard.
+ */
+export async function signUpFreshOwner(page: Page): Promise<void> {
+  const unique = `${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+  await page.goto('/signup');
+  await page.getByLabel('Workspace name').fill(`Onboarding Co ${unique}`);
+  await page.getByLabel('Your name').fill('Robin Owner');
+  await page.getByLabel('Email').fill(`owner-${unique}@onboarding.test`);
+  await page.getByLabel('Password').fill(ONBOARDING_PASSWORD);
+  await page.getByRole('button', { name: 'Create workspace' }).click();
+
+  // Auto-signed-in, and because the workspace is empty the shell sends the new
+  // owner to the wizard rather than the inbox.
+  await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toBeVisible();
+  await expect(page).toHaveURL(/\/app\/onboarding/);
+}
+
 /** The widget lives in a cross-origin iframe; everything inside is addressed through it. */
 export function widgetFrame(page: Page) {
   return page.frameLocator('#nexa-widget-frame');

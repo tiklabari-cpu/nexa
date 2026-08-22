@@ -3,15 +3,19 @@
  *
  * §7.2 has claimed AA since Dilim 14 on hand evidence alone; the GL-8 round
  * (tm 114) measured that no automated a11y check existed anywhere in the tree.
- * This spec is the measurement: axe-core over nine surfaces in a real browser,
- * with `serious`/`critical` as a hard gate (see `a11y.ts` for why the grade
- * split is where it is).
+ * This spec is the measurement: axe-core over fourteen surfaces in a real
+ * browser, with `serious`/`critical` as a hard gate (see `a11y.ts` for why the
+ * grade split is where it is).
  *
- * The nine are the ones a user cannot route around: the door (Sign in), the
- * screen agents live in all day (Inbox), the four module screens reachable from
- * the rail (Customers, Reports, Team, Settings), the marketplace behind Settings
- * → Integrations (Apps), the customer widget in its cross-origin iframe, and the
- * one surface a signed-out stranger sees at all (public KB — served as
+ * The fourteen are the ones a user cannot route around: the registration
+ * funnel a signed-out stranger reaches before an account exists (Sign up,
+ * Forgot password, Reset password, Join — tm 137.1), the first-run wizard a
+ * brand-new owner lands on straight after (Onboarding — tm 137.1), the door
+ * back in for everyone else (Sign in), the screen agents live in all day
+ * (Inbox), the four module screens reachable from the rail (Customers,
+ * Reports, Team, Settings), the marketplace behind Settings → Integrations
+ * (Apps), the customer widget in its cross-origin iframe, and the one surface
+ * a signed-out stranger sees at all outside the funnel (public KB — served as
  * `text/html` by the API, not by the SPA, so nothing the web suite renders
  * covers it).
  *
@@ -20,12 +24,12 @@
  * silently returning nothing — a bad selector, an axe that never injected —
  * would read exactly like a clean pass.
  *
- * **Both themes, since tm 117.** The seven panel surfaces are scanned once dark
- * and once light. Until tm 117 the light ramp was unreachable — `index.html`
- * hard-coded `data-theme="dark"` — so half of `tokens.css` and half of
- * `tokens.test.ts`'s 40 contrast assertions guarded a surface axe had never
- * looked at. Now that an agent can choose it, it is measured: contrast is a
- * property of the rendered pair, and a token ramp that satisfies AA on its own
+ * **Both themes, since tm 117.** The twelve panel surfaces are scanned once
+ * dark and once light. Until tm 117 the light ramp was unreachable —
+ * `index.html` hard-coded `data-theme="dark"` — so half of `tokens.css` and
+ * half of `tokens.test.ts`'s 40 contrast assertions guarded a surface axe had
+ * never looked at. Now that an agent can choose it, it is measured: contrast is
+ * a property of the rendered pair, and a token ramp that satisfies AA on its own
  * says nothing about a component that reaches for the wrong one. The remaining
  * two surfaces are scanned once each and are not in the loop — the public KB is
  * served as `text/html` by the API and has no panel stylesheet, and the widget's
@@ -71,6 +75,7 @@ import {
   expect,
   openWidget,
   ownerAccessTokenFor,
+  signUpFreshOwner,
   test,
   widgetFrame,
 } from './fixtures.js';
@@ -163,8 +168,35 @@ async function ensureActiveChat(api: APIRequestContext, token: string): Promise<
   return chat.id;
 }
 
+/**
+ * A live `/join` link the way it reaches an invitee's inbox: the raw token
+ * only ever appears in this create response (`account-lifecycle.ts` — the
+ * list endpoint returns none, since only the hash is stored). The invitee's
+ * address is fixed and re-invited on every run rather than minted fresh: the
+ * insert upserts on `(license_id, email)` for an unaccepted invitation, so
+ * this never accumulates rows the way a `Date.now()` email would.
+ *
+ * Scans the `needs_password` branch — a brand-new address — because that is
+ * the fuller form (name + password, two labelled fields); an already-known
+ * address renders a one-line notice instead and shares its markup with the
+ * other `AuthCard` screens already in this file.
+ */
+async function ensureJoinInvitation(api: APIRequestContext, ownerToken: string): Promise<string> {
+  const created = await api.post(`${API_BASE}/invitations`, {
+    ...auth(ownerToken),
+    data: { emails: ['a11y-join@nexa.test'], role: 'agent' },
+  });
+  expect(created.ok(), `invite failed: ${created.status()} ${await created.text()}`).toBe(true);
+  const { items } = (await created.json()) as { items: Array<{ accept_url: string }> };
+  const token = new URL(items[0]!.accept_url).searchParams.get('token');
+  expect(token, 'invitation accept_url carried no token').toBeTruthy();
+  return token!;
+}
+
 /** The active chat the composer scan deep-links to (`ensureActiveChat`). */
 let activeChatId: string;
+/** The invitation token the join-page scan deep-links to (`ensureJoinInvitation`). */
+let joinToken: string;
 
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
@@ -173,6 +205,7 @@ test.beforeAll(async () => {
   const token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
   await ensurePublishedArticle(apiCtx, token);
   activeChatId = await ensureActiveChat(apiCtx, token);
+  joinToken = await ensureJoinInvitation(apiCtx, token);
 });
 
 test.afterAll(async () => {
@@ -411,6 +444,67 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           await expect(
             agentPage.getByRole('list', { name: 'Apps' }).getByRole('listitem').first(),
           ).toBeVisible();
+        });
+      });
+
+      /**
+       * The registration funnel + first-run wizard (Faz-4 K11 · tm 137.1).
+       *
+       * These five are the rest of the pre-`/app` surface: nobody reaches the
+       * inbox without passing through at least sign-in, and a meaningful slice
+       * of users pass through one of these instead — creating a workspace,
+       * recovering a password, or accepting a teammate invite. `a11y.spec.ts`
+       * had measured `Sign in` since tm 115 but never its four siblings, and
+       * never the wizard every brand-new owner lands on straight after.
+       */
+      test('sign-up page has no serious or critical violations', async ({ page }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto('/signup');
+        await scanPanel(page, 'Sign up', theme, testInfo, async () => {
+          await expect(page.getByRole('button', { name: 'Create workspace' })).toBeVisible();
+        });
+      });
+
+      test('forgot-password page has no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto('/forgot-password');
+        await scanPanel(page, 'Forgot password', theme, testInfo, async () => {
+          await expect(page.getByRole('button', { name: 'Send link' })).toBeVisible();
+        });
+      });
+
+      test('reset-password page has no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto('/reset-password');
+        await scanPanel(page, 'Reset password', theme, testInfo, async () => {
+          await expect(page.getByRole('button', { name: 'Set password' })).toBeVisible();
+        });
+      });
+
+      // The `needs_password` branch (`ensureJoinInvitation`) — the fuller of
+      // the two forms this screen renders, with two labelled fields.
+      test('join page has no serious or critical violations', async ({ page }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto(`/join?token=${joinToken}`);
+        await scanPanel(page, 'Join', theme, testInfo, async () => {
+          await expect(page.getByRole('button', { name: 'Join workspace' })).toBeVisible();
+        });
+      });
+
+      // A signup of its own (`signUpFreshOwner`), not a deep link — the wizard
+      // only ever renders for a workspace that has never finished setup, and
+      // the seeded Acme tenant ships pre-onboarded.
+      test('onboarding wizard has no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await pinTheme(page, theme);
+        await signUpFreshOwner(page);
+        await scanPanel(page, 'Onboarding', theme, testInfo, async () => {
+          await expect(page.getByRole('heading', { name: /Welcome/ })).toBeVisible();
         });
       });
 

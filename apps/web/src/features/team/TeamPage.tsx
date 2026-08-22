@@ -28,9 +28,8 @@ import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
 import { TeamAiPerformance } from './TeamAiPerformance.js';
 import { CopilotKnowledge } from './CopilotKnowledge.js';
 import { AgentSkills, type Expertise } from './AgentSkills.js';
+import { RoleMenu, roleAtLeast, type Role } from './RoleMenu.js';
 import { WorkSchedule } from './WorkSchedule.js';
-
-type Role = 'owner' | 'viceowner' | 'admin' | 'agent';
 
 interface Agent {
   id: string;
@@ -58,13 +57,6 @@ interface Group {
   name: string;
   language_code: string;
   agents: Array<{ agent_id: string; priority: 'primary' | 'first' | 'normal' | 'last' }>;
-}
-
-/** Roles are coarse ranks; the server enforces the same order (ROLE_RANK). */
-const ROLE_RANK: Record<Role, number> = { owner: 3, viceowner: 2, admin: 1, agent: 0 };
-
-function roleAtLeast(role: string | null, minimum: Role): boolean {
-  return role != null && role in ROLE_RANK && ROLE_RANK[role as Role] >= ROLE_RANK[minimum];
 }
 
 /**
@@ -260,17 +252,27 @@ export function TeamPage(): ReactElement {
                         <AgentSkills agent={agent} canEdit={canManage} />
                       </td>
                       {canManage && (
-                        <td className="px-4 py-2.5 text-right">
-                          {canSuspend(agent) && (
-                            <button
-                              type="button"
-                              onClick={() => suspension.mutate({ id: agent.id, suspended: true })}
-                              disabled={suspension.isPending}
-                              className="text-xs text-danger underline disabled:opacity-40"
-                            >
-                              {t('team.page.suspendButton')}
-                            </button>
-                          )}
+                        <td className="px-4 py-2.5">
+                          <div className="flex items-center justify-end gap-3">
+                            {/* Role first, suspension second: one is a change of
+                                what someone may do, the other ends their access
+                                — and the destructive one reads last. */}
+                            <RoleMenu
+                              agent={agent}
+                              actorRole={currentRole}
+                              isSelf={agent.id === currentAgentId}
+                            />
+                            {canSuspend(agent) && (
+                              <button
+                                type="button"
+                                onClick={() => suspension.mutate({ id: agent.id, suspended: true })}
+                                disabled={suspension.isPending}
+                                className="text-xs text-danger underline disabled:opacity-40"
+                              >
+                                {t('team.page.suspendButton')}
+                              </button>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>

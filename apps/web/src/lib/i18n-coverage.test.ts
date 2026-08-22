@@ -78,6 +78,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/team/WorkSchedule.tsx',
   'src/features/team/InviteTeammates.tsx',
   'src/features/team/AgentSkills.tsx',
+  'src/features/team/RoleMenu.tsx',
   'src/features/home/HomePage.tsx',
   'src/features/settings/CannedResponses.tsx',
   'src/features/settings/Channels.tsx',

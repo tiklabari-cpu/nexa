@@ -152,6 +152,21 @@ export const team: Messages = {
   'team.skills.saveButton': 'Save',
   'team.skills.saving': 'Saving…',
 
+  // Change a teammate's role — RoleMenu.tsx (NFR-S12)
+  'team.roleChange.openButton': 'Change role',
+  'team.roleChange.openAriaLabel': 'Change role for {name}',
+  'team.roleChange.dialogTitle': 'Change role — {name}',
+  'team.roleChange.dialogDescription':
+    'Role decides what this teammate may do. The change applies to their next request and is recorded in the audit log.',
+  'team.roleChange.roleLabel': 'Role',
+  'team.roleChange.ceilingHint':
+    'You can only assign a role at or below your own. Handing over the workspace is a separate operation, so Owner is never offered here.',
+  'team.roleChange.cancel': 'Cancel',
+  'team.roleChange.saveButton': 'Save',
+  'team.roleChange.saving': 'Saving…',
+  'team.roleChange.error.refused':
+    'The server refused that change. A role can only be assigned at or below your own rank, and never to yourself or the owner.',
+
   // Notification preferences — NotificationSettings.tsx (FR-MOD-13.8)
   'team.notifications.title': 'Notifications',
   'team.notifications.description':

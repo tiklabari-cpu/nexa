@@ -6678,7 +6678,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-22T02:58:06.267Z",
+        "updatedAt": "2026-08-22T02:59:31.842Z",
         "subtasks": [
           {
             "id": 1,
@@ -6697,10 +6697,10 @@
             "description": "Rol değişimi konsoldan yapılabilir; sunucunun tavan kuralları UI’da da dürüstçe yansır.",
             "details": "NE YAPILACAK: `features/team/TeamPage.tsx` satır menüsüne \"Change role\" → rol seçici (sunucu kuralı:\nçağıranın rolü ≤ tavan; kendi rolü ve owner rolü seçilemez — `agents.yaml:226-250` açıklaması) →\n`PUT /agents/{agentId}/role` → liste güncellenir; 403/validation ADR-06 tipinden dürüst mesaj; audit\nekranında `agent.role_changed` (C6-a2 eklediyse) görünür. OPUS: yetki sınırına dokunan UI — sunucu\nkuralını UI'da YENİDEN uygulama (sunucu tek doğruluk), yalnız seçenekleri filtrele ve reddi göster.\nTestler: seçenek filtreleme (admin owner'ı seçemez · kendi satırında menü yok) · PUT gövdesi · 403 mesajı.\nDOSYALAR: `features/team/{TeamPage.tsx, RoleMenu.tsx?, *.test.tsx}`.\nREFERANS: `features/team/TeamPage.tsx` mevcut suspend/expertise menüleri · `routes/agents.ts` rol kuralı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-UI-GAP (türetilmiş — §F.1/7 \"UI’ı olmayan endpoint\": FR-MOD-08.7.3 · 04.x rol · 02.2.2 unread · 00.x onboarding)**. Gereksinim satırı: `grep -n '| M-UI-GAP' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-UI-GAP' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test exit 0 (+4) · e2e `team.spec.ts` +1 (owner admin'i agent yapar → rozet değişir) · typecheck/lint/build.\n- Ölçülebilir: `grep -rn \"/agents/.*/role\" apps/web/src` ≥ 1.\n- PLAN: K04.x (Team) bloğuna madde; KM-UI-GAP maddesi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "136",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T02:59:31.842Z"
           },
           {
             "id": 3,
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T02:58:06.267Z",
+      "lastModified": "2026-08-22T02:59:31.843Z",
       "taskCount": 144,
       "completedCount": 135,
       "tags": [

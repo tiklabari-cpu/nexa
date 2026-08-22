@@ -7,7 +7,7 @@
  * without nagging. Both halves matter: a guard that always asks is as annoying
  * as one that never does.
  */
-import { DEMO, expect, test } from './fixtures.js';
+import { API_BASE, DEMO, expect, ownerAccessToken, test } from './fixtures.js';
 
 test.describe('invite teammates — dirty guard (FR-EK-A.2)', () => {
   test('a dirty modal asks before discarding, and keeps the work if you decline', async ({
@@ -82,5 +82,78 @@ test.describe('Team — per-agent skill assignment (FR-MOD-08.6.3)', () => {
     // the seeded tenant is shared across the whole suite.
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toBeHidden();
+  });
+});
+
+test.describe('Team — changing a teammate’s role (NFR-S12)', () => {
+  /**
+   * The endpoint has existed since the role model landed and no screen ever
+   * called it (GL-9 §F.1/7): the roster showed a role it gave nobody a way to
+   * change. This walks the seam the console was missing — picker → `PUT` →
+   * roster → audit trail — and puts the seed back the way it found it, because
+   * the whole suite shares one tenant and the seeded admin's scopes are what
+   * several other files sign in for.
+   */
+  test('the owner demotes an admin, and the change reaches the roster and the audit trail', async ({
+    agentPage,
+    request,
+  }) => {
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const roster = await request.get(`${API_BASE}/agents`, { headers: auth });
+    expect(roster.ok(), `roster read failed: ${roster.status()}`).toBe(true);
+    const { items } = (await roster.json()) as {
+      items: Array<{ id: string; name: string; role: string }>;
+    };
+    const sam = items.find((agent) => agent.name === 'Sam Rivera');
+    expect(sam, 'seeded admin Sam Rivera not found').toBeTruthy();
+    expect(sam!.role, 'this test assumes the seeded starting role').toBe('admin');
+
+    try {
+      await agentPage.goto('/app/team');
+      await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+
+      await agentPage.getByRole('button', { name: 'Change role for Sam Rivera' }).click();
+      const dialog = agentPage.getByRole('dialog', { name: 'Change role — Sam Rivera' });
+      await expect(dialog).toBeVisible();
+
+      // Owner is never offered: handing over the workspace is a separate,
+      // heavier operation the endpoint refuses outright.
+      await expect(dialog.getByRole('option')).toHaveText(['Vice owner', 'Admin', 'Agent']);
+
+      await dialog.getByLabel('Role').selectOption('agent');
+      const saved = agentPage.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/agents/${sam!.id}/role`) &&
+          response.request().method() === 'PUT',
+      );
+      await dialog.getByRole('button', { name: 'Save' }).click();
+      expect((await saved).status()).toBe(200);
+      await expect(dialog).toBeHidden();
+
+      // Reload rather than trusting the redraw: the round trip is the claim.
+      await agentPage.reload();
+      const row = agentPage.getByRole('row').filter({ hasText: 'Sam Rivera' });
+      await expect(row.getByRole('cell', { name: 'Agent', exact: true })).toBeVisible();
+      await agentPage.screenshot({ path: 'kanit/136.2-rol-degistirildi.png', fullPage: true });
+
+      // The other half of NFR-S12: the change is not just applied, it is
+      // recorded. The action filter runs server-side, so the row is found
+      // however much other activity this shared tenant has piled up.
+      await agentPage.goto('/app/settings/audit-log');
+      await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
+      await agentPage.getByLabel('Filter by action').selectOption('member.role_changed');
+      await expect(
+        agentPage
+          .getByRole('table', { name: 'Audit log' })
+          .getByText('member.role_changed')
+          .first(),
+      ).toBeVisible();
+    } finally {
+      const restored = await request.put(`${API_BASE}/agents/${sam!.id}/role`, {
+        headers: auth,
+        data: { role: 'admin' },
+      });
+      expect(restored.ok(), `could not restore Sam Rivera's role: ${restored.status()}`).toBe(true);
+    }
   });
 });

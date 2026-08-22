@@ -145,6 +145,21 @@ export const team: Messages = {
   'team.skills.saveButton': 'Kaydet',
   'team.skills.saving': 'Kaydediliyor…',
 
+  // Change a teammate's role — RoleMenu.tsx (NFR-S12)
+  'team.roleChange.openButton': 'Rolü değiştir',
+  'team.roleChange.openAriaLabel': '{name} için rolü değiştir',
+  'team.roleChange.dialogTitle': 'Rolü değiştir — {name}',
+  'team.roleChange.dialogDescription':
+    'Rol, bu ekip arkadaşının neler yapabileceğini belirler. Değişiklik bir sonraki isteğinde geçerli olur ve denetim kaydına yazılır.',
+  'team.roleChange.roleLabel': 'Rol',
+  'team.roleChange.ceilingHint':
+    'Yalnızca kendi rolünüz ya da altındaki bir rolü atayabilirsiniz. Çalışma alanının devri ayrı bir işlem olduğu için Sahip burada hiç sunulmaz.',
+  'team.roleChange.cancel': 'İptal',
+  'team.roleChange.saveButton': 'Kaydet',
+  'team.roleChange.saving': 'Kaydediliyor…',
+  'team.roleChange.error.refused':
+    'Sunucu bu değişikliği reddetti. Bir rol yalnızca kendi rütbeniz ya da altında atanabilir; kendinize ya da sahibe atanamaz.',
+
   // Notification preferences — NotificationSettings.tsx (FR-MOD-13.8)
   'team.notifications.title': 'Bildirimler',
   'team.notifications.description':

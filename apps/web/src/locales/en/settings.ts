@@ -183,6 +183,17 @@ export const settings: Messages = {
   'settings.channels.whatsapp.description': 'Answer WhatsApp messages.',
   'settings.channels.sms.name': 'SMS',
   'settings.channels.sms.description': 'Reply to text messages over Twilio.',
+  'settings.channels.sms.connectTitle': 'Connect SMS (Twilio)',
+  'settings.channels.sms.connectDescription':
+    'Mock provider for this build — enter the Twilio Account SID, Auth token and the phone number to answer texts on.',
+  'settings.channels.sms.accountSidLabel': 'Twilio Account SID',
+  'settings.channels.sms.accountSidError': 'Enter the Twilio Account SID.',
+  'settings.channels.sms.authTokenLabel': 'Twilio Auth token',
+  'settings.channels.sms.authTokenError': 'Enter the Twilio Auth token.',
+  'settings.channels.sms.phoneNumberLabel': 'Phone number',
+  'settings.channels.sms.phoneNumberError': 'Enter a valid phone number, e.g. +15551234567.',
+  'settings.channels.sms.disconnectConfirm':
+    'Disconnect SMS? Messages will stop arriving until you reconnect.',
   'settings.channels.instagram.name': 'Instagram',
   'settings.channels.instagram.description': 'Answer Instagram direct messages.',
   'settings.channels.instagram.connectTitle': 'Connect Instagram',

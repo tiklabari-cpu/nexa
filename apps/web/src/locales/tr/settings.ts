@@ -174,6 +174,18 @@ export const settings: Messages = {
   'settings.channels.whatsapp.description': 'WhatsApp mesajlarını yanıtlayın.',
   'settings.channels.sms.name': 'SMS',
   'settings.channels.sms.description': 'Twilio üzerinden kısa mesajlara yanıt verin.',
+  'settings.channels.sms.connectTitle': "SMS'i bağla (Twilio)",
+  'settings.channels.sms.connectDescription':
+    'Bu sürüm için sahte sağlayıcı — mesajları yanıtlayacağınız Twilio Hesap SID, Yetkilendirme jetonu ve telefon numarasını girin.',
+  'settings.channels.sms.accountSidLabel': 'Twilio Hesap SID',
+  'settings.channels.sms.accountSidError': 'Twilio Hesap SID girin.',
+  'settings.channels.sms.authTokenLabel': 'Twilio Yetkilendirme jetonu',
+  'settings.channels.sms.authTokenError': 'Twilio Yetkilendirme jetonunu girin.',
+  'settings.channels.sms.phoneNumberLabel': 'Telefon numarası',
+  'settings.channels.sms.phoneNumberError':
+    'Geçerli bir telefon numarası girin, örn. +15551234567.',
+  'settings.channels.sms.disconnectConfirm':
+    'SMS bağlantısı kesilsin mi? Yeniden bağlanana kadar mesajlar gelmeyi durdurur.',
   'settings.channels.instagram.name': 'Instagram',
   'settings.channels.instagram.description': 'Instagram doğrudan mesajlarını yanıtlayın.',
   'settings.channels.instagram.connectTitle': "Instagram'ı bağla",

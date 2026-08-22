@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 135.2 — 08.5.5-b: SMS (Twilio) kartı canlı — account_sid + auth_token (password, geri gösterilmez) + phone_number → POST /channels/twilio/connect → Connected/Disconnect — done — 2026-08-22 UTC
+
+- **Yapıldı:** `Channels.tsx`'te SMS, Messenger/Instagram/Telegram deseniyle sabit "Coming soon"dan çıktı (`smsChannel()`, kart id'si `sms` — baktığı bağlı-kanal tipi `twilio`). Messenger'ın aksine mock OAuth yok: admin `account_sid`/`auth_token`/`phone_number`'ı kendisi yazıyor (Telegram'ın bot jetonu gibi). `auth_token` `type="password"`+`autoComplete="off"`, sunucu geri göstermiyor. `phone_number` API `TwilioAdapter`'ının E.164-benzeri regex'iyle (`^\+?[0-9]{3,20}$`) doğrulanıyor — yeni `phoneNumber` doğrulayıcı `lib/form.tsx`'e eklendi. Sunucu/sözleşme değişmedi (adaptör zaten tm 35'te MOCK). i18n `settings.channels.sms.*` (en/tr, +9 anahtar).
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · format:check (tr/settings.ts `prettier --write`) · `pnpm -w build` 8/8 · turbo `test --force` (e2e/api hariç) 9/9 — web 117/**1288** (taban 1278 + 10) · api `test:unit` 64/995 · api `test:integration` 96 dosya/2452 üç shard'da (taban ile birebir) · hedefli e2e `settings`+`instagram`+`telegram` **23/23**. Kontrat/migration değişmedi → `contract:generate`/`db:check-drift` gereksiz.
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:** Sırada 08.5.6-b (tm 135.3, WhatsApp kartı) — aynı desen. `run-loop.sh`'nin çalışma alanındaki değişikliği (panel STOP kapısı) bu pencereden ÖNCE vardı ve bilerek commit'lenmedi (tm 134.4'ten devreden not) — bu görevin işi değil.
+
 ## 135.1 — 08.5.4-b: Messenger kartı canlı — "Connect with Facebook (mock)" → page_id/page_name → POST /channels/messenger/connect → Connected/Disconnect — done — 2026-08-22 UTC
 
 - **Yapıldı:** `Channels.tsx`'te Messenger, Instagram/Telegram deseniyle sabit "Coming soon"dan çıktı (`messengerChannel()`, durum/adres `/channels`'tan türetilir). Instagram'dan fark: mock OAuth `code`'u kullanıcı yazmıyor — "Connect with Facebook (mock)" düğmesi `code`'u kendisi taşıyor, form yalnız `page_id` (zorunlu) + `page_name` (opsiyonel) istiyor. Sunucu/sözleşme değişmedi (adaptör zaten tm 35'te MOCK). i18n `settings.channels.messenger.*` (en/tr).

@@ -94,6 +94,15 @@ export function domain(message = 'Enter a valid domain, like shop.example.'): Va
   };
 }
 
+// Mirrors the API channel adapters' `phoneNumber` zod schema
+// (`apps/api/src/services/channels/channel-adapter.ts`) so a bad number is
+// caught here rather than round-tripping to the server first.
+const PHONE_NUMBER = /^\+?[0-9]{3,20}$/;
+
+export function phoneNumber(message = 'Enter a valid phone number, e.g. +15551234567.'): Validator {
+  return (value) => (PHONE_NUMBER.test(value.trim()) ? null : message);
+}
+
 export interface SubmitHelpers<V extends Record<string, string>> {
   /** Pin a server-reported problem onto one field (e.g. "email already invited"). */
   setFieldError: (name: keyof V, message: string | null) => void;

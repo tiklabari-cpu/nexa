@@ -24,7 +24,7 @@ import { Modal } from '../../components/ui/index.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth, useBrand } from '../../lib/auth-store.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
-import { FieldError, required, useForm } from '../../lib/form.js';
+import { FieldError, compose, phoneNumber, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { useConnectedChannels, type ConnectedChannel } from '../inbox/useInbox.js';
 import { canReadChannels } from '../inbox/views.js';
@@ -189,7 +189,7 @@ export function channelsFor(
     },
     messengerChannel(connectedChannels),
     comingSoon('whatsapp', 'WhatsApp', '📱', 'Answer WhatsApp messages.'),
-    comingSoon('sms', 'SMS', '💬', 'Reply to text messages over Twilio.'),
+    smsChannel(connectedChannels),
     instagramChannel(connectedChannels),
     telegramChannel(connectedChannels),
   ];
@@ -217,6 +217,26 @@ function messengerChannel(connectedChannels: ConnectedChannel[]): Channel {
     description: 'Answer Messenger conversations.',
     status: isConnected ? 'connected' : 'not_connected',
     cta: isConnected ? 'Disconnect' : 'Connect with Facebook (mock)',
+    address: isConnected ? (row?.address ?? null) : undefined,
+  };
+}
+
+/**
+ * SMS connect/disconnect (FR-MOD-08.5.5), same derivation as `messengerChannel`.
+ * The card's own id (`sms`) differs from the adapter/registry type it looks up
+ * (`twilio`, the provider name) and connects through — the card names what the
+ * channel does, the type names who runs it.
+ */
+function smsChannel(connectedChannels: ConnectedChannel[]): Channel {
+  const row = connectedChannels.find((c) => c.type === 'twilio');
+  const isConnected = row?.connected === true;
+  return {
+    id: 'sms',
+    name: 'SMS',
+    icon: '💬',
+    description: 'Reply to text messages over Twilio.',
+    status: isConnected ? 'connected' : 'not_connected',
+    cta: isConnected ? 'Disconnect' : 'Connect',
     address: isConnected ? (row?.address ?? null) : undefined,
   };
 }
@@ -415,7 +435,7 @@ function ChannelCardView({
   const [notified, setNotified] = useState<boolean>(() => readNotified(channel.id));
   const meta = STATUS_META[channel.status];
   const copy = CHANNEL_COPY[channel.id];
-  // The Website/Messenger/Instagram/Telegram status is unknown until its
+  // The Website/Messenger/SMS/Instagram/Telegram status is unknown until its
   // query resolves; do not flash a wrong badge in the meantime.
   // `channelsLoading` is false while the /channels request is gated off
   // (canReadChannels), so it never hides the badge forever for an agent
@@ -424,7 +444,10 @@ function ChannelCardView({
     !(websitesLoading && channel.id === 'website') &&
     !(
       channelsLoading &&
-      (channel.id === 'messenger' || channel.id === 'instagram' || channel.id === 'telegram')
+      (channel.id === 'messenger' ||
+        channel.id === 'sms' ||
+        channel.id === 'instagram' ||
+        channel.id === 'telegram')
     );
 
   const cta = ctaText(t, channel.cta);
@@ -469,6 +492,8 @@ function ChannelCardView({
           <EmailForwardingAddress label={cta} />
         ) : channel.id === 'messenger' ? (
           <MessengerChannelAction channel={channel} cta={cta} />
+        ) : channel.id === 'sms' ? (
+          <SmsChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'instagram' ? (
           <InstagramChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'telegram' ? (
@@ -927,6 +952,182 @@ function MessengerChannelAction({ channel, cta }: { channel: Channel; cta: strin
           onChange={(event) => form.setValue('page_name', event.target.value)}
           className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
         />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={close}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('settings.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {form.isSubmitting
+              ? t('settings.channels.connecting')
+              : t('settings.channels.cta.connect')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * SMS (Twilio) connect/disconnect (FR-MOD-08.5.5), same shape as
+ * `TelegramChannelAction`: the admin supplies real-shaped credentials rather
+ * than running a mock OAuth handshake. `auth_token` is a secret — the field is
+ * `type="password"` with autocomplete off, and (like Telegram's bot token) the
+ * server verifies it at connect and never stores or echoes it back, so nothing
+ * here shows it again once connected. `phone_number` is validated against the
+ * same E.164-ish shape the API's `TwilioAdapter` requires, so a malformed
+ * number is caught here rather than round-tripping to the server first.
+ * Disconnect asks first, same as the other live cards.
+ */
+function SmsChannelAction({ channel, cta }: { channel: Channel; cta: string }): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const client = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const connect = useMutation({
+    mutationFn: (body: { account_sid: string; auth_token: string; phone_number: string }) =>
+      api.post('/channels/twilio/connect', body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const disconnect = useMutation({
+    mutationFn: () => api.post('/channels/twilio/disconnect'),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const form = useForm({
+    initial: { account_sid: '', auth_token: '', phone_number: '' },
+    validators: {
+      account_sid: required(t('settings.channels.sms.accountSidError')),
+      auth_token: required(t('settings.channels.sms.authTokenError')),
+      phone_number: compose(
+        required(t('settings.channels.sms.phoneNumberError')),
+        phoneNumber(t('settings.channels.sms.phoneNumberError')),
+      ),
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        await connect.mutateAsync(values);
+        setOpen(false);
+      } catch (failure) {
+        // A 4xx (e.g. that number already belongs to another workspace) is
+        // shown as a form-level notice; the query cache is untouched, so the
+        // card cannot flip to Connected on a failed attempt.
+        setSubmitError(t(errorMessageKey(failure)));
+      }
+    },
+  });
+
+  const close = useCloseGuard({
+    isDirty: form.isDirty,
+    message: t('settings.channels.discardConnectionConfirm'),
+    onClose: () => {
+      setOpen(false);
+      form.reset();
+      connect.reset();
+    },
+  });
+
+  if (channel.status === 'connected') {
+    return (
+      <div className="flex flex-col gap-1">
+        {channel.address && (
+          <code className="truncate text-2xs text-content-tertiary">{channel.address}</code>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(t('settings.channels.sms.disconnectConfirm'))) {
+              disconnect.mutate();
+            }
+          }}
+          disabled={disconnect.isPending}
+          className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          {disconnect.isPending ? t('settings.channels.disconnecting') : cta}
+        </button>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+      >
+        {cta}
+      </button>
+    );
+  }
+
+  return (
+    <Modal
+      onClose={close}
+      title={t('settings.channels.sms.connectTitle')}
+      description={t('settings.channels.sms.connectDescription')}
+    >
+      <form onSubmit={form.handleSubmit} noValidate>
+        {form.submitError && (
+          <p role="alert" className="mb-3 text-sm text-danger">
+            {form.submitError}
+          </p>
+        )}
+
+        <label htmlFor="sms-account-sid" className="mb-1.5 block text-sm font-medium">
+          {t('settings.channels.sms.accountSidLabel')}
+        </label>
+        <input
+          id="sms-account-sid"
+          value={form.values.account_sid}
+          autoFocus
+          onChange={(event) => form.setValue('account_sid', event.target.value)}
+          onBlur={() => form.blur('account_sid')}
+          aria-invalid={form.errorFor('account_sid') ? true : undefined}
+          aria-describedby={form.errorFor('account_sid') ? 'sms-account-sid-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="sms-account-sid-error" message={form.errorFor('account_sid')} />
+
+        <label htmlFor="sms-auth-token" className="mb-1.5 mt-3 block text-sm font-medium">
+          {t('settings.channels.sms.authTokenLabel')}
+        </label>
+        <input
+          id="sms-auth-token"
+          type="password"
+          autoComplete="off"
+          value={form.values.auth_token}
+          onChange={(event) => form.setValue('auth_token', event.target.value)}
+          onBlur={() => form.blur('auth_token')}
+          aria-invalid={form.errorFor('auth_token') ? true : undefined}
+          aria-describedby={form.errorFor('auth_token') ? 'sms-auth-token-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="sms-auth-token-error" message={form.errorFor('auth_token')} />
+
+        <label htmlFor="sms-phone-number" className="mb-1.5 mt-3 block text-sm font-medium">
+          {t('settings.channels.sms.phoneNumberLabel')}
+        </label>
+        <input
+          id="sms-phone-number"
+          value={form.values.phone_number}
+          onChange={(event) => form.setValue('phone_number', event.target.value)}
+          onBlur={() => form.blur('phone_number')}
+          aria-invalid={form.errorFor('phone_number') ? true : undefined}
+          aria-describedby={form.errorFor('phone_number') ? 'sms-phone-number-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="sms-phone-number-error" message={form.errorFor('phone_number')} />
 
         <div className="mt-4 flex justify-end gap-2">
           <button

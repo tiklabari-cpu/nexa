@@ -43,10 +43,19 @@ describe('channelsFor', () => {
   });
 
   it('shows every unbuilt channel as Coming soon with Get notified', () => {
-    // messenger (08.5.4-b), instagram (08.5.7-e) and telegram (08.5.8-d) are
-    // built — their status is derived from /channels, not fixed — so all
-    // three are excluded here the same way website/chat-page/email are.
-    const built = new Set(['website', 'chat-page', 'email', 'messenger', 'instagram', 'telegram']);
+    // messenger (08.5.4-b), sms (08.5.5-b), instagram (08.5.7-e) and telegram
+    // (08.5.8-d) are built — their status is derived from /channels, not
+    // fixed — so all four are excluded here the same way
+    // website/chat-page/email are.
+    const built = new Set([
+      'website',
+      'chat-page',
+      'email',
+      'messenger',
+      'sms',
+      'instagram',
+      'telegram',
+    ]);
     const rest = channelsFor([]).filter((c) => !built.has(c.id));
     expect(rest.length).toBeGreaterThan(0);
     for (const channel of rest) {
@@ -110,6 +119,51 @@ describe('channelsFor — messenger', () => {
     const card = messenger([row({ type: 'instagram' })]);
     expect(card.status).toBe('not_connected');
     expect(card.cta).toBe('Connect with Facebook (mock)');
+  });
+});
+
+/**
+ * The SMS card (FR-MOD-08.5.5) moved off the fixed "Coming soon" list the
+ * same way Messenger/Instagram/Telegram did: status/address come from the
+ * live `/channels` list. Unlike Messenger, the card's own id (`sms`) differs
+ * from the connected-channel type it looks up (`twilio`, the provider name).
+ */
+describe('channelsFor — sms', () => {
+  const sms = (rows: ConnectedChannel[]) => channelsFor([], rows).find((c) => c.id === 'sms')!;
+
+  const row = (overrides: Partial<ConnectedChannel> = {}): ConnectedChannel => ({
+    type: 'twilio',
+    status: 'connected',
+    address: '+15551234567',
+    connected: true,
+    created_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('is Not connected with no connected-channel row, offering Connect', () => {
+    const card = sms([]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect');
+    expect(card.address).toBeUndefined();
+  });
+
+  it('is Not connected when the row exists but is not currently connected', () => {
+    const card = sms([row({ connected: false, status: 'off' })]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect');
+  });
+
+  it('is Connected when the /channels row is connected, offering Disconnect and showing the phone number', () => {
+    const card = sms([row({ address: '+15551234567' })]);
+    expect(card.status).toBe('connected');
+    expect(card.cta).toBe('Disconnect');
+    expect(card.address).toBe('+15551234567');
+  });
+
+  it('does not confuse another connected channel type for sms', () => {
+    const card = sms([row({ type: 'messenger' })]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect');
   });
 });
 

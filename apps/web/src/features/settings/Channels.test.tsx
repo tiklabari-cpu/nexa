@@ -129,6 +129,112 @@ describe('Messenger card — connected', () => {
   });
 });
 
+describe('SMS card — not connected', () => {
+  beforeEach(() => stubFetch({}));
+
+  // Scoped to the SMS card's own testid, same reason as Instagram's.
+  async function openConnectForm() {
+    const card = await screen.findByTestId('channel-sms');
+    await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
+    return screen.getByRole('dialog', { name: 'Connect SMS (Twilio)' });
+  }
+
+  it('opens a connect form that keeps Submit disabled until all three fields are filled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+    const submit = within(dialog).getByRole('button', { name: 'Connect' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Twilio Account SID'), 'AC123');
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Twilio Auth token'), 'secret-token');
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Phone number'), '+15551234567');
+    expect(submit).toBeEnabled();
+  });
+
+  it('masks the auth token field as a password and never autocompletes it', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+    const tokenField = within(dialog).getByLabelText('Twilio Auth token');
+    expect(tokenField).toHaveAttribute('type', 'password');
+    expect(tokenField).toHaveAttribute('autocomplete', 'off');
+  });
+
+  it('shows a field-under error for a missing Account SID and keeps Submit disabled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+
+    await userEvent.click(within(dialog).getByLabelText('Twilio Account SID'));
+    await userEvent.tab(); // blur without typing reveals the message
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter the Twilio Account SID.');
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+  });
+
+  it('rejects a malformed phone number and keeps Submit disabled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+
+    await userEvent.type(within(dialog).getByLabelText('Twilio Account SID'), 'AC123');
+    await userEvent.type(within(dialog).getByLabelText('Twilio Auth token'), 'secret-token');
+    await userEvent.type(within(dialog).getByLabelText('Phone number'), 'not-a-number');
+    await userEvent.tab();
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Enter a valid phone number, e.g. +15551234567.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+  });
+});
+
+describe('SMS card — connected', () => {
+  beforeEach(() =>
+    stubFetch({
+      channels: {
+        items: [
+          {
+            type: 'twilio',
+            status: 'connected',
+            address: '+15551234567',
+            connected: true,
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  );
+
+  it('shows the connected phone number and a Disconnect action', async () => {
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-sms');
+    // The card renders Not-connected/Connect first, synchronously — the
+    // switch to Connected only happens once /channels resolves.
+    expect(await within(card).findByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    expect(within(card).getByText('+15551234567')).toBeInTheDocument();
+  });
+
+  it('does not disconnect without confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-sms');
+    const disconnectButton = await within(card).findByRole('button', { name: 'Disconnect' });
+    await userEvent.click(disconnectButton);
+
+    expect(window.confirm).toHaveBeenCalled();
+    // Still showing Disconnect (not "Disconnecting…") — nothing was sent.
+    expect(within(card).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+  });
+});
+
 describe('Instagram card — not connected', () => {
   beforeEach(() => stubFetch({}));
 
@@ -312,12 +418,15 @@ describe('Get notified — persistence', () => {
   });
 
   it('does not let one channel’s click acknowledge another', async () => {
+    // sms moved off the Coming-soon list (08.5.5-b) and no longer offers "Get
+    // notified" — whatsapp is the one channel still on it, so the isolation
+    // check compares its storage key against a channel that was never
+    // clicked rather than against a card in the UI.
     renderChannels();
     const whatsapp = await screen.findByTestId('channel-whatsapp');
     await userEvent.click(within(whatsapp).getByRole('button', { name: 'Get notified' }));
 
-    const sms = await screen.findByTestId('channel-sms');
-    expect(within(sms).getByRole('button', { name: 'Get notified' })).toBeInTheDocument();
+    expect(localStorage.getItem(channelNotifiedKey('whatsapp'))).toBe('1');
     expect(localStorage.getItem(channelNotifiedKey('sms'))).toBeNull();
   });
 

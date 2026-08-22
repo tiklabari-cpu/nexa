@@ -75,6 +75,21 @@ export const settings: Messages = {
   'settings.tags.inUse': '{count} kullanımda',
   'settings.tags.deleteAriaLabel': '{name} etiketini sil',
 
+  // Sohbet zaman aşımı — ChatTimeout.tsx
+  'settings.chatTimeout.title': 'Sohbet zaman aşımı',
+  'settings.chatTimeout.description':
+    'Bir süredir sessiz kalan sohbetleri otomatik olarak kapatır.',
+  'settings.chatTimeout.loadError': 'Sohbet zaman aşımı ayarı yüklenemedi.',
+  'settings.chatTimeout.enableLabel': 'Boşta kalan sohbetleri otomatik kapat',
+  'settings.chatTimeout.enableHint':
+    'Varsayılan olarak kapalı. Açıkken, aşağıdaki süre boyunca hiçbir hareket olmayan bir sohbet otomatik olarak kapanır.',
+  'settings.chatTimeout.amountLabel': 'Şu süre boşta kalınca',
+  'settings.chatTimeout.unitLabel': 'Birim',
+  'settings.chatTimeout.unitMinutes': 'Dakika',
+  'settings.chatTimeout.unitHours': 'Saat',
+  'settings.chatTimeout.amountError':
+    "0'dan büyük, toplam en fazla 30 gün olan tam bir sayı girin.",
+
   // Talep e-posta şablonları — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Talep e-posta şablonları',
   'settings.ticketEmailTemplates.description':

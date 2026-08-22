@@ -31,6 +31,7 @@ import { NotificationSettings } from './NotificationSettings.js';
 import { Integrations } from './Integrations.js';
 import { TrustedDomains } from './TrustedDomains.js';
 import { CannedResponses } from './CannedResponses.js';
+import { ChatTimeout } from './ChatTimeout.js';
 import { Tags } from './Tags.js';
 import { TicketEmailTemplates } from './TicketEmailTemplates.js';
 import { CustomFieldsSettings } from './CustomFieldsSettings.js';
@@ -88,6 +89,7 @@ export function SettingsPage(): ReactElement {
       <FileSharing canEdit={canManageAccess} />
       <CannedResponses canEdit={canManageReplies} />
       <Tags canEdit={canManageTags} />
+      <ChatTimeout canEdit={canManageAccess} />
       <Skills canEdit={canManageAccess} />
       <RoutingRules canEdit={canManageAccess} />
       <TicketRules canEdit={canManageTicketRules} />

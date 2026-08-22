@@ -585,6 +585,59 @@ test.describe('settings', () => {
       expect(restored.ok(), `could not restore sales tracking: ${restored.status()}`).toBe(true);
     }
   });
+
+  /**
+   * Chat timeout (FR-MOD-08.7.3, M-UI-GAP tm 136.1). The idle-close sweep has
+   * run since tm 48; `GET/PUT /settings/chat-timeout` had no caller until this
+   * screen. A round trip through the amount+unit picker, not the optimistic
+   * cache, is the claim — the seeded workspace never enables this, so the
+   * window is restored to off no matter how the test ends.
+   */
+  test('saves the idle auto-close window through the amount+unit picker and survives a reload (08.7.3)', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const setChatTimeout = (seconds: number | null) =>
+      request.put(`${API_BASE}/settings/chat-timeout`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: { chat_timeout_seconds: seconds },
+      });
+
+    try {
+      await agentPage.goto('/app/settings#section-chat-timeout');
+      const section = agentPage.getByRole('region', { name: 'Chat timeout' });
+      await expect(section).toBeVisible();
+
+      const toggle = section.getByRole('checkbox', { name: /Automatically close idle chats/ });
+      await expect(toggle).not.toBeChecked();
+      await toggle.check();
+      await section.getByLabel('Idle for').fill('2');
+      await section.getByLabel('Unit').selectOption('hours');
+
+      const saved = agentPage.waitForResponse(
+        (response) =>
+          response.url().endsWith('/settings/chat-timeout') &&
+          response.request().method() === 'PUT',
+      );
+      await section.getByRole('button', { name: 'Save' }).click();
+      expect((await saved).status()).toBe(200);
+
+      // Reload rather than trusting the optimistic cache: the round trip is
+      // the claim, not the redraw.
+      await agentPage.reload();
+      const reloaded = agentPage.getByRole('region', { name: 'Chat timeout' });
+      await expect(
+        reloaded.getByRole('checkbox', { name: /Automatically close idle chats/ }),
+      ).toBeChecked();
+      await expect(reloaded.getByLabel('Idle for')).toHaveValue('2');
+      await expect(reloaded.getByLabel('Unit')).toHaveValue('hours');
+      await reloaded.screenshot({ path: 'kanit/136.1-chat-timeout-kaydedildi.png' });
+    } finally {
+      const restored = await setChatTimeout(null);
+      expect(restored.ok(), `could not restore chat timeout: ${restored.status()}`).toBe(true);
+    }
+  });
 });
 
 test.describe('audit log', () => {

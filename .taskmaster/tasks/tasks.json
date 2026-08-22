@@ -6675,10 +6675,10 @@
         "description": "GL-9 (tm 126) §F.1/7 ölü-kod taraması 183 sözleşme yolundan 7’sinin hiçbir istemci çağıranı olmadığını buldu; üçü tasarım gereği makine tarafından tüketilir (/audit-log/export, /reports/access-review, /billing/entitlements — mobil 13.7-o entitlements’ı çağırdı), DÖRDÜ gerçek ekran boşluğu: `/settings/chat-timeout` (08.7.3 idle auto-close ayarının UI’sı yok — sweep var, ayar sadece API’den), `/agents/{agentId}/role` (rol değişimi konsoldan yapılamıyor), `/chats/{chatId}/seen` (okundu imleci sunucuya hiç yazılmıyor), `/onboarding/state` (sihirbaz ilerlemeyi okumuyor). §F.2 raporu bunları \"M-UI-GAP\" adıyla aday göstermişti; bu görev dördünü kapatır.",
         "details": "BULGU (HANDOFF tm 126 §F.1/7 · §D113/K10): sözleşmede belgeli, sunucuda sunulan, testli — ama hiçbir\nistemcinin çağırmadığı dört uç. Her biri küçük ve bağımsız (dört SONNET/OPUS nanotask). Damgalar:\nilgili PRD satırları ✅ kalır (08.7.3 \"idle auto-close sweep\" ✅ idi — UI payı eklenir), K bloklarına\nmadde; PLAN §7.2 `M-UI-GAP` satırı bu turda `⬜ → KM-UI-GAP`; dördü bitince `✅` (136.4).\nSözleşme/sunucu DEĞİŞMEZ (dört uç zaten var) — yalnız web istemcisi + testler.\n\nFAZ-4'ÜN KONUSU KALEM DEĞİL DİKİŞTİR (§D113): Faz 0–3 kalemleri tek tek ✅ ama bütün, bir kullanıcının\ngözünden bir yerde kopuyor. Bu görev o kopukluğu kapatır; kapatırken YENİ bir kalem/özellik AÇMAZ,\nmevcut sözleşme + servis + ekranı birbirine bağlar. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-UI-GAP (türetilmiş — §F.1/7 \"UI’ı olmayan endpoint\": FR-MOD-08.7.3 · 04.x rol · 02.2.2 unread · 00.x onboarding)**. Gereksinim satırı: `grep -n '| M-UI-GAP' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-UI-GAP' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Dört alt-görev `done`; `pnpm --filter @nexa/web test` (+≥12) · e2e ilgili spec'lerde +1'er senaryo · typecheck/lint/build; `scripts/audit/endpoint-ui.cjs` (tm 132.4 taşıdıysa; yoksa `.audit-tm126/endpoint-ui.cjs`) çıktısında dört yol artık \"istemcisi var\"; PLAN §7.2 `M-UI-GAP` `✅ → KM-UI-GAP`.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-17T16:00:00.000Z",
+        "updatedAt": "2026-08-22T02:30:12.280Z",
         "subtasks": [
           {
             "id": 1,
@@ -6686,10 +6686,10 @@
             "description": "Idle auto-close penceresi konsoldan ayarlanabilir.",
             "details": "NE YAPILACAK: `apps/web/src/features/settings/ChatTimeout.tsx` (yeni): `GET /settings/chat-timeout`\n→ `chat_timeout_seconds | null`; form: \"Boşta sohbetleri otomatik kapat\" anahtarı + süre (dakika/saat\nseçici; sunucu saniye ister, ≤ 30 gün) → `PUT`; `lib/form.tsx` primitifi (EK-A.1) + dirty-guard;\nSettingsPage'in Inbox araçları bölümüne bağla (Canned/Tags yanına). Sözleşme `paths/settings.yaml:1000-`.\nTestler: yükle · kapalı → aç → PUT gövdesi · geçersiz süre alan-altı hata · sunucu hatası.\nDOSYALAR: `features/settings/{ChatTimeout.tsx, ChatTimeout.test.tsx, SettingsPage.tsx}`.\nREFERANS: aynı dosyadaki benzer tekil-ayar formları (ör. transcripts/sales tracker bölümleri).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-UI-GAP (türetilmiş — §F.1/7 \"UI’ı olmayan endpoint\": FR-MOD-08.7.3 · 04.x rol · 02.2.2 unread · 00.x onboarding)**. Gereksinim satırı: `grep -n '| M-UI-GAP' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-UI-GAP' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test exit 0 (+4) · typecheck/lint/build · e2e `settings.spec.ts` +1 (ayarı kaydet → yeniden yükle → değer).\n- Ölçülebilir: `grep -rn \"/settings/chat-timeout\" apps/web/src` ≥ 1.\n- PLAN: K08.7.3 yoksa aç (satır 555 hücresi eski biçim — §1.2'ye getir) + madde; KM-UI-GAP maddesi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "136",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T02:30:12.280Z"
           },
           {
             "id": 2,
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T02:28:22.940Z",
+      "lastModified": "2026-08-22T02:30:12.281Z",
       "taskCount": 144,
       "completedCount": 135,
       "tags": [

@@ -84,6 +84,20 @@ export const settings: Messages = {
   'settings.tags.inUse': '{count} in use',
   'settings.tags.deleteAriaLabel': 'Delete tag {name}',
 
+  // Chat timeout — ChatTimeout.tsx
+  'settings.chatTimeout.title': 'Chat timeout',
+  'settings.chatTimeout.description':
+    'Automatically close conversations that have gone quiet for a while.',
+  'settings.chatTimeout.loadError': 'Could not load the chat timeout setting.',
+  'settings.chatTimeout.enableLabel': 'Automatically close idle chats',
+  'settings.chatTimeout.enableHint':
+    'Off by default. While on, a conversation with no activity for the duration below is closed automatically.',
+  'settings.chatTimeout.amountLabel': 'Idle for',
+  'settings.chatTimeout.unitLabel': 'Unit',
+  'settings.chatTimeout.unitMinutes': 'Minutes',
+  'settings.chatTimeout.unitHours': 'Hours',
+  'settings.chatTimeout.amountError': 'Enter a whole number greater than 0, up to 30 days total.',
+
   // Ticket email templates — TicketEmailTemplates.tsx
   'settings.ticketEmailTemplates.title': 'Ticket email templates',
   'settings.ticketEmailTemplates.description':

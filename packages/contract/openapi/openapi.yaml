@@ -389,6 +389,8 @@ paths:
     $ref: "./paths/onboarding.yaml#/complete"
   /onboarding/seed-demo:
     $ref: "./paths/onboarding.yaml#/seedDemo"
+  /onboarding/survey:
+    $ref: "./paths/onboarding.yaml#/survey"
 
   /brands:
     $ref: "./paths/brands.yaml#/brands"
@@ -2129,12 +2131,23 @@ components:
           minimum: 1
           maximum: 90
 
+    OnboardingSurveyAnswer:
+      type: string
+      nullable: true
+      description: |
+        Choices for the one-time "What are you tracking?" survey popover
+        (FR-MOD-07.2). `null` on the wire means the popover was dismissed
+        without a choice — `other` is a submitted choice like the rest, just
+        an uncategorised one.
+      enum: [agent_performance, team_sharing, spotting_problems, revenue_impact, other]
+
     OnboardingState:
       type: object
       description: |
         First-run setup state (FR-MOD-00.4). `completed` is a per-license fact —
         the workspace is set up — set once the owner finishes or skips the wizard.
-      required: [completed, completed_at, demo_seeded, demo_seeded_at]
+      required:
+        [completed, completed_at, demo_seeded, demo_seeded_at, survey_answer, survey_answered_at]
       properties:
         completed: { type: boolean }
         completed_at: { type: string, format: date-time, nullable: true }
@@ -2142,6 +2155,15 @@ components:
           type: boolean
           description: Whether the sample data has been laid down.
         demo_seeded_at: { type: string, format: date-time, nullable: true }
+        survey_answer:
+          $ref: "#/components/schemas/OnboardingSurveyAnswer"
+        survey_answered_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the survey popover was answered or skipped — either way, set
+            once, so the popover is not shown again.
 
     OnboardingSeedResult:
       type: object

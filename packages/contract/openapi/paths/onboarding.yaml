@@ -69,3 +69,38 @@ seedDemo:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+survey:
+  post:
+    tags: [Onboarding]
+    operationId: answerOnboardingSurvey
+    summary: Answer (or skip) the "What are you tracking?" popover
+    description: |
+      Records the outcome of the one-time survey popover shown on first visit
+      to Reports (FR-MOD-07.2) — a personalization signal, not workspace
+      configuration, so it takes the same `reports_read` gate as Reports
+      itself rather than an admin scope: any caller who can open Reports can
+      answer or skip the popover they were shown there. `answer: null` is a
+      skip; any of the five listed values is a submitted choice. Idempotent:
+      only the first call sets `survey_answered_at`, so the popover is not
+      shown again either way — a later call is accepted but leaves the
+      original answer untouched.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [answer]
+            properties:
+              answer:
+                $ref: "../openapi.yaml#/components/schemas/OnboardingSurveyAnswer"
+    responses:
+      "200":
+        description: Updated onboarding state
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/OnboardingState" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

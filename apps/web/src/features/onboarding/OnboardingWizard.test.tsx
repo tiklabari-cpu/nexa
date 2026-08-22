@@ -28,6 +28,8 @@ const NOT_SET_UP_STATE: OnboardingState = {
   completed_at: null,
   demo_seeded: false,
   demo_seeded_at: null,
+  survey_answer: null,
+  survey_answered_at: null,
 };
 
 /**
@@ -141,6 +143,8 @@ describe('OnboardingWizard', () => {
       completed_at: 'now',
       demo_seeded: true,
       demo_seeded_at: 'now',
+      survey_answer: null,
+      survey_answered_at: null,
     });
 
     renderWizard();
@@ -155,6 +159,8 @@ describe('OnboardingWizard', () => {
       completed_at: null,
       demo_seeded: true,
       demo_seeded_at: 'now',
+      survey_answer: null,
+      survey_answered_at: null,
     });
 
     renderWizard();

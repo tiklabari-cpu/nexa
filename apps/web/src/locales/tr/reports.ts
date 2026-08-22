@@ -29,6 +29,17 @@ export const reports: Messages = {
   'reports.topicsPromo.cta': 'Sohbet konularını gör',
   'reports.topicsPromo.dismiss': 'Sonra hatırlat',
 
+  // Onboarding survey popover — "What are you tracking?" (FR-MOD-07.2)
+  'reports.survey.title': 'Neyi takip ediyorsunuz?',
+  'reports.survey.description':
+    'Sizin için en önemli olanı seçin — hızlı, isterseniz atlayabilirsiniz.',
+  'reports.survey.option.agent_performance': 'Temsilci performansını takip etmek',
+  'reports.survey.option.team_sharing': 'Sonuçları ekibimle veya yöneticimle paylaşmak',
+  'reports.survey.option.spotting_problems': 'Sorunları tespit etmek',
+  'reports.survey.option.revenue_impact': 'Gelir etkisini ölçmek',
+  'reports.survey.option.other': 'Diğer',
+  'reports.survey.skip': 'Atla',
+
   // Header range control
   'reports.range.groupAriaLabel': 'Aralık',
   'reports.range.presetDays': '{days} gün',

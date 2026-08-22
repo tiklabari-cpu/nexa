@@ -248,17 +248,36 @@ export interface ChatEvent {
 // --- Onboarding (FR-MOD-00.4) -----------------------------------------------
 
 /**
+ * Choices for the one-time "What are you tracking?" survey popover
+ * (FR-MOD-07.2, rapor-1-fonksiyonel.md:1253). `other` is a submitted choice
+ * like the rest, just an uncategorised one — a dismissed popover is `null` on
+ * the wire, not a sixth value here.
+ */
+export const ONBOARDING_SURVEY_ANSWERS = [
+  'agent_performance',
+  'team_sharing',
+  'spotting_problems',
+  'revenue_impact',
+  'other',
+] as const;
+export type OnboardingSurveyAnswer = (typeof ONBOARDING_SURVEY_ANSWERS)[number];
+
+/**
  * First-run setup state for a workspace. `completed` flips once the new owner
  * finishes or skips the wizard — a per-license fact (the workspace is set up),
  * not a per-agent one — so it gates the wizard for the whole workspace exactly
  * once. `demo_seeded` records whether the sample data has been laid down, so the
- * seed step never runs twice.
+ * seed step never runs twice. `survey_answer`/`survey_answered_at` are the
+ * Reports survey popover's outcome — set together, once, whether the popover
+ * was answered or skipped, so it is never shown a second time either way.
  */
 export interface OnboardingState {
   completed: boolean;
   completed_at: string | null;
   demo_seeded: boolean;
   demo_seeded_at: string | null;
+  survey_answer: OnboardingSurveyAnswer | null;
+  survey_answered_at: string | null;
 }
 
 /**

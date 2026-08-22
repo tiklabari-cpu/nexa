@@ -4,7 +4,11 @@
  * Assembles the three sections of the Home screen from live data:
  *   - the activation checklist, each step "done" because the thing it asks for
  *     exists (a website, a teammate, widget customisation, a canned response, an
- *     AI Agent) — a computed state, never a stored to-do list that could lie;
+ *     AI Agent) — a computed state, never a stored to-do list that could lie.
+ *     The step *order* is personalized: if the Reports survey popover
+ *     (FR-MOD-07.2) was answered, `orderActivationSteps` brings the step that
+ *     answer says matters most to the front — a signal, not a filter, so a
+ *     step is never hidden, only reordered;
  *   - the live counters — distinct visitors on the site now, open conversations,
  *     and teammates accepting chats;
  *   - the week-over-week performance summary.
@@ -21,7 +25,12 @@
  * not touch the manual/assisted/automated split (ADR-09): that lives once, in
  * the reports route, and the Home screen does not surface it.
  */
-import { ACTIVATION_STEPS, type ActivationStepKey, type HomeDashboard } from '@nexa/types';
+import {
+  type ActivationStepKey,
+  type HomeDashboard,
+  type OnboardingSurveyAnswer,
+  orderActivationSteps,
+} from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 /** How recent a visit has to be for the visitor to count as "on the site now". */
@@ -44,7 +53,7 @@ export class HomeService {
   async getDashboard(tx: TenantClient, tenant: TenantContext, now: Date): Promise<HomeDashboard> {
     // Sequential, not Promise.all: withTenant runs in one interactive
     // transaction, and Prisma forbids concurrent queries on its client.
-    const activation = await this.#activation(tx);
+    const activation = await this.#activation(tx, tenant.licenseId);
     const live = await this.#live(tx, tenant, now);
     const weekly = await this.#weekly(tx, tenant, now);
     return { activation, live, weekly };
@@ -55,7 +64,7 @@ export class HomeService {
    * because the thing it asks for exists right now, so it can never drift from
    * the workspace's real state.
    */
-  async #activation(tx: TenantClient): Promise<HomeDashboard['activation']> {
+  async #activation(tx: TenantClient, licenseId: bigint): Promise<HomeDashboard['activation']> {
     const websites = await tx.website.count();
     const memberships = await tx.agentMembership.count();
     // A pending invite counts as "invited a teammate" even before they accept;
@@ -64,6 +73,10 @@ export class HomeService {
     const widgetSettings = await tx.widgetSettings.count();
     const canned = await tx.cannedResponse.count();
     const aiAgents = await tx.aiAgent.count({ where: { kind: 'ai_agent' } });
+    const license = await tx.license.findUnique({
+      where: { id: licenseId },
+      select: { surveyAnswer: true },
+    });
 
     const done: Record<ActivationStepKey, boolean> = {
       install_widget: websites > 0,
@@ -73,7 +86,10 @@ export class HomeService {
       set_up_ai_agent: aiAgents > 0,
     };
 
-    const steps = ACTIVATION_STEPS.map((key) => ({ key, done: done[key] }));
+    const order = orderActivationSteps(
+      (license?.surveyAnswer as OnboardingSurveyAnswer | null) ?? null,
+    );
+    const steps = order.map((key) => ({ key, done: done[key] }));
     return {
       steps,
       completed: steps.filter((step) => step.done).length,

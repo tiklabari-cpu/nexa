@@ -15,13 +15,15 @@
  * passed in.
  */
 import { generateShortId } from '@nexa/types';
-import type { OnboardingSeedResult, OnboardingState } from '@nexa/types';
+import type { OnboardingSeedResult, OnboardingState, OnboardingSurveyAnswer } from '@nexa/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { TenantContext } from '../../lib/tenant.js';
 
 interface LicenseFlags {
   onboardingCompletedAt: Date | null;
   demoSeededAt: Date | null;
+  surveyAnswer: OnboardingSurveyAnswer | null;
+  surveyAnsweredAt: Date | null;
 }
 
 function toState(flags: LicenseFlags): OnboardingState {
@@ -30,6 +32,8 @@ function toState(flags: LicenseFlags): OnboardingState {
     completed_at: flags.onboardingCompletedAt?.toISOString() ?? null,
     demo_seeded: flags.demoSeededAt !== null,
     demo_seeded_at: flags.demoSeededAt?.toISOString() ?? null,
+    survey_answer: flags.surveyAnswer,
+    survey_answered_at: flags.surveyAnsweredAt?.toISOString() ?? null,
   };
 }
 
@@ -84,16 +88,41 @@ export class OnboardingService {
     };
   }
 
+  /**
+   * Record the Reports survey popover's outcome — an answer or a skip — once.
+   * `answer: null` is a skip; either way `survey_answered_at` is set so the
+   * popover is not shown again (idempotent, like `complete`: a later call is
+   * accepted but leaves the original answer untouched).
+   */
+  async answerSurvey(
+    tx: TenantClient,
+    licenseId: bigint,
+    answer: OnboardingSurveyAnswer | null,
+  ): Promise<OnboardingState> {
+    await tx.license.updateMany({
+      where: { id: licenseId, surveyAnsweredAt: null },
+      data: { surveyAnswer: answer, surveyAnsweredAt: new Date() },
+    });
+    return this.getState(tx, licenseId);
+  }
+
   async #flags(tx: TenantClient, licenseId: bigint): Promise<LicenseFlags> {
     // RLS narrows this to the caller's organization; the id keeps it to the one
     // license even in the (unusual) case of an organization with several.
     const row = await tx.license.findUnique({
       where: { id: licenseId },
-      select: { onboardingCompletedAt: true, demoSeededAt: true },
+      select: {
+        onboardingCompletedAt: true,
+        demoSeededAt: true,
+        surveyAnswer: true,
+        surveyAnsweredAt: true,
+      },
     });
     return {
       onboardingCompletedAt: row?.onboardingCompletedAt ?? null,
       demoSeededAt: row?.demoSeededAt ?? null,
+      surveyAnswer: (row?.surveyAnswer as OnboardingSurveyAnswer | null) ?? null,
+      surveyAnsweredAt: row?.surveyAnsweredAt ?? null,
     };
   }
 }

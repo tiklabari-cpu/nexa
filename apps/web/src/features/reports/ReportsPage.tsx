@@ -44,6 +44,7 @@ import {
   type ReportBaseline,
   type SavedReportView,
 } from './report-views.js';
+import { SurveyPopover } from './SurveyPopover.js';
 
 interface Period {
   range: { from: string; to: string };
@@ -474,6 +475,7 @@ export function ReportsPage(): ReactElement {
         </div>
       }
     >
+      <SurveyPopover />
       <div
         role="tablist"
         aria-label={t('reports.page.tabsAriaLabel')}

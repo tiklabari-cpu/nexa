@@ -1,13 +1,17 @@
 /**
- * First-run setup — FR-MOD-00.4.
+ * First-run setup (FR-MOD-00.4) + Reports survey popover (FR-MOD-07.2).
  *
- * Two properties carry this suite. First, the sample-data seed is tenant-scoped:
+ * Three properties carry this suite. First, the sample-data seed is tenant-scoped:
  * it runs through a SECURITY DEFINER function that takes the tenant ids
  * explicitly, so a seed for one workspace must be invisible from another — the
  * same isolation guarantee the retention sweep is held to, and the reason a
  * second tenant exists in every fixture. Second, the two gates: `onboarding_completed`
  * rides along on `/auth/me`, `complete` is idempotent (skip and finish are one
- * call), and both writes need admin+ by scope *and* by role.
+ * call), and both writes need admin+ by scope *and* by role. Third, the survey
+ * popover is a different shape on purpose: `reports_read`-gated like Reports
+ * itself, no role check — a personalization signal, not workspace
+ * configuration — and `answer: null` (a skip) is idempotent the same way
+ * `complete` is.
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -20,6 +24,8 @@ interface State {
   completed_at: string | null;
   demo_seeded: boolean;
   demo_seeded_at: string | null;
+  survey_answer: string | null;
+  survey_answered_at: string | null;
 }
 
 interface SeedResult {
@@ -116,6 +122,85 @@ describe('onboarding (FR-MOD-00.4)', () => {
         await server.post('/onboarding/complete', undefined, auth(ownerTokenA))
       ).json() as State;
       expect(second.completed_at).toBe(first.completed_at);
+    });
+  });
+
+  // ==========================================================================
+  // Survey popover (FR-MOD-07.2)
+  // ==========================================================================
+
+  describe('survey popover', () => {
+    it('a fresh workspace reads the survey as unanswered', async () => {
+      const state = (await server.get('/onboarding/state', auth(ownerTokenA))).json() as State;
+      expect(state.survey_answer).toBeNull();
+      expect(state.survey_answered_at).toBeNull();
+    });
+
+    it('records a submitted answer', async () => {
+      const res = await server.post(
+        '/onboarding/survey',
+        { answer: 'team_sharing' },
+        auth(ownerTokenA),
+      );
+      expect(res.statusCode).toBe(200);
+      const state = res.json() as State;
+      expect(state.survey_answer).toBe('team_sharing');
+      expect(state.survey_answered_at).not.toBeNull();
+    });
+
+    it('a skip (null answer) also gates it — idempotent, the original outcome sticks', async () => {
+      const first = (
+        await server.post('/onboarding/survey', { answer: null }, auth(ownerTokenA))
+      ).json() as State;
+      expect(first.survey_answer).toBeNull();
+      expect(first.survey_answered_at).not.toBeNull();
+
+      // A second call is accepted (200) but changes nothing — the skip already
+      // answered it, the same idempotency `complete` has.
+      const second = (
+        await server.post('/onboarding/survey', { answer: 'other' }, auth(ownerTokenA))
+      ).json() as State;
+      expect(second.survey_answer).toBeNull();
+      expect(second.survey_answered_at).toBe(first.survey_answered_at);
+    });
+
+    it('rejects an answer outside the five-option catalogue', async () => {
+      const res = await server.post(
+        '/onboarding/survey',
+        { answer: 'not_a_real_option' },
+        auth(ownerTokenA),
+      );
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('is open to any caller who can read Reports — a personalization signal, not admin configuration', async () => {
+      // A narrowly-scoped PAT on the agent-role account: only `reports_read`,
+      // the same gate Reports itself is behind — not the admin
+      // `properties.configuration:rw` the wizard's own writes require.
+      const readOnlyToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.agentAccountId,
+        scopes: ['reports_read'],
+      });
+      const res = await server.post(
+        '/onboarding/survey',
+        { answer: 'spotting_problems' },
+        auth(readOnlyToken),
+      );
+      expect(res.statusCode).toBe(200);
+    });
+
+    it('refuses a caller without reports_read', async () => {
+      const res = await server.post('/onboarding/survey', { answer: 'other' }, auth(agentTokenA));
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('a survey answer for tenant A never appears in tenant B', async () => {
+      await server.post('/onboarding/survey', { answer: 'revenue_impact' }, auth(ownerTokenA));
+      const stateB = (await server.get('/onboarding/state', auth(ownerTokenB))).json() as State;
+      expect(stateB.survey_answer).toBeNull();
+      expect(stateB.survey_answered_at).toBeNull();
     });
   });
 

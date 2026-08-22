@@ -3661,6 +3661,34 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/onboarding/survey': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer (or skip) the "What are you tracking?" popover
+     * @description Records the outcome of the one-time survey popover shown on first visit
+     *     to Reports (FR-MOD-07.2) — a personalization signal, not workspace
+     *     configuration, so it takes the same `reports_read` gate as Reports
+     *     itself rather than an admin scope: any caller who can open Reports can
+     *     answer or skip the popover they were shown there. `answer: null` is a
+     *     skip; any of the five listed values is a submitted choice. Idempotent:
+     *     only the first call sets `survey_answered_at`, so the popover is not
+     *     shown again either way — a later call is accepted but leaves the
+     *     original answer untouched.
+     */
+    post: operations['answerOnboardingSurvey'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/brands': {
     parameters: {
       query?: never;
@@ -7018,6 +7046,20 @@ export interface components {
       attribution_window_days?: number;
     };
     /**
+     * @description Choices for the one-time "What are you tracking?" survey popover
+     *     (FR-MOD-07.2). `null` on the wire means the popover was dismissed
+     *     without a choice — `other` is a submitted choice like the rest, just
+     *     an uncategorised one.
+     * @enum {string|null}
+     */
+    OnboardingSurveyAnswer:
+      | 'agent_performance'
+      | 'team_sharing'
+      | 'spotting_problems'
+      | 'revenue_impact'
+      | 'other'
+      | null;
+    /**
      * @description First-run setup state (FR-MOD-00.4). `completed` is a per-license fact —
      *     the workspace is set up — set once the owner finishes or skips the wizard.
      */
@@ -7029,6 +7071,13 @@ export interface components {
       demo_seeded: boolean;
       /** Format: date-time */
       demo_seeded_at: string | null;
+      survey_answer: components['schemas']['OnboardingSurveyAnswer'];
+      /**
+       * Format: date-time
+       * @description When the survey popover was answered or skipped — either way, set
+       *     once, so the popover is not shown again.
+       */
+      survey_answered_at: string | null;
     };
     OnboardingSeedResult: {
       /**
@@ -15403,6 +15452,35 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['OnboardingSeedResult'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  answerOnboardingSurvey: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          answer: components['schemas']['OnboardingSurveyAnswer'];
+        };
+      };
+    };
+    responses: {
+      /** @description Updated onboarding state */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['OnboardingState'];
         };
       };
       401: components['responses']['Unauthorized'];

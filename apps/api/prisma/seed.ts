@@ -290,10 +290,15 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     // A workspace seeded before the onboarding flags existed would have a null
     // `onboarding_completed_at`, which reads as "not set up" — so the demo owner
     // would land on the first-run wizard. Backfill it so the demo tenant, which
-    // already ships with full data, never sees the wizard (FR-MOD-00.4).
+    // already ships with full data, never sees the wizard (FR-MOD-00.4) or the
+    // Reports survey popover (FR-MOD-07.2) either.
     await prisma.license.updateMany({
       where: { organizationId: existing.id, onboardingCompletedAt: null },
       data: { onboardingCompletedAt: new Date(), demoSeededAt: new Date() },
+    });
+    await prisma.license.updateMany({
+      where: { organizationId: existing.id, surveyAnsweredAt: null },
+      data: { surveyAnsweredAt: new Date() },
     });
     console.log(`  ${spec.organizationName}: already present, skipping`);
     return;
@@ -314,9 +319,12 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       trialEndsAt,
       // The demo tenants already ship with full data, so they must never open on
       // the first-run wizard (FR-MOD-00.4) — that gate is for empty workspaces a
-      // real signup creates. Marked complete and seeded from the start.
+      // real signup creates. Marked complete and seeded from the start; the
+      // Reports survey popover (FR-MOD-07.2) is likewise pre-answered (skipped)
+      // so it never interrupts a deterministic e2e run.
       onboardingCompletedAt: new Date(),
       demoSeededAt: new Date(),
+      surveyAnsweredAt: new Date(),
     },
     select: { id: true },
   });
@@ -1219,6 +1227,7 @@ async function seedMisplacedUsWorkspace(passwordHash: string): Promise<void> {
       // workspace makes is refused — but a null would claim the workspace is
       // merely waiting on its wizard rather than being in the wrong country.
       onboardingCompletedAt: new Date(),
+      surveyAnsweredAt: new Date(),
     },
     select: { id: true },
   });

@@ -13,6 +13,7 @@
  * `chats`/`closed` for an equal range (a deliberate consistency, so the Home
  * glance never disagrees with the full report a click away).
  */
+import type { OnboardingSurveyAnswer } from './domain.js';
 
 /** The activation milestones, in the order the checklist shows them. */
 export const ACTIVATION_STEPS = [
@@ -27,6 +28,31 @@ export type ActivationStepKey = (typeof ACTIVATION_STEPS)[number];
 export interface ActivationStep {
   key: ActivationStepKey;
   done: boolean;
+}
+
+/**
+ * Which activation step a "What are you tracking?" survey answer (FR-MOD-07.2)
+ * says matters most — the checklist brings that one step to the front, the
+ * rest keep their usual order. A goal without an obvious single step
+ * (`revenue_impact`) or without a signal at all (`other`, or the popover never
+ * answered) leaves the default order alone.
+ */
+export const SURVEY_ANSWER_PRIORITY_STEP: Partial<
+  Record<OnboardingSurveyAnswer, ActivationStepKey>
+> = {
+  agent_performance: 'set_up_ai_agent',
+  team_sharing: 'invite_teammate',
+  spotting_problems: 'install_widget',
+  revenue_impact: 'customize_widget',
+};
+
+/** `ACTIVATION_STEPS`, resequenced so the survey's preferred step (if any) leads. */
+export function orderActivationSteps(
+  signal: OnboardingSurveyAnswer | null,
+): readonly ActivationStepKey[] {
+  const preferred = signal ? SURVEY_ANSWER_PRIORITY_STEP[signal] : undefined;
+  if (!preferred) return ACTIVATION_STEPS;
+  return [preferred, ...ACTIVATION_STEPS.filter((key) => key !== preferred)];
 }
 
 export interface ActivationChecklist {

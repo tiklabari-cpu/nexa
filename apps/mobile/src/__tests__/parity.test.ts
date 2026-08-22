@@ -765,7 +765,9 @@ describe('module parity matrix — what is still owed', () => {
       // 183 → 184 with `/customer/chat/form-response` (08.7.7-b, tm 134.3).
       // A visitor-facing route: the widget posts the post-chat form answers to
       // it, and the phone is an agent app — nothing here to re-scope.
-      contractEndpoints: 184,
+      // 184 → 185 with `/onboarding/survey` (FR-MOD-07.2, tm 139.6). Reports'
+      // survey popover — desktop-console-only, nothing here to re-scope either.
+      contractEndpoints: 185,
       scopeBoundaries: 1,
     });
   });

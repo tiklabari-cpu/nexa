@@ -66,6 +66,14 @@ model License {
   hipaaBaaSignedAt      DateTime? @map("hipaa_baa_signed_at") @db.Timestamptz(6)
   /// When the onboarding sample data was laid down, so the seed never runs twice.
   demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
+  /// The "What are you tracking?" survey popover's answer (FR-MOD-07.2), or
+  /// null before it is answered/skipped. One of the five values `@nexa/types`'
+  /// `ONBOARDING_SURVEY_ANSWERS` names — Prisma has no shared enum for this, so
+  /// it is a checked string, the `device_tokens.platform` pattern.
+  surveyAnswer          String?   @map("survey_answer")
+  /// When the survey was answered or skipped — either way, so "tek sefer"
+  /// (shown once) holds regardless of which exit the owner used.
+  surveyAnsweredAt      DateTime? @map("survey_answered_at") @db.Timestamptz(6)
   /// The production licence this one is a sandbox of (FR-MOD-11.5 · 11.5-f), or
   /// null on a real workspace. A sandbox is a *second tenant*: its own
   /// organization, its own RLS scope, its own everything — this column is the

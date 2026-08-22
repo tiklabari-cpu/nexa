@@ -292,6 +292,78 @@ describe('home dashboard', () => {
         true,
       );
     });
+
+    // The Reports survey popover's personalization signal (FR-MOD-07.2):
+    // whichever step the answer names moves to the front, the rest keep their
+    // usual order — the step set and each step's `done` are untouched, only
+    // the sequence changes.
+    it('brings the step a survey answer names to the front', async () => {
+      const before = await getHome();
+      expect(before.body.activation.steps.map((s) => s.key)).toEqual([
+        'install_widget',
+        'invite_teammate',
+        'customize_widget',
+        'add_canned_response',
+        'set_up_ai_agent',
+      ]);
+
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { surveyAnswer: 'agent_performance', surveyAnsweredAt: new Date() },
+      });
+
+      const after = await getHome();
+      expect(after.body.activation.steps.map((s) => s.key)).toEqual([
+        'set_up_ai_agent',
+        'install_widget',
+        'invite_teammate',
+        'customize_widget',
+        'add_canned_response',
+      ]);
+      // Same five steps, same `done` values — reordered, not filtered or recomputed.
+      expect(after.body.activation.completed).toBe(before.body.activation.completed);
+      expect(after.body.activation.steps.map((s) => s.done).sort()).toEqual(
+        before.body.activation.steps.map((s) => s.done).sort(),
+      );
+    });
+
+    it('a survey answer without an obvious step ("other") leaves the default order', async () => {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { surveyAnswer: 'other', surveyAnsweredAt: new Date() },
+      });
+
+      const { body } = await getHome();
+      expect(body.activation.steps.map((s) => s.key)).toEqual([
+        'install_widget',
+        'invite_teammate',
+        'customize_widget',
+        'add_canned_response',
+        'set_up_ai_agent',
+      ]);
+    });
+
+    it("never reorders by another tenant's survey answer", async () => {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { surveyAnswer: 'agent_performance', surveyAnsweredAt: new Date() },
+      });
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+
+      const { body } = await getHome(tokenB);
+      expect(body.activation.steps.map((s) => s.key)).toEqual([
+        'install_widget',
+        'invite_teammate',
+        'customize_widget',
+        'add_canned_response',
+        'set_up_ai_agent',
+      ]);
+    });
   });
 
   // --- Weekly performance ----------------------------------------------------

@@ -43,6 +43,16 @@ export const reports: Messages = {
   'reports.topicsPromo.cta': 'See chat topics',
   'reports.topicsPromo.dismiss': 'Remind me later',
 
+  // Onboarding survey popover — "What are you tracking?" (FR-MOD-07.2)
+  'reports.survey.title': 'What are you tracking?',
+  'reports.survey.description': "Pick what matters most to you — it's quick, and you can skip it.",
+  'reports.survey.option.agent_performance': 'Tracking agent performance',
+  'reports.survey.option.team_sharing': 'Sharing results with my team or manager',
+  'reports.survey.option.spotting_problems': 'Spotting problems',
+  'reports.survey.option.revenue_impact': 'Measuring revenue impact',
+  'reports.survey.option.other': 'Other',
+  'reports.survey.skip': 'Skip',
+
   // Header range control
   'reports.range.groupAriaLabel': 'Range',
   'reports.range.presetDays': '{days} days',

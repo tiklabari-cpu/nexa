@@ -61,6 +61,16 @@
   148 ile yeniden boşalıyor (148 görev, hepsi `done`). §D121'in üç `Should` payı (`02.2.1` sıralama ·
   `03.1.2` "Add more channels" CTA · `04.3.2` Teammates arama/filtre) ve **§D122** (NFR-P3 widget bundle
   bütçesi CI'da sessizce atlanıyor) hâlâ açık aday; §F.3 gereği açılmaları kullanıcının seçimi.
+- **`tasks.json` biçim notu (zararsız, ama bir sonraki diff'i şaşırtmasın):** `task-master-ai` 0.43.1
+  görev 148'i yazarken **dosya genelinde** alt-görev/görev `id` alanlarını string'den sayıya normalize etti
+  (`"id": "1"` → `"id": 1`) — bu turun 310 satırlık `tasks.json` diff'inin tamamı budur, **içerik kaybı YOK**
+  (silinen satırların hepsi `"id": "N"` biçimindeydi; tek istisna bir boş-dizi `]` biçimlendirmesi).
+  Aracın kendi kanonik biçimi; `npx task-master list` sonrasında sorunsuz okuyor ve `run-loop.sh` zaten
+  `tasks.json`'ı doğrudan ayrıştırmıyor (`pick_next` bir pencerenin `.structured_output`'unu okur).
+- **Panelin 148'i açarken dikkat etmesi gereken tek nokta:** MCP `add_task` `priority` alanını
+  `high|medium|low` enum'una göre doğruluyor ve `critical`'ı **sessizce `medium`'a düşürdü**; bu pencere
+  değeri `tasks.json`'da elle `critical`'a çevirdi (CONVENTIONS §4.1 + pencere talimatı: değer tam olarak
+  `critical` olmalı). `critical` görev açan sonraki pencere yazdıktan SONRA değeri doğrulamalı.
 
 
 ## 143 — GL-10 · F4-KAPAT: Faz-4 §F.00 kapanış turu + §F.2 proje geneli final rapor (ikinci) — done — 2026-08-23 UTC

@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 141.1 — M-SEED-a: acme'ye campaigns (2) + tickets (5) + ratings (3) tohumu — done — 2026-08-22 UTC
+
+- **Yapıldı:** `apps/api/prisma/seed.ts`'e `seedCampaigns()` (`CampaignService.create` — bir `ongoing` "Welcome greeting", bir `inactive` "Pricing page nudge") + `seedTickets()` (`TicketService.create`/`update` — open×2/pending×2/solved×1, öncelik 60/0/80/10/-20, biri kapalı sohbetten `source_chat_id` köprüsüyle **bilinçli `solved`** açıldı ki `tickets.spec.ts`'in aynı sohbetten kendi bilet açması "bir çözülmemiş bilet" kilidine takılmasın). Var olan tek reyting üç oldu (`good`/`good`/`bad`, bugün/-3g/-6g). Servislerle yazıldı (ham insert değil) — invariant'lar (ticket-rule, assignee/group doğrulama, id tahsisi, priority-değişimi audit zinciri) korunuyor.
+- **Custom field değerleri bilinçli atlandı:** görevin kendi koşulu ("08.7.6 tanımları varsa") bu depoda hep yanlış — hiçbir yol varsayılan bir `customFieldDefinition` yaratmıyor (grep ile doğrulandı); icat edip doldurmak kapsam dışıydı (CONVENTIONS §5).
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` 12/12 · `pnpm -w lint` 9/9 · `pnpm -w format:check` · turbo `test` (e2e/api hariç) 9/9 (FULL TURBO) · api `test:unit` 64/995 · api `test:integration` üç shard'da **97 dosya/2477** (taban ile birebir) · `pnpm -w build` 8/8 · **`pnpm -w test:e2e` TAM süit 205 passed (12,6 dk)** — taban 205 ile birebir (tickets/campaigns/reports/csat dahil). `NEXA_SEED_RESET=1` ile bir kez + reset'siz ikinci kez, ikisi de exit 0 (ikincisi "already present, skipping"). Kontrat/migration dokunulmadı.
+- **Sonraki pencereye not:** PLAN satır 2689/2991 (`M-SEED`) `⬜` → `◐ → KM-SEED` (M-SEED-b/tm 141.2 hâlâ açık — SLA/goal/zamanlanmış rapor/webhook). `run-loop.sh`'deki panel STOP-kapısı değişikliği bu pencereden ÖNCE vardı, bu görevin işi değil, commit'e alınmadı (önceki yirmi pencere de aynı notu düştü).
+
 ## 140.3 — M-CONTAINER-c: docker-compose.full.yml + `make demo` + duman testi + README — done — 2026-08-22 UTC
 
 - **Yapıldı:** `docker-compose.full.yml` — ayrı proje adı (`nexa-demo`), kendi hacimleri, db/redis portu HİÇ yayınlanmıyor (dev `docker-compose.yml` dokunulmadı; iki yığın yan yana durabiliyor), yayınlanan tek şey README'nin portları (4000/4001/5173/5174). **migrate+seed tek konteyner:** tek atımlık `init` servisi api imajını `node dist/prisma/seed.js` komutuyla koşuyor — imajın kendi entrypoint'i (140.1) önce `prisma migrate deploy` yapıyor, api ve rtm `service_completed_successfully` ile bunu bekliyor, `NEXA_SEED_RESET` bilinçli yok. Ayrıca `scripts/smoke.sh` (10 kontrol, `curl`'den başka bağımlılığı yok) · `Makefile`: `demo` · `smoke` · `demo-down` · `demo-clean` · `demo-logs` · README "Run the whole stack in containers" + SINIR notu.

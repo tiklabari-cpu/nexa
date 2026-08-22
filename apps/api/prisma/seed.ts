@@ -16,7 +16,10 @@ import { embed, toVectorLiteral } from '@nexa/ai-mock';
 import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@nexa/types';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
-import { ADMIN_SCOPES } from '../src/services/auth/principal.js';
+import { type AuditContext } from '../src/services/audit/audit-log.js';
+import { ADMIN_SCOPES, type AgentPrincipal } from '../src/services/auth/principal.js';
+import { CampaignService } from '../src/services/campaigns/campaign-service.js';
+import { type CreateInput, TicketService } from '../src/services/tickets/ticket-service.js';
 
 loadEnvFile();
 
@@ -773,6 +776,32 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
       agentId: agents[0]!.id,
       groupId: supportTeam.id,
     });
+
+    // --- Campaigns / Tickets / Reviews demo fixture (§D113/K14) -------------
+    // Only the richDemo tenant gets these — northwind/stateside stay the
+    // isolation fixtures they already are (some e2e specs rely on their
+    // emptiness). Written through the same services the routes call, so the
+    // rows carry the exact invariants a real workspace's would (computed
+    // campaign status, ticket-rule application, the "one unresolved ticket per
+    // chat" constraint) rather than a hand-rolled approximation of them.
+    await seedCampaigns({ licenseId, organizationId: organization.id });
+    await seedTickets({
+      licenseId,
+      organizationId: organization.id,
+      ownerId: owner.id,
+      agents,
+      groupId: supportTeam.id,
+      customers,
+      // Bridges a ticket to the closed conversation (FR-MOD-13.6) — created
+      // `solved` so it never occupies the chat's "one unresolved ticket" slot,
+      // leaving `tickets.spec.ts`'s own from-a-chat creation free to succeed.
+      bridgeChatId: conversations[0]!.chatId,
+    });
+    // Custom field values (FR-MOD-08.7.6) are deliberately NOT seeded here:
+    // no ticket/contact custom field definitions exist in this fixture yet
+    // (nothing in this repo creates one by default), so there is nothing for
+    // a value to reference. Add the definitions first if a future task needs
+    // the Customers screen to show one.
   }
 
   // --- Sales tracker (FR-MOD-13.5) ------------------------------------------
@@ -873,6 +902,29 @@ async function seedConversations(input: {
   await prisma.rating.create({
     data: { chatId: closed.chatId, licenseId, threadId: closed.threadId, value: 'good' },
   });
+  // Two more (FR-MOD-07.8), backdated so the Reviews report's daily bar and
+  // CSAT donut have more than a single day's worth of data to render. Rating
+  // has no uniqueness constraint on chat/thread — a real visitor can vote more
+  // than once too (`widget.ts#vote`) — so stacking these on the one closed
+  // conversation is the same shape production data takes, not a shortcut.
+  await prisma.rating.create({
+    data: {
+      chatId: closed.chatId,
+      licenseId,
+      threadId: closed.threadId,
+      value: 'good',
+      createdAt: new Date(Date.now() - 3 * 86_400_000),
+    },
+  });
+  await prisma.rating.create({
+    data: {
+      chatId: closed.chatId,
+      licenseId,
+      threadId: closed.threadId,
+      value: 'bad',
+      createdAt: new Date(Date.now() - 6 * 86_400_000),
+    },
+  });
 
   // A live conversation waiting for a reply, so the inbox is not empty either.
   const live = await createConversation({
@@ -891,6 +943,127 @@ async function seedConversations(input: {
     { chatId: closed.chatId, customerId: customers[0]!.id },
     { chatId: live.chatId, customerId: customers[1]!.id },
   ];
+}
+
+/**
+ * Two campaigns (FR-MOD-03.3): one running, one switched off, so the status
+ * tabs (Ongoing / Inactive) have something to filter on the first time anyone
+ * opens the tenant rather than only after an owner builds one by hand.
+ *
+ * `url_contains: '/'` matches any page — the "greeting" shape a real workspace
+ * uses to say hello everywhere, not just on one path.
+ */
+async function seedCampaigns(tenant: { licenseId: bigint; organizationId: string }): Promise<void> {
+  const campaigns = new CampaignService();
+  await campaigns.create(prisma, tenant, {
+    name: 'Welcome greeting',
+    active: true,
+    conditions: { url_contains: '/' },
+    content: { message: 'Welcome to Acme Bikes! Ask us anything about our bikes.' },
+  });
+  await campaigns.create(prisma, tenant, {
+    name: 'Pricing page nudge',
+    active: false,
+    conditions: { url_contains: '/pricing' },
+    content: { message: 'Questions about pricing? Happy to help — just ask.' },
+  });
+}
+
+/**
+ * Five tickets (FR-MOD-02.6/13.6): open/pending/solved, each a different
+ * priority, so the Tickets grid and its sort/filter have real spread to show
+ * rather than one status repeated five times.
+ *
+ * Run through `TicketService` rather than a raw insert so the invariants a
+ * live create/update goes through also hold here: id allocation, ticket-rule
+ * application, the assignee/group existence checks, and — for the priority
+ * change — the audit trail (13.6's other write path an inserted row would
+ * otherwise never exercise).
+ */
+async function seedTickets(input: {
+  licenseId: bigint;
+  organizationId: string;
+  ownerId: string;
+  agents: Array<{ id: string }>;
+  groupId: bigint;
+  customers: Array<{ id: string }>;
+  /** The chat the "bridged" ticket is created from (FR-MOD-13.6). */
+  bridgeChatId: string;
+}): Promise<void> {
+  const { licenseId, organizationId, ownerId, agents, groupId, customers, bridgeChatId } = input;
+  const tenant = { licenseId, organizationId };
+  const principal: AgentPrincipal = {
+    kind: 'agent',
+    accountId: ownerId,
+    licenseId,
+    organizationId,
+    role: 'owner',
+    scopes: [...ADMIN_SCOPES],
+    tokenId: 'seed',
+    tokenKind: 'pat',
+  };
+  const chainSecret = process.env['AUDIT_CHAIN_SECRET'];
+  if (!chainSecret) {
+    throw new Error('AUDIT_CHAIN_SECRET is required to seed tickets (their audit trail).');
+  }
+  const audit: AuditContext = { licenseId, chainSecret, actorId: ownerId, actorType: 'agent' };
+  const tickets = new TicketService();
+  const groupIdNumber = Number(groupId);
+
+  /** Create a ticket, then set its priority when it differs from the 0 default. */
+  async function seedTicket(create: CreateInput, priority: number): Promise<void> {
+    const created = await tickets.create(prisma, tenant, principal, create);
+    if (priority !== 0) {
+      await tickets.update(prisma, tenant, principal, audit, created.id, { priority });
+    }
+  }
+
+  await seedTicket(
+    {
+      subject: 'Bike frame arrived with a scratch',
+      customer_id: customers[0]!.id,
+      status: 'open',
+      assignee_id: agents[1]?.id ?? null,
+      group_id: groupIdNumber,
+    },
+    60,
+  );
+  await seedTicket(
+    { subject: 'Warranty claim — rear gearbox', customer_id: customers[2]!.id, status: 'open' },
+    0,
+  );
+  await seedTicket(
+    {
+      subject: 'Bulk order enquiry — 12 bikes for a local shop',
+      customer_id: customers[1]!.id,
+      status: 'pending',
+      assignee_id: ownerId,
+      group_id: groupIdNumber,
+    },
+    80,
+  );
+  await seedTicket(
+    {
+      subject: 'Return requested — frame size too small',
+      source_chat_id: bridgeChatId,
+      // `solved`, not the `open` default: a ticket already resolved leaves the
+      // chat's "one unresolved ticket" slot free, so `tickets.spec.ts`'s own
+      // from-a-chat creation still gets the fresh-ticket path it expects.
+      status: 'solved',
+      assignee_id: agents[0]?.id ?? null,
+    },
+    -20,
+  );
+  await seedTicket(
+    {
+      subject: 'Missing accessory in shipment NX-7734',
+      customer_id: customers[2]!.id,
+      status: 'pending',
+      assignee_id: agents[1]?.id ?? null,
+      group_id: groupIdNumber,
+    },
+    10,
+  );
 }
 
 /**

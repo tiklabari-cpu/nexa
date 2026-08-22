@@ -6954,10 +6954,10 @@
         "description": "2026-08-17 denetimi: `apps/api/prisma/seed.ts` üç kiracı, ajanlar, müşteriler, sohbetler, skills/knowledge, satış izleme, markalar/kanallar tohumluyor; ama campaigns, tickets, SLA hedefleri, goals, zamanlanmış rapor, webhook ve ratings YOK — Campaigns/Tickets/SLA/Goals/Reviews ekranları demo’da boş açılıyor. Seed idempotent ve `NEXA_SEED_RESET` ile sıfırlanabilir. Bu görev demo’yu bütünler; şema/sözleşme değişmez.",
         "details": "BULGU (§D113/K14): `grep -n \"campaign\\|ticket\\|slaTarget\\|goal\\|scheduledReport\\|webhook\\|rating\" apps/api/prisma/seed.ts`\n→ (bu turda) yalnızca sohbet/oy dışında 0 (doğrula). Kural: yalnız `acme` (richDemo) zenginleşir; `northwind`\nve `stateside` izolasyon fixture'ları OLDUKLARI GİBİ kalır (e2e onların boşluğuna güvenebilir — spec'leri oku);\nidempotency korunur (`already present, skipping`); e2e `global-setup` `NEXA_SEED_RESET=1` ile koşar — yeni tohum\ne2e beklentilerini kırmamalı (özellikle sayaç bekleyen testler: reports/customers spec'lerinde sabit sayı var mı bak).\nPLAN §7.2 `M-SEED` satırı bu turda `⬜ → KM-SEED`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SEED (türetilmiş — MASTER-PROMPT \"Seed veriyle demo akışı\"; PRD §11.2 Q12 onboarding tohum verisi)**. Gereksinim satırı: `grep -n '| M-SEED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SEED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "İki alt-görev `done`; `pnpm -w db:seed` idempotent (iki kez exit 0, ikinci \"already present\") · `NEXA_SEED_RESET=1` ile sıfırdan · `pnpm -w test:e2e` tam süit regresyonsuz · seed testi (varsa `seed.test.ts`) yeşil; PLAN §7.2 `M-SEED` `✅`.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-22T21:08:32.286Z",
+        "updatedAt": "2026-08-22T22:03:21.652Z",
         "subtasks": [
           {
             "id": 1,
@@ -6976,12 +6976,12 @@
             "description": "SLA/Goals/Scheduled reports/Webhooks demo’da dolu; M-SEED kapanır.",
             "details": "NE YAPILACAK: SLA hedefi (ilk yanıt 5 dk / çözüm 24 s, iş saatleri) · goal (lead hunisi) · zamanlanmış rapor\n(haftalık overview, mock mail) · webhook (`chat.archived` → `http://localhost:9/dev-null`? — SSRF koruması\nlocalhost'u reddedebilir; adaptörün kabul ettiği mock URL biçimini oku, yoksa `https://example.com/hook` +\ndisabled) — hepsi servislerle, idempotent. SIEM/SSO tohumlanmaz (e2e kendi kurar). PLAN §7.2 `M-SEED` →\n`✅ → KM-SEED`.\nDOSYALAR: `apps/api/prisma/seed.ts` · PLAN.md.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-SEED (türetilmiş — MASTER-PROMPT \"Seed veriyle demo akışı\"; PRD §11.2 Q12 onboarding tohum verisi)**. Gereksinim satırı: `grep -n '| M-SEED' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-SEED' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `pnpm -w db:seed` idempotent · e2e regresyonsuz (özellikle entitlements/goals/reports spec) · HANDOFF ekran notu.\n- PLAN §7.2 `M-SEED` `✅`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "141.1"
             ],
             "parentId": "141",
-            "updatedAt": "2026-08-22T21:08:32.286Z"
+            "updatedAt": "2026-08-22T22:03:21.652Z"
           }
         ]
       },
@@ -7087,9 +7087,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T21:08:32.291Z",
+      "lastModified": "2026-08-22T22:03:21.652Z",
       "taskCount": 147,
-      "completedCount": 145,
+      "completedCount": 146,
       "tags": [
         "master"
       ]

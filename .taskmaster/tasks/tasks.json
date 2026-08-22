@@ -6617,7 +6617,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-22T00:28:06.014Z",
+        "updatedAt": "2026-08-22T00:51:21.607Z",
         "subtasks": [
           {
             "id": 1,
@@ -6636,10 +6636,10 @@
             "description": "SMS kartı bağlanır; sır alanı gizli.",
             "details": "NE YAPILACAK: `comingSoon('sms'…)` → `smsChannel(connectedChannels)`: form `account_sid` ·\n`auth_token` (`type=password`, `autoComplete=off`) · `phone_number` (E.164 doğrulama — adaptörün\nşemasıyla aynı) → `api.post('/channels/twilio/connect', …)` (kanal tipi adı `twilio` — registry anahtarı;\nkart adı \"SMS\"); kart adres = numara; `auth_token` hiçbir yerde geri gösterilmez (yanıt zaten taşımıyor).\nTestler (+3).\nORTAK (üç kanal alt-görevi için): Desen BİREBİR `apps/web/src/features/settings/Channels.tsx`'in\nTelegram kartı (`telegramChannel`, satır ~543-561: durum `/channels` listesinden `connected` ile türetilir,\n`useMutation` → `api.post('/channels/<type>/connect', body)` / `.../disconnect`, bağlantı formu modal,\nbaşarı/hata) ve Instagram kartı (~384-402). `comingSoon(...)` çağrısı o kanal için KALDIRILIR;\nüçü de kalkınca `comingSoon()` yardımcı fonksiyonu ve \"Get notified\" CTA'sı ölü kod olur → 135.4 siler\n(08.5.1 KK'sındaki \"Coming soon/Get notified\" durumu, artık gerçekten gelmemiş kanal kalmadığı için\nboş küme — K08.5.1'e not). Sunucu/sözleşme DEĞİŞMEZ: connect gövdesi `packages/contract/openapi/paths/\nchannels.yaml:128-135` açıklamasında (Messenger `code` + `page_id` [+ `page_name`]; Twilio\n`account_sid` + `auth_token` + `phone_number`; WhatsApp `waba_id` + `phone_number`); adaptörler\n`apps/api/src/services/channels/{messenger,twilio,whatsapp}.ts` `parseConnect` şemaları alan\ndoğrulamasının kaynağıdır — UI aynı alanları ister. Mock OAuth: Messenger/Instagram'da `code` mock\ndeğişimidir — Instagram kartının yaptığı gibi bir \"Connect with Facebook (mock)\" düğmesi sahte `code`\nüretir; kullanıcıdan `code` yazması İSTENMEZ. Twilio `auth_token` sır: alan `type=password`, yanıt\nonu geri göstermez (adaptör saklamıyor — kart da göstermez). Inbox Views grubu (K02.1.4) zaten bağlı\nkanalları gösteriyor — doğrula, değişiklik gerekmez. Testler: `Channels.test.tsx` (kart durumu ·\nform doğrulama · connect isteği gövdesi · disconnect · hata) — mevcut Telegram testleri emsal.\ni18n: tm 133.9 aynı dosyayı çeviriyor olabilir — çakışırsa önce `git log -1 -- Channels.tsx` oku ve\nonun `t()` düzenine uy.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **FR-MOD-08.5.4 Messenger · 08.5.5 Twilio SMS · 08.5.6 WhatsApp (konsol connect kartları) · 08.5.1 kart gridi**. Gereksinim satırı: `grep -n '| 08\\.5\\.[456]' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### K08.5.4' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test exit 0 (+3) · typecheck/lint/build.\n- Ölçülebilir: `comingSoon('sms'` yok; `/channels/twilio/connect` ≥ 1; password alanı testte doğrulanır.\n- PLAN: satır 552 → `✅ → K08.5.5` + K bloğu.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "135",
-            "updatedAt": "2026-08-22T00:28:06.014Z"
+            "updatedAt": "2026-08-22T00:51:21.607Z"
           },
           {
             "id": 3,
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T00:28:06.014Z",
+      "lastModified": "2026-08-22T00:51:21.607Z",
       "taskCount": 144,
       "completedCount": 134,
       "tags": [

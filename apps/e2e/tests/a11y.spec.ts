@@ -187,39 +187,124 @@ async function ensureActiveChat(api: APIRequestContext, token: string): Promise<
  * the fuller form (name + password, two labelled fields); an already-known
  * address renders a one-line notice instead and shares its markup with the
  * other `AuthCard` screens already in this file.
+ *
+ * The id comes back with the token because the invitation has to be revoked
+ * again in `afterAll` — see the teardown below for what leaving it behind cost.
  */
-async function ensureJoinInvitation(api: APIRequestContext, ownerToken: string): Promise<string> {
+async function ensureJoinInvitation(
+  api: APIRequestContext,
+  ownerToken: string,
+): Promise<{ id: string; token: string }> {
   const created = await api.post(`${API_BASE}/invitations`, {
     ...auth(ownerToken),
     data: { emails: ['a11y-join@nexa.test'], role: 'agent' },
   });
   expect(created.ok(), `invite failed: ${created.status()} ${await created.text()}`).toBe(true);
-  const { items } = (await created.json()) as { items: Array<{ accept_url: string }> };
+  const { items } = (await created.json()) as {
+    items: Array<{ id: string; accept_url: string }>;
+  };
   const token = new URL(items[0]!.accept_url).searchParams.get('token');
   expect(token, 'invitation accept_url carried no token').toBeTruthy();
-  return token!;
+  return { id: items[0]!.id, token: token! };
 }
 
 /** The active chat the composer scan deep-links to (`ensureActiveChat`). */
 let activeChatId: string;
-/** The invitation token the join-page scan deep-links to (`ensureJoinInvitation`). */
-let joinToken: string;
-/** An owner Bearer token, for the skill-editor scan's own cleanup (no delete UI exists). */
-let ownerToken: string;
+/** The invitation the join-page scan deep-links to (`ensureJoinInvitation`). */
+let joinInvitation: { id: string; token: string };
+/**
+ * Skills the editor scan minted, still owed a delete.
+ *
+ * An id is pushed at creation and removed once a delete for it has actually
+ * come back 2xx/404 — so whatever is still in here when the file ends is a row
+ * this spec left in the shared workspace, and the teardown says so out loud.
+ */
+const owedSkillIds: string[] = [];
 
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
     extraHTTPHeaders: { 'user-agent': 'nexa-e2e-a11y' },
   });
   const token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
-  ownerToken = token;
   await ensurePublishedArticle(apiCtx, token);
   activeChatId = await ensureActiveChat(apiCtx, token);
-  joinToken = await ensureJoinInvitation(apiCtx, token);
+  joinInvitation = await ensureJoinInvitation(apiCtx, token);
 });
 
+/**
+ * An owner Bearer token that is valid *now* — minted per cleanup, never held
+ * from `beforeAll` (tm 147).
+ *
+ * This is the measured reason the old cleanup silently did nothing. Every test
+ * in this file signs the demo owner in again through the `agentPage` fixture,
+ * and the product caps an owner at 25 live sessions
+ * (`MAX_ACTIVE_TOKENS_PER_OWNER`, `token-service.ts` — the mint prunes the
+ * oldest beyond the cap). This file has sixty-one tests, so the token setup
+ * minted is revoked roughly a third of the way down, and every request made
+ * with it after that comes back `401 authentication: Invalid or expired
+ * credentials` — which is precisely what the skill-editor `finally` was
+ * throwing away. That cap is correct product behaviour; the spec was the thing
+ * holding a credential longer than the product promises to honour it.
+ */
+async function freshOwnerToken(): Promise<string> {
+  return ownerAccessTokenFor(apiCtx, ACME_OWNER);
+}
+
+/**
+ * Hand the shared workspace back the way this file found it — and check that it
+ * went back (tm 147).
+ *
+ * This file is the first one Playwright runs, and until now it was also the
+ * only one that wrote rows nobody removed. Both of them reached later specs:
+ *
+ * - the join invitation stayed pending, and the Team screen renders a pending
+ *   invitation as a row carrying the *inviter's* name, so
+ *   `command-palette.spec.ts`'s `getByRole('row').filter({ hasText: agentName })`
+ *   matched two rows and died on strict mode. That took `skills-routing` down
+ *   with it: the palette test failed mid-way with the demo agent left refusing
+ *   chats, so the router had nobody to route to.
+ * - the skill-editor scan's own `finally` fired a delete and never looked at
+ *   the reply, so a refused delete read exactly like a clean one. Two `New
+ *   skill N` rows survived every full-suite run and the second theme's scan
+ *   then had two things named "New skill" on the page.
+ *
+ * Hence the shape here: the removals are *asserted*, and the assertion runs
+ * after the context is disposed so a failure cannot leak a request context on
+ * top of the rows it is reporting. Setup goes through the API rather than the
+ * database (`fixtures.ts`), and so does teardown, for the same reason — a
+ * direct DELETE would hide a broken revoke path.
+ */
 test.afterAll(async () => {
+  const leaked: string[] = [];
+
+  if (apiCtx) {
+    const token = await freshOwnerToken();
+
+    for (const id of owedSkillIds.splice(0)) {
+      const removed = await apiCtx.delete(`${API_BASE}/skills/${id}`, auth(token));
+      // 404 is a success here: the per-test `finally` already got it.
+      if (!removed.ok() && removed.status() !== 404) {
+        leaked.push(`skill ${id}: ${removed.status()} ${await removed.text()}`);
+      }
+    }
+
+    if (joinInvitation) {
+      const revoked = await apiCtx.delete(
+        `${API_BASE}/invitations/${joinInvitation.id}`,
+        auth(token),
+      );
+      if (!revoked.ok() && revoked.status() !== 404) {
+        leaked.push(`invitation ${joinInvitation.id}: ${revoked.status()} ${await revoked.text()}`);
+      }
+    }
+  }
+
   await apiCtx?.dispose();
+
+  expect(
+    leaked,
+    `this spec left rows behind for every file after it:\n${leaked.join('\n')}`,
+  ).toEqual([]);
 });
 
 /**
@@ -574,7 +659,16 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       // my order?"), and once the shared e2e database has accumulated a run
       // or two a substring filter could no longer tell the two apart. There
       // is no delete affordance in the UI, so the fresh skill is removed
-      // through the API afterwards.
+      // through the API afterwards — and the id stays on `owedSkillIds` until a
+      // delete for it has actually been accepted, because the first version of
+      // this fired the request and ignored the reply (tm 147).
+      //
+      // `exact: true` on the toolbar button, for the same class of reason: the
+      // skill this very test mints is called "New skill N", and `getByRole`
+      // matches an accessible name by *substring*, so the button and the card
+      // it just created both answer to `{ name: 'New skill' }`. That is a
+      // strict-mode violation waiting for any run where a card outlives the
+      // scan, and the run that produced it read as an a11y failure.
       test('the skill editor has no serious or critical violations', async ({
         agentPage,
       }, testInfo) => {
@@ -588,13 +682,22 @@ test.describe('WCAG 2.1 AA (axe)', () => {
               (response) =>
                 response.url().endsWith('/skills') && response.request().method() === 'POST',
             );
-            await agentPage.getByRole('button', { name: 'New skill' }).click();
+            await agentPage.getByRole('button', { name: 'New skill', exact: true }).click();
             const skill = (await (await created).json()) as { id: string; name: string };
             skillId = skill.id;
+            owedSkillIds.push(skill.id);
             await expect(agentPage.getByRole('region', { name: skill.name })).toBeVisible();
           });
         } finally {
-          if (skillId) await apiCtx.delete(`${API_BASE}/skills/${skillId}`, auth(ownerToken));
+          if (skillId) {
+            const removed = await apiCtx.delete(
+              `${API_BASE}/skills/${skillId}`,
+              auth(await freshOwnerToken()),
+            );
+            if (removed.ok() || removed.status() === 404) {
+              owedSkillIds.splice(owedSkillIds.indexOf(skillId), 1);
+            }
+          }
         }
       });
 
@@ -679,7 +782,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       // the two forms this screen renders, with two labelled fields.
       test('join page has no serious or critical violations', async ({ page }, testInfo) => {
         await pinTheme(page, theme);
-        await page.goto(`/join?token=${joinToken}`);
+        await page.goto(`/join?token=${joinInvitation.token}`);
         await scanPanel(page, 'Join', theme, testInfo, async () => {
           await expect(page.getByRole('button', { name: 'Join workspace' })).toBeVisible();
         });

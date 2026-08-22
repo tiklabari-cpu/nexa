@@ -31,8 +31,79 @@ const SKILLED_AGENT = { email: 'agent2@acme.localhost', name: 'Priya Nair' } as 
 
 interface ChatSummary {
   id: string;
+  active: boolean;
   assignee_id: string | null;
   last_event: { text?: string } | null;
+}
+
+/** Every conversation in the workspace — the list endpoint caps a page at 100. */
+async function allChats(
+  request: APIRequestContext,
+  auth: Record<string, string>,
+): Promise<ChatSummary[]> {
+  const collected: ChatSummary[] = [];
+  let pageId: string | undefined;
+
+  // Bounded rather than `while (true)`: a cursor the server never stops handing
+  // back would otherwise hang the spec instead of failing it.
+  for (let page = 0; page < 10; page += 1) {
+    const query = `view=all&limit=100${pageId ? `&page_id=${encodeURIComponent(pageId)}` : ''}`;
+    const res = await request.get(`${API_BASE}/chats?${query}`, { headers: auth });
+    expect(res.ok(), `list chats failed: ${res.status()} ${await res.text()}`).toBe(true);
+    const body = (await res.json()) as { items: ChatSummary[]; next_page_id?: string };
+    collected.push(...body.items);
+    if (!body.next_page_id) break;
+    pageId = body.next_page_id;
+  }
+
+  return collected;
+}
+
+/**
+ * Leave the skilled agent a slot to be routed into (tm 147).
+ *
+ * This is the only spec in the suite that needs a *specific* agent to be
+ * assignable, and it is the one thing the seed cannot promise it: the router
+ * refuses an agent whose active threads have reached `concurrent_chats_limit`
+ * (`routing-service.ts` — `HAVING COUNT(t.id) < m.concurrent_chats_limit`), and
+ * the shared workspace collects conversations all run long. Measured on the run
+ * that exposed it: Priya held 6 active chats against a limit of 6 by the time
+ * this file's rule edit landed, so the widget conversation went to the queue
+ * with no assignee and the poll below reported "never routed to the skilled
+ * agent" — a routing defect that does not exist.
+ *
+ * Archiving is the narrower of the two fixes available. The other is to make
+ * every spec that opens a conversation close it again, which cuts the debris at
+ * source but spreads one precondition across a dozen files and quietly breaks
+ * the moment a new spec forgets. This one states the precondition where it is
+ * actually needed, and it takes the minimum: enough chats to leave exactly one
+ * free slot, oldest first, through the same `deactivate` an agent clicks when
+ * they are finished. Nothing after this file has a claim on Priya's *open*
+ * conversations — they are leftovers, not fixtures — and the transcripts stay
+ * readable, since archiving a chat neither deletes it nor its events.
+ */
+async function freeARoutingSlot(
+  request: APIRequestContext,
+  auth: Record<string, string>,
+  agentId: string,
+  limit: number,
+): Promise<void> {
+  const held = (await allChats(request, auth)).filter(
+    (chat) => chat.active && chat.assignee_id === agentId,
+  );
+  const surplus = held.length - (limit - 1);
+  if (surplus <= 0) return;
+
+  // `view=all` sorts newest first, so the tail is the oldest.
+  for (const chat of held.slice(-surplus)) {
+    const archived = await request.post(`${API_BASE}/chats/${chat.id}/deactivate`, {
+      headers: auth,
+    });
+    expect(
+      archived.ok(),
+      `could not archive ${chat.id} to make room: ${archived.status()} ${await archived.text()}`,
+    ).toBe(true);
+  }
 }
 
 /** The chat whose most recent message is `text`, straight from the list API. */
@@ -124,9 +195,13 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
 
       const roster = await request.get(`${API_BASE}/agents`, { headers: auth });
       expect(roster.ok()).toBe(true);
-      const agentsList = ((await roster.json()) as { items: { id: string; email: string }[] })
-        .items;
-      const skilledId = agentsList.find((a) => a.email === SKILLED_AGENT.email)?.id;
+      const agentsList = (
+        (await roster.json()) as {
+          items: { id: string; email: string; concurrent_chats_limit: number }[];
+        }
+      ).items;
+      const skilled = agentsList.find((a) => a.email === SKILLED_AGENT.email);
+      const skilledId = skilled?.id;
       const supervisorId = agentsList.find((a) => a.email === DEMO.email)?.id;
       expect(skilledId, 'skilled agent not found').toBeTruthy();
       expect(supervisorId, 'supervisor not found').toBeTruthy();
@@ -174,6 +249,12 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
       );
 
       // --- 4. A visitor writes in; routing must land it on the skilled agent -
+      // The skill filter decides *who* is eligible; capacity decides whether
+      // that person can be given anything at all. By this point in a full-suite
+      // run the earlier files have usually filled Priya to her limit, so the
+      // precondition is established rather than assumed (see `freeARoutingSlot`).
+      await freeARoutingSlot(request, auth, skilledId!, skilled!.concurrent_chats_limit);
+
       await openWidget(visitor, organizationId);
       await visitorSends(visitor, question);
 

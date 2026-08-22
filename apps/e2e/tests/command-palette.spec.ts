@@ -9,7 +9,75 @@
  * survive the round trip through the target screen, not just be constructed —
  * and that an action chosen here reaches the server, not merely the store.
  */
-import { DEMO, expect, test } from './fixtures.js';
+import { request as newApiContext, type APIRequestContext, type Page } from '@playwright/test';
+
+import { API_BASE, DEMO, expect, ownerAccessToken, test } from './fixtures.js';
+
+/**
+ * The demo agent's own row on the Team screen, and nothing else (tm 147).
+ *
+ * Scoped to the roster table on purpose. The Team screen renders a second
+ * table above it — pending invitations — whose rows carry the *inviter's*
+ * name in their "Invited by" column, so a page-wide
+ * `getByRole('row').filter({ hasText: agentName })` matches the demo agent's
+ * roster row *and* every invitation they sent. That is a strict-mode
+ * violation, and it is not a hypothetical: `a11y.spec.ts` left one pending
+ * invitation behind and took both availability tests here down with it, plus
+ * `skills-routing.spec.ts` after them.
+ *
+ * The leak itself is fixed at its source, but the locator was fragile
+ * independently of it: a workspace with a real outstanding invitation is a
+ * perfectly ordinary product state, and this file has no business failing on
+ * one.
+ */
+const rosterRow = (page: Page) =>
+  page
+    .getByRole('table', { name: 'Agents on this licence' })
+    .getByRole('row')
+    .filter({ hasText: DEMO.agentName });
+
+/**
+ * Availability, restored after every test in this file (tm 147).
+ *
+ * Two of them stop the demo agent accepting chats and turn it back on at the
+ * end — which is exactly the wrong place for the restore to live, because a
+ * test that fails in between never reaches it. That is what happened: one
+ * assertion in the middle of the palette test failed, the agent stayed
+ * refusing chats, and `skills-routing.spec.ts` then had no one to route to and
+ * reported a routing defect that did not exist. One failing test should cost
+ * one red, not three.
+ *
+ * Unconditional rather than conditional: `PUT /agents/me/routing-status` is
+ * idempotent, and reading the status first only adds a request that can itself
+ * be the thing that fails.
+ *
+ * The token is minted per teardown rather than once in `beforeAll`, because a
+ * held one does not stay valid: an owner may hold 25 live sessions
+ * (`MAX_ACTIVE_TOKENS_PER_OWNER`) and every signed-in test mints another, so a
+ * setup token silently becomes a 401 partway down a long file. `a11y.spec.ts`
+ * lost its cleanup to exactly that (tm 147), and this file has no reason to
+ * repeat it for the sake of three saved requests.
+ */
+let apiCtx: APIRequestContext;
+
+test.beforeAll(async () => {
+  apiCtx = await newApiContext.newContext();
+});
+
+test.afterAll(async () => {
+  await apiCtx?.dispose();
+});
+
+test.afterEach(async () => {
+  const restored = await apiCtx.put(`${API_BASE}/agents/me/routing-status`, {
+    headers: { authorization: `Bearer ${await ownerAccessToken(apiCtx)}` },
+    data: { routing_status: 'accepting_chats' },
+  });
+  expect(
+    restored.ok(),
+    `could not put the demo agent back to accepting chats: ${restored.status()} ${await restored.text()}`,
+  ).toBe(true);
+});
 
 test.describe('command palette', () => {
   test('searches the workspace and opens the chosen record', async ({ agentPage }) => {
@@ -73,7 +141,7 @@ test.describe('command palette', () => {
 
     await agentPage.getByRole('link', { name: 'Team' }).click();
     await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
-    const me = agentPage.getByRole('row').filter({ hasText: DEMO.agentName });
+    const me = rosterRow(agentPage);
     await expect(me).toContainText('Not accepting');
     await agentPage.screenshot({ path: 'kanit/95-palette-action.png', fullPage: true });
 
@@ -85,9 +153,7 @@ test.describe('command palette', () => {
     await expect(palette).toBeHidden();
 
     await agentPage.reload();
-    await expect(agentPage.getByRole('row').filter({ hasText: DEMO.agentName })).toContainText(
-      'Accepting chats',
-    );
+    await expect(rosterRow(agentPage)).toContainText('Accepting chats');
   });
 
   /**
@@ -164,9 +230,7 @@ test.describe('command palette', () => {
     // only the local store would look identical here and be wrong everywhere
     // routing decisions are made.
     await agentPage.getByRole('link', { name: 'Team' }).click();
-    await expect(agentPage.getByRole('row').filter({ hasText: DEMO.agentName })).toContainText(
-      'Not accepting',
-    );
+    await expect(rosterRow(agentPage)).toContainText('Not accepting');
 
     // Put it back before anything downstream depends on it.
     await openPalette();
@@ -174,9 +238,7 @@ test.describe('command palette', () => {
     await agentPage.getByRole('option', { name: 'Start Accepting Chats' }).click();
     await expect(palette).toBeHidden();
     await agentPage.reload();
-    await expect(agentPage.getByRole('row').filter({ hasText: DEMO.agentName })).toContainText(
-      'Accepting chats',
-    );
+    await expect(rosterRow(agentPage)).toContainText('Accepting chats');
 
     // ── Kind 3: a question nothing else can answer ──────────────────────────
     // The criterion's own example. It matches no action, no module and no

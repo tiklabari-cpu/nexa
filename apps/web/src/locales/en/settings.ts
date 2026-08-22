@@ -170,6 +170,15 @@ export const settings: Messages = {
     'Forward your support inbox here and each email becomes a ticket.',
   'settings.channels.messenger.name': 'Facebook Messenger',
   'settings.channels.messenger.description': 'Answer Messenger conversations.',
+  'settings.channels.messenger.connectCta': 'Connect with Facebook (mock)',
+  'settings.channels.messenger.connectTitle': 'Connect Facebook Messenger',
+  'settings.channels.messenger.connectDescription':
+    'Mock authorization for this build — a Facebook authorization code is generated automatically; add the Page id it should connect (name optional).',
+  'settings.channels.messenger.pageIdLabel': 'Facebook Page id',
+  'settings.channels.messenger.pageIdError': 'Enter the Facebook Page id.',
+  'settings.channels.messenger.pageNameLabel': 'Page name (optional)',
+  'settings.channels.messenger.disconnectConfirm':
+    'Disconnect Messenger? Messages will stop arriving until you reconnect.',
   'settings.channels.whatsapp.name': 'WhatsApp',
   'settings.channels.whatsapp.description': 'Answer WhatsApp messages.',
   'settings.channels.sms.name': 'SMS',

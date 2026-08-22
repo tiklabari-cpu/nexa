@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 135.1 — 08.5.4-b: Messenger kartı canlı — "Connect with Facebook (mock)" → page_id/page_name → POST /channels/messenger/connect → Connected/Disconnect — done — 2026-08-22 UTC
+
+- **Yapıldı:** `Channels.tsx`'te Messenger, Instagram/Telegram deseniyle sabit "Coming soon"dan çıktı (`messengerChannel()`, durum/adres `/channels`'tan türetilir). Instagram'dan fark: mock OAuth `code`'u kullanıcı yazmıyor — "Connect with Facebook (mock)" düğmesi `code`'u kendisi taşıyor, form yalnız `page_id` (zorunlu) + `page_name` (opsiyonel) istiyor. Sunucu/sözleşme değişmedi (adaptör zaten tm 35'te MOCK). i18n `settings.channels.messenger.*` (en/tr).
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · format:check · `pnpm -w build` 8/8 · turbo `test --force` (e2e/api hariç) 9/9 — web 117/**1278** (taban 1271 + 7) · api `test:unit` 64/995 · api `test:integration` 96 dosya/2452 üç shard'da (taban ile birebir) · hedefli e2e `settings`+`instagram`+`telegram`+`apps` **26/26** · `pnpm -w test:e2e` tam süit **154/154** (68 `kanit/*.png` beklenen yan etki). Kontrat/migration değişmedi.
+- **Varsayımlar:** yok.
+- **Sonraki pencereye not:** Sırada 08.5.5-b (tm 135.2, Twilio SMS kartı) ve 08.5.6-b (tm 135.3, WhatsApp kartı) — ikisi de aynı desen. `run-loop.sh`'nin çalışma alanındaki değişikliği (panel STOP kapısı) bu pencereden ÖNCE vardı ve bilerek commit'lenmedi (tm 134.4'ten devreden not) — bu görevin işi değil.
+
 ## 134.4 — 07.8-c: uçtan uca `csat.spec.ts` — ziyaretçi → arşiv → post-chat form + oy → Reports Reviews donut'u — done — 2026-08-22 UTC
 
 - **Yapıldı:** Yeni `apps/e2e/tests/csat.spec.ts` (2 test), ürün kodu değişmeden. (1) Ziyaretçi greeting → pre-chat **adıyla** girer (anonim ziyaretçi CRM'de yalnız "en sonuncusu" olarak adreslenebilirdi, bu bir kanıt değil), yazar → ajan yanıtlar + **arşivler** → widget'ın 4 sn'lik poll'u post-chat formunu + CSAT davetini + "Chat ended."i açar → form gönderilir → 👍 → `csat.good` +1 · `bad` sabit → aynı yanıt **CRM kartında** (`Custom fields`) → **Reports → Reviews** donut'unun erişilebilir adı (`N of M rated good`) sunucuyu birebir alıntılar. (2) Ziyaretçi sohbeti **kendi bitirir** (⋮ → End chat → onay diyaloğu) → aynı kapanış ekranı, 👎 → `csat.bad` +1. Post-chat alanı seed'de yok: spec `POST /settings/custom-fields` ile `form_placement:'post_chat'` alanı `beforeAll`'da kurar, `afterAll`'da siler (artık tanım da temizlenir — (license, entity, label) tekil). 5 kanıt PNG `kanit/csat-*.png`.

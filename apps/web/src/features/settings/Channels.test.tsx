@@ -65,6 +65,70 @@ afterEach(() => {
   localStorage.clear();
 });
 
+describe('Messenger card — not connected', () => {
+  beforeEach(() => stubFetch({}));
+
+  // Scoped to the Messenger card's own testid, same reason as Instagram's.
+  async function openConnectForm() {
+    const card = await screen.findByTestId('channel-messenger');
+    await userEvent.click(
+      within(card).getByRole('button', { name: 'Connect with Facebook (mock)' }),
+    );
+    return screen.getByRole('dialog', { name: 'Connect Facebook Messenger' });
+  }
+
+  it('opens a connect form that enables Submit once the Page id is filled — the page name stays optional', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+    const submit = within(dialog).getByRole('button', { name: 'Connect' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Facebook Page id'), 'page_42');
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows a field-under error for a missing Page id and keeps Submit disabled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+
+    await userEvent.click(within(dialog).getByLabelText('Facebook Page id'));
+    await userEvent.tab(); // blur without typing reveals the message
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Enter the Facebook Page id.');
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+  });
+});
+
+describe('Messenger card — connected', () => {
+  beforeEach(() =>
+    stubFetch({
+      channels: {
+        items: [
+          {
+            type: 'messenger',
+            status: 'connected',
+            address: 'page_789',
+            connected: true,
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  );
+
+  it('shows the connected page id and a Disconnect action', async () => {
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-messenger');
+    // The card renders Not-connected/mock-connect first, synchronously — the
+    // switch to Connected only happens once /channels resolves.
+    expect(await within(card).findByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    expect(within(card).getByText('page_789')).toBeInTheDocument();
+  });
+});
+
 describe('Instagram card — not connected', () => {
   beforeEach(() => stubFetch({}));
 

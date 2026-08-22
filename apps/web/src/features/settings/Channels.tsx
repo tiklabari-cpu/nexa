@@ -111,6 +111,7 @@ const CTA_KEYS: Record<string, string> = {
   'Get address': 'settings.channels.cta.getAddress',
   'Get notified': 'settings.channels.cta.getNotified',
   Disconnect: 'settings.channels.cta.disconnect',
+  'Connect with Facebook (mock)': 'settings.channels.messenger.connectCta',
 };
 
 function ctaText(t: TFunction, cta: string): string {
@@ -186,7 +187,7 @@ export function channelsFor(
       status: 'ready',
       cta: 'Get address',
     },
-    comingSoon('messenger', 'Facebook Messenger', '📨', 'Answer Messenger conversations.'),
+    messengerChannel(connectedChannels),
     comingSoon('whatsapp', 'WhatsApp', '📱', 'Answer WhatsApp messages.'),
     comingSoon('sms', 'SMS', '💬', 'Reply to text messages over Twilio.'),
     instagramChannel(connectedChannels),
@@ -196,6 +197,28 @@ export function channelsFor(
 
 function comingSoon(id: string, name: string, icon: string, description: string): Channel {
   return { id, name, icon, description, status: 'coming_soon', cta: 'Get notified' };
+}
+
+/**
+ * Messenger connect/disconnect (FR-MOD-08.5.4). Same derivation as
+ * `instagramChannel`/`telegramChannel`: status/address come from the live
+ * `/channels` list, not a fixed label. Its not-connected CTA names the
+ * provider ("Connect with Facebook (mock)") because — unlike Instagram's
+ * plain "Connect" — the button itself is what runs the mock OAuth exchange;
+ * no code field is ever shown to fill in.
+ */
+function messengerChannel(connectedChannels: ConnectedChannel[]): Channel {
+  const row = connectedChannels.find((c) => c.type === 'messenger');
+  const isConnected = row?.connected === true;
+  return {
+    id: 'messenger',
+    name: 'Facebook Messenger',
+    icon: '📨',
+    description: 'Answer Messenger conversations.',
+    status: isConnected ? 'connected' : 'not_connected',
+    cta: isConnected ? 'Disconnect' : 'Connect with Facebook (mock)',
+    address: isConnected ? (row?.address ?? null) : undefined,
+  };
 }
 
 /**
@@ -392,13 +415,17 @@ function ChannelCardView({
   const [notified, setNotified] = useState<boolean>(() => readNotified(channel.id));
   const meta = STATUS_META[channel.status];
   const copy = CHANNEL_COPY[channel.id];
-  // The Website/Instagram/Telegram status is unknown until its query
-  // resolves; do not flash a wrong badge in the meantime. `channelsLoading`
-  // is false while the /channels request is gated off (canReadChannels), so
-  // it never hides the badge forever for an agent without the scope.
+  // The Website/Messenger/Instagram/Telegram status is unknown until its
+  // query resolves; do not flash a wrong badge in the meantime.
+  // `channelsLoading` is false while the /channels request is gated off
+  // (canReadChannels), so it never hides the badge forever for an agent
+  // without the scope.
   const showStatus =
     !(websitesLoading && channel.id === 'website') &&
-    !(channelsLoading && (channel.id === 'instagram' || channel.id === 'telegram'));
+    !(
+      channelsLoading &&
+      (channel.id === 'messenger' || channel.id === 'instagram' || channel.id === 'telegram')
+    );
 
   const cta = ctaText(t, channel.cta);
 
@@ -440,6 +467,8 @@ function ChannelCardView({
           <ChatPageLink label={cta} />
         ) : channel.id === 'email' ? (
           <EmailForwardingAddress label={cta} />
+        ) : channel.id === 'messenger' ? (
+          <MessengerChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'instagram' ? (
           <InstagramChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'telegram' ? (
@@ -743,6 +772,161 @@ function TelegramChannelAction({ channel, cta }: { channel: Channel; cta: string
           className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
         />
         <FieldError id="telegram-bot-username-error" message={form.errorFor('bot_username')} />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={close}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('settings.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {form.isSubmitting
+              ? t('settings.channels.connecting')
+              : t('settings.channels.cta.connect')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/** The mock Facebook OAuth authorization code — minted here, never typed. */
+const MOCK_FACEBOOK_AUTH_CODE = 'mock-facebook-auth-code';
+
+/**
+ * Messenger connect/disconnect (FR-MOD-08.5.4). Clicking "Connect with
+ * Facebook (mock)" is what stands in for the Facebook redirect — the
+ * authorization code is minted right here rather than typed, so the form
+ * that follows only asks for the Facebook Page being connected (its name is
+ * optional). Disconnect asks first, same as Instagram/Telegram: it stops
+ * inbound messages at once and is not undoable from this button.
+ */
+function MessengerChannelAction({ channel, cta }: { channel: Channel; cta: string }): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const client = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const connect = useMutation({
+    mutationFn: (body: { page_id: string; page_name: string }) =>
+      api.post('/channels/messenger/connect', {
+        code: MOCK_FACEBOOK_AUTH_CODE,
+        page_id: body.page_id,
+        ...(body.page_name ? { page_name: body.page_name } : {}),
+      }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const disconnect = useMutation({
+    mutationFn: () => api.post('/channels/messenger/disconnect'),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const form = useForm({
+    initial: { page_id: '', page_name: '' },
+    validators: {
+      page_id: required(t('settings.channels.messenger.pageIdError')),
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        await connect.mutateAsync(values);
+        setOpen(false);
+      } catch (failure) {
+        // A 4xx (e.g. that page already belongs to another workspace) is
+        // shown as a form-level notice; the query cache is untouched, so the
+        // card cannot flip to Connected on a failed attempt.
+        setSubmitError(t(errorMessageKey(failure)));
+      }
+    },
+  });
+
+  const close = useCloseGuard({
+    isDirty: form.isDirty,
+    message: t('settings.channels.discardConnectionConfirm'),
+    onClose: () => {
+      setOpen(false);
+      form.reset();
+      connect.reset();
+    },
+  });
+
+  if (channel.status === 'connected') {
+    return (
+      <div className="flex flex-col gap-1">
+        {channel.address && (
+          <code className="truncate text-2xs text-content-tertiary">{channel.address}</code>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(t('settings.channels.messenger.disconnectConfirm'))) {
+              disconnect.mutate();
+            }
+          }}
+          disabled={disconnect.isPending}
+          className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          {disconnect.isPending ? t('settings.channels.disconnecting') : cta}
+        </button>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+      >
+        {cta}
+      </button>
+    );
+  }
+
+  return (
+    <Modal
+      onClose={close}
+      title={t('settings.channels.messenger.connectTitle')}
+      description={t('settings.channels.messenger.connectDescription')}
+    >
+      <form onSubmit={form.handleSubmit} noValidate>
+        {form.submitError && (
+          <p role="alert" className="mb-3 text-sm text-danger">
+            {form.submitError}
+          </p>
+        )}
+
+        <label htmlFor="messenger-page-id" className="mb-1.5 block text-sm font-medium">
+          {t('settings.channels.messenger.pageIdLabel')}
+        </label>
+        <input
+          id="messenger-page-id"
+          value={form.values.page_id}
+          autoFocus
+          onChange={(event) => form.setValue('page_id', event.target.value)}
+          onBlur={() => form.blur('page_id')}
+          aria-invalid={form.errorFor('page_id') ? true : undefined}
+          aria-describedby={form.errorFor('page_id') ? 'messenger-page-id-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="messenger-page-id-error" message={form.errorFor('page_id')} />
+
+        <label htmlFor="messenger-page-name" className="mb-1.5 mt-3 block text-sm font-medium">
+          {t('settings.channels.messenger.pageNameLabel')}
+        </label>
+        <input
+          id="messenger-page-name"
+          value={form.values.page_name}
+          onChange={(event) => form.setValue('page_name', event.target.value)}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
 
         <div className="mt-4 flex justify-end gap-2">
           <button

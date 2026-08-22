@@ -43,10 +43,10 @@ describe('channelsFor', () => {
   });
 
   it('shows every unbuilt channel as Coming soon with Get notified', () => {
-    // instagram (08.5.7-e) and telegram (08.5.8-d) are built — their status is
-    // derived from /channels, not fixed — so both are excluded here the same
-    // way website/chat-page/email are.
-    const built = new Set(['website', 'chat-page', 'email', 'instagram', 'telegram']);
+    // messenger (08.5.4-b), instagram (08.5.7-e) and telegram (08.5.8-d) are
+    // built — their status is derived from /channels, not fixed — so all
+    // three are excluded here the same way website/chat-page/email are.
+    const built = new Set(['website', 'chat-page', 'email', 'messenger', 'instagram', 'telegram']);
     const rest = channelsFor([]).filter((c) => !built.has(c.id));
     expect(rest.length).toBeGreaterThan(0);
     for (const channel of rest) {
@@ -63,6 +63,53 @@ describe('channelsFor', () => {
       channelsFor([]).find((c) => c.id === 'whatsapp')!.status, // coming_soon
     ]);
     expect(seen).toEqual(new Set(['not_connected', 'connected', 'ready', 'coming_soon']));
+  });
+});
+
+/**
+ * The Messenger card (FR-MOD-08.5.4) moved off the fixed "Coming soon" list
+ * the same way Instagram/Telegram did: status/address come from the live
+ * `/channels` list. Its not-connected CTA names the provider because the
+ * button itself runs the mock OAuth exchange, unlike Instagram/Telegram's
+ * plain "Connect".
+ */
+describe('channelsFor — messenger', () => {
+  const messenger = (rows: ConnectedChannel[]) =>
+    channelsFor([], rows).find((c) => c.id === 'messenger')!;
+
+  const row = (overrides: Partial<ConnectedChannel> = {}): ConnectedChannel => ({
+    type: 'messenger',
+    status: 'connected',
+    address: 'page_789',
+    connected: true,
+    created_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('is Not connected with no connected-channel row, offering the Facebook mock connect CTA', () => {
+    const card = messenger([]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect with Facebook (mock)');
+    expect(card.address).toBeUndefined();
+  });
+
+  it('is Not connected when the row exists but is not currently connected', () => {
+    const card = messenger([row({ connected: false, status: 'off' })]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect with Facebook (mock)');
+  });
+
+  it('is Connected when the /channels row is connected, offering Disconnect and showing the page id', () => {
+    const card = messenger([row({ address: 'page_789' })]);
+    expect(card.status).toBe('connected');
+    expect(card.cta).toBe('Disconnect');
+    expect(card.address).toBe('page_789');
+  });
+
+  it('does not confuse another connected channel type for messenger', () => {
+    const card = messenger([row({ type: 'instagram' })]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect with Facebook (mock)');
   });
 });
 

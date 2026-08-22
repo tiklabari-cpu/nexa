@@ -161,6 +161,15 @@ export const settings: Messages = {
     'Destek gelen kutunuzu buraya yönlendirin, her e-posta bir talebe dönüşsün.',
   'settings.channels.messenger.name': 'Facebook Messenger',
   'settings.channels.messenger.description': 'Messenger sohbetlerini yanıtlayın.',
+  'settings.channels.messenger.connectCta': 'Facebook ile bağlan (sahte)',
+  'settings.channels.messenger.connectTitle': "Facebook Messenger'ı bağla",
+  'settings.channels.messenger.connectDescription':
+    'Bu sürüm için sahte yetkilendirme — Facebook yetkilendirme kodu otomatik üretilir; bağlanacak Sayfa kimliğini girin (ad isteğe bağlı).',
+  'settings.channels.messenger.pageIdLabel': 'Facebook Sayfa kimliği',
+  'settings.channels.messenger.pageIdError': 'Facebook Sayfa kimliğini girin.',
+  'settings.channels.messenger.pageNameLabel': 'Sayfa adı (isteğe bağlı)',
+  'settings.channels.messenger.disconnectConfirm':
+    'Messenger bağlantısı kesilsin mi? Yeniden bağlanana kadar mesajlar gelmeyi durdurur.',
   'settings.channels.whatsapp.name': 'WhatsApp',
   'settings.channels.whatsapp.description': 'WhatsApp mesajlarını yanıtlayın.',
   'settings.channels.sms.name': 'SMS',

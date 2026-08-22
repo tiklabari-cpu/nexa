@@ -73,6 +73,11 @@ interface UsageOpts {
   overageCents?: number;
   quotaWarning?: boolean;
   access?: 'trialing' | 'active' | 'read_only';
+  /** Trial countdown shown by the status banner (`access: 'trialing'`). */
+  trial?: { ends_at: string | null; days_remaining: number | null };
+  billingCycle?: 'monthly' | 'annual';
+  seats?: number;
+  minSeats?: number;
   /** Billed API calls this period — exercises the FR-MOD-10.1.5 counter/overage. */
   apiUsed?: number;
   /** Invoices the list endpoint returns (FR-MOD-10.3). */
@@ -153,12 +158,12 @@ function mockBilling(opts: UsageOpts): void {
     if (path === '/billing/subscription') {
       return Promise.resolve({
         plan: 'growth',
-        billing_cycle: 'monthly',
+        billing_cycle: opts.billingCycle ?? 'monthly',
         status: access === 'trialing' ? 'trialing' : 'active',
         access,
-        trial: { ends_at: null, days_remaining: null },
-        seats: 3,
-        min_seats: 1,
+        trial: opts.trial ?? { ends_at: null, days_remaining: null },
+        seats: opts.seats ?? 3,
+        min_seats: opts.minSeats ?? 1,
         unit_price_cents: 9900,
         usage,
         estimated_total_cents: 29700,
@@ -246,6 +251,169 @@ describe('BillingPage — AI resolutions meter', () => {
     // 10 over at $0.50 each = $5.00, and the counter is honestly past 100%.
     expect(screen.getByTestId('overage-charge')).toHaveTextContent('$5.00');
     expect(screen.getByTestId('quota-percent')).toHaveTextContent('(105% used)');
+  });
+});
+
+describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1–.3)', () => {
+  it('switches to annual billing through a PATCH and reflects the reply', async () => {
+    const user = userEvent.setup();
+    mockBilling({ billingCycle: 'monthly', seats: 3 });
+    api.patch.mockResolvedValue({
+      plan: 'growth',
+      billing_cycle: 'annual',
+      status: 'active',
+      access: 'active',
+      trial: { ends_at: null, days_remaining: null },
+      seats: 3,
+      min_seats: 1,
+      unit_price_cents: 9900,
+      usage: {
+        ai_resolutions: {
+          used: 12,
+          included: 200,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 50,
+          overage_unit_price_cents: 50,
+        },
+        api_calls: {
+          used: 0,
+          included: 100_000,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 100_000,
+          overage_unit_price_cents: 2_950,
+        },
+      },
+      estimated_total_cents: 297_000,
+      annual_savings_cents: 1_188,
+      provider: 'mock',
+    });
+    renderBilling(<BillingPage />);
+
+    const monthlyButton = await screen.findByRole('button', { name: 'Monthly' });
+    expect(monthlyButton).toHaveAttribute('aria-pressed', 'true');
+    const annualButton = screen.getByRole('button', { name: /Annual/ });
+    expect(annualButton).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(annualButton);
+
+    expect(api.patch).toHaveBeenCalledWith('/billing/subscription', { billing_cycle: 'annual' });
+    // The page re-reads from the PATCH reply rather than guessing locally.
+    await vi.waitFor(() => {
+      expect(screen.getByRole('button', { name: /Annual/ })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+    expect(screen.getByRole('button', { name: 'Monthly' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+  });
+
+  it('adds a seat through a PATCH', async () => {
+    const user = userEvent.setup();
+    mockBilling({ seats: 3, minSeats: 1 });
+    api.patch.mockResolvedValue({
+      plan: 'growth',
+      billing_cycle: 'monthly',
+      status: 'active',
+      access: 'active',
+      trial: { ends_at: null, days_remaining: null },
+      seats: 4,
+      min_seats: 1,
+      unit_price_cents: 9900,
+      usage: {
+        ai_resolutions: {
+          used: 12,
+          included: 200,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 50,
+          overage_unit_price_cents: 50,
+        },
+        api_calls: {
+          used: 0,
+          included: 100_000,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 100_000,
+          overage_unit_price_cents: 2_950,
+        },
+      },
+      estimated_total_cents: 39_600,
+      annual_savings_cents: 0,
+      provider: 'mock',
+    });
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByTestId('seat-count')).toHaveTextContent('3');
+
+    await user.click(screen.getByRole('button', { name: 'Add a seat' }));
+
+    expect(api.patch).toHaveBeenCalledWith('/billing/subscription', { seats: 4 });
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('seat-count')).toHaveTextContent('4');
+    });
+  });
+
+  it('disables removing a seat at the active-agent floor', async () => {
+    mockBilling({ seats: 1, minSeats: 1 });
+    renderBilling(<BillingPage />);
+
+    const removeButton = await screen.findByRole('button', { name: 'Remove a seat' });
+    expect(removeButton).toBeDisabled();
+    expect(screen.getByText(/Minimum 1/)).toBeInTheDocument();
+  });
+
+  it('shows a $0 charge now and the post-trial price while trialing', async () => {
+    mockBilling({
+      access: 'trialing',
+      trial: { ends_at: '2026-08-10T00:00:00.000Z', days_remaining: 5 },
+      seats: 2,
+    });
+    renderBilling(<BillingPage />);
+
+    const summary = await screen.findByTestId('billing-summary');
+    expect(summary).toHaveTextContent('Billed now');
+    expect(summary).toHaveTextContent('$0.00');
+    expect(summary).toHaveTextContent('After the trial:');
+  });
+});
+
+describe('BillingPage — trial and read-only banners (ADR-10)', () => {
+  it('shows the trial countdown and end date', async () => {
+    mockBilling({
+      access: 'trialing',
+      trial: { ends_at: '2026-08-10T00:00:00.000Z', days_remaining: 5 },
+    });
+    renderBilling(<BillingPage />);
+
+    const banner = await screen.findByRole('status');
+    expect(banner).toHaveTextContent('5 days left in your trial');
+    expect(banner).toHaveTextContent(/ends on/i);
+    expect(screen.queryByRole('alert', { name: /read-only/i })).not.toBeInTheDocument();
+  });
+
+  it('shows the read-only banner once the trial has expired, without hiding the data', async () => {
+    mockBilling({ access: 'read_only' });
+    renderBilling(<BillingPage />);
+
+    const banner = await screen.findByRole('alert');
+    expect(banner).toHaveTextContent('This workspace is read-only.');
+    expect(banner).toHaveTextContent(/trial has ended/i);
+    expect(banner).toHaveTextContent(/nothing has been deleted/i);
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('notes that a payment method can still be updated while read-only', async () => {
+    mockBilling({ access: 'read_only', paymentMethod: null });
+    renderBilling(<BillingPage />);
+
+    await screen.findByRole('button', { name: /add payment method/i });
+
+    expect(screen.getByText(/can still update your payment method/i)).toBeInTheDocument();
   });
 });
 
@@ -457,6 +625,21 @@ describe('BillingPage — API packages (FR-MOD-09.3)', () => {
     renderBilling(<BillingPage />);
 
     expect(await screen.findByTestId('api-packages-empty')).toBeInTheDocument();
+  });
+
+  it('states no card is charged before the purchase is confirmed (mock billing)', async () => {
+    const user = userEvent.setup();
+    mockBilling({});
+    renderBilling(<BillingPage />);
+
+    await screen.findByTestId('api-package-essential');
+    await user.click(screen.getByRole('button', { name: 'Buy Essential' }));
+
+    expect(
+      screen.getByText('Buy Essential for $29.99? No card is charged (mock billing).'),
+    ).toBeInTheDocument();
+    // Nothing is posted until the confirm button is pressed.
+    expect(api.post).not.toHaveBeenCalled();
   });
 
   it('buys a package through a confirm step and raises the quota on success', async () => {

@@ -56,4 +56,11 @@ export const common: Messages = {
   // still gets one in the agent's language (Banner.tsx, Panel.tsx).
   'common.actions.dismiss': 'Dismiss',
   'common.actions.collapsePanel': 'Collapse panel',
+  // Tour.tsx's own chrome (FR-MOD-02.2.3) — step content is the caller's, but
+  // Back/Next/Skip/Done and the counter are generic across every tour.
+  'common.actions.tourNext': 'Next',
+  'common.actions.tourBack': 'Back',
+  'common.actions.tourSkip': 'Skip',
+  'common.actions.tourDone': 'Done',
+  'common.actions.tourProgress': 'Step {current} of {count}',
 };

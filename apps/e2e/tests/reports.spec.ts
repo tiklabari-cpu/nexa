@@ -417,7 +417,7 @@ test.describe('reports — chat topics (FR-MOD-07.6)', () => {
     await agentPage.screenshot({ path: 'kanit/23-reports-topics-empty.png', fullPage: true });
   });
 
-  test('Overview promo opens the tab, and "Remind me later" persists across a reload (07.6-f)', async ({
+  test('CTA opens the tab, and the promo never returns to Overview (07.6-f segment, tm 139.5)', async ({
     agentPage,
   }) => {
     await agentPage.goto('/app/reports');
@@ -435,12 +435,30 @@ test.describe('reports — chat topics (FR-MOD-07.6)', () => {
     );
     await expect(promo).toHaveCount(0);
 
-    // Back on Overview it returns — it has not been dismissed yet…
+    // Segment: Topics has now been opened, so the promo does not come back —
+    // opening it once silences it exactly as an explicit dismiss would.
     await agentPage.getByRole('tab', { name: 'Overview' }).click();
+    await expect(promo).toHaveCount(0);
+
+    // …and it stays silenced across a full reload (which re-auths from the
+    // stored refresh token) — the mark is a real localStorage write, not
+    // component state.
+    await agentPage.reload();
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+    await expect(agentPage.getByText('Top chat topics in one place')).toHaveCount(0);
+  });
+
+  test('"Remind me later" persists across a reload, without ever opening Topics (07.6-f)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    const promo = agentPage.getByText('Top chat topics in one place');
     await expect(promo).toBeVisible();
 
-    // …until "Remind me later" — a real localStorage dismiss — hides it, and a full
-    // reload (which re-auths from the stored refresh token) keeps it hidden.
+    // A real localStorage dismiss — hides it, and a full reload (which
+    // re-auths from the stored refresh token) keeps it hidden.
     await agentPage.getByRole('button', { name: 'Remind me later' }).click();
     await expect(promo).toHaveCount(0);
     await agentPage.reload();

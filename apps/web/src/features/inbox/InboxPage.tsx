@@ -18,6 +18,7 @@ import { CopilotPanel } from './CopilotPanel.js';
 import { Transcript } from './Transcript.js';
 import { TypingIndicator } from './TypingIndicator.js';
 import { ConflictBanner } from './ConflictBanner.js';
+import { TakeTourBanner } from './TakeTourBanner.js';
 import {
   useChat,
   useChatList,
@@ -268,341 +269,352 @@ export function InboxPage(): ReactElement {
   }, [ticketItems, selectedTicketId, onTickets, tickets.data]);
 
   return (
-    <>
-      {/* Views */}
-      <nav
-        aria-label={t('inbox.rail.ariaLabel')}
-        className="flex w-sidebar shrink-0 flex-col overflow-y-auto border-r border-border bg-surface"
-      >
-        <header className="flex h-topbar items-center justify-between px-4">
-          <h1 className="text-lg font-semibold">{t('inbox.rail.title')}</h1>
-          <ConnectionBadge status={rtmStatus} />
-        </header>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {/* Take tour (FR-MOD-01.4, 02.2.3): above both the ticket grid and the
+          chat panes, since it is a whole-module offer, not a chat-view one. */}
+      <TakeTourBanner />
+      <div className="flex min-h-0 flex-1">
+        {/* Views */}
+        <nav
+          aria-label={t('inbox.rail.ariaLabel')}
+          className="flex w-sidebar shrink-0 flex-col overflow-y-auto border-r border-border bg-surface"
+        >
+          <header className="flex h-topbar items-center justify-between px-4">
+            <h1 className="text-lg font-semibold">{t('inbox.rail.title')}</h1>
+            <ConnectionBadge status={rtmStatus} />
+          </header>
 
-        <ul className="flex flex-col gap-0.5 px-2">
-          {VIEWS.map((item) => (
-            <li key={item.id}>
-              <ViewButton
-                label={t(VIEW_LABEL_KEY[item.id])}
-                icon={item.icon}
-                active={selection.kind === 'chat' && selection.view === item.id}
-                count={counts[item.id]}
-                onClick={() => selectChatView(item.id)}
-              />
-            </li>
-          ))}
-        </ul>
+          <ul className="flex flex-col gap-0.5 px-2">
+            {VIEWS.map((item) => (
+              <li key={item.id}>
+                <ViewButton
+                  label={t(VIEW_LABEL_KEY[item.id])}
+                  icon={item.icon}
+                  active={selection.kind === 'chat' && selection.view === item.id}
+                  count={counts[item.id]}
+                  onClick={() => selectChatView(item.id)}
+                />
+              </li>
+            ))}
+          </ul>
 
-        <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          {t('inbox.rail.aiHeading')}
-        </h2>
-        <ul className="flex flex-col gap-0.5 px-2">
-          {AI_VIEWS.map((item) => (
-            <li key={item.id}>
-              <ViewButton
-                label={t(VIEW_LABEL_KEY[item.id])}
-                icon={item.icon}
-                active={selection.kind === 'chat' && selection.view === item.id}
-                count={counts[item.id]}
-                onClick={() => selectChatView(item.id)}
-              />
-            </li>
-          ))}
-        </ul>
+          <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('inbox.rail.aiHeading')}
+          </h2>
+          <ul className="flex flex-col gap-0.5 px-2">
+            {AI_VIEWS.map((item) => (
+              <li key={item.id}>
+                <ViewButton
+                  label={t(VIEW_LABEL_KEY[item.id])}
+                  icon={item.icon}
+                  active={selection.kind === 'chat' && selection.view === item.id}
+                  count={counts[item.id]}
+                  onClick={() => selectChatView(item.id)}
+                />
+              </li>
+            ))}
+          </ul>
 
-        <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          {t('inbox.rail.ticketsHeading')}
-        </h2>
-        <ul className="flex flex-col gap-0.5 px-2">
-          {TICKET_VIEWS.map((item) => (
-            <li key={item.id}>
-              <ViewButton
-                label={t(TICKET_VIEW_LABEL_KEY[item.id])}
-                icon={item.icon}
-                active={selection.kind === 'ticket' && selection.view === item.id}
-                onClick={() => selectTicketView(item.id)}
-              />
-            </li>
-          ))}
-        </ul>
+          <h2 className="px-4 pb-1 pt-4 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('inbox.rail.ticketsHeading')}
+          </h2>
+          <ul className="flex flex-col gap-0.5 px-2">
+            {TICKET_VIEWS.map((item) => (
+              <li key={item.id}>
+                <ViewButton
+                  label={t(TICKET_VIEW_LABEL_KEY[item.id])}
+                  icon={item.icon}
+                  active={selection.kind === 'ticket' && selection.view === item.id}
+                  onClick={() => selectTicketView(item.id)}
+                />
+              </li>
+            ))}
+          </ul>
 
-        {/* Views (FR-MOD-02.1.4): channel views — or a promo when no channel is
+          {/* Views (FR-MOD-02.1.4): channel views — or a promo when no channel is
             connected — plus the agent's own saved filters. */}
-        <ViewsGroup
-          canReadChannels={canChannels}
-          channels={channelItems}
-          channelsResolved={!channels.isPending}
-          savedViews={savedViews.views}
-          onSelectSaved={applySavedView}
-          onAddSavedView={(name) => savedViews.add({ name, base: view, traffic: trafficTab })}
-          onRemoveSavedView={savedViews.remove}
-        />
+          <ViewsGroup
+            canReadChannels={canChannels}
+            channels={channelItems}
+            channelsResolved={!channels.isPending}
+            savedViews={savedViews.views}
+            onSelectSaved={applySavedView}
+            onAddSavedView={(name) => savedViews.add({ name, base: view, traffic: trafficTab })}
+            onRemoveSavedView={savedViews.remove}
+          />
 
-        <div className="mt-auto border-t border-border p-3">
-          {/* `htmlFor` matters here: without it this is an unnamed combobox,
+          <div className="mt-auto border-t border-border p-3">
+            {/* `htmlFor` matters here: without it this is an unnamed combobox,
               and the control that decides whether an agent receives work is the
               last one that should be unlabelled (NFR-A11Y5). */}
-          <label
-            htmlFor="routing-status"
-            className="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
-          >
-            {t('inbox.rail.availability')}
-          </label>
-          <select
-            id="routing-status"
-            value={agent?.routing_status ?? 'offline'}
-            onChange={(event) => void setRoutingStatus(event.target.value as 'accepting_chats')}
-            className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
-          >
-            <option value="accepting_chats">{t('inbox.rail.routing.accepting')}</option>
-            <option value="not_accepting_chats">{t('inbox.rail.routing.notAccepting')}</option>
-            <option value="offline">{t('inbox.rail.routing.offline')}</option>
-          </select>
-        </div>
-      </nav>
+            <label
+              htmlFor="routing-status"
+              className="mb-1.5 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+            >
+              {t('inbox.rail.availability')}
+            </label>
+            <select
+              id="routing-status"
+              value={agent?.routing_status ?? 'offline'}
+              onChange={(event) => void setRoutingStatus(event.target.value as 'accepting_chats')}
+              className="w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
+            >
+              <option value="accepting_chats">{t('inbox.rail.routing.accepting')}</option>
+              <option value="not_accepting_chats">{t('inbox.rail.routing.notAccepting')}</option>
+              <option value="offline">{t('inbox.rail.routing.offline')}</option>
+            </select>
+          </div>
+        </nav>
 
-      {onTickets ? (
-        /* Tickets (FR-MOD-02.7): a full-width sortable grid, or the ticket
+        {onTickets ? (
+          /* Tickets (FR-MOD-02.7): a full-width sortable grid, or the ticket
            record once a row is opened. The grid spans the list + transcript
            columns — tickets are compared across columns, not scanned in a
            narrow rail, and the row is the link to the conversation behind it. */
-        selectedTicketId ? (
-          <TicketDetailPane
-            ticketId={selectedTicketId}
-            candidates={ticketItems}
-            onBack={() => setSelectedTicketId(null)}
-          />
+          selectedTicketId ? (
+            <TicketDetailPane
+              ticketId={selectedTicketId}
+              candidates={ticketItems}
+              onBack={() => setSelectedTicketId(null)}
+            />
+          ) : (
+            <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+              <header className="flex h-topbar shrink-0 items-center justify-between border-b border-border bg-surface px-4">
+                <h2 className="text-sm font-semibold">{t(TICKET_VIEW_LABEL_KEY[ticketView])}</h2>
+                <span className="tabular text-2xs text-content-tertiary">
+                  {sortedTickets.length}
+                </span>
+              </header>
+              <div className="min-h-0 flex-1 overflow-hidden p-4">
+                <TicketGrid
+                  tickets={sortedTickets}
+                  loading={tickets.isPending}
+                  sort={ticketSort}
+                  onSort={changeTicketSort}
+                  onOpen={setSelectedTicketId}
+                  selectedId={selectedTicketId}
+                />
+              </div>
+            </main>
+          )
         ) : (
-          <main className="flex min-w-0 flex-1 flex-col bg-canvas">
-            <header className="flex h-topbar shrink-0 items-center justify-between border-b border-border bg-surface px-4">
-              <h2 className="text-sm font-semibold">{t(TICKET_VIEW_LABEL_KEY[ticketView])}</h2>
-              <span className="tabular text-2xs text-content-tertiary">{sortedTickets.length}</span>
-            </header>
-            <div className="min-h-0 flex-1 overflow-hidden p-4">
-              <TicketGrid
-                tickets={sortedTickets}
-                loading={tickets.isPending}
-                sort={ticketSort}
-                onSort={changeTicketSort}
-                onOpen={setSelectedTicketId}
-                selectedId={selectedTicketId}
-              />
-            </div>
-          </main>
-        )
-      ) : (
-        <>
-          {/* Conversation list */}
-          <section
-            aria-label={t('inbox.list.ariaLabel')}
-            className="flex w-list shrink-0 flex-col border-r border-border bg-surface"
-          >
-            <header className="flex h-topbar items-center justify-between border-b border-border px-4">
-              <h2 className="text-sm font-semibold">{t(VIEW_LABEL_KEY[view])}</h2>
-              <span className="tabular text-2xs text-content-tertiary">{visibleChats.length}</span>
-            </header>
-
-            {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list. */}
-            <div
-              role="tablist"
-              aria-label={t('inbox.list.trafficAriaLabel')}
-              className="flex gap-1 border-b border-border px-2 py-1.5"
+          <>
+            {/* Conversation list */}
+            <section
+              aria-label={t('inbox.list.ariaLabel')}
+              className="flex w-list shrink-0 flex-col border-r border-border bg-surface"
             >
-              {TRAFFIC_TABS.map((tab) => {
-                const active = trafficTab === tab.id;
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={active}
-                    onClick={() => setTrafficTab(tab.id)}
-                    className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
-                      active
-                        ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
-                        : 'text-content-secondary hover:bg-surface-2'
-                    }`}
-                  >
-                    <span>{t(TRAFFIC_TAB_LABEL_KEY[tab.id])}</span>
-                    <span
-                      aria-hidden="true"
-                      className={`tabular rounded-sm px-1 text-2xs ${
-                        active ? 'bg-brand-200 dark:bg-brand-900' : 'bg-inset text-content-tertiary'
+              <header className="flex h-topbar items-center justify-between border-b border-border px-4">
+                <h2 className="text-sm font-semibold">{t(VIEW_LABEL_KEY[view])}</h2>
+                <span className="tabular text-2xs text-content-tertiary">
+                  {visibleChats.length}
+                </span>
+              </header>
+
+              {/* Real-time tabs (FR-MOD-03.1.1): a live segmentation of the chat list. */}
+              <div
+                role="tablist"
+                aria-label={t('inbox.list.trafficAriaLabel')}
+                className="flex gap-1 border-b border-border px-2 py-1.5"
+              >
+                {TRAFFIC_TABS.map((tab) => {
+                  const active = trafficTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setTrafficTab(tab.id)}
+                      className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-xs transition-colors ${
+                        active
+                          ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                          : 'text-content-secondary hover:bg-surface-2'
                       }`}
                     >
-                      {trafficCounts[tab.id]}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <div className="flex-1 overflow-y-auto" role="tabpanel">
-              {list.isPending ? (
-                <ListSkeleton />
-              ) : visibleChats.length === 0 ? (
-                <EmptyState
-                  title={
-                    chats.length > 0 && trafficTab !== 'all'
-                      ? t('inbox.list.empty.tabTitle')
-                      : t('inbox.list.empty.title')
-                  }
-                  description={
-                    chats.length > 0 && trafficTab !== 'all'
-                      ? t('inbox.list.empty.tabDescription')
-                      : view === 'archived'
-                        ? t('inbox.list.empty.archived')
-                        : view === 'ai'
-                          ? t('inbox.list.empty.ai')
-                          : view === 'ai_solved'
-                            ? t('inbox.list.empty.aiSolved')
-                            : t('inbox.list.empty.description')
-                  }
-                />
-              ) : (
-                <ul>
-                  {visibleChats.map((item) => (
-                    <li key={item.id}>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedId(item.id)}
-                        aria-current={selectedId === item.id ? 'true' : undefined}
-                        className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${
-                          selectedId === item.id
-                            ? 'bg-brand-100 dark:bg-brand-950'
-                            : 'hover:bg-surface-2'
+                      <span>{t(TRAFFIC_TAB_LABEL_KEY[tab.id])}</span>
+                      <span
+                        aria-hidden="true"
+                        className={`tabular rounded-sm px-1 text-2xs ${
+                          active
+                            ? 'bg-brand-200 dark:bg-brand-900'
+                            : 'bg-inset text-content-tertiary'
                         }`}
                       >
-                        <span className="flex items-center gap-2">
-                          <span className="flex-1 truncate text-sm font-medium">
-                            {item.customer_name ?? t('inbox.list.item.visitorFallback')}
-                          </span>
-                          {item.queue_position !== null && (
-                            <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
-                              {t('inbox.list.item.queuePosition', {
-                                position: item.queue_position,
-                              })}
-                            </span>
-                          )}
-                          {item.unread_count > 0 && (
-                            <span
-                              aria-label={t('inbox.list.item.unreadAria', {
-                                count: item.unread_count,
-                              })}
-                              className="h-2 w-2 rounded-full bg-brand-500"
-                            />
-                          )}
-                        </span>
-                        <span className="truncate text-xs text-content-secondary">
-                          {item.last_event?.text ?? t('inbox.list.item.noMessages')}
-                        </span>
-                        {item.tags.length > 0 && (
-                          <span className="flex flex-wrap gap-1">
-                            {item.tags.map((tag) => (
-                              <span
-                                key={tag}
-                                className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-tertiary"
-                              >
-                                {tag}
-                              </span>
-                            ))}
-                          </span>
-                        )}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </section>
+                        {trafficCounts[tab.id]}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
 
-          {/* Transcript */}
-          <main className="flex min-w-0 flex-1 flex-col bg-canvas">
-            {selectedId && chat.data ? (
-              <>
-                <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
-                  <h2 className="flex-1 truncate text-sm font-semibold">
-                    {chats.find((c) => c.id === selectedId)?.customer_name ??
-                      t('inbox.thread.visitorFallback')}
-                  </h2>
-                  <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
-                  <StatusDot
-                    tone={chat.data.active ? 'success' : 'neutral'}
-                    label={
-                      chat.data.active
-                        ? t('inbox.thread.statusActive')
-                        : t('inbox.thread.statusArchived')
+              <div className="flex-1 overflow-y-auto" role="tabpanel">
+                {list.isPending ? (
+                  <ListSkeleton />
+                ) : visibleChats.length === 0 ? (
+                  <EmptyState
+                    title={
+                      chats.length > 0 && trafficTab !== 'all'
+                        ? t('inbox.list.empty.tabTitle')
+                        : t('inbox.list.empty.title')
+                    }
+                    description={
+                      chats.length > 0 && trafficTab !== 'all'
+                        ? t('inbox.list.empty.tabDescription')
+                        : view === 'archived'
+                          ? t('inbox.list.empty.archived')
+                          : view === 'ai'
+                            ? t('inbox.list.empty.ai')
+                            : view === 'ai_solved'
+                              ? t('inbox.list.empty.aiSolved')
+                              : t('inbox.list.empty.description')
                     }
                   />
-                  <CopyLinkButton chatId={selectedId} />
-                  <CreateTicketButton
-                    chatId={selectedId}
-                    customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-                    onOpenTicket={(ticketId) => {
-                      setSelection({ kind: 'ticket', view: 'all' });
-                      setSelectedTicketId(ticketId);
-                    }}
-                  />
-                  {/* Copilot (FR-MOD-12.1): opens the assist panel for this chat,
+                ) : (
+                  <ul>
+                    {visibleChats.map((item) => (
+                      <li key={item.id}>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedId(item.id)}
+                          aria-current={selectedId === item.id ? 'true' : undefined}
+                          className={`flex w-full flex-col gap-1 border-b border-border px-4 py-3 text-left transition-colors ${
+                            selectedId === item.id
+                              ? 'bg-brand-100 dark:bg-brand-950'
+                              : 'hover:bg-surface-2'
+                          }`}
+                        >
+                          <span className="flex items-center gap-2">
+                            <span className="flex-1 truncate text-sm font-medium">
+                              {item.customer_name ?? t('inbox.list.item.visitorFallback')}
+                            </span>
+                            {item.queue_position !== null && (
+                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-warning">
+                                {t('inbox.list.item.queuePosition', {
+                                  position: item.queue_position,
+                                })}
+                              </span>
+                            )}
+                            {item.unread_count > 0 && (
+                              <span
+                                aria-label={t('inbox.list.item.unreadAria', {
+                                  count: item.unread_count,
+                                })}
+                                className="h-2 w-2 rounded-full bg-brand-500"
+                              />
+                            )}
+                          </span>
+                          <span className="truncate text-xs text-content-secondary">
+                            {item.last_event?.text ?? t('inbox.list.item.noMessages')}
+                          </span>
+                          {item.tags.length > 0 && (
+                            <span className="flex flex-wrap gap-1">
+                              {item.tags.map((tag) => (
+                                <span
+                                  key={tag}
+                                  className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-tertiary"
+                                >
+                                  {tag}
+                                </span>
+                              ))}
+                            </span>
+                          )}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </section>
+
+            {/* Transcript */}
+            <main className="flex min-w-0 flex-1 flex-col bg-canvas">
+              {selectedId && chat.data ? (
+                <>
+                  <header className="flex h-topbar shrink-0 items-center gap-3 border-b border-border bg-surface px-4">
+                    <h2 className="flex-1 truncate text-sm font-semibold">
+                      {chats.find((c) => c.id === selectedId)?.customer_name ??
+                        t('inbox.thread.visitorFallback')}
+                    </h2>
+                    <span className="font-mono text-2xs text-content-tertiary">{selectedId}</span>
+                    <StatusDot
+                      tone={chat.data.active ? 'success' : 'neutral'}
+                      label={
+                        chat.data.active
+                          ? t('inbox.thread.statusActive')
+                          : t('inbox.thread.statusArchived')
+                      }
+                    />
+                    <CopyLinkButton chatId={selectedId} />
+                    <CreateTicketButton
+                      chatId={selectedId}
+                      customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                      onOpenTicket={(ticketId) => {
+                        setSelection({ kind: 'ticket', view: 'all' });
+                        setSelectedTicketId(ticketId);
+                      }}
+                    />
+                    {/* Copilot (FR-MOD-12.1): opens the assist panel for this chat,
                       bringing the right panel back if it was collapsed. */}
-                  <CopilotButton
-                    onOpen={() => {
-                      setPanelTab('copilot');
-                      rightPanel.setExpanded(false);
-                    }}
-                  />
-                  {/* When the panel is open it is collapsed from its own header
+                    <CopilotButton
+                      onOpen={() => {
+                        setPanelTab('copilot');
+                        rightPanel.setExpanded(false);
+                      }}
+                    />
+                    {/* When the panel is open it is collapsed from its own header
                       (the transcript header is tight at this width); when it is
                       hidden, this is the way back to it. */}
-                  {rightPanel.expanded && (
-                    <ShowDetailsButton onShow={() => rightPanel.setExpanded(false)} />
-                  )}
-                </header>
+                    {rightPanel.expanded && (
+                      <ShowDetailsButton onShow={() => rightPanel.setExpanded(false)} />
+                    )}
+                  </header>
 
-                <Transcript
-                  events={transcript.data?.items ?? []}
-                  loading={transcript.isPending}
-                  currentAgentId={agent?.account_id ?? null}
+                  <Transcript
+                    events={transcript.data?.items ?? []}
+                    loading={transcript.isPending}
+                    currentAgentId={agent?.account_id ?? null}
+                  />
+
+                  <TypingIndicator
+                    chatId={selectedId}
+                    customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
+                  />
+                  <ConflictBanner chatId={selectedId} />
+
+                  <Composer chatId={selectedId} disabled={!chat.data.active} />
+                </>
+              ) : (
+                <EmptyState
+                  title={t('inbox.thread.empty.title')}
+                  description={t('inbox.thread.empty.description')}
                 />
+              )}
+            </main>
 
-                <TypingIndicator
-                  chatId={selectedId}
-                  customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
-                />
-                <ConflictBanner chatId={selectedId} />
-
-                <Composer chatId={selectedId} disabled={!chat.data.active} />
-              </>
-            ) : (
-              <EmptyState
-                title={t('inbox.thread.empty.title')}
-                description={t('inbox.thread.empty.description')}
-              />
-            )}
-          </main>
-
-          {/* Right panel — Details or Copilot. Hidden in Expand mode so the
+            {/* Right panel — Details or Copilot. Hidden in Expand mode so the
               transcript takes the full width (FR-MOD-01.3 / 12.1). */}
-          {selectedId &&
-            chat.data &&
-            !rightPanel.expanded &&
-            (panelTab === 'copilot' ? (
-              <CopilotPanel
-                chatId={selectedId}
-                chatActive={chat.data.active}
-                onShowDetails={() => setPanelTab('details')}
-                onCollapse={() => rightPanel.setExpanded(true)}
-              />
-            ) : (
-              <DetailsPanel
-                chat={chat.data}
-                chatId={selectedId}
-                onCollapse={() => rightPanel.setExpanded(true)}
-              />
-            ))}
-        </>
-      )}
-    </>
+            {selectedId &&
+              chat.data &&
+              !rightPanel.expanded &&
+              (panelTab === 'copilot' ? (
+                <CopilotPanel
+                  chatId={selectedId}
+                  chatActive={chat.data.active}
+                  onShowDetails={() => setPanelTab('details')}
+                  onCollapse={() => rightPanel.setExpanded(true)}
+                />
+              ) : (
+                <DetailsPanel
+                  chat={chat.data}
+                  chatId={selectedId}
+                  onCollapse={() => rightPanel.setExpanded(true)}
+                />
+              ))}
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

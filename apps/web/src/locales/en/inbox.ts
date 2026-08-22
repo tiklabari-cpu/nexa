@@ -45,6 +45,22 @@ export const inbox: Messages = {
   'inbox.rail.connection.offline': 'Offline',
   'inbox.rail.connection.reconnecting': 'Reconnecting',
 
+  // Take tour banner (FR-MOD-01.4, 02.2.3) — TakeTourBanner.tsx
+  'inbox.takeTour.text': 'New here? Take a quick tour of the inbox.',
+  'inbox.takeTour.cta': 'Take tour',
+  'inbox.takeTour.step1.title': 'Your queues',
+  'inbox.takeTour.step1.body':
+    'All, My chats, Queued, Unassigned and Archive — each view on the left filters the conversations you see.',
+  'inbox.takeTour.step2.title': 'The conversation',
+  'inbox.takeTour.step2.body':
+    'Pick a chat from the list to read the transcript, then reply from the composer underneath it.',
+  'inbox.takeTour.step3.title': 'Details and Copilot',
+  'inbox.takeTour.step3.body':
+    "The right panel shows the customer's details, or switch it to Copilot for AI-drafted replies.",
+  'inbox.takeTour.step4.title': 'Your availability',
+  'inbox.takeTour.step4.body':
+    'Set your status at the bottom of the rail to control whether new chats route to you.',
+
   // Conversation list
   'inbox.list.ariaLabel': 'Conversations',
   'inbox.list.trafficAriaLabel': 'Real-time tabs',

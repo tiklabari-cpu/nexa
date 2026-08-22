@@ -37,6 +37,22 @@ export const inbox: Messages = {
   'inbox.rail.connection.offline': 'Çevrimdışı',
   'inbox.rail.connection.reconnecting': 'Yeniden bağlanıyor',
 
+  // Take tour banner (FR-MOD-01.4, 02.2.3) — TakeTourBanner.tsx
+  'inbox.takeTour.text': 'Buraya yeni mi geldiniz? Gelen kutusunu kısa bir turla tanıyın.',
+  'inbox.takeTour.cta': 'Turu başlat',
+  'inbox.takeTour.step1.title': 'Kuyruklarınız',
+  'inbox.takeTour.step1.body':
+    'Tümü, Sohbetlerim, Sırada, Atanmamış ve Arşiv — soldaki her görünüm gördüğünüz sohbetleri filtreler.',
+  'inbox.takeTour.step2.title': 'Sohbet',
+  'inbox.takeTour.step2.body':
+    'Metni okumak için listeden bir sohbet seçin, ardından altındaki yazım alanından yanıtlayın.',
+  'inbox.takeTour.step3.title': 'Ayrıntılar ve Copilot',
+  'inbox.takeTour.step3.body':
+    "Sağ panel müşterinin ayrıntılarını gösterir; AI taslak yanıtlar için Copilot'a geçirebilirsiniz.",
+  'inbox.takeTour.step4.title': 'Uygunluğunuz',
+  'inbox.takeTour.step4.body':
+    'Yeni sohbetlerin size yönlendirilip yönlendirilmeyeceğini raydaki durumunuzdan ayarlayın.',
+
   // Conversation list
   'inbox.list.ariaLabel': 'Sohbetler',
   'inbox.list.trafficAriaLabel': 'Gerçek zamanlı sekmeler',

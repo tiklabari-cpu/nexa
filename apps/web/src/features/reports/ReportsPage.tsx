@@ -13,7 +13,7 @@
  * customer disputing a bill.
  */
 import { useQuery } from '@tanstack/react-query';
-import { useState, type ReactElement } from 'react';
+import { useEffect, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Card,
@@ -25,7 +25,7 @@ import {
   Section,
 } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
-import { Banner, Dropdown } from '../../components/ui/index.js';
+import { Banner, Dropdown, bannerDismissKey } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { errorMessageKey, type ApiClient } from '../../lib/api-client.js';
 import {
@@ -322,9 +322,26 @@ type RangeMode = (typeof PRESETS)[number] | 'custom';
 const TOPICS_PROMO_BANNER_ID = 'reports-topics-promo';
 
 /**
+ * Marks the offer used up — the same `localStorage` key Banner's own dismiss
+ * button writes (`bannerDismissKey`), so opening Topics has the identical
+ * effect to clicking "Remind me later" once and for all.
+ */
+function markTopicsSeen(): void {
+  try {
+    localStorage.setItem(bannerDismissKey(TOPICS_PROMO_BANNER_ID), '1');
+  } catch {
+    // Storage unavailable — the tab still switches, the banner just outlives
+    // the session it would otherwise have been silenced in.
+  }
+}
+
+/**
  * Overview-only promo for the Chat topics tab (FR-MOD-07.6, rapor-1-fonksiyonel.md:297).
- * "See chat topics" switches the tab in place; "Remind me later" is Banner's
- * own persistent dismiss (`dismissLabel`) rather than a second control.
+ * Segment: shown only while Topics has never been opened (02.2.3's sibling KK
+ * — "kalıcı dismiss + segment"). "See chat topics" switches the tab in place;
+ * "Remind me later" is Banner's own persistent dismiss (`dismissLabel`) rather
+ * than a second control — either path, or opening the Topics tab directly
+ * (`ReportsPage`'s own effect), silences it for good.
  */
 function TopicsPromoBanner({ onSeeTopics }: { onSeeTopics: () => void }): ReactElement {
   const t = useTranslate();
@@ -408,6 +425,13 @@ export function ReportsPage(): ReactElement {
   // a saved view round-trips a `baseline` it may carry without silently
   // dropping it, and so the wiring is already correct the day a control lands.
   const [baseline, setBaseline] = useState<ReportBaseline | null>(null);
+
+  // The topics promo's segment (FR-MOD-07.6): once Topics has been opened —
+  // by this tab, its own CTA, or a restored saved view — the offer is used up
+  // for good, the same as clicking the banner's own "Remind me later".
+  useEffect(() => {
+    if (tab === 'topics') markTopicsSeen();
+  }, [tab]);
 
   const range = resolveRange(mode, customFrom, customTo);
   // Stable across renders (unlike `range`, which re-derives "now"), so it is the

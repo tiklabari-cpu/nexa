@@ -41,4 +41,10 @@ export const common: Messages = {
   // The design-system primitives' own defaults (Banner.tsx, Panel.tsx).
   'common.actions.dismiss': 'Kapat',
   'common.actions.collapsePanel': 'Paneli daralt',
+  // Tour.tsx's own chrome (FR-MOD-02.2.3).
+  'common.actions.tourNext': 'İleri',
+  'common.actions.tourBack': 'Geri',
+  'common.actions.tourSkip': 'Atla',
+  'common.actions.tourDone': 'Bitti',
+  'common.actions.tourProgress': 'Adım {current} / {count}',
 };

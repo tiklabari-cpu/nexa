@@ -1180,6 +1180,55 @@ describe('ReportsPage — Overview "Chat topics" promo banner (07.6-f)', () => {
     expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
   });
 
+  // Segment (07.6's sibling KK, tm 139.5): the promo is for an agent who has
+  // never opened Chat topics — once they have, by any path, it does not come
+  // back to Overview even though it was never explicitly dismissed.
+  it('does not return to Overview once its own CTA has opened Topics', async () => {
+    mockTopics({ sufficient_data: false, analyzed: 0, topics: [] });
+    renderReports(<ReportsPage />);
+    expect(screen.getByText('Top chat topics in one place')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'See chat topics' }));
+    await screen.findByRole('region', { name: 'Chat topics' });
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByText('In queue now');
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+  });
+
+  it('does not return to Overview once Topics has been opened directly, without the CTA', async () => {
+    mockTopics({ sufficient_data: false, analyzed: 0, topics: [] });
+    renderReports(<ReportsPage />);
+    expect(screen.getByText('Top chat topics in one place')).toBeInTheDocument();
+
+    await openTopicsTab();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Overview' }));
+    await screen.findByText('In queue now');
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+  });
+
+  it('the "seen" mark from opening Topics survives a remount, like an explicit dismissal', async () => {
+    mockTopics({ sufficient_data: false, analyzed: 0, topics: [] });
+    const queryClient = new QueryClient();
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <ReportsPage />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByText('Top chat topics in one place')).toBeInTheDocument();
+
+    await openTopicsTab();
+
+    view.unmount();
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ReportsPage />
+      </QueryClientProvider>,
+    );
+    expect(screen.queryByText('Top chat topics in one place')).not.toBeInTheDocument();
+  });
+
   it('renders only on Overview, not on other report tabs', async () => {
     mockReports({ resolutions: 0 });
     renderReports(<ReportsPage />);

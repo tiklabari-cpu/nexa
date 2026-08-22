@@ -374,11 +374,13 @@ test.describe('settings', () => {
    * What only a browser can show is that the pieces line up: the report
    * catalogue really fills the picker, the roster really fills the recipients,
    * the definition survives a reload, and cancelling takes it away again. The
-   * section is created and cancelled inside one test because the seed carries no
-   * schedules — so the empty state at both ends is the tenant's true steady
-   * state, and the run leaves nothing for the next one to trip over.
+   * seed carries one schedule of its own (M-SEED-b, 07.9 — a weekly Overview
+   * mailed to the owner), so this proves the round trip against that real
+   * steady state rather than an artificial empty one: create a second
+   * schedule, prove it independently, cancel only it, and leave the seeded row
+   * exactly as it was for the next run.
    */
-  test('schedules a report export and cancels it back to the empty state', async ({
+  test('schedules a report export and cancels it back to the seeded state', async ({
     agentPage,
   }) => {
     await agentPage.goto('/app/settings');
@@ -386,11 +388,13 @@ test.describe('settings', () => {
     // Re-resolved after each reload: the old handle points at a detached node.
     const section = (): ReturnType<typeof agentPage.getByRole> =>
       agentPage.getByRole('region', { name: 'Scheduled exports' });
+    const seededRow = (): ReturnType<typeof agentPage.locator> =>
+      section().locator('li').filter({ hasText: 'Overview' });
 
     await expect(
       section().getByRole('heading', { name: 'Scheduled exports', level: 2 }),
     ).toBeVisible();
-    await expect(section().getByText('No scheduled exports')).toBeVisible();
+    await expect(seededRow()).toBeVisible();
 
     // Nothing is submittable until both halves of the decision are made — a
     // schedule with no report or no recipient is a timer that mails nothing.
@@ -439,7 +443,10 @@ test.describe('settings', () => {
     await row().getByRole('button', { name: 'Confirm cancel' }).click();
     expect((await removed).status()).toBe(204);
 
-    await expect(section().getByText('No scheduled exports')).toBeVisible();
+    // Only what this test added is gone; the seed's own schedule survives for
+    // the next run.
+    await expect(row()).toHaveCount(0);
+    await expect(seededRow()).toBeVisible();
   });
 
   /**

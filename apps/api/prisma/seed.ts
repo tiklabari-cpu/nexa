@@ -19,7 +19,11 @@ import { hashPassword, hashToken } from '../src/lib/crypto.js';
 import { type AuditContext } from '../src/services/audit/audit-log.js';
 import { ADMIN_SCOPES, type AgentPrincipal } from '../src/services/auth/principal.js';
 import { CampaignService } from '../src/services/campaigns/campaign-service.js';
+import { GoalService } from '../src/services/goals/goal-service.js';
+import { ScheduledReportService } from '../src/services/reports/scheduled-report-service.js';
+import { saveSlaPolicy } from '../src/services/sla/sla-service.js';
 import { type CreateInput, TicketService } from '../src/services/tickets/ticket-service.js';
+import { WebhookService } from '../src/services/webhooks/webhook-service.js';
 
 loadEnvFile();
 
@@ -802,6 +806,21 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     // (nothing in this repo creates one by default), so there is nothing for
     // a value to reference. Add the definitions first if a future task needs
     // the Customers screen to show one.
+
+    // --- SLA / Goal / Scheduled report / Webhook demo fixture (§D113/K14) ---
+    // Same reasoning as campaigns/tickets above: through the services the
+    // routes call, not a raw insert, so each row carries the invariants a real
+    // save would (SLA's minute-range CHECK, the goal's own-trigger rule, the
+    // schedule's roster-bound recipients, the webhook's SSRF-safe target).
+    await seedSlaTarget({ licenseId, organizationId: organization.id });
+    await seedGoal({ licenseId, organizationId: organization.id });
+    await seedScheduledReport({
+      licenseId,
+      organizationId: organization.id,
+      ownerId: owner.id,
+      ownerEmail: owner.email,
+    });
+    await seedWebhook({ licenseId, organizationId: organization.id });
   }
 
   // --- Sales tracker (FR-MOD-13.5) ------------------------------------------
@@ -1064,6 +1083,83 @@ async function seedTickets(input: {
     },
     10,
   );
+}
+
+/**
+ * The SLA target (FR-MOD-11.5-d): a first-response and resolution promise, so
+ * Settings > SLA opens with a configured policy instead of an empty form.
+ * Business-hours-only, the usual real-workspace choice — no `WorkSchedule` rows
+ * are seeded alongside it (no task has put agent hours in this fixture yet), so
+ * `readClock` resolves an empty week and the breach sweep marks nothing; the
+ * target itself, what this screen is for, is what gets seeded.
+ */
+async function seedSlaTarget(tenant: { licenseId: bigint; organizationId: string }): Promise<void> {
+  await saveSlaPolicy(prisma, tenant, {
+    firstResponseMinutes: 5,
+    resolutionMinutes: 24 * 60,
+    businessHoursOnly: true,
+  });
+}
+
+/**
+ * One goal (FR-MOD-13.3) — the lead funnel's conversion stage: a visitor who
+ * reaches the order-confirmation page has converted. `url_contains` is the
+ * only predicate v1's matcher reads (`goal-matching.ts`), so it is the one
+ * usable shape a seeded goal can take.
+ */
+async function seedGoal(tenant: { licenseId: bigint; organizationId: string }): Promise<void> {
+  const goals = new GoalService();
+  await goals.create(prisma, tenant, {
+    name: 'Order confirmed',
+    definition: { url_contains: '/thank-you' },
+  });
+}
+
+/**
+ * One scheduled export (FR-MOD-07.9): a weekly Overview mailed to the owner,
+ * through `ScheduledReportService` rather than a raw insert — `recipients` is
+ * validated against the licence's own roster there, and re-deriving that check
+ * for a seed-only insert would risk it drifting from what `POST
+ * /scheduled-reports` actually enforces.
+ */
+async function seedScheduledReport(input: {
+  licenseId: bigint;
+  organizationId: string;
+  ownerId: string;
+  ownerEmail: string;
+}): Promise<void> {
+  const { licenseId, organizationId, ownerId, ownerEmail } = input;
+  const tenant = { licenseId, organizationId };
+  const schedules = new ScheduledReportService();
+  await schedules.create(prisma, tenant, {
+    group: 'overview',
+    frequency: 'weekly',
+    format: 'csv',
+    recipients: [ownerEmail],
+    createdByAgentId: ownerId,
+  });
+}
+
+/**
+ * One outbound webhook (FR-MOD-08.8.4), subscribed to `chat_deactivated` — the
+ * wire name for an archived chat (`chat-service.ts`'s "Chat archived" system
+ * event publishes exactly this action). The route's own SSRF guard
+ * (`assertPublicHttpUrl`) refuses a literal `localhost` target, so the mock
+ * target is `https://example.com/hook` — the same stand-in the SSRF and
+ * knowledge-crawl fixtures already use for "a URL that parses and is public
+ * but answers nobody real". Disabled immediately after registering: this repo
+ * mocks external services rather than calling them (MASTER-PROMPT), and
+ * `WebhookDispatcher` only ever queries `enabled: true` rows, so a disabled
+ * row is demo data the dispatcher will never actually try to deliver to the
+ * open internet.
+ */
+async function seedWebhook(tenant: { licenseId: bigint; organizationId: string }): Promise<void> {
+  const webhooks = new WebhookService();
+  const registration = await webhooks.register(prisma, tenant, {
+    url: 'https://example.com/hook',
+    action: 'chat_deactivated',
+  });
+  await prisma.webhook.update({ where: { id: registration.id }, data: { enabled: false } });
 }
 
 /**

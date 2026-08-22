@@ -6905,10 +6905,10 @@
         "description": "2026-08-17 denetimi: yalnız dev `docker-compose.yml` (db+redis) var; hiçbir uygulama konteynerize değil, Dockerfile/prod-benzeri compose yok. \"Bir bütün içinde hazır\" ürün, geliştirici makinesi dışında da tek komutla ayağa kalkabilmeli. CLAUDE.md sınırı korunur: production deploy/DNS/TLS/gerçek secret YOK — bu görev yalnız yerelde koşan imajlar + compose + duman testi üretir.",
         "details": "SINIR (CLAUDE.md/MASTER-PROMPT): deploy YOK. Burada üretilen her şey `docker compose -f docker-compose.full.yml up`\nile YEREL makinede koşar; secret'lar dev değerleridir (`.env.example`), TLS/DNS yok. Amaç §F.1/9'un\n\"yalnızca geliştirme makinesinde çalışan sistem çalışmıyor sayılır\" ölçütünü konteynerle karşılamak.\nKIRILIM: 140.1 api+rtm imajları (SONNET) → 140.2 web+widget statik imajları (SONNET) → 140.3 compose +\n`make demo` + duman testi (OPUS-XHIGH). PLAN §7.2 `M-CONTAINER` satırı bu turda `⬜ → KM-CONTAINER`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-CONTAINER (türetilmiş — MASTER-PROMPT \"Teslim Paketi: çalışan monorepo + docker-compose\"; §F.1/9 temiz kurulum provası)**. Gereksinim satırı: `grep -n '| M-CONTAINER' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-CONTAINER' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Üç alt-görev `done`; `make demo` (ya da `docker compose -f docker-compose.full.yml up --build -d`) sonrası duman script'i exit 0 (health 200 × 2, web 200, widget demo 200, seed'li giriş 200); imaj boyutları HANDOFF'a; `pnpm -w format:check`; PLAN §7.2 `M-CONTAINER` `✅`.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-22T19:29:54.809Z",
+        "updatedAt": "2026-08-22T20:23:41.861Z",
         "subtasks": [
           {
             "id": 1,
@@ -6938,13 +6938,13 @@
             "description": "Tam yığın tek komutla yerelde ayağa kalkar ve duman testi geçer.",
             "details": "NE YAPILACAK: `docker-compose.full.yml` (dev compose'u BOZMA — ayrı dosya): db/redis (mevcut tanımlar) +\napi (migrate deploy + seed bir kez — `NEXA_SEED_RESET` YOK; idempotent seed) + rtm + web + widget;\n`depends_on: condition: service_healthy`; env `.env.example`'dan (`env_file`), portlar README'dekiyle aynı;\n`make demo` (`docker compose -f docker-compose.full.yml up --build -d` + duman) ve `make demo-down`;\n`scripts/smoke.sh` (curl: api health 200 + `scheduler.enabled` (tm 130 varsa) · rtm health 200 · web / 200 ·\nwidget /demo.html 200 · seed kimliğiyle `/auth/login` 200); README \"Run the whole stack in containers\"\n+ SINIR notu (yerel, dev secret, TLS/DNS yok). PLAN §7.2 `M-CONTAINER` → `✅ → KM-CONTAINER`.\nDOSYALAR: `docker-compose.full.yml` · `Makefile` · `scripts/smoke.sh` · `README.md` · PLAN.md.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **M-CONTAINER (türetilmiş — MASTER-PROMPT \"Teslim Paketi: çalışan monorepo + docker-compose\"; §F.1/9 temiz kurulum provası)**. Gereksinim satırı: `grep -n '| M-CONTAINER' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM-CONTAINER' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- `make demo` exit 0 (duman script'i tüm kontroller yeşil; çıktı HANDOFF'a) · `make demo-down` temiz · `pnpm -w format:check`.\n- PLAN §7.2 `M-CONTAINER` `✅`.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "140.1",
               "140.2"
             ],
             "parentId": "140",
-            "updatedAt": "2026-08-22T19:29:54.809Z"
+            "updatedAt": "2026-08-22T20:23:41.861Z"
           }
         ]
       },
@@ -7087,9 +7087,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T19:29:54.810Z",
+      "lastModified": "2026-08-22T20:23:41.862Z",
       "taskCount": 147,
-      "completedCount": 144,
+      "completedCount": 145,
       "tags": [
         "master"
       ]

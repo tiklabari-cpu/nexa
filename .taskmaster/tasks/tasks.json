@@ -6785,10 +6785,10 @@
         "description": "2026-08-17 denetimi: `apps/web/src/features/` 18 dizin / 94 test dosyası; ancak reports 2 test (2317 satırlık sayfa) ve billing 1 test (1205 satır) — kapsam/yüzey oranı en zayıf ikisi. Regresyon riski en yüksek yerler bunlar (§D82/§D87 tarihçesi: bu iki alan flake ve locale kusurlarını üretmişti). Bu görev anlamlı unit testler ekler; ürün kodu değişmez (test edilirken bulunan kusur ayrı görev/nota).",
         "details": "BULGU (§D113/K12). İki SONNET alt-görevi. Kural: davranış testleri (kullanıcı ne görür/ne yapar), snapshot\nDEĞİL; `renderWithLocale` (tm 133.1 yazdıysa) ile locale açıkça `en`; MSW/fetch mock deseni mevcut testlerdeki\ngibi. Bulunan ürün kusuru → düzeltme bu görevin kapsamı DIŞI: HANDOFF + Task Master notu (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **NFR-M4 test piramidi (ince kapsam: Reports 2 test/2317 satır · Billing 1 test/1205 satır)**. Gereksinim satırı: `grep -n '| M4 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM4' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\nPLAN §7.2 `M4` satırı ✅ kalır (piramit var); KM4 bloğuna iki madde (test sayıları önce/sonra).\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "İki alt-görev `done`; `pnpm --filter @nexa/web test` exit 0; reports ≥ +12, billing ≥ +10 test; typecheck/lint; KM4'e iki madde.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-22T06:47:21.266Z",
+        "updatedAt": "2026-08-22T07:10:24.258Z",
         "subtasks": [
           {
             "id": 1,
@@ -6807,10 +6807,10 @@
             "description": "Faturalama yüzeyi davranış testleri kazanır.",
             "details": "NE YAPILACAK: `features/billing/BillingPage.test.tsx` ≥ 10 senaryo — yukarıdaki liste; §D82 dersi: locale\ntestte açıkça pinlenir (`setFormatLocale`/renderWithLocale). tm 133.7 ile çakışırsa önce onun düzenine uy.\nDOSYALAR: `features/billing/*.test.tsx`.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **NFR-M4 test piramidi (ince kapsam: Reports 2 test/2317 satır · Billing 1 test/1205 satır)**. Gereksinim satırı: `grep -n '| M4 ' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KM4' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test exit 0; billing test sayısı ≥ 11 (1 → 11+); typecheck/lint.\n- PLAN: KM4'e madde.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "138",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T07:10:24.258Z"
           }
         ]
       },
@@ -7044,9 +7044,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T06:47:21.267Z",
+      "lastModified": "2026-08-22T07:10:24.261Z",
       "taskCount": 144,
-      "completedCount": 137,
+      "completedCount": 138,
       "tags": [
         "master"
       ]

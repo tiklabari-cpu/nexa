@@ -57,6 +57,53 @@ make help
 
 ---
 
+## Run the whole stack in containers
+
+`make dev` needs Node, pnpm and this checkout. `make demo` needs none of them — every
+app is built into its own image and the whole product comes up from one file:
+
+```bash
+make demo        # docker compose -f docker-compose.full.yml up --build -d + scripts/smoke.sh
+```
+
+The first build takes a while (it installs and compiles four apps); afterwards Docker's
+layer cache makes it quick. When it finishes, `scripts/smoke.sh` checks the stack is
+genuinely wired — both health endpoints, the agent app, its same-origin `/api` proxy into
+the `api` container, the widget's loader and hosted Chat page, and a real sign-in with the
+seeded demo account — and exits non-zero if any of them is wrong.
+
+| Surface                    | URL                                                    |
+| -------------------------- | ------------------------------------------------------ |
+| Agent app                  | http://localhost:5173                                  |
+| REST API                   | http://localhost:4000/api/v1                           |
+| RTM (WebSocket)            | ws://localhost:4001/v1/agent/rtm/ws                    |
+| Widget loader              | http://localhost:5174/loader.js                        |
+| Hosted Chat page (visitor) | http://localhost:5174/chat.html?organization_id=`<id>` |
+
+Sign in with the seeded owner of the demo workspace: `owner@acme.localhost` /
+`nexa-demo-password`. Ports match `make dev`, so run one or the other, not both.
+
+| Target            | Does                                             |
+| ----------------- | ------------------------------------------------ |
+| `make demo`       | Build the images, start the stack, smoke-test it |
+| `make smoke`      | Re-run the smoke test against a running stack    |
+| `make demo-logs`  | Follow every container's logs                    |
+| `make demo-down`  | Stop it (its data volumes survive)               |
+| `make demo-clean` | Stop it **and** drop its data volumes            |
+
+**This is a local stack, not a deployment.** No DNS, no TLS, no real secrets, nothing
+published past `127.0.0.1`. It loads `.env.example`'s development placeholders and
+therefore runs as `NODE_ENV=development` on purpose: `parseEnv` refuses a `dev-only-…`
+secret under `production`, and that guard is worth more than the appearance of a
+production run. Uploads, spooled mail/push and the SIEM export are written inside the
+containers and go away with them. `docker-compose.full.yml` explains each choice in place.
+
+The dev datastores (`docker-compose.yml`, used by `make dev`) are a different compose
+project with their own volumes, and this stack publishes no database or Redis port at
+all, so the two never collide.
+
+---
+
 ## Architecture
 
 ```

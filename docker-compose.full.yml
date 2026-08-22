@@ -1,0 +1,197 @@
+# Nexa — the whole product in containers, on one machine (tm 140.3, M-CONTAINER-c).
+#
+# SCOPE: this is a LOCAL stack, not a deployment. No DNS, no TLS, no real
+# secrets, nothing published beyond 127.0.0.1 (CLAUDE.md / MASTER-PROMPT
+# limits). What it does answer is §F.1/9 — "a system that only runs on the
+# author's development machine does not count as running": every app here is
+# built from its own Dockerfile and started by one command, with no pnpm, no
+# Node and no repo checkout needed at run time.
+#
+#   docker compose -f docker-compose.full.yml up --build -d && ./scripts/smoke.sh
+#   (or: `make demo`, which is exactly those two commands)
+#
+# The dev stack in `docker-compose.yml` (db + redis only, for `make dev`) is
+# deliberately untouched and lives under a different project name, so both can
+# be up at once: this one publishes no database or Redis port at all — nothing
+# outside the compose network needs them — and its volumes are its own.
+#
+# NODE_ENV is `development` here ON PURPOSE, even though the api/rtm images
+# default to `production`. Two guards in the code refuse this stack under
+# `production`, and both are right:
+#   * `parseEnv` (apps/api/src/config/env.ts) throws on any secret still
+#     holding its `dev-only-…` placeholder — and the placeholders in
+#     `.env.example` are exactly what this stack loads, because inventing real
+#     secrets is out of scope.
+#   * CORS (`apps/api/src/server.ts`) narrows to `WEB_ORIGIN` alone under
+#     production, which would block the widget's cross-origin calls from
+#     :5174 — i.e. the customer half of the demo.
+# Renaming the placeholders to slip past the first guard would defeat the point
+# of having it. Calling this stack what it is costs nothing.
+name: nexa-demo
+
+services:
+  # --- Datastores ---------------------------------------------------------
+  # Same images and same init script as the dev compose, so the schema, the
+  # extensions and the non-owner `nexa_app` role (RLS) are identical.
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexa
+      POSTGRES_PASSWORD: nexa_dev_password
+      POSTGRES_DB: nexa
+      LANG: C
+    volumes:
+      - nexa_demo_pgdata:/var/lib/postgresql/data
+      - ./infra/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nexa -d nexa']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--save', '']
+    volumes:
+      - nexa_demo_redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+
+  # --- One-shot init: migrate, then seed ----------------------------------
+  # Runs the api image with the seed as its command: the image's own entrypoint
+  # (`apps/api/docker-entrypoint.sh`) applies `prisma migrate deploy` as the
+  # table owner and then execs whatever it was given, so "migrate + seed" is one
+  # container and needs no second copy of the migrate step.
+  #
+  # The seed is idempotent — re-running against a seeded database is a no-op
+  # (`apps/api/prisma/seed.ts`). `NEXA_SEED_RESET` is deliberately NOT set: it
+  # wipes the demo data first, which would silently discard whatever the person
+  # looking at this stack had just done in it.
+  #
+  # `api` and `rtm` wait for this to exit 0, so neither ever starts against a
+  # database without a schema. (api's entrypoint runs `migrate deploy` again on
+  # its own start; by then it is a no-op, and it keeps the image self-sufficient
+  # outside this compose file.)
+  init:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: nexa-api:local
+    restart: 'no'
+    command: ['node', 'dist/prisma/seed.js']
+    env_file:
+      - .env.example
+    environment: &api-environment
+      NODE_ENV: development
+      # Inside the compose network the datastores answer on their service names
+      # and their real ports — `.env.example`'s localhost:5433/6380 are the
+      # host-side offsets `make dev` publishes, and mean nothing in here.
+      DATABASE_URL: postgresql://nexa:nexa_dev_password@db:5432/nexa
+      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@db:5432/nexa
+      REDIS_URL: redis://redis:6379
+      # `.env.example` points the four file-backed mock providers at `.data/`
+      # under the repo, relative to the working directory. That path is
+      # root-owned inside the image (the app runs as `nexa`), so writing there
+      # fails; and there is no repo checkout in the container to write into
+      # anyway. /tmp is writable by every user in the base image. Consequence,
+      # stated rather than hidden: uploads, spooled mail/push and the SIEM
+      # export live inside the container and go away with it. Acceptable for a
+      # demo, not for anything else.
+      STORAGE_LOCAL_DIR: /tmp/nexa/uploads
+      MAIL_DIR: /tmp/nexa/mail
+      PUSH_DIR: /tmp/nexa/push
+      SIEM_DIR: /tmp/nexa/siem
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # --- Applications -------------------------------------------------------
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: nexa-api:local
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment: *api-environment
+    ports:
+      - '4000:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+
+  rtm:
+    build:
+      context: .
+      dockerfile: apps/rtm/Dockerfile
+    image: nexa-rtm:local
+    restart: unless-stopped
+    env_file:
+      - .env.example
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://nexa:nexa_dev_password@db:5432/nexa
+      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@db:5432/nexa
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '4001:4001'
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      init:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # The agent app's REST calls are same-origin (`/api/v1`) and nginx
+        # proxies them to `api` over this network, so they need no address. A
+        # WebSocket URL cannot be relative, so the RTM base is baked in at
+        # build time and has to name a host port — this one, published below.
+        VITE_RTM_URL: ws://localhost:4001/v1/agent/rtm/ws
+    image: nexa-web:local
+    restart: unless-stopped
+    environment:
+      # Defaults in the image already, repeated here because they are the whole
+      # reason the services are named `api` and `rtm`.
+      API_UPSTREAM: http://api:4000
+      RTM_UPSTREAM: http://rtm:4001
+    ports:
+      - '5173:8080'
+    depends_on:
+      api:
+        condition: service_healthy
+
+  widget:
+    build:
+      context: .
+      dockerfile: apps/widget/Dockerfile
+    image: nexa-widget:local
+    restart: unless-stopped
+    # Static files only — no upstream, so nothing to wait for. The widget talks
+    # to the api from the visitor's browser at its published host port, which
+    # is `apps/widget/src/widget.ts`'s own default.
+    ports:
+      - '5174:8080'
+
+volumes:
+  nexa_demo_pgdata:
+  nexa_demo_redisdata:

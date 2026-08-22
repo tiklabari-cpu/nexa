@@ -4,6 +4,11 @@ SHELL := /bin/bash
 COMPOSE := docker compose
 PSQL := $(COMPOSE) exec -T db psql -U nexa -d nexa
 
+# The full containerised stack (`make demo`) — a separate compose file AND a
+# separate compose project, so it can be up at the same time as the dev
+# datastores above without either one owning the other's containers or volumes.
+COMPOSE_DEMO := docker compose -f docker-compose.full.yml
+
 # Export .env to every recipe, so `make dev` / `make test` need no `source .env`
 # and Turbo can forward the variables it declares in globalEnv.
 ifneq (,$(wildcard .env))
@@ -86,3 +91,26 @@ test-e2e: ## Run Playwright end-to-end tests
 
 .PHONY: verify
 verify: typecheck lint test ## Everything CI runs
+
+# --- Containerised stack (local only — no deploy, no TLS, no real secrets) ---
+
+.PHONY: demo
+demo: ## Build + run the whole product in containers, then smoke-test it
+	$(COMPOSE_DEMO) up --build -d
+	./scripts/smoke.sh
+
+.PHONY: smoke
+smoke: ## Smoke-test an already-running container stack
+	./scripts/smoke.sh
+
+.PHONY: demo-down
+demo-down: ## Stop the container stack (its data volumes are kept)
+	$(COMPOSE_DEMO) down
+
+.PHONY: demo-clean
+demo-clean: ## Stop the container stack AND drop its data volumes
+	$(COMPOSE_DEMO) down -v
+
+.PHONY: demo-logs
+demo-logs: ## Follow the container stack's logs
+	$(COMPOSE_DEMO) logs -f

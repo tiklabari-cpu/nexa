@@ -3,30 +3,32 @@
  *
  * §7.2 has claimed AA since Dilim 14 on hand evidence alone; the GL-8 round
  * (tm 114) measured that no automated a11y check existed anywhere in the tree.
- * This spec is the measurement: axe-core over eighteen surfaces in a real
+ * This spec is the measurement: axe-core over twenty-two surfaces in a real
  * browser, with `serious`/`critical` as a hard gate (see `a11y.ts` for why the
  * grade split is where it is).
  *
- * The eighteen are the ones a user cannot route around: the registration
+ * The twenty-two are the ones a user cannot route around: the registration
  * funnel a signed-out stranger reaches before an account exists (Sign up,
  * Forgot password, Reset password, Join — tm 137.1), the first-run wizard a
  * brand-new owner lands on straight after (Onboarding — tm 137.1), the door
  * back in for everyone else (Sign in), the screen agents live in all day
- * (Inbox), the workspace landing dashboard (Home — tm 137.2), the four module
- * screens reachable from the rail (Customers, Reports, Team, Settings) plus
- * three more of Customers' own tabs (real-time traffic, campaigns, goals —
- * tm 137.2), the marketplace behind Settings → Integrations (Apps), the
- * customer widget in its cross-origin iframe, and the one surface a
- * signed-out stranger sees at all outside the funnel (public KB — served as
- * `text/html` by the API, not by the SPA, so nothing the web suite renders
- * covers it).
+ * (Inbox), the workspace landing dashboard (Home — tm 137.2), the seven
+ * module screens reachable from the rail (Customers, Reports, Team, Settings,
+ * Billing, Playbook, Developers — the last three tm 137.3) plus three more of
+ * Customers' own tabs (real-time traffic, campaigns, goals — tm 137.2), the
+ * two screens reached only through Settings (the marketplace — Apps — and the
+ * audit trail — Audit log, tm 137.3), the customer widget in its
+ * cross-origin iframe, and the one surface a signed-out stranger sees at all
+ * outside the funnel (public KB — served as `text/html` by the API, not by
+ * the SPA, so nothing the web suite renders covers it).
  *
  * The last test is the gate's own proof: a known-broken control is injected into
  * a real page and the gate is asserted to fire on it. Without that, a scan
  * silently returning nothing — a bad selector, an axe that never injected —
  * would read exactly like a clean pass.
  *
- * **Both themes, since tm 117.** The twelve panel surfaces are scanned once
+ * **Both themes, since tm 117.** The twenty-eight panel surfaces (or states of
+ * one — a modal, a selected tab, a freshly opened editor) are scanned once
  * dark and once light. Until tm 117 the light ramp was unreachable —
  * `index.html` hard-coded `data-theme="dark"` — so half of `tokens.css` and
  * half of `tokens.test.ts`'s 40 contrast assertions guarded a surface axe had
@@ -52,6 +54,9 @@
  * (the ring is not text) the ring itself is measured directly against what is
  * painted behind it, to the 3:1 of WCAG 1.4.11. `a11y.ts` carries the reasoning.
  */
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   request as newApiContext,
   type APIRequestContext,
@@ -199,12 +204,15 @@ async function ensureJoinInvitation(api: APIRequestContext, ownerToken: string):
 let activeChatId: string;
 /** The invitation token the join-page scan deep-links to (`ensureJoinInvitation`). */
 let joinToken: string;
+/** An owner Bearer token, for the skill-editor scan's own cleanup (no delete UI exists). */
+let ownerToken: string;
 
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
     extraHTTPHeaders: { 'user-agent': 'nexa-e2e-a11y' },
   });
   const token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
+  ownerToken = token;
   await ensurePublishedArticle(apiCtx, token);
   activeChatId = await ensureActiveChat(apiCtx, token);
   joinToken = await ensureJoinInvitation(apiCtx, token);
@@ -530,6 +538,106 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The last four module screens + two states beneath them (Faz-4 K11 ·
+       * tm 137.3): Billing, Playbook, the audit trail behind Settings, and
+       * Developers. `a11y.spec.ts` had measured the four other rail-adjacent
+       * module screens (Customers/Reports/Team/Settings, tm 115/117) but never
+       * these four.
+       */
+      test('billing has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/billing');
+        await scanPanel(agentPage, 'Billing', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
+          // Past the loading skeleton — the plan/seats card only renders once
+          // the subscription fetch resolves.
+          await expect(agentPage.getByRole('region', { name: 'Manage plan' })).toBeVisible();
+        });
+      });
+
+      test('playbook has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/playbook');
+        await scanPanel(agentPage, 'Playbook', theme, testInfo, async () => {
+          await expect(
+            agentPage.getByRole('heading', { name: 'AI Agent', level: 1 }),
+          ).toBeVisible();
+          await expect(agentPage.getByRole('region', { name: 'Recommended skills' })).toBeVisible();
+        });
+      });
+
+      // Not reachable from the scan above — the editor only renders once a
+      // skill is selected, the same reason the campaign/goal builders each
+      // needed their own scan. A skill is created fresh rather than reusing
+      // the seeded "Where is my order" one: `playbook.spec.ts`'s template
+      // flows mint their own skills sharing a near-identical name ("Where is
+      // my order?"), and once the shared e2e database has accumulated a run
+      // or two a substring filter could no longer tell the two apart. There
+      // is no delete affordance in the UI, so the fresh skill is removed
+      // through the API afterwards.
+      test('the skill editor has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/playbook');
+
+        let skillId = '';
+        try {
+          await scanPanel(agentPage, 'Skill editor', theme, testInfo, async () => {
+            const created = agentPage.waitForResponse(
+              (response) =>
+                response.url().endsWith('/skills') && response.request().method() === 'POST',
+            );
+            await agentPage.getByRole('button', { name: 'New skill' }).click();
+            const skill = (await (await created).json()) as { id: string; name: string };
+            skillId = skill.id;
+            await expect(agentPage.getByRole('region', { name: skill.name })).toBeVisible();
+          });
+        } finally {
+          if (skillId) await apiCtx.delete(`${API_BASE}/skills/${skillId}`, auth(ownerToken));
+        }
+      });
+
+      test('audit log has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/settings/audit-log');
+        await scanPanel(agentPage, 'Audit log', theme, testInfo, async () => {
+          await expect(
+            agentPage.getByRole('heading', { name: 'Audit log', level: 1 }),
+          ).toBeVisible();
+          // Non-empty without seeding anything — the `agentPage` fixture's own
+          // sign-in, moments before this test runs, is already in the trail
+          // (settings.spec.ts precedent).
+          await expect(agentPage.getByRole('table', { name: 'Audit log' })).toBeVisible();
+        });
+      });
+
+      test('developers has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/developers');
+        await scanPanel(agentPage, 'Developers', theme, testInfo, async () => {
+          await expect(
+            agentPage.getByRole('heading', { name: 'Developers', level: 1 }),
+          ).toBeVisible();
+          await expect(agentPage.getByRole('tablist', { name: 'Developer portal' })).toBeVisible();
+        });
+      });
+
+      // Not reachable from the scan above — the dialog only renders once
+      // opened, the same reason the campaign/goal builders each needed their
+      // own scan. Nothing is persisted: the form is never submitted.
+      test('the register app dialog has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/developers');
+        await scanPanel(agentPage, 'Register app dialog', theme, testInfo, async () => {
+          await agentPage.getByRole('button', { name: 'Register app' }).click();
+          await expect(agentPage.getByRole('dialog', { name: 'Register app' })).toBeVisible();
+        });
+      });
+
+      /**
        * The registration funnel + first-run wizard (Faz-4 K11 · tm 137.1).
        *
        * These five are the rest of the pre-`/app` surface: nobody reaches the
@@ -716,6 +824,58 @@ test.describe('WCAG 2.1 AA (axe)', () => {
     await scanReadyScreen(page, 'Public KB', testInfo, async () => {
       await expect(page.getByRole('heading', { name: 'Accessibility baseline' })).toBeVisible();
     });
+  });
+
+  /**
+   * Pins the doc-comment's "every `/app/*` route" claim to the router itself
+   * (Faz-4 K11 · tm 137.3) — otherwise the surface count above is just a
+   * comment nothing checks, and 137.1/137.2/137.3 each closing their slice of
+   * routes by hand is exactly how seven of thirteen went unmeasured for as
+   * long as they did (§D113). `App.tsx`'s only paired `<Route>...</Route>` is
+   * the `AppShell` one — every route it nests is a plain self-closing
+   * `<Route path="…" />`, including the index redirect, which carries no
+   * `path` attribute at all and so is not picked up. A route added to
+   * `AppShell` without a matching entry in `SCANNED_APP_ROUTES` — or a scan
+   * removed without the route going with it — fails this rather than quietly
+   * drifting.
+   *
+   * `/app/onboarding` is excluded on purpose: it lives outside the `AppShell`
+   * tree entirely (App.tsx's separate onboarding-gate branch, reached only
+   * while `onboarding_completed` is false) and is scanned above through a
+   * fresh signup rather than a `goto`.
+   */
+  test('the axe suite scans every /app/* route App.tsx defines', () => {
+    const appTsxSource = readFileSync(
+      path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../web/src/App.tsx'),
+      'utf-8',
+    );
+    const shellBlock = /<Route path="\/app" element=\{<AppShell \/>\}>([\s\S]*?)<\/Route>/.exec(
+      appTsxSource,
+    );
+    expect(shellBlock, 'App.tsx no longer nests routes the way this pin expects').toBeTruthy();
+
+    const definedRoutes = [...shellBlock![1]!.matchAll(/<Route path="([^"]+)"/g)]
+      .map((match) => `/app/${match[1]}`)
+      .sort();
+
+    const SCANNED_APP_ROUTES = [
+      '/app/home',
+      '/app/inbox',
+      '/app/customers',
+      '/app/customers/campaigns',
+      '/app/customers/goals',
+      '/app/customers/real-time',
+      '/app/team',
+      '/app/reports',
+      '/app/billing',
+      '/app/playbook',
+      '/app/settings',
+      '/app/settings/audit-log',
+      '/app/apps',
+      '/app/developers',
+    ].sort();
+
+    expect(definedRoutes).toEqual(SCANNED_APP_ROUTES);
   });
 
   /**

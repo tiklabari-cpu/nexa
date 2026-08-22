@@ -6739,7 +6739,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-22T05:26:57.211Z",
+        "updatedAt": "2026-08-22T05:28:07.534Z",
         "subtasks": [
           {
             "id": 1,
@@ -6769,13 +6769,13 @@
             "description": "Kalan dört rota ölçülür; NFR-A11Y satırı kapanır.",
             "details": "NE YAPILACAK: 4 rota (+ SkillEditor açık hâli, DeveloperPortal PAT oluşturma diyaloğu); ihlalleri düzelt;\na11y.spec'in \"tüm uygulama rotaları\" iddiasını bir listeyle pinle (App.tsx rotaları ↔ spec rotaları eşitliği\n— yeni rota eklenince test uyarır); PLAN §7.2 `A11Y1–6` → `✅ → KA11Y`. ORTAK: `apps/e2e/tests/a11y.spec.ts` + `a11y.ts` (axe-core, wcag2a/2aa/21a/21aa, serious/critical = kapı,\nIKI TEMA, focus/hover kapıları) mevcut desenle rota ekle; bulunan ihlaller (çoğunlukla `color-contrast`\ntoken katmanında — KA11Y'nin ilk ölçümü 7/8 ekranı düşürmüştü) KAYNAĞINDA düzeltilir (token/bileşen),\ntestte muaf tutulmaz; `aria-label`/isim eksikleri bileşende. Kanıt: kanit PNG gerekmez (a11y.spec üretmiyor);\nHANDOFF'a ihlal sayısı önce/sonra.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Faz-4'ün gerekçesi + kırılımı: PLAN.md `## 6A.` (bul: `grep -n '^## 6A' PLAN.md`) ve §D111–§D113 (bul: `grep -n '^- \\*\\*D11[123]' PLAN.md`).\n- Bu görevin PRD/kod kimliği: **NFR-A11Y1–6 (WCAG 2.1 AA — panel yarısı ölçülmemiş)**. Gereksinim satırı: `grep -n '| A11Y1–6' PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n '^#### KA11Y' PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz-4 düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 4 (Bütünleme) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- e2e a11y exit 0; rota-eşitlik testi; HANDOFF önce/sonra; PLAN §7.2 `A11Y1–6` `✅`.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "137.1",
               "137.2"
             ],
             "parentId": "137",
-            "updatedAt": "2026-08-17T16:00:00.000Z"
+            "updatedAt": "2026-08-22T05:28:07.534Z"
           }
         ]
       },
@@ -7044,7 +7044,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T05:26:57.212Z",
+      "lastModified": "2026-08-22T05:28:07.535Z",
       "taskCount": 144,
       "completedCount": 136,
       "tags": [

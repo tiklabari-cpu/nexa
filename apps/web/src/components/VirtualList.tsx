@@ -231,7 +231,19 @@ export function VirtualTable<T>({
   const visible = items.slice(window.startIndex, window.endIndex);
 
   return (
-    <div ref={containerRef} onScroll={onScroll} className="overflow-y-auto" style={{ maxHeight }}>
+    // `tabIndex={0}` is WCAG 2.1.1: once the list grows past `maxHeight` this
+    // div becomes the actual scroller, and unlike `VirtualList` its rows are
+    // plain text cells, not buttons — no descendant is focusable, so without
+    // this a keyboard user has no way to reach the rows scrolled out of view
+    // (axe `scrollable-region-focusable`, caught scanning the Audit log table,
+    // tm 137.3).
+    <div
+      ref={containerRef}
+      onScroll={onScroll}
+      tabIndex={0}
+      className="overflow-y-auto"
+      style={{ maxHeight }}
+    >
       <table className={tableClassName}>
         {caption != null && <caption className="sr-only">{caption}</caption>}
         {head}

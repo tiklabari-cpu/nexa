@@ -160,8 +160,19 @@ export function PlaybookPage(): ReactElement {
           : {}),
       }),
     onSuccess: (skill) => {
-      invalidate();
+      // Seed the list cache synchronously *before* selecting — same reason
+      // `createFromTemplate` below does: an invalidate alone leaves a render
+      // where the refetch is still in flight, `items` does not contain the new
+      // id yet, and the guard effect clears the selection right back out from
+      // under it before the refetch ever lands. Without this, "New skill"
+      // silently never opened its own editor.
+      queryClient.setQueryData<{ items: Skill[] }>(['playbook', 'skills'], (old) =>
+        old
+          ? { items: [skill, ...old.items.filter((s) => s.id !== skill.id)] }
+          : { items: [skill] },
+      );
       setSelectedId(skill.id);
+      invalidate();
     },
   });
 

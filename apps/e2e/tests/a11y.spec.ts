@@ -3,19 +3,21 @@
  *
  * §7.2 has claimed AA since Dilim 14 on hand evidence alone; the GL-8 round
  * (tm 114) measured that no automated a11y check existed anywhere in the tree.
- * This spec is the measurement: axe-core over fourteen surfaces in a real
+ * This spec is the measurement: axe-core over eighteen surfaces in a real
  * browser, with `serious`/`critical` as a hard gate (see `a11y.ts` for why the
  * grade split is where it is).
  *
- * The fourteen are the ones a user cannot route around: the registration
+ * The eighteen are the ones a user cannot route around: the registration
  * funnel a signed-out stranger reaches before an account exists (Sign up,
  * Forgot password, Reset password, Join — tm 137.1), the first-run wizard a
  * brand-new owner lands on straight after (Onboarding — tm 137.1), the door
  * back in for everyone else (Sign in), the screen agents live in all day
- * (Inbox), the four module screens reachable from the rail (Customers,
- * Reports, Team, Settings), the marketplace behind Settings → Integrations
- * (Apps), the customer widget in its cross-origin iframe, and the one surface
- * a signed-out stranger sees at all outside the funnel (public KB — served as
+ * (Inbox), the workspace landing dashboard (Home — tm 137.2), the four module
+ * screens reachable from the rail (Customers, Reports, Team, Settings) plus
+ * three more of Customers' own tabs (real-time traffic, campaigns, goals —
+ * tm 137.2), the marketplace behind Settings → Integrations (Apps), the
+ * customer widget in its cross-origin iframe, and the one surface a
+ * signed-out stranger sees at all outside the funnel (public KB — served as
  * `text/html` by the API, not by the SPA, so nothing the web suite renders
  * covers it).
  *
@@ -444,6 +446,86 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           await expect(
             agentPage.getByRole('list', { name: 'Apps' }).getByRole('listitem').first(),
           ).toBeVisible();
+        });
+      });
+
+      /**
+       * Home + the three Engage tabs of Customers (Faz-4 K11 · tm 137.2).
+       *
+       * `a11y.spec.ts` had measured seven panel surfaces (tm 115/117) and the
+       * pre-`/app` funnel (tm 137.1) but never the workspace landing dashboard or
+       * three of Customers' four tabs — `/app/customers` (Contacts) was in the
+       * loop since tm 115, `real-time`/`campaigns`/`goals` were not. Seeded Acme
+       * has neither campaigns nor goals, so both list screens render in their
+       * *empty* state with two identically-named "New …" buttons live at once
+       * (the toolbar and the empty-state action) — `.first()` picks the toolbar
+       * one deterministically rather than failing strict-mode on the ambiguity.
+       */
+      test('home has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/home');
+        await scanPanel(agentPage, 'Home', theme, testInfo, async () => {
+          // The last section to render — its presence means the dashboard fetch
+          // resolved, not just that the h1 painted before the loading skeleton.
+          await expect(
+            agentPage.getByRole('heading', { name: 'This week', level: 2 }),
+          ).toBeVisible();
+        });
+      });
+
+      test('customers real-time traffic has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers/real-time');
+        await scanPanel(agentPage, 'Customers real-time', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('tablist', { name: 'Traffic status' })).toBeVisible();
+        });
+      });
+
+      test('customers campaigns has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers/campaigns');
+        await scanPanel(agentPage, 'Customers campaigns', theme, testInfo, async () => {
+          await expect(
+            agentPage.getByRole('button', { name: 'New campaign' }).first(),
+          ).toBeVisible();
+        });
+      });
+
+      // The create form, open — not reachable from the list scan above, the same
+      // reason the composer's selected note tab (tm 120) needed its own scan.
+      test('the campaign builder has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers/campaigns');
+        await scanPanel(agentPage, 'Campaign builder', theme, testInfo, async () => {
+          await agentPage.getByRole('button', { name: 'New campaign' }).first().click();
+          await expect(agentPage.getByRole('dialog', { name: 'New campaign' })).toBeVisible();
+        });
+      });
+
+      test('customers goals has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers/goals');
+        await scanPanel(agentPage, 'Customers goals', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('button', { name: 'New goal' }).first()).toBeVisible();
+        });
+      });
+
+      test('the goal create modal has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers/goals');
+        await scanPanel(agentPage, 'Goal create modal', theme, testInfo, async () => {
+          await agentPage.getByRole('button', { name: 'New goal' }).first().click();
+          await expect(agentPage.getByRole('dialog', { name: 'New goal' })).toBeVisible();
         });
       });
 

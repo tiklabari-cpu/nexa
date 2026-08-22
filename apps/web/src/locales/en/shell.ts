@@ -20,6 +20,8 @@ export const shell: Messages = {
   'shell.brand': 'Brand',
   'shell.sandbox.notice':
     'Sandbox workspace — nothing here is billed, and nothing here is production data.',
+  'shell.nav.expand': 'Expand navigation',
+  'shell.nav.collapse': 'Collapse navigation',
 
   // Navigation (rail + command palette)
   'nav.home': 'Home',

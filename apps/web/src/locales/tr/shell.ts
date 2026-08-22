@@ -22,6 +22,8 @@ export const shell: Messages = {
   'shell.brand': 'Marka',
   'shell.sandbox.notice':
     'Kum havuzu çalışma alanı — burada hiçbir şey faturalandırılmaz ve hiçbiri gerçek veri değildir.',
+  'shell.nav.expand': 'Gezinmeyi genişlet',
+  'shell.nav.collapse': 'Gezinmeyi daralt',
 
   // Navigation
   'nav.home': 'Ana Sayfa',

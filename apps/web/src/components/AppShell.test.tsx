@@ -23,6 +23,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from './AppShell.js';
 import { readBrandId, useAuth, useBrandStore } from '../lib/auth-store.js';
+import { useNavStore } from '../lib/nav-store.js';
 
 const BRAND_KEY = 'nexa.brand_id';
 
@@ -376,5 +377,110 @@ describe('brand switcher', () => {
     await user.click(screen.getByRole('option', { name: /Acme Support/ }));
 
     expect(invalidateSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe('nav pin (FR-MOD-01.1.1 · 01.5)', () => {
+  const PIN_KEY_A1 = 'nexa.nav.pinned:a-1';
+  const PIN_KEY_A2 = 'nexa.nav.pinned:a-2';
+
+  beforeEach(() => {
+    localStorage.removeItem(PIN_KEY_A1);
+    localStorage.removeItem(PIN_KEY_A2);
+    useNavStore.setState({ accountId: null, pinned: false });
+  });
+
+  it('starts unpinned — the icon rail exactly as it rendered before this preference existed', () => {
+    renderShell();
+    const toggle = screen.getByRole('button', { name: 'Expand navigation' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('names the toggle after the rail it controls (aria-controls)', () => {
+    renderShell();
+    const toggle = screen.getByRole('button', { name: 'Expand navigation' });
+    const rail = screen.getByRole('navigation', { name: 'Modules' });
+    expect(toggle).toHaveAttribute('aria-controls', rail.id);
+  });
+
+  it('toggles pinned on click and reveals the module labels', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.click(screen.getByRole('button', { name: 'Expand navigation' }));
+
+    const toggle = screen.getByRole('button', { name: 'Collapse navigation' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    // Pinned renders a visible label beside the icon; unpinned relies on the
+    // link's aria-label/title alone, so this text is only in the DOM once wide.
+    expect(screen.getByText('Reports')).toBeVisible();
+  });
+
+  it('is operable from the keyboard — Enter and Space both toggle it', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    screen.getByRole('button', { name: 'Expand navigation' }).focus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('button', { name: 'Collapse navigation' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+
+    await user.keyboard(' ');
+    expect(screen.getByRole('button', { name: 'Expand navigation' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('persists the choice under the signed-in account', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.click(screen.getByRole('button', { name: 'Expand navigation' }));
+
+    expect(localStorage.getItem(PIN_KEY_A1)).toBe('true');
+  });
+
+  it('restores a remembered choice on the next mount (reload) for the same account', () => {
+    localStorage.setItem(PIN_KEY_A1, 'true');
+
+    renderShell();
+
+    expect(screen.getByRole('button', { name: 'Collapse navigation' })).toHaveAttribute(
+      'aria-expanded',
+      'true',
+    );
+  });
+
+  it('keeps the preference independent per account', async () => {
+    const user = userEvent.setup();
+    const first = renderShell();
+    await user.click(screen.getByRole('button', { name: 'Expand navigation' }));
+    expect(localStorage.getItem(PIN_KEY_A1)).toBe('true');
+    first.unmount();
+
+    useAuth.setState({
+      agent: {
+        account_id: 'a-2',
+        email: 'sam.rivera@acme.localhost',
+        name: 'Sam Rivera',
+        role: 'agent',
+        organization_id: 'o-1',
+        license_id: '1000003',
+        scopes: [],
+        routing_status: 'offline',
+      },
+    });
+
+    renderShell();
+
+    // a-2 has never pinned its own rail — a-1's choice must not leak across.
+    expect(screen.getByRole('button', { name: 'Expand navigation' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+    expect(localStorage.getItem(PIN_KEY_A2)).toBeNull();
   });
 });

@@ -13,6 +13,14 @@
 
 ## Task log (newest-first)
 
+## 139.1 — 01.1.1-a + 01.5-a: nav pin/unpin (hesap bazında kalıcı) — done — 2026-08-22 UTC
+
+- **Yapıldı:** `AppShell.tsx`'in dekoratif "N" logosu `aria-expanded`/`aria-controls` taşıyan bir düğmeye (`NavPinToggle`) dönüştü, rayı `unpinned` (varsayılan — önceki davranışla piksel-özdeş: `w-rail`, ikon+title) ↔ `pinned` (`w-60`, her modül etiketiyle) arasında değiştiriyor. Yeni `lib/nav-store.ts` — `theme.ts`/`i18n.ts` deseninde bir zustand mağazası, tercih `nexa.nav.pinned:<accountId>` altında `localStorage`'da, hesap değişince önceki hesabın tercihi sızmadan yeniden hidratlanıyor (`useLayoutEffect`, boyamadan önce). i18n `shell.nav.expand`/`shell.nav.collapse` (en/tr).
+- **Kapsam bilinçli dar tutuldu:** `AccountMenu`/`BrandSwitcher` pinned modda pozisyon/genişlik olarak dokunulmadı (sabit `w-9` avatar boyutları korunuyor) — görev yalnız logo/hamburger + modül listesi pin/unpin'i kapsıyordu.
+- **PLAN.md:** §6A tablosundaki satır 12 (`🔒 kalanları`, tm 139) DEĞİŞMEDİ — altı kardeş alt-görevden biri bitti, flip 139.5'te olacak (görevin kendi talimatı). `K01.1` bloğu bu turda AÇILDI (`## K. Kanıt Geçmişi`, K01.1.3'ten hemen önce) ve maddem oraya yazıldı.
+- **Doğrulama (hepsi exit 0):** `pnpm -w typecheck` (9/9) · `pnpm -w lint` (9/9) · `pnpm -w format:check` (tüm repo) · `pnpm -w build` (7/7) · `turbo test --force --filter=!@nexa/e2e --filter=!@nexa/api` (`@nexa/web` 120 dosya/1347 · `@nexa/mobile` 506 · `@nexa/rtm` 106, regresyon) · `@nexa/api` `test:unit` (995) · `@nexa/api` `test:integration` sharded 3× (with-test-datastores) · e2e `tests/a11y.spec.ts` **61/61** iki tema (logo artık erişilebilirlik ağacında — yeni ihlal yok, focus-ring ölçümü dahil, kabuk rotaları yeşil kaldı). Kontrat/migration dokunulmadı → `contract:generate`/`db:check-drift` gereksiz.
+- **Sonraki pencereye not:** `run-loop.sh`'deki panel STOP-kapısı değişikliği bu pencereden ÖNCE vardı, bu görevin işi değil, commit'e alınmadı (önceki on iki pencere de aynı notu düştü). 139.2–139.6 (presence avatarları, Invite +N, lead pill, banner, onboarding survey) hâlâ kuyrukta; 139.5 satır 12'yi `✅`'e çevirecek.
+
 ## 144 — I18N1/2: plan reddi upsell kalsın — SsoConnection + Compliance + SiemExport `details.entitlement`'ı tanıyor — done — 2026-08-22 UTC
 
 - **Yapıldı:** tm 133.12'nin `WidgetCustomization.tsx`'te bulduğu ve kapsam dışı bıraktığı kusuru (entitlement reddi ADR-06'nın genel "That is not allowed here." cümlesine düşüyor, upsell kayboluyor) aynı desenle üç ekrana daha uyguladı — `SsoConnection.tsx` (bağlantı ekleme POST'u, `entitlement: 'sso'`), `Compliance.tsx` (BAA kabul POST'u, `entitlement: 'hipaa'`), `SiemExport.tsx` (PATCH, `entitlement: 'siem_export'`); her biri `error instanceof ApiClientError && error.details?.['entitlement'] === '<key>'` ise kendi katalog cümlesini basıyor. Yeni anahtarlar `locales/{en,tr}/settings.ts`.

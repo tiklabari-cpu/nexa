@@ -15,10 +15,14 @@ import { useEffect, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
+import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
 import { CommandPalette } from './CommandPalette.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
 import { Dropdown } from './ui/index.js';
+
+/** Matches the toggle's `aria-controls` to the rail it expands/collapses. */
+const NAV_ID = 'app-shell-nav';
 
 export function AppShell(): ReactElement {
   return (
@@ -131,27 +135,28 @@ function TrialBanner(): ReactElement | null {
 function IconRail(): ReactElement {
   const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  const accountId = useAuth((s) => s.agent?.account_id);
+  const { pinned, setPinned } = useNavPinned(accountId);
+
   return (
     <nav
+      id={NAV_ID}
       aria-label={t('shell.modules')}
-      className="flex w-rail shrink-0 flex-col items-center gap-1 bg-rail py-3"
+      className={`flex shrink-0 flex-col gap-1 bg-rail py-3 ${
+        pinned ? 'w-60 items-stretch px-2' : 'w-rail items-center'
+      }`}
     >
-      <span
-        aria-hidden="true"
-        className="mb-3 flex h-8 w-8 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white"
-      >
-        N
-      </span>
+      <NavPinToggle pinned={pinned} onToggle={() => setPinned(!pinned)} />
 
       <BrandSwitcher />
 
       {MODULES.map((item) => (
-        <RailButton key={item.to} item={item} />
+        <RailButton key={item.to} item={item} pinned={pinned} />
       ))}
 
-      <div className="mt-auto flex flex-col items-center gap-1">
+      <div className={`mt-auto flex flex-col gap-1 ${pinned ? 'items-stretch' : 'items-center'}`}>
         {FOOTER.filter((item) => isNavVisible(item, scopes)).map((item) => (
-          <RailButton key={item.to} item={item} />
+          <RailButton key={item.to} item={item} pinned={pinned} />
         ))}
         <AccountMenu />
       </div>
@@ -159,11 +164,44 @@ function IconRail(): ReactElement {
   );
 }
 
-function RailButton({ item }: { item: NavDestination }): ReactElement {
+/**
+ * The rail's logo doubles as its pin/unpin control (FR-MOD-01.1.1 · 01.5) — a
+ * `<button>` rather than the decorative `<span>` it replaces, so the state it
+ * drives (`aria-expanded`) and the rail it drives (`aria-controls`) are both
+ * exposed to assistive tech. A native button already answers Enter and Space,
+ * so no extra keyboard wiring is needed.
+ */
+function NavPinToggle({
+  pinned,
+  onToggle,
+}: {
+  pinned: boolean;
+  onToggle: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const label = t(pinned ? 'shell.nav.collapse' : 'shell.nav.expand');
+
+  return (
+    <button
+      type="button"
+      aria-expanded={pinned}
+      aria-controls={NAV_ID}
+      aria-label={label}
+      title={label}
+      onClick={onToggle}
+      className="mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white hover:bg-brand-600"
+    >
+      N
+    </button>
+  );
+}
+
+function RailButton({ item, pinned }: { item: NavDestination; pinned: boolean }): ReactElement {
   const t = useTranslate();
   const label = t(item.labelKey);
-  const shared =
-    'relative flex h-9 w-9 items-center justify-center rounded-md text-base transition-colors';
+  const shared = `relative flex h-9 items-center gap-3 rounded-md text-base transition-colors ${
+    pinned ? 'px-3' : 'w-9 justify-center'
+  }`;
 
   return (
     <NavLink
@@ -179,10 +217,11 @@ function RailButton({ item }: { item: NavDestination }): ReactElement {
           {isActive && (
             <span
               aria-hidden="true"
-              className="absolute -left-3 h-5 w-0.5 rounded-full bg-brand-500"
+              className={`absolute h-5 w-0.5 rounded-full bg-brand-500 ${pinned ? '-left-2' : '-left-3'}`}
             />
           )}
           <span aria-hidden="true">{item.icon}</span>
+          {pinned && <span className="truncate text-sm">{label}</span>}
         </>
       )}
     </NavLink>

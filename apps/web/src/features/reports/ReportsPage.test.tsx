@@ -126,6 +126,158 @@ beforeEach(() => {
   localStorage.clear();
 });
 
+/**
+ * The Overview KPI grid is exercised elsewhere only through the all-zero
+ * `OVERVIEW` fixture (as filler while other tabs/cards are under test), so no
+ * test ever renders its volume/resolution/chats/responsiveness cards with real
+ * figures, or the by-agent table and top-tags list with actual rows. Achieved
+ * goals and SLA breaches already have their own dedicated describe blocks
+ * below, so this fixture leaves both at zero/inactive rather than repeating
+ * that coverage.
+ */
+const RICH_OVERVIEW = {
+  range: OVERVIEW.range,
+  previous_period: {
+    range: OVERVIEW.previous_period.range,
+    chats: 200,
+    tickets: 10,
+    total_cases: 210,
+    closed: 180,
+    manual: 36,
+    assisted: 50,
+    automated: 94,
+    achieved_goals: 0,
+    avg_first_response_seconds: 125,
+    avg_duration_seconds: 550,
+    satisfaction_score: 0.7,
+    sla_breaches: 0,
+  },
+  totals: {
+    chats: 240,
+    tickets: 12,
+    total_cases: 252,
+    closed: 200,
+    manual: 40,
+    assisted: 60,
+    automated: 100,
+    manual_rate: 0.2,
+    assisted_rate: 0.3,
+    automated_rate: 0.5,
+    queued_now: 3,
+    achieved_goals: 0,
+  },
+  chats: {
+    automated_per_hour: 5,
+    automated_avg_duration_seconds: 134,
+    total_duration_seconds: 36_000,
+  },
+  response_times: { avg_first_response_seconds: 65, avg_duration_seconds: 610 },
+  satisfaction: { good: 80, bad: 20, score: 0.8, responses: 100 },
+  by_agent: [
+    { agent_id: 'a1', name: 'Ada Lovelace', chats: 150 },
+    { agent_id: 'a2', name: null, chats: 90 },
+  ] as Array<{ agent_id: string; name: string | null; chats: number }>,
+  top_tags: [
+    { name: 'billing', count: 42 },
+    { name: 'shipping', count: 18 },
+  ],
+  sla: { active: false, breaches: 0, low_confidence: false },
+};
+
+function mockOverviewRich(overrides: Partial<typeof RICH_OVERVIEW> = {}): void {
+  const payload = { ...RICH_OVERVIEW, ...overrides };
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/overview')) return Promise.resolve(payload);
+    return Promise.reject(new Error(`unexpected ${path}`));
+  });
+}
+
+/**
+ * Like `kpi()`, but for a label the by-agent table's "Conversations" column
+ * header also carries verbatim (both read from the same catalogue key) — the
+ * KPI card renders first in DOM order, so the first match is always it.
+ */
+function overviewKpi(label: string): HTMLElement {
+  const labelEl = screen.getAllByText(label, { exact: true })[0];
+  const card = labelEl?.parentElement;
+  if (!card) throw new Error(`KPI "${label}" has no enclosing card`);
+  return card;
+}
+
+describe('ReportsPage — Overview KPI grid, real figures (07.1/07.3)', () => {
+  it('renders the volume, resolution, chats and responsiveness cards with real figures and vs-previous deltas', async () => {
+    mockOverviewRich();
+    renderReports(<ReportsPage />);
+    await screen.findByText('In queue now');
+
+    expect(within(overviewKpi('Conversations')).getByText('240')).toBeInTheDocument();
+    expect(within(overviewKpi('Conversations')).getByText(/↑ 40 vs previous/)).toBeInTheDocument();
+    expect(within(kpi('Total cases')).getByText('252')).toBeInTheDocument();
+    expect(within(kpi('Total cases')).getByText('240 chats + 12 tickets')).toBeInTheDocument();
+    expect(within(kpi('Closed')).getByText('200')).toBeInTheDocument();
+    expect(within(kpi('In queue now')).getByText('3')).toBeInTheDocument();
+    expect(within(kpi('In queue now')).getByText('Waiting for an agent')).toBeInTheDocument();
+
+    expect(within(kpi('Manual')).getByText('40')).toBeInTheDocument();
+    expect(within(kpi('Manual')).getByText('20% of closed')).toBeInTheDocument();
+    expect(within(kpi('Assisted')).getByText('60')).toBeInTheDocument();
+    expect(within(kpi('Assisted')).getByText('30% of closed')).toBeInTheDocument();
+    expect(within(kpi('Automated')).getByText('100')).toBeInTheDocument();
+    expect(within(kpi('Automated')).getByText('50% of closed')).toBeInTheDocument();
+
+    expect(within(kpi('Automated chats / hour')).getByText('5')).toBeInTheDocument();
+    expect(within(kpi('Automated chat duration')).getByText('2m 14s')).toBeInTheDocument();
+    expect(within(kpi('Total chat duration')).getByText('10h')).toBeInTheDocument();
+
+    expect(within(kpi('First response')).getByText('1m 5s')).toBeInTheDocument();
+    expect(within(kpi('First response')).getByText(/↓ 1m vs previous/)).toBeInTheDocument();
+    expect(within(kpi('Conversation length')).getByText('10m 10s')).toBeInTheDocument();
+    expect(within(kpi('Conversation length')).getByText(/↑ 1m vs previous/)).toBeInTheDocument();
+    expect(within(kpi('Satisfaction')).getByText('80%')).toBeInTheDocument();
+    expect(within(kpi('Satisfaction')).getByText(/↑ 10% vs previous/)).toBeInTheDocument();
+    expect(within(kpi('Negative ratings')).getByText('20')).toBeInTheDocument();
+  });
+
+  it('lists each agent with their chat count, falling back to "Unknown agent" for one with no name', async () => {
+    mockOverviewRich();
+    renderReports(<ReportsPage />);
+
+    const table = await screen.findByRole('table', { name: 'Conversations handled per agent' });
+    expect(within(table).getByText('Ada Lovelace')).toBeInTheDocument();
+    expect(within(table).getByText('150')).toBeInTheDocument();
+    expect(within(table).getByText('Unknown agent')).toBeInTheDocument();
+    expect(within(table).getByText('90')).toBeInTheDocument();
+  });
+
+  it('shows a meaningful empty state, not an empty table, when no agent has handled a conversation', async () => {
+    mockOverviewRich({ by_agent: [] });
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    expect(screen.getByText('No assigned conversations')).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('renders each top tag with its conversation count', async () => {
+    mockOverviewRich();
+    renderReports(<ReportsPage />);
+    await screen.findByText('Top tags');
+
+    expect(screen.getByText('billing')).toBeInTheDocument();
+    expect(screen.getByText('42')).toBeInTheDocument();
+    expect(screen.getByText('shipping')).toBeInTheDocument();
+    expect(screen.getByText('18')).toBeInTheDocument();
+  });
+
+  it('shows a meaningful empty state, not an empty list, when no tag was applied in the window', async () => {
+    mockOverviewRich({ top_tags: [] });
+    renderReports(<ReportsPage />);
+    await screen.findByText('In queue now');
+
+    expect(screen.getByText('No tags applied')).toBeInTheDocument();
+  });
+});
+
 describe('ReportsPage — AI Agent report (07.4)', () => {
   it('shows the AI resolution count and its deflection metrics', async () => {
     mockReports({

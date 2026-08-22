@@ -79,6 +79,31 @@ test.describe('onboarding wizard (FR-MOD-00.4)', () => {
     await expect(page.getByRole('navigation', { name: 'Modules' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toHaveCount(0);
   });
+
+  test('reloading after seeding sample data resumes on that step (GET /onboarding/state)', async ({
+    page,
+  }) => {
+    await signUpFreshOwner(page);
+
+    // Welcome → Website → Team → Sample data, skipping each step's own form.
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Add sample data' })).toBeVisible();
+    await page.getByRole('button', { name: 'Add sample data' }).click();
+    await expect(page.getByText(/sample conversation\.$/)).toBeVisible();
+
+    // Reload before choosing "Finish setup" — the wizard re-reads
+    // GET /onboarding/state and, since the demo is already down, opens
+    // straight on the sample step instead of back at welcome.
+    await page.reload();
+    await expect(page.getByRole('heading', { name: 'Add sample data' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sample data added' })).toBeDisabled();
+    await expect(page.getByText('Sample data is already in your workspace.')).toBeVisible();
+
+    await page.getByRole('button', { name: 'Finish setup' }).click();
+    await expect(page).toHaveURL(/\/app\/inbox/);
+  });
 });
 
 test.describe('signup region selection (C4-c, ADR-12)', () => {

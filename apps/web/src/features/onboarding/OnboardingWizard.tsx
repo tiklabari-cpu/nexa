@@ -10,12 +10,17 @@
  * marked set up so the wizard never returns.
  *
  * The gate lives in `App.tsx`, keyed off `agent.onboarding_completed` from
- * `/auth/me`, so this component owns only the flow, not the redirect.
+ * `/auth/me`, so this component owns only the flow, not the redirect. On
+ * mount it also reads `GET /onboarding/state` directly: that flag can be
+ * stale (another tab or admin finished setup since this session's `/auth/me`
+ * load), and the server tracks no per-step progress beyond `demo_seeded`, so
+ * a workspace that already has sample data resumes on that step instead of
+ * making the owner click back through welcome/website/team.
  */
-import { useMutation } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { OnboardingSeedResult } from '@nexa/types';
+import type { OnboardingSeedResult, OnboardingState } from '@nexa/types';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -43,6 +48,31 @@ export function OnboardingWizard(): ReactElement {
   // many steps there are and what the last one does (FR-EK-A.2).
   const steps = useStepper(STEPS.length);
   const stepId = STEPS[steps.index]!;
+
+  const state = useQuery({
+    queryKey: ['onboarding-state'],
+    queryFn: () => api.get<OnboardingState>('/onboarding/state'),
+  });
+
+  // Server truth wins over the local gate: `App.tsx` already kept this route
+  // out of reach for a session that knew it was done, so reaching this point
+  // with `completed: true` means the flag went stale after `/auth/me` loaded.
+  useEffect(() => {
+    if (state.data?.completed) {
+      markOnboarded();
+      navigate('/app/inbox', { replace: true });
+    }
+  }, [state.data, markOnboarded, navigate]);
+
+  // Resume once, the first time the state loads — a ref rather than a step
+  // check, so it does not re-fire (and yank the owner back) if they navigate
+  // to the sample step and then Back away from it.
+  const resumed = useRef(false);
+  useEffect(() => {
+    if (resumed.current || !state.data || state.data.completed) return;
+    resumed.current = true;
+    if (state.data.demo_seeded) steps.goTo(STEPS.indexOf('sample'));
+  }, [state.data, steps]);
 
   // Completing and skipping are the same server call — the workspace is set up
   // either way. On success the local gate flips and the shell takes over.
@@ -85,7 +115,7 @@ export function OnboardingWizard(): ReactElement {
           {stepId === 'welcome' && <WelcomeStep name={agentName} />}
           {stepId === 'website' && <WebsiteStep />}
           {stepId === 'team' && <TeamStep />}
-          {stepId === 'sample' && <SampleStep />}
+          {stepId === 'sample' && <SampleStep initiallySeeded={state.data?.demo_seeded ?? false} />}
         </div>
 
         <footer className="flex items-center justify-between gap-3 border-t border-border px-6 py-4">
@@ -307,8 +337,13 @@ function TeamStep(): ReactElement {
   );
 }
 
-/** Lays down sample data so the inbox is not empty on first run. */
-function SampleStep(): ReactElement {
+/**
+ * Lays down sample data so the inbox is not empty on first run.
+ * `initiallySeeded` reflects `GET /onboarding/state` — the workspace may
+ * already have the demo from an earlier visit, in which case the step opens
+ * as already done rather than asking the owner to seed it again.
+ */
+function SampleStep({ initiallySeeded }: { initiallySeeded: boolean }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const [result, setResult] = useState<OnboardingSeedResult | null>(null);
@@ -318,7 +353,7 @@ function SampleStep(): ReactElement {
     onSuccess: setResult,
   });
 
-  const done = result !== null;
+  const done = result !== null || initiallySeeded;
   const counts = result?.counts;
 
   return (
@@ -339,9 +374,9 @@ function SampleStep(): ReactElement {
               : t('auth.onboarding.sample.addLabel')}
         </button>
       </div>
-      {done && counts && (
+      {done && (
         <p role="status" className="text-2xs text-success">
-          {result?.seeded
+          {result?.seeded && counts
             ? t('auth.onboarding.sample.seeded', {
                 cannedResponses: counts.canned_responses,
                 tags: counts.tags,

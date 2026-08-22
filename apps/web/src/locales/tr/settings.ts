@@ -172,6 +172,16 @@ export const settings: Messages = {
     'Messenger bağlantısı kesilsin mi? Yeniden bağlanana kadar mesajlar gelmeyi durdurur.',
   'settings.channels.whatsapp.name': 'WhatsApp',
   'settings.channels.whatsapp.description': 'WhatsApp mesajlarını yanıtlayın.',
+  'settings.channels.whatsapp.connectTitle': "WhatsApp'ı bağla",
+  'settings.channels.whatsapp.connectDescription':
+    'Bu sürüm için sahte sağlayıcı — mesajları yanıtlayacağınız WhatsApp Business Account kimliğini ve işletme telefon numarasını girin.',
+  'settings.channels.whatsapp.wabaIdLabel': 'WhatsApp Business Account kimliği',
+  'settings.channels.whatsapp.wabaIdError': 'WhatsApp Business Account kimliğini girin.',
+  'settings.channels.whatsapp.phoneNumberLabel': 'Telefon numarası',
+  'settings.channels.whatsapp.phoneNumberError':
+    'Geçerli bir telefon numarası girin, örn. +15551234567.',
+  'settings.channels.whatsapp.disconnectConfirm':
+    'WhatsApp bağlantısı kesilsin mi? Yeniden bağlanana kadar mesajlar gelmeyi durdurur.',
   'settings.channels.sms.name': 'SMS',
   'settings.channels.sms.description': 'Twilio üzerinden kısa mesajlara yanıt verin.',
   'settings.channels.sms.connectTitle': "SMS'i bağla (Twilio)",

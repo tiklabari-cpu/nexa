@@ -188,15 +188,11 @@ export function channelsFor(
       cta: 'Get address',
     },
     messengerChannel(connectedChannels),
-    comingSoon('whatsapp', 'WhatsApp', '📱', 'Answer WhatsApp messages.'),
+    whatsappChannel(connectedChannels),
     smsChannel(connectedChannels),
     instagramChannel(connectedChannels),
     telegramChannel(connectedChannels),
   ];
-}
-
-function comingSoon(id: string, name: string, icon: string, description: string): Channel {
-  return { id, name, icon, description, status: 'coming_soon', cta: 'Get notified' };
 }
 
 /**
@@ -217,6 +213,28 @@ function messengerChannel(connectedChannels: ConnectedChannel[]): Channel {
     description: 'Answer Messenger conversations.',
     status: isConnected ? 'connected' : 'not_connected',
     cta: isConnected ? 'Disconnect' : 'Connect with Facebook (mock)',
+    address: isConnected ? (row?.address ?? null) : undefined,
+  };
+}
+
+/**
+ * WhatsApp connect/disconnect (FR-MOD-08.5.6), same derivation as
+ * `messengerChannel`/`smsChannel`: status/address come from the live
+ * `/channels` list, not a fixed "Coming soon" label. There is no mock OAuth
+ * exchange or secret credential here (unlike Messenger/Twilio) — just the
+ * WhatsApp Business Account id and the business phone number, which becomes
+ * the channel address.
+ */
+function whatsappChannel(connectedChannels: ConnectedChannel[]): Channel {
+  const row = connectedChannels.find((c) => c.type === 'whatsapp');
+  const isConnected = row?.connected === true;
+  return {
+    id: 'whatsapp',
+    name: 'WhatsApp',
+    icon: '📱',
+    description: 'Answer WhatsApp messages.',
+    status: isConnected ? 'connected' : 'not_connected',
+    cta: isConnected ? 'Disconnect' : 'Connect',
     address: isConnected ? (row?.address ?? null) : undefined,
   };
 }
@@ -445,6 +463,7 @@ function ChannelCardView({
     !(
       channelsLoading &&
       (channel.id === 'messenger' ||
+        channel.id === 'whatsapp' ||
         channel.id === 'sms' ||
         channel.id === 'instagram' ||
         channel.id === 'telegram')
@@ -492,6 +511,8 @@ function ChannelCardView({
           <EmailForwardingAddress label={cta} />
         ) : channel.id === 'messenger' ? (
           <MessengerChannelAction channel={channel} cta={cta} />
+        ) : channel.id === 'whatsapp' ? (
+          <WhatsappChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'sms' ? (
           <SmsChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'instagram' ? (
@@ -952,6 +973,166 @@ function MessengerChannelAction({ channel, cta }: { channel: Channel; cta: strin
           onChange={(event) => form.setValue('page_name', event.target.value)}
           className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
         />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={close}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('settings.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
+          >
+            {form.isSubmitting
+              ? t('settings.channels.connecting')
+              : t('settings.channels.cta.connect')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * WhatsApp connect/disconnect (FR-MOD-08.5.6), same shape as
+ * `TelegramChannelAction`: the admin supplies real-shaped identifiers rather
+ * than running a mock OAuth handshake — the WhatsApp Business Account id and
+ * the business phone number that becomes the channel address. Unlike
+ * Twilio's `auth_token`, neither field is a secret, so there is no password
+ * input here. `phone_number` is validated against the same E.164-ish shape
+ * `SmsChannelAction`'s phone number is (the API's `WhatsAppAdapter` requires
+ * it too). Disconnect asks first, same as the other live cards.
+ */
+function WhatsappChannelAction({ channel, cta }: { channel: Channel; cta: string }): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const client = useQueryClient();
+  const [open, setOpen] = useState(false);
+
+  const connect = useMutation({
+    mutationFn: (body: { waba_id: string; phone_number: string }) =>
+      api.post('/channels/whatsapp/connect', body),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const disconnect = useMutation({
+    mutationFn: () => api.post('/channels/whatsapp/disconnect'),
+    onSuccess: () => client.invalidateQueries({ queryKey: ['channels'] }),
+  });
+
+  const form = useForm({
+    initial: { waba_id: '', phone_number: '' },
+    validators: {
+      waba_id: required(t('settings.channels.whatsapp.wabaIdError')),
+      phone_number: compose(
+        required(t('settings.channels.whatsapp.phoneNumberError')),
+        phoneNumber(t('settings.channels.whatsapp.phoneNumberError')),
+      ),
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        await connect.mutateAsync(values);
+        setOpen(false);
+      } catch (failure) {
+        // A 4xx (e.g. that number already belongs to another workspace) is
+        // shown as a form-level notice; the query cache is untouched, so the
+        // card cannot flip to Connected on a failed attempt.
+        setSubmitError(t(errorMessageKey(failure)));
+      }
+    },
+  });
+
+  const close = useCloseGuard({
+    isDirty: form.isDirty,
+    message: t('settings.channels.discardConnectionConfirm'),
+    onClose: () => {
+      setOpen(false);
+      form.reset();
+      connect.reset();
+    },
+  });
+
+  if (channel.status === 'connected') {
+    return (
+      <div className="flex flex-col gap-1">
+        {channel.address && (
+          <code className="truncate text-2xs text-content-tertiary">{channel.address}</code>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(t('settings.channels.whatsapp.disconnectConfirm'))) {
+              disconnect.mutate();
+            }
+          }}
+          disabled={disconnect.isPending}
+          className="self-start rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+        >
+          {disconnect.isPending ? t('settings.channels.disconnecting') : cta}
+        </button>
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+      >
+        {cta}
+      </button>
+    );
+  }
+
+  return (
+    <Modal
+      onClose={close}
+      title={t('settings.channels.whatsapp.connectTitle')}
+      description={t('settings.channels.whatsapp.connectDescription')}
+    >
+      <form onSubmit={form.handleSubmit} noValidate>
+        {form.submitError && (
+          <p role="alert" className="mb-3 text-sm text-danger">
+            {form.submitError}
+          </p>
+        )}
+
+        <label htmlFor="whatsapp-waba-id" className="mb-1.5 block text-sm font-medium">
+          {t('settings.channels.whatsapp.wabaIdLabel')}
+        </label>
+        <input
+          id="whatsapp-waba-id"
+          value={form.values.waba_id}
+          autoFocus
+          onChange={(event) => form.setValue('waba_id', event.target.value)}
+          onBlur={() => form.blur('waba_id')}
+          aria-invalid={form.errorFor('waba_id') ? true : undefined}
+          aria-describedby={form.errorFor('waba_id') ? 'whatsapp-waba-id-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="whatsapp-waba-id-error" message={form.errorFor('waba_id')} />
+
+        <label htmlFor="whatsapp-phone-number" className="mb-1.5 mt-3 block text-sm font-medium">
+          {t('settings.channels.whatsapp.phoneNumberLabel')}
+        </label>
+        <input
+          id="whatsapp-phone-number"
+          value={form.values.phone_number}
+          onChange={(event) => form.setValue('phone_number', event.target.value)}
+          onBlur={() => form.blur('phone_number')}
+          aria-invalid={form.errorFor('phone_number') ? true : undefined}
+          aria-describedby={
+            form.errorFor('phone_number') ? 'whatsapp-phone-number-error' : undefined
+          }
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="whatsapp-phone-number-error" message={form.errorFor('phone_number')} />
 
         <div className="mt-4 flex justify-end gap-2">
           <button

@@ -42,36 +42,33 @@ describe('channelsFor', () => {
     expect(email.cta).toBe('Get address');
   });
 
-  it('shows every unbuilt channel as Coming soon with Get notified', () => {
-    // messenger (08.5.4-b), sms (08.5.5-b), instagram (08.5.7-e) and telegram
-    // (08.5.8-d) are built — their status is derived from /channels, not
-    // fixed — so all four are excluded here the same way
-    // website/chat-page/email are.
+  it('has no unbuilt channels left — whatsapp (08.5.6-b) was the last one off "Coming soon"', () => {
+    // messenger (08.5.4-b), whatsapp (08.5.6-b), sms (08.5.5-b), instagram
+    // (08.5.7-e) and telegram (08.5.8-d) are all built — their status is
+    // derived from /channels, not fixed — so the whole grid is live now.
+    // `coming_soon`/"Get notified" are unreachable dead code as a result;
+    // tm 135.4 removes them (K08.5.1 note).
     const built = new Set([
       'website',
       'chat-page',
       'email',
       'messenger',
+      'whatsapp',
       'sms',
       'instagram',
       'telegram',
     ]);
     const rest = channelsFor([]).filter((c) => !built.has(c.id));
-    expect(rest.length).toBeGreaterThan(0);
-    for (const channel of rest) {
-      expect(channel.status).toBe('coming_soon');
-      expect(channel.cta).toBe('Get notified');
-    }
+    expect(rest).toHaveLength(0);
   });
 
-  it('represents all four statuses, each driven by state', () => {
+  it('represents three statuses, each driven by state — coming_soon is unreachable now that every channel is built', () => {
     const seen = new Set([
       website([]).status,
       website([{ status: 'connected' }]).status,
       channelsFor([]).find((c) => c.id === 'chat-page')!.status, // ready
-      channelsFor([]).find((c) => c.id === 'whatsapp')!.status, // coming_soon
     ]);
-    expect(seen).toEqual(new Set(['not_connected', 'connected', 'ready', 'coming_soon']));
+    expect(seen).toEqual(new Set(['not_connected', 'connected', 'ready']));
   });
 });
 
@@ -119,6 +116,51 @@ describe('channelsFor — messenger', () => {
     const card = messenger([row({ type: 'instagram' })]);
     expect(card.status).toBe('not_connected');
     expect(card.cta).toBe('Connect with Facebook (mock)');
+  });
+});
+
+/**
+ * The WhatsApp card (FR-MOD-08.5.6) moved off the fixed "Coming soon" list
+ * the same way Messenger/SMS/Instagram/Telegram did: status/address come
+ * from the live `/channels` list, not a fixed label.
+ */
+describe('channelsFor — whatsapp', () => {
+  const whatsapp = (rows: ConnectedChannel[]) =>
+    channelsFor([], rows).find((c) => c.id === 'whatsapp')!;
+
+  const row = (overrides: Partial<ConnectedChannel> = {}): ConnectedChannel => ({
+    type: 'whatsapp',
+    status: 'connected',
+    address: '+15551234567',
+    connected: true,
+    created_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('is Not connected with no connected-channel row, offering Connect', () => {
+    const card = whatsapp([]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect');
+    expect(card.address).toBeUndefined();
+  });
+
+  it('is Not connected when the row exists but is not currently connected', () => {
+    const card = whatsapp([row({ connected: false, status: 'off' })]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect');
+  });
+
+  it('is Connected when the /channels row is connected, offering Disconnect and showing the phone number', () => {
+    const card = whatsapp([row({ address: '+15551234567' })]);
+    expect(card.status).toBe('connected');
+    expect(card.cta).toBe('Disconnect');
+    expect(card.address).toBe('+15551234567');
+  });
+
+  it('does not confuse another connected channel type for whatsapp', () => {
+    const card = whatsapp([row({ type: 'twilio' })]);
+    expect(card.status).toBe('not_connected');
+    expect(card.cta).toBe('Connect');
   });
 });
 

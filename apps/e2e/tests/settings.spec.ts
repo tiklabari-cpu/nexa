@@ -99,30 +99,32 @@ test.describe('website widgets', () => {
 
 test.describe('channels', () => {
   // FR-MOD-08.5.1: a card grid whose Website status is read from the live
-  // /websites data (the seed connects one), while unbuilt channels say
-  // "Coming soon" and offer to notify.
+  // /websites data (the seed connects one).
   //
-  // WhatsApp carries the coming-soon half deliberately: Instagram left that set
-  // when 08.5.7-e made its card a live connect surface, and its own behaviour is
-  // covered end to end in `instagram.spec.ts`. WhatsApp and Telegram are what
-  // remain unbuilt, so the assertion below still describes the product.
+  // Every adapter channel (Messenger/WhatsApp/SMS/Instagram/Telegram) is now a
+  // live connect surface — WhatsApp (08.5.6-b) was the last one off the fixed
+  // "Coming soon" list, so the grid no longer has an unbuilt card to assert
+  // against here. WhatsApp's own connect/disconnect form is covered in
+  // `Channels.test.tsx`; a full connect-and-see-it-in-the-inbox flow for all
+  // three adapter channels together is tm 135.4's `channels.spec.ts`.
   test('shows a channel grid with a data-driven Website status', async ({ agentPage }) => {
     await agentPage.goto('/app/settings');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
     await expect(channels).toBeVisible();
 
     // The seed has a connected website, so the card must read Connected — a
-    // hard-coded label would still say Connected, so the coming-soon check below
-    // is what proves the difference, together with the unit tests.
+    // hard-coded label would still say Connected, so the WhatsApp check below
+    // (nothing connected there) is what proves the difference, together with
+    // the unit tests.
     const website = channels.getByTestId('channel-website');
     await expect(website.getByText('Connected')).toBeVisible();
     await expect(website.getByRole('link', { name: 'Manage' })).toBeVisible();
 
-    // An unbuilt channel is honest about it.
+    // WhatsApp is not connected in the seed, so its card reads Not connected
+    // with a Connect action rather than a fixed label.
     const whatsapp = channels.getByTestId('channel-whatsapp');
-    await expect(whatsapp.getByText('Coming soon')).toBeVisible();
-    const notify = whatsapp.getByRole('button', { name: 'Get notified' });
-    await expect(notify).toBeVisible();
+    await expect(whatsapp.getByText('Not connected')).toBeVisible();
+    await expect(whatsapp.getByRole('button', { name: 'Connect' })).toBeVisible();
 
     await agentPage.screenshot({ path: 'kanit/8-channels-grid.png', fullPage: true });
 
@@ -131,10 +133,6 @@ test.describe('channels', () => {
     await expect(chatPage.getByText('Ready')).toBeVisible();
     await chatPage.getByRole('button', { name: 'Get link' }).click();
     await expect(chatPage.getByTestId('chat-page-url')).toContainText('/chat.html');
-
-    // Get notified acknowledges without pretending the channel shipped.
-    await notify.click();
-    await expect(whatsapp.getByText(/let you know/i)).toBeVisible();
   });
 
   // FR-MOD-08.5.3: Email is Ready, not "Coming soon" — Get address reveals the

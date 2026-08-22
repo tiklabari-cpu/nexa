@@ -8,7 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { channelNotifiedKey, ChannelsGrid } from './Channels.js';
+import { ChannelsGrid } from './Channels.js';
 import { useAuth, useBrandStore } from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
@@ -126,6 +126,101 @@ describe('Messenger card — connected', () => {
     // switch to Connected only happens once /channels resolves.
     expect(await within(card).findByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
     expect(within(card).getByText('page_789')).toBeInTheDocument();
+  });
+});
+
+describe('WhatsApp card — not connected', () => {
+  beforeEach(() => stubFetch({}));
+
+  // Scoped to the WhatsApp card's own testid, same reason as Instagram's.
+  async function openConnectForm() {
+    const card = await screen.findByTestId('channel-whatsapp');
+    await userEvent.click(within(card).getByRole('button', { name: 'Connect' }));
+    return screen.getByRole('dialog', { name: 'Connect WhatsApp' });
+  }
+
+  it('opens a connect form that keeps Submit disabled until both fields are filled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+    const submit = within(dialog).getByRole('button', { name: 'Connect' });
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('WhatsApp Business Account id'), 'waba_42');
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(within(dialog).getByLabelText('Phone number'), '+15551234567');
+    expect(submit).toBeEnabled();
+  });
+
+  it('shows a field-under error for a missing WABA id and keeps Submit disabled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+
+    await userEvent.click(within(dialog).getByLabelText('WhatsApp Business Account id'));
+    await userEvent.tab(); // blur without typing reveals the message
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Enter the WhatsApp Business Account id.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+  });
+
+  it('rejects a malformed phone number and keeps Submit disabled', async () => {
+    renderChannels();
+
+    const dialog = await openConnectForm();
+
+    await userEvent.type(within(dialog).getByLabelText('WhatsApp Business Account id'), 'waba_42');
+    await userEvent.type(within(dialog).getByLabelText('Phone number'), 'not-a-number');
+    await userEvent.tab();
+
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      'Enter a valid phone number, e.g. +15551234567.',
+    );
+    expect(within(dialog).getByRole('button', { name: 'Connect' })).toBeDisabled();
+  });
+});
+
+describe('WhatsApp card — connected', () => {
+  beforeEach(() =>
+    stubFetch({
+      channels: {
+        items: [
+          {
+            type: 'whatsapp',
+            status: 'connected',
+            address: '+15551234567',
+            connected: true,
+            created_at: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+      },
+    }),
+  );
+
+  it('shows the connected phone number and a Disconnect action', async () => {
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-whatsapp');
+    // The card renders Not-connected/Connect first, synchronously — the
+    // switch to Connected only happens once /channels resolves.
+    expect(await within(card).findByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
+    expect(within(card).getByText('+15551234567')).toBeInTheDocument();
+  });
+
+  it('does not disconnect without confirmation', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-whatsapp');
+    const disconnectButton = await within(card).findByRole('button', { name: 'Disconnect' });
+    await userEvent.click(disconnectButton);
+
+    expect(window.confirm).toHaveBeenCalled();
+    // Still showing Disconnect (not "Disconnecting…") — nothing was sent.
+    expect(within(card).getByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
   });
 });
 
@@ -394,67 +489,13 @@ describe('Telegram card — connected', () => {
   });
 });
 
-/**
- * "Get notified" persistence (FR-MOD-08.5.7-f). Coming-soon cards used to hold
- * this in plain component state — a reload lost the click. This mirrors
- * Banner.tsx's keyed, storage-backed dismiss (bannerDismissKey) one-for-one,
- * scoped per channel id via channelNotifiedKey.
- */
-describe('Get notified — persistence', () => {
-  beforeEach(() => stubFetch({}));
-
-  it('remembers a channel’s click across remounts', async () => {
-    const view = renderChannels();
-    const card = await screen.findByTestId('channel-whatsapp');
-    await userEvent.click(within(card).getByRole('button', { name: 'Get notified' }));
-    expect(within(card).getByText(/let you know/i)).toBeInTheDocument();
-    expect(localStorage.getItem(channelNotifiedKey('whatsapp'))).toBe('1');
-
-    // A fresh mount — as a reload would be — stays acknowledged.
-    view.unmount();
-    renderChannels();
-    const remounted = await screen.findByTestId('channel-whatsapp');
-    expect(await within(remounted).findByText(/let you know/i)).toBeInTheDocument();
-  });
-
-  it('does not let one channel’s click acknowledge another', async () => {
-    // sms moved off the Coming-soon list (08.5.5-b) and no longer offers "Get
-    // notified" — whatsapp is the one channel still on it, so the isolation
-    // check compares its storage key against a channel that was never
-    // clicked rather than against a card in the UI.
-    renderChannels();
-    const whatsapp = await screen.findByTestId('channel-whatsapp');
-    await userEvent.click(within(whatsapp).getByRole('button', { name: 'Get notified' }));
-
-    expect(localStorage.getItem(channelNotifiedKey('whatsapp'))).toBe('1');
-    expect(localStorage.getItem(channelNotifiedKey('sms'))).toBeNull();
-  });
-
-  it('does not throw when localStorage.getItem fails, defaulting to not notified', async () => {
-    const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('storage blocked');
-    });
-
-    renderChannels();
-    const card = await screen.findByTestId('channel-whatsapp');
-    expect(within(card).getByRole('button', { name: 'Get notified' })).toBeInTheDocument();
-
-    getItem.mockRestore();
-  });
-
-  it('does not throw when localStorage.setItem fails, still reflecting the click for the session', async () => {
-    const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('storage blocked');
-    });
-
-    renderChannels();
-    const card = await screen.findByTestId('channel-whatsapp');
-    await userEvent.click(within(card).getByRole('button', { name: 'Get notified' }));
-    expect(within(card).getByText(/let you know/i)).toBeInTheDocument();
-
-    setItem.mockRestore();
-  });
-});
+// "Get notified" persistence (channelNotifiedKey/readNotified/persistNotified)
+// had its render-level coverage here as long as a card was still on the fixed
+// "Coming soon" list. whatsapp (08.5.6-b) was the last one — every card is
+// now live-derived, so `coming_soon`/"Get notified" are unreachable through
+// the UI (the storage helpers stay wired but nothing calls them). tm 135.4
+// removes that dead code path per its own test strategy; this render-level
+// suite is retired here rather than exercising code no card can reach.
 
 describe('Channels localisation (NFR-I18N2)', () => {
   beforeEach(() => stubFetch({}));

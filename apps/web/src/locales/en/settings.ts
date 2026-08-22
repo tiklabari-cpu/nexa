@@ -181,6 +181,15 @@ export const settings: Messages = {
     'Disconnect Messenger? Messages will stop arriving until you reconnect.',
   'settings.channels.whatsapp.name': 'WhatsApp',
   'settings.channels.whatsapp.description': 'Answer WhatsApp messages.',
+  'settings.channels.whatsapp.connectTitle': 'Connect WhatsApp',
+  'settings.channels.whatsapp.connectDescription':
+    'Mock provider for this build — enter the WhatsApp Business Account id and the business phone number to answer messages on.',
+  'settings.channels.whatsapp.wabaIdLabel': 'WhatsApp Business Account id',
+  'settings.channels.whatsapp.wabaIdError': 'Enter the WhatsApp Business Account id.',
+  'settings.channels.whatsapp.phoneNumberLabel': 'Phone number',
+  'settings.channels.whatsapp.phoneNumberError': 'Enter a valid phone number, e.g. +15551234567.',
+  'settings.channels.whatsapp.disconnectConfirm':
+    'Disconnect WhatsApp? Messages will stop arriving until you reconnect.',
   'settings.channels.sms.name': 'SMS',
   'settings.channels.sms.description': 'Reply to text messages over Twilio.',
   'settings.channels.sms.connectTitle': 'Connect SMS (Twilio)',

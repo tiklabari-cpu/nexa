@@ -61,6 +61,33 @@ test.describe('invite teammates — dirty guard (FR-EK-A.2)', () => {
   });
 });
 
+test.describe('invite from the shell (FR-MOD-01.1.5)', () => {
+  test("the rail's Invite button opens the same modal from a screen that is not Team", async ({
+    agentPage,
+  }) => {
+    // The seeded owner starts on the Inbox (fixtures.ts) — deliberately not
+    // Team, since the point of the requirement is that the door does not
+    // require navigating there first.
+    await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+
+    const rail = agentPage.getByRole('navigation', { name: 'Modules' });
+    await rail.getByRole('button', { name: /^Invite/ }).click();
+
+    const dialog = agentPage.getByRole('dialog', { name: 'Invite teammates' });
+    await expect(dialog).toBeVisible();
+
+    // Untouched form: Cancel closes it without the dirty-guard confirm.
+    let nagged = false;
+    agentPage.on('dialog', (d) => {
+      nagged = true;
+      return d.dismiss();
+    });
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+    expect(nagged).toBe(false);
+  });
+});
+
 test.describe('Team — per-agent skill assignment (FR-MOD-08.6.3)', () => {
   test('the skill catalogue opens from the agent row with the current skills checked', async ({
     agentPage,

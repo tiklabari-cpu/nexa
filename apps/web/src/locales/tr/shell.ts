@@ -25,6 +25,11 @@ export const shell: Messages = {
   'shell.nav.expand': 'Gezinmeyi genişlet',
   'shell.nav.collapse': 'Gezinmeyi daralt',
 
+  // Davet (FR-MOD-01.1.5). "+N" boş koltuk sayısıdır — henüz bilinmiyorsa
+  // (ya da bildirecek bir şey yoksa) düz etikete düşer.
+  'shell.invite.label': 'Davet et',
+  'shell.invite.labelWithCount': 'Davet et +{count}',
+
   // Presence (FR-MOD-01.1.4). Both plural categories are written out for the
   // reason the trial countdown above states.
   'shell.presence.label': 'Çevrimiçi ekip arkadaşları',

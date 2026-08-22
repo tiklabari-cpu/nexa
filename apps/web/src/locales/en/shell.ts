@@ -23,6 +23,11 @@ export const shell: Messages = {
   'shell.nav.expand': 'Expand navigation',
   'shell.nav.collapse': 'Collapse navigation',
 
+  // Invite (FR-MOD-01.1.5). "+N" is free seats — not yet known (or none to
+  // report) falls back to the plain label.
+  'shell.invite.label': 'Invite',
+  'shell.invite.labelWithCount': 'Invite +{count}',
+
   // Presence (FR-MOD-01.1.4). The status word is part of each avatar's
   // accessible name because the ring colour alone would not carry it (A11Y2).
   'shell.presence.label': 'Teammates online',

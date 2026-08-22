@@ -13,6 +13,14 @@
 
 ## Task log (newest-first)
 
+## 139.3 — 01.1.5-a: "Invite +N" her ekrandan (rayda) — done — 2026-08-22 UTC
+
+- **Yapıldı:** `InviteTeammates.tsx` isteğe bağlı `trigger` render-prop aldı; TeamPage'in kendi kullanımı değişmedi (varsayılan pill düğmesi), `AppShell.tsx`'teki yeni `InviteRailButton` aynı formu/mutasyonu **ikinci kopya açmadan** kendi düğmesinin altına bağladı (CONVENTIONS §5). Üst bar yok (139.2'nin kararı) — düğme rayın ayağına, `PresenceAvatars`'ın altına, `FOOTER` bağlantılarından önce kondu.
+- **Yetki, sunucu kuralını yansıtıyor:** `POST /invitations` `accounts--all:rw` ister (yalnız owner/viceowner/admin) — `IconRail` düğmeyi `roleAtLeast(role,'admin')` değilse hiç monte etmiyor. TeamPage'in varsayılan tetikleyicisi bilerek dokunulmadı (mevcut testi `agent: null` ile her zaman görünür varsayıyor).
+- **"+N" = koltuk − aktif üye**, iki zaten-çalışan paylaşılan önbellekten (`['billing','subscription']` — `TrialBanner` · `['agents']` — `PresenceAvatars`), çoğu durumda ekstra istek yok; biri eksikse düz "Invite"e düşer.
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `format:check` · `turbo test --force --filter=!@nexa/e2e --filter=!@nexa/api` 9/9 (`@nexa/web` **1365** ← taban 1360, +5) · api `test:unit` 64/995 · `test:integration` api **97/2467** üç shard'da · `build` 8/8 · **`test:e2e` TAM süit 204 passed (12,0 dk)** — taban 203 + 1 yeni (`team.spec.ts`: Inbox'tan rayın Invite düğmesi aynı modalı açıyor). Kontrat/migration dokunulmadı.
+- **Sonraki pencereye not:** PLAN satır 180 hücresi `🔒` KALDI — altı kardeş alt-görevden üçü bitti (139.1/.2/.3), flip 139.5'in işi; kanıt `K01.1` bloğuna madde olarak eklendi. `run-loop.sh`'nin çalışma alanındaki değişikliği (panel STOP kapısı) bu pencereden ÖNCE vardı, bu görevin işi değil, commit'e alınmadı (önceki on dört pencere de aynı notu düştü).
+
 ## 139.2 — 01.1.4-a: presence avatar grubu (RTM `routing_status_set` tüketimi) — done — 2026-08-22 UTC
 
 - **Yapıldı:** yeni `components/PresenceAvatars.tsx` — lisansın çevrimiçi ekip arkadaşları rayın ayağında, hesap avatarının hemen üstünde (ilk 4 yüz + adları taşıyan `+N`); roster paylaşılan `['agents']` anahtarından (bilet panelinin takipçi seçicisiyle aynı önbellek → tek istek). **Canlılık mevcut push'tan geldi, yeni RTM eylemi açılmadı:** `routing_status_set` sokete zaten aboneydi ve API lisansın tamamına yayınlıyordu, ama `applyPush`'ta `case`'i yoktu (`default:`e düşüyordu) — artık payload'ı önbelleğe yerinde yazıyor (invalidate değil: push zaten yeni değeri taşıyor). Soketi yalnız Inbox açtığı için diğer rotalarda 30 sn `refetchInterval` tabanı var — görevin izin verdiği polling yedeği.

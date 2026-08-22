@@ -45,7 +45,18 @@ export function useRevokeInvitation() {
   });
 }
 
-export function InviteTeammates(): ReactElement {
+export function InviteTeammates({
+  trigger,
+}: {
+  /**
+   * Custom trigger renderer, given the `open` callback. Lets a caller (the
+   * shell's rail, FR-MOD-01.1.5) reuse this exact modal — its form state,
+   * validation and mutation — under its own button instead of a second copy
+   * of the component. Omitted, this renders its own default pill button
+   * (TeamPage's usage).
+   */
+  trigger?: (open: () => void) => ReactElement;
+} = {}): ReactElement {
   const t = useTranslate();
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<'admin' | 'agent'>('admin');
@@ -114,6 +125,7 @@ export function InviteTeammates(): ReactElement {
   });
 
   if (!open) {
+    if (trigger) return trigger(() => setOpen(true));
     return (
       <button
         type="button"

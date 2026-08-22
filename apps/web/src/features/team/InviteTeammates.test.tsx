@@ -57,6 +57,23 @@ describe('InviteTeammates validation', () => {
   });
 });
 
+describe('InviteTeammates custom trigger (FR-MOD-01.1.5)', () => {
+  it('renders the caller-supplied trigger instead of the default pill, and still opens the same modal', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <InviteTeammates trigger={(open) => <button onClick={open}>Custom trigger</button>} />
+      </QueryClientProvider>,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Invite teammates' })).toBeNull();
+    const trigger = screen.getByRole('button', { name: 'Custom trigger' });
+
+    await userEvent.click(trigger);
+    expect(screen.getByRole('dialog', { name: 'Invite teammates' })).toBeVisible();
+  });
+});
+
 describe('InviteTeammates localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();

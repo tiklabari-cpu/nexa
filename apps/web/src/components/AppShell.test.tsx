@@ -356,6 +356,76 @@ describe('presence group (FR-MOD-01.1.4)', () => {
   });
 });
 
+describe('invite (FR-MOD-01.1.5)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /**
+   * Stubs `/billing/subscription` (seats) and `/agents` (roster) together.
+   * The roster rows are shaped like `PresenceMember` too, and offline, so
+   * `PresenceAvatars` — which reads this exact same `['agents']` cache — does
+   * not also try to render them as a present teammate.
+   */
+  function stubSeatsAndRoster(seats: number, activeAgentIds: string[]) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input).includes('/billing/subscription')) {
+          return jsonResponse({ access: 'active', trial: { days_remaining: null }, seats });
+        }
+        if (String(input).includes('/agents')) {
+          return jsonResponse({
+            items: activeAgentIds.map((id) => ({
+              id,
+              name: id,
+              email: `${id}@acme.localhost`,
+              avatar_url: null,
+              routing_status: 'offline',
+            })),
+          });
+        }
+        return {
+          ok: false,
+          status: 404,
+          headers: { get: () => null },
+          json: async () => ({
+            error: { type: 'not_found', message: 'Not found.', request_id: '-' },
+          }),
+        } as unknown as Response;
+      }),
+    );
+  }
+
+  it('shows the plain label from every module when the seat count is not yet known', async () => {
+    renderShell('/app/reports');
+    expect(await screen.findByRole('button', { name: 'Invite' })).toBeInTheDocument();
+  });
+
+  it('hides the button for a caller below admin — the server rule (accounts--all:rw)', () => {
+    useAuth.setState((state) => ({
+      agent: state.agent && { ...state.agent, role: 'agent' },
+    }));
+    renderShell();
+    expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull();
+  });
+
+  it('shows free seats — subscription seats minus active teammates', async () => {
+    stubSeatsAndRoster(5, ['a-1', 'a-2']);
+    renderShell();
+
+    expect(await screen.findByRole('button', { name: 'Invite +3' })).toBeInTheDocument();
+  });
+
+  it('opens the same invite modal InviteTeammates uses on the Team page', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    await user.click(await screen.findByRole('button', { name: 'Invite' }));
+    expect(screen.getByRole('dialog', { name: 'Invite teammates' })).toBeVisible();
+  });
+});
+
 describe('brand switcher', () => {
   beforeEach(() => {
     localStorage.removeItem(BRAND_KEY);

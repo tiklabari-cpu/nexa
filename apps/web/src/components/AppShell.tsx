@@ -17,6 +17,8 @@ import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
+import { InviteTeammates } from '../features/team/InviteTeammates.js';
+import { roleAtLeast } from '../features/team/RoleMenu.js';
 import { CommandPalette } from './CommandPalette.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
@@ -137,7 +139,12 @@ function IconRail(): ReactElement {
   const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const accountId = useAuth((s) => s.agent?.account_id);
+  const role = useAuth((s) => s.agent?.role ?? null);
   const { pinned, setPinned } = useNavPinned(accountId);
+  // `POST /invitations` requires `accounts--all:rw` (ADMIN_SCOPES) — an agent
+  // role never carries it, so the rail hides the door rather than showing one
+  // that only 403s (FR-MOD-01.1.5).
+  const canInvite = roleAtLeast(role, 'admin');
 
   return (
     <nav
@@ -159,6 +166,7 @@ function IconRail(): ReactElement {
         {/* Online teammates (FR-MOD-01.1.4) — above the account avatar, so the
             rail ends with "who else is here" and then "who I am". */}
         <PresenceAvatars pinned={pinned} />
+        {canInvite && <InviteRailButton pinned={pinned} />}
         {FOOTER.filter((item) => isNavVisible(item, scopes)).map((item) => (
           <RailButton key={item.to} item={item} pinned={pinned} />
         ))}
@@ -229,6 +237,70 @@ function RailButton({ item, pinned }: { item: NavDestination; pinned: boolean })
         </>
       )}
     </NavLink>
+  );
+}
+
+interface SeatsInfo {
+  seats: number;
+}
+
+interface RosterCount {
+  items: unknown[];
+}
+
+/**
+ * "Invite +N" (FR-MOD-01.1.5) — reachable from every module, not just Team.
+ *
+ * Opens `InviteTeammates`'s own modal through its `trigger` render prop, so
+ * the form, validation and mutation stay in one place (CONVENTIONS §5 — no
+ * second copy); only this button is new. Mounted only when `canInvite`
+ * (IconRail), which already mirrors the server's role gate, so the button
+ * itself does not repeat that check.
+ *
+ * "+N" is free seats (`seats − active teammates`), read through the same
+ * `['billing','subscription']` and `['agents']` cache keys `TrialBanner` and
+ * `PresenceAvatars` already populate on every mount — no extra request in the
+ * common case. Either read not yet resolved (or refused) falls back to the
+ * plain label rather than blocking the button on two round trips.
+ */
+function InviteRailButton({ pinned }: { pinned: boolean }): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+
+  const subscription = useQuery({
+    queryKey: ['billing', 'subscription'],
+    queryFn: () => api.get<SeatsInfo>('/billing/subscription'),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const roster = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => api.get<RosterCount>('/agents'),
+    retry: false,
+  });
+
+  const free =
+    subscription.data && roster.data ? subscription.data.seats - roster.data.items.length : null;
+  const label =
+    free === null ? t('shell.invite.label') : t('shell.invite.labelWithCount', { count: free });
+
+  return (
+    <InviteTeammates
+      trigger={(open) => (
+        <button
+          type="button"
+          onClick={open}
+          aria-label={label}
+          title={label}
+          className={`flex h-9 items-center gap-3 rounded-md text-base text-white/50 transition-colors hover:bg-white/5 hover:text-white ${
+            pinned ? 'px-3' : 'w-9 justify-center'
+          }`}
+        >
+          <span aria-hidden="true">⊕</span>
+          {pinned && <span className="truncate text-sm">{label}</span>}
+        </button>
+      )}
+    />
   );
 }
 

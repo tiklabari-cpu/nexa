@@ -54,6 +54,70 @@ export function useTranscript(chatId: string | null) {
   });
 }
 
+/**
+ * Read receipt for the open chat (FR-MOD-02.2.2): the newest visible event's
+ * timestamp, debounced 1s, becomes `POST /chats/{chatId}/seen`'s `seen_up_to`.
+ * The unread badge itself already comes straight from the server
+ * (`ChatSummary.unread_count`, derived from this same marker) — the only gap
+ * this closes is that nothing ever wrote the marker, so it never moved.
+ *
+ * `chatId`/`seenUpTo` should be `null` whenever the chat is not actually on
+ * screen (no selection, or another pane — e.g. Tickets — covers it): a chat
+ * that keeps fetching in the background must not get silently marked "seen".
+ */
+export function useMarkSeen(chatId: string | null, seenUpTo: string | null): void {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const apiRef = useRef(api);
+  apiRef.current = api;
+
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingRef = useRef<{ chatId: string; seenUpTo: string } | null>(null);
+
+  // Stable across renders — both effects below reach it through refs, not
+  // through their own dependency arrays, so a chat switch and an unmount can
+  // both flush the exact same in-flight target without duplicating the call.
+  const flushRef = useRef<() => void>(() => {});
+  flushRef.current = () => {
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
+    }
+    const target = pendingRef.current;
+    if (!target) return;
+    pendingRef.current = null;
+    void apiRef.current
+      .post(`/chats/${target.chatId}/seen`, { seen_up_to: target.seenUpTo })
+      .then(() => {
+        // Live badge update, not just a reload-survives-it guarantee — the row
+        // for this chat reads `unread_count` straight from the list query.
+        void queryClient.invalidateQueries({ queryKey: ['chats'] });
+      })
+      .catch(() => {
+        // Best-effort: a dropped request just means the badge clears on the
+        // next successful heartbeat instead — nothing here worth surfacing.
+      });
+  };
+
+  useEffect(() => {
+    // Switching chats (or losing the open one) sends whatever was still
+    // debouncing for the PREVIOUS chat now, instead of dropping it.
+    if (pendingRef.current && pendingRef.current.chatId !== chatId) flushRef.current();
+
+    if (!chatId || !seenUpTo) return;
+
+    pendingRef.current = { chatId, seenUpTo };
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => flushRef.current(), 1_000);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [chatId, seenUpTo]);
+
+  useEffect(() => () => flushRef.current(), []);
+}
+
 type SendInput = { text: string; recipients: 'all' | 'agents'; attachmentUrl?: string };
 
 export function useSendMessage(chatId: string | null) {

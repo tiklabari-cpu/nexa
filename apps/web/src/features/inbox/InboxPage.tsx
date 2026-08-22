@@ -22,6 +22,7 @@ import {
   useChat,
   useChatList,
   useConnectedChannels,
+  useMarkSeen,
   useRealtime,
   useTranscript,
   useViewCounts,
@@ -192,6 +193,13 @@ export function InboxPage(): ReactElement {
   const chat = useChat(selectedId);
   const transcript = useTranscript(selectedId);
   const tickets = useTicketList(selection.kind === 'ticket' ? selection.view : 'all', onTickets);
+
+  // Read receipt (FR-MOD-02.2.2): only while the transcript pane is actually on
+  // screen — the Tickets tab leaves `selectedId`/`transcript` fetching in the
+  // background, and that must not silently mark unseen messages as seen.
+  const seenChatId = onTickets ? null : selectedId;
+  const lastVisibleEventAt = onTickets ? null : (transcript.data?.items.at(-1)?.created_at ?? null);
+  useMarkSeen(seenChatId, lastVisibleEventAt);
 
   const agent = useAuth((s) => s.agent);
   const setRoutingStatus = useAuth((s) => s.setRoutingStatus);

@@ -30,6 +30,10 @@ export const shell: Messages = {
   'shell.invite.label': 'Davet et',
   'shell.invite.labelWithCount': 'Davet et +{count}',
 
+  // Leads rozeti (FR-MOD-01.1.2). Sayı 0 iken gizli — bkz. AppShell.tsx LeadsPill.
+  'shell.leads.label.one': '{count} nitelikli lead',
+  'shell.leads.label.other': '{count} nitelikli lead',
+
   // Presence (FR-MOD-01.1.4). Both plural categories are written out for the
   // reason the trial countdown above states.
   'shell.presence.label': 'Çevrimiçi ekip arkadaşları',

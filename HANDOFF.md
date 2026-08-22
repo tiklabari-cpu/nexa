@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 139.4 — 01.1.2-a: "N Leads qualified" pill (rayda) — done — 2026-08-22 UTC
+
+- **Yapıldı:** `AppShell.tsx`'e `LeadsPill` — rayın ayağında `PresenceAvatars` ile `InviteRailButton` arasında (üst bar yok, 139.2'nin kararı). "Nitelikli lead" = `GET /customers?segment=leads&limit=1` — Customers ekranının kendi Leads sekmesinin kullandığı aynı filtre, `total` zaten sayfalama gövdesinde (`/reports/overview`'a gerek yok). Canlılık: bu sayıyı taşıyan RTM push'u yok → 60 sn polling. 0 iken tamamen gizli (okuma bekliyor/reddedilmişken de).
+- **`CustomersPage.tsx` düzeltildi — tıklama ucu eksikti:** sayfa `?segment=` parametresini hiç okumuyordu, yalnız `?customer=` deep-link'i vardı; rayın linki `/app/customers?segment=leads`e gitse de sayfa hep "All"da açılırdı. İki deep-link (`customer`, `segment`) tek `useEffect`e taşındı, okunan parametre URL'den silinir.
+- **Doğrulama (hepsi exit 0):** typecheck 12/12 · lint 9/9 · `format:check` · `turbo test --force --filter=!@nexa/e2e --filter=!@nexa/api` 9/9 (`@nexa/web` **1369** ← taban 1365, +4) · api `test:unit` 64/995 · `test:integration` **97/2467** üç shard'da (taban ile birebir) · `build` 8/8 · **`test:e2e` TAM süit 204 passed (11,9 dk)** — taban 204 ile birebir, yeni e2e senaryosu açılmadı. Kontrat/migration dokunulmadı.
+- **Sonraki pencereye not:** PLAN satır 181 (`01.1.2`) `🔒` → `✅ → K01.1.2` — bu, altı kardeş görevden `flip 139.5` işi olmayan tek satırdı (kendi PRD kodu), diğerleri satır 180'i paylaşıyor. `run-loop.sh`'nin çalışma alanındaki değişikliği (panel STOP kapısı) bu pencereden ÖNCE vardı, bu görevin işi değil, commit'e alınmadı (önceki on beş pencere de aynı notu düştü).
+
 ## 139.3 — 01.1.5-a: "Invite +N" her ekrandan (rayda) — done — 2026-08-22 UTC
 
 - **Yapıldı:** `InviteTeammates.tsx` isteğe bağlı `trigger` render-prop aldı; TeamPage'in kendi kullanımı değişmedi (varsayılan pill düğmesi), `AppShell.tsx`'teki yeni `InviteRailButton` aynı formu/mutasyonu **ikinci kopya açmadan** kendi düğmesinin altına bağladı (CONVENTIONS §5). Üst bar yok (139.2'nin kararı) — düğme rayın ayağına, `PresenceAvatars`'ın altına, `FOOTER` bağlantılarından önce kondu.

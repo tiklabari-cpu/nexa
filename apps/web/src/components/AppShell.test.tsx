@@ -356,6 +356,47 @@ describe('presence group (FR-MOD-01.1.4)', () => {
   });
 });
 
+describe('leads pill (FR-MOD-01.1.2)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubLeadsCount(total: number) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        if (String(input).includes('/customers?segment=leads')) {
+          return jsonResponse({ items: [], total });
+        }
+        return {
+          ok: false,
+          status: 404,
+          headers: { get: () => null },
+          json: async () => ({
+            error: { type: 'not_found', message: 'Not found.', request_id: '-' },
+          }),
+        } as unknown as Response;
+      }),
+    );
+  }
+
+  it('hides the pill when there are no qualified leads', async () => {
+    stubLeadsCount(0);
+    renderShell();
+
+    await screen.findByText('Inbox module');
+    expect(screen.queryByRole('link', { name: /Leads? qualified/ })).toBeNull();
+  });
+
+  it('shows the qualified lead count and links to the leads segment', async () => {
+    stubLeadsCount(3);
+    renderShell();
+
+    const pill = await screen.findByRole('link', { name: '3 Leads qualified' });
+    expect(pill).toHaveAttribute('href', '/app/customers?segment=leads');
+  });
+});
+
 describe('invite (FR-MOD-01.1.5)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();

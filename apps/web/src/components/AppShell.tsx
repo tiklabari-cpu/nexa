@@ -166,6 +166,9 @@ function IconRail(): ReactElement {
         {/* Online teammates (FR-MOD-01.1.4) — above the account avatar, so the
             rail ends with "who else is here" and then "who I am". */}
         <PresenceAvatars pinned={pinned} />
+        {/* Qualified leads (FR-MOD-01.1.2) — "what needs a look", between who's
+            online and who to invite. */}
+        <LeadsPill pinned={pinned} />
         {canInvite && <InviteRailButton pinned={pinned} />}
         {FOOTER.filter((item) => isNavVisible(item, scopes)).map((item) => (
           <RailButton key={item.to} item={item} pinned={pinned} />
@@ -301,6 +304,69 @@ function InviteRailButton({ pinned }: { pinned: boolean }): ReactElement {
         </button>
       )}
     />
+  );
+}
+
+interface LeadsCount {
+  total: number;
+}
+
+/**
+ * "N Leads qualified" pill (FR-MOD-01.1.2) — reachable from every module, next
+ * to `PresenceAvatars` and `InviteRailButton` above.
+ *
+ * **"Qualified"** is `segment=leads` on `GET /customers` ("gave an email") —
+ * the exact filter the Customers page's own Leads tab already uses, read with
+ * `limit=1` since only the response's `total` is needed here, not a page of
+ * rows. `/reports/overview` also carries a lead figure, but this one is the
+ * literal PRD wording ("lead görünümü") and keeps the count and the screen it
+ * links to answering the same question.
+ *
+ * No RTM push carries this count (opening one would be a new RTM action, out
+ * of scope here), so — like `PresenceAvatars`'s off-Inbox fallback — it polls.
+ *
+ * Hidden entirely at 0, including while the read is pending or refused: the
+ * PRD's own acceptance text ("Sayı>0 iken görünür") asks for exactly that,
+ * and a caller without `customers:ro` should see one fewer rail item rather
+ * than a pill stuck at zero.
+ */
+function LeadsPill({ pinned }: { pinned: boolean }): ReactElement | null {
+  const t = useTranslate();
+  const api = useApiClient();
+
+  const { data } = useQuery({
+    queryKey: ['customers', 'leads', 'count'],
+    queryFn: () => api.get<LeadsCount>('/customers?segment=leads&limit=1'),
+    retry: false,
+    refetchInterval: 60_000,
+  });
+
+  const count = data?.total ?? 0;
+  if (count === 0) return null;
+
+  const label = t('shell.leads.label', { count });
+
+  return (
+    <NavLink
+      to="/app/customers?segment=leads"
+      aria-label={label}
+      title={label}
+      className={`relative flex h-9 items-center gap-3 rounded-md text-base text-white/50 transition-colors hover:bg-white/5 hover:text-white ${
+        pinned ? 'px-3' : 'w-9 justify-center'
+      }`}
+    >
+      <span aria-hidden="true">◔</span>
+      {pinned ? (
+        <span className="truncate text-sm">{label}</span>
+      ) : (
+        <span
+          aria-hidden="true"
+          className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-semibold leading-none text-white"
+        >
+          {count}
+        </span>
+      )}
+    </NavLink>
   );
 }
 

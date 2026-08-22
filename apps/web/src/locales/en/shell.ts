@@ -28,6 +28,10 @@ export const shell: Messages = {
   'shell.invite.label': 'Invite',
   'shell.invite.labelWithCount': 'Invite +{count}',
 
+  // Leads pill (FR-MOD-01.1.2). Hidden at 0 — see LeadsPill in AppShell.tsx.
+  'shell.leads.label.one': '{count} Lead qualified',
+  'shell.leads.label.other': '{count} Leads qualified',
+
   // Presence (FR-MOD-01.1.4). The status word is part of each avatar's
   // accessible name because the ring colour alone would not carry it (A11Y2).
   'shell.presence.label': 'Teammates online',

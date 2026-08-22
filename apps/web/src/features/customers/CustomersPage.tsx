@@ -44,17 +44,27 @@ export function CustomersPage(): ReactElement {
   const [debounced, setDebounced] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  // A deep link (from the command palette, a bookmark, or a colleague) names a
-  // customer to open. Switch to the segment that contains everyone so the row
-  // is present, select it, then strip the parameter so a later segment change
-  // or reload does not re-pin the same person.
+  // Two deep links land here: `?customer=` (command palette, a bookmark, a
+  // colleague) names one person — switch to the segment that contains
+  // everyone so the row is present, then select it. `?segment=` (the rail's
+  // Leads pill, FR-MOD-01.1.2) names a tab to land on directly. Either way the
+  // parameter is stripped once read, so a later segment change or reload does
+  // not re-apply it.
   useEffect(() => {
-    const linked = searchParams.get('customer');
-    if (!linked) return;
-    setSegment('all');
-    setSelectedId(linked);
+    const linkedCustomer = searchParams.get('customer');
+    const linkedSegment = searchParams.get('segment');
+    if (!linkedCustomer && !linkedSegment) return;
+
+    if (linkedCustomer) {
+      setSegment('all');
+      setSelectedId(linkedCustomer);
+    } else if (SEGMENTS.some((item) => item.id === linkedSegment)) {
+      setSegment(linkedSegment as Segment);
+    }
+
     const next = new URLSearchParams(searchParams);
     next.delete('customer');
+    next.delete('segment');
     setSearchParams(next, { replace: true });
   }, [searchParams, setSearchParams]);
 

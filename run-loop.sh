@@ -250,12 +250,32 @@ quota_gate(){
   return 1
 }
 
+# --- Durdurma kapısı: panel istediğinde script KENDİ çıkar --------------------
+# Panel nazik durdurma istediğinde .loop-logs/STOP-REQUESTED dosyasını bırakır.
+# Bu kapı yalnız GÖREV SINIRLARINDA okunur — çalışan bir pencere asla kesilmez.
+# Kendi çıkmak, panelin sinyal/taskkill göndermesinden çok daha temizdir: yarım
+# dosya, commit'siz değişiklik, "done" işaretlenmemiş görev oluşmaz.
+# Kapıyı geçerken dosya SİLİNMEZ, STOP-HONORED'a taşınır: panel böylece
+# "istediğim gibi kendi çıktı" ile "çöktü/işi bitti" arasını ayırt eder.
+STOP_FLAG="$LOG_DIR/STOP-REQUESTED"
+STOP_HONORED="$LOG_DIR/STOP-HONORED"
+stop_gate(){
+  [ -f "$STOP_FLAG" ] || return 0
+  log "⏹ Durdurma isteği görüldü ($1) — görev sınırında temiz çıkılıyor."
+  log "  İstek: $(tr -s '[:space:]' ' ' < "$STOP_FLAG" 2>/dev/null | cut -c1-200)"
+  mv -f "$STOP_FLAG" "$STOP_HONORED" 2>/dev/null || rm -f "$STOP_FLAG"
+  exit 0
+}
+# Koşu başında kalmış bayrak yeni koşuyu anında kapatmasın (panel de temizler).
+rm -f "$STOP_FLAG" "$STOP_HONORED"
+
 # =============================================================================
 consec_errors=0; iteration=0; consec_task_fails=0
 log "▶▶ Döngü başladı. Canlı akış aşağıda; tam kayıt: $LOG_DIR/"
 
 while true; do
   iteration=$((iteration+1))
+  stop_gate "tur başı"
 
   pick=$(pick_next)
   if [ -z "${pick:-}" ] || [ "$pick" = "null" ]; then
@@ -280,6 +300,9 @@ while true; do
 
   # KAPI 1 — görev penceresi açılmadan önce
   quota_gate "$eff" "görev öncesi" "$mdl" || exit 0
+  # Durdurma kapısı: pick_next sürerken istek gelmiş olabilir — pahalı pencereyi
+  # açmadan önce son kez bak.
+  stop_gate "görev penceresi açılmadan"
 
   log "──────────────────────────────────────────────────────────────"
   log "▶ Task $task_id  (model=$mdl, effort=$eff, kalan≈$remaining)  — tek sürekli akış başlıyor (build→doğrulama→kapanış)"

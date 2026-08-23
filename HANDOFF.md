@@ -13,6 +13,54 @@
 
 ## Task log (newest-first)
 
+## 149 — FIX-WT-CLEAN-RUNLOOP · Commit'siz `run-loop.sh` (panel nazik-durdurma kapısı) sahiplenildi — done — 2026-08-23 UTC
+
+- **Yapıldı:** Panelin sağlık taraması `main`'de **1 izlenen, commit'siz dosya** buldu: `run-loop.sh`
+  (+0 izlenmeyen). Değişiklik incelendi ve **tek bir tutarlı iş** çıktı: panelin
+  `.loop-logs/STOP-REQUESTED` bayrağını **yalnız görev sınırlarında** okuyup döngünün KENDİ temiz
+  çıkmasını sağlayan `stop_gate()` kapısı (+23 satır, −0, 2 hunk) — `STOP_FLAG`/`STOP_HONORED`
+  tanımları + fonksiyon + koşu başı `rm -f` (satır 253-270) ve iki çağrı yeri: `stop_gate "tur başı"`
+  (`while` ilk satırı, 278) · `stop_gate "görev penceresi açılmadan"` (KAPI 1 `quota_gate`'ten hemen
+  sonra, pahalı pencere açılmadan, 302-305). Kapı geçilirken bayrak **silinmiyor**, `STOP-HONORED`'a
+  taşınıyor — panel "istendiği gibi kendi çıktı" ile "çöktü / işi bitti" arasını böyle ayırıyor.
+  **Yarım/deneysel parça YOK:** `bash -n` temiz, iki çağrı yeri de bağlı, ölü değişken/fonksiyon yok,
+  `.loop-logs/` zaten `.gitignore:33`'te (bayrak dosyaları repoya sızmaz). Tek commit'e kondu
+  (`ef9946a`), ilgisiz hiçbir şey tıkılmadı.
+- **Sahiplik git + Task Master ile kanıtlandı (tahmin değil):** iş açıldığında Task Master kuyruğu
+  **boştu** (148/148 `done`, `in-progress` yok) → değişiklik hiçbir yarım göreve ait değil. tm 148'in
+  kapanış notu da aynı şeyi yazmıştı: _"`run-loop.sh` çalışma alanında `M` duruyor ve bu pencere ona
+  DOKUNMADI … sahibi panel/kullanıcıdır"_. **tm 148'in o notu artık kapandı** — bu tur değişikliği
+  sahiplenip commit + push etti; sonraki tarama `run-loop.sh`'i kirli görmeyecek.
+- **Doğrulama (hepsi exit 0):** `bash -n run-loop.sh` · `pnpm -w typecheck` **12/12** ·
+  `pnpm -w lint` **9/9** · `pnpm -w format:check` temiz (HANDOFF düzenlemesinden sonra da) ·
+  secret taraması `run-loop.sh` tam dosyada eşleşme yok (CONVENTIONS §2).
+  **ATLANAN KAPILAR VE SEBEBİ (sessizce atlanmadı):** `test` / `test:integration` / `build` / `test:e2e`
+  koşulmadı. Sebep ölçüldü, varsayılmadı: `run-loop.sh` **hiçbir pnpm workspace paketinin girdisi
+  değil** ve `format:check` globu (`**/*.{ts,tsx,js,json,md,css,yaml,yml}`) `.sh` uzantısını
+  **kapsamıyor** → ürün kodu diff'i **0**. Kanıt: typecheck ve lint'in ikisi de **`>>> FULL TURBO`**
+  (12/12 + 9/9 cache hit, 113 ms + 79 ms) döndü, yani turbo girdi hash'i değişmedi; aynı hash'i okuyan
+  test/build/e2e bu diff'i **yapısal olarak gözlemleyemez**. `.taskmaster/` prettier'da ignore'lu
+  (`.prettierignore:39`), kontrat/migration'a dokunulmadı → `contract:generate` / `db:check-drift`
+  gereksiz (CONVENTIONS §1 koşullu maddeleri).
+- **Kapsam dışı bırakılan, bilerek (sonraki pencere için açık not):** `stop_gate`, **retry penceresinden
+  (KAPI 2) önce çağrılmıyor** — `run-loop.sh:317` civarında yalnız `quota_gate "$eff" "retry öncesi"`
+  var. Yani ilk denemenin ORTASINDA gelen bir durdurma isteği, retry penceresinin açılmasını
+  engellemiyor; döngü ancak bir sonraki **tur başında** çıkıyor (en fazla 1 fazladan pencere). Bu bir
+  **davranış değişikliği** olurdu, mevcut diff'te yoktu ve bu tur diff'i genişletmedi (CONVENTIONS §5:
+  "bu arada şunu da düzelteyim" YOK). İstenirse ayrı bir görev: `stop_gate "retry penceresi açılmadan"`
+  satırını KAPI 2'nin hemen ardına eklemek yeterli.
+- **Panel not (tm 148'in uyarısı bu turda da doğrulandı):** MCP `add_task` `priority`'yi `high|medium|low`
+  enum'una göre doğrulayıp `critical`'ı **sessizce `medium`'a düşürdü**; değer `tasks.json`'da elle
+  `critical`'a çevrildi (pencere talimatı: düzeltme görevlerinin priority'si **tam olarak** `critical`).
+  Ayrıca `add_task` yine **dosya genelinde** `id` alanlarını string→sayı normalize etmeye kalktı
+  (314 satırlık diff); bu tur `git checkout` ile geri alıp görevi **elle append** ederek diff'i
+  **11 satıra** düşürdü — `set_task_status` aynı bozulmayı yapmıyor, yalnız `add_task` yapıyor.
+- **Sonraki pencereye not:** Çalışma ağacı **tamamen temiz** (`git status --porcelain` boş), `main`
+  origin ile eşit. Task Master kuyruğu 149 ile yeniden **boş** (149 görev, hepsi `done`). Hâlâ açık
+  adaylar değişmedi: §D121'in üç `Should` payı (`02.2.1` sıralama · `03.1.2` "Add more channels" CTA ·
+  `04.3.2` Teammates arama/filtre), **§D122** (NFR-P3 widget bundle bütçesi CI'da sessizce atlanıyor)
+  ve yukarıdaki **KAPI 2 stop_gate** boşluğu; §F.3 gereği açılmaları kullanıcının seçimi.
+
 ## 148 — FIX-PLAN-F0-SAYAC · Faz-0 özet satırındaki bayat `✅` sayacı (54 → 58) — done — 2026-08-23 UTC
 
 - **Yapıldı:** Panelin sağlık taraması `PLAN.md:20`'nin `54 ✅` rakamını §3'ün gerçek damga sayımıyla

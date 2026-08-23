@@ -7095,13 +7095,25 @@
         "priority": "critical",
         "subtasks": [],
         "updatedAt": "2026-08-22T23:44:25.394Z"
+      },
+      {
+        "id": "149",
+        "title": "FIX-WT-CLEAN-RUNLOOP · Çalışma ağacındaki commit'siz `run-loop.sh` (panel nazik-durdurma kapısı) commit'lensin",
+        "description": "Panelin sağlık taraması `main` üzerinde 1 izlenen, commit'siz dosya buldu: `run-loop.sh`. Değişiklik, panelin `.loop-logs/STOP-REQUESTED` bayrağını görev sınırlarında okuyup döngünün KENDİ temiz çıkmasını sağlayan `stop_gate()` kapısı. CONVENTIONS §2 her task sonunda commit + push şart koşuyor; kirli bırakılan ağaç bir sonraki pencerenin hangi değişikliğin kime ait olduğunu ayırt edememesine yol açıyor (tm 148 HANDOFF notu bunu zaten \"sahibi panel/kullanıcı\" diye işaretlemişti ama kapsam dışı olduğu için commit etmemişti). Bu görev o değişikliği sahiplenip commit + push eder ve ağacı temizler.",
+        "details": "BOOTSTRAP (bu kutu kendi kendine yeter):\n- Depo: C:\\Users\\Hobbie\\Desktop\\nexa-main · dal: `main` · uzak: origin/main.\n- Dosya: repo kökündeki `run-loop.sh` (otonom döngü koşucusu; hiçbir pnpm workspace paketine ait değil).\n- Diff kapsamı (git diff ile ölçüldü, 2 hunk, +23 satır, -0):\n  1) ~satır 250-270: `STOP_FLAG=\".loop-logs/STOP-REQUESTED\"` + `STOP_HONORED=\".loop-logs/STOP-HONORED\"`\n     tanımları, `stop_gate()` fonksiyonu (bayrak varsa logla → `mv` ile STOP-HONORED'a taşı → `exit 0`)\n     ve koşu başında kalmış bayrakları temizleyen `rm -f`.\n  2) ~satır 278 + 300-305: iki çağrı yeri — `stop_gate \"tur başı\"` (while döngüsünün ilk satırı) ve\n     `stop_gate \"görev penceresi açılmadan\"` (KAPI 1 / quota_gate'ten hemen sonra, pahalı Claude\n     penceresi açılmadan önce).\n- Sahiplik: Task Master kuyruğu bu iş açıldığında BOŞtu (148/148 done, in-progress yok), yani\n  değişiklik hiçbir yarım göreve ait değil — panel/kullanıcı tarafından yapılmış bir koşum-aracı\n  iyileştirmesi. tm 148'in HANDOFF notu bunu açıkça yazıyor.\n\nYAPILACAK:\n1) `git diff` ile değişikliği doğrula; `bash -n run-loop.sh` (sözdizimi) geçmeli.\n2) Secret taraması: diff'te .env / anahtar / token yok (CONVENTIONS §2). `.loop-logs/` zaten\n   `.gitignore:33`'te — bayrak dosyaları repoya sızmaz.\n3) Tek anlamlı Conventional Commit: `feat(loop): ...` — başka değişiklik aynı commit'e tıkılmaz.\n4) `git push` (force YOK, history rewrite YOK — CLAUDE.md sınırı).\n5) HANDOFF.md'ye kapanış notu; tm 148'in \"commit'siz duruyor\" notu artık kapandı.\n\nKAPSAM DIŞI (bilerek): `stop_gate` retry penceresinden (KAPI 2) önce ÇAĞRILMIYOR. Bu bir davranış\ndeğişikliği olur, mevcut diff'te yok ve bu görev diff'i genişletmiyor. Not olarak HANDOFF'a düşülür.\n\nDEPENDENCIES: boş — düzeltme hemen çalışabilir, hiçbir işi beklemiyor.",
+        "testStrategy": "Kabul kriterleri (hepsi komutla + exit code ile):\n1) `bash -n run-loop.sh` → exit 0 (sözdizimi temiz).\n2) `git status --porcelain` → BOŞ çıktı (izlenen + izlenmeyen hiçbir dosya kalmamalı).\n3) `git log --oneline -1` → run-loop.sh commit'i; `git status -sb` → `## main...origin/main` (ahead YOK, push edilmiş).\n4) `git show --stat HEAD` → yalnız `run-loop.sh` (+ ayrı commit'te HANDOFF.md) — ilgisiz dosya karışmamış.\n5) Secret kapısı: `git show HEAD -- run-loop.sh | grep -iE 'api[_-]?key|secret|token|passwo?rd|PRIVATE KEY'` → eşleşme yok.\n6) DoD kapıları: `run-loop.sh` HİÇBİR workspace paketinin girdisi değil ve `format:check` globu\n   (`**/*.{ts,tsx,js,json,md,css,yaml,yml}`) `.sh` kapsamıyor → ürün kodu diff'i 0. Yine de\n   `pnpm -w typecheck`, `pnpm -w lint`, `pnpm -w format:check` koşulup exit 0 kaydedilir; test/\n   integration/build/e2e bu diff'i yapısal olarak gözlemleyemez (turbo girdi hash'i değişmedi) ve\n   ATLANMA SEBEBİ kapanış notunda açıkça yazılır — sessizce atlanmaz.",
+        "status": "done",
+        "dependencies": [],
+        "priority": "critical",
+        "subtasks": [],
+        "updatedAt": "2026-08-23T14:13:23.920Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-22T23:44:25.395Z",
-      "taskCount": 148,
-      "completedCount": 148,
+      "lastModified": "2026-08-23T14:13:23.921Z",
+      "taskCount": 149,
+      "completedCount": 149,
       "tags": [
         "master"
       ]

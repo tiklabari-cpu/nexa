@@ -22,6 +22,8 @@
 | **Faz 2 — v2**     | §5.3 | **✅ TESLİM + KAPANDI** (plan 2026-08-01; kapanış turu 2026-08-11, GL-8 · tm 114 · §D89). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: **0 ⬜ açık · 0 ◐ kısmi · 27 ✅ teslim · 3 ⛔ kapsam dışı** (7 faz çelişkisi PRD'den çözüldü). Kapanış ölçütü (**23 açık kalemin hepsi ✅**) sayı olarak KARŞILANDI ve §F.1'in 10 maddesi **tam sürüm** koşuldu (kanıt HANDOFF §F.2). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: **23 açık kalemin hepsi ✅** | ✅ KAPALI |
 | **Faz 3 — Enterprise** | §5.4 | **✅ TESLİM + KAPANDI** (kırılım 2026-08-11 · §D95 + §D99; kapanış turu 2026-08-17, GL-9 · tm 126 · §D105). Kapsam PRD §5.4'e karşı süpürüldü → **15 satır**, **sayılarak**: **6 ✅ + 0 ◐** açık kalemde (53 alt-görev · ~72 pencere; `13.7` ✅ — §D111 kapandı, Faz-4 tm 128.1–128.8) · **2 ✅ v2'de karşılandı** · **4 ⛔** · **2 ⛔-süreç** · **1 faz değişikliği** (08.9.6 → Faz 2 ✅). Kırılım §6.1 · dilimler §6.2 · düz tablo §G. **13.7 mobil** buraya taşındı (§D60 · barındırma §D96) · **08.9.6** v2'ye çıktı (§D61) | Faz-3'te `Must` yok — §F.00'ın sayaç kuralı yerine **kalem** kuralı: **6 ✅ + 0 ◐** (`13.7` ✅ · §D111 kapandı — giriş yolunu Faz-4 tm 128.1–128.8 ödedi; mağaza payı `⛔-süreç` §D110). Kapanış anında (GL-9) 5 ✅ + 1 ◐ ile kapanmıştı, §D110 6 ✅ yaptı, §D111 geri aldı, tm 128 yeniden 6 ✅ yaptı — Should kalem, kapanış kararı hiç değişmedi | ✅ KAPALI |
 | **Faz 4 — Bütünleme** | §F.3 (PRD dışı faz; kalemler PRD kimlikli ya da türetilmiş NFR — §6A · §D113) | **✅ TESLİM + KAPANDI** (açılış 2026-08-17; kapanış turu 2026-08-23, GL-10 · tm 143 · §D120). Kod denetimi 17 bulgu; §6A tablosu **16 satır** (14 iş kalemi + M-SEC denetimi + GL-10 kapanış) · **62 alt-görev + 3 tek görev · ~82 pencere** · tm 128–143, hepsi `done`. Damga (**sayılarak**, öncü damga — naif glif sayımı değil; §6A tablosu, GL-10 hariç): **15 ✅ · 0 ◐ · 0 ⬜**. Konu kalem değil **dikiş** (§6A) | Faz-4'te `Must` yok — **kalem kuralı**: §6A tablosunun GL-10 dışındaki **15 satırının tamamı ✅** → **15/15 sayılarak karşılandı** | ✅ KAPALI |
+| **Faz 5 — Doğruluk** | §F.3 (PRD dışı faz; kalemler PRD kimlikli ya da türetilmiş NFR — §6B · §D124) | **⬜ AÇIK** (açılış 2026-08-24). Konusu **denetimin bulduğu yanlış**: 2026-08-23 bağımsız denetimi dokuz bulgu çıkardı ve ortak şekilleri şu — bir damga, onu hak eden koddan daha geniş bir şey iddia ediyor. **9 satır** (7 iş kalemi + M-SEC-d denetimi + GL-11 kapanış) · **32 alt-görev + 2 tek görev · ~44 pencere** · tm 150–158 | Faz-5’te `Must` yok — **kalem kuralı**: §6B tablosunun GL-11 dışındaki **8 satırının tamamı ✅** | ⬜ AÇIK |
+| **Faz 6 — Hazırlık** | §F.3 (PRD dışı faz; kalemler türetilmiş NFR — §6C · §D124) | **⬜ AÇIK** (açılış 2026-08-24). Konusu **canlıda ayakta kalmak**: konfigürasyon · ops dikişleri · kapasite ölçümü · dağıtım manifestleri · runbook. **Sınır (CLAUDE.md): deploy/DNS/TLS/gerçek secret YOK**; manifest yazılır, uygulanmaz (M-CONTAINER emsali). Mock → gerçek sağlayıcı geçişi de kapsam DIŞI. **10 satır** (8 iş kalemi + M-SEC-e denetimi + GL-12 kapanış) · **23 alt-görev + 2 tek görev · ~36 pencere** · tm 159–168 | Faz-6’da `Must` yok — **kalem kuralı**: §6C tablosunun GL-12 dışındaki **9 satırının tamamı ✅** | ⬜ AÇIK |
 
 **Faz-0 kapandı (2026-07-31 · GL-3 · tm 87).** Kapanışı bloklayan 6 `Must ◐` kapatıldı: 01.3, 02.4,
 13.8 (modül tablolarında D23/D24/D26'da `◐`→`✅`) + EK-A.1 / EK-A.2 / EK-B.1 (bu turda §7.1'de
@@ -2958,6 +2960,296 @@ yazar ve görev `blocked` bırakılıp etiket yükseltilir (CONVENTIONS §4).
 
 ---
 
+## 6B. FAZ 5 — Doğruluk ve Güvenlik Borçları (§F.3 turu · 2026-08-24)
+
+**Tetikleyici (§F.3):** Faz-4 GL-10 (tm 143) ile kapandı ve §F.2 final raporunu verip sıradaki adımı
+kullanıcıya bıraktı. 2026-08-23'te kullanıcı bağımsız bir durum denetimi istedi ("sadece taskmaster'dan
+kontrol etme, genel olarak bir kontrol yap"). Denetim dokuz kalite kapısını fiilen koşturdu (hepsi yeşil,
+6.063 test) ve **projenin kendi kapanış raporunda yer almayan dokuz bulgu** çıkardı. 2026-08-24'te kullanıcı
+kalan işin iki faza bölünmesini seçti: **Faz-5 doğruluk**, **Faz-6 hazırlık** (§D124).
+
+**Faz-5'in konusu KALEM değil DAMGA DÜRÜSTLÜĞÜDÜR.** Bulguların ortak şekli şudur: bir damga, onu hak eden
+koddan daha geniş bir şey iddia ediyor. Kiracı izolasyonu `events` partisyonlarında delik (ölçüldü:
+bağlamsız `select count(*) from events` → 0 ama `from events_2026_08` → 55) · 2FA iki veri alanından
+ibaret, hiçbir kimlik doğrulama yolunda okunmuyor · beş liste sabit `limit` ile tek sayfada kesiliyor
+ama `EK-B.1` "infinite scroll" için `✅` taşıyor · M-SEC denetiminin yedi bulgusu sahipsiz duruyor ·
+NFR-P3 nöbetçisi CI'da sessizce atlanıyor. Bu faz **YENİ ÖZELLİK AÇMAZ**; iddia ile kodu eşitler.
+
+**Damga politikası:** bu faz hiçbir mevcut `✅`'i geri almaz. Üç kabul edilen borç `M-GUARD-c` (tm 156.3)
+ile §D'ye yazılır ve ilgili satırların **metni** daraltılır — damgaları değişmez. Gerekçe §F.00'ın kuralıdır:
+"`◐` + kuyrukta açık görev yok" durumu bir kapanış engelidir; kapsamı daraltıp gerekçesini yazmak
+(§D97'nin KOD/SÜREÇ ayrımının kardeşi olarak KOD/İÇERİK ayrımı) dürüst olanıdır.
+
+**Öncelik (CONVENTIONS §4.1):** `high` = tm 150 (kiracı izolasyonu deliği) · 151 (denetimin MEDIUM'ları) ·
+152 (2FA yok) · 153 (listeler kesiliyor) · `medium` = 154–157 · `low` = 158 (kapanış en son).
+`critical` KULLANILMADI (panel akışına rezerve). Etiketler §5.1.1 matrisi: güvenlik/kripto çekirdekleri
+`OPUS-MAX` (partisyon RLS · TOTP · 2FA zorlaması · SSO alan bağı · M-SEC-d · GL-11), çok-yüzeyli tasarım
+`OPUS-XHIGH`, mekanik `SONNET-XHIGH` — **34 satır: `SONNET-XHIGH` 19 · `OPUS-XHIGH` 9 · `OPUS-MAX` 6 → %56 Sonnet**
+(güvenlik ağırlıklı bir faz olduğu için Sonnet payı Faz-4'ün %69'unun altında; hiçbir güvenlik sınırı Sonnet'e verilmedi).
+
+| # | Kod | Kalem | Öncelik | Damga | tm | Alt-gör. | ~Pen |
+| :-: | --- | --- | :-: | --- | :-: | :-: | :-: |
+| 1 | S4-PART | `events` partisyonlarında RLS — kiracı izolasyonu ana tabloda var, partisyonlarda yok; kapsam nöbetçisi | high | ⬜ | 150 | 3 | 4 |
+| 2 | M-SEC-b | M-SEC denetiminin iki **MEDIUM** bulgusu — SSO/SCIM JIT e-posta güveni · anonim `/health` bilgi sızıntısı | high | ⬜ | 151 | 2 | 3 |
+| 3 | S11-2FA | İki adımlı doğrulama gerçekten çalışır — TOTP kaydı · ikinci giriş adımı · `require_two_factor` zorlaması · kurtarma kodları | high | ⬜ | 152 | 9 | 13 |
+| 4 | P5-PAGE | Liste sayfalaması istemciye bağlanır — Inbox · transcript · Tickets · Customers · Traffic tek sabit sayfada kesiliyor | high | ⬜ | 153 | 7 | 9 |
+| 5 | D121-3 | §D121’in üç `Should` payı — liste sıralaması · "Add more channels" CTA · Teammates arama/filtre | medium | ⬜ | 154 | 3 | 3 |
+| 6 | M-SEC-c | M-SEC denetiminin beş **LOW** bulgusu — rate-limit sırası · mobil `restore()` · audit maskesi · EC sertifika tabanı · SCIM koltuk tavanı | medium | ⬜ | 155 | 5 | 5 |
+| 7 | M-GUARD | Nöbetçi borçları — CI adım sırası (§D122) · design-system a11y testleri · kabul edilen borç kayıtları | medium | ⬜ | 156 | 3 | 3 |
+| 8 | M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (STRIDE) — bulgular görev olur | medium | ⬜ | 157 | tek | 2 |
+| 9 | GL-11 | **F5-KAPAT** — Faz-5 §F.00 kapanış turu + §F.1 tam sürüm + §F.2 raporu | low | ⬜ | 158 | tek | 2 |
+| | | **7 iş kalemi + 1 denetim + 1 kapanış** | | | **150–158** | **32+2** | **~44** |
+
+**Faz-5 §F.00 kapısı — ⬜ AÇIK.** Faz-5'te `Must` yok → **kalem kuralı**: bu tablonun GL-11 dışındaki
+**8 satırının tamamı `✅`** olduğunda GL-11 (tm 158) §F.1'in 10 maddesini tam sürüm koşar, tam DoD kapısı +
+tam e2e ile kapatır ve üst tablodaki Faz-5 satırını `✅ KAPALI` yapar. Sayım **sayılarak** (öncü damga),
+naif glif sayımı değil (§D68–§D77 dersi). Bir kalem `◐` kalırsa faz kapanmaz — ya tamamlanır ya kapsam
+daraltılıp kalanı gerekçeli yeni kaleme ayrılır (§F.00).
+
+### 6B.1 Faz-5 atomik kırılımı (34 satır · 32 alt-görev + 2 tek görev · ~44 pencere)
+
+> Her alt-görev tek temiz pencerede DoD kapısından geçebilecek boyuttadır (§5.1.2 bölme politikası; 2 pencere
+> yalnız güvenlik/kripto çekirdeği ve geniş yüzeyli işler için). Etiket = model × efor (§5.1.1).
+> Alt-görev ID'leri §6B.1, §G düz tablosu ve Task Master'da **birebir aynıdır** — aşağıdaki tablolar Task
+> Master kayıtlarından ÜRETİLDİ (elle kopya değil). **Tam alan detayı Task Master'ın `details` alanındadır**
+> (bulgu · dosya:satır · referans desen · tuzaklar · KK · testler + her görevin başında sıfır-bağlamlı
+> pencere için BAĞLAM kutusu) — Faz-5'in companion dosyası YOKTUR (§D98 gerekçesi).
+
+#### 6B.1.1 · `S4-PART` — `events` partisyonlarında RLS — kiracı izolasyonu ana tabloda var, partisyonlarda yok; kapsam nöbetçisi · tm 150 · `high` · dilim V5-1
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `S4-PART-a` | Migration: partisyonlarda RLS + events_tenant politikasının aynısı; events_ensure_partition yeni partisyond… | `OPUS-MAX` | yok | 2 |
+| `S4-PART-b` | Kapsam nöbetçisi: RLS testinin partisyon muafiyeti kalkar + bağlamsız doğrudan partisyon sorgusunun çapraz-… | `OPUS-XHIGH` | S4-PART-a | 1 |
+| `S4-PART-c` | Zamanlayıcı yolu: maintainPartitions ileri bir ay açtığında RLS de açılıyor mu — integration testi + PLAN §… | `SONNET-XHIGH` | S4-PART-a, S4-PART-b | 1 |
+
+#### 6B.1.2 · `M-SEC-b` — M-SEC denetiminin iki MEDIUM bulgusu — SSO/SCIM JIT e-posta güveni · anonim `/health` bilgi sızıntısı · tm 151 · `high` · dilim V5-1
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-SEC-b1` | SSO/SCIM JIT sağlama doğrulanmış alan bağı ister: sso_connections.verified_domains + var olan hesabı yabanc… | `OPUS-MAX` | yok | 2 |
+| `M-SEC-b2` | /health anonim yanıtı daraltılır: bölge/sürüm/sağlayıcı/scheduler yalnız kimlikli admin e; anonim yola yüks… | `SONNET-XHIGH` | yok | 1 |
+
+#### 6B.1.3 · `S11-2FA` — İki adımlı doğrulama gerçekten çalışır — TOTP kaydı · ikinci giriş adımı · `require_two_factor` zorlaması · kurtarma kodları · tm 152 · `high` · dilim V5-2
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `S11-2FA-a` | Migration + tip iskeleti: account_two_factor + two_factor_recovery_codes tabloları (password_reset_tokens e… | `SONNET-XHIGH` | yok | 1 |
+| `S11-2FA-b` | TOTP çekirdeği lib/totp.ts (BÖLÜNMEZ): RFC 6238 · step replay muhafızı · sabit-zaman karşılaştırma · base32… | `OPUS-MAX` | S11-2FA-a | 2 |
+| `S11-2FA-c` | Kurtarma kodları: 10 adet tek kullanımlık, SHA-256 hash li saklanır, yeniden üretim eskileri geçersizler | `OPUS-XHIGH` | S11-2FA-b | 1 |
+| `S11-2FA-d` | Kayıt uçları + kontrat: POST /auth/2fa/enroll · POST /auth/2fa/activate · DELETE /auth/2fa (parola ister) ·… | `OPUS-XHIGH` | S11-2FA-b, S11-2FA-c | 2 |
+| `S11-2FA-e` | Zorlama (BÖLÜNMEZ): /auth/authorize da 2FA kapısı + require_two_factor politikası fiilen okunur + /auth/log… | `OPUS-MAX` | S11-2FA-d | 2 |
+| `S11-2FA-f` | Web — hesap ayarı ekranı: iki adımlı doğrulamayı aç/kapat, otpauth URI + kopyalanabilir secret, kurtarma ko… | `SONNET-XHIGH` | S11-2FA-d | 1 |
+| `S11-2FA-g` | Web — giriş akışının ikinci adımı: kod ekranı + kurtarma kodu alternatifi + require_two_factor açıkken kayd… | `SONNET-XHIGH` | S11-2FA-e, S11-2FA-f | 1 |
+| `S11-2FA-h` | Settings → Security: require_two_factor artık zorluyor (yardım metni + etkisi) + Teammates 2FA sütunu canlı… | `SONNET-XHIGH` | S11-2FA-e | 1 |
+| `S11-2FA-i` | Uçtan uca two-factor.spec.ts: kaydol → aktifleştir → çıkış → giriş kod ister → yanlış kod reddi → kurtarma… | `OPUS-XHIGH` | S11-2FA-e, S11-2FA-g, S11-2FA-h | 2 |
+
+#### 6B.1.4 · `P5-PAGE` — Liste sayfalaması istemciye bağlanır — Inbox · transcript · Tickets · Customers · Traffic tek sabit sayfada kesiliyor · tm 153 · `high` · dilim V5-3
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `P5-PAGE-a` | Ortak kanca lib/paged-query.ts (useInfiniteQuery sarmalayıcı) + VirtualList/VirtualTable a onEndReached (eş… | `OPUS-XHIGH` | yok | 1 |
+| `P5-PAGE-b` | Inbox sohbet listesi sayfalanır (useInbox.ts limit=50) — RTM push ları ile sayfa birleşiminin tutarlılığı | `OPUS-XHIGH` | P5-PAGE-a | 1 |
+| `P5-PAGE-c` | Transcript ters sonsuz kaydırma (useInbox.ts limit=200): before_event_id ile geriye yürüme + prepend sırası… | `OPUS-XHIGH` | P5-PAGE-a | 2 |
+| `P5-PAGE-d` | Tickets grid sayfalanır (useTickets.ts limit=50) | `SONNET-XHIGH` | P5-PAGE-a | 1 |
+| `P5-PAGE-e` | Customers listesi sayfalanır (CustomersPage.tsx limit=50) + total ile "N / M" göstergesi | `SONNET-XHIGH` | P5-PAGE-a | 1 |
+| `P5-PAGE-f` | Traffic listesi sayfalanır (TrafficPage.tsx limit=100) | `SONNET-XHIGH` | P5-PAGE-a | 1 |
+| `P5-PAGE-g` | Uçtan uca + nöbetçi: seed e 60 sohbet / 250 olaylı bir konuşma → e2e ikinci sayfayı yürür; scripts/audit al… | `OPUS-XHIGH` | P5-PAGE-b, P5-PAGE-c, P5-PAGE-d, P5-PAGE-e, P5-PAGE-f | 2 |
+
+#### 6B.1.5 · `D121-3` — §D121’in üç `Should` payı — liste sıralaması · "Add more channels" CTA · Teammates arama/filtre · tm 154 · `medium` · dilim V5-3
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `02.2.1-b` | Sohbet listesi sıralama kontrolü (Oldest/Newest) — sunucu sort parametresini zaten kabul ediyor, eksik olan… | `SONNET-XHIGH` | yok | 1 |
+| `03.1.2-b` | Real-time boş durumuna "Add more channels" CTA sı → Settings → Channels derin linki | `SONNET-XHIGH` | yok | 1 |
+| `04.3.2-b` | Teammates arama kutusu (debounce) + rol/durum/2FA filtresi + filtrelenmiş boş durum | `SONNET-XHIGH` | yok | 1 |
+
+#### 6B.1.6 · `M-SEC-c` — M-SEC denetiminin beş LOW bulgusu — rate-limit sırası · mobil `restore()` · audit maskesi · EC sertifika tabanı · SCIM koltuk tavanı · tm 155 · `medium` · dilim V5-4
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-SEC-c1` | Kimlik doğrulama onRequest ↔ hız sınırı preHandler sırası: geçersiz bearer seli istek başına bir auth_resol… | `OPUS-XHIGH` | yok | 1 |
+| `M-SEC-c2` | Mobil restore() tek-uçuş muhafızını atlıyor: #rotate doğrudan çağrılıyor, eşzamanlı refresh aile iptaline y… | `SONNET-XHIGH` | yok | 1 |
+| `M-SEC-c3` | sanitizeAuditMetadata derin tarama: iç içe hassas anahtarlar (details.password gibi) bugün aynen yazılıyor | `SONNET-XHIGH` | yok | 1 |
+| `M-SEC-c4` | inspectIdpCertificate EC eğri tabanı zorlaması: küçük eğrili bir EC sertifikası bugün geçiyor | `SONNET-XHIGH` | yok | 1 |
+| `M-SEC-c5` | SCIM koltuk tavanı: applySeatEffect koltuk sayısını tavansız yükseltiyor, bir konnektör faturayı gözetimsiz… | `SONNET-XHIGH` | yok | 1 |
+
+#### 6B.1.7 · `M-GUARD` — Nöbetçi borçları — CI adım sırası (§D122) · design-system a11y testleri · kabul edilen borç kayıtları · tm 156 · `medium` · dilim V5-4
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-GUARD-a` | CI adım sırası: ci.yml de Build, Unit tests ten ÖNCE koşar + bundle-size.test.ts dist yoksa sessizce atlama… | `SONNET-XHIGH` | yok | 1 |
+| `M-GUARD-b` | Design-system a11y nöbetçileri: Modal focus-trap + Escape + odak geri verme · Dropdown roving-tabindex + Ho… | `SONNET-XHIGH` | yok | 1 |
+| `M-GUARD-c` | Kabul edilen borç kayıtları: Radix sapması · NFR-I18N1 KOD/İÇERİK ayrımı · NFR-P8+M4 yük ayağının Faz-6 ya… | `SONNET-XHIGH` | M-GUARD-b | 1 |
+
+#### 6B.1.8 · `M-SEC-d` — Faz-5 salt-okuma güvenlik denetimi (STRIDE) — bulgular görev olur · tm 157 · `medium` · dilim V5-5
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-SEC-d` | Faz-5 salt-okuma güvenlik denetimi (STRIDE): partisyon RLS · TOTP ve kurtarma kodları · SSO alan bağı · say… | `OPUS-MAX` | tm 150, 152, 153 | 2 |
+
+#### 6B.1.9 · `GL-11` — F5-KAPAT — Faz-5 §F.00 kapanış turu + §F.1 tam sürüm + §F.2 raporu · tm 158 · `low` · dilim V5-5
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `GL-11 · F5-KAPAT` | Faz-5 §F.00 kapanış turu: §6B tablosu SAYILARAK + §F.1 in 10 maddesi tam sürüm + tam DoD kapısı + tam e2e +… | `OPUS-MAX` | tm 150, 151, 152, 153, 154, 155, 156, 157 | 2 |
+
+### 6B.2 Faz-5 dilim gruplaması + kritik yol
+
+| Dilim | Kalemler | Neden bu sırada |
+| --- | --- | --- |
+| **V5-1** | tm 150 (`S4-PART`) · tm 151 (`M-SEC-b`) | Güvenlik çekirdeği önce: kiracı izolasyonu deliği ve denetimin sahipsiz MEDIUM'ları. İkisi de bağımsız, paralel koşabilir. |
+| **V5-2** | tm 152 (`S11-2FA`) | Fazın en büyük kalemi (9 alt-görev, ~12 pencere) ve tek başına anlamlı bir teslim. Kendi içinde sıkı bağımlılık zinciri var. |
+| **V5-3** | tm 153 (`P5-PAGE`) · tm 154 (`D121-3`) | Ürün doğruluğu: listeler kesilmesin, PRD'de ismen bilinen üç açık kalem kapansın. `02.2.1` ile `P5-PAGE-b` aynı dosyaya dokunur — hangisi sonra koşarsa diğerinin davranışını korur. |
+| **V5-4** | tm 155 (`M-SEC-c`) · tm 156 (`M-GUARD`) | Borç kapatma: denetimin LOW'ları ve nöbetçi borçları. `M-GUARD-c` kabul edilen borçları §D'ye yazar. |
+| **V5-5** | tm 157 (`M-SEC-d`) · tm 158 (`GL-11`) | Denetim ve kapanış — ikisi de ürün kodu yazmaz. |
+
+**Kritik yol:** `S11-2FA-a` → `-b` (TOTP çekirdeği) → `-c` → `-d` (uçlar) → `-e` (zorlama) → `-g` → `-i`
+(uçtan uca) = 7 alt-görev / ~11 pencere. Fazın toplam süresi bu zincire bağlıdır; V5-1, V5-3 ve V5-4 ona paraleldir.
+
+---
+
+## 6C. FAZ 6 — Yayına Hazırlık (§F.3 turu · 2026-08-24)
+
+**Tetikleyici:** aynı denetim ve aynı kullanıcı kararı (§D124). Faz-5 ürünün **doğru** olmasını sağlar;
+Faz-6 **hazır** olmasını sağlar.
+
+**Faz-6'nın konusu CANLIDA AYAKTA KALMAKTIR.** Denetimin production değerlendirmesi şunu buldu: uygulama
+katmanı sağlam (multi-stage imajlar, root olmayan kullanıcı, healthcheck, entrypoint'te `migrate deploy`,
+altı arka plan sweep'i Redis lider kilidiyle), ama bir SaaS'ın canlıda ihtiyaç duyduğu operasyon katmanı
+hiç yazılmadı: production konfigürasyonu **hiç koşulmadı**, liveness/readiness ayrımı yok, zarif drenaj yok,
+kapasite **hiç ölçülmedi** (NFR-M4'ün beşinci ayağı depoda yok), dağıtım manifesti yok, yedekleme yok.
+
+> **SINIR (CLAUDE.md — pazarlık yok):** production deploy / DNS / TLS sertifikası / gerçek secret **YOK**.
+> Bu fazın **her kalemi** ya yerelde koşulabilir ya `helm template` / `kubectl --dry-run=client` ile
+> doğrulanabilir olmak zorundadır. M-CONTAINER emsali (tm 140): dosyalar depoda, `kubectl apply` YOK.
+> **Mock → gerçek sağlayıcı geçişi de kapsam DIŞIDIR** (kullanıcı kararı, 2026-08-24): LLM · SMTP · S3 ·
+> Stripe · push · SIEM · AV · beş mesajlaşma kanalı mock kalır. Bu faz yalnız **seçim dikişlerini** hazırlar.
+
+**Öncelik (CONVENTIONS §4.1):** `high` = tm 159 (konfigürasyon hiç koşulmadı) · 160 (ops dikişleri) ·
+161 (kapasite bilinmiyor) · `medium` = 162–165, 167 · `low` = 166, 168. `critical` KULLANILMADI.
+Etiketler: dağıtım/güvenlik kararları `OPUS-MAX` (proxy hop + nginx profili · iki-pod doğrulaması ·
+ölçüm kararı · M-SEC-e · GL-12), çok-yüzeyli `OPUS-XHIGH`, mekanik `SONNET-XHIGH` —
+**25 satır: `SONNET-XHIGH` 13 · `OPUS-XHIGH` 7 · `OPUS-MAX` 5 → %52 Sonnet**.
+
+| # | Kod | Kalem | Öncelik | Damga | tm | Alt-gör. | ~Pen |
+| :-: | --- | --- | :-: | --- | :-: | :-: | :-: |
+| 1 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır — boot yolu ilk kez koşulur · proxy hop env’e · nginx güvenlik profili · `.env.production.example` | high | ⬜ | 159 | 3 | 4 |
+| 2 | M-OPS | Ops dikişleri — `/health/live` ↔ `/health/ready` ayrımı · zarif drenaj · production log profili | high | ⬜ | 160 | 3 | 4 |
+| 3 | M-LOAD | Yük ayağı (k6) — NFR-M4’ün beşinci katmanı + NFR-P1/P2 doğrulaması + **NFR-P8’in ilk gerçek ölçümü** | high | ⬜ | 161 | 4 | 7 |
+| 4 | M-SCALE | Ölçek dikişleri — iki-pod doğrulaması · bağlantı havuzu + PgBouncer · read-replica okuma yolu | medium | ⬜ | 162 | 3 | 5 |
+| 5 | M-OTEL | Telemetri exporter seçim dikişi (M-PROV-a deseni) + RTM metrikleri | medium | ⬜ | 163 | 2 | 2 |
+| 6 | M-IAC | Dağıtım manifestleri — **deploy YOK**: Helm iskeleti · probe/kaynak/HPA/PDB · migration stratejisi · dry-run doğrulaması | medium | ⬜ | 164 | 4 | 5 |
+| 7 | M-BACKUP | Yedekleme + **geri yükleme provası** — ölçülen şey "yedek var" değil "geri yüklenebilir" | medium | ⬜ | 165 | 2 | 3 |
+| 8 | M-RUNBOOK | Production checklist + olay runbook’ları — her madde bir komut ya da bir kanıt | low | ⬜ | 166 | 2 | 2 |
+| 9 | M-SEC-e | Faz-6 salt-okuma güvenlik denetimi (STRIDE) — bulgular görev olur | medium | ⬜ | 167 | tek | 2 |
+| 10 | GL-12 | **F6-KAPAT** — Faz-6 §F.00 kapanış turu + §F.1 tam sürüm + §F.2 proje geneli final rapor (üçüncü) | low | ⬜ | 168 | tek | 2 |
+| | | **8 iş kalemi + 1 denetim + 1 kapanış** | | | **159–168** | **23+2** | **~36** |
+
+**Faz-6 §F.00 kapısı — ⬜ AÇIK.** Faz-6'da `Must` yok → **kalem kuralı**: bu tablonun GL-12 dışındaki
+**9 satırının tamamı `✅`** olduğunda GL-12 (tm 168) §F.1'in 10 maddesini tam sürüm koşar ve §F.2'nin
+proje geneli final raporunu **üçüncü kez** üretir. Sayım **sayılarak** (öncü damga).
+
+### 6C.1 Faz-6 atomik kırılımı (25 satır · 23 alt-görev + 2 tek görev · ~36 pencere)
+
+> Aynı disiplin: her alt-görev tek pencerelik, ID'ler Task Master ile birebir, tam alan detayı
+> Task Master'ın `details` alanında (BAĞLAM kutusu dahil).
+
+#### 6C.1.1 · `M-PROD-CFG` — Production konfigürasyonu fiilen çalışır — boot yolu ilk kez koşulur · proxy hop env’e · nginx güvenlik profili · `.env.production.example` · tm 159 · `high` · dilim V6-1
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-PROD-CFG-a` | NODE_ENV=production boot yolu ilk kez fiilen koşulur + integration testi (placeholder secret reddi · DATABA… | `OPUS-XHIGH` | yok | 1 |
+| `M-PROD-CFG-b` | BÖLÜNMEZ: proxy hop sayısı env e (TRUST_PROXY_HOPS) + WEB_ORIGIN çoklu origin + web/widget nginx production… | `OPUS-MAX` | M-PROD-CFG-a | 2 |
+| `M-PROD-CFG-c` | .env.production.example + README "Production configuration": hangi anahtar neden zorunlu, hangisi neden ops… | `SONNET-XHIGH` | M-PROD-CFG-a, M-PROD-CFG-b | 1 |
+
+#### 6C.1.2 · `M-OPS` — Ops dikişleri — `/health/live` ↔ `/health/ready` ayrımı · zarif drenaj · production log profili · tm 160 · `high` · dilim V6-1
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-OPS-a` | /health üçe ayrılır: /health/live (bağımlılıksız) · /health/ready (bağımlılıklar) · /health (kimlikli ayrın… | `SONNET-XHIGH` | yok | 1 |
+| `M-OPS-b` | Zarif drenaj: SIGTERM de readiness önce false → drenaj penceresi → uçuştaki istekler biter → scheduler kili… | `OPUS-XHIGH` | M-OPS-a | 2 |
+| `M-OPS-c` | Production log profili: pino seviyeleri + request_id korelasyonu + lib/log-redact.ts in production da zorun… | `SONNET-XHIGH` | M-OPS-a | 1 |
+
+#### 6C.1.3 · `M-LOAD` — Yük ayağı (k6) — NFR-M4’ün beşinci katmanı + NFR-P1/P2 doğrulaması + NFR-P8’in ilk gerçek ölçümü · tm 161 · `high` · dilim V6-2
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-LOAD-a` | apps/load (k6) iskeleti: senaryo çerçevesi · oturum/tohum yardımcıları · eşikler NFR bütçelerinden · make l… | `OPUS-XHIGH` | yok | 2 |
+| `M-LOAD-b` | REST senaryosu: /chats liste + transcript + mesaj gönderme karışımı → NFR-P2 ölçümü (p99 < 300 ms yazma / <… | `SONNET-XHIGH` | M-LOAD-a | 1 |
+| `M-LOAD-c` | RTM senaryosu: N eşzamanlı WS bağlantısı + fan-out gecikmesi → NFR-P1 doğrulaması ve NFR-P8 in İLK GERÇEK ö… | `OPUS-XHIGH` | M-LOAD-a | 2 |
+| `M-LOAD-d` | Ölçüm turu + KARAR: sonuçlar PLAN §7.2 ye yazılır; NFR-P8 hedefi tutmuyorsa gerekçeli hedef revizyonu (§D)… | `OPUS-MAX` | M-LOAD-b, M-LOAD-c | 2 |
+
+#### 6C.1.4 · `M-SCALE` — Ölçek dikişleri — iki-pod doğrulaması · bağlantı havuzu + PgBouncer · read-replica okuma yolu · tm 162 · `medium` · dilim V6-2
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-SCALE-a` | BÖLÜNMEZ: iki-pod doğrulaması — aynı Redis e bağlı iki api + iki rtm süreci; fan-out çapraz pod çalışıyor m… | `OPUS-MAX` | yok | 2 |
+| `M-SCALE-b` | Bağlantı havuzu: Prisma pool boyutu env e · PgBouncer transaction-mode uyumluluğu belgelenir · max_connecti… | `SONNET-XHIGH` | yok | 1 |
+| `M-SCALE-c` | Read-replica okuma yolu dikişi: DATABASE_REPLICA_URL (yoksa birincile düşer), ağır rapor sorguları oraya —… | `OPUS-XHIGH` | M-SCALE-b | 2 |
+
+#### 6C.1.5 · `M-OTEL` — Telemetri exporter seçim dikişi (M-PROV-a deseni) + RTM metrikleri · tm 163 · `medium` · dilim V6-3
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-OTEL-a` | Exporter seçim dikişi OTEL_EXPORTER=console\|otlp\|none (M-PROV-a deseni, tm 131.2) + env paritesi; collector… | `SONNET-XHIGH` | yok | 1 |
+| `M-OTEL-b` | RTM telemetrisi: eşzamanlı bağlantı sayısı · fan-out gecikmesi · kopma nedeni metrikleri (NFR-M5 in RTM pay… | `SONNET-XHIGH` | M-OTEL-a | 1 |
+
+#### 6C.1.6 · `M-IAC` — Dağıtım manifestleri — deploy YOK: Helm iskeleti · probe/kaynak/HPA/PDB · migration stratejisi · dry-run doğrulaması · tm 164 · `medium` · dilim V6-3
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-IAC-a` | infra/helm/nexa iskeleti: api/rtm/web/widget Deployment + Service + ConfigMap + Secret şablonu; helm templa… | `SONNET-XHIGH` | yok | 1 |
+| `M-IAC-b` | Probe / kaynak / ölçek: liveness→/health/live · readiness→/health/ready · requests+limits · HPA (CPU + RTM… | `SONNET-XHIGH` | M-IAC-a, M-OPS-a | 1 |
+| `M-IAC-c` | Migration stratejisi KARARI: migrate deploy init-container mı Job mu · çok replikada yarış · geri alınamaz… | `OPUS-XHIGH` | M-IAC-a | 2 |
+| `M-IAC-d` | values.production.example.yaml + secret şablonları + kubectl --dry-run=client doğrulaması + README "Deploym… | `SONNET-XHIGH` | M-IAC-b, M-IAC-c | 1 |
+
+#### 6C.1.7 · `M-BACKUP` — Yedekleme + geri yükleme provası — ölçülen şey "yedek var" değil "geri yüklenebilir" · tm 165 · `medium` · dilim V6-4
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-BACKUP-a` | Yedekleme scripti + CronJob manifesti (pg_dump + object storage dizini) + retention politikası | `SONNET-XHIGH` | yok | 1 |
+| `M-BACKUP-b` | GERİ YÜKLEME PROVASI scripts/restore-drill.sh: geçici veritabanına yükler, migration durumunu ve satır sayı… | `OPUS-XHIGH` | M-BACKUP-a | 2 |
+
+#### 6C.1.8 · `M-RUNBOOK` — Production checklist + olay runbook’ları — her madde bir komut ya da bir kanıt · tm 166 · `low` · dilim V6-4
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-RUNBOOK-a` | docs/production-checklist.md — canlıya çıkmadan önce doğrulanacak her madde bir komut ya da bir kanıt | `SONNET-XHIGH` | yok | 1 |
+| `M-RUNBOOK-b` | docs/runbooks/ — DB düştü · Redis düştü · webhook kuyruğu şişti · RTM bağlantı fırtınası · kiracı izolasyon… | `SONNET-XHIGH` | M-RUNBOOK-a | 1 |
+
+#### 6C.1.9 · `M-SEC-e` — Faz-6 salt-okuma güvenlik denetimi (STRIDE) — bulgular görev olur · tm 167 · `medium` · dilim V6-5
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-SEC-e` | Faz-6 salt-okuma güvenlik denetimi (STRIDE): production konfig · proxy hop · nginx başlıkları · drenaj · re… | `OPUS-MAX` | tm 159, 160, 162, 164 | 2 |
+
+#### 6C.1.10 · `GL-12` — F6-KAPAT — Faz-6 §F.00 kapanış turu + §F.1 tam sürüm + §F.2 proje geneli final rapor (üçüncü) · tm 168 · `low` · dilim V6-5
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `GL-12 · F6-KAPAT` | Faz-6 §F.00 kapanış turu: §6C tablosu SAYILARAK + §F.1 in 10 maddesi tam sürüm + tam DoD kapısı + tam e2e +… | `OPUS-MAX` | tm 159, 160, 161, 162, 163, 164, 165, 166, 167 | 2 |
+
+### 6C.2 Faz-6 dilim gruplaması + kritik yol
+
+| Dilim | Kalemler | Neden bu sırada |
+| --- | --- | --- |
+| **V6-1** | tm 159 (`M-PROD-CFG`) · tm 160 (`M-OPS`) | Konfigürasyon ve ops dikişleri önce: sonraki her kalem bunların üstüne kurulur (probe'lar `M-OPS-a`'ya, kaynak sınırları `M-LOAD`'a bağlı). |
+| **V6-2** | tm 161 (`M-LOAD`) · tm 162 (`M-SCALE`) | Ölçüm: kapasite bilinmeden kaynak sınırı ve HPA uydurma olur. `M-SCALE-a`'nın sticky-session sonucu `M-IAC`'ın manifestini etkiler. |
+| **V6-3** | tm 163 (`M-OTEL`) · tm 164 (`M-IAC`) | Gözlemlenebilirlik dikişi ve dağıtım manifestleri. `M-IAC-b` `M-OPS-a`'ya bağlıdır (probe yolları). |
+| **V6-4** | tm 165 (`M-BACKUP`) · tm 166 (`M-RUNBOOK`) | Yedek + prova, sonra belgeler — checklist'in içeriği önceki kalemlerden gelir. |
+| **V6-5** | tm 167 (`M-SEC-e`) · tm 168 (`GL-12`) | Denetim ve kapanış — ikisi de ürün kodu yazmaz. |
+
+**Kritik yol:** `M-OPS-a` → `M-IAC-b` → `M-IAC-d` ve `M-LOAD-a` → `M-LOAD-c` → `M-LOAD-d` → (kaynak
+sınırları) `M-IAC-b`. Yani `M-OPS-a` ve `M-LOAD-a` fazın iki açılış düğümüdür; ikisi de bağımsız
+başlayabilir.
+
+**Faz-6 son fazdır (bu turun kapsamında).** GL-12 kapandıktan sonra §F.3 gereği sıradaki adım kullanıcının
+seçimidir; kendiliğinden açılacak görev yoktur. İlk aday: **mock → gerçek sağlayıcı geçişi** — bu turda
+bilinçli olarak kapsam dışı bırakıldı.
+
+---
+
 ## 7. Çapraz Kesit ve NFR Kapıları (PRD §6 FR-EK + §7)
 
 Bunlar bir dilim değil, **her dilimin kabul koşulu**. Yeni ekran/endpoint eklerken kontrol edilir.
@@ -3002,6 +3294,22 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-CONTAINER | Uygulama imajları + tam yığın compose, YEREL (deploy değil) (**türetilmiş**: MASTER-PROMPT teslim paketi · §F.1/9 · §D113/K13 · Faz-4 tm 140) | ✅ → KM-CONTAINER |
 | M-SEED | Demo verisi bütünlüğü — campaigns/tickets/SLA/goal/scheduled report/webhook/ratings (**türetilmiş**: MASTER-PROMPT "seed veriyle demo" · §D113/K14 · Faz-4 tm 141) | ✅ → KM-SEED |
 | M-SEC | Faz-3 + Faz-4 güvenlik denetimi (salt-okuma, STRIDE) — bulgular görev olur (**türetilmiş**: NFR-S1–S12 · v2-04 · Faz-4 tm 142) | ✅ → KM-SEC |
+| S4-PART | `events` partisyonlarında RLS + kapsam nöbetçisi (**türetilmiş**: NFR-S4 · §D124/1 · Faz-5 tm 150) | ⬜ |
+| M-SEC-b | M-SEC denetiminin iki MEDIUM bulgusu (**türetilmiş**: §D116 MEDIUM · Faz-5 tm 151) | ⬜ |
+| S11-2FA | İki adımlı doğrulama: TOTP · ikinci adım · politika zorlaması (**türetilmiş**: NFR-S11 + FR-MOD-00.1 · §D124/3 · Faz-5 tm 152) | ⬜ |
+| P5-PAGE | Liste sayfalaması istemciye bağlanır (**türetilmiş**: NFR-P5 + FR-EK-B.1 · §D124/2 · Faz-5 tm 153) | ⬜ |
+| M-SEC-c | M-SEC denetiminin beş LOW bulgusu (**türetilmiş**: §D116 LOW · Faz-5 tm 155) | ⬜ |
+| M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ⬜ |
+| M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-5 tm 157) | ⬜ |
+| M-PROD-CFG | Production konfigürasyonu fiilen çalışır (**türetilmiş**: NFR-S3/S5/S6/S9 · NFR-M · Faz-6 tm 159) | ⬜ |
+| M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ⬜ |
+| M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ⬜ |
+| M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ⬜ |
+| M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ⬜ |
+| M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ⬜ |
+| M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ⬜ |
+| M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ⬜ |
+| M-SEC-e | Faz-6 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-6 tm 167) | ⬜ |
 
 ---
 
@@ -3621,6 +3929,88 @@ bağımlılıklar tam kimlikle. Öncelik: tm 128/129/130 `high` · 131–138, 14
 | `M-SEED-b` | acme’ye SLA hedefi (11.5-d) + 1 goal (13.3) + 1 zamanlanmış rapor (07.9) + 1 webhook (08.8.4, m… | M-SEED | `SONNET-XHIGH` | M-SEED-a | V4-4 | 1 | tm 141.2 |
 | `M-SEC-a` | Faz-3 + Faz-4 güvenlik denetimi (SALT-OKUMA): SAML/SCIM · bölge zorlaması · SIEM zinciri · enti… | M-SEC | `OPUS-MAX` | tm 128, 130, 131, 136 | V4-5 | 2 | tm 142 |
 | `GL-10 · F4-KAPAT` | Faz-4 §F.00 kapanış turu: §6A tablosu SAYILARAK (tüm kalemler ✅) + §F.1’in 10 maddesi tam sürüm… | GL-10 | `OPUS-MAX` | tm 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142 | V4-5 | 2 | tm 143 |
+
+---
+
+### Faz 5 (Doğruluk) — düz tablo (Task Master aktarım kaynağı)
+
+34 satır (32 atomik alt-görev + 2 tek görev). Etiket = model × efor (§5.1.1). Tam alan detayı **Task Master
+`details` alanındadır** (companion dosya yok — §D98). Bu tablo Task Master'a **aktarıldı** (2026-08-24 · tm 150–158)
+ve buradaki satırlar Task Master kayıtlarından ÜRETİLDİ (§D124); üst görev başına alt-görevler, başlıklarda etiket,
+bağımlılıklar kardeş kimliğiyle. Öncelik: tm 150–153 `high` · 154–157 `medium` · 158 `low`.
+
+| ID | Başlık | PRD/Kod | Etiket | Bağımlılık | Dilim | Pen | tm |
+| --- | --- | --- | --- | --- | :-: | :-: | --- |
+| `S4-PART-a` | Migration: partisyonlarda RLS + events_tenant politikasının aynısı; events_ensure_partition… | S4-PART | `OPUS-MAX` | yok | V5-1 | 2 | tm 150.1 |
+| `S4-PART-b` | Kapsam nöbetçisi: RLS testinin partisyon muafiyeti kalkar + bağlamsız doğrudan partisyon so… | S4-PART | `OPUS-XHIGH` | S4-PART-a | V5-1 | 1 | tm 150.2 |
+| `S4-PART-c` | Zamanlayıcı yolu: maintainPartitions ileri bir ay açtığında RLS de açılıyor mu — integratio… | S4-PART | `SONNET-XHIGH` | S4-PART-a, S4-PART-b | V5-1 | 1 | tm 150.3 |
+| `M-SEC-b1` | SSO/SCIM JIT sağlama doğrulanmış alan bağı ister: sso_connections.verified_domains + var ol… | M-SEC-b | `OPUS-MAX` | yok | V5-1 | 2 | tm 151.1 |
+| `M-SEC-b2` | /health anonim yanıtı daraltılır: bölge/sürüm/sağlayıcı/scheduler yalnız kimlikli admin e;… | M-SEC-b | `SONNET-XHIGH` | yok | V5-1 | 1 | tm 151.2 |
+| `S11-2FA-a` | Migration + tip iskeleti: account_two_factor + two_factor_recovery_codes tabloları (passwor… | S11-2FA | `SONNET-XHIGH` | yok | V5-2 | 1 | tm 152.1 |
+| `S11-2FA-b` | TOTP çekirdeği lib/totp.ts (BÖLÜNMEZ): RFC 6238 · step replay muhafızı · sabit-zaman karşıl… | S11-2FA | `OPUS-MAX` | S11-2FA-a | V5-2 | 2 | tm 152.2 |
+| `S11-2FA-c` | Kurtarma kodları: 10 adet tek kullanımlık, SHA-256 hash li saklanır, yeniden üretim eskiler… | S11-2FA | `OPUS-XHIGH` | S11-2FA-b | V5-2 | 1 | tm 152.3 |
+| `S11-2FA-d` | Kayıt uçları + kontrat: POST /auth/2fa/enroll · POST /auth/2fa/activate · DELETE /auth/2fa… | S11-2FA | `OPUS-XHIGH` | S11-2FA-b, S11-2FA-c | V5-2 | 2 | tm 152.4 |
+| `S11-2FA-e` | Zorlama (BÖLÜNMEZ): /auth/authorize da 2FA kapısı + require_two_factor politikası fiilen ok… | S11-2FA | `OPUS-MAX` | S11-2FA-d | V5-2 | 2 | tm 152.5 |
+| `S11-2FA-f` | Web — hesap ayarı ekranı: iki adımlı doğrulamayı aç/kapat, otpauth URI + kopyalanabilir sec… | S11-2FA | `SONNET-XHIGH` | S11-2FA-d | V5-2 | 1 | tm 152.6 |
+| `S11-2FA-g` | Web — giriş akışının ikinci adımı: kod ekranı + kurtarma kodu alternatifi + require_two_fac… | S11-2FA | `SONNET-XHIGH` | S11-2FA-e, S11-2FA-f | V5-2 | 1 | tm 152.7 |
+| `S11-2FA-h` | Settings → Security: require_two_factor artık zorluyor (yardım metni + etkisi) + Teammates… | S11-2FA | `SONNET-XHIGH` | S11-2FA-e | V5-2 | 1 | tm 152.8 |
+| `S11-2FA-i` | Uçtan uca two-factor.spec.ts: kaydol → aktifleştir → çıkış → giriş kod ister → yanlış kod r… | S11-2FA | `OPUS-XHIGH` | S11-2FA-e, S11-2FA-g, S11-2FA-h | V5-2 | 2 | tm 152.9 |
+| `P5-PAGE-a` | Ortak kanca lib/paged-query.ts (useInfiniteQuery sarmalayıcı) + VirtualList/VirtualTable a… | P5-PAGE | `OPUS-XHIGH` | yok | V5-3 | 1 | tm 153.1 |
+| `P5-PAGE-b` | Inbox sohbet listesi sayfalanır (useInbox.ts limit=50) — RTM push ları ile sayfa birleşimin… | P5-PAGE | `OPUS-XHIGH` | P5-PAGE-a | V5-3 | 1 | tm 153.2 |
+| `P5-PAGE-c` | Transcript ters sonsuz kaydırma (useInbox.ts limit=200): before_event_id ile geriye yürüme… | P5-PAGE | `OPUS-XHIGH` | P5-PAGE-a | V5-3 | 2 | tm 153.3 |
+| `P5-PAGE-d` | Tickets grid sayfalanır (useTickets.ts limit=50) | P5-PAGE | `SONNET-XHIGH` | P5-PAGE-a | V5-3 | 1 | tm 153.4 |
+| `P5-PAGE-e` | Customers listesi sayfalanır (CustomersPage.tsx limit=50) + total ile "N / M" göstergesi | P5-PAGE | `SONNET-XHIGH` | P5-PAGE-a | V5-3 | 1 | tm 153.5 |
+| `P5-PAGE-f` | Traffic listesi sayfalanır (TrafficPage.tsx limit=100) | P5-PAGE | `SONNET-XHIGH` | P5-PAGE-a | V5-3 | 1 | tm 153.6 |
+| `P5-PAGE-g` | Uçtan uca + nöbetçi: seed e 60 sohbet / 250 olaylı bir konuşma → e2e ikinci sayfayı yürür;… | P5-PAGE | `OPUS-XHIGH` | P5-PAGE-b, P5-PAGE-c, P5-PAGE-d, P5-PAGE-e, P5-PAGE-f | V5-3 | 2 | tm 153.7 |
+| `02.2.1-b` | Sohbet listesi sıralama kontrolü (Oldest/Newest) — sunucu sort parametresini zaten kabul ed… | 02.2.1 | `SONNET-XHIGH` | yok | V5-3 | 1 | tm 154.1 |
+| `03.1.2-b` | Real-time boş durumuna "Add more channels" CTA sı → Settings → Channels derin linki | 03.1.2 | `SONNET-XHIGH` | yok | V5-3 | 1 | tm 154.2 |
+| `04.3.2-b` | Teammates arama kutusu (debounce) + rol/durum/2FA filtresi + filtrelenmiş boş durum | 04.3.2 | `SONNET-XHIGH` | yok | V5-3 | 1 | tm 154.3 |
+| `M-SEC-c1` | Kimlik doğrulama onRequest ↔ hız sınırı preHandler sırası: geçersiz bearer seli istek başın… | M-SEC-c | `OPUS-XHIGH` | yok | V5-4 | 1 | tm 155.1 |
+| `M-SEC-c2` | Mobil restore() tek-uçuş muhafızını atlıyor: #rotate doğrudan çağrılıyor, eşzamanlı refresh… | M-SEC-c | `SONNET-XHIGH` | yok | V5-4 | 1 | tm 155.2 |
+| `M-SEC-c3` | sanitizeAuditMetadata derin tarama: iç içe hassas anahtarlar (details.password gibi) bugün… | M-SEC-c | `SONNET-XHIGH` | yok | V5-4 | 1 | tm 155.3 |
+| `M-SEC-c4` | inspectIdpCertificate EC eğri tabanı zorlaması: küçük eğrili bir EC sertifikası bugün geçiy… | M-SEC-c | `SONNET-XHIGH` | yok | V5-4 | 1 | tm 155.4 |
+| `M-SEC-c5` | SCIM koltuk tavanı: applySeatEffect koltuk sayısını tavansız yükseltiyor, bir konnektör fat… | M-SEC-c | `SONNET-XHIGH` | yok | V5-4 | 1 | tm 155.5 |
+| `M-GUARD-a` | CI adım sırası: ci.yml de Build, Unit tests ten ÖNCE koşar + bundle-size.test.ts dist yoksa… | M-GUARD | `SONNET-XHIGH` | yok | V5-4 | 1 | tm 156.1 |
+| `M-GUARD-b` | Design-system a11y nöbetçileri: Modal focus-trap + Escape + odak geri verme · Dropdown rovi… | M-GUARD | `SONNET-XHIGH` | yok | V5-4 | 1 | tm 156.2 |
+| `M-GUARD-c` | Kabul edilen borç kayıtları: Radix sapması · NFR-I18N1 KOD/İÇERİK ayrımı · NFR-P8+M4 yük ay… | M-GUARD | `SONNET-XHIGH` | M-GUARD-b | V5-4 | 1 | tm 156.3 |
+| `M-SEC-d` | Faz-5 salt-okuma güvenlik denetimi (STRIDE): partisyon RLS · TOTP ve kurtarma kodları · SSO… | M-SEC-d | `OPUS-MAX` | tm 150, 152, 153 | V5-5 | 2 | tm 157 |
+| `GL-11 · F5-KAPAT` | Faz-5 §F.00 kapanış turu: §6B tablosu SAYILARAK + §F.1 in 10 maddesi tam sürüm + tam DoD ka… | GL-11 | `OPUS-MAX` | tm 150, 151, 152, 153, 154, 155, 156, 157 | V5-5 | 2 | tm 158 |
+
+---
+
+### Faz 6 (Hazırlık) — düz tablo (Task Master aktarım kaynağı)
+
+25 satır (23 atomik alt-görev + 2 tek görev). Aynı üretim yolu (§D124 · tm 159–168).
+Öncelik: tm 159–161 `high` · 162–165, 167 `medium` · 166, 168 `low`.
+**Sınır:** bu fazın hiçbir satırı gerçek bir dağıtım yapmaz — manifestler `helm template` / `--dry-run` ile doğrulanır.
+
+| ID | Başlık | PRD/Kod | Etiket | Bağımlılık | Dilim | Pen | tm |
+| --- | --- | --- | --- | --- | :-: | :-: | --- |
+| `M-PROD-CFG-a` | NODE_ENV=production boot yolu ilk kez fiilen koşulur + integration testi (placeholder secre… | M-PROD-CFG | `OPUS-XHIGH` | yok | V6-1 | 1 | tm 159.1 |
+| `M-PROD-CFG-b` | BÖLÜNMEZ: proxy hop sayısı env e (TRUST_PROXY_HOPS) + WEB_ORIGIN çoklu origin + web/widget… | M-PROD-CFG | `OPUS-MAX` | M-PROD-CFG-a | V6-1 | 2 | tm 159.2 |
+| `M-PROD-CFG-c` | .env.production.example + README "Production configuration": hangi anahtar neden zorunlu, h… | M-PROD-CFG | `SONNET-XHIGH` | M-PROD-CFG-a, M-PROD-CFG-b | V6-1 | 1 | tm 159.3 |
+| `M-OPS-a` | /health üçe ayrılır: /health/live (bağımlılıksız) · /health/ready (bağımlılıklar) · /health… | M-OPS | `SONNET-XHIGH` | yok | V6-1 | 1 | tm 160.1 |
+| `M-OPS-b` | Zarif drenaj: SIGTERM de readiness önce false → drenaj penceresi → uçuştaki istekler biter… | M-OPS | `OPUS-XHIGH` | M-OPS-a | V6-1 | 2 | tm 160.2 |
+| `M-OPS-c` | Production log profili: pino seviyeleri + request_id korelasyonu + lib/log-redact.ts in pro… | M-OPS | `SONNET-XHIGH` | M-OPS-a | V6-1 | 1 | tm 160.3 |
+| `M-LOAD-a` | apps/load (k6) iskeleti: senaryo çerçevesi · oturum/tohum yardımcıları · eşikler NFR bütçel… | M-LOAD | `OPUS-XHIGH` | yok | V6-2 | 2 | tm 161.1 |
+| `M-LOAD-b` | REST senaryosu: /chats liste + transcript + mesaj gönderme karışımı → NFR-P2 ölçümü (p99 <… | M-LOAD | `SONNET-XHIGH` | M-LOAD-a | V6-2 | 1 | tm 161.2 |
+| `M-LOAD-c` | RTM senaryosu: N eşzamanlı WS bağlantısı + fan-out gecikmesi → NFR-P1 doğrulaması ve NFR-P8… | M-LOAD | `OPUS-XHIGH` | M-LOAD-a | V6-2 | 2 | tm 161.3 |
+| `M-LOAD-d` | Ölçüm turu + KARAR: sonuçlar PLAN §7.2 ye yazılır; NFR-P8 hedefi tutmuyorsa gerekçeli hedef… | M-LOAD | `OPUS-MAX` | M-LOAD-b, M-LOAD-c | V6-2 | 2 | tm 161.4 |
+| `M-SCALE-a` | BÖLÜNMEZ: iki-pod doğrulaması — aynı Redis e bağlı iki api + iki rtm süreci; fan-out çapraz… | M-SCALE | `OPUS-MAX` | yok | V6-2 | 2 | tm 162.1 |
+| `M-SCALE-b` | Bağlantı havuzu: Prisma pool boyutu env e · PgBouncer transaction-mode uyumluluğu belgeleni… | M-SCALE | `SONNET-XHIGH` | yok | V6-2 | 1 | tm 162.2 |
+| `M-SCALE-c` | Read-replica okuma yolu dikişi: DATABASE_REPLICA_URL (yoksa birincile düşer), ağır rapor so… | M-SCALE | `OPUS-XHIGH` | M-SCALE-b | V6-2 | 2 | tm 162.3 |
+| `M-OTEL-a` | Exporter seçim dikişi OTEL_EXPORTER=console\|otlp\|none (M-PROV-a deseni, tm 131.2) + env par… | M-OTEL | `SONNET-XHIGH` | yok | V6-3 | 1 | tm 163.1 |
+| `M-OTEL-b` | RTM telemetrisi: eşzamanlı bağlantı sayısı · fan-out gecikmesi · kopma nedeni metrikleri (N… | M-OTEL | `SONNET-XHIGH` | M-OTEL-a | V6-3 | 1 | tm 163.2 |
+| `M-IAC-a` | infra/helm/nexa iskeleti: api/rtm/web/widget Deployment + Service + ConfigMap + Secret şabl… | M-IAC | `SONNET-XHIGH` | yok | V6-3 | 1 | tm 164.1 |
+| `M-IAC-b` | Probe / kaynak / ölçek: liveness→/health/live · readiness→/health/ready · requests+limits ·… | M-IAC | `SONNET-XHIGH` | M-IAC-a, M-OPS-a | V6-3 | 1 | tm 164.2 |
+| `M-IAC-c` | Migration stratejisi KARARI: migrate deploy init-container mı Job mu · çok replikada yarış… | M-IAC | `OPUS-XHIGH` | M-IAC-a | V6-3 | 2 | tm 164.3 |
+| `M-IAC-d` | values.production.example.yaml + secret şablonları + kubectl --dry-run=client doğrulaması +… | M-IAC | `SONNET-XHIGH` | M-IAC-b, M-IAC-c | V6-3 | 1 | tm 164.4 |
+| `M-BACKUP-a` | Yedekleme scripti + CronJob manifesti (pg_dump + object storage dizini) + retention politik… | M-BACKUP | `SONNET-XHIGH` | yok | V6-4 | 1 | tm 165.1 |
+| `M-BACKUP-b` | GERİ YÜKLEME PROVASI scripts/restore-drill.sh: geçici veritabanına yükler, migration durumu… | M-BACKUP | `OPUS-XHIGH` | M-BACKUP-a | V6-4 | 2 | tm 165.2 |
+| `M-RUNBOOK-a` | docs/production-checklist.md — canlıya çıkmadan önce doğrulanacak her madde bir komut ya da… | M-RUNBOOK | `SONNET-XHIGH` | yok | V6-4 | 1 | tm 166.1 |
+| `M-RUNBOOK-b` | docs/runbooks/ — DB düştü · Redis düştü · webhook kuyruğu şişti · RTM bağlantı fırtınası ·… | M-RUNBOOK | `SONNET-XHIGH` | M-RUNBOOK-a | V6-4 | 1 | tm 166.2 |
+| `M-SEC-e` | Faz-6 salt-okuma güvenlik denetimi (STRIDE): production konfig · proxy hop · nginx başlıkla… | M-SEC-e | `OPUS-MAX` | tm 159, 160, 162, 164 | V6-5 | 2 | tm 167 |
+| `GL-12 · F6-KAPAT` | Faz-6 §F.00 kapanış turu: §6C tablosu SAYILARAK + §F.1 in 10 maddesi tam sürüm + tam DoD ka… | GL-12 | `OPUS-MAX` | tm 159, 160, 161, 162, 163, 164, 165, 166, 167 | V6-5 | 2 | tm 168 |
 
 ---
 
@@ -4901,6 +5291,7 @@ görüneceği en son yerdir.
 - **D121 (v1'e `🔒`lenip hiçbir v1 satırına TAŞINMAYAN dört PRD kodu — §D107'nin sınıfı, bu kez GRUPLU satırlarda saklıydı · tm 143 · 2026-08-23):** §F.1/1 süpürmesi 137 koddan 15'ini "satırsız" (NOROW) verdi; 11'i gruplu ama **damgalı** satırlarda karşılandı (`01.1.1/.2/.4/.5` · `01.4` · `01.5` → `✅ → K01.1` @180 · `03.3.1–.3` → `✅` @546 · `12.1–12.3` → `✅` @569), geriye **dördü** kaldı ve o dördü yalnız Faz-0'ın üç **gruplu `🔒` erteleme satırında** görünüyordu — gerekçe hücresi tek kelimeydi: _"v1"_. v1 (Faz 1) 2026-07-31'de kapandı ve bu dört kod hiçbir v1/v2/Faz-3 satırına taşınmadı; yani §F.00'ın "gerekçesiz `🔒` gizlenmiş bir `⬜` olabilir" uyarısının tam örneği. Koda karşı ölçüldü: **`03.2.2`** (Contacts alt sekmeler All/Leads/Last 30 days) **KODDA TESLİM** — `customers/types.ts` `Segment = 'all'|'leads'|'recent'|'banned'`, etiketler `customers.page.segment.*`, `CustomersPage.test.tsx` `role=tab` ile doğruluyor; eksik olan yalnız PLAN kaydıydı. **`02.2.1`** — "My chats" kapsamı teslim (`inbox.rail.view.my`), "Oldest/Newest" sıralaması **YOK** (Tickets grid'in `?ticket_sort` sıralaması 02.7'dir, sohbet listesi değil). **`03.1.2`** — "anlamlı empty state" payı teslim (EK-B.1 · `customers.page.empty.*` + 7 `traffic.empty.*` varyantı), "Add more channels" **CTA'sı yok** (boş ekran metin veriyor, kanal ekleme yoluna dönmüyor). **`04.3.2`** — Teammates tablosu rol/durum/2FA sütunlarını gösteriyor ama **arama kutusu ve filtre kontrolü yok** (`locales/en/team.ts`'te tek `search`/`filter` anahtarı yok). Dördü de PRD'de **`Should`**, hiçbiri `Must` sayacına girmez ve hiçbiri bir Faz-4 kaleminin kapsamında DEĞİLDİ — bu yüzden Faz-4 kapısını **bloklamazlar** (§F.00 "`Should` bloklamaz ama ismen listelenir"). Karar: damga `🔒` KALDI (glif değiştirilmedi — `◐` yazmak "sahibi olan yarım iş" iddia ederdi, oysa açık görevi yok), fakat üç gruplu satırın **gerekçesi tazelendi** ve açık kalan pay ismen yazıldı; §2 matrisinin MOD-02/03.1/03.2/04 satırlarına da düşüldü. Görev **AÇILMADI**: §F.3 kuralı gereği kapanıştan sonra ne yapılacağı kullanıcının seçimidir ve GL-10'un kendi talimatı kuyruğu boş bırakmayı söylüyor; adaylar §F.2 raporunda. _Not: bu dört kod GL-9'un (tm 126) §F.1/1 turunda da "gruplu satırda bulundu" diye geçilmişti — o tur satırın VARLIĞINI doğruladı, damgasını okumadı. Süpürme script'i gruplu satırları indekslemiyor (ilk hücre saf kod olmalı), yani `pnpm audit:sweep` bunu tek başına asla yakalayamaz; ders: NOROW listesi "sorun yok" değil "elle oku" demektir._ · §D107 emsali · tm 143
 - **D122 (NFR-P3 widget bundle bütçesi CI'da SESSİZCE ATLANIYOR — kapı yeşil ama ölçüm hiç yapılmıyor · tm 143 · 2026-08-23):** `apps/widget/test/bundle-size.test.ts` iki bütçeyi (loader ≤ 8 KB, toplam ≤ 50 KB gzip) `describe.skipIf(!existsSync(distDir))` ile sarıyor — `dist` yoksa iki test de **atlanır ve süit yeşil kalır**. `turbo.json`'da `test`/`test:unit` yalnız `^build`'e (yukarı akış bağımlılıklarının build'ine) bağlı, paketin KENDİ `build`'ine değil; `.github/workflows/ci.yml`'de de "Unit tests" adımı (satır 108) "Build" adımından (satır 114) **ÖNCE** koşuyor. Sonuç: temiz bir checkout'ta ve CI'da `apps/widget/dist` yoktur → NFR-P3 hiç ölçülmez, kimse fark etmez. Bu makinede yeşil görünmesinin tek sebebi DoD sırasının `build`'i önce koşmuş olması. Bütçenin kendisi bu turda **elle ölçüldü ve geniş marjla geçiyor** (loader 1.635 B · toplam **18.484 B / 51.200 B**), yani açık olan risk değil **nöbetçinin sessizliği**. Düzeltme YAZILMADI (GL-10 salt-okuma bir kapanış turudur, CONVENTIONS §5); iki makul seçenek var ve ikisi de kapı sözleşmesine dokunuyor, yani kullanıcı kararıdır: (a) `turbo.json`'da widget'ın `test`'ine kendi `build`'ini `dependsOn` olarak eklemek, (b) `skipIf`'i kaldırıp testin "önce build koş" diye **kırmızı** düşmesini sağlamak. Aynı sınıf: §D105'in `format:check` bulgusu (§7.2 `✅` diyordu, gerçek kırmızıydı) — bir NFR damgası, onu ölçen komut fiilen koşmuyorsa iddiadan ibarettir · §KM4 · tm 143
 - **D123 (Faz-0 özet satırındaki `✅` sayacı Faz-4'ün 4 damga çevirmesinden sonra güncellenmedi: `54` yazıyordu, gerçek sayım `58` · 2026-08-23):** Üst tablo satır 20 `54 ✅ · 0 ◐ (§3)` diyordu; §3.0–§3.10 gereksinim tablolarının **61 damgalı satırı tek tek sayıldığında** `58 ✅ · 3 🔒 · 0 ◐ · 0 ⬜` çıktı. **SEBEP KANITLA (git ile ölçüldü, tahminle değil): satır EKLENMEDİ, damga GERİLEMEDİ — dört satır `🔒` → `✅` çevrildi.** `ada46de^` (Faz-4 tm 139.1 öncesi) durumu **`54 ✅ · 7 🔒`**, `dda5b1d` (GL-10 sonrası) durumu **`58 ✅ · 3 🔒`**; satır sayısı iki uçta da **61** (54+7 = 58+3). Çevrilen dört satır: **180** `01.1.1/.4/.5, 01.4, 01.5` → `✅ → K01.1` (tm 139.1–.3, .5) · **181** `01.1.2` → `✅ → K01.1.2` (tm 139.4) · **199** `02.2.3` → `✅ → K02.2.3` (tm 139.5) · **236** `07.2` → `✅ → K07.2` (tm 139.6). Üçünün kanıt bloğu çevirmeyi zaten yazmıştı (K01.1: _"Satır 180 artık `🔒` değil"_ · K02.2.3: _"Satır 199 artık `🔒` değil"_ · K07.2: _"Satır 236 `🔒` → `✅ → K07.2`"_) — yani **damga tarafı doğruydu, yalnız özet bayat kaldı**. tm 139.x turları aynı commit'lerde §2 matrisini ve §6A dilim tablosunun 12. satırını güncelledi, **§1'in kapı tablosunu atladı**; satır 20'ye en son `1f50ce56` (GL-3, 2026-07-31) dokunmuştu, yani `54` o günün ölçümüdür ve 23 gün bayat kaldı. **KAPANIŞ KARARI DEĞİŞMEDİ:** dört satırın dördü de `Should`/`Could`'dur, `Must` sayacına hiç girmez — §3'ün `Must` satırları bu turda da **sayılarak** `48 ✅ · 0 ◐ · 0 ⬜` (+ §7.1'de 3 EK = **51 ✅**), yani `**51 ✅ · 0 ◐ · 0 ⬜**` kapı hücresi **doğruydu ve DEĞİŞTİRİLMEDİ**. Düzeltilen yalnız `Genel durum` hücresi: `54 ✅ · 0 ◐ (§3) · gruplu-🔒 v1'e` → `58 ✅ · 0 ◐ · 3 gruplu-🔒 (§3, sayılarak …)`. İkinci düzeltme aynı hücrede: _"gruplu-🔒 **v1'e**"_ ifadesi de bayattı — §D121 (2026-08-23) o üç gruplu satırın v1'e gitmediğini ölçmüştü (v1 2026-07-31'de kapandı, dört PRD kodu hiçbir v1 satırına taşınmadı); hücre artık faz iddiası taşımıyor, yalnız **sayı** veriyor. **GEREKSİNİM SATIRLARINA DOKUNULMADI** — damgalar kanıta (`## K.` blokları) dayalı, bu tur onları yeniden ölçmedi, yalnız **saydı**. **KALICI KURAL (§D100'ün kuralının kardeşi):** bir gereksinim damgası çevrildiğinde **AYNI turda** §1'in faz kapısı tablosu da yeniden **sayılır** — §1.2'nin _"rakamlar sayılarak üretilir, elle yazılmaz"_ notu §2/§6A için ödendi ama §1 için ödenmedi; bir damga en az **üç** yerde yaşıyor (gereksinim satırı · §2 matrisi · §1 sayacı) ve üçü aynı turda güncellenmezse §F.00 kapısı bayat bir tabloya bakar. Ölçüm komutu §D'de bırakıldı: §3 aralığını `grep -n '^## 3\. FAZ 0'` + `'^### 3\.11 '` ile sınırla, `^|` satırlarının **5. borulu alanını** say (ayraç/başlık satırlarını ele, `→ Kxx` ekini kırp). · §D100 · §D121 · §1.2 · §F.00 · §F.1/8
+- **D124 (BAĞIMSIZ DURUM DENETİMİ → FAZ-5 + FAZ-6 AÇILDI: dokuz bulgu, dört kapsam kararı · 2026-08-24):** GL-10 (tm 143) §F.2 raporunu verip sıradaki adımı kullanıcıya bırakmıştı (§F.3). Kullanıcı 2026-08-23'te **plana değil koda karşı** bağımsız bir denetim istedi. Denetim dokuz kalite kapısını fiilen koşturdu — `typecheck` · `lint` · `format:check` · `build` · `test` (5.858) · `test:integration` (2.541) · `test:e2e` **205/205** · `db:check-drift` · `contract:generate` diff'i boş — hepsi **exit 0**; ayrıca veritabanını canlı sorguladı (64 migration, 88 tablo, PRD §8.4'ün **36 tablosunun 36'sı mevcut**) ve dört `pnpm audit:*` tarayıcısını koşturdu (sessiz borç 982 dosyada 0 · ölü kod 0/40 rota, 0/120 web modülü · istemcisiz uç 16/185, hepsi tasarımı gereği başsız). **Yani kapsam iddiası doğrulandı.** Denetimin ürettiği değer, projenin kendi kapanış raporunda **yer almayan dokuz bulgudur** — ve dokuzunun ortak şekli §D122'nin dersiyle aynıdır: _bir damga, onu ölçen ya da hak eden şeyden daha geniş bir iddia taşıyorsa, iddiadan ibarettir._ **(1) `events` partisyonlarında RLS kapalı — ÖLÇÜLDÜ, tahmin değil:** çalışma zamanı rolüyle, kiracı bağlamı ayarlanmadan `select count(*) from events` → **0** (RLS doğru), `select count(*) from events_2026_08` → **55** (baypas, tüm kiracılar). `events_ensure_partition` her yeni partisyona açıkça `GRANT` veriyor ama `ENABLE ROW LEVEL SECURITY` vermiyor; `ALTER DEFAULT PRIVILEGES` (`20260722090000_init_extensions`) de aynı yetkiyi her yeni tabloya bağışlıyor — yani delik her ay kendini yeniden üretiyor. Bugün uygulama kodundan sömürülebilir DEĞİL (Prisma yalnız ana tabloyu sorguluyor, `grep` ile doğrulandı), ama invariant'ı koruyan test **partisyonları açıkça muaf tutuyor** (`data-model.test.ts` "covers every tenant table" sorgusundaki `events_` dışlaması) — yani nöbetçinin kör noktası kusurun kendisiyle aynı yerde. → tm 150. **(2) Liste sayfalaması istemciye bağlanmamış:** `/chats` (50) · transcript (200) · `/tickets` (50) · `/customers` (50) · `/traffic` (100) sabit `limit` ile tek istek atıp `next_page_id`'yi hiç okumuyor; sunucu tarafı opak keyset cursor ile **tam sayfalanmış** ve sözleşme gerekçesini de yazıyor. Sayfa zincirlemesi depoda yalnız iki yerde gerçekten var (Apps Marketplace · Audit Log). Sonuç 51. sohbete ulaşılamaması; tohum veri küçük olduğu için testler yeşil kalıyor. Ayrıca §7.1'in `EK-B.1` satırı "virtualized grid, **infinite scroll**, skeleton, anlamlı empty state" için `✅` taşıyor ama kanıtı yalnız `VirtualList`/`Skeleton`/`EmptyState` sayıyor — `VirtualList.tsx` saf penceremedir, veri getirme kancası yoktur. → tm 153. **(3) 2FA bir veri alanı, bir güvenlik kontrolü değil:** `agent_memberships.two_factor_enabled` yalnız Teammates tablosunda ve erişim-inceleme raporunda **okunuyor** (yazan yok); `security_settings.require_two_factor` `PATCH /settings/security` ile yazılıp `GET` ile dönüyor ama **hiçbir kimlik doğrulama yolunda okunmuyor**. TOTP kaydı yok, ikinci adım yok, zorlama yok. PRD iki yerde istiyor (FR-MOD-00.1 · NFR-S11). İlgili tarihçe: tm 146 (SEC-2) "düşürülmüş admin 2FA zorunluluğunu kapatabiliyor" bulgusunu HIGH saymıştı — kapatılabilen şeyin zaten hiçbir şeyi zorlamadığı o turda yazılmamıştı. → tm 152. **(4) Widget 8 dilde, NFR-I18N1 45+ istiyor:** mekanizma + RTL teslim (`ar/de/en/es/fr/it/pt/tr`) ve `i18n.ts` dokuzuncu dilin kod değişikliği gerektirmediğini kendi yorumunda yazıyor; eksik olan 37 çeviri kataloğu, yani **mühendislik değil lokalizasyon** borcu. → borç kaydı, tm 156.3. **(5) NFR-P8 ne uygulandı ne ölçüldü:** PRD "~20k WS/pod (uWebSockets.js)" diyor, `apps/rtm` Node'un `ws`'ini kullanıyor (MASTER-PROMPT kilitli kararı, sapma DEĞİL) — ama kararın P8 hedefiyle çeliştiği hiçbir yerde yazılmamış ve kapasite hiç ölçülmemiş. → tm 161. **(6) NFR-M4'ün yük ayağı yok:** unit + integration + contract + E2E var, `k6`/`gatling`/`load-test` aramaları depoda **0 sonuç**. → tm 161. **(7) Radix/shadcn sapması belgelenmemiş:** MASTER-PROMPT kilitli kararı ve `design-brief.md §6.1` shadcn/ui (Radix) tabanını istiyor; `apps/web` dört primitifi (`Banner`/`Dropdown`/`Modal`/`Panel`) elle yazdı ve sapma **123 kayıtlı sapmanın arasında yok**. İşlevsel etkisi sınırlı (axe 59 tarama, blocking 0) ama Radix'in bedava verdiği klavye/odak davranışları hiçbir testle kilitli değil. → sapma kaydı + a11y nöbetçisi, tm 156.2/156.3. **(8) §D121'in üç `Should` payı gerçekten eksik** (`02.2.1` sıralama — sunucu `sort`'u ZATEN kabul ediyor · `03.1.2` CTA · `04.3.2` Teammates filtresi); kodda tek tek doğrulandı. → tm 154. **(9) §D122 doğrulandı ve ölçüldü:** bundle nöbetçisi CI'da sessizce atlanıyor, ama bütçenin kendisi geniş marjla geçiyor — denetim koşusunda build unit'lerden önce çalıştığı için test FİİLEN koştu: loader **1.646 B** + widget **16.705 B** gzip = **18,4 KB / 51.200 B**. Yani **bütçe sağlam, nöbetçi bozuk**. → tm 156.1. **KULLANICININ DÖRT KAPSAM KARARI (2026-08-24):** (a) kalan iş **iki faza** bölünür — Faz-5 doğruluk (tm 150–158), Faz-6 hazırlık (tm 159–168); gerekçe: yük testini bugünkü sayfalanmayan listelerle koşmak yanlış sayı üretir, önce doğru bir taban gerekir. (b) **IaC manifestleri YAZILIR, deploy EDİLMEZ** — M-CONTAINER emsali (tm 140: "imaj + compose var, deploy yok"); doğrulama `helm template` ve `kubectl --dry-run=client` ile, gerçek küme kullanılmaz. (c) **Widget 45+ dil hedefi borç olarak kayda geçer** — göç yapılmaz, satır `✅` kalır ve metni daraltılır (§D97'nin KOD/SÜREÇ ayrımının kardeşi: **KOD/İÇERİK** ayrımı); `◐` yazılmaz çünkü "`◐` + kuyrukta açık görev yok" §F.00'ı bloklar. (d) **Radix sapması kaydedilir + a11y nöbetçisi eklenir**, göç yapılmaz. **AYRICA KAPSAM DIŞI (kullanıcı kararı):** mock → gerçek sağlayıcı geçişi (LLM · SMTP · S3 · Stripe · push · SIEM · AV · beş kanal) — Faz-5 ve Faz-6'nın ikisinin de dışında. **AKTARIM TURUNUN KENDİSİ ÜRÜN KODU YAZMADI** (CONVENTIONS §5): diff yalnız `PLAN.md` · `HANDOFF.md` · `.taskmaster/tasks/tasks.json`; denetimin e2e koşusunun yeniden ürettiği ~70 `apps/e2e/kanit/*.png` `git restore` ile HEAD'e geri alındı. → §6B · §6C · §7.2 · §G · §F.00 · §F.3 · tm 150–168
 
 ---
 
@@ -5028,6 +5419,20 @@ bütçenin kendisi elle ölçüldü ve geçiyor. **Faz-4 bu projenin son fazıd�
 final raporu ikinci kez üretildi**; §F.3 gereği bundan sonrasını kullanıcı seçer, kendiliğinden
 açılacak görev yoktur.
 
+**Faz-5 (Doğruluk) kapısı — ⬜ AÇIK (açılış 2026-08-24 · §D124).** Faz-5 PRD dışı bir fazdır ve `Must`
+**içermez**, bu yüzden v2/Faz-3/Faz-4'teki gibi **kalem kuralı** uygulanır: §6B tablosunun **GL-11 dışındaki
+8 satırının tamamı `✅`**. Sayım §6B tablosunun **öncü** damgasından **sayılarak** yapılır (naif glif sayımı
+değil — §D68–§D77'nin beş turluk yanlış-pozitif tarihçesi). Kapanış turu **GL-11 (tm 158)**: §F.1'in 10 maddesi
+tam sürüm + tam DoD kapısı + tam e2e + §F.2 raporu. Faz-5'te `Must` olmadığı için taşınacak `Must` borcu
+yoktur; taşınan `Should` borçları kapanış raporunda **ismen** listelenir (§F.00 genel kuralı).
+
+**Faz-6 (Hazırlık) kapısı — ⬜ AÇIK (açılış 2026-08-24 · §D124).** Aynı kalem kuralı: §6C tablosunun
+**GL-12 dışındaki 9 satırının tamamı `✅`**. Kapanış turu **GL-12 (tm 168)**, §F.2'nin proje geneli final
+raporunu **üçüncü kez** üretir. **Bu kapının okunuşuna özel sınır:** Faz-6'nın `✅`'leri yalnız **kod ve
+manifest payını** iddia eder — gerçek bir dağıtım, TLS sertifikası, DNS ve gerçek sağlayıcı bağlantısı
+CLAUDE.md gereği bu depodan üretilemez ve §D97'nin KOD/SÜREÇ ayrımıyla aynı sınıfta değerlendirilir:
+görevleşmez, sayaca girmez, kapıyı bloklamaz. "Dağıtılmış bir sistem" iddiası bu depoda hiçbir kalem için yazılmaz.
+
 > **KOD / SÜREÇ AYRIMI (§D97) — bu kapının okunuşunu değiştirir.** Uyumluluk kalemlerinde
 > (`C6` SOC2/ISO, `C4` HIPAA) bir kalemin ✅'i **yalnız kod payını** iddia eder: audit kapsamı,
 > SIEM export ve bütünlük zinciri, erişim gözden geçirme raporu, bölge zorlaması, BAA kaydı,
@@ -5138,6 +5543,13 @@ olarak §6'nın altına eklenir ve aynı döngü işler: PRD kimliği → dilim 
 
 **Uygulandı (2026-08-17 · §D113):** kullanıcı "tamamen çalışır ve bir bütün içinde hazır" hedefiyle
 kalanların tamamını seçti → **Faz-4 · §6A** (16 satır · tm 128–143). Kapanış turu GL-10 (tm 143).
+
+**Uygulandı (2026-08-24 · §D124):** GL-10'un §F.2 raporu sıradaki adımı kullanıcıya bırakmıştı. Kullanıcı
+2026-08-23'te bağımsız bir durum denetimi istedi; denetimin dokuz bulgusu ve production değerlendirmesi
+üzerine 2026-08-24'te kalan işi **iki faza** böldü → **Faz-5 · §6B** (9 satır · tm 150–158) ve
+**Faz-6 · §6C** (10 satır · tm 159–168). Kapanış turları GL-11 (tm 158) ve GL-12 (tm 168).
+Dört kapsam kararı §D124'te kayıtlıdır (IaC yazılır-deploy edilmez · 45+ dil borç · Radix sapması kaydedilir ·
+mock → gerçek sağlayıcı geçişi kapsam dışı).
 
 
 ## K. Kanıt Geçmişi (evidence log)
@@ -6355,3 +6767,86 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 - ✅ **Tam DoD kapısı, exit code'larla:** `typecheck` **12/12** · `lint` **9/9** · `format:check` temiz · `test` **üç ardışık `--force` koşu, sayılar birebir sabit** (CONVENTIONS §1.3 gereği parçalandı: turbo `test --force --filter=!@nexa/e2e --filter=!@nexa/api` ×3 → web 1392 · mobil 506/45 süit · rtm 106 · ai-mock 136 · types 131 · widget 115; api `test:unit --force` ×3 → 995/64) · integration api **2477/97 dosya** (`--shard=1..3/3` → 1074+791+612) + rtm **64/3** · `contract-parity` **5/5** · `build` **8/8** · **`test:e2e` 205/205 (12,2 dk)** · `db:check-drift` "no drift" · `contract:generate` sonrası `git status --short packages/contract/src/generated` **boş** (185 path). — `HANDOFF.md` §F.2 · tm 143
 - ✅ **§F.1'in 10 maddesi tam sürüm, her biri kanıtlı:** kapsam süpürmesi (`pnpm audit:sweep`, 137 FR-MOD → 0 `⬜` · 0 `◐` · 0 `🔒` · 2 gerekçeli `⛔`) · faz sızıntısı (Faz-4 son faz; ters okuma temiz) · NFR **ölçüldü** (P2 43/70 ms · P3 18.484 B/51.200 B · P4 102 kart → 36 DOM · 59 axe taraması blocking 0 · i18n 3 e2e) · şema artıkları (77 model, tek 0-tüketicili `workflows` = ⛔ ADR-14) · kontrat bütünlüğü 5/5 · sessiz borç (982 dosyada 0) · ölü kod + istemcisiz uç (16/185, hiçbiri ekran boşluğu değil — GL-9'un dördü M-UI-GAP'te kapandı) · doküman tazeliği (5 düzeltme) · temiz kurulum provası (`make dev` bacakları + `make demo` konteyner yığını + duman testi) · kapsam dışı doğrulaması (10/10 temiz). — `scripts/audit/*` · §D120
 - ✅ **Üç bulgu, üçü de kayda geçti — ürün kodu yazılmadı (CONVENTIONS §5):** §D121 (v1'e `🔒`lenip taşınmayan dört `Should` kodu: `02.2.1` · `03.1.2` · `03.2.2` · `04.3.2`) · §D122 (NFR-P3 bundle bütçesi CI'da sessizce atlanıyor) · §F.1/8'in beş bayat doküman satırı (bu turda düzeltildi). Görev **açılmadı**: §F.3 gereği sıradaki adım kullanıcının seçimidir. — `PLAN.md` §D120–§D122 · tm 143
+
+#### KS4-PART — S4-PART · events partisyonlarında RLS (NFR-S4)
+
+_(Faz-5 · tm 150 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-SEC-b — M-SEC-b · §D116 MEDIUM bulguları
+
+_(Faz-5 · tm 151 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KS11-2FA — S11-2FA · İki adımlı doğrulama (NFR-S11 · FR-MOD-00.1)
+
+_(Faz-5 · tm 152 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KP5-PAGE — P5-PAGE · Liste sayfalaması (NFR-P5 · FR-EK-B.1)
+
+_(Faz-5 · tm 153 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### K02.2.1 — 02.2.1 · Sohbet listesi sıralaması (Oldest/Newest)
+
+_(Faz-5 · tm 154 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### K03.1.2 — 03.1.2 · Real-time boş durumunda "Add more channels" CTA
+
+_(Faz-5 · tm 154 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### K04.3.2 — 04.3.2 · Teammates arama + rol/durum/2FA filtresi
+
+_(Faz-5 · tm 154 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-SEC-c — M-SEC-c · §D116 LOW bulguları
+
+_(Faz-5 · tm 155 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-GUARD — M-GUARD · Nöbetçi borçları (NFR-P3 · NFR-A11Y · §D124)
+
+_(Faz-5 · tm 156 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-SEC-d — M-SEC-d · Faz-5 güvenlik denetimi
+
+_(Faz-5 · tm 157 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KGL-11 — GL-11 · F5-KAPAT · Faz-5 §F.00 kapanış turu
+
+_(Faz-5 · tm 158 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+#### KM-PROD-CFG — M-PROD-CFG · Production konfigürasyonu
+
+_(Faz-6 · tm 159 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-OPS — M-OPS · Ops dikişleri (NFR-R1/R2 · NFR-M5)
+
+_(Faz-6 · tm 160 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-LOAD — M-LOAD · Yük ayağı ve kapasite ölçümü (NFR-M4 · P1/P2/P8)
+
+_(Faz-6 · tm 161 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-SCALE — M-SCALE · Ölçek dikişleri (NFR-R1/R4 · NFR-P7)
+
+_(Faz-6 · tm 162 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-OTEL — M-OTEL · Telemetri exporter dikişi + RTM metrikleri (NFR-M5)
+
+_(Faz-6 · tm 163 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-IAC — M-IAC · Dağıtım manifestleri (deploy yok)
+
+_(Faz-6 · tm 164 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-BACKUP — M-BACKUP · Yedekleme ve geri yükleme provası (NFR-R5)
+
+_(Faz-6 · tm 165 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-RUNBOOK — M-RUNBOOK · Checklist ve runbook’lar
+
+_(Faz-6 · tm 166 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KM-SEC-e — M-SEC-e · Faz-6 güvenlik denetimi
+
+_(Faz-6 · tm 167 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+#### KGL-12 — GL-12 · F6-KAPAT · Faz-6 §F.00 kapanış turu
+
+_(Faz-6 · tm 168 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_

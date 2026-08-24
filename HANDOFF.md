@@ -13,6 +13,45 @@
 
 ## Task log (newest-first)
 
+## PLAN — Faz-5 + Faz-6 açılışı (§F.3 turu): denetim bulguları kırılıma çevrildi, tm 150–168 açıldı — done — 2026-08-24 UTC
+
+- **Yapıldı:** 2026-08-23 bağımsız durum denetiminin dokuz bulgusu ve production değerlendirmesi
+  **iki yeni faza** çevrildi (§F.3 · §D124). **Faz-5 — Doğruluk ve Güvenlik Borçları** (`## 6B.`,
+  9 satır · 32 alt-görev + 2 tek görev · ~44 pencere · tm 150–158): partisyon RLS deliği · M-SEC
+  MEDIUM'ları · 2FA · liste sayfalaması · §D121'in üç `Should`u · M-SEC LOW'ları · nöbetçi borçları ·
+  M-SEC-d denetimi · GL-11 kapanışı. **Faz-6 — Yayına Hazırlık** (`## 6C.`, 10 satır · 23 alt-görev +
+  2 tek görev · ~36 pencere · tm 159–168): production konfigürasyonu · ops dikişleri · yük ayağı (k6) ·
+  ölçek dikişleri · telemetri exporter · dağıtım manifestleri (deploy YOK) · yedek + geri yükleme provası ·
+  runbook · M-SEC-e · GL-12. PLAN.md: üst faz tablosuna iki satır · `## 6B.`/`## 6C.` bölümleri
+  (kalem tablosu + §F.00 kapısı + atomik kırılım + dilim gruplaması) · §7.2’ye 16 türetilmiş satır `⬜` ·
+  §G’ye iki düz tablo · §F.00’a iki kapı paragrafı · §F.3’e uygulandı notu · §D124 · 22 boş `#### K…` bloğu.
+- **Doğrulama (hepsi exit 0):** `pnpm -w format:check` temiz (prettier `**/*.md` dahil) ·
+  Task Master **168 görev** (149 `done` + 19 `pending`), kırık bağımlılık **0** (görev ve alt-görev
+  referansları tek tek çözüldü) · `node scripts/audit/sweep.cjs` PRD sayacı **değişmedi**
+  (137 satır · 0 `⬜` · 0 `◐` · 120 `✅` · 2 gerekçeli `⛔` · 15 satırsız) — bu tur hiçbir gereksinim
+  damgası çevirmedi · markdown tablo denetimi: yeni bölümlerde **25 tablo bloğu, 0 hücre uyuşmazlığı**
+  (kaçışa duyarlı sayım; `M-OTEL-a` başlığındaki `console|otlp|none` `\|` ile kaçırıldı) ·
+  en uzun yeni tablo satırı **236 karakter** (§1.2’nin 526 karakterlik emsalinin altında).
+  **Ürün kodu diff’i SIFIR** (CONVENTIONS §5): `git diff --stat` yalnız `PLAN.md` · `HANDOFF.md` ·
+  `.taskmaster/tasks/tasks.json`. Test süiti KOŞULMADI — hiçbir testin girdisi değişmedi.
+- **Varsayımlar:** (1) **§G düz tabloları ve §6B.1/§6C.1 kırılım tabloları Task Master kayıtlarından
+  ÜRETİLDİ** (elle kopya değil, §D113 emsali); üretici alt-görev başlığındaki `<ID> [ETİKET]` önekini
+  ayrıştırıyor ve bağımlılıkları kardeş kısa kimliğine çeviriyor, böylece üç yer (PLAN §6B/§6C · PLAN §G ·
+  Task Master) tanım gereği senkron. (2) **Alt-görev `testStrategy` alanı MCP `add_subtask` aracında YOK**;
+  kayıtlar bu yüzden `.taskmaster/tasks/tasks.json`’a doğrudan yazıldı (şema mevcut kayıtlardan birebir
+  çıkarıldı: `id`/`title`/`description`/`details`/`testStrategy`/`status`/`dependencies`/`parentId`/`updatedAt`)
+  ve sonradan bağımlılık bütünlüğü + alan doluluğu programla doğrulandı. (3) **`~44` pencere tahmini**
+  ilk taslaktaki `~43`’ten bir fazla: `S11-2FA` kırılımı dokuz alt-göreve bölününce kurtarma kodları
+  ayrı bir pencere aldı; PLAN’daki sayı üreticiden gelen GERÇEK toplamdır.
+- **Sonraki pencereye not:** kuyruk **tm 150** ile açılıyor (`S4-PART-a`, `high`, bağımlılıksız,
+  `OPUS-MAX`, bölünmez — kiracı izolasyonu çekirdeği). Faz-6’nın hiçbir kalemi Faz-5’e teknik olarak
+  bağlı DEĞİLDİR (fazlar sırayla koşulur ama bağımlılık grafiği ayrıktır); tek çapraz kenar Faz-6 içinde:
+  `M-IAC-b` → `M-OPS-a` (probe yolları). **İki dosya çakışması bilinerek bırakıldı ve görev metinlerine
+  yazıldı:** `02.2.1-b` ile `P5-PAGE-b` aynı `useInbox.ts`’e dokunur; `M-SEC-b2` ile `M-OPS-a` aynı
+  `routes/health.ts`’e — hangisi sonra koşarsa diğerinin kararını KORUR. **Kapsam dışı (kullanıcı kararı,
+  2026-08-24):** mock → gerçek sağlayıcı geçişi (LLM · SMTP · S3 · Stripe · push · SIEM · AV · beş kanal)
+  her iki fazın da dışındadır; GL-12 sonrası ilk aday odur.
+
 ## 149 — FIX-WT-CLEAN-RUNLOOP · Commit'siz `run-loop.sh` (panel nazik-durdurma kapısı) sahiplenildi — done — 2026-08-23 UTC
 
 - **Yapıldı:** Panelin sağlık taraması `main`'de **1 izlenen, commit'siz dosya** buldu: `run-loop.sh`

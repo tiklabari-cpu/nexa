@@ -65,7 +65,14 @@ interface AuthState {
 
   restore: () => Promise<void>;
   listWorkspaces: (email: string, password: string) => Promise<Membership[]>;
-  signIn: (email: string, password: string, licenseId: string) => Promise<void>;
+  /**
+   * `code` is the second factor (NFR-S11 · S11-2FA-g) — a TOTP digit string or a
+   * recovery sheet entry, the server tells the two apart. Omitted rather than
+   * sent empty on a first attempt, so the server reads "no code offered yet"
+   * and answers with its protocol prompt (`two_factor_required`, no code error)
+   * instead of a wrong-code refusal.
+   */
+  signIn: (email: string, password: string, licenseId: string, code?: string) => Promise<void>;
   /**
    * Hand the browser to the workspace's identity provider (NFR-S11 · S11-i).
    *
@@ -270,7 +277,7 @@ export const useAuth = create<AuthState>((set, get) => {
       }
     },
 
-    async signIn(email, password, licenseId) {
+    async signIn(email, password, licenseId, code) {
       set({ busy: true, error: null });
       try {
         // The client id is per-organization, and the workspace list is what
@@ -298,6 +305,9 @@ export const useAuth = create<AuthState>((set, get) => {
           email,
           password,
           license_id: licenseId,
+          // `undefined` drops the key entirely (JSON.stringify) rather than
+          // sending an empty string — see the field's doc comment above.
+          code,
         });
 
         const grant = await anonymous.post<{ access_token: string; refresh_token: string }>(

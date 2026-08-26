@@ -18,6 +18,8 @@ export const auth: Messages = {
   'auth.fields.workspaceName': 'Workspace name',
   'auth.fields.yourName': 'Your name',
   'auth.fields.dataRegion': 'Data region',
+  'auth.fields.twoFactorCode': 'Authentication code',
+  'auth.fields.recoveryCode': 'Recovery code',
 
   // Shared validation messages (lib/form.tsx primitives, called with these overrides)
   'auth.validation.emailRequired': 'Enter your email.',
@@ -26,6 +28,7 @@ export const auth: Messages = {
   'auth.validation.nameRequired': 'Enter your name.',
   'auth.validation.organizationRequired': 'Enter a workspace name.',
   'auth.validation.passwordMinLength': 'Use at least {count} characters.',
+  'auth.validation.codeRequired': 'Enter your code.',
 
   // Sign in
   'auth.signin.subtitle': 'Sign in to your workspace',
@@ -45,6 +48,19 @@ export const auth: Messages = {
   'auth.signin.workspaceOpenFailed': 'Could not open that workspace.',
   'auth.signin.chooseWorkspace': 'Choose a workspace',
   'auth.signin.ssoRequiredBadge': 'SSO required',
+  'auth.signin.codeTitle': 'Enter your code',
+  'auth.signin.codeSubtitle':
+    '{organization} needs a code from your authenticator app to finish signing in.',
+  'auth.signin.codeInvalid': 'That code is not right. Try again.',
+  'auth.signin.codeRateLimited': 'Too many attempts. Wait before trying again.',
+  'auth.signin.verify': 'Verify',
+  'auth.signin.verifying': 'Verifying…',
+  'auth.signin.useRecoveryCode': 'Use a recovery code instead',
+  'auth.signin.useAuthenticatorCode': 'Use your authenticator app instead',
+  'auth.signin.enrollmentRequiredTitle': 'Set up two-factor authentication',
+  'auth.signin.enrollmentRequiredBody':
+    '{organization} requires two-factor authentication, and this account has not set it up yet. Sign in to a workspace where you already have a session to set it up in Account Settings, then come back here.',
+  'auth.signin.enrollmentRequiredLink': 'Go to Account Settings',
 
   // Sign up
   'auth.signup.title': 'Create a workspace',

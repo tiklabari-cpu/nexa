@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
 
@@ -33,6 +34,20 @@ import { FieldError, compose, email as emailRule, required, useForm } from '../.
  * because the person already clicked something — their identity provider's Nexa
  * tile — and their session there makes the second leg silent. Nothing in the
  * URL decides where they go: the destination comes from the connection row.
+ *
+ * A two-factor account (NFR-S11 · FR-MOD-00.1 · S11-2FA-g) is this branch's
+ * sibling: `/auth/authorize` answers a first attempt with `two_factor_required`
+ * — a protocol prompt, not a failed one — and this page swaps the password box
+ * for a code box rather than a second sign-in screen, exactly as it swaps to
+ * "Continue with SSO" above. A wrong code stays right there (never back to
+ * retyping the password, which was already proved correct) and a code that is
+ * actually a recovery sheet entry is the same field under a label toggle — the
+ * server tells the two shapes apart, this screen does not have to. An account
+ * with no factor at all, in a workspace that demands one, cannot be issued a
+ * session no matter what is typed here (`details.enrollment_required`): there
+ * is no signed-out enrollment endpoint (`POST /auth/2fa/enroll` requires a
+ * bearer token), so this screen states the reason plainly and points at Account
+ * Settings rather than rendering a code box nothing can satisfy.
  */
 
 /**
@@ -45,10 +60,30 @@ function passwordWorks(membership: Membership): boolean {
   return membership.password_login_available !== false;
 }
 
+/** What the code step needs to resubmit `/auth/authorize` — never the password step again. */
+interface CodeStep {
+  email: string;
+  password: string;
+  licenseId: string;
+  organizationName: string;
+}
+
+interface EnrollmentRequired {
+  organizationName: string;
+}
+
+/** A field-under or form-level reporter, named so its arrow never sits next to
+ *  a generic return type on one signature (the i18n prose scanner reads that
+ *  span as JSX text — see `attemptSignIn` below). */
+type ReportFailure = (message: string) => void;
+
 export function SignInPage(): ReactElement {
   const t = useTranslate();
   const [workspaces, setWorkspaces] = useState<Membership[] | null>(null);
   const [chooseError, setChooseError] = useState<string | null>(null);
+  const [codeStep, setCodeStep] = useState<CodeStep | null>(null);
+  const [codeMode, setCodeMode] = useState<'totp' | 'recovery'>('totp');
+  const [enrollmentRequired, setEnrollmentRequired] = useState<EnrollmentRequired | null>(null);
 
   const busy = useAuth((s) => s.busy);
   const listWorkspaces = useAuth((s) => s.listWorkspaces);
@@ -96,6 +131,37 @@ export function SignInPage(): ReactElement {
     }
   };
 
+  /**
+   * Try to mint a session for one workspace, and branch on the two-factor
+   * protocol prompt rather than treating it as an ordinary failure.
+   *
+   * `genericFailureMessage` is the caller's own wording for "something else
+   * went wrong" (invalid credentials from the password form, "could not open
+   * that workspace" from the picker) — this helper does not guess which.
+   */
+  const attemptSignIn = async (
+    email: string,
+    password: string,
+    licenseId: string,
+    organizationName: string,
+    report: ReportFailure,
+    genericFailureMessage: string,
+  ): Promise<void> => {
+    try {
+      await signIn(email, password, licenseId);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.type === 'two_factor_required') {
+        if (error.details?.enrollment_required === true) {
+          setEnrollmentRequired({ organizationName });
+        } else {
+          setCodeStep({ email, password, licenseId, organizationName });
+        }
+        return;
+      }
+      report(genericFailureMessage);
+    }
+  };
+
   const form = useForm({
     initial: { email: '', password: '' },
     validators: {
@@ -121,7 +187,14 @@ export function SignInPage(): ReactElement {
             await continueWithSso(only, setSubmitError);
             return;
           }
-          await signIn(values.email, values.password, only.license_id);
+          await attemptSignIn(
+            values.email,
+            values.password,
+            only.license_id,
+            only.organization_name,
+            setSubmitError,
+            t('auth.signin.invalidCredentials'),
+          );
           return;
         }
         setWorkspaces(memberships);
@@ -136,21 +209,90 @@ export function SignInPage(): ReactElement {
   const choose = async (licenseId: string): Promise<void> => {
     setChooseError(null);
     const workspace = workspaces?.find((w) => w.license_id === licenseId);
+    if (!workspace) return;
     // Checked before the call rather than after its 403, so the reason survives:
     // the catch below cannot tell "SSO required" from "the network went away".
-    if (workspace && !passwordWorks(workspace)) {
+    if (!passwordWorks(workspace)) {
       await continueWithSso(workspace, setChooseError);
       return;
     }
-    try {
-      await signIn(form.values.email, form.values.password, licenseId);
-    } catch {
-      setChooseError(t('auth.signin.workspaceOpenFailed'));
-    }
+    await attemptSignIn(
+      form.values.email,
+      form.values.password,
+      licenseId,
+      workspace.organization_name,
+      setChooseError,
+      t('auth.signin.workspaceOpenFailed'),
+    );
+  };
+
+  const codeForm = useForm({
+    initial: { code: '' },
+    validators: { code: required(t('auth.validation.codeRequired')) },
+    onSubmit: async (values, { setFieldError, setSubmitError }) => {
+      if (!codeStep) return;
+      try {
+        await signIn(codeStep.email, codeStep.password, codeStep.licenseId, values.code.trim());
+      } catch (error) {
+        if (
+          error instanceof ApiClientError &&
+          error.type === 'two_factor_required' &&
+          error.details?.enrollment_required === true
+        ) {
+          // The factor was live a moment ago and is not now (disabled from
+          // another tab mid-retry) — the same dead end as a first attempt.
+          setEnrollmentRequired({ organizationName: codeStep.organizationName });
+          setCodeStep(null);
+          return;
+        }
+        if (error instanceof ApiClientError && error.type === 'too_many_requests') {
+          setSubmitError(t('auth.signin.codeRateLimited'));
+          return;
+        }
+        // Wrong, expired or already spent — stays right here under the field.
+        // Never back to the password step: it was already proved correct, and
+        // restarting there would waste it on a call that does not need it again.
+        setFieldError('code', t('auth.signin.codeInvalid'));
+      }
+    },
+  });
+
+  // Six digits is a complete TOTP code, so this saves the keystroke on Submit
+  // without taking anything away from someone who prefers to press it —
+  // Enter and the button both still work at any length (NFR-A11Y4). Recovery
+  // codes are not all-digits and are never auto-submitted.
+  useEffect(() => {
+    if (!codeStep || codeMode !== 'totp') return;
+    if (codeForm.isSubmitting) return;
+    if (!/^[0-9]{6}$/.test(codeForm.values.code)) return;
+    codeForm.handleSubmit();
+  }, [codeStep, codeMode, codeForm.values.code, codeForm.isSubmitting]);
+
+  const handleCodeChange = (raw: string): void => {
+    const next = codeMode === 'totp' ? raw.replace(/\D/g, '').slice(0, 6) : raw.slice(0, 11);
+    codeForm.setValue('code', next);
+  };
+
+  const toggleCodeMode = (): void => {
+    setCodeMode((mode) => (mode === 'totp' ? 'recovery' : 'totp'));
+    codeForm.setValue('code', '');
+  };
+
+  const cancelCodeStep = (): void => {
+    setCodeStep(null);
+    setCodeMode('totp');
+    codeForm.reset();
+    setWorkspaces(null);
+  };
+
+  const dismissEnrollmentRequired = (): void => {
+    setEnrollmentRequired(null);
+    setWorkspaces(null);
   };
 
   const emailError = form.errorFor('email');
   const passwordError = form.errorFor('password');
+  const codeError = codeForm.errorFor('code');
 
   return (
     <main className="flex min-h-full items-center justify-center bg-canvas p-6">
@@ -180,6 +322,96 @@ export function SignInPage(): ReactElement {
           <p role="status" className="text-sm text-content-secondary">
             {t('auth.signin.ssoRedirecting')}
           </p>
+        ) : enrollmentRequired ? (
+          <section
+            aria-label={t('auth.signin.enrollmentRequiredTitle')}
+            className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+          >
+            <h2 className="mb-1 text-sm font-medium">{t('auth.signin.enrollmentRequiredTitle')}</h2>
+            <p className="mb-4 text-sm text-content-secondary">
+              {t('auth.signin.enrollmentRequiredBody', {
+                organization: enrollmentRequired.organizationName,
+              })}
+            </p>
+            <div className="flex items-center justify-between text-xs">
+              <Link to="/app/settings" className="text-content-brand underline">
+                {t('auth.signin.enrollmentRequiredLink')}
+              </Link>
+              <button
+                type="button"
+                onClick={dismissEnrollmentRequired}
+                className="text-content-secondary underline"
+              >
+                {t('auth.common.backToSignIn')}
+              </button>
+            </div>
+          </section>
+        ) : codeStep ? (
+          <section
+            aria-label={t('auth.signin.codeTitle')}
+            className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+          >
+            <h2 className="mb-1 text-sm font-medium">{t('auth.signin.codeTitle')}</h2>
+            <p className="mb-3 text-xs text-content-secondary">
+              {t('auth.signin.codeSubtitle', { organization: codeStep.organizationName })}
+            </p>
+            <form onSubmit={codeForm.handleSubmit} noValidate className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label htmlFor="two-factor-code" className="text-xs font-medium">
+                  {codeMode === 'totp'
+                    ? t('auth.fields.twoFactorCode')
+                    : t('auth.fields.recoveryCode')}
+                </label>
+                <input
+                  id="two-factor-code"
+                  type="text"
+                  inputMode={codeMode === 'totp' ? 'numeric' : 'text'}
+                  autoComplete="one-time-code"
+                  autoFocus
+                  value={codeForm.values.code}
+                  onChange={(event) => handleCodeChange(event.target.value)}
+                  onBlur={() => codeForm.blur('code')}
+                  aria-invalid={codeError ? true : undefined}
+                  aria-describedby={codeError ? 'code-error' : undefined}
+                  className="rounded-md border border-border bg-inset px-3 py-2 text-sm tracking-widest"
+                />
+                <FieldError id="code-error" message={codeError} />
+              </div>
+
+              {codeForm.submitError && (
+                <p role="alert" className="text-xs text-danger">
+                  {codeForm.submitError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                disabled={!codeForm.canSubmit}
+                className="mt-1 rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+              >
+                {codeForm.isSubmitting ? t('auth.signin.verifying') : t('auth.signin.verify')}
+              </button>
+            </form>
+
+            <div className="mt-3 flex items-center justify-between text-xs">
+              <button
+                type="button"
+                onClick={toggleCodeMode}
+                className="text-content-brand underline"
+              >
+                {codeMode === 'totp'
+                  ? t('auth.signin.useRecoveryCode')
+                  : t('auth.signin.useAuthenticatorCode')}
+              </button>
+              <button
+                type="button"
+                onClick={cancelCodeStep}
+                className="text-content-secondary underline"
+              >
+                {t('auth.common.backToSignIn')}
+              </button>
+            </div>
+          </section>
         ) : workspaces ? (
           <section
             aria-label={t('auth.signin.chooseWorkspace')}

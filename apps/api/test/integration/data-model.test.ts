@@ -395,16 +395,23 @@ describe('data model invariants', () => {
   // =========================================================================
 
   describe('row level security', () => {
-    it('covers every tenant table', async () => {
+    it('covers every tenant table, partitions included', async () => {
+      // The `events` partitions used to be exempted from this sweep, and the
+      // exemption hid a real hole: RLS on a partitioned parent governs access
+      // *through* the parent, so `SELECT * FROM events_2026_08` was checked
+      // against that partition's own — absent — policies and handed back every
+      // tenant's rows. Counting them here means a month opened by the
+      // partition scheduler has to arrive protected or this turns red.
       const rows = await app.$queryRaw<Array<{ tablename: string; rowsecurity: boolean }>>`
         SELECT tablename, rowsecurity FROM pg_tables
         WHERE schemaname = 'public'
           AND tablename <> '_prisma_migrations'
-          AND tablename NOT LIKE 'events\\_%'
       `;
       const unprotected = rows.filter((r) => !r.rowsecurity).map((r) => r.tablename);
       expect(unprotected).toEqual([]);
       expect(rows.length).toBeGreaterThan(30);
+      // The sweep is only a guard if it actually reached the partitions.
+      expect(rows.filter((r) => /^events_/.test(r.tablename)).length).toBeGreaterThan(1);
     });
 
     it("hides another tenant's chats, threads and events", async () => {
@@ -440,6 +447,75 @@ describe('data model invariants', () => {
       expect(visible.chats.map((c) => c.id)).toEqual([mine.chatId]);
       expect(visible.threads.map((t) => t.id)).toEqual([mine.threadId]);
       expect(visible.events.every((e) => e.chatId === mine.chatId)).toBe(true);
+    });
+
+    it('hides events from the runtime role when a partition is named directly', async () => {
+      // The sibling test above reads through `events`, which is the only way
+      // application code ever reaches an event. This one goes around it: the
+      // runtime role can name a partition, and a partitioned parent's policies
+      // do not govern that path. Both tenants write, so "nothing came back"
+      // cannot be an artefact of an empty table.
+      const mine = await openChat(fx.a, fx.a.customerId);
+      const theirs = await openChat(fx.b, fx.b.customerId);
+      for (const { chatId, threadId, licenseId } of [
+        { ...mine, licenseId: fx.a.licenseId },
+        { ...theirs, licenseId: fx.b.licenseId },
+      ]) {
+        await owner.event.create({
+          data: {
+            id: buildEventId(threadId, 1),
+            threadId,
+            chatId,
+            licenseId,
+            type: 'message',
+            text: 'hello',
+            authorType: 'customer',
+          },
+        });
+      }
+
+      // Ask the planner which partition took the rows rather than deriving the
+      // name from today's date: the test then follows the schema instead of
+      // restating it, and keeps working when the partitioning scheme changes.
+      const [routed] = await owner.$queryRaw<Array<{ partition: string }>>`
+        SELECT DISTINCT tableoid::regclass::text AS partition FROM events
+      `;
+      const partition = routed?.partition ?? '';
+      expect(partition).toMatch(/^events_(\d{4}_\d{2}|default)$/);
+
+      // No tenant context at all — the shape of an unscoped query that slipped
+      // past `withTenant`. Before the partitions carried their own policy this
+      // returned both tenants' rows.
+      const leaked = await app.$queryRawUnsafe<Array<{ count: number }>>(
+        `SELECT count(*)::int AS count FROM public."${partition}"`,
+      );
+      expect(leaked[0]?.count).toBe(0);
+
+      // The other half of the proof: a policy that denies everything would also
+      // return zero. With the context set, the same partition yields this
+      // tenant's row and only this tenant's row, and the parent still reads.
+      const scoped = await withTenant(
+        app,
+        { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId },
+        async (tx) => ({
+          direct: await tx.$queryRawUnsafe<Array<{ licenseId: bigint }>>(
+            `SELECT license_id AS "licenseId" FROM public."${partition}"`,
+          ),
+          throughParent: await tx.event.findMany({ select: { chatId: true } }),
+        }),
+      );
+      expect(scoped.direct.map((r) => r.licenseId)).toEqual([fx.a.licenseId]);
+      expect(scoped.throughParent.map((e) => e.chatId)).toEqual([mine.chatId]);
+
+      // And the deny is durable rather than a side effect of a missing grant:
+      // `ALTER DEFAULT PRIVILEGES` hands DML on every new table back to the
+      // runtime role, so only a policy survives the next month's partition.
+      const [policy] = await owner.$queryRaw<Array<{ qual: string; withCheck: string | null }>>`
+        SELECT qual, with_check AS "withCheck" FROM pg_policies
+        WHERE schemaname = 'public' AND tablename = ${partition}
+      `;
+      expect(policy?.qual).toMatch(/nexa_current_license/);
+      expect(policy?.withCheck).toMatch(/nexa_current_license/);
     });
 
     it('hides chat_users and chat_access, which have no license column', async () => {

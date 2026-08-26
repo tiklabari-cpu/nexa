@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 150.2 — S4-PART-b · kapsam nöbetçisi: partisyon muafiyeti kalktı + doğrudan-partisyon testi — done — 2026-08-26 UTC
+
+- **Yapıldı:** `apps/api/test/integration/data-model.test.ts` — RLS sweep'inden `AND tablename NOT LIKE 'events\_%'` kaldırıldı (test adı artık `covers every tenant table, partitions included`) + sweep'in partisyonlara gerçekten ULAŞTIĞINI ölçen satır. Yeni kardeş test `hides events from the runtime role when a partition is named directly`: iki kiracı da olay yazar, partisyon adı `tableoid::regclass` ile planlayıcıdan okunur (tarihten türetilmez), bağlamsız `nexa_app` doğrudan partisyona `count(*)` → 0, AYNI testte bağlamla doğrudan partisyon → yalnız kendi `license_id`'si ve ana tablo → yalnız kendi sohbeti (her şeyi reddeden bir politika da 0 döndürürdü — iki yönlü kanıt), ayrıca `pg_policies.qual`/`with_check` içinde `nexa_current_license` aranır (GRANT'a dayanan savunma `ALTER DEFAULT PRIVILEGES` yüzünden gelecek ayı korumaz).
+- **Önce KIRMIZI (ölçüldü, kanaat değil):** izole test veritabanında 150.1'in etkisi geri alındı (10 partisyonda politika `DROP` + `DISABLE ROW LEVEL SECURITY`) → `2 failed | 4 passed`; sweep `['events_default', 'events_2026_06' … 'events_2027_02']` — 10 korumasız partisyonu tek tek listeledi, doğrudan-partisyon okuması `expected 2 to be +0` (iki kiracının satırı da geldi). Temiz izole veritabanında aynı dosya **`6 passed`** (öncesi 5). Geri-alma betiği geçiciydi, silindi.
+- **Doğrulama (hepsi exit 0):** `typecheck` 12/12 · `lint` 9/9 · `format:check` · turbo `test` (e2e/api hariç) 9/9 · api `test:unit` 995/64 · api `test:integration` **üç shard'a parçalandı** (CONVENTIONS §1.3): 33+33+31 = **97 dosya / 2478 test** (1074+791+613) — taban 2477 **+1**, eklenen testin ta kendisi · rtm `test:integration` 64/3 · `build` 8/8 · `db:check-drift` "no drift" · e2e `demo-flow`+`inbox-panel`+`inbox-unread` **7 passed**. Kontrat ve ürün kodu dokunulmadı.
+- **Varsayımlar / sonraki pencereye not:** `test/helpers/fixtures.ts:78`'deki aynı kalıplı `events\_%` muafiyeti BİLEREK bırakıldı — orası TRUNCATE listesi (partisyonlar ana tablo üzerinden boşalıyor), güvenlik nöbetçisi değil. §7.2 S4-PART satırı `⬜` → **`◐ → KS4-PART`** yapıldı (delik kapandı + nöbetçi genişledi; zamanlayıcı yolu kanıtı eksik) — **150.3 `✅` yapacak**. 150.3 için 150.1'in uyarısı hâlâ geçerli: `events_ensure_partition` SECURITY INVOKER ve `nexa_app`'in `public` şemasında CREATE yetkisi yok, testi `owner` rolüyle kur. e2e iki `kanit` PNG'sini yeniden üretti (commit'te).
+
 ## 150.1 — S4-PART-a · `events` partisyonlarında RLS (migration) — done — 2026-08-26 UTC
 
 - **Yapıldı:** Yeni migration `apps/api/prisma/migrations/20260826090000_events_partition_rls/`.

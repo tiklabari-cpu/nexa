@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T17:52:56.054Z",
+        "updatedAt": "2026-08-26T18:15:56.387Z",
         "subtasks": [
           {
             "id": 1,
@@ -7235,12 +7235,12 @@
             "description": "Telefonunu kaybeden ajan hesabına geri girebiliyor.",
             "details": "NE YAPILACAK: apps/api/src/services/auth/two-factor-service.ts (yeni) içinde kurtarma kodu\nüretimi ve tüketimi:\n- Aktivasyon anında 10 adet kod üretilir, kullanıcıya BİR KEZ düz metin gösterilir, veritabanına\n  yalnız SHA-256 hash i yazılır (lib/crypto.ts in token deseni: 256 bit entropi → tek SHA-256).\n- Bir kod kullanılınca used_at damgalanır ve BİR DAHA kabul edilmez.\n- Yeniden üretim (regenerate) ESKİ kodların hepsini geçersizler (kullanılmamış olanlar dahil).\n- Kalan kod sayısı okunabilir olmalı (UI \"3 kurtarma kodunuz kaldı\" diyebilsin).\n\nDOSYALAR: apps/api/src/services/auth/two-factor-service.ts (yeni) + testi ·\napps/api/src/lib/crypto.ts (token hash deseni — OKU, yeniden yazma).\nREFERANS DESEN: davetiye ve parola sıfırlama token larının hash lenerek saklanması\n(services/auth/lifecycle-service.ts) — aynı disiplin.\n\nTUZAKLAR:\n1. Kodlar okunabilir olmalı (insan elle yazacak): karışabilen karakterleri (0/O, 1/l/I) alfabeden çıkar.\n2. Tüketim ATOMİK olmalı: iki eşzamanlı istek aynı kodu iki kez harcayamamalı\n   (koşullu UPDATE ... WHERE used_at IS NULL RETURNING deseni — audit zincirinin kullandığı yol).\n3. Kurtarma kodu ile giriş, denetim kaydına AYRI bir olay olarak yazılmalı (normal 2FA girişinden ayırt edilebilsin).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S11-2FA** (türetilmiş — NFR-S11). Gereksinim satırı: `grep -n \"| S11-2FA\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS11-2FA\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration yeşil; yeni testler: kod bir kez çalışır, ikinci kez reddedilir · regenerate eskiyi geçersizler\n  · eşzamanlı iki tüketim denemesinden yalnız biri başarılı.\n- Ölçülebilir: veritabanında düz metin kod YOK (yalnız hash sütunu).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "152.2"
             ],
             "parentId": "152",
-            "updatedAt": "2026-08-26T17:52:56.054Z"
+            "updatedAt": "2026-08-26T18:15:56.387Z"
           },
           {
             "id": 4,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T17:52:56.055Z",
+      "lastModified": "2026-08-26T18:15:56.388Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T23:09:03.844Z",
+        "updatedAt": "2026-08-26T23:54:12.713Z",
         "subtasks": [
           {
             "id": 1,
@@ -7288,13 +7288,13 @@
             "description": "Girişte ikinci adım gerçekten sorulıyor.",
             "details": "NE YAPILACAK: apps/web/src/features/auth/SignInPage.tsx akışına ikinci adım eklenir.\n- /auth/login yanıtındaki two_factor_required anotasyonu true olan üyelik seçilince, parola\n  adımından sonra KOD adımı gelir; kod /auth/authorize gövdesine eklenir.\n- \"Kurtarma kodu kullan\" alternatifi aynı ekranda.\n- Sunucu require_two_factor yüzünden reddettiyse (kaydı yok) kullanıcı kayıt akışına yönlendirilir\n  ve neden yönlendirildiği açıkça yazılır.\n- Hata mesajları katalogdan (two_factor_required dahil).\n\nDOSYALAR: apps/web/src/features/auth/SignInPage.tsx · apps/web/src/lib/auth-store.ts (authorize çağrısı) ·\napps/web/src/locales/{en,tr}/auth.ts.\nREFERANS DESEN: aynı ekrandaki SSO dalı — sso_enforced_connection_id anotasyonu geldiğinde parola\nkutusu yerine \"SSO ile devam et\" gösteriliyor. İkinci adım onun kardeşidir; aynı state makinesine ekle,\nikinci bir giriş ekranı YARATMA.\n\nTUZAKLAR:\n1. Kod alanı numerik ve yapıştırmaya uygun olmalı; otomatik gönderim 6. hanede tetiklenebilir ama\n   klavye erişilebilirliğini bozmamalı (NFR-A11Y4).\n2. Yanlış kod sonrası parola adımına GERİ DÖNME — kullanıcıyı baştan başlatma.\n3. Mobil uygulama (apps/mobile) bu akıştan ETKİLENİR mi? Bu alt-görevin kapsamı web dir;\n   mobil in davranışını ÖLÇ ve bir borç doğuyorsa HANDOFF a yaz (kapsam dışına çıkma, CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S11-2FA** (türetilmiş — NFR-S11 + FR-MOD-00.1). Gereksinim satırı: `grep -n \"| S11-2FA\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS11-2FA\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+5 civarı): kod adımı görünüyor · yanlış kod alan-altı hata · kurtarma kodu dalı\n  · require_two_factor reddi kayıt yoluna yönlendiriyor.\n- i18n nöbetçisi yeşil.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "152.5",
               "152.6"
             ],
             "parentId": "152",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-26T23:54:12.713Z"
           },
           {
             "id": 8,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T23:09:03.845Z",
+      "lastModified": "2026-08-26T23:54:12.715Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

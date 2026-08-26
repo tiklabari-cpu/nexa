@@ -700,4 +700,52 @@ export const settings: Messages = {
   'settings.ticketRules.setPriorityAction': 'önceliği {priority} yap',
   'settings.ticketRules.addTagAction': '“{tag}” etiketini ekle',
   'settings.ticketRules.doNothing': 'hiçbir şey yapma',
+
+  // İki adımlı doğrulama — TwoFactor.tsx
+  'settings.twoFactor.title': 'İki adımlı doğrulama',
+  'settings.twoFactor.description':
+    'Giriş yaparken parolanıza ek olarak bir doğrulayıcı uygulamadan kod isteyin.',
+  'settings.twoFactor.loadError': 'İki adımlı doğrulama durumu yüklenemedi.',
+  'settings.twoFactor.offDescription': 'Hesabınız şu anda yalnızca parolayla giriş yapıyor.',
+  'settings.twoFactor.pendingHint':
+    'Kurulum başlatıldı ama tamamlanmadı. Kaldığınız yerden devam etmek için tekrar etkinleştirin.',
+  'settings.twoFactor.recoveryCodesRemaining.one': '{count} kurtarma kodu kaldı',
+  'settings.twoFactor.recoveryCodesRemaining.other': '{count} kurtarma kodu kaldı',
+  'settings.twoFactor.enableButton': 'İki adımlı doğrulamayı etkinleştir',
+  'settings.twoFactor.enabling': 'Başlatılıyor…',
+  'settings.twoFactor.regenerateButton': 'Yeni kurtarma kodları al',
+  'settings.twoFactor.disableButton': 'Kapat',
+  'settings.twoFactor.disableBlockedByWorkspaces':
+    'İki adımlı doğrulama {names} tarafından zorunlu tutuluyor. Orada üye olduğunuz sürece kapatılamaz.',
+
+  'settings.twoFactor.enroll.title': 'İki adımlı doğrulamayı kur',
+  'settings.twoFactor.enroll.description':
+    'Bunu doğrulayıcı uygulamanıza girin, sonra uygulamanın gösterdiği kodu girin.',
+  'settings.twoFactor.enroll.secretLabel': 'Kurulum anahtarı',
+  'settings.twoFactor.enroll.copySecretAriaLabel': 'Kurulum anahtarını kopyala',
+  'settings.twoFactor.enroll.uriLabel': 'Kurulum bağlantısı',
+  'settings.twoFactor.enroll.copyUriAriaLabel': 'Kurulum bağlantısını kopyala',
+  'settings.twoFactor.enroll.codeLabel': 'Doğrulama kodu',
+  'settings.twoFactor.enroll.codeError': 'Doğrulayıcı uygulamanızın gösterdiği kodu girin.',
+  'settings.twoFactor.enroll.verifyButton': 'Doğrula ve etkinleştir',
+  'settings.twoFactor.enroll.verifying': 'Doğrulanıyor…',
+  'settings.twoFactor.enroll.discardConfirm': 'Bu kurulum denemesi iptal edilsin mi?',
+
+  'settings.twoFactor.recovery.title': 'Kurtarma kodlarınızı kaydedin',
+  'settings.twoFactor.recovery.description':
+    'Her kod bir kez çalışır ve doğrulayıcı uygulamanıza erişiminizi kaybederseniz sizi tekrar içeri alır. Bir daha gösterilmeyecekler.',
+  'settings.twoFactor.recovery.downloadButton': '.txt olarak indir',
+  'settings.twoFactor.recovery.savedConfirm': 'Bu kodları güvenli bir yere kaydettim.',
+  'settings.twoFactor.recovery.doneButton': 'Tamam',
+  'settings.twoFactor.recovery.discardConfirm':
+    'Bu kodlar bir daha gösterilmeyecek. Kaydetmeden kapatılsın mı?',
+
+  'settings.twoFactor.reauth.disableTitle': 'İki adımlı doğrulamayı kapatmak için sizi doğrulayın',
+  'settings.twoFactor.reauth.regenerateTitle': 'Yeni kurtarma kodları için sizi doğrulayın',
+  'settings.twoFactor.reauth.passwordLabel': 'Parola',
+  'settings.twoFactor.reauth.codeLabel': 'İki adımlı doğrulama veya kurtarma kodu',
+  'settings.twoFactor.reauth.credentialError': 'Bu alan zorunludur.',
+  'settings.twoFactor.reauth.confirmButton': 'Onayla',
+  'settings.twoFactor.reauth.confirming': 'Onaylanıyor…',
+  'settings.twoFactor.reauth.discardConfirm': 'Bu iptal edilsin mi?',
 };

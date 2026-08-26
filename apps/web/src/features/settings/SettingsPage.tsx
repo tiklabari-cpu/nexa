@@ -32,6 +32,7 @@ import { Integrations } from './Integrations.js';
 import { TrustedDomains } from './TrustedDomains.js';
 import { CannedResponses } from './CannedResponses.js';
 import { ChatTimeout } from './ChatTimeout.js';
+import { TwoFactor } from './TwoFactor.js';
 import { Tags } from './Tags.js';
 import { TicketEmailTemplates } from './TicketEmailTemplates.js';
 import { CustomFieldsSettings } from './CustomFieldsSettings.js';
@@ -81,6 +82,7 @@ export function SettingsPage(): ReactElement {
       <BannedCustomerIps canEdit={canManageAccess} />
       <IpAllowlist canEdit={canManageAccess} />
       <SsoConnection canEdit={canManageAccess} />
+      <TwoFactor />
       <Compliance canEdit={canManageAccess} />
       <SiemExport canEdit={canManageAccess} />
       <SlaPolicy canEdit={canManageAccess} />

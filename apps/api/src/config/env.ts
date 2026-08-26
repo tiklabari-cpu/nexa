@@ -124,6 +124,26 @@ export const envSchema = z.object({
    * instance it is trying to keep in rotation.
    */
   RATE_LIMIT_HEALTH_PER_MIN: z.coerce.number().int().positive().default(600),
+  /**
+   * Second-factor code presentations at `/auth/authorize`, per **account** and
+   * per **hour** (NFR-S11 · S11-2FA-e).
+   *
+   * Keyed by account rather than by IP because the thing being guessed belongs
+   * to an account: a six-digit code with a one-step drift window either side is
+   * three live values in a million, and spreading the guesses across addresses
+   * is the first thing anyone would do. Unreachable without the password —
+   * the gate runs after it has been verified — so this cannot be used to lock a
+   * stranger out; whoever can spend a slot could, before this existed, have
+   * signed in outright.
+   *
+   * An hour, not a minute, and that is the whole point. Every other bucket here
+   * shapes traffic, where a short window is right; this one has to *bound a
+   * search*, and a window that resets every minute bounds nothing — 20/min is
+   * 28,800 guesses a day and a six-digit code inside a fortnight. At 20/hour the
+   * same search runs for years, while a person mistyping their code three times
+   * and a client retrying on a flaky connection never come close.
+   */
+  RATE_LIMIT_TWO_FACTOR_PER_HOUR: z.coerce.number().int().positive().default(20),
 
   /**
    * Data retention windows in days (NFR-C8). Each is a positive integer; the

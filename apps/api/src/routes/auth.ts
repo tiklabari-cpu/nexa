@@ -22,7 +22,7 @@ import {
   type AuditContext,
   type AuditEntry,
 } from '../services/audit/audit-log.js';
-import { OauthService } from '../services/auth/oauth-service.js';
+import { OauthService, type Membership } from '../services/auth/oauth-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
 import {
   NOTIFICATION_PREFERENCE_SELECT,
@@ -46,6 +46,21 @@ const authorizeBody = z.object({
   email: emailSchema,
   password: passwordSchema,
   license_id: z.string().regex(/^\d+$/, 'license_id must be numeric'),
+  /**
+   * The second factor, when the account holds one (NFR-S11 · S11-2FA-e).
+   *
+   * One field for both credentials — a six-digit TOTP code and a
+   * `ABCDE-FGHJK` recovery code — because the person typing it is answering one
+   * question ("prove it is you"), and a client that had to declare which kind it
+   * was sending would be guessing on the user's behalf. The server tries them in
+   * that order and records which one worked; nothing about the two shapes
+   * overlaps, so neither can be mistaken for the other.
+   *
+   * Optional here and required by the account, not by the schema: whether a code
+   * is needed depends on state the caller cannot see, so a missing one is a
+   * refusal that says *what* is missing rather than a validation error.
+   */
+  code: z.string().trim().min(1).max(64).optional(),
 });
 
 const tokenBody = z.discriminatedUnion('grant_type', [
@@ -195,6 +210,164 @@ export default async function authRoutes(
     }
   }
 
+  /**
+   * The second-factor gate (NFR-S11 · FR-MOD-00.1 · S11-2FA-e).
+   *
+   * Called from `/auth/authorize` and nowhere else, for the reason that endpoint
+   * already states about single sign-on: this is the call that binds a
+   * credential to a workspace and mints the code a session comes from, so it is
+   * the only place a gate cannot be routed around. `/auth/login` selects no
+   * workspace and a client can reach `/auth/authorize` without ever calling it,
+   * which is why the listing endpoint annotates and this one refuses.
+   *
+   * Three outcomes, and the difference between the second and the third is the
+   * whole feature:
+   *
+   *   **The account holds a factor.** A code is required, whatever the
+   *   workspace's policy says. Somebody who has set up an authenticator has
+   *   asked for this, and a workspace that has not switched the policy on has
+   *   not thereby asked us to ignore it.
+   *
+   *   **The account holds none and the workspace requires one.** Refused. This
+   *   is the branch `security_settings.require_two_factor` never had — until
+   *   now the flag was written, read back by the screen that wrote it, and
+   *   consulted by nothing on the way in.
+   *
+   *   **Neither.** Nothing changes, which is what keeps every existing sign-in,
+   *   seed account and end-to-end suite working exactly as before.
+   *
+   * Deliberately *not* applied to the SAML assertion path (`routes/saml.ts`).
+   * A federated sign-in is one the identity provider has already vouched for,
+   * and MFA, conditional access and device posture are precisely what the
+   * workspace bought that provider for; demanding a second Nexa factor on top
+   * would be a second, weaker copy of a control the IdP already owns, and would
+   * make an enforced-SSO workspace unenterable for anyone whose authenticator
+   * broke. A *password* sign-in is not vouched for by anybody, so it is gated —
+   * including the owner's break-glass entry into an SSO-enforced workspace,
+   * which is the one password door left open and therefore the last one worth
+   * leaving single-factor.
+   *
+   * Refresh-token rotation and personal access tokens are untouched: neither is
+   * a sign-in. A refresh presents a credential this gate already vetted when the
+   * session was minted, and a PAT is a named credential its holder created on
+   * purpose — binding a second factor to it would mean typing a code to run a
+   * cron job.
+   */
+  async function enforceSecondFactor(
+    request: FastifyRequest,
+    tenant: { licenseId: bigint; organizationId: string },
+    accountId: string,
+    membership: Membership,
+    code: string | undefined,
+  ): Promise<void> {
+    const trail = (entry: AuditEntry) =>
+      audit(request, tenant, { actorId: accountId, actorType: 'agent' }, entry);
+    const target = `account:${accountId}`;
+
+    if (!(await twoFactor.isActive(accountId))) {
+      if (!membership.two_factor_required) return;
+
+      // Not `auth.login_failed`. Nothing was wrong with the credential; the
+      // workspace changed what it accepts. An admin who has just switched the
+      // policy on needs to see who is now shut out, and that is a different
+      // list from who is being attacked.
+      await trail({ action: 'security.two_factor_enrollment_required', target });
+      throw new ApiError(
+        'two_factor_required',
+        'This workspace requires two-factor authentication. Set it up on your account before signing in.',
+        // Named so the client can route to enrollment rather than render a code
+        // box nothing will satisfy — the same reasoning as the SSO refusal
+        // carrying its connection id. Absent rather than `false` in the ordinary
+        // "show me your code" refusal: a field that is always there is a field
+        // every reader has to remember to ignore.
+        { details: { enrollment_required: true } },
+      );
+    }
+
+    if (code === undefined) {
+      // No audit entry: this is the protocol prompt, not a failed attempt. A
+      // client that has not yet been told a code is needed learns it here, and
+      // recording that exchange would bury the entries that mean somebody is
+      // guessing under the ones that mean somebody is signing in normally.
+      throw new ApiError(
+        'two_factor_required',
+        'Enter the code from your authenticator app, or one of your recovery codes.',
+      );
+    }
+
+    if (!(await spendChallengeAttempt(request, accountId))) {
+      // Deliberately silent in the trail. The attempts that got here already
+      // wrote `security.two_factor_challenge_failed`; every request after the
+      // budget is gone would add an entry that says nothing new, and an audit
+      // log is the one table nothing prunes.
+      throw ApiError.tooManyRequests(
+        3600,
+        'Too many verification attempts. Wait before trying again.',
+      );
+    }
+
+    // TOTP first, then the recovery sheet. The two shapes cannot be confused —
+    // six digits against ten symbols from an alphabet with no digits below two —
+    // so the order is about cost, not ambiguity: the common credential is tried
+    // first and a recovery code is never spent by a mistyped TOTP.
+    if (await twoFactor.verifyTotpCode(accountId, code, Date.now())) return;
+
+    const recovery = await twoFactor.consumeRecoveryCode(accountId, code);
+    if (recovery) {
+      // Its own entry rather than metadata on `auth.login`, because this is the
+      // second factor that is *consumed* by being used. The count is what turns
+      // it into a warning somebody can act on before the sheet runs out.
+      await trail({
+        action: 'security.two_factor_recovery_code_used',
+        target,
+        metadata: { recovery_codes_remaining: recovery.remaining },
+      });
+      return;
+    }
+
+    // Wrong, expired, or right but already spent — `badCode` gives one answer
+    // for all three, and the trail keeps the same discretion: which of them it
+    // was is exactly what somebody guessing would like to know.
+    await trail({ action: 'security.two_factor_challenge_failed', target });
+    throw badCode();
+  }
+
+  /**
+   * Take one attempt from this account's hourly budget, or report it is empty.
+   *
+   * Charged per *presentation* rather than per failure, and that ordering is the
+   * point: a budget spent only on failures still lets a caller who has exhausted
+   * it keep presenting codes, and one of those presentations is eventually
+   * right. Charging first means a caller over the limit never reaches the
+   * comparison at all. An honest sign-in costs one, and nobody signs in twenty
+   * times an hour by hand.
+   *
+   * Fails open when Redis is unreachable, matching `plugins/rate-limit.ts` and
+   * for the same reason: the alternative is that a cache outage locks every
+   * two-factor account out of the product, and the password plus a live code is
+   * still two credentials. It is logged at error level so the outage is visible
+   * rather than inferred.
+   */
+  async function spendChallengeAttempt(
+    request: FastifyRequest,
+    accountId: string,
+  ): Promise<boolean> {
+    try {
+      // `rl:` prefixed like every other bucket so the operational tooling that
+      // sweeps them — `clearRateLimits` in the test helpers among it — does not
+      // have to learn a second naming scheme.
+      const decision = await app.rateLimiter.consume(
+        `rl:2fa:${accountId}`,
+        env.RATE_LIMIT_TWO_FACTOR_PER_HOUR,
+        3_600_000,
+      );
+      return decision.allowed;
+    } catch (error) {
+      request.log.error({ err: error }, 'two-factor attempt budget unavailable — allowing attempt');
+      return true;
+    }
+  }
+
   // --- POST /auth/login ------------------------------------------------------
 
   app.post('/auth/login', { config: { public: true } }, async (request, reply) => {
@@ -207,8 +380,19 @@ export default async function authRoutes(
     }
 
     const memberships = await oauth.listMemberships(account.id);
+    // Whether a code will be demanded at `/auth/authorize` (NFR-S11 ·
+    // S11-2FA-e). An account fact, not a membership one: one person holds one
+    // authenticator and it covers every workspace they belong to, so this sits
+    // beside the account rather than being repeated down the list.
+    //
+    // Not a disclosure worth withholding. The caller has just proved this
+    // account's password, and the very next call tells them anyway — the whole
+    // purpose of the refusal is to say "now show me a code". What it buys is a
+    // sign-in screen that asks for the code in the same breath as the password
+    // instead of after a round trip that reads as a failure.
+    const twoFactorEnabled = await twoFactor.isActive(account.id);
     return reply.send({
-      account,
+      account: { ...account, two_factor_enabled: twoFactorEnabled },
       memberships: memberships.map((m) => ({
         license_id: m.license_id.toString(),
         organization_id: m.organization_id,
@@ -237,6 +421,13 @@ export default async function authRoutes(
         // password and this membership, so naming the connection tells them
         // nothing they are not entitled to know.
         sso_enforced_connection_id: m.sso_enforced_connection_id,
+        // Which workspaces insist on a second factor (NFR-S11 · S11-2FA-e).
+        // The policy alone — read together with `account.two_factor_enabled`
+        // above, the pair says which of three things the screen must do: go
+        // straight through, ask for a code, or send the person to set one up
+        // because this workspace will not let them in without one. One combined
+        // boolean could not tell the last two apart.
+        two_factor_required: m.two_factor_required,
         // Derived here, not left to the client, because the break-glass rule is
         // a server rule (§C-A17.7) and a copy of it in the UI is a copy that
         // goes stale — showing a password box the API refuses, or hiding one it
@@ -324,6 +515,20 @@ export default async function authRoutes(
         { details: { sso_connection_id: enforcedConnection } },
       );
     }
+
+    // --- Two-factor enforcement (NFR-S11 · FR-MOD-00.1 · S11-2FA-e) ---------
+    //
+    // After the SSO gate above and before anything is minted. After, because a
+    // workspace that refuses passwords outright has already answered this
+    // request and a rejected password must not also spend a thirty-second code;
+    // before, because everything below this line produces a credential.
+    await enforceSecondFactor(
+      request,
+      { licenseId, organizationId: membership.organization_id },
+      account.id,
+      membership,
+      body.code,
+    );
 
     const requested = body.scope
       ? body.scope

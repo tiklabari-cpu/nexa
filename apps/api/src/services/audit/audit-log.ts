@@ -119,6 +119,29 @@ export const AUDIT_ACTIONS = [
   // the one of these that happens repeatedly on an account that is already
   // protected.
   'security.two_factor_recovery_codes_regenerated',
+  // The three the *sign-in* gate writes (S11-2FA-e). `security.*` like the rest
+  // of the family rather than `auth.*`, even though these happen at the door:
+  // what an incident review asks of them is "what happened to this account's
+  // second factor", and splitting the challenge across two prefixes would mean
+  // asking that question twice.
+  //
+  // A wrong code, and only a wrong code. A sign-in that arrives without one at
+  // all leaves nothing here: the client that has not been told a code is needed
+  // learns it from the refusal, and recording that exchange would fill the trail
+  // with protocol noise and bury the entries that mean somebody is guessing.
+  'security.two_factor_challenge_failed',
+  // Signing in with a recovery code rather than the authenticator. Its own
+  // entry, not metadata on `auth.login`, because it is the one second factor
+  // that is *consumed* by being used: the sheet is finite, and "which sign-ins
+  // spent one" is the question behind both "is this person locked out of their
+  // authenticator" and "did somebody who is not them hold the sheet".
+  'security.two_factor_recovery_code_used',
+  // The workspace requires a second factor and this account has none, so no
+  // session was minted. Not `auth.login_failed`: nothing about the credential
+  // was wrong, and an admin reading the trail after switching the policy on
+  // needs to see who is now shut out — which is a different list from who is
+  // being attacked.
+  'security.two_factor_enrollment_required',
   // The workspace accepted the HIPAA Business Associate Agreement (NFR-C4 ·
   // C4-d). `compliance.*` rather than `settings.*`: the other settings entries
   // record a configuration somebody can change back, while this one records a

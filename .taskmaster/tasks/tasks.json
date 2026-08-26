@@ -7165,10 +7165,10 @@
         "description": "tm 142 (M-SEC-a) STRIDE denetimi iki HIGH bulmuş ve ikisi de kapatılmıştı (tm 145/146). Aynı denetimin iki MEDIUM bulgusu ise CONVENTIONS §4.1 gereği o turda görevleşmemiş, PLAN §D116 içinde listeli kalmıştı. Faz-5 onları ödüyor. (a) SSO ve SCIM JIT sağlama, IdP/konnektörün bildirdiği HER e-posta adresine güveniyor — doğrulanmış alan bağı yok; kendi IdP sini kuran bir çalışma alanı başka birinin var olan hesabını kendi kiracısına iliştirebiliyor ya da hiç kaydolmamış bir adres için hesap satırı işgal edebiliyor. (b) GET /api/v1/health anonim çağırana bölgeyi, sürümü, her dikişin hangi mock ile koştuğunu ve scheduler durumunu veriyor, üstelik her çağrı sınırsızca bir Postgres sorgusu ve bir Redis PING harcıyor.",
         "details": "BULGU KAYNAĞI: PLAN §D116 MEDIUM (a) ve (b) — tm 142 denetiminin görevleşmemiş payı.\nBu iki bulgu bugün depoda YAZILI ama SAHİPSİZ; Faz-5 sahibini veriyor.\nİkisi de bağımsız, iki ayrı nanotask.\n\nFAZ-5'İN KONUSU: DENETİMİN BULDUĞU YANLIŞ (§D124). Faz 0–4 kalemleri tek tek ✅ ve testli;\n2026-08-23 bağımsız denetimi yine de dokuz bulgu çıkardı ve ortak şekilleri şu: bir damga, onu hak\neden koddan daha geniş bir şey iddia ediyor. Bu faz YENİ ÖZELLİK AÇMAZ — iddia ile kodu eşitler.\nKapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-b** (türetilmiş — NFR-S1/S4/S12; kaynak PLAN §D116 MEDIUM). Gereksinim satırı: `grep -n \"| M-SEC-b\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-b\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "İki alt-görev done. Ölçülebilir:\n1. Doğrulanmamış alanlı bir IdP iddiası ile JIT sağlama reddediliyor (önce-kırmızı testle kanıtlı).\n2. Anonim GET /health yanıtı yalnız durum ve servis adı taşıyor; region/version/providers/scheduler yok.\n3. scripts/smoke.sh ve docker-compose.full.yml healthcheck bacakları hâlâ yeşil (make demo kırılmadı).\n4. PLAN §7.2 M-SEC-b satırı \"✅ → KM-SEC-b\".",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T15:51:58.274Z",
+        "updatedAt": "2026-08-26T16:49:51.069Z",
         "subtasks": [
           {
             "id": 1,
@@ -7187,10 +7187,10 @@
             "description": "Sağlık ucu artık altyapıyı anonim çağırana anlatmıyor.",
             "details": "NE YAPILACAK (§D116 MEDIUM (b)): GET /api/v1/health bugün public + skipRateLimit ve yanıtında\nregion, version, dependencies (gecikmeler dahil), scheduler durumu ve hangi dikişin hangi mock ile\nkoştuğu (providers) var. Anonim yanıt yalnız {status, service} taşıyacak biçimde daraltılır;\nayrıntılı gövde kimlikli VE admin rolündeki çağırana verilir.\nAnonim yol sınırsız kalmaz: probe u öldürmeyecek kadar YÜKSEK tavanlı bir IP sınırı konur\n(mevcut rate-limit eklentisinin anon kovası deseni).\n\nDOSYALAR: apps/api/src/routes/health.ts (public + skipRateLimit yapılandırması ve yanıt gövdesi) ·\napps/api/src/plugins/rate-limit.ts (anon kova deseni) ·\npackages/contract/openapi/paths/health.yaml (yanıt şeması iki biçime ayrılır).\n\nZORUNLU EŞ GÜNCELLEME — yoksa make demo kırılır:\n- scripts/smoke.sh: \"api /health is ok\" ve scheduler kontrolü daraltılan gövdeye göre güncellenir.\n- docker-compose.full.yml ve apps/api/Dockerfile · apps/rtm/Dockerfile HEALTHCHECK satırları:\n  anonim yanıt hâlâ 200/503 ayrımını verdiği için curl bacağı çalışmalı; kontrol eden alan değişirse düzelt.\n\nTUZAKLAR:\n1. Sağlık ucunun ASIL işi kaybolmasın: bağımlılıklar düştüğünde anonim yanıt hâlâ 503 dönmeli\n   (orkestratör rotasyondan çıkarabilsin). Daraltma yalnız GÖVDEYİ kısar, durum kodunu değil.\n2. RTM in kendi /health i de aynı sınıf bilgi veriyor mu — bak, veriyorsa aynı daraltmayı uygula.\n3. Sınır tavanı düşük seçilirse izleme sistemi kendini DDoS etmiş olur; anon kovası için ayrı ve\n   yüksek bir tavan kullan, gerekçesini koda yorum olarak yaz.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-b** (türetilmiş — §D116 MEDIUM (b)). Gereksinim satırı: `grep -n \"| M-SEC-b\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-b\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration: anonim /health gövdesinde region/version/providers/scheduler YOK; admin token ile VAR.\n- Bağımlılık düşük senaryosunda anonim yanıt hâlâ 503 (mevcut health testi korunur).\n- scripts/smoke.sh elle koşulur ve 10/10 geçer (ya da güncellenmiş kontrol sayısıyla exit 0).\n- contract:generate sonrası git status temiz.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "151",
-            "updatedAt": "2026-08-26T15:51:58.274Z"
+            "updatedAt": "2026-08-26T16:49:51.069Z"
           }
         ]
       },
@@ -8062,9 +8062,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T15:51:58.275Z",
+      "lastModified": "2026-08-26T16:49:51.069Z",
       "taskCount": 168,
-      "completedCount": 150,
+      "completedCount": 151,
       "tags": [
         "master"
       ]

@@ -7117,7 +7117,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T12:22:43.287Z",
+        "updatedAt": "2026-08-26T12:43:32.416Z",
         "subtasks": [
           {
             "id": 1,
@@ -7136,12 +7136,12 @@
             "description": "İnvariant testi artık partisyonları da sayıyor.",
             "details": "NE YAPILACAK: apps/api/test/integration/data-model.test.ts içindeki\ndescribe(\"row level security\") > it(\"covers every tenant table\") testinin sorgusundan,\nevents_ ön ekli tabloları dışlayan tablename koşulu KALDIRILIR.\nArdından aynı describe bloğuna YENİ bir test eklenir: çalışma zamanı rolüyle (DATABASE_APP_URL)\nkiracı bağlamı AYARLANMADAN doğrudan bir partisyona SELECT atıldığında 0 satır döndüğü ölçülür —\nve ana tablo üzerinden bağlamla okumanın hâlâ çalıştığı AYNI testte doğrulanır (iki yönlü kanıt).\n\nSIRA ÖNEMLİ — ÖNCE KIRMIZI: muafiyeti kaldırdığın ilk koşuda test KIRMIZI gelmeli\n(11 partisyon korumasız listelenir). 150.1 uygulanmışsa yeşile döner. Kırmızıyı GÖRMEDEN geçme:\ngörmediysen ya muafiyet doğru kaldırılmamıştır ya sorgu partisyonları hiç görmüyordur.\nKırmızı/yeşil sırasını HANDOFF notuna YAZ — kanıt, kanaat değil.\n\nDOSYALAR: apps/api/test/integration/data-model.test.ts (RLS describe bloğu).\nREFERANS DESEN: aynı dosyadaki \"hides another tenant...\" testi — iki kiracılı fixture kurup\nçapraz görünürlüğü ölçüyor; yeni test onun kardeşidir.\nÇalışma zamanı rolüyle bağlanma deseni: apps/api/scripts/with-test-datastores.ts ve testlerin\nDATABASE_APP_URL kullanımı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S4-PART** (türetilmiş — NFR-S4). Gereksinim satırı: `grep -n \"| S4-PART\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS4-PART\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration yeşil; \"covers every tenant table\" testi artık events partisyonlarını da sayıyor.\n- Ölçülebilir: test dosyasında partisyon muafiyeti kalmadı (grep ile doğrula).\n- Yeni testin adı ve önce-kırmızı çıktısı HANDOFF notunda geçsin.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "150.1"
             ],
             "parentId": "150",
-            "updatedAt": "2026-08-26T12:22:43.287Z"
+            "updatedAt": "2026-08-26T12:43:32.416Z"
           },
           {
             "id": 3,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T12:22:43.288Z",
+      "lastModified": "2026-08-26T12:43:32.418Z",
       "taskCount": 168,
       "completedCount": 149,
       "tags": [

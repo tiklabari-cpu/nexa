@@ -293,7 +293,238 @@ me:
                     on every incoming message and cannot afford a fetch;
                     `/agents/me/notification-preferences` is the same object on
                     its own.
+                two_factor:
+                  type: object
+                  required: [enabled, pending, recovery_codes_remaining]
+                  description: |
+                    Agent principals only. The caller's own second factor
+                    (NFR-S11 · FR-MOD-00.1). Carried here rather than on an
+                    endpoint of its own: it is a property of the caller, which is
+                    what this route describes, and the account settings screen
+                    has nowhere else to read "it is on, and three recovery codes
+                    are left". Never carries the secret or any code.
+                  properties:
+                    enabled:
+                      type: boolean
+                      description: An enrollment exists and has been confirmed with a code.
+                    pending:
+                      type: boolean
+                      description: |
+                        A secret has been issued but no code has confirmed it
+                        yet — `POST /auth/2fa/enroll` was called and
+                        `POST /auth/2fa/activate` was not.
+                    recovery_codes_remaining:
+                      type: integer
+                      description: Unused codes left. Which ones is never retrievable.
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+
+twoFactorEnroll:
+  post:
+    tags: [Auth]
+    operationId: enrollTwoFactor
+    summary: Start two-factor enrollment
+    description: |
+      Mints a TOTP secret for the caller's own account and returns the
+      `otpauth://` URI an authenticator app imports (NFR-S11 · FR-MOD-00.1).
+
+      Nothing is enabled yet — `activated_at` stays unset until
+      `POST /auth/2fa/activate` proves the app and the server agree about the
+      time. Calling this again before that happens **replaces** the pending
+      secret rather than refusing, so an abandoned attempt (a closed tab, a
+      phone reset halfway through) is not a state anybody gets stuck in.
+
+      Calling it against an already-active factor answers 409
+      `two_factor_already_enabled`: replacing a live second factor without
+      proving anything is what a stolen session would do, and the owner would
+      only find out when their own app started being rejected.
+
+      The secret is in this response and nowhere else it can be read back from.
+    responses:
+      "200":
+        description: Enrollment started
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [secret, otpauth_uri, issuer, account_name]
+              properties:
+                secret:
+                  type: string
+                  description: |
+                    RFC 4648 base32, unpadded. Offered as copyable text for
+                    manual entry, which is also why no QR code is generated.
+                otpauth_uri:
+                  type: string
+                  description: |
+                    `otpauth://totp/…`. Its `algorithm`, `digits` and `period`
+                    are fixed to what verification computes — a URI disagreeing
+                    with the server would enroll an app producing plausible
+                    codes that never match.
+                issuer:
+                  type: string
+                  description: What the authenticator app lists the entry under.
+                account_name:
+                  type: string
+                  description: |
+                    The caller's e-mail address — what distinguishes two entries
+                    for somebody holding a personal and a work account.
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+twoFactorActivate:
+  post:
+    tags: [Auth]
+    operationId: activateTwoFactor
+    summary: Confirm two-factor enrollment with a code
+    description: |
+      Verifies a code against the pending secret, switches the factor on, and
+      returns the recovery sheet — the only response in the API that carries
+      recovery codes in the clear. They are stored hashed and are never
+      retrievable again; `POST /auth/2fa/recovery-codes` issues a new sheet
+      rather than re-showing this one.
+
+      The accepted code's RFC 6238 step becomes the replay floor, so the code
+      just typed cannot be turned around into a session in the seconds it
+      remains valid.
+
+      Activation also sets `two_factor_enabled` on **every** membership the
+      account holds — that flag is a derived copy of this fact, not a second
+      source of truth for it.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [code]
+            properties:
+              code:
+                type: string
+                description: The six digits the authenticator app is showing.
+    responses:
+      "200":
+        description: Two-factor authentication is now active
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled, recovery_codes, recovery_codes_remaining]
+              properties:
+                enabled: { type: boolean, enum: [true] }
+                recovery_codes:
+                  type: array
+                  description: |
+                    Ten single-use codes, `ABCDE-FGHJK`. Shown once. Store them
+                    now — nothing can show them again.
+                  items: { type: string }
+                recovery_codes_remaining: { type: integer }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401":
+        description: |
+          The code was wrong, expired or already spent (`authentication`), or the
+          account has no pending enrollment to confirm (`two_factor_required`).
+          One answer covers wrong, expired and already-spent: which it was is
+          exactly what somebody guessing would like to know.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+
+twoFactor:
+  delete:
+    tags: [Auth]
+    operationId: disableTwoFactor
+    summary: Turn two-factor authentication off
+    description: |
+      Removes the factor and the recovery sheet together, and clears
+      `two_factor_enabled` on every membership the account holds.
+
+      **Requires the account password in the body**, not just a session. A
+      session token that has been stolen is exactly the thing that would
+      otherwise be used to remove the control protecting the account it came
+      from, so this asks for the credential a thief is least likely to hold.
+
+      An account provisioned through SSO has no password. Those callers send
+      `code` instead — a current TOTP code or a recovery code — because
+      otherwise they could enable the factor and never switch it off. It is a
+      weaker step and it is the strongest one that account has.
+
+      Refused with 403 `not_allowed` while the caller belongs to any workspace
+      whose `require_two_factor` policy is on; the refusal names them. Every
+      workspace is considered, not just the one the session is in — an account
+      is global, so a member of a strict workspace could otherwise sign in to a
+      lax one to escape its policy.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/twoFactorReauthentication" }
+    responses:
+      "204": { description: Two-factor authentication removed }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404":
+        description: The account has no two-factor authentication to remove
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
+twoFactorRecoveryCodes:
+  post:
+    tags: [Auth]
+    operationId: regenerateTwoFactorRecoveryCodes
+    summary: Issue a new two-factor recovery sheet
+    description: |
+      Replaces the previous sheet **whole**, unused codes included: somebody
+      asking for a new one is saying the old one is no longer trustworthy, and
+      leaving half of it live would quietly disagree with them.
+
+      Carries the same re-authentication requirement as removing the factor — a
+      fresh sheet is ten standalone second factors, so a stolen session must not
+      be able to print itself one. Requires an already-active factor.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "#/twoFactorReauthentication" }
+    responses:
+      "200":
+        description: A new sheet, shown once
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [recovery_codes, recovery_codes_remaining]
+              properties:
+                recovery_codes:
+                  type: array
+                  items: { type: string }
+                recovery_codes_remaining: { type: integer }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+
+# Shared by the two endpoints that change a live second factor. Both fields are
+# optional in the schema because which one is required depends on the account
+# rather than on the request: an account with a password must send `password`
+# and nothing else will do; an account without one (SSO-provisioned) sends
+# `code`.
+twoFactorReauthentication:
+  type: object
+  properties:
+    password:
+      type: string
+      description: The caller's own account password.
+    code:
+      type: string
+      description: |
+        A current TOTP code or a recovery code. Accepted **only** for accounts
+        with no password — for everyone else the factor cannot re-authenticate
+        its own removal, since the phone is one of the things stolen along with
+        a laptop.
 
 personalAccessTokens:
   get:

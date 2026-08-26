@@ -166,6 +166,14 @@ paths:
     $ref: "./paths/account-lifecycle.yaml#/invitations"
   /invitations/{invitationId}:
     $ref: "./paths/account-lifecycle.yaml#/invitation"
+  /auth/2fa:
+    $ref: "./paths/auth.yaml#/twoFactor"
+  /auth/2fa/enroll:
+    $ref: "./paths/auth.yaml#/twoFactorEnroll"
+  /auth/2fa/activate:
+    $ref: "./paths/auth.yaml#/twoFactorActivate"
+  /auth/2fa/recovery-codes:
+    $ref: "./paths/auth.yaml#/twoFactorRecoveryCodes"
   /auth/personal-access-tokens:
     $ref: "./paths/auth.yaml#/personalAccessTokens"
   /auth/personal-access-tokens/{tokenId}:

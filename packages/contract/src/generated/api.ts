@@ -443,6 +443,135 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/auth/2fa': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Turn two-factor authentication off
+     * @description Removes the factor and the recovery sheet together, and clears
+     *     `two_factor_enabled` on every membership the account holds.
+     *
+     *     **Requires the account password in the body**, not just a session. A
+     *     session token that has been stolen is exactly the thing that would
+     *     otherwise be used to remove the control protecting the account it came
+     *     from, so this asks for the credential a thief is least likely to hold.
+     *
+     *     An account provisioned through SSO has no password. Those callers send
+     *     `code` instead — a current TOTP code or a recovery code — because
+     *     otherwise they could enable the factor and never switch it off. It is a
+     *     weaker step and it is the strongest one that account has.
+     *
+     *     Refused with 403 `not_allowed` while the caller belongs to any workspace
+     *     whose `require_two_factor` policy is on; the refusal names them. Every
+     *     workspace is considered, not just the one the session is in — an account
+     *     is global, so a member of a strict workspace could otherwise sign in to a
+     *     lax one to escape its policy.
+     */
+    delete: operations['disableTwoFactor'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/2fa/enroll': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Start two-factor enrollment
+     * @description Mints a TOTP secret for the caller's own account and returns the
+     *     `otpauth://` URI an authenticator app imports (NFR-S11 · FR-MOD-00.1).
+     *
+     *     Nothing is enabled yet — `activated_at` stays unset until
+     *     `POST /auth/2fa/activate` proves the app and the server agree about the
+     *     time. Calling this again before that happens **replaces** the pending
+     *     secret rather than refusing, so an abandoned attempt (a closed tab, a
+     *     phone reset halfway through) is not a state anybody gets stuck in.
+     *
+     *     Calling it against an already-active factor answers 409
+     *     `two_factor_already_enabled`: replacing a live second factor without
+     *     proving anything is what a stolen session would do, and the owner would
+     *     only find out when their own app started being rejected.
+     *
+     *     The secret is in this response and nowhere else it can be read back from.
+     */
+    post: operations['enrollTwoFactor'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/2fa/activate': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Confirm two-factor enrollment with a code
+     * @description Verifies a code against the pending secret, switches the factor on, and
+     *     returns the recovery sheet — the only response in the API that carries
+     *     recovery codes in the clear. They are stored hashed and are never
+     *     retrievable again; `POST /auth/2fa/recovery-codes` issues a new sheet
+     *     rather than re-showing this one.
+     *
+     *     The accepted code's RFC 6238 step becomes the replay floor, so the code
+     *     just typed cannot be turned around into a session in the seconds it
+     *     remains valid.
+     *
+     *     Activation also sets `two_factor_enabled` on **every** membership the
+     *     account holds — that flag is a derived copy of this fact, not a second
+     *     source of truth for it.
+     */
+    post: operations['activateTwoFactor'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/2fa/recovery-codes': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Issue a new two-factor recovery sheet
+     * @description Replaces the previous sheet **whole**, unused codes included: somebody
+     *     asking for a new one is saying the old one is no longer trustworthy, and
+     *     leaving half of it live would quietly disagree with them.
+     *
+     *     Carries the same re-authentication requirement as removing the factor — a
+     *     fresh sheet is ten standalone second factors, so a stolen session must not
+     *     be able to print itself one. Requires an already-active factor.
+     */
+    post: operations['regenerateTwoFactorRecoveryCodes'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/personal-access-tokens': {
     parameters: {
       query?: never;
@@ -9392,6 +9521,17 @@ export interface components {
       | 'validation'
       | 'website_exists'
       | 'wrong_product_version';
+    twoFactorReauthentication: {
+      /** @description The caller's own account password. */
+      password?: string;
+      /**
+       * @description A current TOTP code or a recovery code. Accepted **only** for accounts
+       *     with no password — for everyone else the factor cannot re-authenticate
+       *     its own removal, since the phone is one of the things stolen along with
+       *     a laptop.
+       */
+      code?: string;
+    };
     /**
      * @description A registered handset, as everything except the sender is allowed to see it.
      *     There is no `token` field, and there is no operation that adds one.
@@ -9940,6 +10080,26 @@ export interface operations {
              *     its own.
              */
             notification_preferences?: components['schemas']['NotificationPreferences'];
+            /**
+             * @description Agent principals only. The caller's own second factor
+             *     (NFR-S11 · FR-MOD-00.1). Carried here rather than on an
+             *     endpoint of its own: it is a property of the caller, which is
+             *     what this route describes, and the account settings screen
+             *     has nowhere else to read "it is on, and three recovery codes
+             *     are left". Never carries the secret or any code.
+             */
+            two_factor?: {
+              /** @description An enrollment exists and has been confirmed with a code. */
+              enabled: boolean;
+              /**
+               * @description A secret has been issued but no code has confirmed it
+               *     yet — `POST /auth/2fa/enroll` was called and
+               *     `POST /auth/2fa/activate` was not.
+               */
+              pending: boolean;
+              /** @description Unused codes left. Which ones is never retrievable. */
+              recovery_codes_remaining: number;
+            };
           };
         };
       };
@@ -10365,6 +10525,166 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+    };
+  };
+  disableTwoFactor: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['twoFactorReauthentication'];
+      };
+    };
+    responses: {
+      /** @description Two-factor authentication removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description The account has no two-factor authentication to remove */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  enrollTwoFactor: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Enrollment started */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /**
+             * @description RFC 4648 base32, unpadded. Offered as copyable text for
+             *     manual entry, which is also why no QR code is generated.
+             */
+            secret: string;
+            /**
+             * @description `otpauth://totp/…`. Its `algorithm`, `digits` and `period`
+             *     are fixed to what verification computes — a URI disagreeing
+             *     with the server would enroll an app producing plausible
+             *     codes that never match.
+             */
+            otpauth_uri: string;
+            /** @description What the authenticator app lists the entry under. */
+            issuer: string;
+            /**
+             * @description The caller's e-mail address — what distinguishes two entries
+             *     for somebody holding a personal and a work account.
+             */
+            account_name: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  activateTwoFactor: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The six digits the authenticator app is showing. */
+          code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Two-factor authentication is now active */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @enum {boolean} */
+            enabled: true;
+            /**
+             * @description Ten single-use codes, `ABCDE-FGHJK`. Shown once. Store them
+             *     now — nothing can show them again.
+             */
+            recovery_codes: string[];
+            recovery_codes_remaining: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /**
+       * @description The code was wrong, expired or already spent (`authentication`), or the
+       *     account has no pending enrollment to confirm (`two_factor_required`).
+       *     One answer covers wrong, expired and already-spent: which it was is
+       *     exactly what somebody guessing would like to know.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      403: components['responses']['Forbidden'];
+      409: components['responses']['Conflict'];
+    };
+  };
+  regenerateTwoFactorRecoveryCodes: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['twoFactorReauthentication'];
+      };
+    };
+    responses: {
+      /** @description A new sheet, shown once */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            recovery_codes: string[];
+            recovery_codes_remaining: number;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
     };
   };
   listPersonalAccessTokens: {

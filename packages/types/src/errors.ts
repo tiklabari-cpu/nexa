@@ -64,6 +64,15 @@ export const ERROR_TYPES = [
   // the rest of this list is written (`group_offline`, not `unavailable`).
   'ticket_exists',
   'too_many_requests',
+  // Nexa addition — two-factor authentication (NFR-S11 · FR-MOD-00.1). Asking
+  // to set up a second factor on an account that already has a live one
+  // (S11-2FA-d). A conflict rather than a malformed request: the body was fine,
+  // the account's state is what refused it — and the client needs to tell this
+  // apart from a rejected code, because the answer is "turn it off first", not
+  // "try again". Kept narrow like `sandbox_exists`/`ticket_exists` rather than
+  // folded into a generic conflict, which is how the rest of this list is
+  // written.
+  'two_factor_already_enabled',
   // Nexa addition — two-factor authentication (NFR-S11 · FR-MOD-00.1). The
   // second login step (S11-2FA-e) answers with this rather than
   // `authentication`: the password was correct, a second factor is simply
@@ -116,6 +125,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   takeover_conflict: 409,
   ticket_exists: 409,
   too_many_requests: 429,
+  two_factor_already_enabled: 409,
   // Not authenticated yet, same as `authentication` — the second factor is
   // the missing piece, not a different kind of failure.
   two_factor_required: 401,

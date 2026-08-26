@@ -70,6 +70,7 @@ describe('sso connections', () => {
     idp_certificate_pem: string;
     previous_certificate_pem: string | null;
     previous_certificate_expires_at: string | null;
+    verified_domains: string[];
     attribute_mapping: Record<string, string>;
     allow_idp_initiated: boolean;
     enabled: boolean;
@@ -86,6 +87,7 @@ describe('sso connections', () => {
     idpEntityId: 'https://idp.example.test/saml/metadata',
     idpSsoUrl: 'https://idp.example.test/saml/sso',
     idpCertificatePem: PEM,
+    verifiedDomains: ['acme.test'],
     ...overrides,
   });
 
@@ -95,6 +97,7 @@ describe('sso connections', () => {
     idp_entity_id: 'https://idp.example.test/saml/metadata',
     idp_sso_url: 'https://idp.example.test/saml/sso',
     idp_certificate_pem: VALID_CERTIFICATE_PEM,
+    verified_domains: ['acme.test'],
     ...overrides,
   });
 
@@ -385,6 +388,93 @@ describe('sso connections', () => {
       auth(ownerWriteToken),
     );
     expect(res.statusCode).toBe(400);
+  });
+
+  // --- Write surface: the domains a connection may provision from (§D116) ----
+
+  it('normalises the verified domains it stores, and deduplicates them', async () => {
+    // Case, surrounding space and the DNS root dot are three spellings of one
+    // domain. Storing them as three would mean an address matching one and not
+    // the others, and a list an owner reads as three different claims.
+    const created = await create({
+      verified_domains: ['ACME.test', ' acme.test. ', 'Corp.Acme.Test'],
+    });
+    expect(created.verified_domains).toEqual(['acme.test', 'corp.acme.test']);
+  });
+
+  it('refuses a wildcard rather than expanding it', async () => {
+    // The refusal is the fix. `*.acme.test` reads like a convenience and is the
+    // vulnerability back again: running `acme.test` says nothing about who
+    // controls `payroll.acme.test`, and the moment one form of suffix matching
+    // is accepted, "verified" stops meaning "we checked this exact name".
+    const res = await server.post(
+      '/settings/sso',
+      createBody({ verified_domains: ['*.acme.test'] }),
+      auth(ownerWriteToken),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(errorType(res)).toBe('validation');
+    // Named, not merely refused: this is the mistake somebody makes first.
+    expect((res.json() as { error: { message: string } }).error.message).toContain('wildcard');
+    expect(await owner.ssoConnection.count()).toBe(0);
+  });
+
+  it('refuses anything that is not a bare domain, and an empty list', async () => {
+    for (const domains of [
+      ['https://acme.test'], // a URL
+      ['acme.test/path'], // a path
+      ['acme.test:443'], // a port
+      ['ada@acme.test'], // an address
+      ['localhost'], // a machine, not a domain
+      ['.acme.test'], // a leading dot
+      ['-acme.test'], // a label opening with a hyphen
+      ['acme .test'], // a space
+      [], // nothing at all — a federation that would refuse every first sign-in
+    ]) {
+      const res = await server.post(
+        '/settings/sso',
+        createBody({ verified_domains: domains }),
+        auth(ownerWriteToken),
+      );
+      expect(res.statusCode, JSON.stringify(domains)).toBe(400);
+    }
+    expect(await owner.ssoConnection.count()).toBe(0);
+  });
+
+  it('bounds how many domains one connection may claim', async () => {
+    const res = await server.post(
+      '/settings/sso',
+      createBody({
+        verified_domains: Array.from({ length: 21 }, (_, i) => `d${i}.acme.test`),
+      }),
+      auth(ownerWriteToken),
+    );
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('replaces the domain list wholesale on a patch, leaving the rest alone', async () => {
+    const created = await create({ verified_domains: ['acme.test', 'old.acme.test'] });
+
+    const res = await server.patch(
+      `/settings/sso/${created.id}`,
+      { verified_domains: ['acme.test'] },
+      auth(ownerWriteToken),
+    );
+    expect(res.statusCode).toBe(200);
+    expect(wire(res).verified_domains).toEqual(['acme.test']);
+    // The certificate is untouched: a domain change is not a rotation.
+    expect(wire(res).idp_certificate_pem).toBe(created.idp_certificate_pem);
+
+    // And it cannot be emptied — a connection that provisions nobody is a
+    // decision with a switch (`enabled`), not a side effect of clearing a field.
+    const emptied = await server.patch(
+      `/settings/sso/${created.id}`,
+      { verified_domains: [] },
+      auth(ownerWriteToken),
+    );
+    expect(emptied.statusCode).toBe(400);
+    const after = await owner.ssoConnection.findFirst({ where: { id: created.id } });
+    expect(after!.verifiedDomains).toEqual(['acme.test']);
   });
 
   it('refuses a pasted chain rather than trusting its first certificate', async () => {

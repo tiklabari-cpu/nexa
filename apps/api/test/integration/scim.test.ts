@@ -121,7 +121,32 @@ describe('scim server core', () => {
       ownerId: fx.a.ownerAccountId,
       scopes: ['access_rules:rw', 'agents--all:rw', 'accounts--all:rw'],
     });
+    await Promise.all([verifyDomains(fx.a.licenseId), verifyDomains(fx.b.licenseId)]);
   });
+
+  /**
+   * Give a workspace an identity provider that has verified `example.test`.
+   *
+   * Provisioning is confined to the domains a workspace's SSO connections
+   * declare (§D116 MEDIUM (a)), and both fixture tenants live on
+   * `example.test`, so this is what makes the *ordinary* cases in this file
+   * ordinary again. `enabled: false` on purpose: nothing here signs anybody in,
+   * and a switched-off connection still says which domains the workspace is
+   * authoritative for — which is also how a workspace that provisions over SCIM
+   * without federating sign-in configures this.
+   */
+  async function verifyDomains(licenseId: bigint, domains = ['example.test']): Promise<void> {
+    await owner.ssoConnection.create({
+      data: {
+        licenseId,
+        name: 'Directory',
+        idpEntityId: `https://idp.example.test/${licenseId}`,
+        idpSsoUrl: 'https://idp.example.test/sso',
+        idpCertificatePem: '-----BEGIN CERTIFICATE-----\nunused\n-----END CERTIFICATE-----\n',
+        verifiedDomains: domains,
+      },
+    });
+  }
 
   // --- Authentication --------------------------------------------------------
 
@@ -427,6 +452,53 @@ describe('scim server core', () => {
       const res = await server.post('/scim/v2/Users', { userName: 'grace' }, scimBody(scimA));
       expect(res.statusCode).toBe(400);
       expect(asError(res).scimType).toBe('invalidValue');
+    });
+
+    it('refuses an address outside the domains this workspace has verified', async () => {
+      // The other half of §D116 MEDIUM (a). A connector runs unattended with a
+      // credential an admin minted, and the invitation path it stands next to
+      // cannot do this: an invitation only becomes a membership when the person
+      // accepts it, so it can neither adopt a stranger's account nor occupy the
+      // account row of an address that never signed up. Provisioning could do
+      // both, for any address it cared to name.
+      const outsider = 'victim@unrelated.example.test';
+      const res = await server.post(
+        '/scim/v2/Users',
+        { userName: outsider, externalId: 'idp-outsider' },
+        scimBody(scimA),
+      );
+
+      expect(res.statusCode).toBe(400);
+      expect(asError(res).scimType).toBe('invalidValue');
+      // Nothing was written: the address stays free for whoever really holds it.
+      expect(await owner.account.count({ where: { email: outsider } })).toBe(0);
+
+      // And the workspace can see it happened. A connector that quietly fails
+      // is how a directory drifts out of step for a month before anybody looks.
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'security.provisioning_domain_rejected' },
+      });
+      expect(entries).toHaveLength(1);
+      // The domain is named — that is what the admin has to add — but the local
+      // part is not: it is a person's address, and this is an append-only table.
+      expect(entries[0]!.metadata).toMatchObject({ domain: 'unrelated.example.test' });
+      expect(JSON.stringify(entries[0]!.metadata)).not.toContain('victim');
+    });
+
+    it('provisions nobody at all for a workspace that has verified nothing', async () => {
+      // The fail-closed half. An empty (or absent) list must not read as "every
+      // domain is fine" — that reading would leave the finding open for exactly
+      // the workspaces that never filled the field in, which is all of them
+      // until somebody does.
+      await owner.ssoConnection.deleteMany({ where: { licenseId: fx.a.licenseId } });
+
+      const res = await server.post('/scim/v2/Users', newUser, scimBody(scimA));
+      expect(res.statusCode).toBe(400);
+      expect(await owner.account.count({ where: { email: newUser.userName } })).toBe(0);
+
+      // Workspace B is unaffected: the list is read per license, so one
+      // workspace's federation can neither widen nor narrow another's.
+      expect((await server.post('/scim/v2/Users', newUser, scimBody(scimB))).statusCode).toBe(201);
     });
 
     it('refuses a body that is not valid JSON, in the SCIM envelope', async () => {

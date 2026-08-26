@@ -94,6 +94,14 @@ describe('sso end-to-end verification', () => {
 
   // --- Helpers ---------------------------------------------------------------
 
+  /**
+   * The domains this workspace's identity provider — and, through the same
+   * rows, its SCIM connector — may provision from (§D116 MEDIUM (a)). The
+   * fixtures live on `example.test` and the newcomer this file provisions on
+   * `corp.example.test`; both are the company's, which is the ordinary case.
+   */
+  const VERIFIED_DOMAINS = ['example.test', 'corp.example.test'];
+
   async function connect(
     overrides: Record<string, unknown> = {},
     tenant = fx.a,
@@ -105,6 +113,7 @@ describe('sso end-to-end verification', () => {
         idpEntityId: MOCK_IDP_ENTITY_ID,
         idpSsoUrl: IDP_SSO_URL,
         idpCertificatePem: MOCK_IDP_CERTIFICATE,
+        verifiedDomains: VERIFIED_DOMAINS,
         enabled: true,
         ...overrides,
       },

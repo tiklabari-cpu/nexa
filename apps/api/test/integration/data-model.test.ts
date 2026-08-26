@@ -1873,6 +1873,32 @@ describe('data model invariants', () => {
       }
     });
 
+    it('refuses a verified-domain list nothing could ever match', async () => {
+      // Just-in-time provisioning compares these for equality against the
+      // domain half of an asserted address (§D116 MEDIUM (a)), so an uppercase
+      // element, a blank one or a NULL is not merely untidy — it is a claim the
+      // owner believes they made and no sign-in can ever satisfy. Bounded too:
+      // this column is read on every federated login.
+      for (const verifiedDomains of [
+        ['ACME.test'],
+        [''],
+        ['acme test'],
+        ['acme.test', 'ACME.test'],
+        Array.from({ length: 21 }, (_, i) => `d${i}.acme.test`),
+      ]) {
+        await expect(
+          owner.ssoConnection.create({ data: connection({ verifiedDomains }) }),
+          JSON.stringify(verifiedDomains),
+        ).rejects.toThrow(/sso_connections_verified_domains_check/i);
+      }
+
+      await expect(
+        owner.ssoConnection.create({
+          data: connection({ verifiedDomains: ['acme.test', 'corp.acme.test'] }),
+        }),
+      ).resolves.toBeDefined();
+    });
+
     it('is removed when its license is deleted (onDelete cascade)', async () => {
       await owner.ssoConnection.create({ data: connection({ licenseId: fx.b.licenseId }) });
       await owner.license.delete({ where: { id: fx.b.licenseId } });
@@ -1889,6 +1915,9 @@ describe('data model invariants', () => {
       expect(saved.enabled).toBe(false);
       expect(saved.allowIdpInitiated).toBe(false);
       expect(saved.attributeMapping).toEqual({});
+      // The third "off": a connection that has verified nothing provisions
+      // nobody, so the default cannot be a list that admits anyone.
+      expect(saved.verifiedDomains).toEqual([]);
       // The certificate is stored as it arrives — public, so nothing is hashed.
       expect(saved.idpCertificatePem).toBe(PEM);
     });

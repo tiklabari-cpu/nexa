@@ -71,6 +71,9 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       // "who was turned away at the door, and why" — even though the door in
       // this case is the region rather than the credential (NFR-C4).
       'security.region_rejected',
+      // Same question again, one door along: a provisioning connector asked for
+      // somebody outside the domains this workspace has verified (NFR-S11).
+      'security.provisioning_domain_rejected',
     ],
   },
   {

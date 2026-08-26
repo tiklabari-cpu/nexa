@@ -2378,6 +2378,13 @@ export interface paths {
      *     so the scheme is a security boundary; plain http is accepted only for a
      *     loopback address, which is how a local identity-provider harness is tested.
      *
+     *     `verified_domains` is required, and it is what confines just-in-time
+     *     provisioning. Without it an identity provider could assert any address on
+     *     the internet and have it provisioned — pulling a stranger's existing
+     *     account into this workspace, or occupying the account row of somebody who
+     *     never signed up and could then never register. A workspace's own SCIM
+     *     connector reads the union of these lists for the same reason.
+     *
      *     `enabled` defaults to off. Saving the configuration and opening the door
      *     are two decisions.
      *
@@ -6321,6 +6328,8 @@ export interface components {
        * @description When the overlap stops being trusted. Null when there is none.
        */
       previous_certificate_expires_at: string | null;
+      /** @description The e-mail domains this identity provider has been declared authoritative for. Just-in-time provisioning — SAML sign-in and the workspace's SCIM connector alike — is confined to addresses inside them, so a workspace's own IdP cannot adopt a stranger's account or occupy the address of somebody who never signed up. Stored lowercase and matched exactly, never by suffix: verifying `acme.test` says nothing about `mail.acme.test`. An empty list provisions nobody. */
+      verified_domains: string[];
       attribute_mapping: components['schemas']['SsoAttributeMapping'];
       /** @description Whether an assertion the IdP sends unsolicited is accepted. False by default — an IdP-initiated flow gives up the `InResponseTo` binding that makes replay detectable, so it is a choice, never inherited. */
       allow_idp_initiated: boolean;
@@ -13427,6 +13436,8 @@ export interface operations {
           idp_sso_url: string;
           /** @description The IdP's public signing certificate, PEM-encoded. */
           idp_certificate_pem: string;
+          /** @description The e-mail domains this identity provider is authoritative for. Just-in-time provisioning is confined to them, so a connection cannot adopt a stranger's account or occupy an address that never signed up. Bare domains only — no scheme, port, path or `@` — normalised to lowercase and deduplicated. A `*.` wildcard is refused rather than expanded: verifying `acme.test` says nothing about who controls `payroll.acme.test`, and one form of suffix matching is all it takes for "verified" to stop meaning "we checked this exact name". At least one is required — an empty list would configure a federation that silently refuses every first sign-in. */
+          verified_domains: string[];
           attribute_mapping?: components['schemas']['SsoAttributeMapping'];
           /** @default false */
           allow_idp_initiated?: boolean;
@@ -13504,6 +13515,8 @@ export interface operations {
           idp_entity_id?: string;
           idp_sso_url?: string;
           idp_certificate_pem?: string;
+          /** @description Replaces the whole list. Still at least one: a workspace that wants this connection to provision nobody switches it off, rather than reaching the same state by emptying a field. */
+          verified_domains?: string[];
           attribute_mapping?: components['schemas']['SsoAttributeMapping'];
           allow_idp_initiated?: boolean;
           enabled?: boolean;

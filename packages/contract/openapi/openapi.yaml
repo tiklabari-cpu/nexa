@@ -1182,6 +1182,7 @@ components:
           idp_certificate_pem,
           previous_certificate_pem,
           previous_certificate_expires_at,
+          verified_domains,
           attribute_mapping,
           allow_idp_initiated,
           enabled,
@@ -1219,6 +1220,18 @@ components:
           format: date-time
           nullable: true
           description: When the overlap stops being trusted. Null when there is none.
+        verified_domains:
+          type: array
+          maxItems: 20
+          items: { type: string, maxLength: 253 }
+          description: >-
+            The e-mail domains this identity provider has been declared
+            authoritative for. Just-in-time provisioning — SAML sign-in and the
+            workspace's SCIM connector alike — is confined to addresses inside
+            them, so a workspace's own IdP cannot adopt a stranger's account or
+            occupy the address of somebody who never signed up. Stored lowercase
+            and matched exactly, never by suffix: verifying `acme.test` says
+            nothing about `mail.acme.test`. An empty list provisions nobody.
         attribute_mapping: { $ref: "#/components/schemas/SsoAttributeMapping" }
         allow_idp_initiated:
           type: boolean

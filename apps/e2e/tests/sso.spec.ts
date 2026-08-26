@@ -74,6 +74,10 @@ test.describe('single sign-on', () => {
       .getByLabel('Sign-on URL')
       .fill(`${metadata.sso_url}?user=${encodeURIComponent(SSO_MEMBER)}`);
     await section().getByLabel('IdP signing certificate (PEM)').fill(metadata.certificate_pem);
+    // The domains this identity provider may provision from (PLAN §D116). The
+    // seeded member below lives on `acme.localhost`; without this the ACS
+    // refuses the assertion and the journey stops one hop before the panel.
+    await section().getByLabel('Verified domains').fill('acme.localhost');
     await section().getByLabel('Enable immediately').check();
 
     // The format check is local by design (§D99): it must not reach the IdP.

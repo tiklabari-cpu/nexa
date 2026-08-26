@@ -48,6 +48,7 @@ const CONNECTIONS = {
       idp_certificate_pem: VALID_PEM,
       previous_certificate_pem: null,
       previous_certificate_expires_at: null,
+      verified_domains: ['acme.com'],
       attribute_mapping: {},
       allow_idp_initiated: false,
       enabled: true,
@@ -86,7 +87,7 @@ function mockGet(path: string): unknown {
   throw new Error(`unexpected GET ${path}`);
 }
 
-/** Fills the four required SSO metadata fields with valid values. */
+/** Fills the five required SSO metadata fields with valid values. */
 async function fillValidSsoForm(): Promise<void> {
   await userEvent.type(screen.getByLabelText('Name'), 'Okta (corp)');
   await userEvent.type(screen.getByLabelText('IdP entity id'), 'http://www.okta.com/exk1');
@@ -98,6 +99,7 @@ async function fillValidSsoForm(): Promise<void> {
   // pastes this from their IdP console rather than typing it key by key.
   await userEvent.click(screen.getByLabelText('IdP signing certificate (PEM)'));
   await userEvent.paste(VALID_PEM);
+  await userEvent.type(screen.getByLabelText('Verified domains'), 'acme.com');
 }
 
 beforeEach(() => {
@@ -117,6 +119,7 @@ describe('verifySsoMetadata', () => {
       idp_entity_id: 'http://www.okta.com/exk1',
       idp_sso_url: 'https://corp.okta.com/app/exk1/sso/saml',
       idp_certificate_pem: VALID_PEM,
+      verified_domains: 'acme.com',
       attribute_email: '',
       attribute_name: '',
     });
@@ -128,6 +131,7 @@ describe('verifySsoMetadata', () => {
       idp_entity_id: 'entity',
       idp_sso_url: 'https://idp.example/sso',
       idp_certificate_pem: 'not a certificate',
+      verified_domains: 'acme.com',
       attribute_email: '',
       attribute_name: '',
     });
@@ -142,6 +146,7 @@ describe('verifySsoMetadata', () => {
       idp_entity_id: 'entity',
       idp_sso_url: 'http://idp.example/sso',
       idp_certificate_pem: VALID_PEM,
+      verified_domains: 'acme.com',
       attribute_email: '',
       attribute_name: '',
     });
@@ -156,6 +161,7 @@ describe('verifySsoMetadata', () => {
       idp_entity_id: 'entity',
       idp_sso_url: 'https://idp.example/sso',
       idp_certificate_pem: VALID_PEM,
+      verified_domains: 'acme.com',
       attribute_email: '',
       attribute_name: 'displayName',
     });
@@ -173,7 +179,7 @@ describe('SsoConnection', () => {
     expect(screen.getByText('http://www.okta.com/exk1a2b3c4')).toBeInTheDocument();
   });
 
-  it('disables Add connection until the metadata fields are filled, certificate included', async () => {
+  it('disables Add connection until the metadata fields are filled, certificate and domains included', async () => {
     renderComponent(<SsoConnection canEdit />);
     await screen.findByText('Okta (corp)');
 
@@ -199,6 +205,12 @@ describe('SsoConnection', () => {
     await userEvent.paste(VALID_PEM);
 
     expect(screen.queryByText('Paste the IdP certificate.')).not.toBeInTheDocument();
+    // Still disabled: the domains this identity provider may provision from are
+    // required too, and forgetting them is how a connection ends up refusing
+    // every first sign-in (PLAN §D116).
+    expect(submit).toBeDisabled();
+
+    await userEvent.type(screen.getByLabelText('Verified domains'), 'acme.com');
     expect(submit).toBeEnabled();
   });
 
@@ -241,11 +253,57 @@ describe('SsoConnection', () => {
         idp_entity_id: 'http://www.okta.com/exk1',
         idp_sso_url: 'https://corp.okta.com/app/exk1/sso/saml',
         idp_certificate_pem: VALID_PEM,
+        verified_domains: ['acme.com'],
         attribute_mapping: undefined,
         allow_idp_initiated: false,
         enabled: false,
       }),
     );
+  });
+
+  it('splits and normalises the verified domains it sends', async () => {
+    // Typed as one field because that is how a list of domains arrives from a
+    // browser; sent as an array because that is what the contract takes. Case
+    // and the DNS root dot are the same domain, so the screen does not offer
+    // three ways to say one thing (PLAN §D116).
+    api.post.mockResolvedValue(CONNECTIONS.items[0]);
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await fillValidSsoForm();
+    await userEvent.clear(screen.getByLabelText('Verified domains'));
+    await userEvent.type(
+      screen.getByLabelText('Verified domains'),
+      'ACME.com, corp.acme.com. , acme.com',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Add connection' }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        '/settings/sso',
+        expect.objectContaining({ verified_domains: ['acme.com', 'corp.acme.com'] }),
+      ),
+    );
+  });
+
+  it('Verify format refuses a wildcard domain and says why', async () => {
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('Okta (corp)');
+
+    await fillValidSsoForm();
+    await userEvent.clear(screen.getByLabelText('Verified domains'));
+    await userEvent.type(screen.getByLabelText('Verified domains'), '*.acme.com');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify format' }));
+
+    expect(screen.getByRole('status')).toHaveTextContent(
+      'Remove the wildcard from *.acme.com — list each domain in full, subdomains included.',
+    );
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('shows which domains a connection may provision from', async () => {
+    renderComponent(<SsoConnection canEdit />);
+    expect(await screen.findByText('Provisions: acme.com')).toBeInTheDocument();
   });
 
   it('asks for confirmation before removing a connection, and only removes on confirm', async () => {

@@ -413,6 +413,11 @@ export const settings: Messages = {
   'settings.sso.ssoUrlError': 'Enter the IdP sign-on URL.',
   'settings.sso.certificateLabel': 'IdP signing certificate (PEM)',
   'settings.sso.certificateError': 'Paste the IdP certificate.',
+  'settings.sso.verifiedDomainsLabel': 'Verified domains',
+  'settings.sso.verifiedDomainsError': 'Enter at least one domain, like acme.com.',
+  'settings.sso.verifiedDomainsHint':
+    'Comma-separated. Only addresses in these domains can be provisioned by this identity provider or by SCIM — one per line of your company’s domains, in full and without a wildcard.',
+  'settings.sso.verifiedDomainsSummary': 'Provisions: {domains}',
   'settings.sso.emailAttributeLabel': 'Email attribute (optional)',
   'settings.sso.nameAttributeLabel': 'Name attribute (optional)',
   'settings.sso.allowIdpInitiatedLabel': 'Allow IdP-initiated sign-in',

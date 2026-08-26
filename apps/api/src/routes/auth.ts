@@ -11,6 +11,7 @@ import {
 } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { verifyPassword } from '../lib/crypto.js';
 import { poweredByFor } from '../lib/entitlements.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant, type TenantContext } from '../lib/tenant.js';
@@ -22,6 +23,7 @@ import {
   type AuditEntry,
 } from '../services/audit/audit-log.js';
 import { OauthService } from '../services/auth/oauth-service.js';
+import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
 import {
   NOTIFICATION_PREFERENCE_SELECT,
   serialiseNotificationPreferences,
@@ -74,6 +76,21 @@ const createPatBody = z.object({
   expires_in_days: z.number().int().min(1).max(365).optional(),
 });
 
+/** The one field `POST /auth/2fa/activate` takes: what the app is showing now. */
+const activateTwoFactorBody = z.object({ code: z.string().trim().min(1).max(32) });
+
+/**
+ * Re-authentication for the two endpoints that change a live second factor.
+ *
+ * Both fields are optional *here* because which one is required depends on the
+ * account, not on the request — see `reauthenticate`. Nothing is trimmed out of
+ * `password`: leading and trailing space is part of a password.
+ */
+const reauthenticateBody = z.object({
+  password: passwordSchema.optional(),
+  code: z.string().trim().min(1).max(64).optional(),
+});
+
 const customerTokenBody = z.object({
   organization_id: z.string().uuid(),
   customer_id: z.string().uuid().optional(),
@@ -123,6 +140,7 @@ export default async function authRoutes(
     authorizationCodeTtl: env.AUTH_CODE_TTL,
     auditChainSecret: env.AUDIT_CHAIN_SECRET,
   });
+  const twoFactor = new TwoFactorService(app.db);
 
   /**
    * Best-effort audit write. Authentication and credential management must not
@@ -463,40 +481,50 @@ export default async function authRoutes(
       // falling into the agent branch below.
       if (principal.kind !== 'agent') throw ApiError.notFound('Resource not found.');
 
-      const profile = await request.withTenant(async (tx) => {
-        const [account, membership, license, organization] = await Promise.all([
-          tx.account.findUnique({
-            where: { id: principal.accountId },
-            select: { email: true, name: true, avatarUrl: true },
-          }),
-          tx.agentMembership.findUnique({
-            where: {
-              licenseId_agentId: { licenseId: principal.licenseId, agentId: principal.accountId },
-            },
-            select: {
-              routingStatus: true,
-              concurrentChatsLimit: true,
-              ...NOTIFICATION_PREFERENCE_SELECT,
-            },
-          }),
-          // The onboarding gate: the shell reads this to decide whether to send a
-          // new owner to the first-run wizard, so it rides along with the profile
-          // the app already fetches on load rather than costing a second request.
-          tx.license.findUnique({
-            where: { id: principal.licenseId },
-            select: { onboardingCompletedAt: true },
-          }),
-          // The mobile Settings → Account card's only source for "which
-          // workspace" (13.7-r) — a long-lived session has no other request
-          // that would carry it (the console reads it once, off `/auth/login`'s
-          // membership list, and never needs it again).
-          tx.organization.findUnique({
-            where: { id: principal.organizationId },
-            select: { name: true },
-          }),
-        ]);
-        return { account, membership, license, organization };
-      });
+      // The caller's own second factor rides along with the profile rather than
+      // getting an endpoint of its own (S11-2FA-d): it is a property of the
+      // caller, which is the question this route answers, and the account
+      // settings screen (S11-2FA-f) has nowhere else to read "it is on, and
+      // three recovery codes are left". Outside the tenant transaction because
+      // `account_two_factor` is per-account and reachable only through a
+      // SECURITY DEFINER function.
+      const [profile, twoFactorStatus] = await Promise.all([
+        request.withTenant(async (tx) => {
+          const [account, membership, license, organization] = await Promise.all([
+            tx.account.findUnique({
+              where: { id: principal.accountId },
+              select: { email: true, name: true, avatarUrl: true },
+            }),
+            tx.agentMembership.findUnique({
+              where: {
+                licenseId_agentId: { licenseId: principal.licenseId, agentId: principal.accountId },
+              },
+              select: {
+                routingStatus: true,
+                concurrentChatsLimit: true,
+                ...NOTIFICATION_PREFERENCE_SELECT,
+              },
+            }),
+            // The onboarding gate: the shell reads this to decide whether to send a
+            // new owner to the first-run wizard, so it rides along with the profile
+            // the app already fetches on load rather than costing a second request.
+            tx.license.findUnique({
+              where: { id: principal.licenseId },
+              select: { onboardingCompletedAt: true },
+            }),
+            // The mobile Settings → Account card's only source for "which
+            // workspace" (13.7-r) — a long-lived session has no other request
+            // that would carry it (the console reads it once, off `/auth/login`'s
+            // membership list, and never needs it again).
+            tx.organization.findUnique({
+              where: { id: principal.organizationId },
+              select: { name: true },
+            }),
+          ]);
+          return { account, membership, license, organization };
+        }),
+        twoFactor.status(principal.accountId),
+      ]);
 
       return reply.send({
         kind: 'agent',
@@ -519,6 +547,14 @@ export default async function authRoutes(
         // second round trip (13.7-c).
         notification_preferences: serialiseNotificationPreferences(profile.membership),
         onboarding_completed: profile.license?.onboardingCompletedAt != null,
+        two_factor: {
+          enabled: twoFactorStatus.enabled,
+          pending: twoFactorStatus.pending,
+          // How many are left, never which ones. The count is what lets the
+          // settings screen warn before somebody runs out; the codes themselves
+          // were shown once and are not retrievable.
+          recovery_codes_remaining: twoFactorStatus.recoveryCodesRemaining,
+        },
       });
     },
   );
@@ -645,6 +681,251 @@ export default async function authRoutes(
       return reply.status(204).send();
     },
   );
+
+  // --- Two-factor authentication ---------------------------------------------
+  //
+  // Four endpoints, all on the caller's *own* account: there is no path here to
+  // another person's second factor, and no scope that grants one. They follow
+  // the personal-access-token family above — authenticated, resource-shaped, and
+  // showing a secret exactly once — because that is what a second factor is.
+  //
+  // Brute force: these all sit behind the agent rate-limit bucket (180/min per
+  // token) and each requires a session that already belongs to the account being
+  // changed, so guessing a TOTP code here means guessing against an account one
+  // is already signed in to. The surface where a failure counter genuinely
+  // belongs is the login challenge — an unauthenticated caller, one password
+  // away — and that endpoint (S11-2FA-e) is where it should land.
+
+  /**
+   * Mint a secret. Nothing is enabled until `/auth/2fa/activate` proves the
+   * authenticator app and this server agree about the time.
+   *
+   * Calling this twice before activating replaces the pending secret rather than
+   * refusing, so a closed tab or a reset phone halfway through is not a state
+   * anybody gets stuck in. Calling it against an *active* factor is refused with
+   * 409 — see `auth_two_factor_begin_enrollment`.
+   */
+  app.post(
+    '/auth/2fa/enroll',
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal() as AgentPrincipal;
+
+      // The label the authenticator app shows under "Nexa". The address rather
+      // than the display name: it is what distinguishes two entries for somebody
+      // who holds a personal and a work account.
+      const account = await request.withTenant((tx) =>
+        tx.account.findUnique({ where: { id: principal.accountId }, select: { email: true } }),
+      );
+      if (!account) throw ApiError.notFound('Resource not found.');
+
+      const enrollment = await twoFactor.beginEnrollment(principal.accountId, account.email);
+
+      // The secret is deliberately not in the entry: an audit log is read by
+      // people who are not its subject, and a TOTP secret in one would be a
+      // working second factor sitting in a table designed never to be deleted.
+      await audit(
+        request,
+        request.tenant(),
+        {},
+        {
+          action: 'security.two_factor_enrollment_started',
+          target: `account:${principal.accountId}`,
+        },
+      );
+
+      reply.header('Cache-Control', 'no-store');
+      return reply.send({
+        secret: enrollment.secret,
+        otpauth_uri: enrollment.otpauthUri,
+        issuer: TOTP_ISSUER,
+        account_name: account.email,
+      });
+    },
+  );
+
+  /**
+   * Confirm the enrollment and hand over the recovery sheet.
+   *
+   * This is the only response in the system that carries recovery codes in the
+   * clear. Regeneration produces a new sheet; nothing ever re-reads an old one.
+   */
+  app.post(
+    '/auth/2fa/activate',
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal() as AgentPrincipal;
+      const body = parse(activateTwoFactorBody, request.body);
+
+      const recoveryCodes = await twoFactor.activate(principal.accountId, body.code, Date.now());
+
+      await audit(
+        request,
+        request.tenant(),
+        {},
+        { action: 'security.two_factor_enabled', target: `account:${principal.accountId}` },
+      );
+
+      reply.header('Cache-Control', 'no-store');
+      return reply.send({
+        enabled: true,
+        recovery_codes: recoveryCodes,
+        recovery_codes_remaining: recoveryCodes.length,
+      });
+    },
+  );
+
+  /**
+   * Turn the second factor off.
+   *
+   * The password is not ceremony. A session token that has been stolen is
+   * exactly the thing that would otherwise be used to remove the control
+   * protecting the account it was stolen from, and the whole point of the factor
+   * is that the thief does not hold every credential — so removing it asks for
+   * one they are least likely to have.
+   */
+  app.delete(
+    '/auth/2fa',
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal() as AgentPrincipal;
+      const body = parse(reauthenticateBody, request.body ?? {});
+
+      // Checked before the password, for the reason `/auth/authorize` states one
+      // gate over: never spend a password verification on a request that cannot
+      // succeed. Nothing is leaked by the ordering — the caller is a member of
+      // the workspaces being named, and `require_two_factor` is a setting they
+      // can already read.
+      const enforcing = await twoFactor.enforcingWorkspaces(principal.accountId);
+      if (enforcing.length > 0) {
+        throw new ApiError(
+          'not_allowed',
+          `Two-factor authentication is required by ${enforcing
+            .map((w) => w.name)
+            .join(', ')}. It cannot be turned off while you are a member.`,
+          { details: { workspaces: enforcing.map((w) => w.name) } },
+        );
+      }
+
+      await reauthenticate(request, principal, body);
+
+      if (!(await twoFactor.disable(principal.accountId))) {
+        throw ApiError.notFound('Two-factor authentication is not set up on this account.');
+      }
+
+      await audit(
+        request,
+        request.tenant(),
+        {},
+        { action: 'security.two_factor_disabled', target: `account:${principal.accountId}` },
+      );
+
+      return reply.status(204).send();
+    },
+  );
+
+  /**
+   * Issue a new recovery sheet, invalidating the old one whole — unused codes
+   * included. Somebody asking for a new sheet is saying the old one is no longer
+   * trustworthy, and leaving half of it live would quietly disagree with them.
+   */
+  app.post(
+    '/auth/2fa/recovery-codes',
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal() as AgentPrincipal;
+      const body = parse(reauthenticateBody, request.body ?? {});
+
+      // Same weight as removing the factor: a fresh sheet is ten standalone
+      // second factors, so a stolen session must not be able to print itself
+      // one. Refused before re-authentication when there is nothing to protect,
+      // which is also what keeps `reauthenticate`'s SSO branch coherent — it
+      // proves possession *of* the factor.
+      const status = await twoFactor.status(principal.accountId);
+      if (!status.enabled) {
+        throw new ApiError(
+          'two_factor_required',
+          'Two-factor authentication is not active on this account.',
+        );
+      }
+
+      await reauthenticate(request, principal, body);
+
+      const recoveryCodes = await twoFactor.issueRecoveryCodes(principal.accountId);
+
+      await audit(
+        request,
+        request.tenant(),
+        {},
+        {
+          action: 'security.two_factor_recovery_codes_regenerated',
+          target: `account:${principal.accountId}`,
+          metadata: { count: recoveryCodes.length },
+        },
+      );
+
+      reply.header('Cache-Control', 'no-store');
+      return reply.send({
+        recovery_codes: recoveryCodes,
+        recovery_codes_remaining: recoveryCodes.length,
+      });
+    },
+  );
+
+  /**
+   * Prove the account holder is still at the keyboard, not merely that a session
+   * exists.
+   *
+   * Normally that means the password, and only the password: a second factor is
+   * no use as re-authentication for removing itself, since the phone is one of
+   * the things that gets stolen along with a laptop.
+   *
+   * An account provisioned through SSO has no password at all (`password_hash`
+   * is null), and demanding one would leave it able to enable two-factor
+   * authentication and never able to switch it off. Those accounts prove
+   * possession of the factor instead — a current TOTP code, or a recovery code,
+   * which is the credential that exists precisely for when the authenticator is
+   * gone. It is a weaker step than a password and it is the strongest one
+   * available: there is no other secret held by that account. A TOTP code
+   * presented here spends its step like any other, so it cannot be replayed.
+   */
+  async function reauthenticate(
+    request: FastifyRequest,
+    principal: AgentPrincipal,
+    body: { password?: string; code?: string },
+  ): Promise<void> {
+    const account = await request.withTenant((tx) =>
+      tx.account.findUnique({
+        where: { id: principal.accountId },
+        select: { passwordHash: true },
+      }),
+    );
+    if (!account) throw ApiError.notFound('Resource not found.');
+
+    if (account.passwordHash !== null) {
+      if (body.password === undefined) {
+        throw ApiError.validation('password: your password is required for this change.', {
+          fields: [{ field: 'password', message: 'Required.' }],
+        });
+      }
+      if (!(await verifyPassword(body.password, account.passwordHash))) {
+        throw ApiError.authentication('That password is not correct.');
+      }
+      return;
+    }
+
+    if (body.code === undefined) {
+      throw new ApiError(
+        'two_factor_required',
+        'This account signs in through your identity provider and has no password, so a two-factor or recovery code is required for this change.',
+      );
+    }
+
+    const now = Date.now();
+    if (await twoFactor.verifyTotpCode(principal.accountId, body.code, now)) return;
+    if (await twoFactor.consumeRecoveryCode(principal.accountId, body.code)) return;
+    throw badCode();
+  }
 
   // --- POST /customer/token --------------------------------------------------
 

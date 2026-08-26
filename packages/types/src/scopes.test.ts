@@ -132,8 +132,9 @@ describe('error taxonomy', () => {
     'sandbox_exists',
     // Two-factor authentication (NFR-S11 · FR-MOD-00.1): the second login
     // step's answer when the password was right and a TOTP/recovery code is
-    // still owed.
+    // still owed, and the 409 for setting up a factor over a live one.
     'two_factor_required',
+    'two_factor_already_enabled',
   ];
 
   it('carries the 24 documented types, plus Nexa additions', () => {

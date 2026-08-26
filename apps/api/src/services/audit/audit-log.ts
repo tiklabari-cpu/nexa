@@ -94,6 +94,31 @@ export const AUDIT_ACTIONS = [
   // deliberately not the address: this table is append-only, and the address
   // belongs to somebody who is not a member of this workspace.
   'security.provisioning_domain_rejected',
+  // Two-factor authentication on somebody's own account (NFR-S11 ·
+  // FR-MOD-00.1 · S11-2FA-d). `security.*` rather than `auth.*`: nothing is
+  // being signed in to here — these record changes to *which credentials the
+  // account has*, which is the question asked after a compromise ("when did the
+  // second factor go away, and from what session"), not the question the
+  // sign-in entries answer.
+  //
+  // Enrollment is recorded as well as activation, even though an unactivated
+  // enrollment protects nothing. It is the entry that dates the moment a secret
+  // was handed out, so a factor that appears from nowhere has a beginning; and
+  // a run of enrollments with no activation is the shape of somebody probing an
+  // account they hold a stolen session to.
+  //
+  // No entry carries a secret, a code or a hash — the metadata is a count at
+  // most. An audit log is read by people who are not its subject, and is
+  // designed never to be deleted.
+  'security.two_factor_enrollment_started',
+  'security.two_factor_enabled',
+  'security.two_factor_disabled',
+  // A fresh recovery sheet invalidates the previous one whole, so this entry is
+  // the record that ten working second factors stopped working and ten others
+  // started. Worth its own line rather than folding into `..._enabled`: it is
+  // the one of these that happens repeatedly on an account that is already
+  // protected.
+  'security.two_factor_recovery_codes_regenerated',
   // The workspace accepted the HIPAA Business Associate Agreement (NFR-C4 ·
   // C4-d). `compliance.*` rather than `settings.*`: the other settings entries
   // record a configuration somebody can change back, while this one records a

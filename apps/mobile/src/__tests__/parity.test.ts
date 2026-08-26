@@ -767,7 +767,13 @@ describe('module parity matrix — what is still owed', () => {
       // it, and the phone is an agent app — nothing here to re-scope.
       // 184 → 185 with `/onboarding/survey` (FR-MOD-07.2, tm 139.6). Reports'
       // survey popover — desktop-console-only, nothing here to re-scope either.
-      contractEndpoints: 185,
+      // 185 → 189 with the four two-factor enrollment routes (NFR-S11 ·
+      // S11-2FA-d, tm 152.4): `/auth/2fa`, `/auth/2fa/enroll`,
+      // `/auth/2fa/activate`, `/auth/2fa/recovery-codes`. Account security on
+      // the console, and the handset does not manage credentials — it signs in
+      // with them. The phone will meet two-factor when the *login* gate lands
+      // (S11-2FA-e); setting one up is not a screen this app has.
+      contractEndpoints: 189,
       scopeBoundaries: 1,
     });
   });

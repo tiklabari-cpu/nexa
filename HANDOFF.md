@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 150.3 — S4-PART-c · zamanlayıcı yolu: `events_maintain_partitions` de doğuştan RLS açıyor — done — 2026-08-26 UTC
+
+- **Yapıldı:** `apps/api/test/integration/data-model.test.ts` > `row level security`'e yeni test — `events_ensure_partition`'ı tek başına değil, `plugins/database.ts`'in gerçekten çağırdığı `events_maintain_partitions(months_ahead, 1)` üzerinden bilinçli uzak bir ay (+14) açtırıp `pg_class.relrowsecurity` + `pg_policies` doğrulandı. `owner` rolüyle koşuldu (150.1'in ölçtüğü ayrı kusur: `nexa_app`'in `public`'te CREATE yetkisi yok, kapsam dışı bırakıldı — CONVENTIONS §5).
+- **Doğrulama (hepsi exit 0):** `typecheck` 12/12 · `lint` 9/9 · `format:check` · turbo `test` (e2e/api hariç) 9/9 · api `test:unit` 64/995 · api `test:integration` 3 shard (CONVENTIONS §1.3) 33+33+31 = 97 dosya/**2479** test (taban 2478 **+1**) · `build` 8/8 · `db:check-drift` "no drift" · e2e `demo-flow`+`inbox-panel`+`inbox-unread` **7 passed**.
+- **Varsayımlar:** Yok — 150.1'in dokümante ettiği ölçülmüş uyarıya (owner rolü gerekiyor) aynen uyuldu.
+- **Sonraki pencereye not:** §7.2 S4-PART satırı artık **`✅ → KS4-PART`** — tm 150 (S4-PART-a/b/c) tamamen kapandı. `events_ensure_partition`'ın SECURITY INVOKER + eksik `public` CREATE yetkisi kusuru (150.1'de not edildi) hâlâ AYRI ve açık — bu görevin kapsamı yalnız RLS'ti, o kusuru düzeltmedi.
+
 ## 150.2 — S4-PART-b · kapsam nöbetçisi: partisyon muafiyeti kalktı + doğrudan-partisyon testi — done — 2026-08-26 UTC
 
 - **Yapıldı:** `apps/api/test/integration/data-model.test.ts` — RLS sweep'inden `AND tablename NOT LIKE 'events\_%'` kaldırıldı (test adı artık `covers every tenant table, partitions included`) + sweep'in partisyonlara gerçekten ULAŞTIĞINI ölçen satır. Yeni kardeş test `hides events from the runtime role when a partition is named directly`: iki kiracı da olay yazar, partisyon adı `tableoid::regclass` ile planlayıcıdan okunur (tarihten türetilmez), bağlamsız `nexa_app` doğrudan partisyona `count(*)` → 0, AYNI testte bağlamla doğrudan partisyon → yalnız kendi `license_id`'si ve ana tablo → yalnız kendi sohbeti (her şeyi reddeden bir politika da 0 döndürürdü — iki yönlü kanıt), ayrıca `pg_policies.qual`/`with_check` içinde `nexa_current_license` aranır (GRANT'a dayanan savunma `ALTER DEFAULT PRIVILEGES` yüzünden gelecek ayı korumaz).

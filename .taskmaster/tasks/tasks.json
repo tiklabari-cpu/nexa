@@ -7114,10 +7114,10 @@
         "description": "Denetim ölçtü: nexa_app rolüyle kiracı bağlamı ayarlanmadan \"select count(*) from events\" → 0 (RLS doğru çalışıyor), ama \"select count(*) from events_2026_08\" → 55 (RLS baypas, tüm kiracıların satırları okunabiliyor). events aylık RANGE partitionlı; ana tabloda RLS açık, partisyonlarda kapalı. ALTER DEFAULT PRIVILEGES her yeni tabloya nexa_app için DML veriyor ve events_ensure_partition her ay yeni partisyon açıyor — delik kendini her ay yeniden üretiyor. Bugün uygulama kodundan sömürülebilir DEĞİL (Prisma hep ana tabloyu sorguluyor), ama projenin bir numaralı güvenlik iddiası partisyon seviyesinde tutmuyor ve invariant testi partisyonları açıkça muaf tutuyor.",
         "details": "BULGU (2026-08-23 bağımsız denetim · §D124/1): ÖLÇÜLDÜ, tahmin değil. Çalışma zamanı rolüyle,\nkiracı bağlamı ayarlanmadan: \"select count(*) from events\" → 0; \"select count(*) from events_2026_08\" → 55.\nBugün 11 partisyon var (events_2026_06 … events_2027_02 + events_default) ve hiçbirinde\nrelrowsecurity açık değil. Grant kaynağı iki yerde: 20260722090000_init_extensions/migration.sql:25-31\n(ALTER DEFAULT PRIVILEGES + GRANT ON ALL TABLES) ve events_ensure_partition gövdesinin kendisi\n(her yeni partisyona açıkça GRANT SELECT, INSERT, UPDATE, DELETE veriyor).\n\nFAZ-5'İN KONUSU: DENETİMİN BULDUĞU YANLIŞ (§D124). Faz 0–4 kalemleri tek tek ✅ ve testli;\n2026-08-23 bağımsız denetimi yine de dokuz bulgu çıkardı ve ortak şekilleri şu: bir damga, onu hak\neden koddan daha geniş bir şey iddia ediyor. Bu faz YENİ ÖZELLİK AÇMAZ — iddia ile kodu eşitler.\nKapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S4-PART** (türetilmiş — NFR-S4 kiracı izolasyonu). Gereksinim satırı: `grep -n \"| S4-PART\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS4-PART\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Üç alt-görev done. Ölçülebilir kapanış kanıtı:\n1. Çalışma zamanı rolüyle bağlamsız \"select count(*) from events_<ay>\" → 0 satır.\n2. data-model.test.ts RLS kapsam testi artık events_ ön ekli tabloları DIŞLAMIYOR ve yeşil.\n3. api integration süiti tam yeşil (taban 2477) — ana tablo üzerinden giden hiçbir sorgu davranışı değişmemiş.\n4. PLAN §7.2 S4-PART satırı \"✅ → KS4-PART\".",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T12:43:32.416Z",
+        "updatedAt": "2026-08-26T13:03:23.209Z",
         "subtasks": [
           {
             "id": 1,
@@ -7149,13 +7149,13 @@
             "description": "Gelecek ayların partisyonları da doğuştan korumalı.",
             "details": "NE YAPILACAK: events_ensure_partition uygulama tarafından da çağrılıyor\n(apps/api/src/plugins/database.ts — boot anında ve 6 saatte bir events_maintain_partitions).\nYeni integration testi: ileri bir tarih için events_ensure_partition çağır → yaratılan partisyonun\npg_class.relrowsecurity değeri true VE pg_policies içinde politikası var.\nYani düzeltme yalnız bugünkü partisyonları değil GELECEKTEKİLERİ de kapsıyor.\n\nDOSYALAR: apps/api/test/integration/data-model.test.ts (ya da yakınındaki uygun süit) ·\napps/api/src/plugins/database.ts (yalnız OKUMA — kod değişikliği beklenmiyor).\n\nPLAN İŞİ (bu alt-görev kalemi kapatır): §7.2 NFR kapıları tablosuna S4-PART satırı\n\"✅ → KS4-PART\" yapılır ve #### KS4-PART kanıt bloğuna üç alt-görevin maddesi eklenir.\nCONVENTIONS §1.2: tablo hücresine kanıt YAZMA, damga + referans yaz.\n\nREFERANS DESEN: aynı dosyadaki mevcut RLS testleri (describe \"row level security\") ve\napps/api/src/plugins/database.ts’in maintainPartitions çağrısı — testin neyi taklit edeceğini\noradan oku, tahmin etme.\n\nTUZAKLAR:\n1. Test ileri bir ay için partisyon YARATIR; koşu sonunda o partisyonu bırakması sorun değil\n   (izole test veritabanı koşu sonunda düşer, §1.1) — ama testi PAYLAŞILAN veritabanına karşı\n   koşarsan (NEXA_TEST_ISOLATION=off) artık bırakır. Bunu bil.\n2. Bu alt-görev kalemi KAPATIR: 150.1 ve 150.2 yeşil değilse §7.2 satırını ✅ yapma.\n3. Kanıt K bloğuna madde olarak eklenir; tablo hücresine kanıt YAZILMAZ (CONVENTIONS §1.2).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S4-PART** (türetilmiş — NFR-S4). Gereksinim satırı: `grep -n \"| S4-PART\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS4-PART\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration yeşil (+1 test) · typecheck/lint/format/build exit 0.\n- Ölçülebilir: yeni testin adı events_ensure_partition ve relrowsecurity kelimelerini içerir.\n- PLAN §7.2 S4-PART → \"✅ → KS4-PART\"; grep ile damgalı satır görünür.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "150.1",
               "150.2"
             ],
             "parentId": "150",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-26T13:03:23.209Z"
           }
         ]
       },
@@ -8062,9 +8062,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T12:43:32.418Z",
+      "lastModified": "2026-08-26T13:03:23.210Z",
       "taskCount": 168,
-      "completedCount": 149,
+      "completedCount": 150,
       "tags": [
         "master"
       ]

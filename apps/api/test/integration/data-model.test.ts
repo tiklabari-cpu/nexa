@@ -518,6 +518,53 @@ describe('data model invariants', () => {
       expect(policy?.withCheck).toMatch(/nexa_current_license/);
     });
 
+    it('opens a future month through the maintenance scheduler with relrowsecurity already on, not just via a direct events_ensure_partition call', async () => {
+      // `plugins/database.ts` never calls events_ensure_partition on its own —
+      // it calls events_maintain_partitions on boot and every six hours, which
+      // loops over a window of months and calls events_ensure_partition once
+      // per month. S4-PART-a proved a direct events_ensure_partition call is
+      // born secured; this proves the function the scheduler actually runs
+      // reaches the same guard for a month that scheduler would open.
+      //
+      // The offset is chosen far outside both the app's 3-month window
+      // (PARTITION_MONTHS_AHEAD) and the domain migration's one-off 6-month
+      // seed, so this month cannot already exist from an earlier step in this
+      // suite or from migrating the test database.
+      const monthsAhead = 14;
+      const future = new Date();
+      future.setUTCMonth(future.getUTCMonth() + monthsAhead);
+      const name = `events_${future.getUTCFullYear()}_${String(future.getUTCMonth() + 1).padStart(2, '0')}`;
+
+      const before = await owner.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS exists
+      `;
+      expect(before[0]?.exists).toBe(false);
+
+      // events_ensure_partition is SECURITY INVOKER and nexa_app has no CREATE
+      // privilege on schema public (a pre-existing, separate gap — see tm
+      // 150.1's handoff note), so an out-of-window month can only be opened by
+      // a privileged connection. That is run here as `owner`, standing in for
+      // whatever privileged path actually opens a month that far out.
+      await owner.$queryRaw`SELECT events_maintain_partitions(${monthsAhead}::int, 1::int)`;
+
+      const after = await owner.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS exists
+      `;
+      expect(after[0]?.exists).toBe(true);
+
+      const [security] = await owner.$queryRaw<Array<{ relname: string; enabled: boolean }>>`
+        SELECT relname, relrowsecurity AS enabled FROM pg_class WHERE relname = ${name}
+      `;
+      expect(security).toEqual({ relname: name, enabled: true });
+
+      const policies = await owner.$queryRaw<Array<{ policyname: string }>>`
+        SELECT policyname FROM pg_policies WHERE schemaname = 'public' AND tablename = ${name}
+      `;
+      expect(policies.map((p) => p.policyname)).toEqual([`${name}_tenant`]);
+
+      await owner.$executeRawUnsafe(`DROP TABLE IF EXISTS ${name}`);
+    });
+
     it('hides chat_users and chat_access, which have no license column', async () => {
       // These inherit visibility through their chat, which is the kind of
       // indirect policy that is easy to get wrong.

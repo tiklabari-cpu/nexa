@@ -702,4 +702,53 @@ export const settings: Messages = {
   'settings.ticketRules.setPriorityAction': 'set priority {priority}',
   'settings.ticketRules.addTagAction': 'add tag “{tag}”',
   'settings.ticketRules.doNothing': 'do nothing',
+
+  // Two-factor authentication — TwoFactor.tsx
+  'settings.twoFactor.title': 'Two-factor authentication',
+  'settings.twoFactor.description':
+    'Ask for a code from an authenticator app, in addition to your password, when you sign in.',
+  'settings.twoFactor.loadError': 'Could not load two-factor authentication status.',
+  'settings.twoFactor.offDescription': 'Your account currently signs in with a password alone.',
+  'settings.twoFactor.pendingHint':
+    'Setup was started but never finished. Enable it again to pick up where you left off.',
+  'settings.twoFactor.recoveryCodesRemaining.one': '{count} recovery code left',
+  'settings.twoFactor.recoveryCodesRemaining.other': '{count} recovery codes left',
+  'settings.twoFactor.enableButton': 'Enable two-factor authentication',
+  'settings.twoFactor.enabling': 'Starting…',
+  'settings.twoFactor.regenerateButton': 'Get new recovery codes',
+  'settings.twoFactor.disableButton': 'Turn off',
+  'settings.twoFactor.disableBlockedByWorkspaces':
+    'Two-factor authentication is required by {names}. It cannot be turned off while you are a member there.',
+
+  'settings.twoFactor.enroll.title': 'Set up two-factor authentication',
+  'settings.twoFactor.enroll.description':
+    'Enter this into your authenticator app, then enter the code it shows.',
+  'settings.twoFactor.enroll.secretLabel': 'Setup key',
+  'settings.twoFactor.enroll.copySecretAriaLabel': 'Copy setup key',
+  'settings.twoFactor.enroll.uriLabel': 'Setup link',
+  'settings.twoFactor.enroll.copyUriAriaLabel': 'Copy setup link',
+  'settings.twoFactor.enroll.codeLabel': 'Authentication code',
+  'settings.twoFactor.enroll.codeError': 'Enter the code your authenticator app is showing.',
+  'settings.twoFactor.enroll.verifyButton': 'Verify & activate',
+  'settings.twoFactor.enroll.verifying': 'Verifying…',
+  'settings.twoFactor.enroll.discardConfirm': 'Discard this setup attempt?',
+
+  'settings.twoFactor.recovery.title': 'Save your recovery codes',
+  'settings.twoFactor.recovery.description':
+    'Each code works once, and gets you back in if you lose access to your authenticator app. They will not be shown again.',
+  'settings.twoFactor.recovery.downloadButton': 'Download .txt',
+  'settings.twoFactor.recovery.savedConfirm': 'I have saved these codes somewhere safe.',
+  'settings.twoFactor.recovery.doneButton': 'Done',
+  'settings.twoFactor.recovery.discardConfirm':
+    'These codes will not be shown again. Close without saving them?',
+
+  'settings.twoFactor.reauth.disableTitle':
+    'Confirm it is you, to turn off two-factor authentication',
+  'settings.twoFactor.reauth.regenerateTitle': 'Confirm it is you, to get new recovery codes',
+  'settings.twoFactor.reauth.passwordLabel': 'Password',
+  'settings.twoFactor.reauth.codeLabel': 'Two-factor or recovery code',
+  'settings.twoFactor.reauth.credentialError': 'This field is required.',
+  'settings.twoFactor.reauth.confirmButton': 'Confirm',
+  'settings.twoFactor.reauth.confirming': 'Confirming…',
+  'settings.twoFactor.reauth.discardConfirm': 'Discard this?',
 };

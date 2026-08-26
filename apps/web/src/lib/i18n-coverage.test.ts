@@ -128,6 +128,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/SlaPolicy.tsx',
   'src/features/settings/SsoConnection.tsx',
   'src/features/settings/TicketRules.tsx',
+  'src/features/settings/TwoFactor.tsx',
   'src/features/settings/WidgetCustomization.tsx',
   'src/features/team/CopilotKnowledge.tsx',
   'src/features/team/TeamAiPerformance.tsx',

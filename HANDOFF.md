@@ -13,6 +13,41 @@
 
 ## Task log (newest-first)
 
+## 150.1 — S4-PART-a · `events` partisyonlarında RLS (migration) — done — 2026-08-26 UTC
+
+- **Yapıldı:** Yeni migration `apps/api/prisma/migrations/20260826090000_events_partition_rls/`.
+  Üç parça: `events_secure_partition(TEXT)` (ana tablonun `events_tenant` politikasının birebir
+  aynısını `<partisyon>_tenant` adıyla kurar; `relrowsecurity`/`pg_policies` okunarak KORUMALI —
+  `ALTER TABLE … ENABLE RLS` hiçbir şey değiştirmese bile ACCESS EXCLUSIVE kilit alır ve bu yol
+  zamanlayıcıdan 6 saatte bir canlı tabloya karşı koşuyor) · `events_ensure_partition` erken
+  dönüşü kaldırıldı, artık VAR OLAN partisyonu da güvenceye alıyor (kendini iyileştiriyor) ·
+  `pg_inherits` üzerinden dolaşan `DO` bloğu mevcut partisyonların hepsini geriye dönük düzeltiyor
+  (ad kalıbı değil kalıtım okunuyor → `events_default` dahil). REVOKE bilinçli seçilmedi:
+  `init_extensions`'ın `ALTER DEFAULT PRIVILEGES`'i her yeni tabloya DML'i geri veriyor.
+- **Doğrulama (hepsi exit 0):** delik ÖNCE ölçüldü — `nexa_app`, bağlamsız: `events` → 0 ama
+  `events_2026_08` → **113**, 10 partisyonun hiçbirinde RLS yok. SONRA: 10/10 partisyon
+  `relrowsecurity = t` + 10 politika, `events_2026_08` → **0**, bağlamla ana tablo 108 / partisyon
+  104 / çapraz kiracı 0; `events_ensure_partition('2099-07-15')` (rollback) → yeni partisyon
+  doğuştan RLS+politika; migration ikinci kez elle koşuldu (idempotent, exit 0, politika sayısı
+  yine 10). Kapı: `typecheck` 12/12 · `lint` 9/9 · `format:check` · turbo `test` (e2e/api hariç)
+  9/9 · api `test:unit` 64/995 · api `test:integration` **üç shard'a parçalandı** (CONVENTIONS
+  §1.3): 33+33+31 = **97 dosya / 2477 test** — taban 2477 ile birebir · `build` 8/8 ·
+  `db:check-drift` "no drift" · ilgili e2e `demo-flow`+`inbox-panel`+`inbox-unread` **7 passed**.
+- **Varsayımlar:** Politika gövdesi ana tablonunkiyle BİREBİR aynı tutuldu — ana tablo üzerinden
+  giden bir sorguda PostgreSQL ikisini birden uyguluyor, farklı iki kural kesişseydi davranış
+  sessizce daralırdı. `FORCE ROW LEVEL SECURITY` bilinçli EKLENMEDİ: ana tabloda da yok ve
+  testlerin `owner` fixture'ları tablo sahibi muafiyetine dayanıyor.
+- **Sonraki pencereye not:** §7.2 S4-PART satırı bilerek `⬜` bırakıldı — 150.3 kapatacak
+  (150.1'in kendi testStrategy'si böyle diyor). **150.3 için ölçülmüş uyarı:**
+  `events_ensure_partition` SECURITY INVOKER ve `nexa_app`'in `public` şemasında CREATE yetkisi
+  YOK, yani EKSİK bir ay için zamanlayıcı yolu `permission denied for schema public` ile düşüyor
+  ve `plugins/database.ts` bu hatayı bilerek yutuyor (ölçüldü: `BEGIN; SELECT
+  events_ensure_partition('2099-07-15'); ROLLBACK;` `nexa_app` ile hata veriyor, `nexa` ile
+  çalışıyor). Bu RLS'ten bağımsız, ÖNCEDEN VAR OLAN ayrı bir kusur (CONVENTIONS §5 gereği bu
+  pencerede düzeltilmedi) — 150.3'ün testi partisyonu `owner` rolüyle yaratmalı, yoksa premisi
+  kırık çıkar. Dal `feat/events-partition-rls` → `main`'e ff-merge edildi; bu merge bir önceki
+  pencerenin hiç push edilmemiş `c2f7674` (Faz-5/Faz-6 kırılımı) commit'ini de uzağa taşıdı.
+
 ## PLAN — Faz-5 + Faz-6 açılışı (§F.3 turu): denetim bulguları kırılıma çevrildi, tm 150–168 açıldı — done — 2026-08-24 UTC
 
 - **Yapıldı:** 2026-08-23 bağımsız durum denetiminin dokuz bulgusu ve production değerlendirmesi

@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T21:39:23.594Z",
+        "updatedAt": "2026-08-26T21:40:58.120Z",
         "subtasks": [
           {
             "id": 1,
@@ -7262,12 +7262,12 @@
             "description": "2FA artık bir ayar değil, gerçekten geçilmesi gereken bir kapı.",
             "details": "NE YAPILACAK: oturumun basıldığı yere kapı konur.\n1. POST /auth/authorize: hesabın aktif 2FA kaydı varsa gövdede geçerli bir kod (ya da kurtarma kodu)\n   ŞART; yoksa two_factor_required hata tipiyle reddedilir (yeni ERROR_TYPES girdisi, 152.1 de eklendi).\n2. Seçilen çalışma alanının security_settings.require_two_factor değeri TRUE ise ve hesabın 2FA kaydı\n   YOKSA oturum basılmaz — kullanıcı kayda yönlendirilir. Bugün bu alan hiçbir yerde okunmuyor;\n   bu maddeyi atlarsan kalem kapanmaz.\n3. POST /auth/login yanıtındaki her üyeliğe two_factor_required anotasyonu eklenir\n   (sso_enforced_connection_id ile birebir aynı gerekçe ve aynı yer — ekran doğru kapıyı açabilsin).\n4. Denetim olayları: security.two_factor_enabled / disabled / challenge_failed / recovery_code_used.\n\nNEDEN OPUS-MAX VE BÖLÜNMEZ: bu bir authN sınırıdır. Yanlış kurulursa ya kapı hiç çalışmaz\n(sessiz açık) ya da herkesi kilitler.\n\nÖNCE KIRMIZI — ZORUNLU SIRA: üç testi düzeltmeden ÖNCE yaz ve kırmızı koştur:\n(a) aktif 2FA lı hesap kodsuz authorize çağırıyor → bugün 200, olması gereken red;\n(b) require_two_factor açık çalışma alanı + kaydı olmayan ajan → bugün 200, olması gereken red;\n(c) yanlış kod → red. Kırmızı çıktıları HANDOFF a yaz.\n\nDOSYALAR: apps/api/src/routes/auth.ts (login anotasyonu + authorize kapısı) ·\napps/api/src/services/auth/oauth-service.ts (grant yolu) ·\napps/api/src/services/auth/two-factor-service.ts · apps/api/src/routes/settings.ts (yalnız OKUMA:\nrequire_two_factor nereden geliyor) · apps/api/src/services/audit/audit-log.ts (yeni olay adları).\n\nTUZAKLAR:\n1. SAML/SSO ile gelen oturumlar: IdP zaten MFA yapmış olabilir. Karar ver ve GEREKÇESİNİ yaz —\n   önerilen: SSO ile basılan oturum 2FA kapısından MUAFTIR (IdP nin sorumluluğu), parola ile\n   basılan oturum muaf DEĞİLDİR. Kararını §D ye ve koda yorum olarak yaz.\n2. Bot token ve PAT yolları etkilenmemeli — onlar kullanıcı oturumu değil.\n3. Kendini kilitleme senaryosu: son owner ın 2FA sı bozulursa çalışma alanı erişilemez olur.\n   Kurtarma kodları bunun cevabıdır; ayrıca DELETE /auth/2fa in require_two_factor altında\n   reddedildiğini unutma (152.4) — bu ikisi birlikte tutarlı olmalı.\n4. e2e süitinin mevcut giriş akışı KIRILMAMALI: seed hesaplarının 2FA sı yok, dolayısıyla\n   require_two_factor kapalıyken hiçbir şey değişmemeli. 205 e2e yeşil kalmalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S11-2FA** (türetilmiş — NFR-S11 + FR-MOD-00.1). Gereksinim satırı: `grep -n \"| S11-2FA\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS11-2FA\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- ÖNCE KIRMIZI üç test, sonra yeşil (çıktılar HANDOFF ta).\n- api integration yeşil · TAM e2e süiti yeşil (taban 205) — mevcut giriş akışları bozulmadı.\n- Ölçülebilir: require_two_factor artık auth yolunda okunuyor (grep ile routes/auth.ts ya da\n  oauth-service.ts içinde geçiyor) — bugün hiçbir yerde geçmiyor.\n- Ölçülebilir: dört yeni denetim olayı AUDIT_ACTIONS içinde ve audit-log testinde kapsanıyor.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "152.4"
             ],
             "parentId": "152",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-26T21:40:58.120Z"
           },
           {
             "id": 6,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T21:39:23.595Z",
+      "lastModified": "2026-08-26T21:40:58.121Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

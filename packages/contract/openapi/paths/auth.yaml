@@ -26,6 +26,13 @@ login:
       them nothing to click. Enforcement itself is applied by `/auth/authorize`,
       which is where a credential becomes a session — this call selects no
       workspace and is not a gate.
+
+      Two-factor authentication is annotated the same way (NFR-S11 ·
+      FR-MOD-00.1): `account.two_factor_enabled` says a code will be demanded at
+      `/auth/authorize`, and `memberships[].two_factor_required` says which
+      workspaces insist their members hold a factor at all. Read together they
+      tell the sign-in screen which of three things to do — go straight through,
+      ask for a code, or send the person to set one up.
     security: []
     requestBody:
       required: true
@@ -53,6 +60,16 @@ login:
                     id: { type: string, format: uuid }
                     email: { type: string }
                     name: { type: string }
+                    two_factor_enabled:
+                      type: boolean
+                      description: >-
+                        Whether this account holds an active second factor, so
+                        `/auth/authorize` will require `code`. An account fact,
+                        not a workspace one — one authenticator covers every
+                        membership — which is why it sits here rather than being
+                        repeated down the list. No disclosure: the caller has
+                        just proved this account's password, and the next call
+                        would say so anyway.
                 memberships:
                   type: array
                   items:
@@ -75,6 +92,15 @@ login:
                           Present so the sign-in screen can offer the right door;
                           the caller has already proved this account's password
                           and this membership.
+                      two_factor_required:
+                        type: boolean
+                        description: >-
+                          Whether this workspace requires its members to hold a
+                          second factor (`security_settings.require_two_factor`).
+                          The policy alone: combined with a false
+                          `account.two_factor_enabled` it means the sign-in will
+                          be refused until the person enrolls, which is a
+                          different screen from "type your code".
                       password_login_available:
                         type: boolean
                         description: >-
@@ -104,6 +130,21 @@ authorize:
       workspace out of its own account — and their sign-in is marked in the
       audit trail. Refusals are recorded as `auth.login_failed` with the reason
       `sso_enforced`.
+
+      It is also where the second factor bites (NFR-S11 · FR-MOD-00.1). An
+      account with an active enrollment must send `code` — a TOTP code or one of
+      its recovery codes — whatever the workspace's policy says; a workspace with
+      `require_two_factor` refuses an account that has none at all, carrying
+      `details.enrollment_required` so the client routes to setup rather than to
+      a code box. Both refusals are `two_factor_required` (401); a code that is
+      simply wrong is `authentication`, so a client can tell "ask again" from
+      "ask for something else". Attempts are budgeted per account
+      (`RATE_LIMIT_TWO_FACTOR_PER_HOUR`), and running out is a 429.
+
+      The SAML assertion path is deliberately exempt: a federated sign-in has
+      already been vouched for by the identity provider, which is where the
+      workspace's MFA lives. Refresh-token rotation and personal access tokens
+      are untouched — neither is a sign-in.
     security: []
     requestBody:
       required: true
@@ -134,6 +175,16 @@ authorize:
               email: { type: string, format: email }
               password: { type: string }
               license_id: { type: string }
+              code:
+                type: string
+                maxLength: 64
+                description: >-
+                  The second factor, when the account holds one — a six-digit
+                  TOTP code or a `ABCDE-FGHJK` recovery code. One field for both:
+                  the person is answering one question, and the two shapes cannot
+                  be confused. Required by the account rather than by the schema,
+                  so omitting it when one is needed is a `two_factor_required`
+                  refusal that says what is missing, not a validation error.
     responses:
       "200":
         description: Authorization code issued
@@ -148,7 +199,17 @@ authorize:
                 state: { type: string }
                 expires_in: { type: integer }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
-      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "401":
+        description: >-
+          The credentials were refused, or a second factor is missing or wrong.
+          `two_factor_required` means present a code — or, with
+          `details.enrollment_required`, that this workspace will not admit an
+          account that has not set one up. `authentication` on its own means the
+          code was wrong, expired or already spent; which of the three is
+          deliberately not said.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "403":
         description: >-
           The requested scopes are unavailable, or the workspace requires single

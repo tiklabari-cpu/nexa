@@ -287,6 +287,22 @@ export class TwoFactorService {
     return rows.map((r) => ({ licenseId: r.enforcing_license_id, name: r.workspace_name }));
   }
 
+  /**
+   * Does this account hold a *live* second factor?
+   *
+   * The sign-in gate's first question (S11-2FA-e), and separate from `status`
+   * on purpose: `status` reads the whole row — TOTP secret included — to build a
+   * screen, while this is asked on every sign-in attempt including every failed
+   * one. `auth_two_factor_is_active` returns the boolean without the secret
+   * leaving the database, which is the difference between a plaintext shared
+   * secret that lives in one function and one that passes through the hot path.
+   */
+  async isActive(accountId: string): Promise<boolean> {
+    const rows = await this.#db.$queryRaw<Array<{ active: boolean }>>`
+      SELECT auth_two_factor_is_active(${accountId}::uuid) AS active`;
+    return rows[0]?.active ?? false;
+  }
+
   // --- Verification ---------------------------------------------------------
 
   /**

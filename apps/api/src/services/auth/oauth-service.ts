@@ -72,6 +72,18 @@ export interface Membership {
    * rejects.
    */
   sso_enforced_connection_id: string | null;
+  /**
+   * Whether this workspace insists its members hold a second factor
+   * (`security_settings.require_two_factor` — NFR-S11 · S11-2FA-e).
+   *
+   * Here for the reason the field above is: both doors read the same row.
+   * The *policy* only — whether a code will actually be demanded is this OR'd
+   * with "the account has an active enrollment", which is an account fact and
+   * travels separately (`TwoFactorService.isActive`). Keeping them apart is what
+   * lets a client tell "type your code" from "you must set one up first"; folded
+   * together they are one boolean that cannot say which.
+   */
+  two_factor_required: boolean;
 }
 
 export interface TokenGrant {

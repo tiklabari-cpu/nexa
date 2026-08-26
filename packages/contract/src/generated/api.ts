@@ -60,6 +60,13 @@ export interface paths {
      *     them nothing to click. Enforcement itself is applied by `/auth/authorize`,
      *     which is where a credential becomes a session — this call selects no
      *     workspace and is not a gate.
+     *
+     *     Two-factor authentication is annotated the same way (NFR-S11 ·
+     *     FR-MOD-00.1): `account.two_factor_enabled` says a code will be demanded at
+     *     `/auth/authorize`, and `memberships[].two_factor_required` says which
+     *     workspaces insist their members hold a factor at all. Read together they
+     *     tell the sign-in screen which of three things to do — go straight through,
+     *     ask for a code, or send the person to set one up.
      */
     post: operations['login'];
     delete?: never;
@@ -90,6 +97,21 @@ export interface paths {
      *     workspace out of its own account — and their sign-in is marked in the
      *     audit trail. Refusals are recorded as `auth.login_failed` with the reason
      *     `sso_enforced`.
+     *
+     *     It is also where the second factor bites (NFR-S11 · FR-MOD-00.1). An
+     *     account with an active enrollment must send `code` — a TOTP code or one of
+     *     its recovery codes — whatever the workspace's policy says; a workspace with
+     *     `require_two_factor` refuses an account that has none at all, carrying
+     *     `details.enrollment_required` so the client routes to setup rather than to
+     *     a code box. Both refusals are `two_factor_required` (401); a code that is
+     *     simply wrong is `authentication`, so a client can tell "ask again" from
+     *     "ask for something else". Attempts are budgeted per account
+     *     (`RATE_LIMIT_TWO_FACTOR_PER_HOUR`), and running out is a 429.
+     *
+     *     The SAML assertion path is deliberately exempt: a federated sign-in has
+     *     already been vouched for by the identity provider, which is where the
+     *     workspace's MFA lives. Refresh-token rotation and personal access tokens
+     *     are untouched — neither is a sign-in.
      */
     post: operations['authorize'];
     delete?: never;
@@ -9859,6 +9881,8 @@ export interface operations {
               id: string;
               email: string;
               name: string;
+              /** @description Whether this account holds an active second factor, so `/auth/authorize` will require `code`. An account fact, not a workspace one — one authenticator covers every membership — which is why it sits here rather than being repeated down the list. No disclosure: the caller has just proved this account's password, and the next call would say so anyway. */
+              two_factor_enabled?: boolean;
             };
             memberships: {
               license_id: string;
@@ -9874,6 +9898,8 @@ export interface operations {
                * @description The SAML connection that has closed this workspace's password door, or null while passwords still work. Present so the sign-in screen can offer the right door; the caller has already proved this account's password and this membership.
                */
               sso_enforced_connection_id?: string | null;
+              /** @description Whether this workspace requires its members to hold a second factor (`security_settings.require_two_factor`). The policy alone: combined with a false `account.two_factor_enabled` it means the sign-in will be refused until the person enrolls, which is a different screen from "type your code". */
+              two_factor_required?: boolean;
               /** @description Whether `/auth/authorize` will accept a password for this workspace. False for a member of an SSO-enforced license; true for its owners, who keep a break-glass door so a broken identity provider is not terminal. Server-derived so the rule has one home. */
               password_login_available?: boolean;
             }[];
@@ -9913,6 +9939,8 @@ export interface operations {
           email: string;
           password: string;
           license_id: string;
+          /** @description The second factor, when the account holds one — a six-digit TOTP code or a `ABCDE-FGHJK` recovery code. One field for both: the person is answering one question, and the two shapes cannot be confused. Required by the account rather than by the schema, so omitting it when one is needed is a `two_factor_required` refusal that says what is missing, not a validation error. */
+          code?: string;
         };
       };
     };
@@ -9932,7 +9960,15 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
-      401: components['responses']['Unauthorized'];
+      /** @description The credentials were refused, or a second factor is missing or wrong. `two_factor_required` means present a code — or, with `details.enrollment_required`, that this workspace will not admit an account that has not set one up. `authentication` on its own means the code was wrong, expired or already spent; which of the three is deliberately not said. */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       /** @description The requested scopes are unavailable, or the workspace requires single sign-on and the caller is not an owner. The latter carries `details.sso_connection_id`. */
       403: {
         headers: {

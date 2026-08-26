@@ -13,6 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignInPage } from './SignInPage.js';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 function renderSignIn(initialEntry = '/'): void {
@@ -217,6 +218,132 @@ describe('SignInPage arriving from an identity provider', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/not available/);
     // Somewhere to go next, rather than a dead status line.
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
+  });
+});
+
+function twoFactorRequiredError(details?: Record<string, unknown>): ApiClientError {
+  return new ApiClientError({
+    type: 'two_factor_required',
+    status: 401,
+    message: 'Enter the code from your authenticator app, or one of your recovery codes.',
+    requestId: 'req-2fa',
+    details,
+  });
+}
+
+function wrongCodeError(): ApiClientError {
+  return new ApiClientError({
+    type: 'authentication',
+    status: 401,
+    message: 'Invalid email or password.',
+    requestId: 'req-badcode',
+  });
+}
+
+function stubTwoFactorFlow(signIn: ReturnType<typeof vi.fn>): void {
+  useAuth.setState({
+    busy: false,
+    listWorkspaces: async () => [WORKSPACE],
+    signIn,
+    startSsoLogin: vi.fn(async () => undefined),
+  });
+}
+
+describe('SignInPage under two-factor enforcement (S11-2FA-g)', () => {
+  it('swaps the password box for a code box when the account already holds an active factor', async () => {
+    const signIn = vi.fn(async (_email, _password, _licenseId, code) => {
+      if (code === undefined) throw twoFactorRequiredError();
+    });
+    stubTwoFactorFlow(signIn);
+    renderSignIn();
+
+    await submitCredentials();
+
+    expect(await screen.findByLabelText('Authentication code')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+
+    // Six digits is a complete code — Submit is never pressed by hand here.
+    await userEvent.type(screen.getByLabelText('Authentication code'), '123456');
+
+    await waitFor(() =>
+      expect(signIn).toHaveBeenCalledWith(
+        'agent@acme.localhost',
+        'correct-password',
+        '1',
+        '123456',
+      ),
+    );
+  });
+
+  it('shows a field-level error under the code box on a wrong code, and never returns to the password step', async () => {
+    const signIn = vi
+      .fn()
+      .mockRejectedValueOnce(twoFactorRequiredError())
+      .mockRejectedValueOnce(wrongCodeError())
+      .mockResolvedValueOnce(undefined);
+    stubTwoFactorFlow(signIn);
+    renderSignIn();
+
+    await submitCredentials();
+    await userEvent.type(await screen.findByLabelText('Authentication code'), '111111');
+
+    expect(await screen.findByText('That code is not right. Try again.')).toBeInTheDocument();
+    // Still the code step, with the same credentials in hand — not a restart.
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+
+    await userEvent.clear(screen.getByLabelText('Authentication code'));
+    await userEvent.type(screen.getByLabelText('Authentication code'), '222222');
+
+    await waitFor(() =>
+      expect(signIn).toHaveBeenLastCalledWith(
+        'agent@acme.localhost',
+        'correct-password',
+        '1',
+        '222222',
+      ),
+    );
+  });
+
+  it('offers a recovery code as an alternative on the same screen', async () => {
+    const signIn = vi
+      .fn()
+      .mockRejectedValueOnce(twoFactorRequiredError())
+      .mockResolvedValueOnce(undefined);
+    stubTwoFactorFlow(signIn);
+    renderSignIn();
+
+    await submitCredentials();
+    await screen.findByLabelText('Authentication code');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Use a recovery code instead' }));
+    await userEvent.type(screen.getByLabelText('Recovery code'), 'ABCDE-FGHJK');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify' }));
+
+    await waitFor(() =>
+      expect(signIn).toHaveBeenLastCalledWith(
+        'agent@acme.localhost',
+        'correct-password',
+        '1',
+        'ABCDE-FGHJK',
+      ),
+    );
+  });
+
+  it('routes to account settings, with the reason stated, when the account has never enrolled', async () => {
+    const signIn = vi
+      .fn()
+      .mockRejectedValueOnce(twoFactorRequiredError({ enrollment_required: true }));
+    stubTwoFactorFlow(signIn);
+    renderSignIn();
+
+    await submitCredentials();
+
+    expect(await screen.findByText(/requires two-factor authentication/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Authentication code')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Go to Account Settings' })).toHaveAttribute(
+      'href',
+      '/app/settings',
+    );
   });
 });
 

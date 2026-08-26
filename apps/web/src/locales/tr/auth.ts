@@ -13,6 +13,8 @@ export const auth: Messages = {
   'auth.fields.workspaceName': 'Çalışma alanı adı',
   'auth.fields.yourName': 'Adınız',
   'auth.fields.dataRegion': 'Veri bölgesi',
+  'auth.fields.twoFactorCode': 'Doğrulama kodu',
+  'auth.fields.recoveryCode': 'Kurtarma kodu',
 
   // Shared validation messages
   'auth.validation.emailRequired': 'E-posta adresinizi girin.',
@@ -21,6 +23,7 @@ export const auth: Messages = {
   'auth.validation.nameRequired': 'Adınızı girin.',
   'auth.validation.organizationRequired': 'Bir çalışma alanı adı girin.',
   'auth.validation.passwordMinLength': 'En az {count} karakter kullanın.',
+  'auth.validation.codeRequired': 'Kodunuzu girin.',
 
   // Sign in
   'auth.signin.subtitle': 'Çalışma alanınızda oturum açın',
@@ -40,6 +43,19 @@ export const auth: Messages = {
   'auth.signin.workspaceOpenFailed': 'O çalışma alanı açılamadı.',
   'auth.signin.chooseWorkspace': 'Bir çalışma alanı seçin',
   'auth.signin.ssoRequiredBadge': 'SSO gerekli',
+  'auth.signin.codeTitle': 'Kodunuzu girin',
+  'auth.signin.codeSubtitle':
+    '{organization} oturum açmayı tamamlamak için kimlik doğrulama uygulamanızdan bir kod istiyor.',
+  'auth.signin.codeInvalid': 'Bu kod doğru değil. Tekrar deneyin.',
+  'auth.signin.codeRateLimited': 'Çok fazla deneme yapıldı. Tekrar denemeden önce bekleyin.',
+  'auth.signin.verify': 'Doğrula',
+  'auth.signin.verifying': 'Doğrulanıyor…',
+  'auth.signin.useRecoveryCode': 'Bunun yerine kurtarma kodu kullan',
+  'auth.signin.useAuthenticatorCode': 'Bunun yerine kimlik doğrulama uygulamanızı kullanın',
+  'auth.signin.enrollmentRequiredTitle': 'İki adımlı doğrulamayı kurun',
+  'auth.signin.enrollmentRequiredBody':
+    '{organization} iki adımlı doğrulama gerektiriyor ve bu hesapta henüz kurulu değil. Zaten oturum açık olduğunuz bir çalışma alanından hesap ayarlarında kurulum yapın, sonra buraya dönün.',
+  'auth.signin.enrollmentRequiredLink': 'Hesap ayarlarına git',
 
   // Sign up
   'auth.signup.title': 'Çalışma alanı oluştur',

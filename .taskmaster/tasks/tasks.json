@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T17:24:47.025Z",
+        "updatedAt": "2026-08-26T17:51:41.534Z",
         "subtasks": [
           {
             "id": 1,
@@ -7222,12 +7222,12 @@
             "description": "Kod üretimi ve doğrulaması standartlara uygun ve tekrar saldırısına kapalı.",
             "details": "NE YAPILACAK: apps/api/src/lib/totp.ts — bağımlılıksız, Node standart kütüphanesiyle:\n- HMAC-SHA1 tabanlı HOTP (RFC 4226) + zaman adımlı TOTP (RFC 6238): 30 saniyelik pencere, 6 hane.\n- Doğrulamada ±1 pencere kayması kabul edilir (saat kayması), DAHA GENİŞİ KABUL EDİLMEZ.\n- REPLAY MUHAFIZI: bir kod bir kez kullanılınca aynı step tekrar kabul edilmez\n  (account_two_factor.last_used_step ile). Bu opsiyonel değil — TOTP nin bilinen zayıflığı budur.\n- Karşılaştırma timingSafeEqual ile.\n- Secret üretimi: 160 bit rastgele → base32 (RFC 4648, padding siz), randomBytes ile.\n- otpauth://totp/<issuer>:<hesap>?secret=...&issuer=... URI üreticisi.\n- Unit testler RFC 6238 in kendi TEST VEKTÖRLERİYLE (belgede yayınlanmış zaman/kod çiftleri).\n\nNEDEN OPUS-MAX VE NEDEN BÖLÜNMEZ (§5.1.2 istisnası): bu bir kripto/kimlik doğrulama çekirdeğidir.\nBağlam bölününce güvenlik akıl yürütmesi kaybolur. Çevresindeki her şey (uçlar, UI, e2e) ayrı ve\ndaha ucuz alt-görevlerdedir; çekirdek tek pencerede kalır.\n\nREFERANS DESEN: apps/api/src/lib/crypto.ts — depo neden argon2 yerine scrypt seçtiğini,\nneden token lar için tek SHA-256 kullandığını ve timingSafeEqual disiplinini yazıyor.\nAynı gerekçelendirme seviyesini totp.ts te de tut: NEDEN ±1 pencere, NEDEN replay muhafızı.\n\nDOSYALAR: apps/api/src/lib/totp.ts (yeni) · apps/api/src/lib/totp.test.ts (yeni).\nBAĞIMLILIK EKLEME: otplib benzeri bir paket KURMA — crypto.ts in gerekçesi burada da geçerli\n(bir güvenlik primitifi için native/üçüncü parti bağımlılık, standart kütüphaneyle yazılabiliyorsa, tercih edilmez).\n\nTUZAKLAR:\n1. Base32 alfabesi ve padding: doğrulayıcı uygulamalar (Google Authenticator, 1Password) padding siz\n   büyük harf base32 bekler. Yanlışsa kullanıcı kodu asla tutmaz ve hata sessizdir.\n2. Zaman kaynağı test edilebilir olmalı: fonksiyon \"şimdi\"yi parametre olarak alsın, Date.now() u\n   içeride sabitlemesin — RFC vektörleri ancak öyle koşulabilir.\n3. otpauth URI de issuer hem yolda hem sorgu parametresinde olmalı (uygulamalar ikisini de okur).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S11-2FA** (türetilmiş — NFR-S11). Gereksinim satırı: `grep -n \"| S11-2FA\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS11-2FA\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api unit yeşil; totp.test.ts RFC 6238 test vektörlerinin HEPSİNİ koşuyor (adıyla görünür).\n- Ölçülebilir: aynı step iki kez doğrulanamıyor (replay testi) · ±1 pencere kabul, ±2 RED.\n- Ölçülebilir: package.json a yeni bağımlılık EKLENMEDİ (git diff ile doğrula).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "152.1"
             ],
             "parentId": "152",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-26T17:51:41.534Z"
           },
           {
             "id": 3,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T17:24:47.026Z",
+      "lastModified": "2026-08-26T17:51:41.535Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

@@ -7168,7 +7168,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T13:05:12.051Z",
+        "updatedAt": "2026-08-26T14:12:34.102Z",
         "subtasks": [
           {
             "id": 1,
@@ -7176,10 +7176,10 @@
             "description": "Bir IdP artık yalnız kendi doğruladığı alanın kullanıcılarını sağlayabiliyor.",
             "details": "NE YAPILACAK (§D116 MEDIUM (a)): JIT sağlama yolunun e-posta güvenine bir sınır konur.\n1. sso_connections tablosuna doğrulanmış alan listesi eklenir (migration + kontrat + Settings UI alanı).\n2. auth_provision_sso_account ve scim_provision_member yalnız o alanlara ait adresleri sağlar;\n   dışarıdaki adres reddedilir ve reddin denetim kaydı yazılır.\n3. \"Var olan hesabı bu kiracıya üye yap\" davranışı ile \"yeni hesap yarat\" davranışı AYRIŞTIRILIR:\n   var olan bir hesabın yabancı bir kiracıya iliştirilmesi artık doğrulanmış alan olmadan olmaz.\n\nDOSYALAR (denetimin işaret ettiği yerler):\n- apps/api/prisma/migrations/20260814090000_sso_sp_endpoints/migration.sql:116 → auth_provision_sso_account\n- aynı ailedeki scim_provision_member fonksiyonu\n- apps/api/src/lib/sso-connection.ts (bağlantı okuma/yazma + doğrulama yüzeyi)\n- apps/api/src/routes/saml.ts · apps/api/src/routes/scim.ts (çağıranlar)\n- apps/web/src/features/settings/SsoConnection.tsx (alan listesi girişi)\n- Kontrat: packages/contract/openapi/paths/settings.yaml (SSO bağlantı şeması)\n\nREFERANS DESEN: aynı ailede sertifika rotasyonu (previous_certificate_pem + expires_at) —\nbir güvenlik alanının şemaya, kontrata ve UI ye birlikte nasıl eklendiğini gösterir.\n\nTUZAKLAR:\n1. GERİYE UYUMLULUK: bugün doğrulanmış alanı olmayan bağlantılar var (seed + e2e sso.spec.ts).\n   Boş liste \"her alana izin ver\" anlamına GELMEMELİ (fail-open olur) — ama var olan e2e akışını da\n   kırmamalısın. Doğru cevap: migration mevcut bağlantılara bugünkü kullanıcılarının alanını yazar\n   (veri türetimi), yeni bağlantılarda alan zorunlu olur. Seçtiğin yolu gerekçesiyle §D ye yaz.\n2. Alan karşılaştırması büyük/küçük harf duyarsız ve tam eşleşme olmalı; alt alan (subdomain)\n   otomatik kabul EDİLMEMELİ — \"acme.com\" doğrulandı diye \"evil.acme.com.attacker.net\" geçmemeli.\n3. ÖNCE KIRMIZI: doğrulanmamış alanlı bir assertion ile sağlamanın bugün BAŞARILI olduğunu gösteren\n   test önce yazılır ve kırmızı koşulur; düzeltmeden sonra yeşile döner.\n4. SCIM tarafı unutulmasın — denetim iki yüzeyi birden işaret ediyor.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-b** (türetilmiş — §D116 MEDIUM (a)). Gereksinim satırı: `grep -n \"| M-SEC-b\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-b\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration yeşil; sso ve scim süitlerine önce-kırmızı koşulmuş negatif testler eklendi.\n- e2e sso.spec.ts hâlâ yeşil (mock IdP akışı kırılmadı).\n- db:check-drift exit 0 · contract:generate sonrası git status temiz.\n- Ölçülebilir: doğrulanmamış alanlı sağlama denemesi 4xx + denetim kaydı yazıyor.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "151",
-            "updatedAt": "2026-08-26T13:05:12.051Z"
+            "updatedAt": "2026-08-26T14:12:34.102Z"
           },
           {
             "id": 2,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T13:05:12.051Z",
+      "lastModified": "2026-08-26T14:12:34.103Z",
       "taskCount": 168,
       "completedCount": 150,
       "tags": [

@@ -411,6 +411,11 @@ export const settings: Messages = {
   'settings.sso.ssoUrlError': "IdP oturum açma URL'sini girin.",
   'settings.sso.certificateLabel': 'IdP imzalama sertifikası (PEM)',
   'settings.sso.certificateError': 'IdP sertifikasını yapıştırın.',
+  'settings.sso.verifiedDomainsLabel': 'Doğrulanmış alan adları',
+  'settings.sso.verifiedDomainsError': 'En az bir alan adı girin, örneğin acme.com.',
+  'settings.sso.verifiedDomainsHint':
+    'Virgülle ayırın. Bu kimlik sağlayıcı ve SCIM yalnızca bu alan adlarındaki adresleri sağlayabilir — şirketinizin alan adlarını tam ve joker karakter kullanmadan yazın.',
+  'settings.sso.verifiedDomainsSummary': 'Sağlayabildiği alan adları: {domains}',
   'settings.sso.emailAttributeLabel': 'E-posta özniteliği (opsiyonel)',
   'settings.sso.nameAttributeLabel': 'Ad özniteliği (opsiyonel)',
   'settings.sso.allowIdpInitiatedLabel': 'IdP tarafından başlatılan oturum açmaya izin ver',

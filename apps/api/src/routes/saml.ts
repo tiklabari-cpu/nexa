@@ -136,6 +136,16 @@ type LoginRejection =
   | 'unknown_relay_state'
   /** The client that started the login is gone, or registers no usable scope. */
   | 'client_unavailable'
+  /**
+   * The asserted address is outside the domains this connection has verified
+   * (§D116 MEDIUM (a)). Recorded under its own name rather than folded into
+   * `membership_not_active`, because the two ask different questions of the
+   * admin reading the trail: one means "this person is not (or no longer) on
+   * our roster", the other means "our identity provider vouched for somebody it
+   * has no authority over" — which is either a misconfigured claim rule or an
+   * attempt to adopt an account, and both want looking at.
+   */
+  | 'email_domain_unverified'
   /** No membership this person may sign in with — suspended, or awaiting approval. */
   | 'membership_not_active';
 
@@ -502,18 +512,38 @@ export default async function samlRoutes(
       // somebody, cannot clear a password and cannot undo a suspension or a
       // promotion — all it can add is a membership in the workspace whose own
       // identity provider just vouched for the address.
+      //
+      // It is handed the *connection*, not the license: the license and the
+      // verified-domain list are both read off that row inside the resolver, so
+      // this endpoint cannot widen either (§D116 MEDIUM (a)). An address
+      // outside the connection's verified domains never reaches the account
+      // table at all — the refusal comes back as a flag rather than an
+      // exception so it is recorded like every other reason a login was turned
+      // away, and answered with the same opaque failure.
       const [provisioned] = await app.db.$queryRaw<
-        Array<{ account_id: string; account_created: boolean; membership_created: boolean }>
+        Array<{
+          account_id: string | null;
+          account_created: boolean;
+          membership_created: boolean;
+          domain_rejected: boolean;
+        }>
       >`SELECT * FROM auth_provision_sso_account(
-          ${connection.license_id}, ${identity.identity.email}::citext,
+          ${connection.id}::uuid, ${identity.identity.email}::citext,
           ${identity.identity.name}, ${JIT_ROLE})`;
+      // No row at all means the connection was deleted between the assertion
+      // being verified and this statement — refused like a missing membership.
       if (!provisioned) return refuse(request, connection, 'membership_not_active');
+      if (provisioned.domain_rejected) {
+        return refuse(request, connection, 'email_domain_unverified');
+      }
+      const accountId = provisioned.account_id;
+      if (!accountId) return refuse(request, connection, 'membership_not_active');
 
       // The one rule for "may this person sign in to this workspace", reused
       // rather than restated: `auth_list_memberships` already filters out
       // suspended and unapproved memberships, so a deprovisioned teammate whose
       // IdP still vouches for them finds no membership here and is refused.
-      const memberships = await oauth.listMemberships(provisioned.account_id);
+      const memberships = await oauth.listMemberships(accountId);
       const membership = memberships.find((m) => m.license_id === connection.license_id);
       if (!membership) return refuse(request, connection, 'membership_not_active');
 
@@ -526,7 +556,7 @@ export default async function samlRoutes(
 
       const { code } = await oauth.createAuthorizationCode({
         clientId: client.id,
-        accountId: provisioned.account_id,
+        accountId,
         licenseId: connection.license_id,
         organizationId: connection.organization_id,
         redirectUri: pending.redirectUri,
@@ -551,7 +581,7 @@ export default async function samlRoutes(
             account_created: provisioned.account_created,
           },
         },
-        provisioned.account_id,
+        accountId,
       );
 
       // The authorization response, in the shape every OAuth client already

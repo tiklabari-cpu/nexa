@@ -420,6 +420,43 @@ export default async function scimRoutes(
   }
 
   /**
+   * Record a provisioning call turned away for naming an unverified domain
+   * (§D116 MEDIUM (a)).
+   *
+   * The refusal is the whole point of the fix, and a refusal nobody can see is
+   * indistinguishable from a connector that never ran. Two readers need this
+   * line: the admin whose nightly sync has quietly stopped creating half its
+   * people (they need the domain, so they can add it), and whoever is asked
+   * later whether anything was ever provisioned from outside the company's own
+   * domains.
+   *
+   * The domain goes in; the local part does not. `audit_log` is append-only, so
+   * a rejected address written into it is a stranger's e-mail address this
+   * workspace now keeps forever — from a request that was refused precisely
+   * because the workspace had no business asserting it. The domain alone is
+   * both the actionable half and the half that names no person.
+   *
+   * Best-effort, like the sign-in trail's: a workspace whose audit write fails
+   * must still get the refusal, never a 500 that a connector would retry into.
+   */
+  async function recordDomainRefusal(
+    request: FastifyRequest,
+    principal: ScimPrincipal,
+    domain: string,
+  ): Promise<void> {
+    try {
+      await request.withTenant((tx) =>
+        writeAuditEntry(tx, request.auditContext(), {
+          action: 'security.provisioning_domain_rejected',
+          metadata: scimActor(principal, { domain }),
+        }),
+      );
+    } catch (err) {
+      request.log.warn({ err }, 'audit write failed');
+    }
+  }
+
+  /**
    * Refuse to deactivate the workspace owner.
    *
    * The one lifecycle decision this endpoint takes away from the directory. An
@@ -528,10 +565,17 @@ export default async function scimRoutes(
     // membership). A SECURITY DEFINER resolver settles find-or-create and the
     // duplicate-membership question in one statement — see the migration. The
     // licence it writes into is the principal's, never anything in the body.
-    let provisioned: { account_id: string; membership_created: boolean } | undefined;
+    let provisioned:
+      | { account_id: string | null; membership_created: boolean; domain_rejected: boolean }
+      | undefined;
     try {
       [provisioned] = await app.db.$queryRaw<
-        Array<{ account_id: string; account_created: boolean; membership_created: boolean }>
+        Array<{
+          account_id: string | null;
+          account_created: boolean;
+          membership_created: boolean;
+          domain_rejected: boolean;
+        }>
       >`SELECT * FROM scim_provision_member(
           ${principal.licenseId}, ${user.userName}::citext, ${user.displayName},
           ${SCIM_ROLE}, ${user.externalId}, ${user.active})`;
@@ -549,7 +593,24 @@ export default async function scimRoutes(
       throw error;
     }
 
-    if (!provisioned || !provisioned.membership_created) {
+    // The address is outside every domain this workspace's identity provider
+    // has been declared authoritative for, so nothing was written (§D116
+    // MEDIUM (a)). Refused rather than silently skipped: a connector that gets
+    // a 201 for a member that does not exist stops syncing that person and
+    // nobody finds out for a month. `invalidValue` on `userName` is the
+    // RFC 7644 §3.3 shape for "the value you sent is not one we accept here",
+    // and it names the field the operator has to change.
+    if (provisioned?.domain_rejected) {
+      const domain = user.userName.slice(user.userName.lastIndexOf('@') + 1).toLowerCase();
+      await recordDomainRefusal(request, principal, domain);
+      throw scimProblem(
+        'validation',
+        `This workspace has not verified the domain ${domain}. Add it to a single sign-on connection in Settings before provisioning members with that address.`,
+        'invalidValue',
+      );
+    }
+
+    if (!provisioned || !provisioned.membership_created || !provisioned.account_id) {
       // RFC 7644 §3.3: a create whose userName is taken is 409 `uniqueness`, and
       // the connector's next move is to look the existing resource up and patch
       // it. Telling it the truth is what makes that recovery possible.
@@ -559,6 +620,7 @@ export default async function scimRoutes(
         'uniqueness',
       );
     }
+    const accountId = provisioned.account_id;
 
     // Reading the new membership back, recording it and reconciling the seat
     // count are one transaction: a workspace whose headcount grew without its
@@ -566,7 +628,7 @@ export default async function scimRoutes(
     // exactly the divergence this sub-task exists to close.
     const row = await request.withTenant(async (tx) => {
       const created = await tx.agentMembership.findFirst({
-        where: { agentId: provisioned.account_id },
+        where: { agentId: accountId },
         select: MEMBERSHIP_SELECT,
       });
       // A statement ago a SECURITY DEFINER function reported writing this row
@@ -590,7 +652,7 @@ export default async function scimRoutes(
       return created;
     });
 
-    reply.header('Location', `${baseUrl}/Users/${provisioned.account_id}`);
+    reply.header('Location', `${baseUrl}/Users/${accountId}`);
     return scimReply(reply, 201, serialiseScimUser(toUserSource(row), baseUrl));
   });
 

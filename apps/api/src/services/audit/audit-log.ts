@@ -82,6 +82,18 @@ export const AUDIT_ACTIONS = [
   // address, no token, no person. Naming one would mean this region writing
   // down a member of a workspace it is not allowed to hold.
   'security.region_rejected',
+  // A directory connector asked to provision an address whose domain this
+  // workspace's identity provider has not been declared authoritative for
+  // (NFR-S11 · PLAN §D116). `security.*` for the same reason the line above is:
+  // the credential is genuine and the request is well-formed — what is refused
+  // is the *claim*, that this workspace speaks for that domain. The SAML half
+  // of the same rule is recorded as `auth.sso_login_failed` with reason
+  // `email_domain_unverified`, because there it really is a sign-in being
+  // turned away and an admin reading the sign-in failures should find it there.
+  // Metadata carries the domain — the thing an admin has to add to fix it — and
+  // deliberately not the address: this table is append-only, and the address
+  // belongs to somebody who is not a member of this workspace.
+  'security.provisioning_domain_rejected',
   // The workspace accepted the HIPAA Business Associate Agreement (NFR-C4 ·
   // C4-d). `compliance.*` rather than `settings.*`: the other settings entries
   // record a configuration somebody can change back, while this one records a

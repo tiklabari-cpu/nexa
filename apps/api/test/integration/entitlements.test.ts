@@ -318,6 +318,7 @@ describe('plan entitlements (11.5-b)', () => {
       idp_entity_id: 'https://idp.example.test/saml/metadata',
       idp_sso_url: 'https://idp.example.test/saml/sso',
       idp_certificate_pem: VALID_CERTIFICATE_PEM,
+      verified_domains: ['acme.test'],
     };
 
     async function seedConnection(): Promise<string> {
@@ -623,6 +624,7 @@ describe('plan entitlements (11.5-b)', () => {
       idp_entity_id: 'https://idp.example.test/saml/metadata',
       idp_sso_url: 'https://idp.example.test/saml/sso',
       idp_certificate_pem: VALID_CERTIFICATE_PEM,
+      verified_domains: ['acme.test'],
     };
 
     const PROBES: Record<Entitlement, Probe> = {

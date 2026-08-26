@@ -61,6 +61,13 @@ interface SsoConnectionRecord {
   idp_certificate_pem: string;
   previous_certificate_pem: string | null;
   previous_certificate_expires_at: string | null;
+  /**
+   * The e-mail domains this identity provider is authoritative for. Just-in-time
+   * provisioning — SAML sign-in and this workspace's SCIM connector alike — is
+   * confined to them, so a connection cannot adopt a stranger's account or
+   * occupy an address that never signed up (PLAN §D116).
+   */
+  verified_domains: string[];
   attribute_mapping: SsoAttributeMapping;
   allow_idp_initiated: boolean;
   enabled: boolean;
@@ -79,6 +86,7 @@ interface CreateSsoConnectionBody {
   idp_entity_id: string;
   idp_sso_url: string;
   idp_certificate_pem: string;
+  verified_domains: string[];
   attribute_mapping?: SsoAttributeMapping;
   allow_idp_initiated: boolean;
   enabled: boolean;
@@ -179,15 +187,37 @@ function checkSsoUrlFormat(raw: string): string | null {
 }
 
 /**
+ * The domains typed into the form, normalised the way the server will store
+ * them (§D116 MEDIUM (a)).
+ *
+ * Comma or newline separated, because both are how a list of domains arrives
+ * from a browser: typed with commas, pasted from a column. Lower-cased and
+ * de-duplicated here so what the field shows after a save matches what was
+ * sent; the server normalises again and is the actual authority.
+ */
+export function parseVerifiedDomains(raw: string): string[] {
+  return [
+    ...new Set(
+      raw
+        .split(/[\s,;]+/)
+        .map((value) => value.trim().toLowerCase().replace(/\.$/, ''))
+        .filter(Boolean),
+    ),
+  ];
+}
+
+/**
  * Local-only checks (no network request) for the metadata form: does the
- * certificate parse, are the entity id and sign-on URL well-formed, and — if
- * an attribute mapping is being configured at all — does it name the email
- * claim JIT provisioning matches accounts on.
+ * certificate parse, are the entity id and sign-on URL well-formed, are the
+ * verified domains bare domains, and — if an attribute mapping is being
+ * configured at all — does it name the email claim JIT provisioning matches
+ * accounts on.
  */
 export function verifySsoMetadata(values: {
   idp_entity_id: string;
   idp_sso_url: string;
   idp_certificate_pem: string;
+  verified_domains: string;
   attribute_email: string;
   attribute_name: string;
 }): SsoMetadataCheck {
@@ -202,6 +232,31 @@ export function verifySsoMetadata(values: {
 
   const certProblem = checkCertificateFormat(values.idp_certificate_pem);
   if (certProblem) problems.push(certProblem);
+
+  const domains = parseVerifiedDomains(values.verified_domains);
+  if (domains.length === 0) {
+    problems.push(
+      'Add at least one verified domain — without one this connection signs nobody in.',
+    );
+  } else if (domains.length > 20) {
+    problems.push('That is more than 20 domains.');
+  } else {
+    // The wildcard gets its own sentence because it is the thing somebody
+    // reaches for first, and "malformed" would not explain why it is refused:
+    // verifying acme.com says nothing about who controls payroll.acme.com.
+    const wildcard = domains.find((domain) => domain.includes('*'));
+    if (wildcard) {
+      problems.push(
+        `Remove the wildcard from ${wildcard} — list each domain in full, subdomains included.`,
+      );
+    }
+    const malformed = domains.find(
+      (domain) => !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(domain),
+    );
+    if (malformed && malformed !== wildcard) {
+      problems.push(`${malformed} is not a bare domain like acme.com.`);
+    }
+  }
 
   if (values.attribute_name.trim() && !values.attribute_email.trim()) {
     problems.push(
@@ -285,6 +340,7 @@ function SsoConnections({
       idp_entity_id: '',
       idp_sso_url: '',
       idp_certificate_pem: '',
+      verified_domains: '',
       attribute_email: '',
       attribute_name: '',
     },
@@ -293,6 +349,7 @@ function SsoConnections({
       idp_entity_id: required(t('settings.sso.entityIdError')),
       idp_sso_url: required(t('settings.sso.ssoUrlError')),
       idp_certificate_pem: required(t('settings.sso.certificateError')),
+      verified_domains: required(t('settings.sso.verifiedDomainsError')),
     },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
@@ -301,6 +358,7 @@ function SsoConnections({
           idp_entity_id: values.idp_entity_id.trim(),
           idp_sso_url: values.idp_sso_url.trim(),
           idp_certificate_pem: values.idp_certificate_pem.trim(),
+          verified_domains: parseVerifiedDomains(values.verified_domains),
           attribute_mapping: attributeMappingFrom(values),
           allow_idp_initiated: allowIdpInitiated,
           enabled: enabledOnCreate,
@@ -322,6 +380,7 @@ function SsoConnections({
   const entityIdError = form.errorFor('idp_entity_id');
   const ssoUrlError = form.errorFor('idp_sso_url');
   const certificateError = form.errorFor('idp_certificate_pem');
+  const verifiedDomainsError = form.errorFor('verified_domains');
 
   return (
     <Section title={t('settings.sso.title')} description={t('settings.sso.description')}>
@@ -422,6 +481,42 @@ function SsoConnections({
                 <FieldError id="sso-certificate-error" message={certificateError} />
               </label>
 
+              {/* Required, and next to the certificate on purpose: the two
+                  together are what decides *who* this identity provider may
+                  speak for. Without the domains, an IdP could assert any
+                  address on the internet and have it provisioned (PLAN §D116). */}
+              {/* The hint is a sibling of the label rather than inside it: a
+                  label's whole text content becomes the field's accessible
+                  name, so a sentence of guidance in there would be read out
+                  after "Verified domains" by every screen reader. It is bound
+                  with `aria-describedby` instead, which is what describes. */}
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="sso-verified-domains"
+                  className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+                >
+                  {t('settings.sso.verifiedDomainsLabel')}
+                </label>
+                <input
+                  id="sso-verified-domains"
+                  value={form.values.verified_domains}
+                  onChange={(event) => form.setValue('verified_domains', event.target.value)}
+                  onBlur={() => form.blur('verified_domains')}
+                  aria-invalid={verifiedDomainsError ? true : undefined}
+                  aria-describedby={
+                    verifiedDomainsError
+                      ? 'sso-verified-domains-hint sso-verified-domains-error'
+                      : 'sso-verified-domains-hint'
+                  }
+                  placeholder="acme.com, corp.acme.com"
+                  className="rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none placeholder:text-content-tertiary"
+                />
+                <span id="sso-verified-domains-hint" className="text-2xs text-content-tertiary">
+                  {t('settings.sso.verifiedDomainsHint')}
+                </span>
+                <FieldError id="sso-verified-domains-error" message={verifiedDomainsError} />
+              </div>
+
               <div className="flex flex-wrap items-end gap-3">
                 <label
                   htmlFor="sso-attribute-email"
@@ -481,6 +576,7 @@ function SsoConnections({
                         idp_entity_id: form.values.idp_entity_id,
                         idp_sso_url: form.values.idp_sso_url,
                         idp_certificate_pem: form.values.idp_certificate_pem,
+                        verified_domains: form.values.verified_domains,
                         attribute_email: form.values.attribute_email,
                         attribute_name: form.values.attribute_name,
                       }),
@@ -560,6 +656,13 @@ function SsoConnections({
                     <p className="truncate font-mono text-2xs text-content-tertiary">
                       {connection.idp_sso_url}
                     </p>
+                    {connection.verified_domains.length > 0 && (
+                      <p className="truncate text-2xs text-content-tertiary">
+                        {t('settings.sso.verifiedDomainsSummary', {
+                          domains: connection.verified_domains.join(', '),
+                        })}
+                      </p>
+                    )}
                     {connection.previous_certificate_expires_at && (
                       <p className="text-2xs text-warning">
                         {t('settings.sso.rotationOverlapNote', {

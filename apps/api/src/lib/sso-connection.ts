@@ -42,6 +42,18 @@ export const CERTIFICATE_NOT_BEFORE_GRACE_MS = 5 * 60_000;
 /** Longest overlap a rotation may keep the outgoing certificate trusted for. */
 export const MAX_CERTIFICATE_OVERLAP_HOURS = 168; // 7 days
 
+/**
+ * How many domains one connection may claim, and how long each may be.
+ *
+ * Twenty is generous for a real federation (one company, its acquisitions and
+ * its regional suffixes) and small enough that the list stays something an
+ * owner reads rather than scrolls. 253 is the DNS ceiling for a full name.
+ * Both are mirrored by the storage CHECK, so no path can leave behind a longer
+ * one — see the migration.
+ */
+export const MAX_VERIFIED_DOMAINS = 20;
+export const SSO_VERIFIED_DOMAIN_MAX_LENGTH = 253;
+
 /** Bounds that keep a single field from becoming a storage or display problem. */
 export const SSO_NAME_MAX_LENGTH = 100;
 export const SSO_ENTITY_ID_MAX_LENGTH = 1024;
@@ -168,6 +180,58 @@ export function readSsoAttributeMapping(value: unknown): SsoAttributeMapping {
     if (typeof attribute === 'string') mapping[key] = attribute;
   }
   return mapping;
+}
+
+export type VerifiedDomainRejection =
+  /** Empty, or nothing left after trimming. */
+  | 'blank'
+  /** Longer than {@link SSO_VERIFIED_DOMAIN_MAX_LENGTH}. */
+  | 'too_long'
+  /**
+   * Not a bare hostname: a scheme, a path, a port, an `@`, a wildcard, a
+   * leading or trailing dot, an underscore, or a label that starts/ends with a
+   * hyphen. Also a single label with no dot — `localhost` names a machine, not
+   * a domain an identity provider can be authoritative for.
+   */
+  | 'malformed';
+
+export type VerifiedDomainCheck =
+  { ok: true; domain: string } | { ok: false; reason: VerifiedDomainRejection };
+
+/**
+ * The pattern a stored verified domain has to match, after normalisation.
+ *
+ * Two or more labels of letters, digits and inner hyphens. Deliberately narrow:
+ * this value is compared for equality against the domain half of an address
+ * that an identity provider asserts, so anything it accepts that an address can
+ * never contain is dead weight, and anything ambiguous is a place for the two
+ * sides to disagree. A wildcard is not in the grammar at all — see
+ * {@link readVerifiedDomain}.
+ */
+const HOSTNAME = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
+/**
+ * Normalise one domain an owner typed, or refuse it by name (§D116 MEDIUM (a)).
+ *
+ * Lower-cased and trimmed, and a trailing dot (the DNS root, which a copy from
+ * a zone file carries) removed — all three are the same domain, and storing
+ * them as three would mean an address matching one of them and not the others.
+ * Normalising here rather than at match time is what lets the database compare
+ * with plain equality: the expensive, forgettable half of the rule runs once
+ * per write instead of once per sign-in.
+ *
+ * A `*.` wildcard is refused rather than expanded. It reads like a convenience
+ * and is the whole vulnerability back again: `*.acme.test` verified by a
+ * workspace that runs `acme.test` says nothing about who controls
+ * `payroll.acme.test`, and the moment the product accepts one form of suffix
+ * matching, "verified" stops meaning "we checked this exact name".
+ */
+export function readVerifiedDomain(raw: string): VerifiedDomainCheck {
+  const domain = raw.trim().toLowerCase().replace(/\.$/, '');
+  if (!domain) return { ok: false, reason: 'blank' };
+  if (domain.length > SSO_VERIFIED_DOMAIN_MAX_LENGTH) return { ok: false, reason: 'too_long' };
+  if (!HOSTNAME.test(domain)) return { ok: false, reason: 'malformed' };
+  return { ok: true, domain };
 }
 
 export type FederationUrlRejection =

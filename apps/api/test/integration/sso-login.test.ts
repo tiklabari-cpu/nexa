@@ -70,7 +70,14 @@ describe('saml sign-in', () => {
 
   // --- Fixtures --------------------------------------------------------------
 
-  /** A live connection, trusting the mock IdP's certificate. */
+  /**
+   * A live connection, trusting the mock IdP's certificate.
+   *
+   * The two domains this workspace's IdP is authoritative for: the fixtures'
+   * own (`owner-a@example.test`) and the one the JIT tests provision newcomers
+   * from. Anything else is outside the connection's authority — which is what
+   * the `verified domains` cases below measure (§D116 MEDIUM (a)).
+   */
   async function connect(
     overrides: Record<string, unknown> = {},
     tenant = fx.a,
@@ -82,6 +89,7 @@ describe('saml sign-in', () => {
         idpEntityId: MOCK_IDP_ENTITY_ID,
         idpSsoUrl: IDP_SSO_URL,
         idpCertificatePem: MOCK_IDP_CERTIFICATE,
+        verifiedDomains: ['example.test', 'corp.example.test'],
         enabled: true,
         ...overrides,
       },
@@ -543,7 +551,74 @@ describe('saml sign-in', () => {
       expect(await owner.account.count({ where: { email } })).toBe(1);
     });
 
+    it('refuses an address outside the domains the connection has verified', async () => {
+      // The finding this closes (§D116 MEDIUM (a)): a workspace that configures
+      // its own identity provider could assert *any* address and have it
+      // provisioned — adopting a stranger's existing account into its tenant, or
+      // squatting the account row of somebody who never signed up. The IdP
+      // vouches for its own domains; nothing gave it authority over the rest of
+      // the internet, and the connection now has to say which those are.
+      const connection = await connect();
+      const outsider = 'victim@unrelated.example.test';
+
+      const login = await startLogin(connection);
+      const res = await acs(connection.id, {
+        SAMLResponse: goodAssertion(connection, login, {
+          subject: outsider,
+          attributes: { email: [outsider] },
+        }).samlResponseBase64,
+        RelayState: login.relayState,
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(await failureReasons()).toEqual(['email_domain_unverified']);
+      // The refusal is not merely a 401 on the way out: nothing was written, so
+      // the address is still free for its real owner to sign up with.
+      expect(await owner.account.count({ where: { email: outsider } })).toBe(0);
+    });
+
+    it('matches a verified domain exactly, and never by suffix', async () => {
+      // `acme.test` being verified must not admit `acme.test.attacker.example`
+      // (a suffix an attacker registers) or `mail.acme.test` (a subdomain the
+      // workspace may not control). Both are refused; the domain itself passes,
+      // so this measures the boundary rather than a blanket refusal.
+      const connection = await connect({ verifiedDomains: ['acme.test'] });
+
+      for (const email of ['a@acme.test.attacker.example', 'b@mail.acme.test', 'c@notacme.test']) {
+        const login = await startLogin(connection);
+        const res = await acs(connection.id, {
+          SAMLResponse: goodAssertion(connection, login, {
+            subject: email,
+            attributes: { email: [email] },
+          }).samlResponseBase64,
+          RelayState: login.relayState,
+        });
+        expect(res.statusCode, email).toBe(401);
+      }
+      expect(await failureReasons()).toEqual([
+        'email_domain_unverified',
+        'email_domain_unverified',
+        'email_domain_unverified',
+      ]);
+
+      // Case is not part of a domain: an IdP that upper-cases the address is
+      // still asserting the domain it verified.
+      const login = await startLogin(connection);
+      const accepted = await acs(connection.id, {
+        SAMLResponse: goodAssertion(connection, login, {
+          subject: 'Ada@ACME.test',
+          attributes: { email: ['Ada@ACME.test'] },
+        }).samlResponseBase64,
+        RelayState: login.relayState,
+      });
+      expect(accepted.statusCode).toBe(302);
+    });
+
     it('never edits an account it did not create, and never resets a role', async () => {
+      // Both fixture workspaces are on `example.test`, so this connection has
+      // genuinely verified the domain B's owner lives in — which is the case
+      // the domain gate is *supposed* to admit (two workspaces of one company).
+      // What is under test is what stays true once it is admitted.
       const connection = await connect();
       // Tenant B's owner, asserted by tenant A's identity provider. A's admin
       // could have invited them anyway, so the membership is fair; touching the

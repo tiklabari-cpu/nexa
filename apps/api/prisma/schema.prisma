@@ -414,6 +414,17 @@ model SsoConnection {
   /// Which assertion attribute fills which account field; see
   /// `SSO_ATTRIBUTE_MAPPING_KEYS`. `{}` means the connection said nothing.
   attributeMapping  Json     @default("{}") @map("attribute_mapping")
+  /// The e-mail domains this identity provider has been declared authoritative
+  /// for. Just-in-time provisioning — SAML sign-in and the workspace's SCIM
+  /// connector alike — may only name addresses inside them, so an IdP cannot
+  /// adopt a stranger's account or squat an address that never signed up
+  /// (PLAN §D116). Stored lowercase and matched exactly, never by suffix: a
+  /// workspace that verified `acme.test` has said nothing about
+  /// `mail.acme.test`. An empty list provisions nobody — "nothing verified"
+  /// must not read as "everything verified", which is why the migration
+  /// back-fills existing rows from their members' own domains instead of
+  /// treating empty as open.
+  verifiedDomains   String[] @default([]) @map("verified_domains")
   /// Accept an assertion sent with no AuthnRequest of ours to correlate it
   /// against. Off by default — that flow gives up the `InResponseTo` binding
   /// replay detection rests on, so it is chosen, never inherited.

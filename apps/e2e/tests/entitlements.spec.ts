@@ -514,6 +514,10 @@ test.describe('single sign-on (FR-MOD-11.5 · S11-g)', () => {
         .fill(
           '-----BEGIN CERTIFICATE-----\nZTJlLWVudGl0bGVtZW50LWZpeHR1cmU=\n-----END CERTIFICATE-----',
         );
+      // Required since PLAN §D116, and required here for the same reason as the
+      // fields above: the form will not submit without it, so the entitlement
+      // refusal this test is about would never be reached.
+      await section.getByLabel('Verified domains').fill('acme.localhost');
       await section.getByRole('button', { name: 'Add connection' }).click();
 
       // The console's own sentence, not the server's — ADR-06 keeps the API's

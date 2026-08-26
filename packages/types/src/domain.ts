@@ -629,6 +629,20 @@ export interface SsoConnection {
   previous_certificate_pem: string | null;
   /** When the overlap above stops being trusted. `null` when there is none. */
   previous_certificate_expires_at: string | null;
+  /**
+   * The e-mail domains this identity provider has been declared authoritative
+   * for. Just-in-time provisioning — SAML sign-in and the workspace's SCIM
+   * connector alike — may only name addresses inside them, so an identity
+   * provider cannot adopt a stranger's account or occupy the address of
+   * somebody who never signed up (PLAN §D116).
+   *
+   * Stored lowercase and matched *exactly*, never by suffix: a workspace that
+   * verified `acme.test` has said nothing about `mail.acme.test`, and one form
+   * of suffix matching is all it takes for "verified" to stop meaning "we
+   * checked this exact name". An empty list provisions nobody — the fail-closed
+   * reading, which is why the write surface requires at least one.
+   */
+  verified_domains: string[];
   attribute_mapping: SsoAttributeMapping;
   /**
    * Accept an assertion the IdP sends unsolicited, with no AuthnRequest of ours

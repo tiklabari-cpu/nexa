@@ -36,12 +36,15 @@ import {
   inspectIdpCertificate,
   isEnforcingSso,
   MAX_CERTIFICATE_OVERLAP_HOURS,
+  MAX_VERIFIED_DOMAINS,
   MIN_RSA_MODULUS_BITS,
   readSsoAttributeMapping,
+  readVerifiedDomain,
   SSO_CERTIFICATE_MAX_LENGTH,
   SSO_ENTITY_ID_MAX_LENGTH,
   SSO_NAME_MAX_LENGTH,
   SSO_URL_MAX_LENGTH,
+  SSO_VERIFIED_DOMAIN_MAX_LENGTH,
   type CertificateFacts,
 } from '../lib/sso-connection.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
@@ -115,6 +118,26 @@ const ssoCertificate = z
   .transform((pem) => `${pem}\n`);
 
 /**
+ * The domains this identity provider is authoritative for (§D116 MEDIUM (a)).
+ *
+ * `min(1)` rather than an optional list, and the reason is the finding itself:
+ * an empty list provisions nobody, so an optional field would let a workspace
+ * configure a federation that silently refuses every first sign-in — the fix
+ * turning into an outage nobody can diagnose from the screen. Making the owner
+ * name at least one domain at the moment they paste the certificate is the
+ * cheapest possible time to ask.
+ *
+ * Deduplicated after normalisation, because `Acme.test` and `acme.test.` are
+ * the same claim typed twice and a list showing both invites the reader to
+ * think they differ.
+ */
+const ssoVerifiedDomains = z
+  .array(z.string().trim().min(1).max(SSO_VERIFIED_DOMAIN_MAX_LENGTH))
+  .min(1)
+  .max(MAX_VERIFIED_DOMAINS)
+  .transform((values) => [...new Set(values.map((value) => readSsoDomain(value)))]);
+
+/**
  * A new SAML connection. Every field that decides whether an assertion is
  * believed is required — there is no half-configured trust anchor to save and
  * finish later, because a row missing one of these would sit in the list looking
@@ -126,6 +149,7 @@ const createSsoBody = z.object({
   idp_entity_id: z.string().trim().min(1).max(SSO_ENTITY_ID_MAX_LENGTH),
   idp_sso_url: z.string().trim().min(1).max(SSO_URL_MAX_LENGTH),
   idp_certificate_pem: ssoCertificate,
+  verified_domains: ssoVerifiedDomains,
   attribute_mapping: ssoAttributeMappingBody.optional(),
   allow_idp_initiated: z.boolean().default(false),
   enabled: z.boolean().default(false),
@@ -155,6 +179,14 @@ const updateSsoBody = z
     idp_entity_id: z.string().trim().min(1).max(SSO_ENTITY_ID_MAX_LENGTH).optional(),
     idp_sso_url: z.string().trim().min(1).max(SSO_URL_MAX_LENGTH).optional(),
     idp_certificate_pem: ssoCertificate.optional(),
+    /**
+     * Replaced wholesale, like the attribute mapping next to it: an add/remove
+     * pair would need its own conflict story, and the screen holds the whole
+     * list anyway. Still `min(1)` — a workspace that wants this connection to
+     * provision nobody disables it, which is a decision with a switch, rather
+     * than emptying a list and getting the same effect by accident.
+     */
+    verified_domains: ssoVerifiedDomains.optional(),
     attribute_mapping: ssoAttributeMappingBody.optional(),
     allow_idp_initiated: z.boolean().optional(),
     enabled: z.boolean().optional(),
@@ -925,6 +957,7 @@ export default async function settingsRoutes(
               // builds uses this string, so what is stored is what is used.
               idpSsoUrl: ssoUrl,
               idpCertificatePem: body.idp_certificate_pem,
+              verifiedDomains: body.verified_domains,
               attributeMapping: body.attribute_mapping ?? {},
               allowIdpInitiated: body.allow_idp_initiated,
               enabled: body.enabled,
@@ -1047,6 +1080,9 @@ export default async function settingsRoutes(
               ...(ssoUrl !== undefined ? { idpSsoUrl: ssoUrl } : {}),
               ...(body.idp_certificate_pem !== undefined
                 ? { idpCertificatePem: body.idp_certificate_pem }
+                : {}),
+              ...(body.verified_domains !== undefined
+                ? { verifiedDomains: body.verified_domains }
                 : {}),
               ...(body.attribute_mapping !== undefined
                 ? { attributeMapping: body.attribute_mapping }
@@ -2499,6 +2535,7 @@ function serialiseSsoConnection(
     idpCertificatePem: string;
     previousCertificatePem: string | null;
     previousCertificateExpiresAt: Date | null;
+    verifiedDomains: string[];
     attributeMapping: Prisma.JsonValue;
     allowIdpInitiated: boolean;
     enabled: boolean;
@@ -2517,6 +2554,11 @@ function serialiseSsoConnection(
     idp_certificate_pem: row.idpCertificatePem,
     previous_certificate_pem: previous?.pem ?? null,
     previous_certificate_expires_at: previous?.expiresAt.toISOString() ?? null,
+    // As stored. An empty list is reported as empty rather than hidden or
+    // defaulted: a connection that provisions nobody is a state the screen has
+    // to be able to show, and it is exactly the state a workspace whose
+    // back-fill found nothing lands in.
+    verified_domains: row.verifiedDomains,
     attribute_mapping: readSsoAttributeMapping(row.attributeMapping),
     allow_idp_initiated: row.allowIdpInitiated,
     enabled: row.enabled,
@@ -2559,6 +2601,32 @@ function readFederationUrl(raw: string): string {
       throw ApiError.validation(
         'Enter the sign-on URL from your identity provider, like https://idp.example.com/sso.',
       );
+  }
+}
+
+/**
+ * Normalise one verified domain, or refuse it by name (§D116 MEDIUM (a)).
+ *
+ * The rules live in `lib/sso-connection.ts`; this turns a refusal into a
+ * sentence an owner can act on without opening the API reference. The wildcard
+ * case gets its own, because `*.acme.test` is the thing somebody reaches for
+ * first and the refusal is not obvious unless the reason is said out loud.
+ */
+function readSsoDomain(raw: string): string {
+  const checked = readVerifiedDomain(raw);
+  if (checked.ok) return checked.domain;
+
+  switch (checked.reason) {
+    case 'too_long':
+      throw ApiError.validation('That domain is too long to be a domain name.');
+    case 'malformed':
+      throw ApiError.validation(
+        raw.trim().startsWith('*')
+          ? 'Enter each domain in full, without a wildcard: verifying acme.test says nothing about who controls mail.acme.test, so subdomains are listed one by one.'
+          : 'Enter a bare domain like acme.test — no scheme, path, port or @.',
+      );
+    default:
+      throw ApiError.validation('Enter a domain like acme.test.');
   }
 }
 

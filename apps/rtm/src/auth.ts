@@ -217,6 +217,34 @@ export class SocketAuthenticator {
   }
 
   /**
+   * Resolve a bearer token to the role behind it, with no organization to bind
+   * to (M-SEC-b2 · §D116 MEDIUM (b)). `/health` is an ops surface reporting on
+   * *this process*, not any one tenant's data, so the residency and
+   * organization-match checks `authenticate` enforces for a chat socket do not
+   * apply — there is no `organization_id` for a health probe to have gotten
+   * right or wrong. Customer tokens are never staff and resolve to `null`
+   * without a lookup; a bot token has no membership to hold a role, likewise
+   * `null`.
+   */
+  async resolveAdminRole(rawToken: string): Promise<AgentRole | null> {
+    const token = rawToken.replace(/^Bearer\s+/i, '').trim();
+    if (!token || token.startsWith(`${CUSTOMER_PREFIX}.`)) return null;
+
+    const hash = createHash('sha256').update(token, 'utf8').digest('base64url');
+    const rows = await this.db.$queryRaw<ResolvedTokenRow[]>`
+      SELECT * FROM auth_resolve_token(${hash})
+    `;
+    const row = rows[0];
+    if (!row) return null;
+    if (row.revoked_at) return null;
+    if (row.expires_at && row.expires_at.getTime() <= Date.now()) return null;
+    if (row.license_status === 'canceled') return null;
+    if (row.kind === 'bot') return null;
+
+    return this.#membershipRole(row.license_id, row.organization_id, row.owner_id);
+  }
+
+  /**
    * The role behind a live membership, or `null` when there is none to speak
    * of — removed, suspended, or still awaiting approval. One read answers both
    * questions the login needs (may this credential connect at all, and how far

@@ -7168,7 +7168,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T14:12:34.102Z",
+        "updatedAt": "2026-08-26T15:51:58.274Z",
         "subtasks": [
           {
             "id": 1,
@@ -7187,10 +7187,10 @@
             "description": "Sağlık ucu artık altyapıyı anonim çağırana anlatmıyor.",
             "details": "NE YAPILACAK (§D116 MEDIUM (b)): GET /api/v1/health bugün public + skipRateLimit ve yanıtında\nregion, version, dependencies (gecikmeler dahil), scheduler durumu ve hangi dikişin hangi mock ile\nkoştuğu (providers) var. Anonim yanıt yalnız {status, service} taşıyacak biçimde daraltılır;\nayrıntılı gövde kimlikli VE admin rolündeki çağırana verilir.\nAnonim yol sınırsız kalmaz: probe u öldürmeyecek kadar YÜKSEK tavanlı bir IP sınırı konur\n(mevcut rate-limit eklentisinin anon kovası deseni).\n\nDOSYALAR: apps/api/src/routes/health.ts (public + skipRateLimit yapılandırması ve yanıt gövdesi) ·\napps/api/src/plugins/rate-limit.ts (anon kova deseni) ·\npackages/contract/openapi/paths/health.yaml (yanıt şeması iki biçime ayrılır).\n\nZORUNLU EŞ GÜNCELLEME — yoksa make demo kırılır:\n- scripts/smoke.sh: \"api /health is ok\" ve scheduler kontrolü daraltılan gövdeye göre güncellenir.\n- docker-compose.full.yml ve apps/api/Dockerfile · apps/rtm/Dockerfile HEALTHCHECK satırları:\n  anonim yanıt hâlâ 200/503 ayrımını verdiği için curl bacağı çalışmalı; kontrol eden alan değişirse düzelt.\n\nTUZAKLAR:\n1. Sağlık ucunun ASIL işi kaybolmasın: bağımlılıklar düştüğünde anonim yanıt hâlâ 503 dönmeli\n   (orkestratör rotasyondan çıkarabilsin). Daraltma yalnız GÖVDEYİ kısar, durum kodunu değil.\n2. RTM in kendi /health i de aynı sınıf bilgi veriyor mu — bak, veriyorsa aynı daraltmayı uygula.\n3. Sınır tavanı düşük seçilirse izleme sistemi kendini DDoS etmiş olur; anon kovası için ayrı ve\n   yüksek bir tavan kullan, gerekçesini koda yorum olarak yaz.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-b** (türetilmiş — §D116 MEDIUM (b)). Gereksinim satırı: `grep -n \"| M-SEC-b\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-b\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration: anonim /health gövdesinde region/version/providers/scheduler YOK; admin token ile VAR.\n- Bağımlılık düşük senaryosunda anonim yanıt hâlâ 503 (mevcut health testi korunur).\n- scripts/smoke.sh elle koşulur ve 10/10 geçer (ya da güncellenmiş kontrol sayısıyla exit 0).\n- contract:generate sonrası git status temiz.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "151",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-26T15:51:58.274Z"
           }
         ]
       },
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T14:12:34.103Z",
+      "lastModified": "2026-08-26T15:51:58.275Z",
       "taskCount": 168,
       "completedCount": 150,
       "tags": [

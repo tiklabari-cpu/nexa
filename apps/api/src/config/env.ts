@@ -113,6 +113,17 @@ export const envSchema = z.object({
    */
   RATE_LIMIT_SCIM_PER_MIN: z.coerce.number().int().positive().default(300),
   RATE_LIMIT_RTM_PER_SEC: z.coerce.number().int().positive().default(10),
+  /**
+   * `/health`, per IP (M-SEC-b2 · §D116 MEDIUM (b)). Anonymous, but no longer
+   * `skipRateLimit` — a bare probe is unauthenticated by nature, so it shares
+   * the anon bucket's shape (keyed by IP) rather than the anon bucket itself:
+   * a monitor polling every few seconds must never compete with sign-in/token
+   * traffic for the same 30/min. High on purpose — this ceiling exists only to
+   * bound abuse of a public endpoint, not to throttle legitimate polling; set
+   * it too low and an orchestrator's own liveness probe starts failing the
+   * instance it is trying to keep in rotation.
+   */
+  RATE_LIMIT_HEALTH_PER_MIN: z.coerce.number().int().positive().default(600),
 
   /**
    * Data retention windows in days (NFR-C8). Each is a positive integer; the

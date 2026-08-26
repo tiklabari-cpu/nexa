@@ -55,6 +55,7 @@ import { FileMailer } from '../../src/services/mail/mailer.js';
 import { startOfUtcDay } from '../../src/services/reports/scheduled-report-period.js';
 import type { SchedulerSnapshot } from '../../src/services/scheduler/types.js';
 import {
+  grantToken,
   ownerClient,
   resetDatabase,
   seedDefaultBrand,
@@ -223,6 +224,8 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
   let unansweredThreadId: string;
   let retentionCanaryId: string;
   let health: HealthBody;
+  /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
+  let adminAuth: { authorization: string };
 
   const ndjsonFiles = async (t: TenantFixture): Promise<string[]> => {
     try {
@@ -254,6 +257,14 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       seedDefaultBrand(owner, fx.a.licenseId),
       seedDefaultBrand(owner, fx.b.licenseId),
     ]);
+    adminAuth = {
+      authorization: `Bearer ${await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: [],
+      })}`,
+    };
 
     const now = Date.now();
 
@@ -372,7 +383,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     // Read while the server is still up: this is the body an operator curls
     // after `make dev`, and the point is that it agrees with the four effects
     // already observed above.
-    health = (await server.get('/health')).json() as HealthBody;
+    health = (await server.get('/health', adminAuth)).json() as HealthBody;
   });
 
   afterAll(async () => {
@@ -573,10 +584,20 @@ describe('retention deletes only once a deployment has said so', () => {
   let fx: Fixtures;
   let expiredThreadId: string;
   let freshThreadId: string;
+  /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
+  let adminAuth: { authorization: string };
 
   beforeAll(async () => {
     mailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-retention-'));
     fx = await seedFixtures(owner);
+    adminAuth = {
+      authorization: `Bearer ${await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: [],
+      })}`,
+    };
 
     const now = Date.now();
     expiredThreadId = (
@@ -638,7 +659,7 @@ describe('retention deletes only once a deployment has said so', () => {
   });
 
   it('reports itself enabled and running on /health', async () => {
-    const body = (await server.get('/health')).json() as HealthBody;
+    const body = (await server.get('/health', adminAuth)).json() as HealthBody;
     const retention = body.scheduler.jobs.find((job) => job.name === 'retention');
     expect(retention).toMatchObject({ enabled: true, last_status: 'ok' });
     expect(retention?.last_run_at).not.toBeNull();

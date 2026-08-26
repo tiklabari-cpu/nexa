@@ -113,6 +113,16 @@ paths:
       description: |
         Reports the process plus each backing store. Returns 200 only when every
         dependency is reachable, so it is safe to use as a readiness probe.
+
+        The body has two shapes (M-SEC-b2 · §D116 MEDIUM (b)). An anonymous
+        caller — or one whose credential does not resolve to at least the
+        `admin` role — gets only `status` + `service`: version, region,
+        dependency latencies, scheduler status and which mock each provider
+        runs are infrastructure detail an unauthenticated caller has no
+        business reading. An admin-role bearer token gets every field below.
+        Either way the status code (200/503) reflects real dependency health —
+        narrowing applies to the body only, so an orchestrator that reads only
+        the status code is unaffected.
       security: []
       responses:
         "200":
@@ -570,7 +580,11 @@ components:
         email: { type: boolean }
     Health:
       type: object
-      required: [status, service, version, region, uptime_s, dependencies, scheduler, providers]
+      description: |
+        `status` + `service` are always present. Every other field is
+        admin-only (M-SEC-b2) — absent for an anonymous or non-admin caller,
+        present together for an admin-role one.
+      required: [status, service]
       properties:
         status:
           type: string

@@ -13,7 +13,7 @@ import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { pino, type Logger } from 'pino';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { RTM_LIMITS, RTM_PATHS } from '@nexa/types';
+import { RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@nexa/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
@@ -97,9 +97,22 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
 
   const http = createServer((req, res) => {
     if (req.url?.startsWith('/health')) {
-      void health(db, commands, version, env, registry).then((body) => {
-        res.writeHead(body.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
-        res.end(JSON.stringify(body));
+      // Same narrowing as `apps/api/src/routes/health.ts` (M-SEC-b2 · §D116
+      // MEDIUM (b)): region/connection-count/dependency detail is
+      // infrastructure fingerprinting, admin-role callers only. Run alongside
+      // the dependency probes, not after them — both are independently bounded
+      // (`HEALTH_PROBE_TIMEOUT_MS`), and chaining them would mean an admin
+      // token presented while Postgres is down waits out that same timeout
+      // twice before /health answers at all, which defeats the point of a
+      // readiness probe when the dependency it reports on is the one that is
+      // actually unreachable.
+      void Promise.all([
+        health(db, commands, version, env, registry),
+        wantsHealthDetail(req.headers.authorization, authenticator),
+      ]).then(([body, detailed]) => {
+        const response = detailed ? body.detailed : body.narrow;
+        res.writeHead(response.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(response));
       });
       return;
     }
@@ -201,26 +214,63 @@ async function probeHealth(
   }
 }
 
+// Undefined header → no token to resolve; the common anonymous-probe case
+// never touches the database. A presented token is bound by the same
+// `HEALTH_PROBE_TIMEOUT_MS` the dependency probes use — resolving it means a
+// query against the very Postgres this check might be reporting as down, and
+// an admin caller's credential must not be why an otherwise-fast 503 hangs.
+// Unresolvable (timeout, malformed token, database down) fails closed to "not
+// admin", the same posture as an anonymous request.
+async function wantsHealthDetail(
+  authorization: string | undefined,
+  authenticator: SocketAuthenticator,
+): Promise<boolean> {
+  if (!authorization) return false;
+  try {
+    const outcome = authenticator.resolveAdminRole(authorization);
+    // Same reasoning as `probeHealth`: a resolution that outlives the race
+    // below must not surface as an unhandled rejection later.
+    outcome.catch(() => {});
+    const role = await Promise.race([
+      outcome,
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), HEALTH_PROBE_TIMEOUT_MS)),
+    ]);
+    return role !== null && roleAtLeast(role, 'admin');
+  } catch {
+    return false;
+  }
+}
+
+interface HealthBodies {
+  narrow: { status: 'ok' | 'degraded'; service: string };
+  detailed: { status: 'ok' | 'degraded'; [key: string]: unknown };
+}
+
 async function health(
   db: PrismaClient,
   redis: Redis,
   version: string,
   env: RtmEnv,
   registry: ConnectionRegistry,
-): Promise<{ status: 'ok' | 'degraded'; [key: string]: unknown }> {
+): Promise<HealthBodies> {
   // Every agent login reads Postgres (`auth.ts`) — a gateway that reports `ok`
   // with the database down accepts no logins while claiming to be healthy.
   const [database, redisHealth] = await Promise.all([
     probeHealth('database', () => db.$queryRaw`SELECT 1`),
     probeHealth('redis', () => redis.ping()),
   ]);
+  const status = database.status === 'up' && redisHealth.status === 'up' ? 'ok' : 'degraded';
+
   return {
-    status: database.status === 'up' && redisHealth.status === 'up' ? 'ok' : 'degraded',
-    service: 'rtm',
-    version,
-    region: env.NEXA_REGION,
-    connections: registry.size,
-    dependencies: { database, redis: redisHealth },
+    narrow: { status, service: 'rtm' },
+    detailed: {
+      status,
+      service: 'rtm',
+      version,
+      region: env.NEXA_REGION,
+      connections: registry.size,
+      dependencies: { database, redis: redisHealth },
+    },
   };
 }
 

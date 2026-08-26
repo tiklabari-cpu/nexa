@@ -111,6 +111,20 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
     };
   }
 
+  // `/health` (M-SEC-b2): its own per-IP bucket, checked before the principal
+  // buckets below so an admin polling it with a bearer token still gets the
+  // generous health ceiling rather than being metered out of the 180/min agent
+  // bucket by its own monitoring. High limit is deliberate (env.ts) — this is
+  // a liveness probe an orchestrator hits on a tight interval, not a surface
+  // worth defending at the same tightness as sign-in.
+  if (request.routeOptions.config.healthRateLimit) {
+    return {
+      key: `rl:health:${request.ip}`,
+      limit: env.RATE_LIMIT_HEALTH_PER_MIN,
+      windowMs: 60_000,
+    };
+  }
+
   if (principal?.kind === 'agent' || principal?.kind === 'bot') {
     const owner = principal.kind === 'agent' ? principal.accountId : principal.botId;
     return {
@@ -210,6 +224,12 @@ declare module 'fastify' {
      * surface stays limited, just more generously.
      */
     publicKbRateLimit?: boolean;
+    /**
+     * `/health` (M-SEC-b2): use the `rl:health:<ip>` bucket instead of
+     * `skipRateLimit` — a public endpoint stays bounded, just at a ceiling high
+     * enough that a legitimate probe never trips it.
+     */
+    healthRateLimit?: boolean;
   }
 }
 

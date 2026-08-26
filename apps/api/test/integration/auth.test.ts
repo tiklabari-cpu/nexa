@@ -1160,7 +1160,7 @@ describe('auth', () => {
       }
     });
 
-    it('does not rate limit the health probe', async () => {
+    it('meters the health probe in its own bucket, unaffected by the agent limit', async () => {
       const server429 = await startTestServer({ RATE_LIMIT_AGENT_PER_MIN: '1' });
       try {
         for (let i = 0; i < 5; i++) {
@@ -1168,6 +1168,29 @@ describe('auth', () => {
           expect(response.statusCode).toBe(200);
         }
       } finally {
+        await server429.close();
+      }
+    });
+
+    it('still enforces a ceiling on the health bucket (M-SEC-b2)', async () => {
+      // `healthRateLimit` (rate-limit.ts) trades `skipRateLimit` for a
+      // generous per-IP bucket, not for no limit at all (§D116 MEDIUM (b)
+      // tuzak 3) — a low `RATE_LIMIT_HEALTH_PER_MIN` here proves the bucket is
+      // real rather than a config flag nothing reads.
+      const server429 = await startTestServer({ RATE_LIMIT_HEALTH_PER_MIN: '3' });
+      try {
+        await clearRateLimits(server429.app);
+        const call = () => server429.get('/health');
+
+        expect((await call()).statusCode).toBe(200);
+        expect((await call()).statusCode).toBe(200);
+        expect((await call()).statusCode).toBe(200);
+
+        const limited = await call();
+        expect(limited.statusCode).toBe(429);
+        expect(limited.json().error.type).toBe('too_many_requests');
+      } finally {
+        await clearRateLimits(server429.app);
         await server429.close();
       }
     });

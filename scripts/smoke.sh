@@ -49,12 +49,16 @@ fail() {
 # Set to send a cross-origin request the way a browser would; empty means
 # same-origin, which is when a browser sends no `Origin` header at all.
 origin_header=''
+# Set to send an Authorization header the way an authenticated client would;
+# empty means anonymous.
+auth_header=''
 
 # GET/POST once. Writes the body to $body_file, echoes the status code.
 request() {
   local method="$1" url="$2" data="${3:-}"
   local args=(-sS -o "$body_file" -w '%{http_code}' -X "$method" --max-time 15)
   [ -n "$origin_header" ] && args+=(-H "Origin: $origin_header")
+  [ -n "$auth_header" ] && args+=(-H "Authorization: $auth_header")
   [ -n "$data" ] && args+=(-H 'Content-Type: application/json' --data "$data")
   curl "${args[@]}" "$url" 2>/dev/null || echo 000
 }
@@ -72,6 +76,25 @@ check() {
   fi
   if [ -n "$want_body" ] && ! grep -q -- "$want_body" "$body_file"; then
     fail "$label" "HTTP $want_status from $url but the body does not contain '$want_body'"
+    return 1
+  fi
+  pass "$label"
+  return 0
+}
+
+# The inverse of `check`'s body assertion: status must match and the body must
+# NOT contain a string. Proves a narrowing didn't silently regress back open,
+# the same way `check`'s positive assertion proves a field is really there.
+check_excludes() {
+  local label="$1" method="$2" url="$3" want_status="$4" exclude_body="$5"
+  local status
+  status="$(request "$method" "$url")"
+  if [ "$status" != "$want_status" ]; then
+    fail "$label" "expected HTTP $want_status from $url, got $status"
+    return 1
+  fi
+  if grep -q -- "$exclude_body" "$body_file"; then
+    fail "$label" "HTTP $want_status from $url but the body contains '$exclude_body', which an anonymous caller must not see"
     return 1
   fi
   pass "$label"
@@ -106,13 +129,28 @@ printf '\nServices\n'
 # flag, so "status":"ok" here is also the datastores' result.
 check 'api /health is ok (Postgres + Redis reachable)' \
   GET "$API_BASE/api/v1/health" 200 '"status":"ok"'
+# The detailed body (version/region/scheduler/providers, M-SEC-b2 · §D116
+# MEDIUM (b)) is admin-only now — an anonymous caller gets only status +
+# service. Proven both ways: the field is gone anonymously, and the seeded
+# demo owner's fixed PAT (apps/api/prisma/seed.ts, same credential
+# apps/api/test/integration/reports-topics.test.ts uses) still sees it.
+check_excludes 'api /health hides the scheduler block from an anonymous caller' \
+  GET "$API_BASE/api/v1/health" 200 '"scheduler"'
+auth_header='Bearer nexa_pat_demo_acme'
 # The six background sweeps (M-SCHED) tick inside the api process. A stack
 # where none of them run looks identical to one with nothing to do — which is
 # why /health reports the scheduler and why this asserts on it.
-check 'api /health reports the scheduler enabled' \
+check 'api /health reports the scheduler enabled (admin caller)' \
   GET "$API_BASE/api/v1/health" 200 '"enabled":true'
+auth_header=''
 check 'rtm /health is ok' \
   GET "$RTM_BASE/health" 200 '"status":"ok"'
+check_excludes 'rtm /health hides region/connections from an anonymous caller' \
+  GET "$RTM_BASE/health" 200 '"region"'
+auth_header='Bearer nexa_pat_demo_acme'
+check 'rtm /health reports region for an admin caller' \
+  GET "$RTM_BASE/health" 200 '"region"'
+auth_header=''
 
 printf '\nStatic surfaces\n'
 check 'web serves the agent app' GET "$WEB_BASE/" 200 '<div id="root">'

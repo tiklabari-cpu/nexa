@@ -46,6 +46,7 @@ export const common: Messages = {
   'common.errors.takeover_conflict': 'Someone else took this conversation first.',
   'common.errors.ticket_exists': 'A ticket already exists for this conversation.',
   'common.errors.too_many_requests': 'Too many attempts — wait a moment and try again.',
+  'common.errors.two_factor_required': 'Enter your two-factor code to continue.',
   'common.errors.unknown': 'Something went wrong — try again.',
   'common.errors.unsupported_version': 'This page is out of date — reload and try again.',
   'common.errors.users_limit_reached': 'Your plan has no seats left.',

@@ -130,6 +130,10 @@ describe('error taxonomy', () => {
     // The sandbox workspace (FR-MOD-11.5 · 11.5-f): the 409 for asking a
     // licence that already has one for a second.
     'sandbox_exists',
+    // Two-factor authentication (NFR-S11 · FR-MOD-00.1): the second login
+    // step's answer when the password was right and a TOTP/recovery code is
+    // still owed.
+    'two_factor_required',
   ];
 
   it('carries the 24 documented types, plus Nexa additions', () => {

@@ -3296,7 +3296,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-SEC | Faz-3 + Faz-4 güvenlik denetimi (salt-okuma, STRIDE) — bulgular görev olur (**türetilmiş**: NFR-S1–S12 · v2-04 · Faz-4 tm 142) | ✅ → KM-SEC |
 | S4-PART | `events` partisyonlarında RLS + kapsam nöbetçisi (**türetilmiş**: NFR-S4 · §D124/1 · Faz-5 tm 150) | ✅ → KS4-PART |
 | M-SEC-b | M-SEC denetiminin iki MEDIUM bulgusu (**türetilmiş**: §D116 MEDIUM · Faz-5 tm 151) | ✅ → KM-SEC-b |
-| S11-2FA | İki adımlı doğrulama: TOTP · ikinci adım · politika zorlaması (**türetilmiş**: NFR-S11 + FR-MOD-00.1 · §D124/3 · Faz-5 tm 152) | ⬜ |
+| S11-2FA | İki adımlı doğrulama: TOTP · ikinci adım · politika zorlaması (**türetilmiş**: NFR-S11 + FR-MOD-00.1 · §D124/3 · Faz-5 tm 152) | ◐ → KS11-2FA |
 | P5-PAGE | Liste sayfalaması istemciye bağlanır (**türetilmiş**: NFR-P5 + FR-EK-B.1 · §D124/2 · Faz-5 tm 153) | ⬜ |
 | M-SEC-c | M-SEC denetiminin beş LOW bulgusu (**türetilmiş**: §D116 LOW · Faz-5 tm 155) | ⬜ |
 | M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ⬜ |
@@ -6786,7 +6786,9 @@ _(Faz-5 · tm 151 — açıldı 2026-08-24. Alt-görevler kapandıkça bu bloğu
 
 #### KS11-2FA — S11-2FA · İki adımlı doğrulama (NFR-S11 · FR-MOD-00.1)
 
-_(Faz-5 · tm 152 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+_(Faz-5 · tm 152 — açıldı 2026-08-24. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+- ◐ Migration + tip iskeleti — `account_two_factor` (account_id PK/FK, secret düz metin + `last_used_step` replay muhafızı, `activated_at`) ve `two_factor_recovery_codes` (id, account_id FK, `code_hash` SHA-256, `used_at`) tabloları; ikisinde de izin verici RLS politikası YOK (`password_reset_tokens` deseni — erişim yalnız gelecek alt-görevlerin SECURITY DEFINER fonksiyonları üzerinden), ölçüldü: `pg_policies` boş, `pg_tables.rowsecurity` ikisinde de true. Yapısal SQL `prisma migrate diff`'in ürettiğiyle birebir (id sütununda DB-seviyesi varsayılan YOK, FK `ON UPDATE CASCADE`) — aksi halde `db:check-drift` kırmızıydı (ölçüldü, düzeltildi). `agent_memberships.two_factor_enabled`'a DOKUNULMADI (türev, senkronu S11-2FA-d/e'de). `packages/types/src/errors.ts`'e `two_factor_required` (401) eklendi + `scopes.test.ts`'in `error taxonomy` bloğuna kayıt + `apps/web/src/locales/{en,tr}/common.ts`'e `common.errors.two_factor_required` (i18n nöbetçisi bunsuz kırmızıydı). Yeni route/OpenAPI path YOK (bilinçli — 152.4 ile birlikte gelecek). — `apps/api/prisma/migrations/20260826150000_two_factor_auth/migration.sql` · `apps/api/prisma/schema.prisma` (`AccountTwoFactor`, `TwoFactorRecoveryCode`) · test: `packages/types/src/scopes.test.ts` (15) · `apps/web/src/lib/i18n-coverage.test.ts` (11) · api `test:integration` RLS sweep (`data-model.test.ts`) · tm 152.1. **Kalan:** TOTP çekirdeği (152.2), kurtarma kodu üretimi (152.3), kayıt uçları (152.4), zorlama (152.5), web ekranları (152.6-152.8), e2e (152.9).
 
 #### KP5-PAGE — P5-PAGE · Liste sayfalaması (NFR-P5 · FR-EK-B.1)
 

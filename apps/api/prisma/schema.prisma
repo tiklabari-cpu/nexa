@@ -175,6 +175,8 @@ model Account {
   workSchedules      WorkSchedule[]
   presenceEvents     AgentPresenceEvent[]
   supervisions       ChatSupervision[]
+  twoFactor          AccountTwoFactor?
+  recoveryCodes      TwoFactorRecoveryCode[]
 
   @@map("accounts")
 }
@@ -1011,6 +1013,44 @@ model PasswordResetToken {
 
   @@index([accountId])
   @@map("password_reset_tokens")
+}
+
+/// TOTP secret for two-factor authentication (NFR-S11 · FR-MOD-00.1 ·
+/// S11-2FA). One row per account — `agent_memberships.twoFactorEnabled` is
+/// the per-membership flag PRD §8.4 actually specifies, kept in sync as a
+/// derived copy of `activatedAt` rather than a second source of truth.
+///
+/// RLS has no permissive policy, same as `PasswordResetToken`: only a
+/// SECURITY DEFINER function reaches this table. `secret` is plain text, not
+/// hashed — it must be read back to compute the next code — see the
+/// migration for why that is not encrypted at rest either.
+model AccountTwoFactor {
+  accountId    String    @id @map("account_id") @db.Uuid
+  secret       String
+  activatedAt  DateTime? @map("activated_at") @db.Timestamptz(6)
+  /// Last accepted TOTP step counter (RFC 6238 §5.2) — replay guard.
+  lastUsedStep BigInt?   @map("last_used_step")
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@map("account_two_factor")
+}
+
+/// Single-use two-factor recovery codes (NFR-S11). Stored hashed, like
+/// `PasswordResetToken`: a code is presented once and never read back, unlike
+/// the TOTP secret above.
+model TwoFactorRecoveryCode {
+  id        String    @id @default(uuid()) @db.Uuid
+  accountId String    @map("account_id") @db.Uuid
+  codeHash  String    @map("code_hash")
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("two_factor_recovery_codes")
 }
 
 /// Team invitations (PRD FR-MOD-04.4). Not in §8.4 — see PLAN §D12.

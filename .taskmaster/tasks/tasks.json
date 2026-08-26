@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T22:31:01.739Z",
+        "updatedAt": "2026-08-26T23:09:03.844Z",
         "subtasks": [
           {
             "id": 1,
@@ -7275,12 +7275,12 @@
             "description": "Ajan iki adımlı doğrulamayı kendi hesabında kurabiliyor.",
             "details": "NE YAPILACAK: apps/web/src/features/settings/ (ya da hesap menüsü altında) TwoFactor.tsx —\n- Kapalıyken: \"Etkinleştir\" → POST /auth/2fa/enroll → otpauth URI + KOPYALANABİLİR secret gösterilir\n  → kullanıcı doğrulayıcı uygulamasına girer → kod alanı → POST /auth/2fa/activate.\n- Aktivasyon yanıtındaki 10 kurtarma kodu BİR KEZ gösterilir + indirilebilir (.txt) + \"kaydettim\" onayı.\n- Açıkken: durum + kalan kurtarma kodu sayısı + \"Yeniden üret\" + \"Kapat\" (parola ister).\n- Tüm metinler locales/{en,tr} katalogundan (i18n nöbetçisi lib/i18n-coverage.test.ts yeşil kalmalı).\n\nQR KODU EKLENMEZ: yeni bir QR kütüphanesi kurmak bundle ve bağımlılık maliyetidir; otpauth URI si\nkopyalanabilir metin olarak yeterlidir (doğrulayıcı uygulamalar elle girişi destekler).\nBu bir karardır, unutulmuş bir iş değil — HANDOFF a yaz.\n\nDOSYALAR: apps/web/src/features/settings/TwoFactor.tsx + testi ·\napps/web/src/features/settings/SettingsPage.tsx (bağlama) ·\napps/web/src/locales/{en,tr}/settings.ts (ya da uygun ad alanı).\nREFERANS DESEN: aynı dizindeki tekil-ayar formları (ChatTimeout.tsx) + lib/form.tsx primitifi\n(EK-A.1: alan-altı hata, geçersizken submit pasif) + lib/dirty-guard.tsx (EK-A.2).\n\nTUZAKLAR:\n1. Kurtarma kodları ekrandan kaybolduktan sonra bir daha GÖSTERİLEMEZ — UI bunu açıkça söylemeli.\n2. İndirme bağlantısı için data: URI kullanılıyorsa tarayıcı kısıtlarına dikkat; basit ve test edilebilir tut.\n3. Sunucunun döndürdüğü hata tipini t(errorMessageKey(...)) ile çevir (ham error.message BASMA) —\n   i18n nöbetçisi bunu denetliyor.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S11-2FA** (türetilmiş — NFR-S11). Gereksinim satırı: `grep -n \"| S11-2FA\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS11-2FA\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+6 civarı): enroll akışı · aktivasyon · kurtarma kodu gösterimi bir kez · kapatma parola ister.\n- i18n: lib/i18n-coverage.test.ts yeşil (en/tr anahtar kümesi eşit, çevrilmemiş İngilizce cümle yok).\n- a11y: yeni ekran e2e a11y taramasına eklenmeli mi — 137 deseni; eklenmezse gerekçesi HANDOFF ta.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "152.4"
             ],
             "parentId": "152",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-26T23:09:03.844Z"
           },
           {
             "id": 7,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T22:31:01.740Z",
+      "lastModified": "2026-08-26T23:09:03.845Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

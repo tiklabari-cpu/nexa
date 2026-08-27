@@ -7684,7 +7684,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T11:12:00.361Z",
+        "updatedAt": "2026-08-27T12:01:35.380Z",
         "subtasks": [
           {
             "id": 1,
@@ -7692,10 +7692,10 @@
             "description": "Production konfigürasyonunun reddettiği şeyleri gerçekten reddettiği ölçüldü.",
             "details": "NE YAPILACAK: apps/api/src/config/env.ts içindeki production dalı bugün YAZILI ama HİÇ KOŞULMAMIŞ.\nparseEnv, NODE_ENV=production altında: DATABASE_APP_URL i zorunlu kılıyor (yoksa RLS baypas olur) ve\nbeş secret in (JWT_SIGNING_KEY · WEBHOOK_HMAC_SEED · CUSTOMER_TOKEN_SECRET · UPLOAD_SIGNING_KEY ·\nAUDIT_CHAIN_SECRET) dev-only- ön ekiyle başlamasını reddediyor.\nBu dalı kapsayan integration testleri yazılır:\n- production + eksik DATABASE_APP_URL → anlamlı hata (mesaj RLS gerekçesini söylüyor).\n- production + dev-only- secret → anlamlı hata (hangi anahtar olduğunu söylüyor).\n- production + geçerli konfig → parseEnv başarılı, isProduction true, schedulerEnabled/otelEnabled doğru.\n- Sunucu, .env DOSYASI OLMADAN yalnız process.env ile ayağa kalkabiliyor (12-factor) — depoda hiçbir şey\n  dotenv çağırmıyor, bu zaten böyle; testle KİLİTLE ki ileride bir dotenv eklenip sessizce bağımlılık doğmasın.\n\nDOSYALAR: apps/api/src/config/env.ts (yalnız OKUMA beklenir; kusur bulursan düzelt) ·\napps/api/src/config/env.test.ts (mevcut parite testleri burada — kardeşlerini oraya ekle) ·\ngerekirse apps/api/test/integration/ altında boot testi.\nREFERANS DESEN: aynı dosyadaki env.parity.test.ts / env.test.ts — sağlayıcı sözlüklerini .shape\nüzerinden sayan mevcut testler; production dalı da aynı disiplinle sınanır.\n\nTUZAKLAR:\n1. Test NODE_ENV i global olarak DEĞİŞTİRMEMELİ — parseEnv e sahte bir source nesnesi ver\n   (fonksiyon zaten source parametresi alıyor). Global mutasyon diğer süitleri kirletir.\n2. Gerçek bir production sunucusu AYAĞA KALDIRMA (gerçek secret yok, CLAUDE.md sınırı);\n   ölçülen şey konfigürasyon dalıdır, canlı bir dağıtım değil.\n3. RTM in kendi env şeması da var (apps/rtm) — aynı production korumaları orada var mı, ÖLÇ.\n   Yoksa bu alt-görevin kapsamındadır (aynı sınıf kusur, aynı dosya ailesi).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-PROD-CFG** (türetilmiş — NFR-M · NFR-S4). Gereksinim satırı: `grep -n \"| M-PROD-CFG\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-PROD-CFG\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api unit/integration yeşil (+6 civarı test); production dalının üç reddi ve bir kabulü ayrı testlerde.\n- Ölçülebilir: depoda dotenv çağrısı YOK (grep ile doğrulanır ve test bunu kilitler).\n- RTM env şemasının production davranışı ölçüldü; bulgu varsa kapatıldı ya da HANDOFF a yazıldı.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "159",
-            "updatedAt": "2026-08-27T11:12:00.361Z"
+            "updatedAt": "2026-08-27T12:01:35.380Z"
           },
           {
             "id": 2,
@@ -8118,7 +8118,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T11:12:00.361Z",
+      "lastModified": "2026-08-27T12:01:35.380Z",
       "taskCount": 169,
       "completedCount": 154,
       "tags": [

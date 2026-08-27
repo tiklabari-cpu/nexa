@@ -9,6 +9,7 @@
  * client SDK written against the original protocol still works.
  */
 import { createServer, type Server } from 'node:http';
+import { setTimeout as delay } from 'node:timers/promises';
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { pino, type Logger } from 'pino';
@@ -24,6 +25,19 @@ import { Fanout } from './fanout.js';
 import { decodeRequest, encodeError } from './protocol.js';
 import { SyncService } from './sync.js';
 import { TypingService } from './typing.js';
+
+/**
+ * How long `close()` waits for open sockets to answer the close frame before it
+ * tears them down (M-OPS-b).
+ *
+ * `ws` gives a peer thirty seconds to send its own close frame back, which is
+ * generous for a browser tab that went to sleep and far too long for a deploy:
+ * the orchestrator's grace period expires first and SIGKILL ends the process
+ * mid-drain anyway. A client that has not answered in five seconds is not going
+ * to notice the difference between a clean close and a reset — it reconnects
+ * either way — but the deploy notices the twenty-five seconds.
+ */
+const SOCKET_CLOSE_TIMEOUT_MS = 5_000;
 
 // Defined in `@nexa/types` so the gateway and its clients cannot disagree about
 // it; re-exported here because this is where callers have always imported it.
@@ -41,6 +55,13 @@ export interface RtmServer {
 export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   const log: Logger = pino({ level: env.LOG_LEVEL, name: 'nexa-rtm' });
   const startedAt = Date.now();
+  /**
+   * Set the moment `close()` starts (M-OPS-b). Readiness turns false first and
+   * new upgrades are refused, so the orchestrator stops routing here — and a
+   * client whose socket is about to be closed reconnects to an instance that is
+   * staying, rather than back into this one.
+   */
+  let draining = false;
 
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   const commands = new Redis(env.REDIS_URL, {
@@ -120,6 +141,17 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
     // probe never carries a bearer token, so the admin-gated detail below
     // would never be reachable here anyway.
     if (pathname === '/health/ready') {
+      // Draining short-circuits the probe: mid-close the connections it reads
+      // may already be gone, so probing would spend the full
+      // `HEALTH_PROBE_TIMEOUT_MS` on the way to the same 503 — and a readiness
+      // answer that is slow during a drain is the one that arrives too late to
+      // stop the traffic. `draining` rather than `degraded` because they call
+      // for opposite responses: one is leaving on purpose, the other is broken.
+      if (draining) {
+        res.writeHead(503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ status: 'draining', service: 'rtm' }));
+        return;
+      }
       void health(db, commands, version, env, registry).then(({ narrow }) => {
         res.writeHead(narrow.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
         res.end(JSON.stringify(narrow));
@@ -128,6 +160,15 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
     }
 
     if (pathname === '/health') {
+      // Draining wins over the admin body below, for the reason it does in
+      // `apps/api/src/routes/health.ts`: anything still pointed at this route
+      // from before the M-OPS-a split reads it as readiness, and a 200 here
+      // during a drain keeps traffic arriving at a process that is closing.
+      if (draining) {
+        res.writeHead(503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ status: 'draining', service: 'rtm' }));
+        return;
+      }
       // Same narrowing as `apps/api/src/routes/health.ts` (M-SEC-b2 · §D116
       // MEDIUM (b)): region/connection-count/dependency detail is
       // infrastructure fingerprinting, admin-role callers only. Run alongside
@@ -161,6 +202,16 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   const wss = new WebSocketServer({ noServer: true, maxPayload: 256 * 1024 });
 
   http.on('upgrade', (request, socket, head) => {
+    // A socket accepted during the drain window would be closed seconds later
+    // by the very `close()` that opened the window — and the client would
+    // reconnect straight back here, because nothing told it this instance is
+    // leaving. Refusing sends it to one that is staying.
+    if (draining) {
+      socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+
     const url = new URL(request.url ?? '/', 'http://localhost');
     const side =
       url.pathname === RTM_PATHS.agent
@@ -199,10 +250,37 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
           resolve();
         });
       }),
+    /**
+     * Graceful drain (M-OPS-b), in the same order the API uses
+     * (`apps/api/src/lib/shutdown.ts`) and for the same reason: an orchestrator
+     * keeps routing here until a readiness probe fails, so anything that closes
+     * before that probe had a chance to fail is a client dropped mid-handshake.
+     *
+     *   1. readiness turns false and new upgrades are refused;
+     *   2. wait `SHUTDOWN_DRAIN_MS` — zero outside production, see `config/env.ts`;
+     *   3. tell every open socket to go away with close code 1001 ("going
+     *      away"), which a client reads as reconnect rather than as an error
+     *      (`apps/web/src/lib/realtime.ts` retries any close it did not
+     *      initiate) — so NFR-R2's reconnect + missed-event sync is what
+     *      carries the session across the deploy;
+     *   4. stop listening and let go of Postgres and Redis.
+     */
     close: async () => {
+      draining = true;
+      if (env.shutdownDrainMs > 0) {
+        log.info({ drain_ms: env.shutdownDrainMs }, 'draining: readiness is now false');
+        await delay(env.shutdownDrainMs);
+      }
+
       registry.closeAll(1001, 'server shutting down');
-      await new Promise<void>((resolve) => wss.close(() => resolve()));
-      await new Promise<void>((resolve) => http.close(() => resolve()));
+      await closeSockets(wss);
+      await new Promise<void>((resolve) => {
+        http.close(() => resolve());
+        // A health probe's keep-alive connection is idle, not in flight, and
+        // `close()` alone would wait for it — which is a shutdown that hangs on
+        // a connection nobody is using.
+        http.closeIdleConnections();
+      });
       await Promise.all([
         commands.quit().catch(() => commands.disconnect()),
         subscriber.quit().catch(() => subscriber.disconnect()),
@@ -211,6 +289,35 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
       ]);
     },
   };
+}
+
+/**
+ * Wait for every socket to answer its close frame, then stop waiting.
+ *
+ * `wss.close()` resolves only once the last client has gone, and `ws` will sit
+ * on an unanswered close frame for thirty seconds. A peer that is asleep or
+ * whose network vanished would hold the whole shutdown open for that long, so
+ * after {@link SOCKET_CLOSE_TIMEOUT_MS} the stragglers are torn down — which
+ * their clients see as a dropped connection and handle exactly the way they
+ * handle any other one: by reconnecting.
+ */
+async function closeSockets(wss: WebSocketServer): Promise<void> {
+  const closed = new Promise<void>((resolve) => wss.close(() => resolve()));
+
+  let timer: NodeJS.Timeout | undefined;
+  const outcome = await Promise.race([
+    closed.then(() => 'closed' as const),
+    new Promise<'timeout'>((resolve) => {
+      timer = setTimeout(() => resolve('timeout'), SOCKET_CLOSE_TIMEOUT_MS);
+      // Never the reason the process stays alive.
+      timer.unref?.();
+    }),
+  ]);
+  if (timer) clearTimeout(timer);
+  if (outcome === 'closed') return;
+
+  for (const client of wss.clients) client.terminate();
+  await closed;
 }
 
 interface RtmDependencyHealth {

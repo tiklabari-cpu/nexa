@@ -404,6 +404,28 @@ jobs does):
   `RETENTION_*_DAYS` before setting it to `true`; `/health` reports the job as
   `enabled: false` until you do, never simply absent.
 
+### `SHUTDOWN_DRAIN_MS` and graceful shutdown
+
+On `SIGTERM`, both `apps/api` and `apps/rtm` drain before they close, in this order:
+
+1. readiness turns false — `/health/ready` answers `503 {"status":"draining"}` while the
+   process keeps serving normally, and `apps/rtm` also starts refusing new WebSocket
+   upgrades. Liveness (`/health/live`) stays `200`: the process has not failed, and killing
+   it here would only add a SIGKILL to the deploy.
+2. `SHUTDOWN_DRAIN_MS` elapses. This is the window your orchestrator needs to notice step 1
+   and stop routing here; anything it already routed is answered, not refused.
+3. in-flight requests finish, the scheduler's Redis leader locks are handed back (so the
+   next instance sweeps at its next tick instead of waiting out the lock TTL), open
+   WebSockets get close code `1001` — which clients read as reconnect, handing the session
+   to the missed-event sync (NFR-R2) — and the Postgres/Redis connections close.
+
+Unset, the window is **5000 ms in production and 0 everywhere else**: nothing probes a
+`make dev`, and every suite that closes a server would otherwise pay the wait. Size it at or
+above your readiness probe period (Kubernetes defaults to 10s), and keep it well under the
+orchestrator's own grace period — Kubernetes' `terminationGracePeriodSeconds` defaults to
+30s, and when that expires SIGKILL truncates exactly the requests this drain exists to
+protect. A second `SIGTERM` skips the wait and exits immediately.
+
 ---
 
 ## Status

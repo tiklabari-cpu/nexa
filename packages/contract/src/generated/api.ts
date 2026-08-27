@@ -6047,8 +6047,16 @@ export interface components {
      *     present together for an admin-role one.
      */
     Health: {
-      /** @enum {string} */
-      status: 'ok' | 'degraded';
+      /**
+       * @description `ok` every dependency is reachable · `degraded` at least one is not
+       *     (503) · `draining` the process is shutting down and has taken
+       *     itself out of rotation on purpose (503, M-OPS-b). The last two share
+       *     a status code because an orchestrator should stop routing either
+       *     way, and are told apart here because the responses a human owes them
+       *     are opposite ones.
+       * @enum {string}
+       */
+      status: 'ok' | 'degraded' | 'draining';
       /** @example api */
       service: string;
       version?: string;
@@ -9965,7 +9973,14 @@ export interface operations {
           'application/json': components['schemas']['Health'];
         };
       };
-      /** @description At least one dependency is unreachable */
+      /**
+       * @description Not ready. `status` says which kind: `degraded` — at least one
+       *     dependency is unreachable; `draining` — the process received SIGTERM
+       *     and is shutting down (M-OPS-b). Readiness turns false before the
+       *     server stops accepting, precisely so an orchestrator has a probe
+       *     interval in which to stop routing here while requests are still being
+       *     answered normally.
+       */
       503: {
         headers: {
           [name: string]: unknown;

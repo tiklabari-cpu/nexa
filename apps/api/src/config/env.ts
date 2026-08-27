@@ -121,6 +121,30 @@ export const envSchema = z.object({
       z.coerce.number().int().min(0).max(8),
     )
     .default(1),
+  /**
+   * How long a shutting-down process keeps answering before it starts closing
+   * (M-OPS-b). Milliseconds.
+   *
+   * The window sits between "readiness turns false" and "stop accepting": an
+   * orchestrator only stops routing to an instance after its next readiness
+   * probe fails, and anything it routed in the meantime has to land somewhere.
+   * Close immediately and those requests meet a socket that is already gone —
+   * which is the connection reset a rolling deploy shows up as, and the whole
+   * reason this key exists. Size it at or above the readiness probe period of
+   * whatever runs this (Kubernetes defaults to 10s).
+   *
+   * Unset it follows the environment, the way `SCHEDULER_ENABLED` does: the
+   * window is production's, and zero everywhere else. There is no orchestrator
+   * watching a `make dev` or a test, so waiting there would only add seconds to
+   * every Ctrl-C and to every suite that closes a server — and the suites close
+   * hundreds. An explicit value overrides in any environment, which is how the
+   * integration test drives the real wait without waiting the real length.
+   *
+   * Capped: past a couple of minutes the orchestrator's own grace period
+   * (`terminationGracePeriodSeconds`, 30s by default) expires first and SIGKILL
+   * lands mid-drain — a value that large does not do what it says.
+   */
+  SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(0).max(120_000).optional(),
   API_BASE_URL: z.string().url().default('http://localhost:4000'),
   /// Where invitation links point. The agent app, not the API.
   WEB_APP_URL: z.string().url().default('http://localhost:5173'),
@@ -441,6 +465,8 @@ export type Env = z.infer<typeof envSchema> & {
   otelEnabled: boolean;
   /** Whether this process runs the background sweeps (M-SCHED). */
   schedulerEnabled: boolean;
+  /** Resolved shutdown drain window in milliseconds (M-OPS-b). */
+  shutdownDrainMs: number;
 };
 
 /**
@@ -525,5 +551,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     isTest: env.NODE_ENV === 'test',
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
     schedulerEnabled: env.SCHEDULER_ENABLED ?? env.NODE_ENV !== 'test',
+    shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
   };
 }

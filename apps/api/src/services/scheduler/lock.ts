@@ -33,10 +33,17 @@
  * would close that, and is deliberately not here — none of the five sweeps comes
  * close to its window.
  *
- * {@link JobLock.release} is still owner-checked, because the one path that does
- * hand a lock back (the scheduler stopping between acquiring and running) must
- * not be able to delete a lock that expired and was retaken by somebody else in
- * the meantime.
+ * The one thing that *does* hand a lock back is a process on its way out
+ * (M-OPS-b, `Scheduler.stop`). The "already taken" marker above is worth keeping
+ * only while its holder is still around to take the next interval as well; an
+ * exiting one leaves it parked, and nobody sweeps until it expires — up to an
+ * hour for retention, with no other holder at all on a single-instance
+ * deployment. Weighed against one extra idempotent pass, that is the worse
+ * outcome, so shutdown releases and a completed pass still does not.
+ *
+ * {@link JobLock.release} is owner-checked for both paths — the shutdown one and
+ * the scheduler stopping between acquiring and running — so neither can delete a
+ * lock that expired and was retaken by somebody else in the meantime.
  */
 import { randomUUID } from 'node:crypto';
 

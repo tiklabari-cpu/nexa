@@ -14,6 +14,7 @@ import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
 import { logSafeUrl } from './lib/log-redact.js';
 import licenseGate from './plugins/license-gate.js';
+import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
 import rateLimit from './plugins/rate-limit.js';
@@ -182,9 +183,29 @@ export async function buildServer({
     // made it off in the first place.
     disableRequestLogging: env.isTest && !logStream,
     bodyLimit: 1_048_576, // 1 MiB — attachments go through signed upload URLs
+    // Do not let `close()` tear down live connections (M-OPS-b).
+    //
+    // This looks like it should be the default and is not. Fastify resolves an
+    // unset `forceCloseConnections` to the string `'idle'`, and its close path
+    // then reads `else if (serverHasCloseAllConnections && forceCloseConnections)`
+    // — a truthiness check that `'idle'` passes — so the default calls
+    // `closeAllConnections()` and destroys every socket, including the ones with
+    // a request half-answered on them. Measured, not inferred: with the default,
+    // `test/integration/graceful-shutdown.test.ts`'s in-flight request comes back
+    // as a socket error with zero bytes read.
+    //
+    // `false` makes `close()` wait for connections to end instead. Idle
+    // keep-alive sockets are handed back separately, in `plugins/lifecycle.ts`'s
+    // `preClose` hook — otherwise a monitor's parked connection would hold the
+    // shutdown open for a full `keepAliveTimeout`.
+    forceCloseConnections: false,
   });
 
   await app.register(errorHandler);
+  // First, and with no dependencies of its own: `/health/ready` has to be able
+  // to answer "draining" even when the drain started while Postgres was
+  // unreachable, and those are two different 503s that must not be confused.
+  await app.register(lifecycle);
   // Registered before the rest so its onRequest span opens ahead of auth and
   // rate limiting, and its onResponse metrics see the final status code.
   await app.register(telemetryPlugin, { telemetry: telemetryInstance });

@@ -37,7 +37,13 @@ ready:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Health" }
       "503":
-        description: At least one dependency is unreachable
+        description: |
+          Not ready. `status` says which kind: `degraded` — at least one
+          dependency is unreachable; `draining` — the process received SIGTERM
+          and is shutting down (M-OPS-b). Readiness turns false before the
+          server stops accepting, precisely so an orchestrator has a probe
+          interval in which to stop routing here while requests are still being
+          answered normally.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Health" }

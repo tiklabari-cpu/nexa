@@ -601,7 +601,14 @@ components:
       properties:
         status:
           type: string
-          enum: [ok, degraded]
+          description: |
+            `ok` every dependency is reachable · `degraded` at least one is not
+            (503) · `draining` the process is shutting down and has taken
+            itself out of rotation on purpose (503, M-OPS-b). The last two share
+            a status code because an orchestrator should stop routing either
+            way, and are told apart here because the responses a human owes them
+            are opposite ones.
+          enum: [ok, degraded, draining]
         service:
           type: string
           examples: [api]

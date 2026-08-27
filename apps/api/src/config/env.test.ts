@@ -164,6 +164,25 @@ describe('production configuration', () => {
     ).toMatchObject({ schedulerEnabled: false, otelEnabled: false });
   });
 
+  it('drains on shutdown in production and nowhere else (M-OPS-b)', () => {
+    // The window is only worth anything where an orchestrator is watching
+    // readiness. Defaulting it on everywhere would add five seconds to every
+    // Ctrl-C and to every one of the hundreds of server closes the suites do,
+    // and buy nothing in return.
+    expect(parseEnv(PROD_BASE).shutdownDrainMs).toBe(5_000);
+    expect(parseEnv(BASE).shutdownDrainMs).toBe(0);
+    expect(parseEnv({ ...BASE, NODE_ENV: 'development' }).shutdownDrainMs).toBe(0);
+
+    // Explicit wins in either direction — including zero, which is how a
+    // deployment behind a load balancer that drains for itself opts out.
+    expect(parseEnv({ ...PROD_BASE, SHUTDOWN_DRAIN_MS: '0' }).shutdownDrainMs).toBe(0);
+    expect(parseEnv({ ...BASE, SHUTDOWN_DRAIN_MS: '250' }).shutdownDrainMs).toBe(250);
+
+    // Capped: past a couple of minutes the orchestrator's own grace period
+    // expires first and SIGKILL lands mid-drain, so the value would be a lie.
+    expect(() => parseEnv({ ...BASE, SHUTDOWN_DRAIN_MS: '600000' })).toThrow(/SHUTDOWN_DRAIN_MS/);
+  });
+
   it('refuses to boot without DATABASE_APP_URL, and says why', () => {
     const { DATABASE_APP_URL: _omitted, ...withoutAppUrl } = PROD_BASE;
 

@@ -307,6 +307,105 @@ overlapping tick delivers the same event twice.
 
 ---
 
+## Production configuration
+
+`.env.production.example` is the production sibling of `.env.example` (see "Environment"
+above) — copy it to `.env` on the host running `apps/api`/`apps/rtm` and fill in every
+placeholder. It has no real secrets in it: each one is either a value you must supply for
+your infrastructure or a generation instruction. `parseEnv`
+(`apps/api/src/config/env.ts`, `apps/rtm/src/config/env.ts`) validates the result once at
+boot and refuses to start — with every problem listed at once, not just the first — rather
+than fail at the first request that happens to touch a missing value.
+
+**This repository has no production deploy of its own** (CLAUDE.md) — no DNS, no TLS, no
+real secret ever committed. This section documents what a deployment built from this code
+needs to configure, not a hosted instance of it.
+
+### Required — boot refuses without these
+
+| Variable                | Why it's required                                                                                                                                                                           |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`          | Migration/owner connection. Always required, in every `NODE_ENV`.                                                                                                                           |
+| `DATABASE_APP_URL`      | Runtime connection, required specifically under `NODE_ENV=production`. See "DATABASE_URL vs DATABASE_APP_URL" below — this is the one most likely to be skipped by habit and worst to skip. |
+| `REDIS_URL`             | Presence, rate limiting, pub/sub. Always required.                                                                                                                                          |
+| `JWT_SIGNING_KEY`       | Signs agent session tokens. Always required; production additionally refuses the published `dev-only-…` placeholder.                                                                        |
+| `WEBHOOK_HMAC_SEED`     | Signs outbound webhook payloads (NFR-S7). Same production-only placeholder refusal.                                                                                                         |
+| `CUSTOMER_TOKEN_SECRET` | Signs widget customer tokens — must be byte-identical between `apps/api` and `apps/rtm`. Same production-only placeholder refusal.                                                          |
+| `UPLOAD_SIGNING_KEY`    | Signs upload URLs. Same production-only placeholder refusal.                                                                                                                                |
+| `AUDIT_CHAIN_SECRET`    | Roots the audit hash chain (NFR-C6) — deliberately not stored in the database. Same production-only placeholder refusal.                                                                    |
+| `INBOUND_EMAIL_SECRET`  | Authenticates the inbound mail webhook, required specifically under `NODE_ENV=production` — unset, the recipient address is the only routing key, and it's handed to customers.             |
+
+Generate each secret independently, per deployment — never reuse a value across
+environments:
+
+```bash
+openssl rand -hex 32
+```
+
+### `DATABASE_URL` vs `DATABASE_APP_URL`
+
+Two connection strings to the same database, and the distinction is a tenant-isolation
+control, not a style choice. Migrations run as the table owner (`DATABASE_URL`); the
+request path runs as `nexa_app` (`DATABASE_APP_URL`), a role with no owner/superuser
+privilege. PostgreSQL exempts owners and superusers from row level security — so a
+deployment that (accidentally or "temporarily") points the runtime at the owner connection
+does not error, does not fail a test, and does not look different in any way except that
+every tenant's rows are now readable by every other tenant's queries. `parseEnv` closes
+that gap the only way that actually holds: it refuses to boot in production without
+`DATABASE_APP_URL` set to something other than the owner connection.
+
+### Choosing `TRUST_PROXY_HOPS`
+
+`request.ip` — the anonymous rate-limit bucket, the customer IP ban and the agent IP
+allow-list — is derived from `X-Forwarded-For`, and `TRUST_PROXY_HOPS` says how many
+entries from the right of that header to trust. Get it wrong in either direction and it's a
+security bug, not a cosmetic one:
+
+- **Too high** (more than the proxies actually in front of the process): a caller can put
+  an allow-listed address in the header themselves and be believed — the allow-list is
+  bypassed by a header anyone can send.
+- **Too low** (fewer than the real count, most commonly left at the default with none):
+  every request appears to come from the last proxy's address, which silently collapses
+  the rate limit, the IP ban and the allow-list onto one address.
+
+Count the reverse proxies between the internet and this process, not including the process
+itself:
+
+| Topology                                                   | `TRUST_PROXY_HOPS` |
+| ---------------------------------------------------------- | ------------------ |
+| Nothing in front — the process is reached directly         | `0`                |
+| One reverse proxy (e.g. the compose stack's nginx sidecar) | `1` (default)      |
+| A CDN/load balancer in front of that reverse proxy         | `2`                |
+| Each additional hop that appends to `X-Forwarded-For`      | `+1`               |
+
+Capped at `8` — past a handful this stops describing a topology and starts meaning "trust
+the whole chain", which is what the setting exists to prevent.
+
+### `WEB_ORIGIN`
+
+Comma-separated list of origins the API answers cross-origin (only production enforces
+it). Left at the `.env.example` localhost default, every real browser request is refused by
+CORS — this has to be set to the panel's actual origin(s), and a second origin if a chat
+page is hosted separately (FR-MOD-08.5.9). A value that isn't a bare `scheme://host[:port]`
+fails the boot rather than silently matching nothing.
+
+### `SCHEDULER_ENABLED` and `RETENTION_ENABLED` defaults
+
+Both are read by `apps/api` only (see "Background jobs" above for what each of the six
+jobs does):
+
+- `SCHEDULER_ENABLED` — unset already means **on** under `NODE_ENV=production` (it only
+  defaults off under test, so suites don't race a sweep against their own fixtures). Set it
+  to `false` explicitly if this deployment drives the jobs from a host cron instead; each
+  job keeps its own `pnpm --filter @nexa/api <job>:run` script for that.
+- `RETENTION_ENABLED` — defaults to **off** in every environment, scheduler on or not. It
+  is the one sweep that hard-deletes data, and unlike the CLI's `--apply` flag — an operator
+  confirming one specific run — a scheduled pass has no operator to ask. Review
+  `RETENTION_*_DAYS` before setting it to `true`; `/health` reports the job as
+  `enabled: false` until you do, never simply absent.
+
+---
+
 ## Status
 
 See [PLAN.md](PLAN.md) for what is done and what is next, and [HANDOFF.md](HANDOFF.md)

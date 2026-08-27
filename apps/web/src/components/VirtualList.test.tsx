@@ -11,7 +11,8 @@
  * event — the component reads exactly those, keeping the window deterministic.
  */
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import type { ReactElement } from 'react';
+import { describe, expect, it, vi } from 'vitest';
 import { computeVirtualWindow, VirtualList, VirtualTable } from './VirtualList.js';
 
 interface Row {
@@ -202,6 +203,160 @@ describe('VirtualTable', () => {
 
     expect(screen.getByText('Row 9000')).toBeInTheDocument();
     expect(screen.queryByText('Row 0')).not.toBeInTheDocument();
+  });
+});
+
+describe('onEndReached', () => {
+  function listOf(
+    count: number,
+    onEndReached: () => void,
+    endReachedThreshold?: number,
+  ): ReactElement {
+    return (
+      <VirtualList
+        items={makeRows(count)}
+        rowHeight={ROW}
+        viewportHeight={VIEWPORT}
+        overscan={OVERSCAN}
+        label="Rows"
+        onEndReached={onEndReached}
+        {...(endReachedThreshold != null ? { endReachedThreshold } : {})}
+        renderRow={(row) => (
+          <div key={row.id} role="listitem" data-testid="vrow">
+            {row.label}
+          </div>
+        )}
+      />
+    );
+  }
+
+  function renderList(
+    count: number,
+    onEndReached: () => void,
+    endReachedThreshold?: number,
+  ): ReturnType<typeof render> {
+    return render(listOf(count, onEndReached, endReachedThreshold));
+  }
+
+  /** scrollTop that puts the very last row of `count` at the bottom edge. */
+  function bottomOf(count: number): number {
+    return count * ROW - VIEWPORT;
+  }
+
+  /** The scroller of one render, for tests that mount two lists side by side. */
+  function scrollerOf(result: ReturnType<typeof render>): HTMLElement {
+    return result.container.querySelector('[role="list"]') as HTMLElement;
+  }
+
+  it('stays quiet until the window comes within the threshold of the end', () => {
+    const onEndReached = vi.fn();
+    renderList(100, onEndReached);
+
+    expect(onEndReached).not.toHaveBeenCalled();
+
+    scrollTo(screen.getByRole('list'), bottomOf(100));
+    expect(onEndReached).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks once per row count, not once per scroll event', () => {
+    const onEndReached = vi.fn();
+    renderList(100, onEndReached);
+    const list = screen.getByRole('list');
+
+    // Three more events, all still inside the trailing zone: the same page must
+    // not be requested again just because the reader kept dragging.
+    scrollTo(list, bottomOf(100));
+    scrollTo(list, bottomOf(100) - ROW);
+    scrollTo(list, bottomOf(100) - 2 * ROW);
+    scrollTo(list, bottomOf(100));
+
+    expect(onEndReached).toHaveBeenCalledTimes(1);
+  });
+
+  it('re-arms once the window leaves the trailing zone', () => {
+    const onEndReached = vi.fn();
+    renderList(100, onEndReached);
+    const list = screen.getByRole('list');
+
+    scrollTo(list, bottomOf(100));
+    expect(onEndReached).toHaveBeenCalledTimes(1);
+
+    scrollTo(list, 0);
+    scrollTo(list, bottomOf(100));
+    expect(onEndReached).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps asking until the loaded rows outgrow the viewport', () => {
+    const onEndReached = vi.fn();
+    const { rerender } = renderList(10, onEndReached);
+
+    // 10 rows do not fill 400px: the whole list is the window, so the end is
+    // already reached and a second page is genuinely needed.
+    expect(onEndReached).toHaveBeenCalledTimes(1);
+
+    // A page landed: 20 rows, window still ends at 14 — within 8 of the end.
+    rerender(listOf(20, onEndReached));
+    expect(onEndReached).toHaveBeenCalledTimes(2);
+
+    // 30 rows finally push the end out of reach, and the chain stops on its own.
+    rerender(listOf(30, onEndReached));
+    expect(onEndReached).toHaveBeenCalledTimes(2);
+  });
+
+  it('honours the threshold: a wider one fires earlier', () => {
+    const eager = vi.fn();
+    const lazy = vi.fn();
+    const eagerList = scrollerOf(renderList(100, eager, 40));
+    const lazyList = scrollerOf(renderList(100, lazy));
+
+    // Same scroll position for both: 40 rows from the end, so inside the wide
+    // threshold and well outside the default 8.
+    scrollTo(eagerList, 50 * ROW);
+    scrollTo(lazyList, 50 * ROW);
+
+    expect(eager).toHaveBeenCalledTimes(1);
+    expect(lazy).not.toHaveBeenCalled();
+  });
+
+  it('is inert for an empty list', () => {
+    const onEndReached = vi.fn();
+    renderList(0, onEndReached);
+    expect(onEndReached).not.toHaveBeenCalled();
+  });
+
+  it('works the same on VirtualTable', () => {
+    const onEndReached = vi.fn();
+    render(
+      <VirtualTable
+        items={makeRows(100)}
+        rowHeight={ROW}
+        viewportHeight={VIEWPORT}
+        overscan={OVERSCAN}
+        caption="People"
+        colSpan={1}
+        onEndReached={onEndReached}
+        head={
+          <thead>
+            <tr>
+              <th scope="col">Label</th>
+            </tr>
+          </thead>
+        }
+        renderRow={(row) => (
+          <tr key={row.id} data-testid="trow">
+            <td>{row.label}</td>
+          </tr>
+        )}
+      />,
+    );
+
+    expect(onEndReached).not.toHaveBeenCalled();
+
+    const scroller = screen.getByRole('table').parentElement as HTMLElement;
+    scrollTo(scroller, bottomOf(100));
+    scrollTo(scroller, bottomOf(100) - ROW);
+
+    expect(onEndReached).toHaveBeenCalledTimes(1);
   });
 });
 

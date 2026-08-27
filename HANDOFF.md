@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 153.6 — P5-PAGE-f · Traffic listesi sayfalanır (TrafficPage.tsx limit=100) — done — 2026-08-27 UTC
+
+- **Yapıldı:** `/traffic` diğer dört listeden farklı olarak sunucu tarafında sayfalama HİÇ desteklemiyordu (yalnız `limit`, `next_page_id` yok) — bu görev önce kontrata (`traffic.yaml`: `PageId` param + `next_page_id`) sonra `TrafficService#listLive`'a keyset cursor ekledi (`Cursor {sortAt, customerId}`, `skip` sayacı YOK — ilk tasarım denendi, churn testinde kırıldığı için terk edildi). Sonra `TrafficPage.tsx` `usePagedQuery`'ye geçti + `VirtualTable onEndReached`.
+- **Canlı + sayfalı, 153.2'nin daha basit hâli:** `refetchInterval` yerine `mergeTrafficHead` (yalnız ilk sayfa yeniden okunur) — `mergeChatHead`'in uyarlaması, TEK fark: visitor'ın `last_activity_at`'i chat'in `created_at`'inin aksine YUKARI da kayabiliyor (bilinçli borç, dosyada yazılı). Ayrı bir kusur bu sırada yakalanıp düzeltildi: pano küçülünce aynı satır iki sayfada birden görünebiliyordu, `useChatList`'teki dedup Traffic'te yoktu — eklendi.
+- **Doğrulama (hepsi exit 0):** `typecheck` 12/12 · `lint` 9/9 · `format:check` · turbo `test --force` (e2e+api hariç) 9/9 — web **136 dosya / 1475 test** (taban 135/1467 → **+8**), rtm 109 (+0) · api `test:unit --force` 65/1077 (+0) · api `test:integration` 3 shard 34+34+33 = **101 dosya / 2575 test** (taban 101/2571 → **+4**) · `build` 8/8 · `contract:generate` bu commit'in içinde (traffic'e `page_id`/`next_page_id` eklendi) · migration yok · **TAM e2e 207/207** (2 shard, 5,1 + 6,2 dk) — taban korundu; `traffic.spec.ts` tek başına 2/2 (13.2-k'nin 360° panel testi dahil, taban değişmedi).
+- **Sonraki pencereye:** §7.2 `P5-PAGE` satırı **`◐ → KP5-PAGE` KALIYOR** — beş ekranın hepsi artık bağlı, yalnız 153.7 (uçtan uca + nöbetçi) kapatır. Detay/gerekçe `PLAN.md` `#### KP5-PAGE` bloğunda. e2e'nin yeniden yazdığı 90 `kanit` PNG'si `git checkout` ile geri alındı. `run-loop.sh`'ın commit'siz değişikliği BU GÖREVE AİT DEĞİL — dokunulmadı.
+
 ## 153.5 — P5-PAGE-e · Customers listesi sayfalanır (CustomersPage.tsx limit=50) + "N / M" göstergesi — done — 2026-08-27 UTC
 
 - **Yapıldı:** `CustomersPage.tsx`'in doğrudan yazdığı `useQuery` 153.1'in `usePagedQuery`'sine taşındı (`limit=50` + `page_id`, `VirtualTable`'ın `onEndReached`'ine `list.fetchNext` bağlandı). Zaten var olan ama okunmayan `total` alanı artık Card'ın üstüne eklenen "{shown} / {total} shown" satırında kullanılıyor (`customers.page.shown`, `locales/{en,tr}/customers.ts`).

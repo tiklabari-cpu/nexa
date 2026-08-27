@@ -30,7 +30,7 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   };
 });
 
-const { TrafficPage } = await import('./TrafficPage.js');
+const { TrafficPage, mergeTrafficHead } = await import('./TrafficPage.js');
 
 function visitor(over: Partial<TrafficVisitor> & { customer_id: string }): TrafficVisitor {
   return {
@@ -42,6 +42,22 @@ function visitor(over: Partial<TrafficVisitor> & { customer_id: string }): Traff
     last_activity_at: null,
     ...over,
   };
+}
+
+/** A visitor with a distinct `last_activity_at` — higher `minute` sorts first. */
+function v(id: string, minute: number, over: Partial<TrafficVisitor> = {}): TrafficVisitor {
+  return visitor({
+    customer_id: id,
+    last_activity_at: `2026-08-27T10:${String(minute).padStart(2, '0')}:00.000Z`,
+    ...over,
+  });
+}
+
+function trafficPage(
+  items: TrafficVisitor[],
+  next?: string,
+): { items: TrafficVisitor[]; total: number; next_page_id?: string } {
+  return { items, total: items.length, ...(next != null ? { next_page_id: next } : {}) };
 }
 
 function renderPage(initialEntries: string[] = ['/']): ReturnType<typeof render> {
@@ -254,5 +270,134 @@ describe('TrafficPage status tabs', () => {
     expect(await screen.findByRole('button', { name: 'Supervise chat' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Assign chat to me' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Edit contact' })).toBeDisabled();
+  });
+});
+
+/**
+ * Paging (P5-PAGE-f). `TrafficPage`'s `useQuery` moved onto 153.1's
+ * `usePagedQuery`, the same wrapper Tickets/Customers (153.4/153.5) consume —
+ * `TicketGrid.test.tsx` established that a page small enough to fit the
+ * virtualizer's fallback viewport already sits in `onEndReached`'s trailing
+ * zone on mount, so these fixtures (two rows) walk to a second page without
+ * simulating a real scroll.
+ */
+describe('paging (P5-PAGE-f)', () => {
+  const c1 = v('c1', 14, { name: 'Alex Moreau' });
+  const c2 = v('c2', 13, { name: 'Mira Haddad' });
+  const c3 = v('c3', 12, { name: 'Robin Lee' });
+
+  it('walks past the first page as the table scrolls', async () => {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('page_id=cursor-1') ? trafficPage([c3]) : trafficPage([c1, c2], 'cursor-1'),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText('Alex Moreau');
+    // Second page arrives on its own — see the block comment above.
+    await screen.findByText('Robin Lee');
+    expect(api.get).toHaveBeenCalledWith('/traffic?limit=100&page_id=cursor-1');
+  });
+
+  it('a tab change starts a new chain instead of appending to the loaded one', async () => {
+    const user = userEvent.setup();
+    const queued = v('q1', 20, { name: 'Quinn', activity: 'queued' });
+    api.get.mockImplementation((url: string) => {
+      if (url.includes('activity=queued')) return Promise.resolve(trafficPage([queued]));
+      if (url.includes('page_id=cursor-1')) return Promise.resolve(trafficPage([c3]));
+      return Promise.resolve(trafficPage([c1, c2], 'cursor-1'));
+    });
+    renderPage();
+    // Load past the first page before switching tabs, so a chain genuinely
+    // exists to be thrown away rather than appended to.
+    await screen.findByText('Robin Lee');
+
+    api.get.mockClear();
+    await user.click(screen.getByRole('tab', { name: /Queued/ }));
+
+    await screen.findByText('Quinn');
+    expect(screen.queryByText('Alex Moreau')).not.toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith('/traffic?limit=100&activity=queued');
+  });
+
+  it('shows a visitor once even when a later page hands it back too', async () => {
+    // The board shrinking between two fetches can put the same row on two
+    // pages (see `TrafficPage.tsx`'s `items` comment) — this pins the fix,
+    // the same de-dup `useChatList` needs for its own paged cache.
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('page_id=cursor-1')
+          ? trafficPage([c2, c3])
+          : trafficPage([c1, c2], 'cursor-1'),
+      ),
+    );
+    renderPage();
+
+    await screen.findByText('Alex Moreau');
+    await screen.findByText('Robin Lee');
+    expect(screen.getAllByText('Mira Haddad')).toHaveLength(1);
+  });
+});
+
+/**
+ * The board is live (8s poll) as well as paged — the periodic refresh must
+ * re-read only the first page and fold it into the cache without discarding
+ * pages the agent has already scrolled to (same rule as 153.2's chat list;
+ * `mergeChatHead`'s tests are the direct precedent for testing the merge as
+ * a pure function rather than driving the `setInterval` in a component test).
+ */
+describe('mergeTrafficHead', () => {
+  const cache = {
+    pages: [trafficPage([c1(), c2()], 'cursor-1'), trafficPage([c3()])],
+    pageParams: [undefined, 'cursor-1'] as Array<string | undefined>,
+  };
+
+  function c1(): TrafficVisitor {
+    return v('c1', 14);
+  }
+  function c2(): TrafficVisitor {
+    return v('c2', 13);
+  }
+  function c3(): TrafficVisitor {
+    return v('c3', 12);
+  }
+
+  it('keeps the row the arrivals pushed out of the newest window', () => {
+    const merged = mergeTrafficHead(cache, trafficPage([v('c0', 15), c1()], 'cursor-fresh'));
+    expect(merged?.pages[0]?.items.map((visitor) => visitor.customer_id)).toEqual([
+      'c0',
+      'c1',
+      'c2',
+    ]);
+    // The cursor page 2 was fetched with, not the fresh one: replacing it
+    // would leave `c3` covered by no page at all.
+    expect(merged?.pages[0]?.next_page_id).toBe('cursor-1');
+    expect(merged?.pages[1]).toBe(cache.pages[1]);
+    expect(merged?.pageParams).toEqual([undefined, 'cursor-1']);
+  });
+
+  it('drops a row the fresh window reached and did not return', () => {
+    // `c2` is inside the range the fresh page covers and is absent from it —
+    // the visitor left the board (chat closed, visit aged out).
+    const merged = mergeTrafficHead(cache, trafficPage([c1(), v('c3b', 12)], 'cursor-fresh'));
+    expect(merged?.pages[0]?.items.map((visitor) => visitor.customer_id)).toEqual(['c1', 'c3b']);
+  });
+
+  it('takes the fresh cursor when no page follows the first', () => {
+    const single = { pages: [trafficPage([c1()])], pageParams: [undefined] };
+    const merged = mergeTrafficHead(single, trafficPage([v('c0', 15), c1()], 'cursor-fresh'));
+    expect(merged?.pages[0]?.next_page_id).toBe('cursor-fresh');
+  });
+
+  it('an empty first page empties the whole board', () => {
+    const merged = mergeTrafficHead(cache, trafficPage([]));
+    expect(merged?.pages).toHaveLength(1);
+    expect(merged?.pages[0]?.items).toEqual([]);
+    expect(merged?.pageParams).toEqual([undefined]);
+  });
+
+  it('leaves an unloaded board alone — its own first fetch is the refresh', () => {
+    expect(mergeTrafficHead(undefined, trafficPage([c1()]))).toBeUndefined();
   });
 });

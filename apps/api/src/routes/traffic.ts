@@ -39,6 +39,7 @@ const booleanQuery = z.enum(['true', 'false']).transform((value) => value === 't
 const listQuery = z
   .object({
     limit: z.coerce.number().int().min(1).max(100).default(50),
+    page_id: z.string().max(512).optional(),
     activity: activityQuery.optional(),
     page_url_contains: z.string().trim().min(1).max(2048).optional(),
     came_from_contains: z.string().trim().min(1).max(2048).optional(),
@@ -72,6 +73,7 @@ export default async function trafficRoutes(app: FastifyInstance): Promise<void>
           // explicit `undefined` and a missing key mean the same thing here
           // (no restriction), and only the service's `!== undefined` checks
           // decide whether a condition joins the query.
+          ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),
           ...(query.activity !== undefined ? { activity: query.activity } : {}),
           ...(query.page_url_contains !== undefined
             ? { pageUrlContains: query.page_url_contains }
@@ -85,7 +87,11 @@ export default async function trafficRoutes(app: FastifyInstance): Promise<void>
         }),
       );
 
-      return reply.send(live);
+      return reply.send({
+        items: live.items,
+        total: live.total,
+        ...(live.nextPageId ? { next_page_id: live.nextPageId } : {}),
+      });
     },
   );
 }

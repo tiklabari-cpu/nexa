@@ -1505,6 +1505,12 @@ export interface paths {
      *     inside the live window, so a visitor with no such visit never matches
      *     them. An unknown key is rejected (400) rather than ignored — a silently
      *     dropped filter would show more people than the caller asked for.
+     *
+     *     Paginated by opaque keyset cursor, the same shape every other list
+     *     endpoint uses: `next_page_id` is absent once the board has no more rows
+     *     to offer. `total` describes this page only — the union of three sources
+     *     makes a true board-wide count expensive, so it is not the whole board's
+     *     size the way `GET /customers`'s is.
      */
     get: operations['listTraffic'];
     put?: never;
@@ -12179,6 +12185,8 @@ export interface operations {
          *     (`?activity=queued&activity=waiting`). Omitted means every state.
          */
         activity?: ('browsing' | 'queued' | 'waiting' | 'chatting' | 'supervised' | 'invited')[];
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
         /**
          * @description Case-insensitive substring of any page URL recorded on the visitor's
          *     most recent visit inside the live window.
@@ -12212,8 +12220,9 @@ export interface operations {
         content: {
           'application/json': {
             items: components['schemas']['TrafficVisitor'][];
-            /** @description Live visitors returned — capped at `limit`. */
+            /** @description Visitors on this page — not the whole board. */
             total: number;
+            next_page_id?: string;
           };
         };
       };

@@ -13,17 +13,39 @@
 import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { usePagedQuery, type PagedQueryResult } from '../../lib/paged-query.js';
+import type { TicketSort } from './ticket-grid.js';
 import type { Agent, Ticket, TicketDetail, TicketStatus, TicketView } from './types.js';
 
-export function ticketsKey(view: TicketView): unknown[] {
-  return ['tickets', view];
+/** Rows per request. The grid chains pages from here, so it is a page, not a cap. */
+const TICKET_PAGE_SIZE = 50;
+
+/**
+ * Cache key for a ticket list. `sort` belongs in it: the grid sorts the rows
+ * already loaded rather than asking the server to (the server has no `sort`
+ * param — `ticket-grid.ts`'s `sortTickets` is a pure client-side function), so
+ * applying a new sort to an old, larger loaded window can read differently
+ * than the same sort over a fresh page one. Folding `sort` into the key makes
+ * a header click start a new chain instead — the "filter change ⇒ new query
+ * key" shape `AuditLogPage` uses for its own filters.
+ */
+export function ticketsKey(view: TicketView, sort: TicketSort): unknown[] {
+  return ['tickets', view, sort.key, sort.order];
 }
 
-export function useTicketList(view: TicketView, enabled: boolean) {
-  const api = useApiClient();
-  return useQuery({
-    queryKey: ticketsKey(view),
-    queryFn: () => api.get<{ items: Ticket[]; total: number }>(`/tickets?view=${view}&limit=50`),
+function ticketListUrl(view: TicketView, pageId: string | undefined): string {
+  const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
+  return `/tickets?view=${view}&limit=${TICKET_PAGE_SIZE}${cursor}`;
+}
+
+export function useTicketList(
+  view: TicketView,
+  sort: TicketSort,
+  enabled: boolean,
+): PagedQueryResult<Ticket> {
+  return usePagedQuery<Ticket>({
+    queryKey: ticketsKey(view, sort),
+    buildUrl: (pageId) => ticketListUrl(view, pageId),
     enabled,
   });
 }

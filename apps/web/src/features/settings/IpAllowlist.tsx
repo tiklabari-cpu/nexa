@@ -1,20 +1,30 @@
 /**
- * IP allowlist and session policy (FR-MOD-08.9.6).
+ * IP allowlist and session policy (FR-MOD-08.9.6) + the `require_two_factor`
+ * switch (S11-2FA-h).
  *
- * Two controls that share one `security_settings` row: the allowlist is its
+ * Three controls that share one `security_settings` row: the allowlist is its
  * own CRUD resource (`/settings/ip-allowlist`, one row per entry), while
- * enforcement and the two session limits are three columns on the same
- * settings row `FileSharing` and `BannedCustomerIps` read — so a save here
- * goes through that same `['settings','security']` cache and both screens
- * stay in step. All validation, self-lockout rejection and enforcement happen
- * server-side (08.9.6-c/d/e/g); this screen only lists, submits and shows
- * what the server says.
+ * enforcement, the two session limits and two-factor enforcement are columns
+ * on the same settings row `FileSharing` and `BannedCustomerIps` read — so a
+ * save here goes through that same `['settings','security']` cache and every
+ * screen stays in step. All validation, self-lockout rejection and
+ * enforcement happen server-side (08.9.6-c/d/e/g, S11-2FA-e); this screen only
+ * lists, submits and shows what the server says.
+ *
+ * Turning `require_two_factor` on is confirmed, off is not — `SsoConnection.tsx`'s
+ * `enforced` toggle sets the precedent (asymmetric because only one direction
+ * closes a door on somebody). Unlike that toggle there is no server-side
+ * self-lockout guard here: enforcement never signs anybody out, it only asks
+ * for a factor at the *next* sign-in (S11-2FA-e's `enrollment_required`), so
+ * the confirmation exists to inform, not to gate a rejection — the roster
+ * count comes from `GET /agents`, the same call `TeamPage.tsx` renders.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
+import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -192,11 +202,23 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
   const queryClient = useQueryClient();
   const [idleMinutes, setIdleMinutes] = useState<string | null>(null);
   const [maxSessions, setMaxSessions] = useState<string | null>(null);
+  /** Set only while the "turn two-factor on" confirmation is open. */
+  const [confirmTwoFactor, setConfirmTwoFactor] = useState(false);
 
   const settings = useQuery({
     queryKey: ['settings', 'security'],
     queryFn: () => api.get<SecuritySettings>('/settings/security'),
   });
+
+  // Only fetched for the confirmation copy ("N of M teammates…") — a
+  // read-only viewer never sees the checkbox that would open it.
+  const roster = useQuery({
+    queryKey: ['team', 'agents'],
+    queryFn: () => api.get<{ items: Array<{ two_factor_enabled: boolean }> }>('/agents'),
+    enabled: canEdit,
+  });
+  const rosterItems = roster.data?.items ?? [];
+  const missingTwoFactor = rosterItems.filter((agent) => !agent.two_factor_enabled).length;
 
   const save = useMutation({
     mutationFn: (body: Partial<SecuritySettings>) =>
@@ -205,8 +227,16 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
       queryClient.setQueryData(['settings', 'security'], data);
       setIdleMinutes(null);
       setMaxSessions(null);
+      setConfirmTwoFactor(false);
     },
   });
+
+  function handleRequireTwoFactorChange(checked: boolean): void {
+    // Only the "on" direction needs confirming — switching off reopens a
+    // door instead of closing one, nobody regrets that at 2am.
+    if (checked) setConfirmTwoFactor(true);
+    else save.mutate({ require_two_factor: false });
+  }
 
   if (settings.error)
     return <ErrorNotice message={t('settings.ipAllowlist.sessionPolicyLoadError')} />;
@@ -257,6 +287,13 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
                 label={current!.ip_allowlist_enforced ? t('settings.on') : t('settings.off')}
               />
             </p>
+            <p className="flex items-center gap-2">
+              {t('settings.ipAllowlist.requireTwoFactorLabel')}
+              <StatusDot
+                tone={current!.require_two_factor ? 'success' : 'neutral'}
+                label={current!.require_two_factor ? t('settings.on') : t('settings.off')}
+              />
+            </p>
             <p>
               {t('settings.ipAllowlist.idleTimeoutSummary', {
                 value:
@@ -287,6 +324,21 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
                 {t('settings.ipAllowlist.enforceCheckboxLabel')}
                 <span className="block text-2xs text-content-tertiary">
                   {t('settings.ipAllowlist.enforceHint')}
+                </span>
+              </span>
+            </label>
+
+            <label className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                checked={current!.require_two_factor}
+                disabled={save.isPending}
+                onChange={(event) => handleRequireTwoFactorChange(event.target.checked)}
+              />
+              <span className="flex-1 text-sm">
+                {t('settings.ipAllowlist.requireTwoFactorCheckboxLabel')}
+                <span className="block text-2xs text-content-tertiary">
+                  {t('settings.ipAllowlist.requireTwoFactorHint')}
                 </span>
               </span>
             </label>
@@ -331,7 +383,7 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
               </button>
             </div>
 
-            {save.isError && (
+            {save.isError && !confirmTwoFactor && (
               <p role="alert" className="text-2xs text-danger">
                 {t(errorMessageKey(save.error))}
               </p>
@@ -339,6 +391,47 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
           </form>
         )}
       </Card>
+
+      {confirmTwoFactor && (
+        <Modal
+          onClose={() => setConfirmTwoFactor(false)}
+          title={t('settings.ipAllowlist.requireTwoFactorConfirmTitle')}
+          description={t('settings.ipAllowlist.requireTwoFactorConfirmDescription')}
+        >
+          {!roster.isPending && !roster.error && (
+            <p className="text-sm text-content-secondary">
+              {t('settings.ipAllowlist.requireTwoFactorMissingCount', {
+                count: missingTwoFactor,
+                total: rosterItems.length,
+              })}
+            </p>
+          )}
+          {save.isError && (
+            <p role="alert" className="mt-2 text-2xs text-danger">
+              {t(errorMessageKey(save.error))}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirmTwoFactor(false)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {t('settings.cancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => save.mutate({ require_two_factor: true })}
+              disabled={save.isPending}
+              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+            >
+              {save.isPending
+                ? t('settings.saving')
+                : t('settings.ipAllowlist.requireTwoFactorConfirmButton')}
+            </button>
+          </div>
+        </Modal>
+      )}
     </Section>
   );
 }

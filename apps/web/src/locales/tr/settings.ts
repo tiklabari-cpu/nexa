@@ -395,6 +395,18 @@ export const settings: Messages = {
   'settings.ipAllowlist.maxSessionsLabel': 'Maksimum eşzamanlı oturum',
   'settings.ipAllowlist.maxSessionsSummary': 'Maksimum eşzamanlı oturum: {value}',
   'settings.ipAllowlist.defaultMaxSessions': '25 (varsayılan)',
+  'settings.ipAllowlist.requireTwoFactorLabel': 'İki adımlı doğrulama',
+  'settings.ipAllowlist.requireTwoFactorCheckboxLabel': 'İki adımlı doğrulamayı zorunlu kıl',
+  'settings.ipAllowlist.requireTwoFactorHint':
+    'Açıldığında, henüz kaydı olmayan bir üye bir sonraki girişinde kayıt olmaya yönlendirilir — kimse anında oturumdan atılmaz ya da kilitlenmez.',
+  'settings.ipAllowlist.requireTwoFactorConfirmTitle': 'İki adımlı doğrulama zorunlu kılınsın mı?',
+  'settings.ipAllowlist.requireTwoFactorConfirmDescription':
+    'Her üyenin çalışan bir doğrulayıcısı olması gerekecek. Henüz kaydı olmayanlar bir sonraki girişe kadar normal çalışmaya devam eder, o girişte kayıt olmaları istenir.',
+  'settings.ipAllowlist.requireTwoFactorMissingCount.one':
+    '{total} üyeden {count} tanesi henüz iki adımlı doğrulama kaydı yapmadı.',
+  'settings.ipAllowlist.requireTwoFactorMissingCount.other':
+    '{total} üyeden {count} tanesi henüz iki adımlı doğrulama kaydı yapmadı.',
+  'settings.ipAllowlist.requireTwoFactorConfirmButton': 'Zorunlu kıl',
 
   // Tek oturum açma + SCIM — SsoConnection.tsx
   'settings.sso.title': 'Tek oturum açma',

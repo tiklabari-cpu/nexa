@@ -51,6 +51,11 @@ const SECURITY = {
   updated_at: null,
 };
 
+/** Two teammates, one already enrolled — the confirmation copy counts these. */
+const ROSTER = {
+  items: [{ two_factor_enabled: false }, { two_factor_enabled: true }],
+};
+
 function renderComponent(ui: ReactElement): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
@@ -59,6 +64,7 @@ function renderComponent(ui: ReactElement): void {
 function mockGet(path: string): unknown {
   if (path === '/settings/ip-allowlist') return Promise.resolve(ENTRIES);
   if (path === '/settings/security') return Promise.resolve(SECURITY);
+  if (path === '/agents') return Promise.resolve(ROSTER);
   throw new Error(`unexpected GET ${path}`);
 }
 
@@ -158,6 +164,58 @@ describe('IpAllowlist', () => {
 
     await waitFor(() =>
       expect(api.patch).toHaveBeenCalledWith('/settings/security', { ip_allowlist_enforced: true }),
+    );
+  });
+
+  it('asks for confirmation before requiring two-factor, showing how many teammates lack it', async () => {
+    renderComponent(<IpAllowlist canEdit />);
+    await screen.findByText('10.0.0.0/24');
+
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /Require two-factor authentication/ }),
+    );
+    expect(api.patch).not.toHaveBeenCalled();
+
+    expect(
+      await screen.findByText('1 of 2 teammate has not set up two-factor yet.'),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Require two-factor' }));
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/settings/security', { require_two_factor: true }),
+    );
+  });
+
+  it('cancelling the two-factor confirmation saves nothing', async () => {
+    renderComponent(<IpAllowlist canEdit />);
+    await screen.findByText('10.0.0.0/24');
+
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /Require two-factor authentication/ }),
+    );
+    await screen.findByRole('dialog');
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it('turns two-factor off without a confirmation step', async () => {
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/security'
+        ? Promise.resolve({ ...SECURITY, require_two_factor: true })
+        : mockGet(path),
+    );
+    renderComponent(<IpAllowlist canEdit />);
+    await screen.findByText('10.0.0.0/24');
+
+    await userEvent.click(
+      screen.getByRole('checkbox', { name: /Require two-factor authentication/ }),
+    );
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/settings/security', { require_two_factor: false }),
     );
   });
 

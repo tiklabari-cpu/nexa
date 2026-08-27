@@ -398,6 +398,18 @@ export const settings: Messages = {
   'settings.ipAllowlist.maxSessionsLabel': 'Max concurrent sessions',
   'settings.ipAllowlist.maxSessionsSummary': 'Max concurrent sessions: {value}',
   'settings.ipAllowlist.defaultMaxSessions': '25 (default)',
+  'settings.ipAllowlist.requireTwoFactorLabel': 'Two-factor authentication',
+  'settings.ipAllowlist.requireTwoFactorCheckboxLabel': 'Require two-factor authentication',
+  'settings.ipAllowlist.requireTwoFactorHint':
+    'Once on, any teammate without it set up is asked to add it the next time they sign in — nobody is signed out or locked out immediately.',
+  'settings.ipAllowlist.requireTwoFactorConfirmTitle': 'Require two-factor authentication?',
+  'settings.ipAllowlist.requireTwoFactorConfirmDescription':
+    'Every teammate will need a working authenticator. Anyone without one yet keeps working normally until their next sign-in, when they will be asked to set it up.',
+  'settings.ipAllowlist.requireTwoFactorMissingCount.one':
+    '{count} of {total} teammate has not set up two-factor yet.',
+  'settings.ipAllowlist.requireTwoFactorMissingCount.other':
+    '{count} of {total} teammates have not set up two-factor yet.',
+  'settings.ipAllowlist.requireTwoFactorConfirmButton': 'Require two-factor',
 
   // Single sign-on + SCIM — SsoConnection.tsx
   'settings.sso.title': 'Single sign-on',

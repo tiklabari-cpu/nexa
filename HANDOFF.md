@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 152.8 — S11-2FA-h · Settings → Security: require_two_factor anahtarı + yardım metni + onay modalı (kaydı olmayan üye sayısı) + Teammates 2FA sütunu doğrulaması — done — 2026-08-27 UTC
+
+- **Yapıldı:** `require_two_factor` checkbox'ı `IpAllowlist.tsx`'in `SessionPolicy` bileşenine eklendi (aynı `security_settings` satırı, `['settings','security']` cache'i paylaşılıyor). Açma `SsoConnection.tsx`'in `enforced` anahtarıyla aynı asimetrik desende bir `Modal` ile onay ister (kapatma onaysız); modal `GET /agents`'ten kaç üyenin kaydı olmadığını sayıp çoğul-duyarlı gösterir. Sunucu tarafında self-lockout guard YOK ve eklenmedi — zorlama kimseyi kilitlemiyor (yalnız sonraki girişte kayıt istiyor), onay yalnız bilgilendirme.
+- **Teammates 2FA sütunu (görev madde 3) ölçüldü, kod değişikliği gerekmedi:** `GET /agents` zaten `agent_memberships.two_factor_enabled`'ı (152.4/152.5'in yazdığı) döndürüyordu ve `TeamPage.tsx` zaten `StatusDot` ile render ediyordu — bağlantı koddaydı ama hiçbir test kanıtlamıyordu. Yeni `apps/api/test/integration/agents-two-factor.test.ts` bunu enroll→activate→`GET /agents` ile uçtan uca kanıtladı.
+- **Doğrulama (hepsi exit 0):** `typecheck` 12/12 · `lint` 9/9 · `format:check` · turbo `test --force` (e2e+api hariç) 8/8 (web **1412** = taban 1409 **+3**) · api `test:unit --force` 65/1077 (**+0**) · api `test:integration` 3 shard 34+34+33 = **101 dosya / 2554 test** (taban 100/2553 → **+1/+1**) · `build` 8/8 · `db:check-drift` gerekmedi (migration yok) · e2e `settings.spec.ts` **20/20 passed**.
+- **Sonraki pencereye not:** §7.2 S11-2FA satırı `◐ → KS11-2FA` kalıyor (9 alt-görevden 8'i bitti — yalnız 152.9 e2e kaldı). `DEFAULT_AGENT_SCOPES` boşluğu (152.5'in notu) bu görevde de düzeltilmedi, kapsam dışı. `run-loop.sh`'ın commit'siz değişikliği BU GÖREVE AİT DEĞİL — dokunulmadı.
+
 ## 152.7 — S11-2FA-g · Web — giriş akışının ikinci adımı: kod ekranı + kurtarma kodu alternatifi + require_two_factor açıkken kaydı olmayana zorunlu kayıt yolu — done — 2026-08-27 UTC
 
 - **Yapıldı:** `SignInPage.tsx`'e SSO dalının kardeşi olarak eklendi — aynı state makinesi, ikinci ekran yok. `/auth/authorize`'ın kodsuz ilk çağrısı `two_factor_required` dönünce şifre kutusu kod kutusuna döner; `details.enrollment_required` ise (hesabın hiç faktörü yok) ayrı bir "kurulum gerekiyor" paneli açılır ve `/app/settings`'e yönlendirir. Yanlış kod alan-altı hatadır (`setFieldError`) ve asla parola adımına dönmez — aynı ekranda aynı kimlik bilgileriyle tekrar denenir. "Kurtarma kodu kullan" aynı `code` alanının etiket değişimi. TOTP modunda 6 hanede otomatik gönderim, Submit/Enter her zaman çalışır kalır (NFR-A11Y4). `auth-store.ts`'in `signIn`'ine opsiyonel `code` eklendi (`undefined` iken hiç gönderilmez).

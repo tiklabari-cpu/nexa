@@ -345,12 +345,24 @@ test.describe('two-factor authentication', () => {
     const enrollment = page.getByRole('region', { name: 'Set up two-factor authentication' });
     await expect(enrollment).toBeVisible();
     await expect(enrollment).toContainText(owner.workspace);
-    await expect(enrollment.getByRole('link', { name: 'Go to Account Settings' })).toBeVisible();
     // No code box, because no code could satisfy it: this account has no factor
     // to produce one with.
     await expect(page.getByRole('region', { name: 'Enter your code' })).toHaveCount(0);
     await expect(page.getByRole('link', { name: 'Inbox' })).toHaveCount(0);
     await page.screenshot({ path: 'kanit/S11-2FA-enrollment-required.png', fullPage: true });
+
+    // The door out of the policy's own dead end (S11-2FA-k). Until it existed
+    // this panel could only point at Account Settings, which is behind the
+    // sign-in that just refused — a link to a locked room. The refusal now
+    // carries a credential good for the two enrollment endpoints, and the only
+    // way to know it actually reaches the server is to press the button in a
+    // browser holding no session at all: nothing in this tab is signed in, so
+    // if the ticket were not being sent, or were being sent as anything but a
+    // bearer token, the setup key below would never arrive.
+    await enrollment.getByRole('button', { name: 'Set it up now' }).click();
+    await expect(enrollment.getByText(/^[A-Z2-7]{32}$/)).toBeVisible();
+    await expect(enrollment.getByLabel('Authentication code')).toBeVisible();
+    await page.screenshot({ path: 'kanit/S11-2FA-enrollment-ticket.png', fullPage: true });
 
     // --- Give the workspace back ---------------------------------------------
     // And prove it was the policy that closed the door: with the setting off,

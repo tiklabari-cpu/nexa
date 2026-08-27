@@ -56,6 +56,14 @@ export interface CurrentAgent {
   onboarding_completed?: boolean;
 }
 
+/** What `POST /auth/2fa/enroll` hands back — the authenticator app's half. */
+export interface TwoFactorEnrollment {
+  secret: string;
+  otpauth_uri: string;
+  issuer: string;
+  account_name: string;
+}
+
 interface AuthState {
   accessToken: string | null;
   agent: CurrentAgent | null;
@@ -73,6 +81,18 @@ interface AuthState {
    * instead of a wrong-code refusal.
    */
   signIn: (email: string, password: string, licenseId: string, code?: string) => Promise<void>;
+  /**
+   * The two calls an enrollment ticket can make (NFR-S11 · S11-2FA-k).
+   *
+   * They live here rather than on `useApiClient()` because that client sends
+   * the *session's* bearer token, and the whole point of this pair is that
+   * there is no session — the ticket arrives inside the `two_factor_required`
+   * refusal `signIn` threw, and is the only credential the caller holds.
+   * `anonymous` is the client that sends none, so the header passed here is
+   * the one that reaches the server.
+   */
+  enrollWithTicket: (ticket: string) => Promise<TwoFactorEnrollment>;
+  activateWithTicket: (ticket: string, code: string) => Promise<string[]>;
   /**
    * Hand the browser to the workspace's identity provider (NFR-S11 · S11-i).
    *
@@ -336,6 +356,21 @@ export const useAuth = create<AuthState>((set, get) => {
       } finally {
         set({ busy: false });
       }
+    },
+
+    enrollWithTicket(ticket) {
+      return anonymous.post<TwoFactorEnrollment>('/auth/2fa/enroll', undefined, {
+        headers: { Authorization: `Bearer ${ticket}` },
+      });
+    },
+
+    async activateWithTicket(ticket, code) {
+      const result = await anonymous.post<{ recovery_codes: string[] }>(
+        '/auth/2fa/activate',
+        { code },
+        { headers: { Authorization: `Bearer ${ticket}` } },
+      );
+      return result.recovery_codes;
     },
 
     async startSsoLogin(connectionId, clientId) {

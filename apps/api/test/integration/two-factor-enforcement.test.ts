@@ -256,8 +256,17 @@ describe('two-factor enforcement (S11-2FA-e)', () => {
       expect(errorBody(response).type).toBe('two_factor_required');
       // The client has to be able to tell "type your code" from "you have no
       // code to type" — one renders an input, the other has to send the person
-      // somewhere else entirely.
-      expect(errorBody(response).details).toEqual({ enrollment_required: true });
+      // somewhere else entirely. Since S11-2FA-k the refusal also carries the
+      // credential that makes "somewhere else" reachable without a session;
+      // `two-factor-enrollment.test.ts` owns what that credential can and
+      // cannot do, so this asserts the shape and moves on.
+      expect(errorBody(response).details).toMatchObject({
+        enrollment_required: true,
+        enrollment_ticket: expect.any(String),
+        enrollment_ticket_expires_in: expect.any(Number),
+      });
+      // A bearer credential in the body, so the response must not be storable.
+      expect(response.headers['cache-control']).toBe('no-store');
 
       const entries = await trail();
       expect(entries.map((e) => e.action)).toEqual(['security.two_factor_enrollment_required']);

@@ -329,7 +329,10 @@ describe('SignInPage under two-factor enforcement (S11-2FA-g)', () => {
     );
   });
 
-  it('routes to account settings, with the reason stated, when the account has never enrolled', async () => {
+  it('routes to account settings, with the reason stated, when the server sends no enrollment ticket', async () => {
+    // The pre-S11-2FA-k shape, and still the answer for an older server or a
+    // mint that failed: no ticket means no enrollment is possible from here,
+    // and the panel says so rather than offering a button that cannot work.
     const signIn = vi
       .fn()
       .mockRejectedValueOnce(twoFactorRequiredError({ enrollment_required: true }));
@@ -340,10 +343,203 @@ describe('SignInPage under two-factor enforcement (S11-2FA-g)', () => {
 
     expect(await screen.findByText(/requires two-factor authentication/)).toBeInTheDocument();
     expect(screen.queryByLabelText('Authentication code')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set it up now' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Go to Account Settings' })).toHaveAttribute(
       'href',
       '/app/settings',
     );
+  });
+});
+
+// ===========================================================================
+// Enrolling from the sign-in screen (S11-2FA-k)
+// ===========================================================================
+
+/**
+ * The screen half of the dead end S11-2FA-k opens.
+ *
+ * The panel S11-2FA-g left here was correct and useless: it pointed at Account
+ * Settings, which is behind the sign-in that just refused. What matters now is
+ * not that a form renders — it is that the refusal's own credential is what
+ * carries every call, that the recovery sheet cannot be skipped past, and that
+ * the screen ends up at the code box rather than pretending to be signed in.
+ */
+describe('SignInPage enrollment from the refusal (S11-2FA-k)', () => {
+  const TICKET = 'enrollment-ticket-value';
+
+  const ENROLLMENT = {
+    secret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    otpauth_uri: 'otpauth://totp/Nexa:agent@acme.localhost?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    issuer: 'Nexa',
+    account_name: 'agent@acme.localhost',
+  };
+
+  const RECOVERY = ['ABCDE-FGHJK', 'BCDEF-GHJKM'];
+
+  function stubEnrollment(overrides: Partial<Parameters<typeof useAuth.setState>[0]> = {}) {
+    const signIn = vi
+      .fn()
+      .mockRejectedValueOnce(
+        twoFactorRequiredError({ enrollment_required: true, enrollment_ticket: TICKET }),
+      )
+      .mockResolvedValue(undefined);
+    const enrollWithTicket = vi.fn(async () => ENROLLMENT);
+    const activateWithTicket = vi.fn(async () => RECOVERY);
+    useAuth.setState({
+      busy: false,
+      listWorkspaces: async () => [WORKSPACE],
+      signIn,
+      startSsoLogin: vi.fn(async () => undefined),
+      enrollWithTicket,
+      activateWithTicket,
+      ...overrides,
+    });
+    return { signIn, enrollWithTicket, activateWithTicket };
+  }
+
+  afterEach(() => {
+    useAuth.setState({
+      enrollWithTicket: original.enrollWithTicket,
+      activateWithTicket: original.activateWithTicket,
+    });
+  });
+
+  /** Get as far as the setup key being on screen. */
+  async function startEnrollment(): Promise<void> {
+    await submitCredentials();
+    await userEvent.click(await screen.findByRole('button', { name: 'Set it up now' }));
+    await screen.findByText(ENROLLMENT.secret);
+  }
+
+  it('carries the refusal’s own ticket into both enrollment calls', async () => {
+    // The property everything else rests on. There is no session here — if
+    // these calls went through the ordinary API client they would carry no
+    // credential at all and 401, which is exactly the state this replaces.
+    const { enrollWithTicket, activateWithTicket } = stubEnrollment();
+    renderSignIn();
+
+    await startEnrollment();
+    expect(enrollWithTicket).toHaveBeenCalledWith(TICKET);
+
+    await userEvent.type(screen.getByLabelText('Authentication code'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify & activate' }));
+
+    await waitFor(() => expect(activateWithTicket).toHaveBeenCalledWith(TICKET, '123456'));
+  });
+
+  it('shows the recovery sheet and will not move on until it is acknowledged', async () => {
+    // These codes exist in component state and nowhere else in the world —
+    // `/auth/2fa/activate` is the only response that carries them and it does
+    // so once. A Continue button that worked before the box was checked would
+    // be a one-click way to lose them permanently.
+    stubEnrollment();
+    renderSignIn();
+
+    await startEnrollment();
+    await userEvent.type(screen.getByLabelText('Authentication code'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify & activate' }));
+
+    for (const code of RECOVERY) {
+      expect(await screen.findByText(code)).toBeInTheDocument();
+    }
+    const advance = screen.getByRole('button', { name: 'Continue to sign in' });
+    expect(advance).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('checkbox'));
+    expect(advance).toBeEnabled();
+  });
+
+  it('hands over to the code step rather than claiming to be signed in', async () => {
+    // The code that confirmed the enrollment is spent — activation makes its
+    // RFC 6238 step the replay floor — so the next one has to be typed. A
+    // screen that tried to complete the sign-in here would fail on a code the
+    // server has already refused to reuse, and the person would be told their
+    // brand-new factor is wrong.
+    const { signIn } = stubEnrollment();
+    renderSignIn();
+
+    await startEnrollment();
+    await userEvent.type(screen.getByLabelText('Authentication code'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify & activate' }));
+    await userEvent.click(await screen.findByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Continue to sign in' }));
+
+    // The code box, with the same credentials still in hand — never back to
+    // the password field.
+    expect(await screen.findByLabelText('Authentication code')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Password')).not.toBeInTheDocument();
+
+    await userEvent.type(screen.getByLabelText('Authentication code'), '654321');
+    await waitFor(() =>
+      expect(signIn).toHaveBeenLastCalledWith(
+        'agent@acme.localhost',
+        'correct-password',
+        '1',
+        '654321',
+      ),
+    );
+  });
+
+  it('keeps a wrong activation code under the field, with the setup key still on screen', async () => {
+    // Re-entering the whole flow for a typo would mean a second ticket, and
+    // minting one replaces the first — so the person would be restarting an
+    // enrollment they had almost finished.
+    const activateWithTicket = vi.fn().mockRejectedValue(wrongCodeError());
+    stubEnrollment({ activateWithTicket });
+    renderSignIn();
+
+    await startEnrollment();
+    await userEvent.type(screen.getByLabelText('Authentication code'), '000000');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify & activate' }));
+
+    expect(await screen.findByText('That code is not right. Try again.')).toBeInTheDocument();
+    expect(screen.getByText(ENROLLMENT.secret)).toBeInTheDocument();
+  });
+
+  it('says the attempt expired, rather than blaming the code, when the ticket is gone', async () => {
+    // A ticket that timed out or was replaced by a later sign-in answers 404
+    // (the principal kind is no longer one this endpoint names). Under the code
+    // field that would read as "you typed it wrong", and the person would keep
+    // retyping a correct code forever.
+    const activateWithTicket = vi.fn().mockRejectedValue(
+      new ApiClientError({
+        type: 'not_found',
+        status: 404,
+        message: 'Resource not found.',
+        requestId: 'req-gone',
+      }),
+    );
+    stubEnrollment({ activateWithTicket });
+    renderSignIn();
+
+    await startEnrollment();
+    await userEvent.type(screen.getByLabelText('Authentication code'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify & activate' }));
+
+    expect(
+      await screen.findByText('This setup attempt has expired. Go back and sign in again.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByLabelText('Authentication code')).not.toBeInTheDocument();
+  });
+
+  it('says so when the ticket is already dead at the first call', async () => {
+    const enrollWithTicket = vi.fn().mockRejectedValue(
+      new ApiClientError({
+        type: 'authentication',
+        status: 401,
+        message: 'Invalid or expired credentials.',
+        requestId: 'req-expired',
+      }),
+    );
+    stubEnrollment({ enrollWithTicket });
+    renderSignIn();
+
+    await submitCredentials();
+    await userEvent.click(await screen.findByRole('button', { name: 'Set it up now' }));
+
+    expect(
+      await screen.findByText('This setup attempt has expired. Go back and sign in again.'),
+    ).toBeInTheDocument();
   });
 });
 

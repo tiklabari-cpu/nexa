@@ -55,7 +55,32 @@ export const auth: Messages = {
   'auth.signin.enrollmentRequiredTitle': 'İki adımlı doğrulamayı kurun',
   'auth.signin.enrollmentRequiredBody':
     '{organization} iki adımlı doğrulama gerektiriyor ve bu hesapta henüz kurulu değil. Zaten oturum açık olduğunuz bir çalışma alanından hesap ayarlarında kurulum yapın, sonra buraya dönün.',
+  'auth.signin.enrollmentRequiredHere':
+    '{organization} iki adımlı doğrulama gerektiriyor ve bu hesapta henüz kurulu değil. Kurulumu buradan yapabilirsiniz — yaklaşık bir dakika sürer ve kimlik doğrulama uygulamanız gerekir.',
   'auth.signin.enrollmentRequiredLink': 'Hesap ayarlarına git',
+  'auth.signin.enroll.startButton': 'Şimdi kur',
+  'auth.signin.enroll.starting': 'Başlatılıyor…',
+  'auth.signin.enroll.failed': 'Kurulum başlatılamadı. Geri dönüp tekrar oturum açın.',
+  'auth.signin.enroll.expired':
+    'Bu kurulum denemesinin süresi doldu. Geri dönüp tekrar oturum açın.',
+  'auth.signin.enroll.scanBody':
+    'Bu kurulum anahtarını kimlik doğrulama uygulamanıza ekleyin, sonra gösterdiği kodu yazın.',
+  'auth.signin.enroll.secretLabel': 'Kurulum anahtarı',
+  'auth.signin.enroll.uriLabel': 'Kurulum bağlantısı',
+  'auth.signin.enroll.copy': 'Kopyala',
+  'auth.signin.enroll.copied': 'Kopyalandı',
+  'auth.signin.enroll.copySecretAriaLabel': 'Kurulum anahtarını kopyala',
+  'auth.signin.enroll.copyUriAriaLabel': 'Kurulum bağlantısını kopyala',
+  'auth.signin.enroll.codeLabel': 'Doğrulama kodu',
+  'auth.signin.enroll.codeRequired': 'Kimlik doğrulama uygulamanızın gösterdiği kodu girin.',
+  'auth.signin.enroll.codeInvalid': 'Bu kod doğru değil. Tekrar deneyin.',
+  'auth.signin.enroll.activateButton': 'Doğrula ve etkinleştir',
+  'auth.signin.enroll.activating': 'Doğrulanıyor…',
+  'auth.signin.enroll.recoveryBody':
+    'Kimlik doğrulama uygulamanızı kaybederseniz bu kodların her biri sizi bir kez içeri alır. Yalnızca bu sefer gösterilirler.',
+  'auth.signin.enroll.downloadButton': '.txt indir',
+  'auth.signin.enroll.savedConfirm': 'Bu kodları güvenli bir yere kaydettim.',
+  'auth.signin.enroll.continueButton': 'Oturum açmaya devam et',
 
   // Sign up
   'auth.signup.title': 'Çalışma alanı oluştur',

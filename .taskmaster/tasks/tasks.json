@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T03:27:34.580Z",
+        "updatedAt": "2026-08-27T03:29:21.874Z",
         "subtasks": [
           {
             "id": 1,
@@ -7340,10 +7340,11 @@
             "title": "S11-2FA-k [OPUS-XHIGH] Kayıt kapısı: require_two_factor açık alanda oturumu olmayan üyenin girişi yok (role bağımsız kilit)",
             "description": "Faktörü olmayan + oturumu olmayan üye require_two_factor açık bir alanda ne giriş yapabiliyor ne kaydını yapabiliyor; enroll ucu oturum istiyor, oturum da faktör istiyor.",
             "details": "ÖLÇÜLEN KUSUR (2026-08-27 · tm 152.10 penceresinde ölçüldü ve TESTLE ÇİVİLENDİ, düzeltilmedi):\napps/api/test/integration/two-factor-enrollment.test.ts · \"is still shut out with no session,\nno factor and the policy on\" bugünkü davranışı sabitliyor: /auth/authorize 401\ntwo_factor_required + details.enrollment_required döner (S11-2FA-e, DOĞRU), ve kimliksiz\nPOST /auth/2fa/enroll 401 döner (oturumsuz kayıt ucu YOK). Dört kayıt ucunun dördü de\n`principals: ['agent']` + `accounts--my:rw` istiyor, yani hepsi bir oturum gerektiriyor.\n\nNEDEN 152.10 DEĞİL: 152.10 rol/scope kusuruydu (DEFAULT_AGENT_SCOPES accounts--my:rw\ntaşımıyordu) ve kapandı. Bu kalan kilit ROLE BAĞIMSIZDIR — owner da, admin de aynı durumda\nsıkışır — dolayısıyla farklı bir kusur ve farklı bir çözüm ister.\n\nKİMİ VURUYOR: (a) require_two_factor açık bir alana yeni davet edilen üye (hiç oturumu\nolmadı); (b) kaydını yapmadan çıkış yapmış üye; (c) authenticator'ı bozulan + kurtarma\nsayfasını kaybeden üye. Tek üyeliği o alandaysa ürüne girişi kalıcı olarak yoktur.\n152.7'nin web tarafındaki `enrollment_required` paneli bu sınırı zaten dürüstçe taşıyor\n(/app/settings'e link verir, oturumsuzken o rota sign-in'e döner) — panel çalışıyor, arkasında\nuç yok.\n\nNE YAPILACAK (öneri, ölçerek karar ver):\n1. Parolası doğrulanmış ama faktörü olmayan çağırana, /auth/authorize'ın reddiyle BİRLİKTE\n   dar kapsamlı + kısa ömürlü bir KAYIT kimliği ver (yalnız accounts--my:rw, yalnız\n   /auth/2fa/enroll + /auth/2fa/activate, dakikalar mertebesinde TTL, tek kullanım).\n   Genel bir oturum BASMA — kayıt bitmeden ürünün geri kalanına erişim olmamalı.\n2. Sadece require_two_factor açıkken ve hesabın AKTİF faktörü yokken üret; aktif faktörü olan\n   hesap bu yola HİÇ girmemeli (yoksa kod sorma kapısı atlanır — S11-2FA-e'nin ilk dalı).\n3. Denetim: kaydın bu yolla yapıldığı ayırt edilebilsin (mevcut\n   security.two_factor_enrollment_required olayının yanına).\n4. Kontrat + web: /auth/authorize yanıtına yeni alan → OpenAPI + @nexa/types + typed client;\n   SignInPage'in `enrollment_required` paneli artık gerçekten kaydı bitirebilsin (152.7'nin\n   bıraktığı \"bilinen sınır\" notu kapanır).\n5. Mevcut çivi testini GÜNCELLE (silme): \"hâlâ kilitli\" iddiası \"kayıt kapısından geçebiliyor,\n   ama yalnız kayıt uçlarına\" iddiasına dönüşmeli.\n\nTUZAK: bu kapı, S11-2FA-e'nin kapattığı deliği geri açmanın en kolay yoludur. Kayıt kimliğinin\nbaşka HİÇBİR ucu açmadığı negatif testle kanıtlanmalı (inbox, /auth/me dışı her şey 403).\n\nDOSYALAR (beklenen): apps/api/src/routes/auth.ts · packages/contract/openapi/* + @nexa/types ·\napps/web/src/features/auth/SignInPage.tsx · test apps/api/test/integration/two-factor-enrollment.test.ts\n+ two-factor-enforcement.test.ts · apps/web/src/features/auth/SignInPage.test.tsx.\nREFERANS: tm 152.5 (enforceSecondFactor'ın üç dalı) · tm 152.7 (enrollment paneli) · tm 152.10\n(role/scope yarısı, kapandı).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentTaskId": 152,
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-08-27T03:29:21.874Z"
           },
           {
             "id": 12,
@@ -8103,7 +8104,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T03:27:34.581Z",
+      "lastModified": "2026-08-27T03:29:21.874Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

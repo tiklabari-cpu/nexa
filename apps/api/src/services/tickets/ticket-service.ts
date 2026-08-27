@@ -672,6 +672,11 @@ async function resolveVisibility(
   if (principal.kind === 'scim') {
     throw ApiError.authorization('Provisioning credentials cannot access tickets.');
   }
+  // And a two-factor enrollment ticket (S11-2FA-k), which reaches the two
+  // enrollment endpoints and nothing else.
+  if (principal.kind === 'enrollment') {
+    throw ApiError.authorization('Enrollment credentials cannot access tickets.');
+  }
 
   const actorId = principal.kind === 'agent' ? principal.accountId : principal.botId;
 

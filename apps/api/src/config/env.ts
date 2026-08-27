@@ -90,6 +90,17 @@ export const envSchema = z.object({
   REFRESH_TOKEN_TTL: z.coerce.number().int().positive().default(2_592_000),
   CUSTOMER_TOKEN_TTL: z.coerce.number().int().positive().default(28_800),
   AUTH_CODE_TTL: z.coerce.number().int().positive().max(600).default(120),
+  /**
+   * How long the two-factor enrollment ticket lives (NFR-S11 · S11-2FA-k).
+   *
+   * Longer than `AUTH_CODE_TTL` because a person is doing more than a redirect:
+   * installing an authenticator app, typing or scanning a secret, waiting for
+   * the next code. Ten minutes is enough for that on a first attempt and short
+   * enough that a ticket left in a closed tab is dead before anyone could go
+   * looking for it. Capped at half an hour — past that it stops being a step in
+   * a sign-in and starts being a session, which is the one thing it must not be.
+   */
+  TWO_FACTOR_ENROLLMENT_TICKET_TTL: z.coerce.number().int().positive().max(1800).default(600),
 
   RATE_LIMIT_AGENT_PER_MIN: z.coerce.number().int().positive().default(180),
   RATE_LIMIT_AGENT_BURST: z.coerce.number().int().positive().default(30),

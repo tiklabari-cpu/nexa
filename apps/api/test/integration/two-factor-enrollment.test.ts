@@ -801,32 +801,376 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       );
       expect(demote.statusCode).toBe(403);
     });
+  });
 
-    /**
-     * The half this subtask does *not* close, pinned so it cannot be mistaken
-     * for working: a member holding no session, with no factor, whose only
-     * membership is in an enforcing workspace has no way in. The refusal is
-     * S11-2FA-e's and is correct; what is missing is a door to enrollment that
-     * does not already require a session. It is role-independent — an owner in
-     * the same position is just as stuck — so it is not the scope-shaped defect
-     * this subtask names.
-     */
-    it('is still shut out with no session, no factor and the policy on', async () => {
+  // =========================================================================
+  // The door out of the policy's own dead end (S11-2FA-k)
+  // =========================================================================
+
+  /**
+   * S11-2FA-j opened enrollment to the `agent` role. What it could not open was
+   * the case that has no role in it at all: a member holding **no session**, no
+   * factor, whose only membership is in a workspace with `require_two_factor`.
+   * `/auth/authorize` refuses them (correctly — that is S11-2FA-e), all four
+   * enrollment endpoints want a session, and the only way to a session is
+   * through the factor they do not have. An owner is exactly as stuck as an
+   * agent; the previous version of this block pinned that as a known limit.
+   *
+   * The way out is a credential minted *with* the refusal: it opens the two
+   * enrollment endpoints and nothing else. So the tests that matter are not
+   * "can they enrol" — that is one line — but the ways this could quietly
+   * become the hole S11-2FA-e closed:
+   *
+   *   a ticket handed to somebody who already holds a factor (the code prompt,
+   *     skipped);
+   *   a ticket that reaches a third endpoint (a session by another name);
+   *   a ticket that outlives the enrollment it was minted for;
+   *   a ticket that keeps working after the membership behind it stops.
+   */
+  describe('the enrollment ticket (S11-2FA-k)', () => {
+    interface Refusal {
+      statusCode: number;
+      details: Record<string, unknown>;
+      cacheControl: string | undefined;
+      ticket: string;
+    }
+
+    /** Sign in far enough to be refused, and read the refusal. */
+    async function refusedSignIn(email = fx.a.agentEmail): Promise<Refusal> {
+      const response = await server.post('/auth/authorize', {
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+        code_challenge: deriveCodeChallenge(generateToken(48).slice(0, 64)),
+        email,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+      });
+      const details = (response.json().error.details ?? {}) as Record<string, unknown>;
+      return {
+        statusCode: response.statusCode,
+        details,
+        cacheControl: response.headers['cache-control'] as string | undefined,
+        ticket: details['enrollment_ticket'] as string,
+      };
+    }
+
+    /** The full sign-in, for proving the ticket's work actually opened the door. */
+    async function signIn(email: string, code?: string): Promise<number> {
+      const verifier = generateToken(48).slice(0, 64);
+      const authorized = await server.post('/auth/authorize', {
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+        code_challenge: deriveCodeChallenge(verifier),
+        email,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+        ...(code === undefined ? {} : { code }),
+      });
+      if (authorized.statusCode !== 200) return authorized.statusCode;
+
+      const granted = await server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code: authorized.json().code,
+        code_verifier: verifier,
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+      });
+      expect(granted.statusCode).toBe(200);
+      const me = await server.get('/auth/me', auth(granted.json().access_token as string));
+      return me.statusCode;
+    }
+
+    it('walks the whole way out: refused, enrolled, activated, signed in', async () => {
       await requireTwoFactor(fx.a);
 
-      const refused = await server.post('/auth/authorize', {
+      const refusal = await refusedSignIn();
+      expect(refusal.statusCode).toBe(401);
+      expect(refusal.details['enrollment_required']).toBe(true);
+      expect(refusal.ticket).toEqual(expect.any(String));
+      expect(refusal.details['enrollment_ticket_expires_in']).toBe(600);
+      // There is a bearer credential in that body.
+      expect(refusal.cacheControl).toBe('no-store');
+
+      const enrolled = await server.post('/auth/2fa/enroll', undefined, auth(refusal.ticket));
+      expect(enrolled.statusCode).toBe(200);
+      const secret = enrolled.json().secret as string;
+
+      const activated = await server.post(
+        '/auth/2fa/activate',
+        { code: generateTotp(secret, Date.now()) },
+        auth(refusal.ticket),
+      );
+      expect(activated.statusCode).toBe(200);
+      expect(activated.json().recovery_codes as string[]).toHaveLength(10);
+
+      // The point of the whole subtask: the same password that was refused a
+      // moment ago now opens the workspace, because the factor exists.
+      // `Date.now()`'s own step was just spent by activation; +1 is inside the
+      // accepted drift window.
+      const code = generateTotpForStep(secret, totpStep(Date.now()) + 1);
+      expect(await signIn(fx.a.agentEmail, code)).toBe(200);
+    });
+
+    it('is role-independent — an owner in the same position gets one too', async () => {
+      // The defect S11-2FA-j fixed was scope-shaped and stopped at `agent`.
+      // This one is not: it is about holding no session at all, so the account
+      // with every scope in the product is in it as deeply as the account with
+      // the fewest. A ticket for the owner is what proves the two are different
+      // defects rather than two readings of one.
+      await requireTwoFactor(fx.a);
+
+      const refusal = await refusedSignIn(fx.a.ownerEmail);
+      expect(refusal.statusCode).toBe(401);
+      expect(refusal.ticket).toEqual(expect.any(String));
+      expect(
+        (await server.post('/auth/2fa/enroll', undefined, auth(refusal.ticket))).statusCode,
+      ).toBe(200);
+    });
+
+    it('reaches the two enrollment endpoints and nothing else', async () => {
+      // The trap this subtask names: the ticket is the easiest way to reopen
+      // the hole S11-2FA-e closed, and it would reopen it by being *slightly*
+      // too wide rather than obviously too wide. So the claim is not "it is
+      // narrow" but "here is every neighbouring door, and each one is shut".
+      //
+      // 404 rather than 403 throughout, and that is the product's own answer,
+      // not a compromise: `plugins/auth.ts` refuses a principal kind a route
+      // did not name with `not_found`, so the surface cannot be mapped by
+      // reading which refusals differ.
+      await requireTwoFactor(fx.a);
+      const { ticket } = await refusedSignIn();
+      const headers = auth(ticket);
+
+      // The account's own profile — the endpoint every other own-account
+      // credential opens, and the one carrying memberships, scopes and
+      // notification preferences.
+      expect((await server.get('/auth/me', headers)).statusCode).toBe(404);
+      // The other two two-factor endpoints. These are the operations a stolen
+      // credential wants — remove the factor, print a fresh recovery sheet —
+      // and both would be reachable if `principals` had been widened by family
+      // rather than by endpoint.
+      expect((await deleteTwoFactor({ password: TEST_PASSWORD }, ticket)).statusCode).toBe(404);
+      expect(
+        (await server.post('/auth/2fa/recovery-codes', { password: TEST_PASSWORD }, headers))
+          .statusCode,
+      ).toBe(404);
+      // A personal access token would be a session that outlives the ticket by
+      // a year — the single most valuable thing to mint from here.
+      expect(
+        (await server.post('/auth/personal-access-tokens', { name: 'from a ticket' }, headers))
+          .statusCode,
+      ).toBe(404);
+      // And the product itself.
+      expect((await server.get('/chats', headers)).statusCode).toBe(404);
+      expect((await server.get('/agents', headers)).statusCode).toBe(404);
+      expect(
+        (await server.patch('/settings/security', { require_two_factor: false }, headers))
+          .statusCode,
+      ).toBe(404);
+    });
+
+    it('is never minted for an account that already holds a factor', async () => {
+      // The first branch of `enforceSecondFactor`: a live factor means a code
+      // is demanded whatever the policy says. If a ticket appeared here it
+      // would be a way past the code prompt for anybody holding the password —
+      // enrol a second authenticator, sign in with it — which is precisely the
+      // control being enforced.
+      const agentSession = await session(fx.a, fx.a.agentAccountId);
+      const secret = await enroll(agentSession);
+      expect(
+        (
+          await server.post(
+            '/auth/2fa/activate',
+            { code: generateTotp(secret, Date.now()) },
+            auth(agentSession),
+          )
+        ).statusCode,
+      ).toBe(200);
+      await requireTwoFactor(fx.a);
+
+      const refusal = await refusedSignIn();
+      expect(refusal.statusCode).toBe(401);
+      // The code prompt, which carries no details at all.
+      expect(refusal.details).toEqual({});
+      expect(refusal.ticket).toBeUndefined();
+
+      // And a wrong code does not produce one either — the refusal changes
+      // type, and a client retrying wrong codes must not collect credentials.
+      const wrongCode = await server.post('/auth/authorize', {
         client_id: fx.a.clientId,
         redirect_uri: fx.a.redirectUri,
         code_challenge: deriveCodeChallenge(generateToken(48).slice(0, 64)),
         email: fx.a.agentEmail,
         password: TEST_PASSWORD,
         license_id: fx.a.licenseId.toString(),
+        code: '000000',
       });
-      expect(refused.statusCode).toBe(401);
-      expect(refused.json().error.details).toEqual({ enrollment_required: true });
+      expect(wrongCode.statusCode).toBe(401);
+      expect(wrongCode.body).not.toContain('enrollment_ticket');
+    });
 
-      // And there is no unauthenticated way round it.
+    it('is not minted at all when the workspace does not require a factor', async () => {
+      // No policy, no factor: the untouched case S11-2FA-e was careful to leave
+      // alone. A ticket here would mean every ordinary sign-in in the product
+      // mints a second credential nobody asked for.
+      expect(await signIn(fx.a.agentEmail)).toBe(200);
+      const tickets = await owner.apiToken.findMany({ where: { kind: 'enrollment' } });
+      expect(tickets).toHaveLength(0);
+    });
+
+    it('is spent by the activation it exists for', async () => {
+      await requireTwoFactor(fx.a);
+      const { ticket } = await refusedSignIn();
+
+      const secret = (await server.post('/auth/2fa/enroll', undefined, auth(ticket))).json()
+        .secret as string;
+      expect(
+        (
+          await server.post(
+            '/auth/2fa/activate',
+            { code: generateTotp(secret, Date.now()) },
+            auth(ticket),
+          )
+        ).statusCode,
+      ).toBe(200);
+
+      // Done its one job. Anything still holding it — a browser tab, a log, a
+      // proxy — is holding nothing.
+      expect((await server.post('/auth/2fa/enroll', undefined, auth(ticket))).statusCode).toBe(401);
+    });
+
+    it('survives a wrong activation code, so a typo is not a locked door', async () => {
+      // The other side of "single use": spending the ticket on a *failed*
+      // activation would send somebody back to a sign-in that refuses them, for
+      // mistyping six digits. It is spent by success only.
+      await requireTwoFactor(fx.a);
+      const { ticket } = await refusedSignIn();
+
+      const secret = (await server.post('/auth/2fa/enroll', undefined, auth(ticket))).json()
+        .secret as string;
+      expect(
+        (await server.post('/auth/2fa/activate', { code: '000000' }, auth(ticket))).statusCode,
+      ).toBe(401);
+
+      expect(
+        (
+          await server.post(
+            '/auth/2fa/activate',
+            { code: generateTotp(secret, Date.now()) },
+            auth(ticket),
+          )
+        ).statusCode,
+      ).toBe(200);
+    });
+
+    it('leaves at most one live ticket per member, however many times they try', async () => {
+      // Every refused attempt mints one. Without replacing the previous, a
+      // handful of retries leaves a handful of live credentials, and the set
+      // outlives any one of them — the TTL stops meaning what it says.
+      await requireTwoFactor(fx.a);
+      const first = await refusedSignIn();
+      const second = await refusedSignIn();
+      expect(second.ticket).not.toBe(first.ticket);
+
+      expect(
+        (await server.post('/auth/2fa/enroll', undefined, auth(first.ticket))).statusCode,
+      ).toBe(401);
+      expect(
+        (await server.post('/auth/2fa/enroll', undefined, auth(second.ticket))).statusCode,
+      ).toBe(200);
+
+      const live = await owner.apiToken.findMany({
+        where: { kind: 'enrollment', ownerId: fx.a.agentAccountId, revokedAt: null },
+      });
+      expect(live).toHaveLength(1);
+    });
+
+    it('stops working the moment the membership behind it does', async () => {
+      // The reason the ticket is a row in `api_tokens` rather than a signed
+      // blob: resolution reads the membership fresh on every request. An admin
+      // who suspends somebody mid-enrollment has suspended them, not queued a
+      // suspension for whenever the credential happens to expire.
+      await requireTwoFactor(fx.a);
+      const { ticket } = await refusedSignIn();
+      expect((await server.post('/auth/2fa/enroll', undefined, auth(ticket))).statusCode).toBe(200);
+
+      await owner.agentMembership.update({
+        where: {
+          licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+        },
+        data: { suspended: true },
+      });
+
+      expect((await server.post('/auth/2fa/enroll', undefined, auth(ticket))).statusCode).toBe(401);
+    });
+
+    it('marks the enrollment it produced, and leaves an ordinary one unmarked', async () => {
+      // A workspace that has just switched the policy on will see a run of
+      // these, and that is expected; the same marker weeks later, on an account
+      // that had a session all along, is not. Distinguishable is the whole ask.
+      await requireTwoFactor(fx.a);
+      const { ticket } = await refusedSignIn();
+      const secret = (await server.post('/auth/2fa/enroll', undefined, auth(ticket))).json()
+        .secret as string;
+      await server.post(
+        '/auth/2fa/activate',
+        { code: generateTotp(secret, Date.now()) },
+        auth(ticket),
+      );
+
+      const viaTicket = await owner.auditLogEntry.findMany({
+        where: {
+          licenseId: fx.a.licenseId,
+          actorId: fx.a.agentAccountId,
+          action: { in: ['security.two_factor_enrollment_started', 'security.two_factor_enabled'] },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+      expect(viaTicket.map((e) => e.action)).toEqual([
+        'security.two_factor_enrollment_started',
+        'security.two_factor_enabled',
+      ]);
+      for (const entry of viaTicket) {
+        // `toMatchObject`, not `toEqual`: every entry's metadata also carries
+        // the `request_id` the audit writer folds in (`sanitizeAuditMetadata`).
+        expect(entry.metadata).toMatchObject({ via: 'enrollment_ticket' });
+      }
+      // The actor is the person, not the credential: an account's security
+      // history has to read as one story whichever door it came through.
+      expect(viaTicket[0]?.actorType).toBe('agent');
+
+      // The ordinary path keeps no metadata at all — a key that is always there
+      // is a key every query has to remember to ignore.
+      await activate(await session(fx.a, fx.a.ownerAccountId));
+      const viaSession = await owner.auditLogEntry.findMany({
+        where: {
+          licenseId: fx.a.licenseId,
+          actorId: fx.a.ownerAccountId,
+          action: 'security.two_factor_enabled',
+        },
+      });
+      expect(viaSession).toHaveLength(1);
+      expect(viaSession[0]?.metadata).not.toHaveProperty('via');
+    });
+
+    it('does not survive its own expiry', async () => {
+      await requireTwoFactor(fx.a);
+      const { ticket } = await refusedSignIn();
+
+      await owner.apiToken.updateMany({
+        where: { kind: 'enrollment', ownerId: fx.a.agentAccountId },
+        data: { expiresAt: new Date(Date.now() - 1000) },
+      });
+
+      expect((await server.post('/auth/2fa/enroll', undefined, auth(ticket))).statusCode).toBe(401);
+    });
+
+    it('is still no unauthenticated way in — the endpoints have not become public', async () => {
+      await requireTwoFactor(fx.a);
+      await refusedSignIn();
+
       expect((await server.post('/auth/2fa/enroll', undefined)).statusCode).toBe(401);
+      expect((await server.post('/auth/2fa/activate', { code: '000000' })).statusCode).toBe(401);
     });
   });
 });

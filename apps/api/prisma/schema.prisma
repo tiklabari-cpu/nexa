@@ -461,7 +461,9 @@ model ApiToken {
   id             String    @id @default(uuid()) @db.Uuid
   licenseId      BigInt    @map("license_id")
   organizationId String    @map("organization_id") @db.Uuid
-  /// Account uuid for pat/oauth; bot id for bot tokens.
+  /// Account uuid for pat/oauth/enrollment; bot id for bot tokens. A scim token
+  /// records the admin who minted it, and is deliberately never resolved
+  /// through that membership — see `token-service.ts`.
   ownerId        String    @map("owner_id")
   kind           String
   tokenHash      String    @unique @map("token_hash")

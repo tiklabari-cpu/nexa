@@ -1,0 +1,34 @@
+-- The enrollment ticket credential (NFR-S11 · FR-MOD-00.1 · S11-2FA-k).
+--
+-- One change: `api_tokens.kind` gains 'enrollment'.
+--
+-- S11-2FA-e made `require_two_factor` mean something at the door: an account
+-- with no factor is refused a session. That left a closed loop for the person
+-- it is hardest to help — somebody newly invited to an enforcing workspace, or
+-- signed out before enrolling, or whose authenticator broke. All four
+-- enrollment endpoints need a session, and the only way to a session is through
+-- the factor they do not have. It is role-independent: an owner is just as
+-- stuck as an agent.
+--
+-- The ticket is the narrow door out. It is minted only alongside that refusal —
+-- so the password has been verified, the membership resolved and the account
+-- proved to hold no active factor — lives for minutes, and is spent by the
+-- activation it exists for.
+--
+-- Stored here rather than as a signed, stateless blob (`customer-token.ts`'s
+-- shape) for two reasons the enforcement gate depends on. It must be
+-- *revocable* — spent on activation, and replaced when a second is minted — and
+-- a stateless token can only be revoked by keeping a list somewhere, which is
+-- this table. And its bearer must stop working the moment the membership does:
+-- resolution already reads the membership fresh on every request (suspension,
+-- pending approval), and a credential outside that path would have to re-derive
+-- the rule.
+--
+-- It follows the 'scim' precedent exactly (20260814150000): what makes a kind
+-- different is not how it is stored — hashed, revocable, tenant-stamped, like
+-- every other bearer credential this product issues — but what it is *allowed
+-- to reach*, and that is an authorization decision enforced where the others
+-- are (`plugins/auth.ts` and the `principals` list on the two routes).
+ALTER TABLE api_tokens DROP CONSTRAINT api_tokens_kind_check;
+ALTER TABLE api_tokens
+  ADD CONSTRAINT api_tokens_kind_check CHECK (kind IN ('pat', 'oauth', 'bot', 'scim', 'enrollment'));

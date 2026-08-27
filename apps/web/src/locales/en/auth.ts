@@ -60,7 +60,31 @@ export const auth: Messages = {
   'auth.signin.enrollmentRequiredTitle': 'Set up two-factor authentication',
   'auth.signin.enrollmentRequiredBody':
     '{organization} requires two-factor authentication, and this account has not set it up yet. Sign in to a workspace where you already have a session to set it up in Account Settings, then come back here.',
+  'auth.signin.enrollmentRequiredHere':
+    '{organization} requires two-factor authentication, and this account has not set it up yet. You can do it here — it takes about a minute, and you will need your authenticator app.',
   'auth.signin.enrollmentRequiredLink': 'Go to Account Settings',
+  'auth.signin.enroll.startButton': 'Set it up now',
+  'auth.signin.enroll.starting': 'Starting…',
+  'auth.signin.enroll.failed': 'Could not start setup. Go back and sign in again.',
+  'auth.signin.enroll.expired': 'This setup attempt has expired. Go back and sign in again.',
+  'auth.signin.enroll.scanBody':
+    'Add this setup key to your authenticator app, then type the code it shows.',
+  'auth.signin.enroll.secretLabel': 'Setup key',
+  'auth.signin.enroll.uriLabel': 'Setup link',
+  'auth.signin.enroll.copy': 'Copy',
+  'auth.signin.enroll.copied': 'Copied',
+  'auth.signin.enroll.copySecretAriaLabel': 'Copy setup key',
+  'auth.signin.enroll.copyUriAriaLabel': 'Copy setup link',
+  'auth.signin.enroll.codeLabel': 'Authentication code',
+  'auth.signin.enroll.codeRequired': 'Enter the code your authenticator app is showing.',
+  'auth.signin.enroll.codeInvalid': 'That code is not right. Try again.',
+  'auth.signin.enroll.activateButton': 'Verify & activate',
+  'auth.signin.enroll.activating': 'Verifying…',
+  'auth.signin.enroll.recoveryBody':
+    'Each of these signs you in once if you lose your authenticator app. This is the only time they are shown.',
+  'auth.signin.enroll.downloadButton': 'Download .txt',
+  'auth.signin.enroll.savedConfirm': 'I have saved these codes somewhere safe.',
+  'auth.signin.enroll.continueButton': 'Continue to sign in',
 
   // Sign up
   'auth.signup.title': 'Create a workspace',

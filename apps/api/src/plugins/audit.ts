@@ -23,6 +23,14 @@ function actorOf(request: FastifyRequest): { actorId: string | null; actorType: 
   if (!principal) return { actorId: null, actorType: 'system' };
   if (principal.kind === 'agent') return { actorId: principal.accountId, actorType: 'agent' };
   if (principal.kind === 'bot') return { actorId: principal.botId, actorType: 'bot' };
+  // An enrollment ticket (S11-2FA-k) names a person, and the two entries it can
+  // produce — enrollment started, factor enabled — are that person's own. It is
+  // recorded as `agent` rather than a fifth actor type so an account's security
+  // history reads as one story regardless of which door the enrollment came
+  // through; *which* door is on the entry itself, as `via: 'enrollment_ticket'`.
+  if (principal.kind === 'enrollment') {
+    return { actorId: principal.accountId, actorType: 'agent' };
+  }
   // A SCIM provisioning connector (NFR-S11) names no person and is not a bot in
   // this product's sense — `bot` means an AI agent of the workspace. It is an
   // external system acting on the workspace's own instruction, which is what

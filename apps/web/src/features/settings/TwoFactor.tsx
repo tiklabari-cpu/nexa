@@ -36,6 +36,7 @@ import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { downloadRecoveryCodes } from '../../lib/recovery-codes.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 interface TwoFactorStatus {
@@ -65,19 +66,6 @@ interface RecoveryCodesResult {
 type ReauthAction = 'disable' | 'regenerate';
 
 const QUERY_KEY = ['settings', 'two-factor'];
-
-/** Ready for an `<a download>` / `URL.createObjectURL` link — `BulkImportForm.tsx`'s pattern. */
-function downloadRecoveryCodes(codes: string[]): void {
-  const blob = new Blob([codes.join('\n') + '\n'], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = 'nexa-recovery-codes.txt';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
 
 function workspaceNames(details: Record<string, unknown> | undefined): string[] {
   const raw = details?.['workspaces'];

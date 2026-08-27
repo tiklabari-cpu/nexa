@@ -7684,7 +7684,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T12:56:35.041Z",
+        "updatedAt": "2026-08-27T13:02:59.895Z",
         "subtasks": [
           {
             "id": 1,
@@ -7716,13 +7716,13 @@
             "description": "Canlıya çıkacak kişi hangi değeri neden vermesi gerektiğini okuyabiliyor.",
             "details": "NE YAPILACAK: iki belge.\n1. .env.production.example (yeni): .env.example in production kardeşi. Her anahtar için TEK SATIR\n   gerekçe: neden zorunlu, ne olursa ne olur. Gerçek secret İÇERMEZ — yer tutucular dev-only- ön ekiyle\n   OLMAMALI (parseEnv onları production da reddediyor), bunun yerine \"<üret: openssl rand -hex 32>\"\n   biçiminde talimat olsun.\n2. README ye \"Production configuration\" bölümü: zorunlu anahtarlar tablosu · secret üretme komutları ·\n   DATABASE_URL (migration, sahip rolü) ile DATABASE_APP_URL (çalışma zamanı, nexa_app) ayrımının\n   NEDEN kritik olduğu · TRUST_PROXY_HOPS un dağıtım topolojisine göre nasıl seçileceği ·\n   SCHEDULER_ENABLED ve RETENTION_ENABLED in varsayılan davranışı.\nREADME nin mevcut \"Environment\" ve \"Background jobs\" bölümleriyle ÇELİŞMEMELİ — onlara referans ver.\n\nDOSYALAR: .env.production.example (yeni) · README.md (yeni bölüm) · .gitignore (yeni dosyanın\nyanlışlıkla ignore edilmediğini doğrula — .env.* deseni var, !.env.example istisnası da; yeni dosya\niçin de istisna gerekiyor).\nREFERANS: .env.example in mevcut yorum yoğunluğu (her blok neden orada olduğunu yazıyor) ve\nREADME nin \"Notable engineering choices\" bölümünün ton u.\n\nTUZAK: .gitignore de .env.* deseni bu dosyayı yakalar. İstisna eklemezsen dosya commit lenmez ve\ngörev sessizce hiçbir şey teslim etmemiş olur — git status ile DOĞRULA.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-PROD-CFG** (türetilmiş — NFR-M). Gereksinim satırı: `grep -n \"| M-PROD-CFG\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-PROD-CFG\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Ölçülebilir: git ls-files ile .env.production.example İZLENİYOR (ignore edilmemiş).\n- Ölçülebilir: dosyadaki anahtar kümesi env.ts şemasının production da zorunlu kıldığı kümeyi KAPSIYOR\n  (env parite testine bir kardeş eklenebilir — eklersen kapıyı güçlendirmiş olursun).\n- format:check yeşil · README bölümü mevcut bölümlerle çelişmiyor.\n- PLAN: §7.2 M-PROD-CFG → \"✅ → KM-PROD-CFG\" (üçüncü alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "159.1",
               "159.2"
             ],
             "parentId": "159",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-27T13:02:59.895Z"
           }
         ]
       },
@@ -8118,7 +8118,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T12:56:35.043Z",
+      "lastModified": "2026-08-27T13:02:59.896Z",
       "taskCount": 169,
       "completedCount": 154,
       "tags": [

@@ -48,7 +48,17 @@ FROM ${NGINX_IMAGE} AS runtime
 # Same non-root rationale as apps/web/Dockerfile: `nginx-unprivileged` runs
 # entirely as a non-root user on port 8080, no custom USER plumbing needed.
 COPY --from=build --chown=nginx:nginx /repo/apps/widget/dist /usr/share/nginx/html
-COPY apps/widget/nginx.conf /etc/nginx/conf.d/default.conf
+# Templated since M-PROD-CFG-b (it used to be copied straight to conf.d): the
+# security profile has to name the API origin the widget document may call, and
+# unlike the web app the widget has no same-origin backend to fall back on, so
+# an unset value would break every install rather than merely tighten it. The
+# default matches `apps/widget/src/widget.ts`'s own `apiBaseUrl` default and
+# this compose's api port-publishing convention; a deployment sets its real API
+# origin. The stock entrypoint renders `/etc/nginx/templates/*.template` into
+# /etc/nginx/conf.d — see apps/web/Dockerfile for why nginx's own `$uri` and
+# friends survive that pass untouched.
+COPY apps/widget/nginx.conf /etc/nginx/templates/default.conf.template
+ENV CSP_CONNECT_EXTRA="http://localhost:4000"
 
 EXPOSE 8080
 # `loader.js` is the one file every embed depends on being reachable; a

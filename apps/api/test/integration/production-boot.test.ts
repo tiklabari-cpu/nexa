@@ -96,3 +96,50 @@ describe('a server built from a production environment', () => {
     }
   });
 });
+
+/**
+ * More than one front door (M-PROD-CFG-b).
+ *
+ * The allowlist was `[env.WEB_ORIGIN]` — one origin, wrapped at the point of
+ * use. A deployment that serves the agent panel and the hosted chat page
+ * (FR-MOD-08.5.9) from different hosts had no way to say so, and the failure is
+ * the quiet kind again: the browser drops the response and the second app looks
+ * broken for no visible reason.
+ */
+describe('a production server with several panel origins', () => {
+  const CHAT_ORIGIN = 'https://chat.nexa.test';
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await startTestServer({
+      ...PRODUCTION_ENV,
+      WEB_ORIGIN: `${PANEL_ORIGIN}, ${CHAT_ORIGIN}`,
+    });
+  });
+
+  afterAll(async () => {
+    await server?.close();
+  });
+
+  it('answers each configured origin with itself, not with the first one', async () => {
+    for (const origin of [PANEL_ORIGIN, CHAT_ORIGIN]) {
+      const response = await server.get('/health', { origin });
+      expect(response.headers['access-control-allow-origin'], origin).toBe(origin);
+    }
+  });
+
+  it('still refuses everything else', async () => {
+    const response = await server.get('/health', { origin: FOREIGN_ORIGIN });
+
+    expect(response.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('refuses to boot at all on a value that is not an origin', async () => {
+    // Fail closed. A list that parses but matches nothing a browser sends would
+    // come up healthy and serve no one — the worst of the three outcomes,
+    // because the process reports itself fine.
+    await expect(
+      startTestServer({ ...PRODUCTION_ENV, WEB_ORIGIN: 'panel.nexa.test/app' }),
+    ).rejects.toThrow(/WEB_ORIGIN/);
+  });
+});

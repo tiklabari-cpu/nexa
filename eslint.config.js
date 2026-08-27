@@ -63,6 +63,21 @@ export default tseslint.config(
     },
   },
 
+  // The k6 load suite (apps/load). k6 runs its own JavaScript runtime, not
+  // Node: `__ENV` and friends are injected by the host, and `k6/http` is a
+  // built-in module rather than anything on disk. Declaring the globals here
+  // is what lets `pnpm -w lint` cover these files at all — the alternative was
+  // excluding the package, which would leave the one suite that gates the NFR
+  // budgets as the only unlinted code in the repo.
+  {
+    files: ['apps/load/**/*.js'],
+    languageOptions: {
+      globals: { __ENV: 'readonly', __VU: 'readonly', __ITER: 'readonly', open: 'readonly' },
+    },
+    // A k6 scenario reports through stdout; there is no logger to reach for.
+    rules: { 'no-console': 'off' },
+  },
+
   // The mobile session, and the only store it is allowed to live in (13.7-b).
   //
   // A rule rather than a test, because the failure mode is an addition: someone

@@ -290,6 +290,9 @@ function ScheduledExportRow({
   // attempt decides the badge. `last_run_at` on the definition only advances
   // on success, so it cannot distinguish "never run" from "just failed" —
   // the run itself is the only honest source for that.
+  //
+  // paging-exempt: the badge is about the newest attempt and nothing else; a
+  // second page of older runs would have no reader.
   const lastRun = useQuery({
     queryKey: ['settings', 'scheduled-exports', scheduledExport.id, 'last-run'],
     queryFn: () =>

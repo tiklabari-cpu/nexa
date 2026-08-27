@@ -178,6 +178,9 @@ export function CommandPalette(): ReactElement | null {
 
   const customers = useQuery({
     queryKey: ['palette', 'customers', query],
+    // paging-exempt: a type-ahead, so six is the whole answer — the server does
+    // the searching and the palette shows the top of it. Narrowing the query is
+    // the way to the seventh match, not a second page.
     queryFn: () =>
       api.get<{ items: CustomerSummary[] }>(
         `/customers?query=${encodeURIComponent(query)}&limit=6`,
@@ -189,6 +192,8 @@ export function CommandPalette(): ReactElement | null {
 
   const tickets = useQuery({
     queryKey: ['palette', 'tickets', query],
+    // paging-exempt: the same type-ahead as the customer search above — six
+    // server-side matches, not the first page of a list.
     queryFn: () =>
       api.get<{ items: Ticket[] }>(`/tickets?query=${encodeURIComponent(query)}&limit=6`),
     enabled: searching && has(TICKET_READ),
@@ -196,9 +201,15 @@ export function CommandPalette(): ReactElement | null {
     staleTime: 10_000,
   });
 
-  // Chats have no free-text endpoint — the list is small and already loaded for
-  // the inbox, so it is filtered here rather than adding a search path the
-  // product does not otherwise need.
+  // Chats have no free-text endpoint, so unlike the two searches above this one
+  // fetches rows and matches them here. That puts a real bound on it: the fifty
+  // most recent conversations are searchable and older ones are not, whatever
+  // the workspace holds.
+  //
+  // paging-exempt: chaining pages here would not lift the bound, it would move
+  // it — a palette cannot download an entire inbox to grep it. The fix is a
+  // `query` parameter on `GET /chats`, which is a contract change and its own
+  // task; recorded rather than papered over.
   const chats = useQuery({
     queryKey: ['palette', 'chats'],
     queryFn: () => api.get<{ items: ChatSummary[] }>('/chats?view=all&limit=50'),

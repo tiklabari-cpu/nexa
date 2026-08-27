@@ -106,6 +106,21 @@ export const ACME_OWNER: TenantOwner = {
   orgPrefix: 'Acme',
 };
 
+/**
+ * The seeded workspace that is bigger than one page of anything (NFR-P5 ·
+ * P5-PAGE): sixty conversations against the inbox's 50-row page, and one
+ * conversation of 250 events against the transcript's 200-event page.
+ *
+ * Its own tenant rather than sixty more rows in Acme — see `seedPagingWorkspace`
+ * for why. The consequence here is that `paging.spec.ts` signs in as this owner
+ * instead of using the `agentPage` fixture, which is Acme's.
+ */
+export const PAGING_OWNER: TenantOwner = {
+  email: 'owner@paging.localhost',
+  password: DEMO.password,
+  orgPrefix: 'Paging',
+};
+
 /** The second seeded tenant — the "other tenant" side of cross-tenant proofs. */
 export const NORTHWIND_OWNER: TenantOwner = {
   email: 'owner@northwind.localhost',
@@ -215,9 +230,20 @@ export async function channelWebhook(
 }
 
 export async function signIn(page: Page): Promise<void> {
+  await signInAs(page, DEMO.email, DEMO.password);
+}
+
+/**
+ * The sign-in form, driven for any seeded owner.
+ *
+ * Each seeded owner belongs to exactly one workspace, and `SignInPage` skips
+ * the workspace picker for a single membership — so this lands on the inbox of
+ * whichever tenant the address belongs to.
+ */
+export async function signInAs(page: Page, email: string, password: string): Promise<void> {
   await page.goto('/');
-  await page.getByLabel('Email').fill(DEMO.email);
-  await page.getByLabel('Password').fill(DEMO.password);
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(password);
   await page.getByRole('button', { name: 'Sign in' }).click();
 
   // The inbox rail only exists once the session is real.

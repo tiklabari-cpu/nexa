@@ -13,6 +13,62 @@
 
 ## Task log (newest-first)
 
+## 169 — FIX-WT-CLEAN-RUNLOOP-2 · Commit'siz `run-loop.sh` (elle başlatma önceliğinde kota beklemesi) sahiplenildi — done — 2026-08-27 UTC
+
+- **Yapıldı:** Panelin sağlık taraması `main`'de yine **1 izlenen, commit'siz dosya** buldu:
+  `run-loop.sh` (+0 izlenmeyen). Değişiklik incelendi ve **tek bir tutarlı iş** çıktı (+75 / −17,
+  2 hunk; eksilerin TAMAMI `quota_gate`'in `while` içine alınıp yeniden girintilenen eski
+  gövdesi — silinen davranış yok): panel `/api/usage` yanıtında `manualOverride.active`
+  bildirdiğinde kota kapısı artık döngüyü KAPATMIYOR, sıfırlanmayı bekleyip kotayı YENİDEN
+  ölçüyor ve aynı görevle devam ediyor. Parçalar: `WAIT_RESET_MAX_MIN`
+  (`LOOP_WAIT_RESET_MAX_MIN`, varsayılan 90 dk) · `quota_gate` gövdesinin `while` turu ·
+  yeni `wait_for_reset()`. Beklerken hiç pencere açılmadığı için kota harcanmaz, hiçbir iş
+  yarıda kalmaz. **Yarım/deneysel parça YOK:** `bash -n` temiz, `wait_for_reset` tek çağrı
+  yerinden bağlı, ölü değişken/fonksiyon yok, secret yok.
+- **Beklemenin üç sınırı (sonsuz bekleme kapatıldı):** (1) ayrıştırılamayan ya da
+  `WAIT_RESET_MAX_MIN`'den uzak bir hedef → `return 1`, eski davranış (temiz çıkış + panelin
+  zamanlanmış devamı) daha doğru; (2) en fazla 5 tur — `resumeAtIfStopped` bayat kalıp her
+  turda "1 dk sonra" derse döngü sonsuza kadar beklemez; (3) bekleyişten sonraki ölçüm
+  `?fresh=1` ile panelin 30 sn'lik önbelleğini atlar, yoksa sıfırlanmanın hemen ardından bayat
+  (yüksek) değer boşuna bir tur daha bekletirdi. Bekleyiş **durdurulabilir**: 10 sn'de bir
+  tm 149'un `stop_gate`'i çağrılıyor, 5 dk'da bir kalan süre loglanıyor.
+- **Panel ucu AYRI DEPODA ve HAZIR (salt-okuma doğrulandı, dokunulmadı):**
+  `Claude_Loop_Controller-main/lib/manualOverride.mjs` `summary()` → `{active, untilISO, …}`,
+  `server.mjs:90` bunu `/api/usage` yanıtına koyuyor, `server.mjs:81` `?fresh`'i
+  `getUsage({fresh})`'e geçiriyor, `resumeAtIfStopped` (`server.mjs:87`) zaten vardı. Script'in
+  okuduğu üç alanın üçü de sunucuda mevcut. Panel yoksa/eskiyse `.manualOverride.active // false`
+  **false** okur ve kapı bire bir eski gibi davranır — geriye dönük güvenli.
+- **Sahiplik git + Task Master ile kanıtlandı (tahmin değil):** kuyrukta `in-progress` görev YOK
+  (168 görev: 153 done / 15 pending) ve pending görevlerin hiçbiri `run-loop.sh`/panel işi değil
+  → değişiklik hiçbir yarım göreve ait değil. tm 153.1–153.7'nin **yedi** kapanış notu da aynı
+  şeyi yazmıştı: _"`run-loop.sh`'ın commit'siz değişikliği BU GÖREVE AİT DEĞİL — dokunulmadı"_.
+  **O yedi pencerelik emsal artık kapandı** — bu tur sahiplenip commit + push etti. Aynı desenin
+  birincisi tm 149 (FIX-WT-CLEAN-RUNLOOP, `stop_gate` kapısı) idi; bu ikincisi.
+- **Doğrulama (hepsi exit 0):** `bash -n run-loop.sh` · `date -u -d <ISO>` ayrıştırması bu
+  kabukta çalışıyor (Git Bash / GNU date — `wait_for_reset`'in tek dış bağımlılığı) ·
+  `pnpm -w typecheck` **12/12** · `pnpm -w lint` **9/9** · `pnpm -w format:check` temiz ·
+  secret taraması `run-loop.sh` tam dosyada eşleşme yok (CONVENTIONS §2).
+  **ATLANAN KAPILAR VE SEBEBİ (sessizce atlanmadı):** `test` / `test:integration` / `build` /
+  `test:e2e` koşulmadı — `run-loop.sh` **hiçbir pnpm workspace paketinin girdisi değil** ve
+  `format:check` globu (`**/*.{ts,tsx,js,json,md,css,yaml,yml}`) `.sh` uzantısını kapsamıyor →
+  ürün kodu diff'i **0**. Kanıt: typecheck **11/12 cache hit** (2,2 sn), lint **8/9 cache hit**
+  (7,0 sn) — turbo girdi hash'i değişmedi, aynı hash'i okuyan test/build/e2e bu diff'i
+  **yapısal olarak gözlemleyemez** (tm 149 emsalinin birebir aynısı). `HANDOFF.md` prettier'da
+  ignore'lu (`.prettierignore:33`), kontrat/migration'a dokunulmadı → `contract:generate` /
+  `db:check-drift` gereksiz (CONVENTIONS §1 koşullu maddeleri).
+- **Kapsam dışı bırakılan, bilerek:** tm 149'un notunda açık bıraktığı **KAPI 2 boşluğu** bu
+  diff'te de kapanmadı — `stop_gate` retry penceresinden önce hâlâ çağrılmıyor
+  (`run-loop.sh:375` civarı yalnız `quota_gate "$eff" "retry öncesi"`), yani ilk denemenin
+  ORTASINDA gelen bir durdurma isteği retry penceresini engellemiyor (en fazla 1 fazladan
+  pencere). Davranış değişikliği olurdu, mevcut diff'te yoktu, genişletilmedi (CONVENTIONS §5).
+  Panel deposuna (`Claude_Loop_Controller-main`) **dokunulmadı**: ayrı repo, CLAUDE.md sınırı —
+  yalnız `manualOverride`/`fresh` uçlarının var olduğu salt-okuma doğrulandı.
+- **Sonraki pencereye not:** Çalışma ağacı **tamamen temiz** (`git status --porcelain` boş),
+  `main` origin ile eşit. Task Master: 169 görev, 154 done / 15 pending — açık kuyruk tm 154–168
+  (K7 sırası değişmedi; 169 `critical` etiketiyle kapandı, etiket işin panel bulgusundan
+  geldiğinin izidir). Hâlâ açık teknik adaylar: yukarıdaki **KAPI 2 stop_gate** boşluğu ve
+  §D122 (NFR-P3 widget bundle bütçesi CI'da sessizce atlanıyor, tm 156'nın içinde).
+
 ## 153.7 — P5-PAGE-g · Uçtan uca sayfalama + nöbetçi (P5-PAGE KAPANDI) — done — 2026-08-27 UTC
 
 - **Yapıldı (üç iş):** (1) `seedPagingWorkspace` — dördüncü çalışma alanı "Paging Proving Ground" (`owner@paging.localhost`), 60 sohbet + en yenisinde 250 olay; AYRI çalışma alanı, çünkü Acme'nin sohbetlerini e2e bir düzine yerde sayıyor. Satırlar sabit bir tabandan geriye diziliyor, yani `Paging Visitor 01` ilk satır / `…60` ikinci sayfanın onuncusu — test satır sayarak değil ADINI söyleyerek buluyor. `createMany` (≈500 satır; `createConversation` satır başına bir gidiş-dönüş olurdu ve her e2e global setup'ında ödenirdi), idempotent. (2) `apps/e2e/tests/paging.spec.ts` (2 senaryo) — liste 50 → "Load more" → 60 + düğme kayboluyor; transcript EN YENİ mesajda açılıyor, `paging-msg-050` DOM'da yok, yukarı kaydırınca `paging-msg-001` geliyor. `fixtures.ts`'e `PAGING_OWNER` + `signInAs` (eski `signIn` ona delege). (3) `scripts/audit/unpaged-lists.cjs` + `pnpm audit:unpaged-lists` + README bölümü.

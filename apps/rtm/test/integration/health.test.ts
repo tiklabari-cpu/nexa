@@ -27,6 +27,7 @@ interface HealthBody {
   service: string;
   region?: string;
   connections?: number;
+  max_connections?: number | null;
   uptime_s?: number;
   dependencies?: {
     database: { status: 'up' | 'down'; error?: string };
@@ -96,6 +97,31 @@ describe('GET /health', () => {
       expect(body.dependencies?.redis).toEqual({ status: 'up' });
     } finally {
       await rtm.close();
+    }
+  });
+
+  it('reports the connection ceiling next to the count it bounds (M-LOAD-CAP)', async () => {
+    // A count of open sockets means nothing on its own: 4000 is healthy under
+    // one ceiling and a page under another. Reported together, from one read,
+    // so the two cannot be compared across two different moments.
+    const withCeiling = await startRtm({ RTM_MAX_CONNECTIONS: '4096' });
+    try {
+      const { body } = await getHealth(withCeiling.port, adminAuth);
+      expect(body.connections).toBe(0);
+      expect(body.max_connections).toBe(4096);
+    } finally {
+      await withCeiling.close();
+    }
+
+    // Unset is unlimited, and says so — an absent field would read as "this
+    // build does not report it", which is the wrong thing to conclude while
+    // deciding whether a pod is near its limit.
+    const unlimited = await startRtm();
+    try {
+      const { body } = await getHealth(unlimited.port, adminAuth);
+      expect(body).toHaveProperty('max_connections', null);
+    } finally {
+      await unlimited.close();
     }
   });
 

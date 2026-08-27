@@ -217,7 +217,15 @@ pod is holding 8000 sockets" are different claims and only the second one is NFR
 Degradation (2) has two completely different causes that look identical from inside k6, and
 a report that does not separate them feeds the next decision the wrong number:
 
-- **The pod refused.** A product finding.
+- **The pod refused.** A product finding — and since M-LOAD-CAP, one that can now be read
+  directly rather than inferred. If `RTM_MAX_CONNECTIONS` is set on the stack under test, the
+  gateway refuses upgrades past it with `503` and
+  `{"error":{"details":{"reason":"connection_limit_reached"}}}`, so a rung that goes red at
+  exactly the configured number is measuring the ceiling, not the machine. `/health` reports
+  `max_connections` alongside `connections` for an admin caller, which is the credential
+  `rtm.js` already uses for `nexa_rtm_connections_observed` — read it before a ladder and you
+  know which rung is expected to fail. A ladder meant to find the pod's real limit should
+  leave the key **unset** (its default), or the ladder measures the configuration.
 - **The load generator ran out of local resources.** Not a product finding at all. On Windows
   the ceiling is the ephemeral port range — `netsh int ipv4 show dynamicport tcp`, **16384
   ports** on the machine these numbers were taken on — and every closed socket holds its port

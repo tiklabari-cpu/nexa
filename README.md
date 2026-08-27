@@ -426,6 +426,38 @@ orchestrator's own grace period — Kubernetes' `terminationGracePeriodSeconds` 
 30s, and when that expires SIGKILL truncates exactly the requests this drain exists to
 protect. A second `SIGTERM` skips the wait and exits immediately.
 
+### `RTM_MAX_CONNECTIONS` — the gateway's connection ceiling
+
+How many concurrent WebSocket connections one `apps/rtm` process holds before it starts
+refusing upgrades. **Unset means unlimited**, which is what the gateway did before this key
+existed — there is no environment-following default, deliberately.
+
+Set it, and an upgrade arriving at a full instance gets `503` with
+`{"error":{"type":"service_unavailable","details":{"reason":"connection_limit_reached"}}}`
+instead of being accepted. The refusal names the reason but never the number: the fact that
+an instance is full is what a client and a load balancer need, and it is what separates "the
+pod refused me" from "my client ran out of ephemeral ports"; the configured number is
+capacity intelligence and stays behind `/health`'s admin gate, next to the live count:
+
+```json
+{ "status": "ok", "service": "rtm", "connections": 4102, "max_connections": 8000 }
+```
+
+`max_connections` is `null` when unset — stated rather than omitted, since an absent field
+reads as "this build does not report it".
+
+Why it is not defaulted: the number belongs to the pod, not to the code. Load measurement
+(tm 161, §D127) put this repo's gateway at **≥ 8000 concurrent sockets** on a single laptop
+core, with the NFR-P1 fan-out budget holding to **~6000 recipients per broadcast** — beyond
+which acceptance and fan-out start competing for the one JS thread and the cost shows up as
+latency for everyone already connected rather than as a refusal. Those are that machine's
+numbers under one tenant. Measure yours and set it from that; capacity past a single pod is
+a horizontal-scale question, not a ceiling question.
+
+A client refused this way reconnects on the usual jittered exponential backoff (500ms
+doubling to 15s, `apps/web/src/lib/realtime.ts`) rather than immediately — a shedding
+mechanism whose retries add load would not be one.
+
 ---
 
 ## Status

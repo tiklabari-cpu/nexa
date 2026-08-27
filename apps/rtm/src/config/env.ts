@@ -54,6 +54,19 @@ const envSchema = z.object({
   /** Must match the API's, or customer tokens will not verify here. */
   CUSTOMER_TOKEN_SECRET: secret(32),
   RATE_LIMIT_RTM_PER_SEC: z.coerce.number().int().positive().default(10),
+  /**
+   * Shutdown drain window in milliseconds (M-OPS-b). Same key, same meaning and
+   * the same environment-following default as the API's
+   * (`apps/api/src/config/env.ts`) — two processes reading one variable out of
+   * one environment must not disagree about what it means, and a deployment
+   * that drains the API for five seconds while the gateway drops its sockets
+   * instantly has not drained.
+   *
+   * Here the window buys the gateway's clients the same thing: readiness turns
+   * false first, so the orchestrator stops sending new upgrades this way before
+   * the sockets already attached are told to go somewhere else.
+   */
+  SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(0).max(120_000).optional(),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
 });
@@ -97,6 +110,8 @@ export type RtmEnv = z.infer<typeof envSchema> & {
   isTest: boolean;
   /** Alias kept explicit so the server reads clearly at the call site. */
   JWT_SIGNING_KEY_CUSTOMER: string;
+  /** Resolved shutdown drain window in milliseconds (M-OPS-b). */
+  shutdownDrainMs: number;
 };
 
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
@@ -122,5 +137,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     JWT_SIGNING_KEY_CUSTOMER: env.CUSTOMER_TOKEN_SECRET,
+    shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
   };
 }

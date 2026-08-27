@@ -14,7 +14,11 @@
  *   when either is down, taking the instance out of rotation. This is the
  *   READINESS probe. It always answers the narrow `{status, service}` body —
  *   an orchestrator probe never carries a bearer token, so the detailed body
- *   would never be seen there.
+ *   would never be seen there. Since M-OPS-b it also answers 503 while the
+ *   process is shutting down, before it stops accepting: that 503 is what
+ *   makes a graceful drain possible at all, because an orchestrator only stops
+ *   routing here once a probe fails, and `status: 'draining'` distinguishes
+ *   "leaving on purpose" from "a dependency is down" for whoever reads it.
  * - `/health` stays backward compatible: same dependency probe, but the body
  *   is admin-gated (M-SEC-b2 · §D116 MEDIUM (b)) — version, region,
  *   dependency latencies, scheduler status, which mock each provider runs is
@@ -63,6 +67,17 @@ export default async function healthRoutes(
   const startedAt = Date.now();
   const uptimeS = () => Math.round((Date.now() - startedAt) / 100) / 10;
 
+  /**
+   * The readiness answer while shutting down (M-OPS-b).
+   *
+   * Short-circuits the dependency probe rather than running it and overriding
+   * the result: mid-close the pool may already be gone, so probing would trade
+   * a truthful 503 for a two-second timeout on the way to the same status
+   * code — and slow readiness during a drain is exactly what a deploy cannot
+   * afford.
+   */
+  const drainingBody = { status: 'draining' as const, service: 'api' };
+
   async function probeDependencies() {
     const [database, redis] = await Promise.all([
       probe('database', () => app.db.$queryRaw`SELECT 1`),
@@ -91,6 +106,7 @@ export default async function healthRoutes(
     '/health/ready',
     { config: { public: true, healthRateLimit: true } },
     async (_request, reply) => {
+      if (app.lifecycle.draining) return reply.status(503).send(drainingBody);
       const { healthy } = await probeDependencies();
       return reply
         .status(healthy ? 200 : 503)
@@ -105,6 +121,12 @@ export default async function healthRoutes(
     '/health',
     { config: { public: true, healthRateLimit: true } },
     async (request, reply) => {
+      // Draining wins over everything below, including the admin body: this
+      // route is still a readiness signal for anything pointed at it from
+      // before the split, and a 200 here during a drain would keep traffic
+      // coming to a process that is closing.
+      if (app.lifecycle.draining) return reply.status(503).send(drainingBody);
+
       const { database, redis, healthy } = await probeDependencies();
       const status = healthy ? 'ok' : 'degraded';
 

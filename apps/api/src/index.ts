@@ -1,5 +1,6 @@
 import { parseEnv } from './config/env.js';
 import { loadEnvFile } from './config/load-env-file.js';
+import { installShutdownHandlers } from './lib/shutdown.js';
 import { buildServer } from './server.js';
 
 // Before parseEnv, so a developer running this directly does not have to
@@ -10,19 +11,10 @@ async function main(): Promise<void> {
   const env = parseEnv();
   const app = await buildServer({ env });
 
-  // Drain in-flight requests before exiting so a deploy never truncates a reply.
-  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
-    process.once(signal, () => {
-      app.log.info({ signal }, 'shutting down');
-      void app.close().then(
-        () => process.exit(0),
-        (error: unknown) => {
-          app.log.error({ err: error }, 'error during shutdown');
-          process.exit(1);
-        },
-      );
-    });
-  }
+  // Turn readiness off, wait out the drain window, then let in-flight requests
+  // finish before anything closes — so a redeploy never truncates a reply
+  // (M-OPS-b). The sequence and why each step is in that order: lib/shutdown.ts.
+  installShutdownHandlers({ app, drainMs: env.shutdownDrainMs });
 
   await app.listen({ port: env.API_PORT, host: env.API_HOST });
 }

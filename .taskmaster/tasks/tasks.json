@@ -7735,7 +7735,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T14:22:26.798Z",
+        "updatedAt": "2026-08-27T14:23:56.423Z",
         "subtasks": [
           {
             "id": 1,
@@ -7754,12 +7754,12 @@
             "description": "Yeniden dağıtım artık istek kesmiyor.",
             "details": "NE YAPILACAK: kapanış sırası kurulur (bugün doğrudan app.close() çağrılıyor).\nSıra:\n1. SIGTERM alınır → dahili \"kapanıyor\" bayrağı set edilir → /health/ready bundan sonra 503 döner.\n   (Orkestratör bunu görüp yeni trafik göndermeyi keser.)\n2. Yapılandırılabilir bir drenaj penceresi beklenir (SHUTDOWN_DRAIN_MS, varsayılan makul bir değer).\n3. Uçuştaki isteklerin tamamlanması beklenir (Fastify close bunu zaten yapar).\n4. Scheduler in Redis lider kilidi BIRAKILIR — yoksa bir sonraki lider kilit süresi dolana kadar bekler.\n5. DB ve Redis bağlantıları kapanır.\nRTM tarafında: açık soketlere düzgün bir kapanış çerçevesi gönderilir ki istemci reconnect e düşsün\n(NFR-R2: otomatik reconnect + missed-event sync zaten var — bu onu TETİKLER, bozmaz).\n\nDOSYALAR: apps/api/src/index.ts (sinyal işleyici) · apps/api/src/server.ts (kapanış kancaları) ·\napps/api/src/plugins/scheduler.ts (kilit bırakma) · apps/api/src/routes/health.ts (kapanıyor bayrağı) ·\napps/rtm/src/index.ts + gateway (soket kapanışı) · env.ts + .env.example + turbo.json (yeni anahtar).\nREFERANS: scheduler in Lua ile sahip doğrulayan kilit bırakma yolu (tm 130.1 de kurulmuştu —\nkilidi BIRAKAN yol zaten var mı, ÖLÇ; varsa çağır, yoksa ekle).\n\nTUZAKLAR:\n1. Testte drenaj penceresi KISA olmalı, yoksa süit yavaşlar; değer env den geldiği için test 0 verebilir.\n2. İki kez SIGTERM gelirse (orkestratör sabırsız) ikinci sinyal ZORLA kapatmalı — sonsuz bekleme yok.\n3. RTM soket kapanışı istemcide \"hata\" değil \"yeniden bağlan\" olarak okunmalı; e2e ve rtm integration\n   süitleri (106 test) yeşil kalmalı.\n4. Bu değişiklik test süitlerinin sunucu kapatma yolunu da etkiler — süitler asılı kalmamalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-OPS** (türetilmiş — NFR-R1/R2). Gereksinim satırı: `grep -n \"| M-OPS\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-OPS\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration: SIGTERM sonrası /health/ready 503 ama uçuştaki istek 200 ile tamamlanıyor.\n- rtm integration yeşil (taban 106) · e2e TAM süit yeşil (taban 205).\n- Ölçülebilir: kapanışta scheduler kilidi Redis te KALMIYOR (anahtar yok).\n- Süitler asılı kalmıyor (koşu süresi taban ile karşılaştırılır ve HANDOFF a yazılır).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "160.1"
             ],
             "parentId": "160",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-27T14:23:56.423Z"
           },
           {
             "id": 3,
@@ -8118,7 +8118,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T14:22:26.800Z",
+      "lastModified": "2026-08-27T14:23:56.424Z",
       "taskCount": 169,
       "completedCount": 155,
       "tags": [

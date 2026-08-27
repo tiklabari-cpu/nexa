@@ -481,6 +481,91 @@ describe('the job lock', () => {
     expect(sla.runs()).toBe(1);
   });
 
+  it('hands back every interval it is still holding when it stops', async () => {
+    // The lock is deliberately left to expire after a pass, because the key
+    // doubles as "this interval is taken" (`lock.ts`). That only holds while
+    // its holder is still around to take the next one — a process on its way
+    // out leaves the job parked for up to ninety percent of its interval with
+    // nobody sweeping, which on a single-instance deployment is nobody at all.
+    const sla = counting('sla');
+    const siem = counting('siem');
+    const instance = scheduler();
+    instance.register(sla.job);
+    instance.register(siem.job);
+    instance.start();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL);
+    expect(sla.runs()).toBe(1);
+    expect(siem.runs()).toBe(1);
+    // Still held: this is the state a shutdown would otherwise walk away from.
+    expect(redis.holder(lockKey('sla'))).not.toBeNull();
+    expect(redis.holder(lockKey('siem'))).not.toBeNull();
+
+    await instance.stop();
+
+    expect(redis.holder(lockKey('sla'))).toBeNull();
+    expect(redis.holder(lockKey('siem'))).toBeNull();
+  });
+
+  it('releases only after the pass it is holding the interval for has finished', async () => {
+    // Handing the lock back underneath a running pass would invite a second
+    // instance in while the first is still mid-sweep — the exact double run
+    // the lock exists to prevent.
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const instance = scheduler();
+    instance.register({ name: 'slow', intervalMs: INTERVAL, run: () => gate });
+    instance.start();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL);
+    const stopping = instance.stop();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(redis.holder(lockKey('slow'))).not.toBeNull();
+
+    release();
+    await stopping;
+    expect(redis.holder(lockKey('slow'))).toBeNull();
+  });
+
+  it('leaves a lock alone once it has expired and another instance has taken it', async () => {
+    // Owner-checked in Lua (`lock.ts`): a departing process must not be able to
+    // delete the interval its successor is already sweeping.
+    const sla = counting('sla');
+    const instance = scheduler();
+    instance.register(sla.job);
+    instance.start();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL);
+    // Into the window where the TTL (90% of the interval) has expired but the
+    // next tick has not yet fired — otherwise this scheduler simply retakes the
+    // key with a fresh token and there is no other holder to protect.
+    await vi.advanceTimersByTimeAsync(INTERVAL * 0.95);
+    expect(await redis.set(lockKey('sla'), 'another-instance', 'PX', 60_000, 'NX')).toBe('OK');
+
+    await instance.stop();
+
+    expect(redis.holder(lockKey('sla'))).toBe('another-instance');
+  });
+
+  it('releases nothing when Redis never gave it a lock to begin with', async () => {
+    // The unreachable-Redis path: `stop()` must not turn a failed acquisition
+    // into a release call with no token behind it.
+    redis.failWith = new Error('redis unreachable');
+    const sla = counting('sla');
+    const instance = scheduler();
+    instance.register(sla.job);
+    instance.start();
+
+    await vi.advanceTimersByTimeAsync(INTERVAL);
+    expect(sla.runs()).toBe(0);
+
+    redis.failWith = null;
+    await expect(instance.stop()).resolves.toBeUndefined();
+  });
+
   it('hands the interval back when it stops between taking the lock and running', async () => {
     // Otherwise a rolling restart parks an interval nobody used, and for the
     // next ninety seconds no instance in the fleet sweeps.

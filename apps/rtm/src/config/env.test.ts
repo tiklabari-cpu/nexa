@@ -71,6 +71,18 @@ describe('production configuration', () => {
     expect(env.JWT_SIGNING_KEY_CUSTOMER).toBe(PROD_BASE['CUSTOMER_TOKEN_SECRET']);
   });
 
+  it('resolves the shutdown drain window exactly as the API does (M-OPS-b)', () => {
+    // One variable, two processes. A deployment that drains the API for five
+    // seconds while the gateway drops its sockets instantly has not drained —
+    // so the default and the override have to mean the same thing on both
+    // sides (`apps/api/src/config/env.ts`).
+    expect(parseEnv(PROD_BASE).shutdownDrainMs).toBe(5_000);
+    expect(parseEnv(BASE).shutdownDrainMs).toBe(0);
+    expect(parseEnv({ ...BASE, SHUTDOWN_DRAIN_MS: '250' }).shutdownDrainMs).toBe(250);
+    expect(parseEnv({ ...PROD_BASE, SHUTDOWN_DRAIN_MS: '0' }).shutdownDrainMs).toBe(0);
+    expect(() => parseEnv({ ...BASE, SHUTDOWN_DRAIN_MS: '600000' })).toThrow(/SHUTDOWN_DRAIN_MS/);
+  });
+
   it('refuses to boot without DATABASE_APP_URL, and says why', () => {
     const { DATABASE_APP_URL: _omitted, ...withoutAppUrl } = PROD_BASE;
 

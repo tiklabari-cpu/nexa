@@ -18,6 +18,7 @@
     "API_HOST",
     "API_BASE_URL",
     "TRUST_PROXY_HOPS",
+    "SHUTDOWN_DRAIN_MS",
     "RTM_PORT",
     "RTM_HOST",
     "RTM_BASE_URL",

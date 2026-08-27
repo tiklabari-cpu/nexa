@@ -70,6 +70,14 @@ interface JobState {
   lastErrorClass: string | null;
   consecutiveErrors: number;
   inFlight: Promise<unknown> | null;
+  /**
+   * The lock token this process is holding for the job, or null when it holds
+   * none. Kept past the end of a pass on purpose — the key outlives the work
+   * as the "this interval is taken" marker (`lock.ts`) — so this is what lets
+   * {@link Scheduler.stop} hand back an interval a departing process is still
+   * sitting on.
+   */
+  heldToken: string | null;
 }
 
 /**
@@ -151,6 +159,7 @@ export class Scheduler {
       lastErrorClass: null,
       consecutiveErrors: 0,
       inFlight: null,
+      heldToken: null,
     });
   }
 
@@ -180,7 +189,30 @@ export class Scheduler {
     );
   }
 
-  /** Stop scheduling and wait for whatever is mid-pass. Single use: no restart. */
+  /**
+   * Stop scheduling, wait for whatever is mid-pass, then hand back every
+   * interval this process is holding. Single use: no restart.
+   *
+   * The release is the part that matters at shutdown (M-OPS-b). A lock is
+   * normally left to expire, because the key doubles as "this interval is
+   * already taken" and handing it back early would let a second instance sweep
+   * the same rows moments later (`lock.ts` says so at length). That reasoning
+   * assumes the holder is still around to take the *next* interval too — and a
+   * process that is exiting is not. Left behind, the key parks the job for up
+   * to ninety percent of its interval with nobody sweeping: an hour of no
+   * retention pass after a routine restart, and on a single-instance
+   * deployment there is no other holder to cover it. The double run the marker
+   * prevents costs one redundant idempotent pass; the parked interval costs a
+   * sweep that does not happen at all, so the trade goes the other way here.
+   *
+   * Releasing is safe against the race it looks like it invites: the token is
+   * owner-checked in Lua, so a lock that expired and was retaken by another
+   * instance while this one drained is left exactly where it is.
+   *
+   * Ordered after the in-flight wait, not before it: a pass that is still
+   * running is still holding its interval, and handing it back underneath
+   * itself would invite the second instance in while the first is mid-sweep.
+   */
   async stop(): Promise<void> {
     this.#stopped = true;
     this.#abort.abort();
@@ -194,6 +226,12 @@ export class Scheduler {
       if (state.inFlight !== null) inFlight.push(state.inFlight);
     }
     await Promise.allSettled(inFlight);
+
+    await Promise.all(
+      [...this.#jobs.values()]
+        .filter((state) => state.heldToken !== null)
+        .map((state) => this.#release(state.definition.name, state.heldToken!)),
+    );
   }
 
   /** What `/health` reports. Registration order, which is the order jobs matter in. */
@@ -267,6 +305,10 @@ export class Scheduler {
       return;
     }
 
+    // Recorded before the pass runs, so `stop()` can hand the interval back
+    // however the pass ends — including the one that throws.
+    state.heldToken = token;
+
     if (this.#stopped) {
       // Took the interval and will not use it. Handing it back lets a healthy
       // instance run the pass now instead of after the lock times out.
@@ -314,6 +356,12 @@ export class Scheduler {
   }
 
   async #release(job: string, token: string): Promise<void> {
+    // Cleared whatever happens below: a second release of the same token can
+    // only delete a lock this process no longer owns, which is the one thing
+    // the owner check exists to prevent.
+    const state = this.#jobs.get(job);
+    if (state?.heldToken === token) state.heldToken = null;
+
     try {
       await this.#lock.release(job, token);
     } catch (error) {

@@ -259,7 +259,7 @@ connected received every message (`nexa_rtm_socket_dropped 0`, delivery check 7 
 The 60 refusals at 8 000 have a named cause, printed by the scenario itself:
 `connectex: No connection could be made because the target machine actively refused it` — the
 listen queue overflowing, not a resource the gateway had run out of. The obvious next question
-is whether that is about the connection *count* or about how fast they arrive, so it was
+is whether that is about the connection _count_ or about how fast they arrive, so it was
 tested rather than argued: the same rung re-run at **half the open rate** (100/s, so the
 connect phase takes 85 s instead of 45 s) refused **67** — no better. Arrival rate is not the
 variable; 8 000 held sockets on this hardware is. Fan-out came down only slightly on that run
@@ -282,7 +282,7 @@ because the next scenario can make either mistake again:
    sockets that stretched to ~4 s, and the last messages went out after every socket had
    already closed. It read as the gateway failing 7 949 sockets. The publisher now sleeps the
    _remainder_ of the interval, and a check named `a publish iteration fits inside its
-   interval` fails the run if it ever cannot — so a slipped schedule says so in its own words
+interval` fails the run if it ever cannot — so a slipped schedule says so in its own words
    instead of being misread as a delivery failure.
 
 Deciding what this means for NFR-P8's stated ~20 000/pod is **161.4's** job, not this file's.
@@ -412,7 +412,7 @@ carries digits belongs under the same guard.
 
 This repo had already been bitten once: `apps/e2e/tests/demo-flow.spec.ts` truncates its own
 `Date.now()` to six digits for exactly this reason, and says so in a comment. The lesson had
-simply never been written anywhere a *new* suite would find it — so it is here now, and it is
+simply never been written anywhere a _new_ suite would find it — so it is here now, and it is
 a test rather than a comment.
 
 ## Gate behaviour

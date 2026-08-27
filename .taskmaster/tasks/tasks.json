@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-26T23:55:48.491Z",
+        "updatedAt": "2026-08-27T00:26:40.092Z",
         "subtasks": [
           {
             "id": 1,
@@ -7302,12 +7302,12 @@
             "description": "Yöneticinin gördüğü anahtar gerçekten bir şey yapıyor.",
             "details": "NE YAPILACAK:\n1. Settings → Security ekranındaki require_two_factor anahtarının yanına, açıldığında NE OLACAĞINI\n   söyleyen yardım metni (kaydı olmayan üyeler bir sonraki girişte kayda zorlanır).\n2. Anahtar açılırken kaç üyenin henüz kaydı olmadığını gösteren bir uyarı (owner ı kilitlemekten korur).\n3. Team → Teammates tablosundaki 2FA sütununun artık GERÇEK kayıttan beslendiği doğrulanır\n   (bugün two_factor_enabled hiç yazılmıyordu; 152.4 sonrası yazılıyor). Gerekirse etiket/boş durum düzeltilir.\n\nDOSYALAR: apps/web/src/features/settings/ (Security bölümü — SettingsForms.tsx ya da ilgili bileşen) ·\napps/web/src/features/team/TeamPage.tsx · locales/{en,tr}.\nREFERANS DESEN: IpAllowlist.tsx ve BannedCustomerIps.tsx — aynı Security bölümünde yaşayan,\nentitlement/uyarı taşıyan ekranlar.\n\nTUZAK: bu alt-görev SUNUCU DAVRANIŞI DEĞİŞTİRMEZ — zorlama 152.5 te kuruldu.\nBurada yapılan iş yalnız yöneticinin doğru bilgiyle karar vermesini sağlamak.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **S11-2FA** (türetilmiş — NFR-S11). Gereksinim satırı: `grep -n \"| S11-2FA\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KS11-2FA\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+4 civarı) · i18n nöbetçisi yeşil.\n- Ölçülebilir: Teammates tablosunda 2FA sütunu, kaydı olan bir hesap için \"açık\" gösteriyor\n  (integration ya da e2e ile bir kez uçtan uca doğrulanır).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "152.5"
             ],
             "parentId": "152",
-            "updatedAt": "2026-08-26T23:55:48.491Z"
+            "updatedAt": "2026-08-27T00:26:40.092Z"
           },
           {
             "id": 9,
@@ -8062,7 +8062,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-26T23:55:48.495Z",
+      "lastModified": "2026-08-27T00:26:40.093Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

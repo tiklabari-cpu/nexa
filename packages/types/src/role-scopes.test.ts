@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SCOPES } from './scopes.js';
+import { effectiveScopes, SCOPES } from './scopes.js';
 import {
   ADMIN_SCOPES,
   DEFAULT_AGENT_SCOPES,
@@ -27,6 +27,23 @@ describe('defaultScopesForRole', () => {
     }
     expect(new Set(ADMIN_SCOPES).size).toBe(ADMIN_SCOPES.length);
     expect(new Set(DEFAULT_AGENT_SCOPES).size).toBe(DEFAULT_AGENT_SCOPES.length);
+  });
+
+  it('lets an agent write its own account, and only its own (S11-2FA-j)', () => {
+    // The write half is what the four `/auth/2fa/*` endpoints ask for; without
+    // it `scopesWithinRole` cut every agent session short of its own second
+    // factor while `require_two_factor` refused the sign-in of anyone who had
+    // not set one up. Read-only here would reopen that loop.
+    expect(DEFAULT_AGENT_SCOPES).toContain('accounts--my:rw');
+
+    // And the bound on it: `--my`, never `--all`. `expandScope` widens `:rw` to
+    // `:ro` but never crosses the access axis, so this grants the role nothing
+    // aimed at a colleague — which is the only reason it was safe to add.
+    const agent = effectiveScopes(defaultScopesForRole('agent'));
+    for (const scope of ['accounts--all:ro', 'accounts--all:rw', 'accounts--all:rc']) {
+      expect(agent.has(scope)).toBe(false);
+    }
+    expect(agent.has('accounts--my:ro')).toBe(true);
   });
 });
 

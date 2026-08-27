@@ -30,7 +30,34 @@ export function roleAtLeast(role: AgentRole, minimum: AgentRole): boolean {
 
 /** Scopes granted to a newly created PAT when the caller does not narrow them. */
 export const DEFAULT_AGENT_SCOPES: Scope[] = [
-  'accounts--my:ro',
+  // Write, not read (S11-2FA-j). Every route this opens is one the caller can
+  // only aim at themselves — measured, not assumed: the six that ask for it are
+  // `POST`/`DELETE /auth/personal-access-tokens[/:id]`, which filter on
+  // `ownerId: principal.accountId`, and the four `/auth/2fa/*` endpoints, which
+  // take no id at all and read `principal.accountId`. Nothing on that list
+  // reaches another account, which is the test this scope had to pass before it
+  // could sit in the default set.
+  //
+  // It is here because the read half alone made the second factor unreachable
+  // for the role that most of a workspace holds. `scopesWithinRole` caps a
+  // session at this list on every request, so an agent's session was refused by
+  // all four enrollment endpoints — and `require_two_factor` (S11-2FA-e)
+  // refuses the sign-in of a member who has not enrolled. Policy shut them out;
+  // enrollment shut them out; the two together were a loop with no exit.
+  //
+  // The alternative was to drop the scope gate from the four endpoints and let
+  // `principals: ['agent']` carry them, on the grounds that they are unaimable
+  // anyway. Rejected: a *narrow* stolen PAT — `chats--access:rw` and nothing
+  // else — would then be enough to plant a second factor on its victim's
+  // account. Widening the role's ceiling keeps the gate and moves the role up
+  // to it; removing the gate would drop the floor for every credential.
+  //
+  // Consequence worth naming: an agent can now mint and revoke their own
+  // personal access token, which they could not before. It cannot be stronger
+  // than the session that mints it (`/auth/personal-access-tokens` refuses
+  // scopes the session does not hold), so this hands the role no authority it
+  // was not already exercising — only a longer-lived way to spell it.
+  'accounts--my:rw',
   'agents--my:rw',
   'chats--access:rw',
   'tickets--access:rw',

@@ -1,0 +1,4 @@
+# Run output. The numbers are copied into PLAN §7.2 and HANDOFF.md by the window
+# that measures them (tm 161.4) — the raw files are artefacts of one machine on
+# one afternoon and are not the record.
+*.json

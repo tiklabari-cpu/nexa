@@ -1,0 +1,19 @@
+{
+  "name": "@nexa/load",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "load": "k6 run scenarios/smoke.js",
+    "load:smoke": "k6 run scenarios/smoke.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint lib scenarios test",
+    "test": "vitest run",
+    "test:unit": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}

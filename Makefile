@@ -92,6 +92,12 @@ test-e2e: ## Run Playwright end-to-end tests
 .PHONY: verify
 verify: typecheck lint test ## Everything CI runs
 
+# --- Load / capacity (k6 — not in CI, not a Node package: apps/load/README.md) ---
+
+.PHONY: load
+load: ## Run the k6 load harness against an ALREADY-RUNNING stack (see apps/load/README.md)
+	cd apps/load && K6_VERSION="$$(k6 version)" k6 run scenarios/smoke.js
+
 # --- Containerised stack (local only — no deploy, no TLS, no real secrets) ---
 
 .PHONY: demo

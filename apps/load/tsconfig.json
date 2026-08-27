@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"],
+    // The k6 sources are JavaScript for k6's own runtime, not Node's, so they
+    // are read for inference (`allowJs`) and not type-checked (`checkJs`).
+    // Only `lib/thresholds.js` is pulled in, transitively, by the guard test —
+    // everything importing `k6/http` stays out of the program, because those
+    // module specifiers do not resolve anywhere a Node `tsc` can see.
+    "allowJs": true,
+    "checkJs": false
+  },
+  "include": ["test/**/*.ts"]
+}

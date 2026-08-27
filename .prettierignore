@@ -46,3 +46,9 @@ HANDOFF.md
 # 14 Playwright-MCP page snapshots (accessibility-tree dumps captured during earlier
 # windows). Artefacts of a run, same class as `test-results/` above.
 .playwright-mcp/
+
+# k6 run output (tm 161.1). Written by `make load` on every run, gitignored, and
+# shaped by whatever k6 measured that afternoon — formatting it once does not
+# hold, and the next run would turn `format:check` red on a repo nobody broke.
+# Same reason as the two state files above.
+apps/load/results/

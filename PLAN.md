@@ -3136,7 +3136,7 @@ Etiketler: dağıtım/güvenlik kararları `OPUS-MAX` (proxy hop + nginx profili
 | :-: | --- | --- | :-: | --- | :-: | :-: | :-: |
 | 1 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır — boot yolu ilk kez koşulur · proxy hop env’e · nginx güvenlik profili · `.env.production.example` | high | ✅ → KM-PROD-CFG | 159 | 3 | 4 |
 | 2 | M-OPS | Ops dikişleri — `/health/live` ↔ `/health/ready` ayrımı · zarif drenaj · production log profili | high | ✅ → KM-OPS | 160 | 3 | 4 |
-| 3 | M-LOAD | Yük ayağı (k6) — NFR-M4’ün beşinci katmanı + NFR-P1/P2 doğrulaması + **NFR-P8’in ilk gerçek ölçümü** | high | ⬜ | 161 | 4 | 7 |
+| 3 | M-LOAD | Yük ayağı (k6) — NFR-M4’ün beşinci katmanı + NFR-P1/P2 doğrulaması + **NFR-P8’in ilk gerçek ölçümü** | high | ◐ → KM-LOAD | 161 | 4 | 7 |
 | 4 | M-SCALE | Ölçek dikişleri — iki-pod doğrulaması · bağlantı havuzu + PgBouncer · read-replica okuma yolu | medium | ⬜ | 162 | 3 | 5 |
 | 5 | M-OTEL | Telemetri exporter seçim dikişi (M-PROV-a deseni) + RTM metrikleri | medium | ⬜ | 163 | 2 | 2 |
 | 6 | M-IAC | Dağıtım manifestleri — **deploy YOK**: Helm iskeleti · probe/kaynak/HPA/PDB · migration stratejisi · dry-run doğrulaması | medium | ⬜ | 164 | 4 | 5 |
@@ -3303,7 +3303,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-5 tm 157) | ⬜ |
 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır (**türetilmiş**: NFR-S3/S5/S6/S9 · NFR-M · Faz-6 tm 159) | ✅ → KM-PROD-CFG |
 | M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ✅ → KM-OPS |
-| M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ⬜ |
+| M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ◐ → KM-LOAD |
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ⬜ |
 | M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ⬜ |
 | M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ⬜ |
@@ -6883,6 +6883,8 @@ _(Faz-6 · tm 160 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
 #### KM-LOAD — M-LOAD · Yük ayağı ve kapasite ölçümü (NFR-M4 · P1/P2/P8)
 
 _(Faz-6 · tm 161 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+- ◐ `apps/load` (k6) iskeleti kuruldu — eşikler PRD §7.1/§7.4'ten TÜRETİLİYOR, elle yazılmıyor: `lib/thresholds.js` · nöbetçi `test/budgets.test.ts` (15) PRD satırlarını her koşuda yeniden okuyor ve iki yön de kırmızı (gevşetilen eşik · sıkılaşan gereksinim) · `make load` + `pnpm --filter @nexa/load load` · k6 v2.2.0 ile FİİLEN koşuldu (api kaynaktan, Postgres+Redis docker): read p99 **49,5 ms** / medyan 29,6 ms, 71 örnek, exit 0 · tm 161.1
 
 #### KM-SCALE — M-SCALE · Ölçek dikişleri (NFR-R1/R4 · NFR-P7)
 

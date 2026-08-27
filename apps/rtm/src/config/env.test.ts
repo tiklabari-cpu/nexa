@@ -1,5 +1,6 @@
 /**
- * Gateway environment parsing — the region half (C4-a).
+ * Gateway environment parsing — the region half (C4-a) and the production
+ * branch (M-PROD-CFG-a).
  *
  * This file is here because the first pass at C4-a listed only the API's env
  * schema. Both processes carried `z.literal('eu')`, so widening one would have
@@ -8,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { REGIONS } from '@nexa/types';
-import { parseEnv } from './env.js';
+import { SECRET_KEYS, parseEnv } from './env.js';
 
 const BASE: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
@@ -32,5 +33,82 @@ describe('NEXA_REGION', () => {
 
   it('refuses a region that is not one of them', () => {
     expect(() => parseEnv({ ...BASE, NEXA_REGION: 'apac' })).toThrow(/NEXA_REGION/);
+  });
+});
+
+/**
+ * The production branch (M-PROD-CFG-a).
+ *
+ * The gateway had none. The API refused an owner connection and a published
+ * placeholder in production; this process — which reads the same database
+ * through the same `set_config` tenant context, and verifies tokens signed with
+ * the same two keys — accepted both. That is the worse half of the pair to get
+ * wrong: an operator who sees the API refuse to start reads it as the deployment
+ * being stopped, when in fact the socket half of it came up on exactly the
+ * values that were rejected.
+ *
+ * Kept deliberately parallel to `apps/api/src/config/env.test.ts`: the point is
+ * that both processes refuse the same environment, so both are asserted the
+ * same way.
+ */
+describe('production configuration', () => {
+  const realSecret = (label: string): string => `${label}-0123456789abcdef0123456789abcdef`;
+
+  const PROD_BASE: NodeJS.ProcessEnv = {
+    ...BASE,
+    NODE_ENV: 'production',
+    DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
+    JWT_SIGNING_KEY: realSecret('jwt'),
+    CUSTOMER_TOKEN_SECRET: realSecret('customer'),
+  };
+
+  it('boots on a fully configured production environment', () => {
+    const env = parseEnv(PROD_BASE);
+
+    expect(env.isProduction).toBe(true);
+    expect(env.isTest).toBe(false);
+    expect(env.runtimeDatabaseUrl).toBe(PROD_BASE['DATABASE_APP_URL']);
+    expect(env.JWT_SIGNING_KEY_CUSTOMER).toBe(PROD_BASE['CUSTOMER_TOKEN_SECRET']);
+  });
+
+  it('refuses to boot without DATABASE_APP_URL, and says why', () => {
+    const { DATABASE_APP_URL: _omitted, ...withoutAppUrl } = PROD_BASE;
+
+    // `auth.ts#scoped` sets `app.current_license` on every read and trusts RLS
+    // to hold it. As the table owner Postgres exempts the connection from the
+    // policy, so the scoping still runs and stops meaning anything.
+    expect(() => parseEnv(withoutAppUrl)).toThrow(/DATABASE_APP_URL/);
+    expect(() => parseEnv(withoutAppUrl)).toThrow(/row level security/i);
+  });
+
+  for (const key of SECRET_KEYS) {
+    it(`refuses the published development placeholder for ${key}`, () => {
+      const source = { ...PROD_BASE, [key]: `dev-only-${key.toLowerCase()}-0123456789abcdef` };
+
+      expect(() => parseEnv(source)).toThrow(new RegExp(key));
+      expect(() => parseEnv(source)).toThrow(/placeholder/i);
+    });
+  }
+
+  it('reports every problem at once rather than one per deploy', () => {
+    const message = (() => {
+      try {
+        parseEnv({ ...BASE, NODE_ENV: 'production' });
+        return '';
+      } catch (error) {
+        return (error as Error).message;
+      }
+    })();
+
+    expect(message).toMatch(/DATABASE_APP_URL/);
+    for (const key of SECRET_KEYS) expect(message).toMatch(new RegExp(key));
+  });
+
+  it('leaves development and test exactly as they were', () => {
+    for (const nodeEnv of ['development', 'test'] as const) {
+      const env = parseEnv({ ...BASE, NODE_ENV: nodeEnv });
+      expect(env.isProduction).toBe(false);
+      expect(env.runtimeDatabaseUrl).toBe(env.DATABASE_URL);
+    }
   });
 });

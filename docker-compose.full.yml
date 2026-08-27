@@ -25,6 +25,9 @@
 #   * CORS (`apps/api/src/server.ts`) narrows to `WEB_ORIGIN` alone under
 #     production, which would block the widget's cross-origin calls from
 #     :5174 — i.e. the customer half of the demo.
+#   * `parseEnv` also requires `INBOUND_EMAIL_SECRET` under production
+#     (M-PROD-CFG-a), which this stack deliberately leaves unset — the mail
+#     provider is mocked here, so there is no signature to stand in for.
 # Renaming the placeholders to slip past the first guard would defeat the point
 # of having it. Calling this stack what it is costs nothing.
 name: nexa-demo

@@ -30,6 +30,13 @@ const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent
 const CHAT_PAGE_SIZE = 50;
 
 /**
+ * Events per request. The transcript walks *backwards* from here, so this too
+ * is a page rather than a cap: before it chained, a conversation longer than
+ * this simply stopped existing past the two-hundredth message (NFR-P5).
+ */
+const TRANSCRIPT_PAGE_SIZE = 200;
+
+/**
  * The safety net for a socket that is down without having noticed yet. It
  * re-reads the *first* page only — see `mergeChatHead` for why that is enough.
  */
@@ -45,6 +52,25 @@ export function eventsKey(chatId: string): unknown[] {
 function chatListUrl(view: InboxView, pageId: string | undefined): string {
   const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
   return `/chats?view=${view}&limit=${CHAT_PAGE_SIZE}${cursor}`;
+}
+
+/**
+ * One page of a transcript, newest-first.
+ *
+ * `sort=newest` is the direction a conversation that opens at the latest
+ * message and loads history upward asks for, and the reason the contract
+ * carries both: `after_event_id` replays forward for the realtime layer,
+ * `before_event_id` walks backward for this (`chats.yaml`, `listEvents`).
+ * `next_page_id` is the id of the last item returned — the oldest on the page —
+ * and feeding it back as `before_event_id` is what asks for the page above it.
+ *
+ * Both directions page on the sequence embedded in the event id (`…_7`) rather
+ * than on `created_at`, because several events can share a millisecond and an
+ * offset page shifts under an active conversation.
+ */
+function transcriptUrl(chatId: string, beforeEventId: string | undefined): string {
+  const cursor = beforeEventId ? `&before_event_id=${encodeURIComponent(beforeEventId)}` : '';
+  return `/chats/${chatId}/events?sort=newest&limit=${TRANSCRIPT_PAGE_SIZE}${cursor}`;
 }
 
 /** What `usePagedQuery` keeps in the cache for one view. */
@@ -261,13 +287,89 @@ export function useChat(chatId: string | null) {
   });
 }
 
-export function useTranscript(chatId: string | null) {
-  const api = useApiClient();
-  return useQuery({
+/** What `usePagedQuery` keeps in the cache for one open transcript. */
+export type TranscriptCache = InfiniteData<PagedResponse<ChatEvent>, string | undefined>;
+
+/**
+ * The pages of a transcript as one oldest-first list — the order it is read in.
+ *
+ * Both levels reverse, because both run newest-first: the last page holds the
+ * oldest events, and inside it the last item is the oldest of all. Reversing
+ * here rather than asking the server for ascending pages is what buys the
+ * stability — walking backwards means page 2 is "everything before this
+ * particular event", which stays true however many messages arrive while the
+ * agent reads.
+ */
+function flattenTranscriptPages(pages: PagedResponse<ChatEvent>[]): ChatEvent[] {
+  const events: ChatEvent[] = [];
+  for (let i = pages.length - 1; i >= 0; i -= 1) {
+    const items = pages[i]!.items;
+    for (let j = items.length - 1; j >= 0; j -= 1) events.push(items[j]!);
+  }
+  return events;
+}
+
+/** The same, for a reader holding the cache entry rather than the hook. */
+export function flattenTranscript(cache: TranscriptCache | undefined): ChatEvent[] {
+  return flattenTranscriptPages(cache?.pages ?? []);
+}
+
+/**
+ * Puts an event that just happened at the head of the newest page.
+ *
+ * Page 0 is the newest slice and its items run newest-first, so "newest" is
+ * index 0 — and the page's `next_page_id` is the id of its *last* item, which
+ * an insert at the front cannot move. That is why the history already loaded
+ * above it stays addressable: nothing the conversation does now changes what
+ * "the page before event N" means.
+ */
+function prependToNewestPage(cache: TranscriptCache, event: ChatEvent): TranscriptCache {
+  const head = cache.pages[0]!;
+  return {
+    ...cache,
+    pages: [{ ...head, items: [event, ...head.items] }, ...cache.pages.slice(1)],
+  };
+}
+
+/**
+ * The open conversation, page by page, newest first (NFR-P5 / FR-MOD-02.3.1).
+ *
+ * `loadOlder` is what the transcript calls as the reader approaches the top;
+ * `events` comes back oldest-first, so a page landing at the front is a
+ * prepend and `Transcript.tsx` compensates the scroll for it.
+ */
+export interface TranscriptResult {
+  /** Every loaded event, oldest-first. */
+  events: ChatEvent[];
+  /** More history exists above what is loaded. */
+  hasOlder: boolean;
+  isLoadingOlder: boolean;
+  /** Walks one page further back; a no-op at the start of the thread. */
+  loadOlder: () => void;
+  /** No page has arrived yet. */
+  isPending: boolean;
+}
+
+export function useTranscript(chatId: string | null): TranscriptResult {
+  const buildUrl = useCallback(
+    (pageId: string | undefined) => transcriptUrl(chatId ?? '', pageId),
+    [chatId],
+  );
+  const query = usePagedQuery<ChatEvent>({
     queryKey: eventsKey(chatId ?? ''),
-    queryFn: () => api.get<{ items: ChatEvent[] }>(`/chats/${chatId}/events?limit=200`),
+    buildUrl,
     enabled: chatId !== null,
   });
+
+  const events = useMemo(() => flattenTranscriptPages(query.pages), [query.pages]);
+
+  return {
+    events,
+    hasOlder: query.hasNext,
+    isLoadingOlder: query.isFetchingNext,
+    loadOlder: query.fetchNext,
+    isPending: query.isPending,
+  };
 }
 
 /**
@@ -345,29 +447,32 @@ export function useSendMessage(chatId: string | null) {
   // optimistic mutation uses: append the pending message now, roll the whole
   // list back if the send fails, reconcile with the server once settled
   // (FR-EK-A.2). The chat list shows last-message and time, so it settles too.
-  const optimistic = optimisticCacheUpdate<{ items: ChatEvent[] }, SendInput>({
+  const optimistic = optimisticCacheUpdate<TranscriptCache, SendInput>({
     queryClient,
     queryKey: eventsKey(chatId ?? ''),
-    update: (current, input) => ({
-      items: [
-        ...(current?.items ?? []),
-        {
-          // An agent who sees nothing happen presses enter again — show the
-          // message immediately, marked pending until the server confirms it.
-          id: `pending-${Date.now()}`,
-          chat_id: chatId ?? '',
-          thread_id: '',
-          type: 'message',
-          text: input.text,
-          author_id: agent?.account_id ?? null,
-          author_type: 'agent',
-          recipients: input.recipients,
-          attachment_url: input.attachmentUrl ?? null,
-          properties: { pending: true },
-          created_at: new Date().toISOString(),
-        },
-      ],
-    }),
+    update: (current, input) => {
+      const pending: ChatEvent = {
+        // An agent who sees nothing happen presses enter again — show the
+        // message immediately, marked pending until the server confirms it.
+        id: `pending-${Date.now()}`,
+        chat_id: chatId ?? '',
+        thread_id: '',
+        type: 'message',
+        text: input.text,
+        author_id: agent?.account_id ?? null,
+        author_type: 'agent',
+        recipients: input.recipients,
+        attachment_url: input.attachmentUrl ?? null,
+        properties: { pending: true },
+        created_at: new Date().toISOString(),
+      };
+      // Sending into a transcript that has not loaded yet is the one case with
+      // no page to prepend to; a bare first page keeps the guess visible, and
+      // `onSettled` replaces it with what the server actually has.
+      return current && current.pages.length > 0
+        ? prependToNewestPage(current, pending)
+        : { pages: [{ items: [pending] }], pageParams: [undefined] };
+    },
     invalidateKeys: [['chats']],
   });
 
@@ -499,15 +604,21 @@ export function applyPush(
       // drop the sneak-peek so the real message is not shadowed by a stale one.
       if (event.author_type === 'customer') useTypingStore.getState().clear(chatId);
 
-      queryClient.setQueryData<{ items: ChatEvent[] }>(eventsKey(chatId), (current) => {
-        if (!current) return current;
+      queryClient.setQueryData<TranscriptCache>(eventsKey(chatId), (cache) => {
+        if (!cache || cache.pages.length === 0) return cache;
+        const head = cache.pages[0]!;
         // Deduplicate by id: a push and a refetch can both deliver the same
         // event, and the optimistic placeholder is replaced by its real one.
-        if (current.items.some((e) => e.id === event.id)) return current;
-        const withoutPending = current.items.filter(
+        // The newest page is the only one either could land on — an event that
+        // exists now is newer than every cursor the pages above were cut at.
+        if (head.items.some((e) => e.id === event.id)) return cache;
+        const withoutPending = head.items.filter(
           (e) => !(e.properties?.['pending'] === true && e.text === event.text),
         );
-        return { items: [...withoutPending, event] };
+        return {
+          ...cache,
+          pages: [{ ...head, items: [event, ...withoutPending] }, ...cache.pages.slice(1)],
+        };
       });
 
       // The list row for this chat, on whichever page it sits — the point of

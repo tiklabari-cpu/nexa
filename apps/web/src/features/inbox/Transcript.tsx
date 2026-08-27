@@ -1,7 +1,14 @@
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import type { ChatEvent } from './types.js';
 import { AttachmentView } from './Attachment.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
+
+/**
+ * How close to the top the reader has to get before the previous page is
+ * requested — about a screenful, so the history is usually already there when
+ * they arrive at the seam.
+ */
+const OLDER_THRESHOLD_PX = 240;
 
 /**
  * The conversation.
@@ -10,30 +17,102 @@ import { getLocale, useTranslate } from '../../lib/i18n.js';
  * without losing their place (design-brief §7). Auto-scroll only follows when
  * the reader is already at the bottom — yanking the view while someone reads
  * back through history is worse than a missed scroll.
+ *
+ * It also grows *upward*: `onLoadOlder` fetches the page before the oldest
+ * event loaded (NFR-P5), which arrives as a prepend. A prepend is the one thing
+ * a scroll container handles badly on its own — the browser keeps `scrollTop`,
+ * so inserting a screenful above the reader throws them a screenful further
+ * down the conversation than where they were reading. So the geometry from
+ * before the insert is what the new `scrollTop` is computed from, and the
+ * correction is applied in a layout effect, before the browser paints, so the
+ * jump is never visible.
  */
 export function Transcript({
+  chatId,
   events,
   loading,
   currentAgentId,
+  hasOlder = false,
+  isLoadingOlder = false,
+  onLoadOlder,
 }: {
+  /** Which conversation this is — the one thing that means "start over". */
+  chatId: string;
   events: ChatEvent[];
   loading: boolean;
   currentAgentId: string | null;
+  /** More history exists above the oldest event loaded. */
+  hasOlder?: boolean;
+  isLoadingOlder?: boolean;
+  onLoadOlder?: () => void;
 }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
   const t = useTranslate();
 
-  useEffect(() => {
+  /**
+   * The scroll geometry to measure the next prepend against.
+   *
+   * Frozen while a page is in flight, deliberately: the loading skeleton is
+   * itself in the scroll flow, so a measurement taken while it is on screen
+   * would be inflated by exactly the height that disappears again in the same
+   * commit the events arrive in — and the correction would be off by it.
+   */
+  const anchor = useRef({ scrollTop: 0, scrollHeight: 0 });
+  /** The head of the last rendered list, which is how a prepend is recognised. */
+  const firstEventId = useRef<string | null>(null);
+  const shownChatId = useRef<string | null>(null);
+
+  /** Takes the reading that the next prepend will be measured against. */
+  const remember = (node: HTMLDivElement): void => {
+    if (isLoadingOlder) return;
+    anchor.current = { scrollTop: node.scrollTop, scrollHeight: node.scrollHeight };
+  };
+
+  useLayoutEffect(() => {
+    const previousChatId = shownChatId.current;
+    shownChatId.current = chatId;
+    const previousFirst = firstEventId.current;
+    firstEventId.current = events[0]?.id ?? null;
+
+    // Opening another conversation starts at its newest message, whatever the
+    // reader had scrolled to in the one before it. Asked of `chatId` rather
+    // than inferred from the events, because within one conversation the head
+    // can change without any of it being new: a refetch re-cuts the chain from
+    // the current tail, and guessing "different head, different chat" would
+    // throw a reader who is deep in the history down to the bottom.
+    const switched = chatId !== previousChatId;
+    if (switched) pinnedToBottom.current = true;
+
     const node = containerRef.current;
-    if (node && pinnedToBottom.current) node.scrollTop = node.scrollHeight;
-  }, [events]);
+    if (!node) return;
+
+    if (!switched && previousFirst !== null && previousFirst !== firstEventId.current) {
+      // The list grew (or moved) at the top. Whatever the difference in height
+      // is, it is above the reader, so adding it to `scrollTop` leaves the line
+      // they were on exactly where it was.
+      node.scrollTop = anchor.current.scrollTop + (node.scrollHeight - anchor.current.scrollHeight);
+      anchor.current = { scrollTop: node.scrollTop, scrollHeight: node.scrollHeight };
+      return;
+    }
+
+    if (pinnedToBottom.current) node.scrollTop = node.scrollHeight;
+    remember(node);
+    // `isLoadingOlder` belongs in the dependencies as well as in `remember`:
+    // the commit that raises the skeleton is precisely the one this has to see,
+    // because it is the reading it must decline to take.
+  }, [chatId, events, isLoadingOlder]);
 
   const handleScroll = (): void => {
     const node = containerRef.current;
     if (!node) return;
     // 32px of slack: exact equality never holds with fractional scroll heights.
     pinnedToBottom.current = node.scrollHeight - node.scrollTop - node.clientHeight < 32;
+    remember(node);
+
+    // Asking twice costs nothing: `usePagedQuery.fetchNext` is single-flight and
+    // a no-op once the thread has no more history behind it.
+    if (hasOlder && !isLoadingOlder && node.scrollTop < OLDER_THRESHOLD_PX) onLoadOlder?.();
   };
 
   if (loading) {
@@ -55,6 +134,19 @@ export function Transcript({
       aria-label={t('inbox.transcript.ariaLabel')}
       className="flex flex-1 flex-col gap-3 overflow-y-auto p-5"
     >
+      {isLoadingOlder && (
+        <div className="flex shrink-0 flex-col gap-3" data-testid="transcript-older-loading">
+          {/* Announced through the log's own live region rather than silently:
+            the reader asked for history by scrolling, and a blank pause is
+            indistinguishable from having reached the start of the thread. */}
+          <span className="sr-only">{t('inbox.transcript.loadingOlder')}</span>
+          <div aria-hidden="true" className="h-10 w-2/3 animate-pulse rounded-lg bg-inset" />
+          <div
+            aria-hidden="true"
+            className="h-10 w-1/2 animate-pulse self-end rounded-lg bg-inset"
+          />
+        </div>
+      )}
       {events.map((event, index) => (
         <Bubble
           key={event.id}

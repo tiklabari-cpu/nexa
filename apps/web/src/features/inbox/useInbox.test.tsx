@@ -16,7 +16,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { applyPush, mergeChatHead, useChatList } from './useInbox.js';
+import {
+  applyPush,
+  flattenTranscript,
+  mergeChatHead,
+  useChatList,
+  useTranscript,
+} from './useInbox.js';
 import { useConflictStore } from './conflict.js';
 import { ConflictBanner } from './ConflictBanner.js';
 import type { PagedResponse } from '../../lib/paged-query.js';
@@ -349,5 +355,197 @@ describe('mergeChatHead', () => {
 
   it('leaves an unloaded list alone — its own first fetch is the refresh', () => {
     expect(mergeChatHead(undefined, chatPage([chat('c1', 14)]))).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The paged transcript (NFR-P5 / FR-MOD-02.3.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * One event, `seq` places into the thread. The sequence lives inside the id
+ * (`TJ1H8CFKRV_7`) and both page directions order on it, so the id is what a
+ * cursor assertion should be reading — not the timestamp beside it.
+ */
+function event(seq: number): ChatEvent {
+  return {
+    ...message(`${CHAT}_${seq}`, CHAT, `m${seq}`),
+    created_at: `2026-08-27T10:00:${String(seq).padStart(2, '0')}.000Z`,
+  };
+}
+
+/** A page as the server sends it: newest first, `next_page_id` = its last item. */
+function eventPage(items: ChatEvent[]): PagedResponse<ChatEvent> {
+  const oldest = items.at(-1);
+  return { items, ...(oldest ? { next_page_id: oldest.id } : {}) };
+}
+
+/** The last page of a thread — no cursor, which is what ends the walk. */
+function firstEverPage(items: ChatEvent[]): PagedResponse<ChatEvent> {
+  return { items };
+}
+
+function renderTranscript(chatId: string | null = CHAT) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const rendered = renderHook(() => useTranscript(chatId), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+  return { ...rendered, queryClient };
+}
+
+function texts(events: ChatEvent[]): string[] {
+  return events.map((e) => e.text ?? '');
+}
+
+describe('useTranscript — reverse paging', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+  });
+
+  it('opens at the newest page and reads oldest-first', async () => {
+    api.get.mockResolvedValue(eventPage([event(3), event(2)]));
+
+    const { result } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+
+    // The request asks for the tail of the thread; the render order is the
+    // reverse of the answer.
+    expect(String(api.get.mock.calls[0]?.[0])).toContain('sort=newest');
+    expect(texts(result.current.events)).toEqual(['m2', 'm3']);
+    expect(result.current.hasOlder).toBe(true);
+  });
+
+  it('walks backwards with before_event_id, and the page lands on top', async () => {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('before_event_id=')
+          ? firstEverPage([event(1), event(0)])
+          : eventPage([event(3), event(2)]),
+      ),
+    );
+
+    const { result } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+
+    act(() => {
+      result.current.loadOlder();
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(4));
+
+    // The cursor is the oldest event already loaded, and the history it returns
+    // is prepended — the seam between the two pages has no gap and no repeat.
+    expect(String(api.get.mock.calls.at(-1)?.[0])).toContain(`before_event_id=${CHAT}_2`);
+    expect(texts(result.current.events)).toEqual(['m0', 'm1', 'm2', 'm3']);
+    // No cursor came back: that is the start of the thread.
+    expect(result.current.hasOlder).toBe(false);
+  });
+
+  it('leaves the read receipt where it was while history loads', async () => {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('before_event_id=')
+          ? firstEverPage([event(1), event(0)])
+          : eventPage([event(3), event(2)]),
+      ),
+    );
+
+    const { result } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+    // `useMarkSeen` reads the last element as "the newest thing on screen"
+    // (`InboxPage`), so reading backwards must not be able to move it.
+    const newest = result.current.events.at(-1);
+
+    act(() => {
+      result.current.loadOlder();
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(4));
+
+    expect(result.current.events.at(-1)).toEqual(newest);
+  });
+
+  it('stops at the start of the thread instead of asking again', async () => {
+    api.get.mockResolvedValue(firstEverPage([event(1), event(0)]));
+
+    const { result } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+    expect(result.current.hasOlder).toBe(false);
+
+    act(() => {
+      result.current.loadOlder();
+    });
+    expect(api.get.mock.calls).toHaveLength(1);
+  });
+
+  it('a pushed message joins the newest page, leaving the history loaded above it', async () => {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('before_event_id=')
+          ? firstEverPage([event(1), event(0)])
+          : eventPage([event(3), event(2)]),
+      ),
+    );
+
+    const { result, queryClient } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+    act(() => {
+      result.current.loadOlder();
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(4));
+    const requestsBefore = api.get.mock.calls.length;
+
+    act(() => {
+      applyPush(queryClient, 'incoming_event', { chat_id: CHAT, event: event(4) });
+    });
+
+    await waitFor(() =>
+      expect(texts(result.current.events)).toEqual(['m0', 'm1', 'm2', 'm3', 'm4']),
+    );
+    // The push carries the event, so nothing is re-read — and in particular the
+    // pages the agent scrolled back through are not thrown away.
+    expect(api.get.mock.calls).toHaveLength(requestsBefore);
+  });
+
+  it('replaces the optimistic copy of a message rather than showing it twice', async () => {
+    api.get.mockResolvedValue(eventPage([event(3)]));
+    const { result, queryClient } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(1));
+
+    const pending: ChatEvent = {
+      ...message('pending-1', CHAT, 'on its way'),
+      author_type: 'agent',
+      properties: { pending: true },
+    };
+    act(() => {
+      queryClient.setQueryData(
+        ['events', CHAT],
+        (cache: { pages: PagedResponse<ChatEvent>[] }) => ({
+          ...cache,
+          pages: [{ ...cache.pages[0]!, items: [pending, ...cache.pages[0]!.items] }],
+        }),
+      );
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+
+    act(() => {
+      applyPush(queryClient, 'incoming_event', {
+        chat_id: CHAT,
+        event: { ...message(`${CHAT}_4`, CHAT, 'on its way'), author_type: 'agent' },
+      });
+    });
+
+    await waitFor(() => expect(texts(result.current.events)).toEqual(['m3', 'on its way']));
+    expect(result.current.events.at(-1)?.id).toBe(`${CHAT}_4`);
+  });
+
+  it('ignores a push about a conversation nobody has open', () => {
+    const queryClient = new QueryClient();
+    applyPush(queryClient, 'incoming_event', { chat_id: CHAT, event: event(1) });
+    expect(queryClient.getQueryData(['events', CHAT])).toBeUndefined();
+  });
+
+  it('flattens an unopened transcript to nothing', () => {
+    expect(flattenTranscript(undefined)).toEqual([]);
   });
 });

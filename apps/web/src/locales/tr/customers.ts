@@ -14,6 +14,7 @@ export const customers: Messages = {
   'customers.page.subtitle': 'Bu çalışma alanıyla iletişime geçen kişiler.',
   'customers.page.count.one': '{formatted} kişi',
   'customers.page.count.other': '{formatted} kişi',
+  'customers.page.shown': '{shown} / {total} gösteriliyor',
   'customers.page.searchLabel': 'Müşteri ara',
   'customers.page.searchPlaceholder': 'Ad, e-posta veya telefon…',
   'customers.page.segmentsAriaLabel': 'Müşteri segmentleri',

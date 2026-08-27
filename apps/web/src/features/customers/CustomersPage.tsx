@@ -9,8 +9,8 @@
  * stored `chats_count` column has never been maintained and would read 0 for
  * everyone — see the note in the customer service.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -20,6 +20,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { usePagedQuery } from '../../lib/paged-query.js';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
 import { CustomersTabs } from './CustomersTabs.js';
 import type { CustomerSummary, Segment } from './types.js';
@@ -30,6 +31,16 @@ const SEGMENTS: Array<{ id: Segment; labelKey: string }> = [
   { id: 'recent', labelKey: 'customers.page.segment.recent' },
   { id: 'banned', labelKey: 'customers.page.segment.banned' },
 ];
+
+/** Rows per request. The table chains pages from here, so it is a page, not a cap. */
+const CUSTOMERS_PAGE_SIZE = 50;
+
+function customersUrl(segment: Segment, query: string, pageId: string | undefined): string {
+  const params = new URLSearchParams({ segment, limit: String(CUSTOMERS_PAGE_SIZE) });
+  if (query) params.set('query', query);
+  if (pageId) params.set('page_id', pageId);
+  return `/customers?${params.toString()}`;
+}
 
 export function CustomersPage(): ReactElement {
   const t = useTranslate();
@@ -75,25 +86,27 @@ export function CustomersPage(): ReactElement {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const list = useQuery({
+  const list = usePagedQuery<CustomerSummary>({
     queryKey: ['customers', segment, debounced],
-    queryFn: () => {
-      const params = new URLSearchParams({ segment, limit: '50' });
-      if (debounced) params.set('query', debounced);
-      return api.get<{ items: CustomerSummary[]; total: number; next_page_id?: string }>(
-        `/customers?${params.toString()}`,
-      );
-    },
+    buildUrl: (pageId) => customersUrl(segment, debounced, pageId),
   });
 
-  const items = useMemo(() => list.data?.items ?? [], [list.data]);
+  const items = list.items;
+  // "The first page has landed" — not `!list.isPending`, which is also false
+  // once the list has *failed*; a load error must not read as an empty list.
+  const pagesLoaded = list.pages.length > 0;
 
   // Keep the selection valid as filters change under it — but only once the
   // list has actually loaded, so a deep-linked selection is not cleared against
-  // the empty array that precedes the first response.
+  // the empty array that precedes the first response. Gated on `!list.hasNext`
+  // too: a customer that is real but sits on a page nobody has scrolled to yet
+  // would otherwise look "gone" while more pages are still coming — the exact
+  // case a `?customer=` deep link onto someone's second page hits.
   useEffect(() => {
-    if (list.data && selectedId && !items.some((c) => c.id === selectedId)) setSelectedId(null);
-  }, [items, selectedId, list.data]);
+    if (pagesLoaded && selectedId && !list.hasNext && !items.some((c) => c.id === selectedId)) {
+      setSelectedId(null);
+    }
+  }, [items, selectedId, pagesLoaded, list.hasNext]);
 
   const canEdit = scopes.includes('customers:rw');
   const canBan = scopes.includes('customers.ban:rw');
@@ -112,10 +125,10 @@ export function CustomersPage(): ReactElement {
     <Page
       title={t('customers.page.title')}
       description={
-        list.data
+        list.total !== undefined
           ? t('customers.page.count', {
-              count: list.data.total,
-              formatted: formatCount(list.data.total) ?? '0',
+              count: list.total,
+              formatted: formatCount(list.total) ?? '0',
             })
           : t('customers.page.subtitle')
       }
@@ -163,6 +176,16 @@ export function CustomersPage(): ReactElement {
       ) : (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_340px]">
           <Card>
+            {!list.isPending && items.length > 0 && (
+              <div className="flex items-center justify-between border-b border-border px-4 py-2 text-2xs text-content-tertiary">
+                <span>
+                  {t('customers.page.shown', {
+                    shown: formatCount(items.length) ?? String(items.length),
+                    total: formatCount(list.total ?? items.length) ?? String(items.length),
+                  })}
+                </span>
+              </div>
+            )}
             {list.isPending ? (
               <ListSkeleton />
             ) : items.length === 0 ? (
@@ -182,6 +205,7 @@ export function CustomersPage(): ReactElement {
                 rowHeight={56}
                 caption={t('customers.page.table.caption')}
                 colSpan={4}
+                onEndReached={list.fetchNext}
                 head={
                   <thead>
                     <tr className="border-b border-border text-left">

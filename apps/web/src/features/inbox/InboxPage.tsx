@@ -200,7 +200,7 @@ export function InboxPage(): ReactElement {
   const list = useChatList(view);
   const chat = useChat(selectedId);
   const transcript = useTranscript(selectedId);
-  const tickets = useTicketList(selection.kind === 'ticket' ? selection.view : 'all', onTickets);
+  const tickets = useTicketList(ticketView, ticketSort, onTickets);
 
   // Read receipt (FR-MOD-02.2.2): only while the transcript pane is actually on
   // screen — the Tickets tab leaves `selectedId`/`transcript` fetching in the
@@ -270,7 +270,8 @@ export function InboxPage(): ReactElement {
     }
   }, [chats, selectedId, onTickets, chatsLoaded, list.hasNext]);
 
-  const ticketItems = useMemo(() => tickets.data?.items ?? [], [tickets.data]);
+  const ticketItems = tickets.items;
+  const ticketsLoaded = tickets.pages.length > 0;
   const sortedTickets = useMemo(
     () => sortTickets(ticketItems, ticketSort),
     [ticketItems, ticketSort],
@@ -278,13 +279,20 @@ export function InboxPage(): ReactElement {
 
   // Grid-first: nothing is auto-selected, so opening the Tickets group lands on
   // the grid rather than jumping into a record. A selection that drops out of
-  // the list (solved into another view, merged away) falls back to the grid.
+  // the loaded list (solved into another view, merged away) falls back to the
+  // grid — gated on `!tickets.hasNext` the same way the chat list is above: a
+  // ticket that is real but sits on a page nobody has scrolled to yet would
+  // otherwise look gone while more pages are still coming.
   useEffect(() => {
-    if (!onTickets || !tickets.data) return;
-    if (selectedTicketId && !ticketItems.some((t) => t.id === selectedTicketId)) {
+    if (!onTickets || !ticketsLoaded) return;
+    if (
+      selectedTicketId &&
+      !tickets.hasNext &&
+      !ticketItems.some((t) => t.id === selectedTicketId)
+    ) {
       setSelectedTicketId(null);
     }
-  }, [ticketItems, selectedTicketId, onTickets, tickets.data]);
+  }, [ticketItems, selectedTicketId, onTickets, ticketsLoaded, tickets.hasNext]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -411,6 +419,7 @@ export function InboxPage(): ReactElement {
                   onSort={changeTicketSort}
                   onOpen={setSelectedTicketId}
                   selectedId={selectedTicketId}
+                  onEndReached={tickets.fetchNext}
                 />
               </div>
             </main>

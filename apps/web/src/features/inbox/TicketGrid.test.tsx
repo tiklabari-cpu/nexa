@@ -98,6 +98,16 @@ describe('TicketGrid', () => {
     renderGrid({ tickets: [] });
     expect(screen.getByText('No tickets here')).toBeInTheDocument();
   });
+
+  it('forwards onEndReached to the shared virtualizer (NFR-P5)', () => {
+    // The grid's two rows fit inside the virtualizer's fallback viewport, so
+    // the window already covers the end on mount — proving the prop reaches
+    // `VirtualTable` without re-testing the scroll maths themselves
+    // (`VirtualList.test.tsx` owns those).
+    const onEndReached = vi.fn();
+    renderGrid({ onEndReached });
+    expect(onEndReached).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('TicketGrid localisation (NFR-I18N2)', () => {

@@ -121,6 +121,7 @@ export function TicketGrid({
   onSort,
   onOpen,
   selectedId,
+  onEndReached,
 }: {
   tickets: Ticket[];
   loading: boolean;
@@ -128,6 +129,8 @@ export function TicketGrid({
   onSort: (key: TicketSortKey) => void;
   onOpen: (id: string) => void;
   selectedId: string | null;
+  /** Asks for the next page as the grid scrolls near the end (NFR-P5); omit for no effect. */
+  onEndReached?: () => void;
 }): ReactElement {
   const t = useTranslate();
   if (loading) {
@@ -148,6 +151,7 @@ export function TicketGrid({
       items={tickets}
       rowHeight={52}
       maxHeight="100%"
+      onEndReached={onEndReached}
       caption={t('inbox.ticketGrid.caption')}
       colSpan={TICKET_COLUMNS.length}
       tableClassName="w-full text-sm"

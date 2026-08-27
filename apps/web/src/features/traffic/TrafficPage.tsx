@@ -8,12 +8,28 @@
  * state and the caller's scopes (see `visitorRowActions`).
  *
  * The board polls rather than holding a socket. A true RTM traffic feed is a
- * larger, separate slice (FR-EK-C.1); until then a short refetch interval keeps
- * it live enough to act on, and every row action invalidates it immediately.
+ * larger, separate slice (FR-EK-C.1); until then a short interval keeps it
+ * live enough to act on, and every row action invalidates it immediately.
+ *
+ * Paginated and live at once, the same shape 153.2 gave the inbox chat list —
+ * a simpler one, since there is no RTM push to reconcile against a loaded
+ * page here, just the poll. `usePagedQuery` chains pages as the table scrolls
+ * (NFR-P5: the board no longer ends at one fixed `limit=100` request); the
+ * periodic refresh re-reads only the first page and folds it into the cache
+ * via `mergeTrafficHead`, rather than `refetchInterval`, which would re-ask
+ * for every page already loaded on each tick.
  */
 import { hasAnyScope } from '@nexa/types';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, useRef, useState, type KeyboardEvent, type ReactElement } from 'react';
+import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactElement,
+} from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -23,6 +39,7 @@ import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { usePagedQuery, type PagedResponse } from '../../lib/paged-query.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
 import { TrafficFilters } from './TrafficFilters.js';
@@ -43,6 +60,91 @@ import {
 import type { TrafficActivity, TrafficVisitor } from './types.js';
 
 const TAB_PARAM = 'tab';
+/** Rows per request. The board chains pages from here, so it is a page, not a cap. */
+const TRAFFIC_PAGE_SIZE = 100;
+/** How often the first page is re-read to keep the board feeling live. */
+const TRAFFIC_REFRESH_MS = 8_000;
+
+function trafficKey(tab: TrafficTab, conditions: readonly TrafficCondition[]): unknown[] {
+  return ['traffic', tab, conditions];
+}
+
+function trafficUrl(
+  tab: TrafficTab,
+  conditions: readonly TrafficCondition[],
+  pageId: string | undefined,
+): string {
+  // The selected tab fills 13.2-f's `activity` filter — the server is the one
+  // and only place that decides who is on the board, so a tab switch is a new
+  // request rather than a client-side re-slice of the last one. The filter
+  // panel's own conditions AND with it: its own `activity` condition (if any)
+  // takes over from the tab (see `resolveActivity`), and every other field it
+  // sets joins as one more `AND`ed parameter.
+  const params = new URLSearchParams({ limit: String(TRAFFIC_PAGE_SIZE) });
+  const activities = resolveActivity(tabToActivity(tab), conditions);
+  for (const activity of activities ?? []) params.append('activity', activity);
+  const filterParams = buildTrafficParams(conditions.filter((c) => c.field !== 'activity'));
+  for (const [key, value] of filterParams) params.append(key, value);
+  if (pageId) params.set('page_id', pageId);
+  return `/traffic?${params.toString()}`;
+}
+
+/** What `usePagedQuery` keeps in the cache for the board. */
+type TrafficCache = InfiniteData<PagedResponse<TrafficVisitor>, string | undefined>;
+
+/**
+ * The server's final sort, as one predicate: `last_activity_at` descending,
+ * `customer_id` descending as the tie-break (`TrafficService#listLive`'s
+ * `rows.sort`, and the two facts its keyset cursor is built from).
+ */
+function isOlderVisitor(a: TrafficVisitor, b: TrafficVisitor): boolean {
+  const at = a.last_activity_at ?? '';
+  const bt = b.last_activity_at ?? '';
+  return at === bt ? a.customer_id < b.customer_id : at < bt;
+}
+
+/**
+ * Folds a freshly read first page into a paged board without disturbing the
+ * pages below it — `mergeChatHead`'s trick (`useInbox.ts`), applied to a
+ * board whose own sort key can move a row *up* as well as down. A visitor's
+ * `last_activity_at` changes with new activity, so a row already scrolled
+ * past can, unlike a chat's immutable `created_at`, become the newest thing
+ * on the board without this merge ever seeing it — accepted here for the
+ * poll's sake (see the file header), the same trade-off 153.3 left for a
+ * multi-page transcript reload.
+ *
+ * A fresh page that comes back empty is the one case where the pages below
+ * are discarded: read from the top, "no rows" is a statement about the whole
+ * board.
+ */
+export function mergeTrafficHead(
+  cache: TrafficCache | undefined,
+  fresh: PagedResponse<TrafficVisitor>,
+): TrafficCache | undefined {
+  if (!cache || cache.pages.length === 0) return cache;
+
+  const head = cache.pages[0]!;
+  const rest = cache.pages.slice(1);
+
+  const oldest = fresh.items.at(-1);
+  if (!oldest) {
+    return { pages: [fresh], pageParams: cache.pageParams.slice(0, 1) };
+  }
+
+  const returned = new Set(fresh.items.map((v) => v.customer_id));
+  const displaced = head.items.filter(
+    (v) => !returned.has(v.customer_id) && isOlderVisitor(v, oldest),
+  );
+
+  const nextPageId = rest.length > 0 ? head.next_page_id : fresh.next_page_id;
+  const merged: PagedResponse<TrafficVisitor> = {
+    items: [...fresh.items, ...displaced],
+    ...(fresh.total !== undefined ? { total: fresh.total } : {}),
+    ...(nextPageId !== undefined ? { next_page_id: nextPageId } : {}),
+  };
+
+  return { ...cache, pages: [merged, ...rest] };
+}
 
 /** `TRAFFIC_TABS[].label` and `ACTIVITY[].label` are English-only (see those files). */
 const TAB_LABEL_KEY: Record<TrafficTab, string> = {
@@ -185,30 +287,58 @@ export function TrafficPage(): ReactElement {
     setSearchParams(params, { replace: true });
   }
 
-  const live = useQuery({
-    queryKey: ['traffic', tab, conditions],
-    queryFn: () => {
-      // The selected tab fills 13.2-f's `activity` filter — the server is the
-      // one and only place that decides who is on the board, so a tab switch
-      // is a new request rather than a client-side re-slice of the last one.
-      // The filter panel's own conditions AND with it: its own `activity`
-      // condition (if any) takes over from the tab (see `resolveActivity`),
-      // and every other field it sets joins as one more `AND`ed parameter.
-      const params = new URLSearchParams({ limit: '100' });
-      const activities = resolveActivity(tabToActivity(tab), conditions);
-      for (const activity of activities ?? []) params.append('activity', activity);
-      const filterParams = buildTrafficParams(conditions.filter((c) => c.field !== 'activity'));
-      for (const [key, value] of filterParams) params.append(key, value);
-      return api.get<{ items: TrafficVisitor[]; total: number }>(`/traffic?${params.toString()}`);
-    },
-    // Poll: the board must feel live without an RTM socket of its own yet.
-    refetchInterval: 8_000,
-  });
+  const buildUrl = useCallback(
+    (pageId: string | undefined) => trafficUrl(tab, conditions, pageId),
+    [tab, conditions],
+  );
+  const list = usePagedQuery<TrafficVisitor>({ queryKey: trafficKey(tab, conditions), buildUrl });
 
-  const items = useMemo(() => live.data?.items ?? [], [live.data]);
-  // Trustworthy only for the tabs the current response actually covers: the
-  // active tab itself (it is exactly what came back) and, when that response
-  // is the unfiltered board, every tab at once.
+  // The poll's target moves with the currently loaded chain, but the refresh
+  // itself never touches it directly — see `refreshHead` below.
+  const fetchingNextRef = useRef(false);
+  fetchingNextRef.current = list.isFetchingNext;
+
+  // Re-reads only the board's first page on a fixed interval and folds it in
+  // via `mergeTrafficHead`, rather than `usePagedQuery`'s own `refetchInterval`
+  // — an infinite query refetches every page currently loaded on each tick,
+  // which turns a deep scroll into a request per loaded page every 8s. One
+  // read stays live enough to act on (arrivals and state changes surface
+  // within a poll) at a flat cost regardless of how far the agent has scrolled.
+  const refreshHead = useCallback(async (): Promise<void> => {
+    if (fetchingNextRef.current) return;
+    const key = trafficKey(tab, conditions);
+    // Nothing loaded yet: the query's own first fetch is the refresh.
+    if (!queryClient.getQueryData(key)) return;
+    try {
+      const fresh = await api.get<PagedResponse<TrafficVisitor>>(
+        trafficUrl(tab, conditions, undefined),
+      );
+      queryClient.setQueryData<TrafficCache>(key, (cache) => mergeTrafficHead(cache, fresh));
+    } catch {
+      // Best-effort, like the interval it replaces: a dropped refresh leaves
+      // the board one beat stale until the next tick.
+    }
+  }, [api, queryClient, tab, conditions]);
+
+  useEffect(() => {
+    const timer = setInterval(() => void refreshHead(), TRAFFIC_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [refreshHead]);
+
+  // De-duplicated on the way out, the same as `useChatList`'s: a visitor who
+  // leaves the board lets the freshly re-read first page reach one row
+  // further down than it used to, which can briefly put that row on two
+  // pages at once (`mergeTrafficHead`'s own boundary is per-page, not
+  // board-wide).
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return list.items.filter((visitor) =>
+      seen.has(visitor.customer_id) ? false : (seen.add(visitor.customer_id), true),
+    );
+  }, [list.items]);
+  // Trustworthy only for the tabs the currently loaded rows actually cover:
+  // the active tab itself (every loaded row is exactly what came back for
+  // it) and, when that response is the unfiltered board, every tab at once.
   const counts = useMemo(() => countByTab(items), [items]);
 
   const invalidate = (): void => {
@@ -269,10 +399,10 @@ export function TrafficPage(): ReactElement {
     <Page
       title={t('customers.page.title')}
       description={
-        live.data
+        list.pages.length > 0
           ? t('traffic.page.count', {
-              count: live.data.total,
-              formatted: formatCount(live.data.total) ?? '0',
+              count: items.length,
+              formatted: formatCount(items.length) ?? '0',
             })
           : t('traffic.page.subtitle')
       }
@@ -319,11 +449,11 @@ export function TrafficPage(): ReactElement {
 
       <TrafficFilters initialConditions={conditions} onChange={handleFiltersChange} />
 
-      {live.error ? (
+      {list.isError ? (
         <ErrorNotice message={t('traffic.page.loadError')} />
       ) : (
         <Card>
-          {live.isPending ? (
+          {list.isPending ? (
             <ListSkeleton />
           ) : items.length === 0 ? (
             <EmptyState
@@ -336,6 +466,7 @@ export function TrafficPage(): ReactElement {
               rowHeight={60}
               caption={t('traffic.page.table.caption')}
               colSpan={4}
+              onEndReached={list.fetchNext}
               head={
                 <thead>
                   <tr className="border-b border-border text-left">

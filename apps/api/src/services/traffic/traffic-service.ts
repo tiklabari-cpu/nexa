@@ -94,6 +94,54 @@ export interface TrafficFilters {
 
 export interface TrafficQuery extends TrafficFilters {
   limit: number;
+  /** Opaque keyset cursor from a previous page's `next_page_id`. */
+  pageId?: string;
+}
+
+/**
+ * The board's cursor: the keyset boundary — the last row the previous page
+ * returned, in the final merged order. A new arrival above it shifts nothing
+ * below it, exactly like `mergeChatHead`'s `(created_at, id)` cursor for the
+ * chat list; the property is what keeps a page stable while the board itself
+ * keeps changing under the reader.
+ *
+ * Unlike a single-table list, `listLive` re-reads and re-merges all three
+ * sources on every call rather than resuming a DB cursor — see `fetchWindow`
+ * below for why that read is *not* sized off how many rows earlier pages
+ * already returned.
+ */
+interface Cursor {
+  sortAt: string;
+  customerId: string;
+}
+
+function encodeCursor(cursor: Cursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+/** A malformed cursor is treated as no cursor — a stale bookmark starts over. */
+function decodeCursor(pageId: string | undefined): Cursor | null {
+  if (!pageId) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(pageId, 'base64url').toString('utf8')) as Cursor;
+    return typeof parsed?.sortAt === 'string' && typeof parsed?.customerId === 'string'
+      ? parsed
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Whether `entry` sits strictly after `cursor` in the board's own order
+ * (`sortAt` desc, `customer_id` desc breaking a tie) — the predicate that
+ * turns "the top `fetchWindow` rows" into "the rows the next page owns".
+ */
+function isBeyondCursor(entry: { sortAt: Date; visitor: TrafficVisitor }, cursor: Cursor): boolean {
+  const cursorTime = new Date(cursor.sortAt).getTime();
+  const entryTime = entry.sortAt.getTime();
+  if (entryTime !== cursorTime) return entryTime < cursorTime;
+  return entry.visitor.customer_id.localeCompare(cursor.customerId) < 0;
 }
 
 /** How recent a visit has to be for the visitor to count as "on the site now". */
@@ -153,8 +201,23 @@ export class TrafficService {
     tx: TenantClient,
     tenant: TenantContext,
     options: TrafficQuery,
-  ): Promise<{ items: TrafficVisitor[]; total: number }> {
+  ): Promise<{ items: TrafficVisitor[]; total: number; nextPageId?: string }> {
     const { limit } = options;
+    const cursor = decodeCursor(options.pageId);
+    // How deep the merged, sorted board has to be materialised to answer this
+    // page. Page 1 reads one row past `limit` — the `customer-service.ts`
+    // trick of fetching one extra to learn whether another page exists,
+    // without a second count query that could disagree with the page under
+    // concurrent writes. A later page reads each source up to its own hard
+    // ceiling instead (`sourceTake` already clamps at `MAX_SOURCE_ROWS`)
+    // rather than a window sized off how many rows earlier pages consumed: a
+    // read sized for "one page past the cursor" would come up short the
+    // moment enough new rows land above the boundary between one request and
+    // the next, silently truncating a page that still has rows to give. The
+    // board is small and live (a 30-minute window, already capped at
+    // `MAX_SOURCE_ROWS` per source) — re-reading it in full on every later
+    // page costs nothing a first-page filter could not already cost.
+    const fetchWindow = cursor ? MAX_SOURCE_ROWS : limit + 1;
     const liveSince = new Date(Date.now() - LIVE_WINDOW_MINUTES * 60_000);
 
     // A team id reaches the query only once it is known to be one of the
@@ -214,7 +277,7 @@ export class TrafficService {
           liveSince,
           customer: customerFilter,
           exclude: new Set<string>(),
-          take: sourceTake(limit, { dedup: true, filtered }),
+          take: sourceTake(fetchWindow, { dedup: true, filtered }),
           withEvidence: true,
         })
       : null;
@@ -259,7 +322,7 @@ export class TrafficService {
           : {}),
       },
       orderBy: { createdAt: 'desc' },
-      take: sourceTake(limit, { dedup: false, filtered }),
+      take: sourceTake(fetchWindow, { dedup: false, filtered }),
       select: {
         id: true,
         customerId: true,
@@ -336,7 +399,7 @@ export class TrafficService {
       // through to the invited or browsing source would not narrow the board,
       // it would relabel them.
       seen.add(chat.customerId);
-      if (!wantsConversation || rows.length >= limit) continue;
+      if (!wantsConversation || rows.length >= fetchWindow) continue;
 
       const thread = chat.threads[0];
       const lastEvent = thread?.events[0] ?? null;
@@ -412,7 +475,7 @@ export class TrafficService {
     //    invitation, and skipping it would hand the same person back from the
     //    visits source as `browsing` — filtering a bucket out would *move*
     //    people into another one instead of removing them.
-    let remaining = limit - rows.length;
+    let remaining = fetchWindow - rows.length;
     if ((wantsInvited || wantsBrowsing) && remaining > 0) {
       const sends = await tx.campaignSend.findMany({
         where: {
@@ -436,7 +499,7 @@ export class TrafficService {
       });
 
       for (const send of sends) {
-        if (rows.length >= limit) break;
+        if (rows.length >= fetchWindow) break;
         if (seen.has(send.customerId)) continue;
         // Claimed before any filter has had its say, for the reason above: an
         // invitation that fails the filter must not reappear as `browsing`.
@@ -460,7 +523,7 @@ export class TrafficService {
 
     // 3. Browsing visitors: a recent visit but no active conversation. Newest
     //    visit first so the JS de-dup keeps the current one per customer.
-    remaining = limit - rows.length;
+    remaining = fetchWindow - rows.length;
     if (wantsBrowsing && remaining > 0) {
       const visits =
         liveVisits ??
@@ -477,7 +540,7 @@ export class TrafficService {
         }));
 
       for (const visit of visits) {
-        if (rows.length >= limit) break;
+        if (rows.length >= fetchWindow) break;
         if (seen.has(visit.customerId)) continue;
         seen.add(visit.customerId);
         if (!matchesVisit(visit.customerId)) continue;
@@ -497,9 +560,38 @@ export class TrafficService {
       }
     }
 
-    rows.sort((a, b) => b.sortAt.getTime() - a.sortAt.getTime());
-    const items = rows.slice(0, limit).map((entry) => entry.visitor);
-    return { items, total: items.length };
+    // `customer_id` breaks a tie deterministically — two rows sharing a
+    // millisecond would otherwise fall back to source-then-DB order, which
+    // `isBeyondCursor` below has no way to reproduce from a cursor alone.
+    rows.sort((a, b) => {
+      const diff = b.sortAt.getTime() - a.sortAt.getTime();
+      return diff !== 0 ? diff : b.visitor.customer_id.localeCompare(a.visitor.customer_id);
+    });
+
+    // Everything materialised above is the top `fetchWindow` of the board;
+    // the boundary cursor (when present) is what carves this particular page
+    // out of it, rather than a raw slice — a new arrival above the boundary
+    // must not shift rows that already went out on an earlier page.
+    const windowRows = rows.slice(0, fetchWindow);
+    const pageRows = cursor
+      ? windowRows.filter((entry) => isBeyondCursor(entry, cursor))
+      : windowRows;
+    const page = pageRows.slice(0, limit);
+    const items = page.map((entry) => entry.visitor);
+    const last = page.at(-1);
+
+    return {
+      items,
+      total: items.length,
+      ...(pageRows.length > limit && last
+        ? {
+            nextPageId: encodeCursor({
+              sortAt: last.sortAt.toISOString(),
+              customerId: last.visitor.customer_id,
+            }),
+          }
+        : {}),
+    };
   }
 
   /**

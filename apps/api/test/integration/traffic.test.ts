@@ -203,6 +203,15 @@ describe('traffic', () => {
     return (response.json() as { items: TrafficVisitor[] }).items;
   };
 
+  /** The full envelope, `next_page_id` included, for the pagination tests. */
+  const listTrafficPage = async (
+    query = '',
+  ): Promise<{ items: TrafficVisitor[]; next_page_id?: string }> => {
+    const response = await server.get(`/traffic${query}`, auth(readToken));
+    expect(response.statusCode).toBe(200);
+    return response.json() as { items: TrafficVisitor[]; next_page_id?: string };
+  };
+
   /** A real visitor token, for the tests that drive the widget's own write path. */
   async function widgetToken(t: TenantFixture): Promise<{ token: string; customer_id: string }> {
     const response = await server.post(
@@ -991,6 +1000,79 @@ describe('traffic', () => {
 
     return calls;
   }
+
+  // --- Pagination (P5-PAGE-f) -------------------------------------------------
+
+  describe('pagination', () => {
+    it('walks a full board across pages with no row skipped or repeated', async () => {
+      const ids: string[] = [];
+      for (let i = 0; i < 5; i += 1) {
+        const id = await seedCustomer(fx.a, `Visitor ${i}`);
+        await seedVisit(fx.a, id, minutesAgo(i + 1));
+        ids.push(id);
+      }
+
+      const first = await listTrafficPage('?limit=2');
+      expect(first.items).toHaveLength(2);
+      expect(first.next_page_id).toBeDefined();
+
+      const second = await listTrafficPage(`?limit=2&page_id=${first.next_page_id}`);
+      expect(second.items).toHaveLength(2);
+      expect(second.next_page_id).toBeDefined();
+
+      const third = await listTrafficPage(`?limit=2&page_id=${second.next_page_id}`);
+      expect(third.items).toHaveLength(1);
+      expect(third.next_page_id).toBeUndefined();
+
+      const seen = [...first.items, ...second.items, ...third.items].map((v) => v.customer_id);
+      expect(seen).toHaveLength(5);
+      expect(new Set(seen).size).toBe(5);
+      expect(seen).toEqual(expect.arrayContaining(ids));
+    });
+
+    it('carries no next_page_id once the board is exhausted', async () => {
+      const id = await seedCustomer(fx.a, 'Only Visitor');
+      await seedVisit(fx.a, id, minutesAgo(1));
+
+      const page = await listTrafficPage('?limit=50');
+      expect(page.items.map((v) => v.customer_id)).toEqual([id]);
+      expect(page.next_page_id).toBeUndefined();
+    });
+
+    it('treats a malformed page_id as no cursor rather than erroring', async () => {
+      const id = await seedCustomer(fx.a, 'Visitor');
+      await seedVisit(fx.a, id, minutesAgo(1));
+
+      const page = await listTrafficPage('?limit=50&page_id=not-a-real-cursor');
+      expect(page.items.map((v) => v.customer_id)).toEqual([id]);
+    });
+
+    it('keeps a stale page 2 stable when a new arrival lands above the boundary', async () => {
+      // The property the keyset cursor exists for: paging must not be an
+      // offset that a fresh arrival can shift out from under the reader.
+      const older: string[] = [];
+      for (let i = 0; i < 4; i += 1) {
+        const id = await seedCustomer(fx.a, `Older ${i}`);
+        await seedVisit(fx.a, id, minutesAgo(10 + i));
+        older.push(id);
+      }
+
+      const first = await listTrafficPage('?limit=2');
+      expect(first.next_page_id).toBeDefined();
+
+      // A brand-new visitor arrives after page 1 was read — above every
+      // boundary any earlier page could have handed out.
+      const newcomer = await seedCustomer(fx.a, 'Just Arrived');
+      await seedVisit(fx.a, newcomer, minutesAgo(1));
+
+      const second = await listTrafficPage(`?limit=2&page_id=${first.next_page_id}`);
+      const secondIds = second.items.map((v) => v.customer_id);
+      // Still exactly the two rows page 1 left behind — not shifted by the
+      // newcomer, and not duplicated with anything page 1 already returned.
+      expect(secondIds).toEqual(older.slice(2, 4));
+      expect(secondIds).not.toContain(newcomer);
+    });
+  });
 
   // --- Shape -----------------------------------------------------------------
 

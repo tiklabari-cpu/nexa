@@ -41,6 +41,12 @@ traffic:
       inside the live window, so a visitor with no such visit never matches
       them. An unknown key is rejected (400) rather than ignored — a silently
       dropped filter would show more people than the caller asked for.
+
+      Paginated by opaque keyset cursor, the same shape every other list
+      endpoint uses: `next_page_id` is absent once the board has no more rows
+      to offer. `total` describes this page only — the union of three sources
+      makes a true board-wide count expensive, so it is not the whole board's
+      size the way `GET /customers`'s is.
     parameters:
       - name: activity
         in: query
@@ -56,6 +62,7 @@ traffic:
           items:
             type: string
             enum: [browsing, queued, waiting, chatting, supervised, invited]
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
       - name: page_url_contains
         in: query
         description: |
@@ -97,7 +104,8 @@ traffic:
                   items: { $ref: "../openapi.yaml#/components/schemas/TrafficVisitor" }
                 total:
                   type: integer
-                  description: Live visitors returned — capped at `limit`.
+                  description: Visitors on this page — not the whole board.
+                next_page_id: { type: string }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

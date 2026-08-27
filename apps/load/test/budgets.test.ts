@@ -16,6 +16,14 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import {
+  markerText,
+  markerTimestamp,
+  RTM_AGENT_PATH,
+  RTM_FANOUT_PUSH,
+  RTM_PING_INTERVAL_MS,
+  RTM_PROTOCOL_VERSION,
+} from '../lib/protocol.js';
+import {
   BUDGET_PROOFS,
   METRIC_NAMES,
   NFR_BUDGETS,
@@ -223,9 +231,8 @@ describe('every request is tagged and counted by the same call', () => {
 });
 
 describe('a scenario cannot quietly opt out of the gate', () => {
-  // 161.2 adds `rest`, 161.3 adds `rtm`. Extending this list is how each of
-  // them signs up for the same guard.
-  const scenarioNames = ['smoke', 'rest'];
+  // Extending this list is how a new scenario signs up for the same guard.
+  const scenarioNames = ['smoke', 'rest', 'rtm'];
 
   for (const scenario of scenarioNames) {
     it(`${scenario}.js sets its thresholds and trend stats from the shared modules`, () => {
@@ -237,4 +244,137 @@ describe('a scenario cannot quietly opt out of the gate', () => {
       expect(source).toContain('summaryHandler(');
     });
   }
+});
+
+describe('"degraded" is defined before the pod is measured (NFR-P8)', () => {
+  // NFR-P8 is not a budget met or crossed; it is a number found by ramping
+  // connections until the pod stops coping. Which makes "stops coping" the
+  // whole measurement: written after the fact it is whatever the operator felt
+  // like calling a limit. These are the three aggregate readings, as gates.
+  const rtm = rtmThresholds();
+
+  it('a fan-out outside NFR-P1 fails the run', () => {
+    expect(rtm[METRIC_NAMES.fanoutLatency]).toEqual([`p(99)<${NFR_BUDGETS.rtmFanoutP99Ms}`]);
+  });
+
+  it('a connection that could not be established fails the run', () => {
+    expect(rtm[METRIC_NAMES.rtmConnectFailed]).toEqual(['count==0']);
+  });
+
+  it('a live connection that was lost fails the run', () => {
+    expect(rtm[METRIC_NAMES.rtmSocketDropped]).toEqual(['count==0']);
+  });
+
+  it('claims the reconnect guarantee only when the run drives it', () => {
+    // A k6 `Rate` with no samples reads as 0, so an unconditional `rate==1.00`
+    // would fail every run configured with `LOAD_RTM_RECONNECT_EVERY=0` — a
+    // red that says nothing about the product.
+    expect(rtm[METRIC_NAMES.rtmSyncRecovered]).toBeUndefined();
+    expect(rtmThresholds({ reconnect: true })[METRIC_NAMES.rtmSyncRecovered]).toEqual([
+      'rate==1.00',
+    ]);
+  });
+});
+
+describe('the scenario speaks the protocol the gateway implements', () => {
+  // `lib/protocol.js` restates four facts that live in the product's own
+  // source, because k6 cannot import TypeScript. Restated constants drift, and
+  // every one of these drifts *quietly*: a stale version makes the gateway
+  // answer `unsupported_version` on a frame while the socket stays open, a
+  // stale path makes the handshake 400, a stale push name makes a subscription
+  // that receives nothing. All three produce a run that finishes and writes a
+  // results file — which is the failure this suite exists to refuse.
+  const rtmSource = readFileSync(join(repoRoot, 'packages', 'types', 'src', 'rtm.ts'), 'utf8');
+
+  /** A `name: 'value'` or `name = 'value'` string constant from that file. */
+  function stringConstant(name: string): string {
+    const match = new RegExp(`${name}\\s*[:=]\\s*'([^']+)'`).exec(rtmSource);
+    expect(match, `no ${name} in packages/types/src/rtm.ts`).not.toBeNull();
+    return match![1]!;
+  }
+
+  /** A numeric constant, with TypeScript's `_` digit separators removed. */
+  function numberConstant(name: string): number {
+    const match = new RegExp(`${name}\\s*:\\s*([\\d_]+)`).exec(rtmSource);
+    expect(match, `no ${name} in packages/types/src/rtm.ts`).not.toBeNull();
+    return Number(match![1]!.replaceAll('_', ''));
+  }
+
+  it("uses the gateway's envelope version", () => {
+    expect(RTM_PROTOCOL_VERSION).toBe(stringConstant('RTM_VERSION'));
+  });
+
+  it('dials the agent socket at the path the gateway serves', () => {
+    expect(RTM_AGENT_PATH).toBe(stringConstant('agent'));
+  });
+
+  it('subscribes to a push the gateway can actually send', () => {
+    const block = /RTM_PUSH_ACTIONS = \[([\s\S]*?)\] as const/.exec(rtmSource);
+    expect(block, 'no RTM_PUSH_ACTIONS array in packages/types/src/rtm.ts').not.toBeNull();
+    expect(block![1]).toContain(`'${RTM_FANOUT_PUSH}'`);
+  });
+
+  it('pings well inside the window the gateway drops an idle socket in', () => {
+    // The load-bearing one. The gateway closes a socket that has sent nothing
+    // for `idleTimeoutMs`, and only *client frames* move that clock — the
+    // transport's own ping/pong does not. Narrow this margin and every socket
+    // in a capacity run starts dropping mid-plateau, which reads exactly like
+    // the pod's connection limit and is not.
+    expect(RTM_PING_INTERVAL_MS * 2).toBeLessThan(numberConstant('idleTimeoutMs'));
+  });
+});
+
+describe("a fan-out sample is only ever taken from this suite's own message", () => {
+  it('carries the publish instant through the message text', () => {
+    const sentAt = 1_787_000_000_123;
+    expect(markerTimestamp(markerText(sentAt, 7, 3))).toBe(sentAt);
+  });
+
+  it('refuses to read a timestamp out of anything else', () => {
+    // The subscriber cannot tell whose event it just received. Without this,
+    // an event from a colleague clicking around the seeded workspace — or from
+    // `rest.js` running at the same time — would be timed against a number
+    // that is not a publish instant, and the resulting NFR-P1 sample would be
+    // wrong in a way no threshold could notice.
+    for (const text of [
+      'Do you ship to France?',
+      'load rest.js — VU 1 iter 2',
+      'load rtm.js — no timestamp here',
+      '',
+      undefined,
+      null,
+      42,
+    ]) {
+      expect(markerTimestamp(text), `read a timestamp out of ${JSON.stringify(text)}`).toBeNull();
+    }
+  });
+
+  it('never writes a message the product will mask on the way in', () => {
+    // Not hypothetical — measured. `POST /chats/:id/events` masks card numbers
+    // before persisting (`apps/api/src/lib/cc-mask.ts`): a 13–19 digit run that
+    // passes Luhn becomes `**** **** **** 1234`. An epoch-ms timestamp is
+    // exactly 13 digits and a mod-10 checksum passes one time in ten, so the
+    // first version of this marker had 10% of its messages come back unreadable
+    // — the push still arrived, the timestamp did not, and the fan-out sample
+    // vanished with no threshold able to see it.
+    //
+    // The detector's own pattern is re-read here rather than restated, so
+    // widening it (a new separator, a shorter minimum) fails this test instead
+    // of quietly costing the next capacity run its samples.
+    const maskSource = readFileSync(
+      join(repoRoot, 'apps', 'api', 'src', 'lib', 'cc-mask.ts'),
+      'utf8',
+    );
+    const pattern = /const CARD_CANDIDATE = \/(.+)\/g;/.exec(maskSource);
+    expect(pattern, 'no CARD_CANDIDATE regex in apps/api/src/lib/cc-mask.ts').not.toBeNull();
+    const candidate = new RegExp(pattern![1]!, 'g');
+
+    // A spread rather than one sample: the failure was data-dependent, and one
+    // lucky timestamp is exactly how it stayed hidden the first time.
+    for (let ms = 1_787_856_000_000; ms < 1_787_856_000_000 + 5_000; ms += 1) {
+      const text = markerText(ms, 12, 34);
+      candidate.lastIndex = 0;
+      expect(candidate.test(text), `${text} is a card-number candidate`).toBe(false);
+    }
+  });
 });

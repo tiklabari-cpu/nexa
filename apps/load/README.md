@@ -11,17 +11,20 @@ produce a stamp without them.**
 
 ## What is here, and what is not yet
 
-| File                 | What it does                                    | Task      |
-| -------------------- | ----------------------------------------------- | --------- |
-| `lib/thresholds.js`  | NFR budgets → k6 thresholds (the gate)          | 161.1     |
-| `lib/config.js`      | Where the run points, how hard it pushes        | 161.1     |
-| `lib/session.js`     | OAuth 2.1 + PKCE sign-in against a seeded stack | 161.1     |
-| `lib/http.js`        | The only door to `k6/http` — tags and counts    | 161.1     |
-| `lib/metrics.js`     | Custom metrics (429 counter, fan-out trend)     | 161.1     |
-| `lib/summary.js`     | stdout block + `results/<scenario>.json`        | 161.1     |
-| `scenarios/smoke.js` | Harness self-check — one read, end to end       | 161.1     |
-| `scenarios/rest.js`  | List + transcript + send mix → NFR-P2           | 161.2     |
-| `scenarios/rtm.js`   | N sockets + fan-out → **NFR-P1 / NFR-P8**       | **161.3** |
+| File                 | What it does                                    | Task  |
+| -------------------- | ----------------------------------------------- | ----- |
+| `lib/thresholds.js`  | NFR budgets → k6 thresholds (the gate)          | 161.1 |
+| `lib/config.js`      | Where the run points, how hard it pushes        | 161.1 |
+| `lib/session.js`     | OAuth 2.1 + PKCE sign-in against a seeded stack | 161.1 |
+| `lib/http.js`        | The only door to `k6/http` — tags and counts    | 161.1 |
+| `lib/metrics.js`     | Custom metrics (429 counter, fan-out trend)     | 161.1 |
+| `lib/summary.js`     | stdout block + `results/<scenario>.json`        | 161.1 |
+| `lib/protocol.js`    | RTM wire facts a Node test can re-check         | 161.3 |
+| `lib/rtm-socket.js`  | One agent socket (`k6/websockets`, async)       | 161.3 |
+| `lib/seed.js`        | Finding the seeded chat a write scenario drives | 161.3 |
+| `scenarios/smoke.js` | Harness self-check — one read, end to end       | 161.1 |
+| `scenarios/rest.js`  | List + transcript + send mix → NFR-P2           | 161.2 |
+| `scenarios/rtm.js`   | N sockets + fan-out → **NFR-P1 / P8 / R2**      | 161.3 |
 
 `smoke.js` is not a capacity measurement and must not be quoted as one. It exercises the
 seams the real scenarios stand on — readiness answers, sign-in survives, a tagged read is
@@ -76,6 +79,9 @@ k6 run scenarios/smoke.js           # directly, when passing env knobs
 
 pnpm --filter @nexa/load load:rest  # == k6 run scenarios/rest.js — NFR-P2
 make load-rest                      # the same thing, from the repo root
+
+pnpm --filter @nexa/load load:rtm   # == k6 run scenarios/rtm.js — NFR-P1 / NFR-P8
+make load-rtm                       # the same thing, from the repo root
 ```
 
 `rest.js` **sends real messages** into the seed's one live conversation and
@@ -97,7 +103,7 @@ All optional; the defaults target a local `make dev` stack.
 | Variable              | Default                               | Meaning                                |
 | --------------------- | ------------------------------------- | -------------------------------------- |
 | `LOAD_API_ORIGIN`     | `http://localhost:4000`               | API origin; `/api/v1` is appended      |
-| `LOAD_RTM_ORIGIN`     | `ws://localhost:4001`                 | RTM origin (used by 161.3)             |
+| `LOAD_RTM_ORIGIN`     | `ws://localhost:4001`                 | RTM origin, socket and `/health` alike |
 | `LOAD_EMAIL`          | `owner@acme.localhost`                | Seeded owner to sign in as             |
 | `LOAD_PASSWORD`       | `nexa-demo-password`                  | Its demo password                      |
 | `LOAD_ORG_PREFIX`     | `Acme`                                | Which membership to use                |
@@ -109,6 +115,23 @@ All optional; the defaults target a local `make dev` stack.
 | `LOAD_PACING_SECONDS` | `1`                                   | Seconds a VU sleeps between iterations |
 | `LOAD_NOTE`           | —                                     | Free text: hardware, stack kind        |
 | `LOAD_RESULTS_DIR`    | `results`                             | Where the JSON summary is written      |
+
+`rtm.js` has its own set — one rung of the capacity ladder, not a profile to tune once:
+
+| Variable                    | Default | Meaning                                                   |
+| --------------------------- | ------- | --------------------------------------------------------- |
+| `LOAD_RTM_CONNECTIONS`      | `200`   | Sockets held open at the plateau — **the rung**           |
+| `LOAD_RTM_SOCKETS_PER_VU`   | `25`    | Sockets one VU owns (a VU is a whole JS runtime)          |
+| `LOAD_RTM_CONNECT_RATE`     | `200`   | Sockets opened per second, run-wide                       |
+| `LOAD_RTM_PUBLISHES`        | `20`    | Messages published once every socket is up                |
+| `LOAD_RTM_PUBLISH_INTERVAL` | `2`     | Seconds between two published messages                    |
+| `LOAD_RTM_RECONNECT_EVERY`  | `10`    | Every Nth socket does one reconnect + `sync`; `0` off     |
+| `LOAD_RTM_SETTLE`           | `5`     | Slack seconds before the first and after the last publish |
+
+Everything else about a rung is derived from those (`lib/config.js#rtmPlan`), because the parts
+have to agree: the publisher must not start before the last socket is up, and no socket may
+close before the last message has had time to arrive. Four independent knobs would let an
+operator produce a run whose "missing deliveries" are the schedule's fault.
 
 The run ramps rather than starting flat, on purpose: a cold Node process is still JITting,
 the connection pool is still opening sockets and Prisma is still compiling queries during
@@ -123,6 +146,9 @@ judge, and the run fails on warm-up rather than on the product.
 | `http_req_duration{op:write}` | p99 < 300 ms  | NFR-P2 (write)           |
 | `nexa_rtm_fanout_ms`          | p99 < 500 ms  | NFR-P1 = NFR-U3          |
 | `nexa_rtm_login_success`      | rate ≥ 0.999  | NFR-U1 (floor)           |
+| `nexa_rtm_connect_failed`     | count == 0    | NFR-P8 degradation (2)   |
+| `nexa_rtm_socket_dropped`     | count == 0    | NFR-P8 degradation (3)   |
+| `nexa_rtm_sync_recovered`     | rate == 1.00  | NFR-R2 (opt-in)          |
 | `http_req_failed`             | rate < 0.0005 | NFR-U2 (floor)           |
 | `nexa_rate_limited`           | count == 0    | ADR-07 (see below)       |
 | `nexa_measured{op:…}`         | count > 0     | see "empty is not green" |
@@ -155,10 +181,112 @@ can falsify 99.95% availability — a run that drops 1% of requests plainly is n
 — but it can never confirm it, because availability is a property of a 30-day window. The
 results file labels them as floors for exactly that reason.
 
-NFR-P8 (20 000 connections per pod) has no threshold here. It is not a budget a scenario
-either meets or crosses; it is a number to be _found_, by ramping connections until the
-single pod degrades. 161.3 defines "degrades" before it measures, and 161.4 decides what
-the resulting number means.
+NFR-P8 (20 000 connections per pod) has no budget threshold, because it is not a budget a
+scenario either meets or crosses — it is a number to be _found_. What it has instead is a
+definition of failure, written before the measurement; see the next section.
+
+## Finding NFR-P8
+
+`rtm.js` runs **one rung** of a ladder. Raise `LOAD_RTM_CONNECTIONS`, run it again, and the
+first rung that exits non-zero is the degradation point — the threshold that failed says
+which kind of degradation it was. Each rung leaves its own `results/rtm-<n>.json`, because
+comparing rungs is the whole exercise.
+
+### "Degraded" — written down before measuring
+
+Four kinds, three of them thresholds (`lib/thresholds.js#rtmThresholds`) and the fourth a
+per-socket check, so none of them is an after-the-fact judgement call:
+
+1. **Too slow** — `nexa_rtm_fanout_ms p(99) ≥ 500 ms`. Every socket is still there; delivery
+   has left NFR-P1's budget.
+2. **Refusing connections** — `nexa_rtm_connect_failed > 0`. A socket could not be opened, or
+   opened and could not log in.
+3. **Dropping connections** — `nexa_rtm_socket_dropped > 0`. A socket that was live went away
+   without the scenario asking it to.
+4. **Deaf sockets** — a socket that stayed open and stopped receiving. No aggregate threshold
+   can see this (the run's total delivery count stays high while one socket goes quiet), so
+   every socket checks its own count at close and `checks rate==1.00` fails the run.
+
+A fifth reading is recorded but not thresholded: `nexa_rtm_connections_observed`, sampled
+from the gateway's own `/health` while the plateau is up. "We opened 8000 sockets" and "the
+pod is holding 8000 sockets" are different claims and only the second one is NFR-P8; the
+`max` of that trend is the number to quote.
+
+### Reading a red run: the pod, or this laptop?
+
+Degradation (2) has two completely different causes that look identical from inside k6, and
+a report that does not separate them feeds the next decision the wrong number:
+
+- **The pod refused.** A product finding.
+- **The load generator ran out of local resources.** Not a product finding at all. On Windows
+  the ceiling is the ephemeral port range — `netsh int ipv4 show dynamicport tcp`, **16384
+  ports** on the machine these numbers were taken on — and every closed socket holds its port
+  in `TIME_WAIT` for ~2 minutes afterwards. Two 8000-socket rungs back to back therefore
+  compete with each other, not with the gateway.
+
+  Check it, do not assume it: `netstat -an | grep -c TIME_WAIT` before a rung, and wait for it
+  to drain between rungs. On Linux the equivalents are `ulimit -n` and
+  `net.ipv4.ip_local_port_range`.
+
+There is a third caveat that applies to _every_ rung on a single machine: k6, the API, the
+gateway, Postgres and Redis are all on the same CPU. Past a few thousand sockets the load
+generator is competing with the thing it is measuring, so a latency figure from a big rung is
+pessimistic by an unknown amount. That does not make it useless — a _green_ rung is still
+honest evidence, because the product met the budget despite the handicap — but a red one at
+the top of the ladder is a reason to re-measure on separate hardware before concluding
+anything about the product.
+
+### Measured (2026-08-27)
+
+Conditions: one dev laptop (Windows 11 26200), `api` and `rtm` from source under `tsx`,
+Postgres 17 + Redis 7 in Docker, k6 v2.2.0 on the same machine. Profile per rung: 50 sockets
+per VU, opened at 200/s, 20 messages published 2 s apart, 1 socket in 25 doing a reconnect +
+`sync` cycle mid-run.
+
+| Sockets asked for | Held (pod's own count) | fan-out p99 | connect p99 | Refused | Verdict                    |
+| ----------------- | ---------------------- | ----------- | ----------- | ------- | -------------------------- |
+| 200               | 200                    | 101 ms      | 38 ms       | 0       | ✅ green                   |
+| 1 000             | 1 000                  | 219 ms      | 170 ms      | 0       | ✅ green                   |
+| 2 000             | 2 000                  | 273 ms      | 162 ms      | 0       | ✅ green                   |
+| 4 000             | 4 000                  | 332 ms      | 376 ms      | 0       | ✅ green                   |
+| 6 000             | 6 000                  | 466 ms      | 601 ms      | 0       | ✅ green — at the edge     |
+| 8 000             | 8 000                  | **599 ms**  | 577 ms      | **60**  | ❌ degradation (1) and (2) |
+
+So the pod degrades **between 6 000 and 8 000 connections on this hardware**, in two ways at
+once and in neither of the other two: it never dropped a live socket, and every socket that
+connected received every message (`nexa_rtm_socket_dropped 0`, delivery check 7 940 / 7 940).
+
+The 60 refusals at 8 000 have a named cause, printed by the scenario itself:
+`connectex: No connection could be made because the target machine actively refused it` — the
+listen queue overflowing, not a resource the gateway had run out of. The obvious next question
+is whether that is about the connection *count* or about how fast they arrive, so it was
+tested rather than argued: the same rung re-run at **half the open rate** (100/s, so the
+connect phase takes 85 s instead of 45 s) refused **67** — no better. Arrival rate is not the
+variable; 8 000 held sockets on this hardware is. Fan-out came down only slightly on that run
+(p99 550 ms) and was still outside the budget.
+
+The reconnect leg (NFR-R2) held at every rung, including the red one:
+`nexa_rtm_sync_recovered rate 1.00` — every reconnecting socket came back and recovered the
+messages it had missed, at 8 000 sockets as readily as at 5.
+
+### Two harness defects this ladder had to fix first
+
+Both produced confident and entirely wrong product findings, and both are worth knowing about
+because the next scenario can make either mistake again:
+
+1. **A tenth of the fan-out samples vanished into card-number masking** — §"The product edits
+   this text on the way in", below. Every threshold stayed green while 10% of the evidence was
+   being thrown away.
+2. **The publisher's schedule slipped past the sockets' close.** Sleeping a fixed interval
+   _after_ each publish makes an iteration cost the interval **plus** its requests; at 8 000
+   sockets that stretched to ~4 s, and the last messages went out after every socket had
+   already closed. It read as the gateway failing 7 949 sockets. The publisher now sleeps the
+   _remainder_ of the interval, and a check named `a publish iteration fits inside its
+   interval` fails the run if it ever cannot — so a slipped schedule says so in its own words
+   instead of being misread as a delivery failure.
+
+Deciding what this means for NFR-P8's stated ~20 000/pod is **161.4's** job, not this file's.
+What is recorded here is what was measured and under what handicap.
 
 ## Staying under the rate limit
 
@@ -260,6 +388,32 @@ This removes exactly the rows the run added and nothing else — no schema touch
 tenant's data touched, no consent gate to clear. Reach for `pnpm db:reset` only when a human
 is present to approve it (e.g. the seed itself needs restoring, not just this scenario's
 messages).
+
+`rtm.js` writes into the same conversation and marks its rows the same way:
+
+```sh
+docker exec -i nexa-db psql -U nexa -d nexa \
+  -c "DELETE FROM events WHERE text LIKE 'load rtm.js — %';"
+```
+
+### The product edits this text on the way in
+
+Worth knowing before inventing a new marker. `POST /chats/:id/events` masks card numbers
+before persisting (`apps/api/src/lib/cc-mask.ts` — FR-MOD-08.9.5 / PCI SAQ A): a run of 13–19
+digits that passes the Luhn checksum is replaced by `**** **** **** 1234`. An epoch-ms
+timestamp is exactly 13 digits, and a mod-10 checksum over a free-running counter passes
+**one time in ten** — so the first version of `rtm.js`'s marker lost 10% of its fan-out
+samples to masking, silently, while every threshold stayed green.
+
+The fix is a `.` between the seconds and the milliseconds (`t1787856673.075`), which keeps the
+longest digit run below the detector's minimum. `test/budgets.test.ts` re-reads the detector's
+own pattern and fails if a marker ever becomes a candidate again. Any future marker that
+carries digits belongs under the same guard.
+
+This repo had already been bitten once: `apps/e2e/tests/demo-flow.spec.ts` truncates its own
+`Date.now()` to six digits for exactly this reason, and says so in a comment. The lesson had
+simply never been written anywhere a *new* suite would find it — so it is here now, and it is
+a test rather than a comment.
 
 ## Gate behaviour
 

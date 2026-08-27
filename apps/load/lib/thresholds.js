@@ -33,7 +33,15 @@ export const NFR_BUDGETS = Object.freeze({
   restWriteP99Ms: 300,
   /** NFR-P1 (= NFR-U3) — RTM message delivery (fan-out) latency, p99. */
   rtmFanoutP99Ms: 500,
-  /** NFR-P8 — concurrent WebSocket connections per pod. Measured by 161.3. */
+  /**
+   * NFR-P8 — the *target* number of concurrent WebSocket connections per pod.
+   *
+   * Not a threshold and not something a run either meets or crosses: it is the
+   * figure `scenarios/rtm.js` climbs towards, and what a rung actually held is
+   * `nexa_rtm_connections_observed`. Kept here because `budgets.test.ts` pins it
+   * against the PRD row, so a revised target cannot silently stop being the one
+   * the ladder is measured against.
+   */
   rtmConnectionsPerPod: 20_000,
   /** NFR-U2 — core API availability (5xx excluded), as a run-scoped floor. */
   apiSuccessRatio: 0.9995,
@@ -62,6 +70,34 @@ export const METRIC_NAMES = Object.freeze({
   fanoutLatency: 'nexa_rtm_fanout_ms',
   /** Rate — RTM `login` attempts that succeeded. NFR-U1. */
   rtmLoginSuccess: 'nexa_rtm_login_success',
+  /** Trend, ms — socket handshake → successful `login`. Degradation signal. */
+  rtmConnectLatency: 'nexa_rtm_connect_ms',
+  /** Counter — sockets that never reached a logged-in state. */
+  rtmConnectFailed: 'nexa_rtm_connect_failed',
+  /** Counter — live sockets the gateway or the network took away. */
+  rtmSocketDropped: 'nexa_rtm_socket_dropped',
+  /** Rate — reconnects whose `sync` replayed what the gap missed. NFR-R2. */
+  rtmSyncRecovered: 'nexa_rtm_sync_recovered',
+  /**
+   * Trend — sockets the gateway itself reports holding, sampled from its own
+   * `/health` while the plateau is up. NFR-P8's number, read from the pod
+   * rather than from the load generator's intent: "we asked for 5000" and "the
+   * pod is holding 5000" are different claims, and only the second one is the
+   * requirement. `max` is the one that matters, which is why it is in
+   * {@link SUMMARY_TREND_STATS}.
+   */
+  rtmConnectionsObserved: 'nexa_rtm_connections_observed',
+  /**
+   * Trend, ms — the publishing `POST /chats/:id/events` itself.
+   *
+   * The fan-out measurement starts when the publisher sends that request, so
+   * the REST write is inside the number NFR-P1 is judged on (deliberately —
+   * see `scenarios/rtm.js`). This is what lets a reader take it back out.
+   * Recorded as its own metric rather than read off `http_req_duration{op:write}`
+   * because k6 only materialises a tagged sub-metric when a threshold names it,
+   * and this scenario has no business claiming NFR-P2's write budget.
+   */
+  rtmPublishLatency: 'nexa_rtm_publish_ms',
 });
 
 /**
@@ -77,6 +113,14 @@ export const OP_TAGS = Object.freeze({
   write: 'write',
   fanout: 'fanout',
   setup: 'setup',
+  /**
+   * An observation *about* the run rather than part of it — today the RTM
+   * `/health` poll that reads how many sockets the pod is holding. Kept out of
+   * `read` for the same reason `setup` is: it is the suite's own traffic, and
+   * folding it into a budget would let the harness flatter or spoil a number
+   * that is supposed to describe the product's endpoints.
+   */
+  probe: 'probe',
 });
 
 /** `p(99)<N`, in the one place the expression is spelled. */
@@ -158,16 +202,59 @@ export function restThresholds({ read = true, write = true } = {}) {
   return thresholds;
 }
 
-/** RTM thresholds — fan-out latency (NFR-P1) and login success (NFR-U1). */
-export function rtmThresholds() {
-  return {
+/**
+ * RTM thresholds — and, with them, the definition of "this pod is degraded".
+ *
+ * NFR-P8 is not a budget a run either meets or crosses; it is a number to be
+ * *found*, by holding more and more sockets until the single pod stops coping.
+ * Which means "stops coping" has to be written down **before** the measurement,
+ * or the number it produces is whatever the operator felt like calling a limit.
+ * It is written down here, as thresholds, so the ladder is self-terminating:
+ * the first rung whose run exits non-zero is the degradation point, and the
+ * threshold that failed says which of the three kinds of degradation it was.
+ *
+ *   1. **Too slow** — `nexa_rtm_fanout_ms p(99) ≥ 500 ms`: the sockets are all
+ *      still there and delivery has fallen outside NFR-P1's budget.
+ *   2. **Refusing connections** — `nexa_rtm_connect_failed > 0`: a socket could
+ *      not be opened, or opened and could not log in.
+ *   3. **Dropping connections** — `nexa_rtm_socket_dropped > 0`: a socket that
+ *      was live went away without the scenario asking it to.
+ *
+ * A fourth kind — sockets that stay open and stop *receiving* — is not a
+ * threshold because it is per-socket rather than aggregate; `rtm.js` checks it
+ * on every socket at close, and `checks rate==1.00` (inherited) is what makes
+ * it fail the run.
+ *
+ * The three above are all product-side readings. The load *generator* hitting
+ * an operating-system limit — file descriptors, ephemeral ports — produces the
+ * same red as (2), and the two must not be reported as one thing: see
+ * README §"Reading a red run: the pod, or this laptop?".
+ *
+ * @param {{ reconnect?: boolean }} [options] whether this run drives the
+ *   reconnect + missed-event-sync path (NFR-R2). Declared rather than always
+ *   claimed, for the same reason `restThresholds` lets a read-only scenario
+ *   decline the write budget: a `Rate` with no samples reads as 0, so an
+ *   unconditional `rate==1.00` would fail every run that does no reconnects.
+ * @returns {Record<string, string[]>} metric → k6 threshold expressions
+ */
+export function rtmThresholds({ reconnect = false } = {}) {
+  const thresholds = {
     ...sharedThresholds(),
     [METRIC_NAMES.fanoutLatency]: [p99Under(NFR_BUDGETS.rtmFanoutP99Ms)],
     ...exercised(OP_TAGS.fanout),
     // A Rate with no samples reads as 0, so this one already fails when the
     // scenario never logs in — it needs no companion.
     [METRIC_NAMES.rtmLoginSuccess]: [`rate>=${NFR_BUDGETS.rtmLoginSuccessRatio}`],
+    [METRIC_NAMES.rtmConnectFailed]: ['count==0'],
+    [METRIC_NAMES.rtmSocketDropped]: ['count==0'],
   };
+  if (reconnect) {
+    // NFR-R2 under load. Not a floor: a reconnect that came back and could not
+    // recover its missed events is the failure this requirement exists about,
+    // so one is one too many.
+    thresholds[METRIC_NAMES.rtmSyncRecovered] = ['rate==1.00'];
+  }
+  return thresholds;
 }
 
 /**

@@ -6,14 +6,10 @@
  *   - `GET /chats/:id/events`             — opening a transcript    (op:read)
  *   - `POST /chats/:id/events`            — an agent's reply        (op:write)
  *
- * `setup()` resolves ONE chat to reply into: `prisma/seed.ts#seedConversations`
- * leaves exactly one active, unassigned-but-queued conversation per richDemo
- * tenant (`agentId: null` + `active: true` sets `queuePosition: 1`, never
- * `null` — so `view=queued`, not `view=unassigned`, is what finds it). Doing
- * that lookup once means every VU replies into a chat that is guaranteed to
- * still be active for the whole run — the alternative, re-discovering a target
- * from the list on every iteration, would have to defend against a run that
- * ever changes which chat is queued.
+ * `setup()` resolves ONE chat to reply into — `lib/seed.js#findQueuedChatId`,
+ * which is where the seed's own quirk is explained. Doing that lookup once
+ * means every VU replies into a chat that is guaranteed to still be active for
+ * the whole run.
  *
  * Rate limit: even at the default profile (2 VU, 3 requests/iteration), this
  * scenario asks for 360 req/min against the 180/min agent cap (ADR-07) — see
@@ -31,6 +27,7 @@
 import { check, fail, sleep } from 'k6';
 import { CONFIG, stages } from '../lib/config.js';
 import { get, postJson } from '../lib/http.js';
+import { findQueuedChatId } from '../lib/seed.js';
 import { authHeaders, signIn } from '../lib/session.js';
 import { OP_TAGS, restThresholds, SUMMARY_TREND_STATS } from '../lib/thresholds.js';
 import { summaryHandler } from '../lib/summary.js';
@@ -45,34 +42,6 @@ export const options = {
 };
 
 const listUrl = `${CONFIG.apiBaseUrl}/chats?view=all&limit=25`;
-
-/**
- * The seed's one active conversation, found by the view that matches its
- * exact state (queued, unassigned) rather than by scanning `view=all` and
- * hoping it lands within the first page. Tagged `setup`, like sign-in — a
- * one-off lookup that happens once per run, not per VU, must stay out of the
- * `op:read` budget it would otherwise drag with three sequential round trips.
- */
-function findQueuedChatId(session) {
-  const url = `${CONFIG.apiBaseUrl}/chats?view=queued&limit=1`;
-  const response = get(url, OP_TAGS.setup, { headers: authHeaders(session) });
-  if (response.status !== 200) {
-    fail(
-      `GET /chats?view=queued failed: ${response.status} ${String(response.body).slice(0, 300)}`,
-    );
-  }
-
-  const items = response.json('items') ?? [];
-  const chatId = items[0]?.id;
-  if (!chatId) {
-    fail(
-      'no queued chat in the seeded workspace — rest.js replies into the conversation ' +
-        '`prisma/seed.ts#seedConversations` leaves live; run `pnpm db:seed` first (or ' +
-        '`pnpm db:reset` if a previous run against this database archived it)',
-    );
-  }
-  return chatId;
-}
 
 /** Runs once, before any VU. Every call here is tagged `setup` — see the module doc. */
 export function setup() {

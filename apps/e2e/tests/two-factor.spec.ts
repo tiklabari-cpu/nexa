@@ -181,21 +181,16 @@ async function submitPassword(page: Page, owner: FreshOwner): Promise<void> {
 /**
  * Swap the code box for the recovery sheet.
  *
- * Activated from the keyboard, and not out of neatness. The code box is
- * `autoFocus`ed, so a *pointer* press on this button blurs it on mousedown; the
- * empty field then earns its "Enter your code." line, `FieldError` inserts a
- * paragraph above the button, and by the time the mouse comes up the button has
- * moved down the page — mousedown and mouseup land on different elements, so
- * the browser fires no click on it at all. Measured, not guessed: the first
- * attempt left the button focused with the mode unchanged, every time.
- *
- * Focus-then-Enter is the same activation without the moving target, and it is
- * how anybody tabbing through this screen reaches the alternative anyway
- * (NFR-A11Y4). The wart itself belongs to `SignInPage`, not to this test — it
- * is noted in the handoff rather than fixed here (CONVENTIONS §5).
+ * A real pointer click, not keyboard activation — that used to be the only way
+ * in (tm 152.12): the code box is `autoFocus`ed, so a mousedown here blurred it,
+ * the empty field earned its "Enter your code." line, `FieldError` inserted a
+ * paragraph, and the button moved down the page before mouseup landed. This
+ * click proves that race is closed (`SignInPage` now reserves the error's slot
+ * whether or not it has a message) — a regression would bring this test back to
+ * the same "button focused, mode unchanged" failure the handoff measured.
  */
 async function useRecoverySheet(codeStep: Locator): Promise<void> {
-  await codeStep.getByRole('button', { name: 'Use a recovery code instead' }).press('Enter');
+  await codeStep.getByRole('button', { name: 'Use a recovery code instead' }).click();
   await expect(codeStep.getByLabel('Recovery code')).toBeVisible();
 }
 

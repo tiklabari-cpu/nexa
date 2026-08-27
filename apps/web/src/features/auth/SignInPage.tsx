@@ -418,7 +418,19 @@ export function SignInPage(): ReactElement {
                   aria-describedby={codeError ? 'code-error' : undefined}
                   className="rounded-md border border-border bg-inset px-3 py-2 text-sm tracking-widest"
                 />
-                <FieldError id="code-error" message={codeError} />
+                {/* Reserved even when empty: the box below is `autoFocus`ed, so a
+                 * pointer press on "Use a recovery code instead" blurs it on
+                 * mousedown. Without this slot, that blur earns the required-field
+                 * message here, `FieldError` inserts a paragraph, and the button
+                 * moves down the page before mouseup lands — mousedown and mouseup
+                 * hit different elements and the browser fires no click at all
+                 * (measured: three-for-three, button stayed focused, mode never
+                 * switched). `overflow-hidden` stops the message's own top margin
+                 * from collapsing through this wrapper, so the reserved height holds
+                 * even while there is nothing to show. */}
+                <div className="min-h-[1.25rem] overflow-hidden">
+                  <FieldError id="code-error" message={codeError} />
+                </div>
               </div>
 
               {codeForm.submitError && (

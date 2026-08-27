@@ -7785,7 +7785,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T17:39:27.973Z",
+        "updatedAt": "2026-08-27T18:22:01.894Z",
         "subtasks": [
           {
             "id": 1,
@@ -7804,12 +7804,12 @@
             "description": "REST API nin yük altındaki gecikmesi ilk kez ölçüldü.",
             "details": "NE YAPILACAK: apps/load/scenarios/rest.js — gerçekçi bir ajan karışımı:\n- Sohbet listesi okuma (GET /chats?view=...) — okuma bütçesi.\n- Transcript okuma (GET /chats/{id}/events) — okuma bütçesi.\n- Mesaj gönderme (POST /chats/{id}/events) — yazma bütçesi.\n- Sanal kullanıcı sayısı kademeli artan bir profil (ramp-up), plato, ve düşüş.\nEşikler 161.1 in thresholds modülünden gelir; okuma ve yazma AYRI ölçülür (bütçeleri farklı).\nSonuç özeti makine-okunur bir dosyaya da yazılmalı (161.4 onu okuyacak).\n\nDOSYALAR: apps/load/scenarios/rest.js · apps/load/lib/ (paylaşılan yardımcılar).\nREFERANS: ADR-07 hız sınırları — agent 180/dk (burst 30). YÜK TESTİ KENDİ SINIRINA TAKILMAMALI:\nya tohumda birden çok ajan kullan ya yığını yükseltilmiş RATE_LIMIT_* ile koş (e2e nin\nRATE_LIMIT_ANON_PER_MIN=500 emsali). Hangi yolu seçtiğini README ye yaz — aksi hâlde ölçtüğün şey\nürünün gecikmesi değil, kendi hız sınırının olur.\n\nTUZAK: yazma senaryosu gerçek veri üretir ve veritabanını şişirir. Yük koşusu sonrası temizlik\nyolunu README de anlat; nexa geliştirme veritabanını DROP ETME (CLAUDE.md sınırı), tohum sıfırlama yeterli.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-LOAD** (türetilmiş — NFR-P2). Gereksinim satırı: `grep -n \"| M-LOAD\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-LOAD\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Senaryo koşuyor ve p99 okuma/yazma değerleri üretiyor; eşik aşılırsa non-zero exit.\n- Ölçülen sayılar HANDOFF a yazılıyor (koşu profili + donanım notu ile — sayı bağlamsız anlamsızdır).\n- Hız sınırına takılmadığı doğrulandı (429 oranı raporda sıfıra yakın).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "161.1"
             ],
             "parentId": "161",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-27T18:22:01.894Z"
           },
           {
             "id": 3,
@@ -8118,7 +8118,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T17:39:27.974Z",
+      "lastModified": "2026-08-27T18:22:01.895Z",
       "taskCount": 169,
       "completedCount": 156,
       "tags": [

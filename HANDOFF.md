@@ -13,6 +13,12 @@
 
 ## Task log (newest-first)
 
+## 152.13 — S11-2FA-m · Kapı flake'i: two-factor-enforcement.test.ts sürüklenme iddiası adım sınırında kırmızı veriyordu — done — 2026-08-27 UTC
+
+- **Yapıldı:** `refuses a code that is more than one step out` testinin `code(secret, offset)` yardımcısı adımı çağrı anında sabitliyordu; `authorize()` sunucuya varana kadar ağ + parola KDF'i (~100-300 ms) geçiyor ve `enforceSecondFactor` kendi `Date.now()`'unu ayrıca okuyordu — araya bir 30 sn adım sınırı girerse "+2" iddiası "+1"e daralıp kabul (200) dönüyordu (tm 152.9'da bir kez ölçüldü). Yeni yardımcı `codeAwayFromBoundary` adımın son 5 saniyesindeyse gerçek `setTimeout` ile bir sonraki adımı bekliyor, SONRA kodu üretiyor — iddia gevşetilmedi (görevin tuzağı), yalnız sınırdan kaçınıldı. Kapsam yalnız bu teste sınırlı: dosyadaki diğer `code(secret,1)` kullanımları analiz edildi, aynı flake'e açık değiller (1 adımlık kayma zaten kabul penceresi içinde kalıyor).
+- **Doğrulama (hepsi exit 0):** `typecheck` 12/12 · `lint` 9/9 · `format:check` · turbo `test --force` (e2e+api hariç) 9/9 · api `test:unit --force` 65/1077 (+0) · api `test:integration` 3 shard 34+34+33 = 101 dosya/2571 test (taban birebir, +0) · hedef dosya tek başına ×4 tekrar 20/20 yeşil · `build` 8/8. Migration/kontrat yok; ürün davranışı değişmediği için e2e koşulmadı.
+- **Sonraki pencereye:** §7.2 `S11-2FA` satırı **`✅ → KS11-2FA`** oldu — tm 152'nin 13 alt-görevi de done, ayrı bir kapanış görevi gerekmiyor. Faz-5 düz/dilim tabloları (`PLAN.md` ~2994, ~3949-3957) BİLİNÇLİ dokunulmadı — tm 150/151 (kendi satırları zaten `✅`) örneğinde de aynı tablo `⬜` kalmış, yani ayrı bir toplu geçiş bekliyor, tek bir alt-görevin işi değil. `run-loop.sh`'ın commit'siz değişikliği BU GÖREVE AİT DEĞİL — dokunulmadı (yedinci pencerelik emsal).
+
 ## 152.12 — S11-2FA-l · SignInPage: "Use a recovery code instead" fare ile ilk tıklamada çalışmıyor — done — 2026-08-27 UTC
 
 - **Yapıldı:** Kök neden tm 152.9'un ölçtüğü gibiydi — `#two-factor-code` `autoFocus`lu, düğmeye mousedown basmak onu blur ediyor, boş alan `required` hatasını kazanıyor, `FieldError` bir paragraf ekliyor, düğme mouseup'tan önce aşağı kayıyor, tarayıcı click üretmiyor. Dar çözüm: yalnız bu alanın hata slotu (`code-error`) `min-h-[1.25rem] overflow-hidden` sarmalayıcıyla artık boşken de yer kaplıyor — yükseklik mesaj var/yok fark etmeksizin sabit. `lib/form.tsx`/`FieldError`'a DOKUNULMADI (CONVENTIONS §1.2'nin uyardığı tüm-formları-etkileme riski hiç doğmadı).

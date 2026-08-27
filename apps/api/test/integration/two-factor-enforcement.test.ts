@@ -37,7 +37,7 @@ import {
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { deriveCodeChallenge, generateToken } from '../../src/lib/crypto.js';
-import { generateTotpForStep, totpStep } from '../../src/lib/totp.js';
+import { generateTotpForStep, totpStep, TOTP_PERIOD_SECONDS } from '../../src/lib/totp.js';
 import { API_PREFIX } from '../../src/server.js';
 
 describe('two-factor enforcement (S11-2FA-e)', () => {
@@ -107,6 +107,32 @@ describe('two-factor enforcement (S11-2FA-e)', () => {
    */
   const code = (secret: string, offset = 0): string =>
     generateTotpForStep(secret, totpStep(Date.now()) + offset);
+
+  /**
+   * Like `code`, but for assertions that need the step to still be current by
+   * the time the *server* reads its own clock.
+   *
+   * `code` fixes the step the instant it is called; `authorize` then spends a
+   * network round trip plus a password KDF (~100-300 ms) before
+   * `enforceSecondFactor` reads `Date.now()` itself. If a 30-second step
+   * boundary falls in that gap, the server's step is one ahead of the one the
+   * test computed — a "+2, a code from a minute ago" narrows to "+1", which
+   * sits inside `TOTP_DRIFT_STEPS` and turns an expected 401 into 200
+   * (measured, tm 152.13: shard 3/3, single occurrence). Loosening the
+   * assertion would hide the exact thing it proves, so instead this waits out
+   * a boundary that is too close before pinning the step — the margin only
+   * costs real time in the rare call that lands in the last few seconds of a
+   * step.
+   */
+  async function codeAwayFromBoundary(secret: string, offset = 0): Promise<string> {
+    const stepMs = TOTP_PERIOD_SECONDS * 1000;
+    const safetyMarginMs = 5_000;
+    const msIntoStep = Date.now() % stepMs;
+    if (msIntoStep > stepMs - safetyMarginMs) {
+      await new Promise((resolve) => setTimeout(resolve, stepMs - msIntoStep + 50));
+    }
+    return code(secret, offset);
+  }
 
   /** Switch `require_two_factor` on for a license, seeding the brand it hangs off. */
   async function requirePolicy(tenant: TenantFixture): Promise<void> {
@@ -191,9 +217,16 @@ describe('two-factor enforcement (S11-2FA-e)', () => {
     it('refuses a code that is more than one step out', async () => {
       const { secret } = await enrol(fx.a, fx.a.ownerAccountId);
 
-      // ±1 is clock skew; ±2 is a code from a minute ago.
-      expect((await authorize(fx.a, { code: code(secret, 2) })).statusCode).toBe(401);
-      expect((await authorize(fx.a, { code: code(secret, 1) })).statusCode).toBe(200);
+      // ±1 is clock skew; ±2 is a code from a minute ago. Each code is pinned
+      // away from the step boundary (see `codeAwayFromBoundary`) so the
+      // server's own clock read, after the password KDF, cannot land one step
+      // later than the one the code was generated for.
+      expect(
+        (await authorize(fx.a, { code: await codeAwayFromBoundary(secret, 2) })).statusCode,
+      ).toBe(401);
+      expect(
+        (await authorize(fx.a, { code: await codeAwayFromBoundary(secret, 1) })).statusCode,
+      ).toBe(200);
     });
   });
 

@@ -24,6 +24,7 @@ export const customers: Messages = {
   'customers.page.subtitle': 'People who have contacted this workspace.',
   'customers.page.count.one': '{formatted} person',
   'customers.page.count.other': '{formatted} people',
+  'customers.page.shown': '{shown} / {total} shown',
   'customers.page.searchLabel': 'Search customers',
   'customers.page.searchPlaceholder': 'Name, email or phone…',
   'customers.page.segmentsAriaLabel': 'Customer segments',

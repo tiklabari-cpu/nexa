@@ -13,6 +13,14 @@
 
 ## Task log (newest-first)
 
+## 153.5 — P5-PAGE-e · Customers listesi sayfalanır (CustomersPage.tsx limit=50) + "N / M" göstergesi — done — 2026-08-27 UTC
+
+- **Yapıldı:** `CustomersPage.tsx`'in doğrudan yazdığı `useQuery` 153.1'in `usePagedQuery`'sine taşındı (`limit=50` + `page_id`, `VirtualTable`'ın `onEndReached`'ine `list.fetchNext` bağlandı). Zaten var olan ama okunmayan `total` alanı artık Card'ın üstüne eklenen "{shown} / {total} shown" satırında kullanılıyor (`customers.page.shown`, `locales/{en,tr}/customers.ts`).
+- **Seçim güvenliği + TUZAK:** `selectedId`'i temizleyen efekt chat/ticket listesindeki `!list.hasNext && !items.some(...)` emsaline geçti — "seçili müşteri ikinci sayfadaysa deep-link ile açılış hâlâ çalışmalı" bu gate sayesinde: `CustomerDetailPanel` seçimi listeden değil doğrudan `/customers/:id`'den okuduğu için, satır henüz yüklenmemiş bir sayfada olsa bile panel açılır.
+- **Arama/segment sıfırlaması:** ayrı kod gerekmedi — `segment`/`debounced` zaten `queryKey`'de, bir değişiklik `ticketsKey`/chat listesiyle aynı "filtre değişince yeni zincir" desenini otomatik tetikliyor.
+- **Doğrulama (hepsi exit 0):** `typecheck` 12/12 · `lint` 9/9 · `format:check` · turbo `test --force` (e2e+api hariç) 9/9 — web **129 dosya / 1467 test** (taban 129/1464 → **+3**: `CustomersPage.test.tsx` yeni `paging (P5-PAGE-e)` bloğu), types 132 · ai-mock 136 · widget 115 · rtm 109 (**+0**) · api `test:unit --force` 65/1077 (**+0**) · api `test:integration` 3 shard 34+34+33 = **101 dosya / 2571 test** (taban birebir, **+0**) · `build` 8/8 · **TAM e2e 207/207** (2 shard) — taban korundu; `customers.spec.ts` ayrıca tek başına 6/6. Kontrat değişmedi, migration yok.
+- **Sonraki pencereye:** §7.2 `P5-PAGE` satırı **`◐ → KP5-PAGE` KALIYOR** — Traffic (153.6) duruyor, 153.7 e2e+nöbetçiyle kapatır. Faz-5 düz/dilim tabloları (`PLAN.md` ~2995, ~3962) D126 emsaliyle DOKUNULMADI. e2e'nin yeniden yazdığı 94 `kanit` PNG'si `git checkout` ile geri alındı (yeni kanıt üretilmedi). `run-loop.sh`'ın commit'siz değişikliği BU GÖREVE AİT DEĞİL — dokunulmadı (on ikinci pencerelik emsal).
+
 ## 153.4 — P5-PAGE-d · Tickets grid sayfalanır (useTickets.ts limit=50) — done — 2026-08-27 UTC
 
 - **Yapıldı:** `useTicketList` `usePagedQuery`'ye geçti (`limit=50` + `page_id`); `TicketGrid` artık `onEndReached` alıyor ve `InboxPage` bunu `tickets.fetchNext`'e bağlıyor — grid sona yaklaşınca sonraki sayfayı istiyor (`VirtualTable`'ın 153.1'de eklenen ortak mekaniği, ayrı bir "Daha fazla yükle" düğmesine gerek kalmadan: klavye kaydırması da aynı `onScroll` yolundan geçiyor).

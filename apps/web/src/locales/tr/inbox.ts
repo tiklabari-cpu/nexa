@@ -71,6 +71,8 @@ export const inbox: Messages = {
   'inbox.list.item.queuePosition': '#{position}. sırada',
   'inbox.list.item.unreadAria': '{count} okunmamış',
   'inbox.list.item.noMessages': 'Henüz mesaj yok',
+  'inbox.list.loadMore': 'Daha fazla yükle',
+  'inbox.list.loading': 'Yükleniyor…',
 
   // Transcript header + empty state
   'inbox.thread.visitorFallback': 'Ziyaretçi',

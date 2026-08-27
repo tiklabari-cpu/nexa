@@ -2,10 +2,11 @@
  * Real-time inbox tabs — All / Chatting / Queued / Waiting (FR-MOD-03.1.1).
  *
  * These segment the *loaded* conversation list rather than fetching a fourth
- * time: the list is already kept live by the realtime layer (a push invalidates
- * `['chats']`), so deriving the buckets from it means the tab counts move the
- * instant a chat is answered, queued, or transferred — no extra socket state to
- * drift out of sync with the rows the agent is looking at.
+ * time: the list is already kept live by the realtime layer (a push writes
+ * straight into the paged `['chats']` cache — `useInbox.ts`), so deriving the
+ * buckets from it means the tab counts move the instant a chat is answered,
+ * queued, or transferred — no extra socket state to drift out of sync with the
+ * rows the agent is looking at.
  *
  * Pure functions on purpose. The bucketing is where the subtle bugs live (a
  * chat counted in two tabs, or in none), so it is tested in isolation rather

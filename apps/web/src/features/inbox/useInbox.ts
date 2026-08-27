@@ -7,17 +7,33 @@
  * alternative — a parallel "live events" list merged at render time — is where
  * duplicate and out-of-order messages come from.
  */
-import { useMutation, useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type InfiniteData,
+  type QueryClient,
+} from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ROUTING_STATUSES } from '@nexa/types';
 import { RtmClient, type PushHandler, type RtmStatus } from '../../lib/realtime.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
+import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
 import { useTypingStore } from './typing.js';
 import { useConflictStore, type ConflictAgent } from './conflict.js';
 import type { ChatDetail, ChatEvent, ChatSummary, InboxView } from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
+
+/** Rows per request. The list chains pages from here, so it is a page, not a cap. */
+const CHAT_PAGE_SIZE = 50;
+
+/**
+ * The safety net for a socket that is down without having noticed yet. It
+ * re-reads the *first* page only — see `mergeChatHead` for why that is enough.
+ */
+const CHAT_HEAD_REFRESH_MS = 30_000;
 
 export function chatsKey(view: InboxView): unknown[] {
   return ['chats', view];
@@ -26,15 +42,214 @@ export function eventsKey(chatId: string): unknown[] {
   return ['events', chatId];
 }
 
-export function useChatList(view: InboxView) {
+function chatListUrl(view: InboxView, pageId: string | undefined): string {
+  const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
+  return `/chats?view=${view}&limit=${CHAT_PAGE_SIZE}${cursor}`;
+}
+
+/** What `usePagedQuery` keeps in the cache for one view. */
+type ChatListCache = InfiniteData<PagedResponse<ChatSummary>, string | undefined>;
+
+/**
+ * The server's order, as one predicate: `created_at` descending, `id`
+ * descending as the tie-break (`listChatsInTenant`'s `orderBy`, and the two
+ * columns its cursor is built from).
+ */
+function isOlderChat(a: ChatSummary, b: ChatSummary): boolean {
+  return a.created_at === b.created_at ? a.id < b.id : a.created_at < b.created_at;
+}
+
+/**
+ * Folds a freshly read first page into a paged chat list without disturbing the
+ * pages below it.
+ *
+ * This is the whole reason the contract pages by keyset cursor rather than by
+ * offset. The cursor is `(created_at, id)` and a chat's `created_at` never
+ * moves, so page 2 means "everything older than this particular chat" — a
+ * stable statement. A conversation that starts right now is the newest row
+ * there is: it can only enter at the top of page 1, and every page already
+ * scrolled past still describes exactly the same rows it did before. With an
+ * offset cursor `?offset=50` would now point one row later and the agent would
+ * silently never see the conversation that slid across the boundary.
+ *
+ * So a refresh only has to re-read page 1. Two details make the seam exact:
+ *
+ *   - Rows pushed *out* of the newest-50 window by the arrivals are kept, not
+ *     dropped: page 2 starts after the boundary this page already had, so
+ *     nothing else covers them. Rows the fresh window *does* reach and did not
+ *     return are gone from the view (archived, transferred away) and are
+ *     dropped — that is the difference `isOlderChat` decides.
+ *   - The stored `next_page_id` stays put while a page follows it, because
+ *     that cursor is what page 2 was fetched with.
+ *
+ * A fresh page that comes back empty is the one case where the pages below are
+ * discarded: read from the top, "no rows" is a statement about the whole view.
+ */
+export function mergeChatHead(
+  cache: ChatListCache | undefined,
+  fresh: PagedResponse<ChatSummary>,
+): ChatListCache | undefined {
+  // Nothing loaded yet: the query's own first fetch is the refresh.
+  if (!cache || cache.pages.length === 0) return cache;
+
+  const head = cache.pages[0]!;
+  const rest = cache.pages.slice(1);
+
+  const oldest = fresh.items.at(-1);
+  if (!oldest) {
+    return { pages: [fresh], pageParams: cache.pageParams.slice(0, 1) };
+  }
+
+  const returned = new Set(fresh.items.map((chat) => chat.id));
+  const displaced = head.items.filter(
+    (chat) => !returned.has(chat.id) && isOlderChat(chat, oldest),
+  );
+
+  const nextPageId = rest.length > 0 ? head.next_page_id : fresh.next_page_id;
+  const merged: PagedResponse<ChatSummary> = {
+    items: [...fresh.items, ...displaced],
+    ...(fresh.total !== undefined ? { total: fresh.total } : {}),
+    ...(nextPageId !== undefined ? { next_page_id: nextPageId } : {}),
+  };
+
+  return { ...cache, pages: [merged, ...rest] };
+}
+
+/**
+ * Every mounted chat list registers how to re-read its own first page here.
+ *
+ * `applyPush` holds a `QueryClient` and nothing else, and a `QueryClient` can
+ * invalidate but cannot refresh *part* of an infinite query — invalidating one
+ * re-requests every page the agent has scrolled through. This registry is how a
+ * push reaches the one request that is actually needed. It is the shape
+ * `useTypingStore.setEmitter` already uses for the same reason: the socket
+ * outlives any one component.
+ */
+const headRefreshers = new Map<symbol, { view: InboxView; run: () => Promise<void> }>();
+const headInFlight = new Set<InboxView>();
+const headPending = new Set<InboxView>();
+let headTicker: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Re-reads the first page of every mounted chat list, once per view — the
+ * sidebar counts mount a list for all seven views and the open one mounts an
+ * eighth for whichever it is showing, so the same view is registered twice.
+ */
+export function refreshChatHeads(): void {
+  const done = new Set<InboxView>();
+  for (const entry of headRefreshers.values()) {
+    if (done.has(entry.view)) continue;
+    done.add(entry.view);
+    void entry.run();
+  }
+}
+
+/**
+ * The conversation list for one view, page by page (NFR-P5).
+ *
+ * Live and paginated at once: pushes and the periodic refresh write into the
+ * same paged cache the scroll reads from, through `mergeChatHead` (arrivals)
+ * and `patchChatInPages` (a row that changed). Rows are de-duplicated on the
+ * way out — a chat that leaves the view lets the fresh window reach one row
+ * further down, which can briefly put that row on two pages.
+ */
+export function useChatList(view: InboxView): PagedQueryResult<ChatSummary> {
   const api = useApiClient();
-  return useQuery({
-    queryKey: chatsKey(view),
-    queryFn: () => api.get<{ items: ChatSummary[] }>(`/chats?view=${view}&limit=50`),
-    // Realtime keeps this fresh; the interval is a safety net for a socket that
-    // is down without having noticed yet.
-    refetchInterval: 30_000,
+  const queryClient = useQueryClient();
+
+  const buildUrl = useCallback((pageId: string | undefined) => chatListUrl(view, pageId), [view]);
+  const query = usePagedQuery<ChatSummary>({ queryKey: chatsKey(view), buildUrl });
+
+  // Read through a ref, not a dependency: the merge writes the page array that
+  // an in-flight `fetchNext` is about to overwrite with the snapshot it took
+  // when it started, so a refresh landing inside that window is simply skipped.
+  // The next push or tick re-applies it.
+  const fetchingNextRef = useRef(false);
+  fetchingNextRef.current = query.isFetchingNext;
+
+  const refreshHead = useCallback(async (): Promise<void> => {
+    if (fetchingNextRef.current) return;
+    const key = chatsKey(view);
+    // Nothing loaded yet: the query's own first fetch is the refresh.
+    if (!queryClient.getQueryData(key)) return;
+
+    // A burst collapses to one read in flight plus at most one repeat, rather
+    // than one read per push. The repeat is not optional: a chat starting and
+    // its first message arrive as two pushes a few milliseconds apart, and a
+    // read already in flight when the second lands is usually too early to
+    // contain it — dropping it would leave the row saying "no messages yet"
+    // until the next tick.
+    if (headInFlight.has(view)) {
+      headPending.add(view);
+      return;
+    }
+    headInFlight.add(view);
+    try {
+      do {
+        headPending.delete(view);
+        const fresh = await api.get<PagedResponse<ChatSummary>>(chatListUrl(view, undefined));
+        queryClient.setQueryData<ChatListCache>(key, (cache) => mergeChatHead(cache, fresh));
+      } while (headPending.has(view));
+    } catch {
+      // Best-effort, like the interval it replaces: a dropped refresh leaves
+      // the list one beat stale until the next push or tick.
+      headPending.delete(view);
+    } finally {
+      headInFlight.delete(view);
+    }
+  }, [api, queryClient, view]);
+
+  useEffect(() => {
+    const token = Symbol('chat-head');
+    headRefreshers.set(token, { view, run: refreshHead });
+    // One timer for all views rather than one per mounted list, so the eight
+    // lists on screen cost seven requests every interval, not eight.
+    headTicker ??= setInterval(refreshChatHeads, CHAT_HEAD_REFRESH_MS);
+    return () => {
+      headRefreshers.delete(token);
+      if (headTicker && headRefreshers.size === 0) {
+        clearInterval(headTicker);
+        headTicker = null;
+      }
+    };
+  }, [view, refreshHead]);
+
+  const items = useMemo(() => {
+    const seen = new Set<string>();
+    return query.items.filter((chat) => (seen.has(chat.id) ? false : (seen.add(chat.id), true)));
+  }, [query.items]);
+
+  return { ...query, items };
+}
+
+/**
+ * Applies `patch` to one chat wherever it sits in the paged cache, across every
+ * view. Returns whether it was found at all — a push about a chat on no loaded
+ * page is the signal that it may have just entered a view, and the only case
+ * where a request is worth spending.
+ */
+function patchChatInPages(
+  queryClient: QueryClient,
+  chatId: string,
+  patch: (chat: ChatSummary) => ChatSummary,
+): boolean {
+  let touched = false;
+  queryClient.setQueriesData<ChatListCache>({ queryKey: ['chats'] }, (cache) => {
+    if (!cache) return cache;
+    let hit = false;
+    const pages = cache.pages.map((page) => {
+      if (!page.items.some((chat) => chat.id === chatId)) return page;
+      hit = true;
+      return {
+        ...page,
+        items: page.items.map((chat) => (chat.id === chatId ? patch(chat) : chat)),
+      };
+    });
+    if (!hit) return cache;
+    touched = true;
+    return { ...cache, pages };
   });
+  return touched;
 }
 
 export function useChat(chatId: string | null) {
@@ -295,7 +510,21 @@ export function applyPush(
         return { items: [...withoutPending, event] };
       });
 
-      void queryClient.invalidateQueries({ queryKey: ['chats'] });
+      // The list row for this chat, on whichever page it sits — the point of
+      // searching every page rather than invalidating: a conversation the agent
+      // scrolled down to is as live as one at the top, and refreshing it costs
+      // nothing because the push already carries what changed.
+      //
+      // `unread_count` is the server's own rule (`countUnread`): a flag, not a
+      // running count — 1 while the newest event is newer than this agent's
+      // seen marker, 0 once it is not. An event that just arrived is always
+      // newer, and `useMarkSeen` is what puts it back to 0.
+      const found = patchChatInPages(queryClient, chatId, (chat) => ({
+        ...chat,
+        last_event: event,
+        unread_count: 1,
+      }));
+      if (!found) refreshChatHeads();
       return;
     }
 
@@ -389,9 +618,20 @@ export function applyPush(
       return;
 
     case 'incoming_chat':
+      // A conversation that started just now is the newest row there is, so it
+      // can only land at the top of page 1 — re-reading that page is the whole
+      // update (`mergeChatHead`). The pages already scrolled past are keyed on
+      // `created_at`, which does not move, so they cannot slide underneath it.
+      refreshChatHeads();
+      return;
+
     case 'chat_transferred':
     case 'chat_unfollowed':
     case 'chat_appeared':
+      // These can move a chat into or out of a view at any depth, and the push
+      // does not say where — the loaded chain is re-read in full. Correct
+      // rather than cheap, and rare enough to afford it: the keyset cursors
+      // re-stitch from the fresh pages, so no row is skipped or repeated.
       void queryClient.invalidateQueries({ queryKey: ['chats'] });
       return;
 
@@ -422,18 +662,28 @@ export function useViewCounts(): Record<InboxView, number | undefined> {
   const ai = useChatList('ai');
   const aiSolved = useChatList('ai_solved');
 
-  return useMemo(
-    () => ({
-      all: all.data?.items.length,
-      my: mine.data?.items.length,
-      queued: queued.data?.items.length,
-      unassigned: unassigned.data?.items.length,
-      archived: archived.data?.items.length,
-      ai: ai.data?.items.length,
-      ai_solved: aiSolved.data?.items.length,
-    }),
-    [all.data, mine.data, queued.data, unassigned.data, archived.data, ai.data, aiSolved.data],
-  );
+  // Read straight through rather than memoised: the counts are consumed as
+  // plain numbers by the rail buttons, so a stable object identity buys
+  // nothing, and every paged result is a fresh object each render anyway.
+  return {
+    all: loadedCount(all),
+    my: loadedCount(mine),
+    queued: loadedCount(queued),
+    unassigned: loadedCount(unassigned),
+    archived: loadedCount(archived),
+    ai: loadedCount(ai),
+    ai_solved: loadedCount(aiSolved),
+  };
+}
+
+/**
+ * What the sidebar can honestly say: the rows loaded so far, and `undefined`
+ * until the first page lands (an unloaded view must not read as empty). These
+ * are the counts of a list nobody has scrolled — one page — which is what they
+ * were before paging too; `/chats` sends no `total` for the whole filter.
+ */
+function loadedCount(list: PagedQueryResult<ChatSummary>): number | undefined {
+  return list.pages.length > 0 ? list.items.length : undefined;
 }
 
 /** One connected channel, as the `/channels` list reports it (FR-MOD-08.5.4-.6). */

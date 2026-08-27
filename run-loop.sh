@@ -53,6 +53,11 @@ ALLOW=""                   # gerekirse: '--allowedTools Bash(git *),Bash(pnpm *)
 # RESERVE_PCT = kendi elle kullanımın için ayrılan pay.
 PANEL_URL="${DASH_URL:-http://127.0.0.1:4545}"
 RESERVE_PCT="${LOOP_RESERVE_PCT:-5}"
+# Panel "elle başlatma önceliği" bildirdiğinde kota bitmişse döngü KAPANMAZ,
+# sıfırlanmayı bekler — ama sonsuza kadar değil: bu üst sınırdan uzun bir
+# bekleyiş gerekiyorsa eski davranışa (temiz çıkış + panelden otomatik devam)
+# dönülür. Beklerken hiçbir pencere açılmaz, yani kota harcanmaz.
+WAIT_RESET_MAX_MIN="${LOOP_WAIT_RESET_MAX_MIN:-90}"
 COST_MAX_PCT="${LOOP_COST_MAX_PCT:-20}"
 COST_HIGH_PCT="${LOOP_COST_HIGH_PCT:-10}"
 
@@ -223,31 +228,84 @@ status_from(){ jq -r 'select(.type=="result") | (.structured_output.status // em
 # olduğu için aynı işten devam edilir).
 # Panel kapalı/okunamıyorsa 0 döner (fail-open) — döngü panele bağımlı değildir.
 # $1 = efor · $2 = aşama adı (log için) · $3 = model (sonnet pencereleri belirgin ucuz)
+#
+# ELLE BAŞLATMA ÖNCELİĞİ (panel /api/usage → manualOverride.active): kullanıcı
+# kullanımı EKRANDA GÖREREK "Başlat" dediyse kapı döngüyü KAPATMAZ; pencere
+# sıfırlanana kadar bekler ve kaldığı yerden sürer. Beklerken hiç pencere
+# açılmadığı için kota harcanmaz ve hiçbir iş yarıda kalmaz — "başlat dedimse
+# başlasın" isteğinin karşılığı budur (panel tarafı: lib/manualOverride.mjs).
 quota_gate(){
-  local stage="$2" mdl="${3:-$MODEL_BIG}" need used remaining usage resume_at
+  local stage="$2" mdl="${3:-$MODEL_BIG}" need used remaining usage resume_at ovr rounds=0
   if [ "$1" = "$EFFORT_MAX" ]; then need=$((COST_MAX_PCT+RESERVE_PCT)); else need=$((COST_HIGH_PCT+RESERVE_PCT)); fi
   # sonnet pencereleri ölçülen opus maliyetinin küçük bir kesri — kapıyı orantılı gevşet,
   # ama RESERVE_PCT'yi asla yeme (kullanıcının elle kullanımı için ayrılmış pay).
   if [ "$mdl" = "$MODEL_SMALL" ]; then need=$(( (need - RESERVE_PCT) / 3 + RESERVE_PCT )); fi
 
-  usage=$(curl -s --max-time 5 "$PANEL_URL/api/usage" 2>/dev/null)
-  used=$(printf '%s' "$usage" | jq -r '.fiveHour.utilization // empty' 2>/dev/null)
-  case "$used" in ''|*[!0-9]*) return 0 ;; esac   # okunamadı → eski davranış
+  while : ; do
+    # Bekleyişten SONRAKİ ölçüm taze olmalı: panel kullanımı 30 sn önbellekler,
+    # sıfırlanmanın hemen ardından bayat (yüksek) değer dönerse boşuna bir tur
+    # daha beklenirdi.
+    if [ "$rounds" -gt 0 ]; then usage=$(curl -s --max-time 8 "$PANEL_URL/api/usage?fresh=1" 2>/dev/null)
+    else usage=$(curl -s --max-time 5 "$PANEL_URL/api/usage" 2>/dev/null); fi
+    used=$(printf '%s' "$usage" | jq -r '.fiveHour.utilization // empty' 2>/dev/null)
+    case "$used" in ''|*[!0-9]*) return 0 ;; esac   # okunamadı → eski davranış
 
-  remaining=$((100-used))
-  [ "$remaining" -ge "$need" ] && return 0
+    remaining=$((100-used))
+    [ "$remaining" -ge "$need" ] && return 0
 
-  # resumeAtIfStopped panelde sıfırlanma + 1 dk olarak hesaplanır ve geçmişe
-  # düşmemesi garanti edilir (usage.mjs resumeAtFrom).
-  resume_at=$(printf '%s' "$usage" | jq -r '.resumeAtIfStopped // empty' 2>/dev/null)
-  if [ -n "$resume_at" ]; then
-    curl -s --max-time 5 -X POST "$PANEL_URL/api/schedules" \
-      -H 'content-type: application/json' \
-      -d "{\"atISO\":\"$resume_at\",\"note\":\"kota kapısı — $stage\"}" >/dev/null 2>&1
-  fi
-  log "⏸ Kota kapısı ($stage): kalan %$remaining < gerekli %$need (efor $1, rezerv %$RESERVE_PCT)."
-  log "  Döngü temiz duruyor. Otomatik devam: ${resume_at:-YOK — panel kapalı, elle başlat}"
-  return 1
+    # resumeAtIfStopped panelde sıfırlanma + 1 dk olarak hesaplanır ve geçmişe
+    # düşmemesi garanti edilir (usage.mjs resumeAtFrom).
+    resume_at=$(printf '%s' "$usage" | jq -r '.resumeAtIfStopped // empty' 2>/dev/null)
+    ovr=$(printf '%s' "$usage" | jq -r '.manualOverride.active // false' 2>/dev/null)
+
+    # Öncelik varken: kapanmak yerine sıfırlanmayı bekle, sonra kotayı yeniden ölç.
+    # rounds sınırı, sıfırlanma zamanı bayat kalırsa (her turda "1 dk sonra")
+    # sonsuz beklemeyi engeller — o durumda eski davranışa düşülür.
+    if [ "$ovr" = "true" ] && [ "$rounds" -lt 5 ] && wait_for_reset "$stage" "$resume_at" "$remaining" "$need"; then
+      rounds=$((rounds+1))
+      continue
+    fi
+
+    if [ -n "$resume_at" ]; then
+      curl -s --max-time 5 -X POST "$PANEL_URL/api/schedules" \
+        -H 'content-type: application/json' \
+        -d "{\"atISO\":\"$resume_at\",\"note\":\"kota kapısı — $stage\"}" >/dev/null 2>&1
+    fi
+    log "⏸ Kota kapısı ($stage): kalan %$remaining < gerekli %$need (efor $1, rezerv %$RESERVE_PCT)."
+    log "  Döngü temiz duruyor. Otomatik devam: ${resume_at:-YOK — panel kapalı, elle başlat}"
+    return 1
+  done
+}
+
+# Sıfırlanmayı bekle. 0 → beklendi (kota yeniden ölçülmeli) · 1 → beklenemez
+# (zaman ayrıştırılamadı ya da üst sınırdan uzun), çağıran eski davranışa döner.
+# $1 aşama · $2 hedef ISO (sıfırlanma + 1 dk) · $3 kalan % · $4 gerekli %
+wait_for_reset(){
+  local stage="$1" target_iso="$2" remaining="$3" need="$4" target now wait_sec next_note
+  [ -n "$target_iso" ] || return 1
+  target=$(date -u -d "$target_iso" +%s 2>/dev/null) || return 1
+  [ -n "$target" ] || return 1
+  now=$(date -u +%s)
+  wait_sec=$((target-now))
+  [ "$wait_sec" -le 0 ] && return 0                                  # zaten geçmiş → hemen yeniden ölç
+  [ "$wait_sec" -gt $((WAIT_RESET_MAX_MIN*60)) ] && return 1         # çok uzun → temiz çıkış daha doğru
+
+  log "⏳ Kota kapısı ($stage): kalan %$remaining < gerekli %$need — ama ELLE BAŞLATMA ÖNCELİĞİ var."
+  log "   Döngü KAPANMIYOR: sıfırlanma bekleniyor ($target_iso, ~$((wait_sec/60)) dk). Beklerken pencere açılmaz."
+  next_note=$((now+300))
+  while : ; do
+    now=$(date -u +%s)
+    [ "$now" -ge "$target" ] && break
+    # Beklerken de durdurulabilmeli: kullanıcı "durdur" derse anında temiz çıkılır.
+    stop_gate "kota sıfırlanması beklenirken"
+    if [ "$now" -ge "$next_note" ]; then
+      log "⏳ Sıfırlanmaya ~$(( (target-now)/60 )) dk (kota bekleniyor, döngü ayakta)."
+      next_note=$((now+300))
+    fi
+    sleep 10
+  done
+  log "⏳ Sıfırlanma geldi — kota yeniden ölçülüyor, döngü kaldığı yerden sürüyor."
+  return 0
 }
 
 # --- Durdurma kapısı: panel istediğinde script KENDİ çıkar --------------------

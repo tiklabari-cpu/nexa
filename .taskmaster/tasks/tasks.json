@@ -7203,7 +7203,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T04:30:45.501Z",
+        "updatedAt": "2026-08-27T05:09:55.276Z",
         "subtasks": [
           {
             "id": 1,
@@ -7351,10 +7351,11 @@
             "title": "S11-2FA-l [SONNET-XHIGH] SignInPage: \"Use a recovery code instead\" fare ile ilk tıklamada çalışmıyor (blur → FieldError → düğme kayıyor)",
             "description": "Kod adımındaki mod değiştirme düğmesi, kutunun autoFocus'u yüzünden ilk fare tıklamasında click üretmiyor; yalnız odaklanıyor.",
             "details": "ÖLÇÜLEN KUSUR (2026-08-27 · tm 152.9 penceresinde e2e yazılırken ölçüldü, düzeltilmedi):\napps/web/src/features/auth/SignInPage.tsx — kod adımı açıldığında `#two-factor-code` girdisi\n`autoFocus` taşıyor. \"Use a recovery code instead\" düğmesine FARE ile basıldığında:\nmousedown → girdi blur olur → `codeForm.blur('code')` alanı touched yapar → boş alan\n`auth.validation.codeRequired` (\"Enter your code.\") hatasını kazanır → `FieldError`\n(`lib/form.tsx:264`, mesaj yokken `null` döner) bir `<p class=\"mt-1 text-xs\">` EKLER →\nformun altındaki düğme satırı ~20px aşağı kayar → mouseup düğmenin ESKİ yerine düşer →\nmousedown/mouseup hedefleri farklı olduğu için tarayıcı düğmede `click` ÜRETMEZ.\nSonuç: mod değişmez, düğme yalnız odaklanır. Üç ardışık koşuda üçünde de aynı (Playwright\naria snapshot: `button \"Use a recovery code instead\" [active]`, etiket hâlâ\n\"Authentication code\"). Gerçek bir insan da aynı şeyi yaşar — basıp bırakma arasındaki ~80 ms,\nReact'in yeniden render'ından uzun.\n\nKAPSAM: yalnız görsel/etkileşim kusuru, güvenlik değil. Kurtarma koduyla giriş İKİNCİ\ntıklamada çalışıyor; klavye yolu (Tab + Enter) ilk seferde çalışıyor.\n\nNE YAPILACAK (öneri, ölçerek karar ver):\n1. En dar düzeltme: `FieldError` yer ayırsın (mesaj yokken de sabit yükseklik) — ama bu TÜM\n   formları etkiler, önce ölç (aynı desen her ekranda var; başka düğmeler de kayıyor olabilir).\n2. Alternatif: kod adımının mod düğmelerini formun ÜSTÜNE al ya da hata satırını girdinin\n   altında mutlak konumlandır, böylece akış kaymasın.\n3. Alternatif: boş+dokunulmamış alanda blur'da required hatasını gösterme (yalnız submit'te).\nDOĞRULAMA: `apps/e2e/tests/two-factor.spec.ts` içindeki `useRecoverySheet` yardımcısı bugün\n`press('Enter')` kullanıyor ve NEDENİNİ dosyada yazıyor; düzeltme sonrası onu `click()`e\nçevir — geçerse kusur gerçekten kapanmıştır. Ayrıca `SignInPage.test.tsx`'e jsdom seviyesinde\nbir iddia eklenemez (layout yok), yani kanıt e2e'dedir.\nDOSYALAR (beklenen): apps/web/src/features/auth/SignInPage.tsx · apps/web/src/lib/form.tsx\n(dokunulursa TÜM form ekranlarının görsel testleri) · apps/e2e/tests/two-factor.spec.ts.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentTaskId": 152,
-            "parentId": "undefined"
+            "parentId": "undefined",
+            "updatedAt": "2026-08-27T05:09:55.276Z"
           },
           {
             "id": 13,
@@ -8104,7 +8105,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T04:30:45.502Z",
+      "lastModified": "2026-08-27T05:09:55.277Z",
       "taskCount": 168,
       "completedCount": 151,
       "tags": [

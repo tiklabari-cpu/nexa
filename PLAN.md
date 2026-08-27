@@ -3297,7 +3297,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | S4-PART | `events` partisyonlarında RLS + kapsam nöbetçisi (**türetilmiş**: NFR-S4 · §D124/1 · Faz-5 tm 150) | ✅ → KS4-PART |
 | M-SEC-b | M-SEC denetiminin iki MEDIUM bulgusu (**türetilmiş**: §D116 MEDIUM · Faz-5 tm 151) | ✅ → KM-SEC-b |
 | S11-2FA | İki adımlı doğrulama: TOTP · ikinci adım · politika zorlaması (**türetilmiş**: NFR-S11 + FR-MOD-00.1 · §D124/3 · Faz-5 tm 152) | ✅ → KS11-2FA |
-| P5-PAGE | Liste sayfalaması istemciye bağlanır (**türetilmiş**: NFR-P5 + FR-EK-B.1 · §D124/2 · Faz-5 tm 153) | ⬜ |
+| P5-PAGE | Liste sayfalaması istemciye bağlanır (**türetilmiş**: NFR-P5 + FR-EK-B.1 · §D124/2 · Faz-5 tm 153) | ◐ → KP5-PAGE |
 | M-SEC-c | M-SEC denetiminin beş LOW bulgusu (**türetilmiş**: §D116 LOW · Faz-5 tm 155) | ⬜ |
 | M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ⬜ |
 | M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-5 tm 157) | ⬜ |
@@ -6811,7 +6811,9 @@ _(Faz-5 · tm 152 — açıldı 2026-08-24. Alt-görevler kapandıkça bu bloğu
 
 #### KP5-PAGE — P5-PAGE · Liste sayfalaması (NFR-P5 · FR-EK-B.1)
 
-_(Faz-5 · tm 153 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+_(Faz-5 · tm 153 — açıldı 2026-08-24. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+- ◐ Sayfalama altyapısı: `usePagedQuery` kancası `next_page_id` zarfını TEK yerde biliyor (zincirleme · tek-uçuş `fetchNext` · `total`), `VirtualList`/`VirtualTable` opsiyonel `onEndReached` + satır cinsinden eşik alıyor (pencere son satıra yaklaşınca satır sayısı başına BİR kez) — `apps/web/src/lib/paged-query.ts` (yeni) · `apps/web/src/components/VirtualList.tsx` · test `paged-query.test.tsx` (8) + `VirtualList.test.tsx` (+7) · tm 153.1. HİÇBİR EKRAN DEĞİŞMEDİ (kapsam gereği): beş liste hâlâ tek sayfada kesiliyor, ekranlar tm 153.2-153.6'da bağlanır. NFR-P4 bütçesi korundu (10.000 satır → 14 DOM satırı).
 
 #### K02.2.1 — 02.2.1 · Sohbet listesi sıralaması (Oldest/Newest)
 

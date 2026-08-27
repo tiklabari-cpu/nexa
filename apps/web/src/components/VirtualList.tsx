@@ -19,9 +19,16 @@
  * must be uniform for the scrollbar to stay honest; overscan absorbs the small
  * variance real rows have. Variable-height measurement is a later concern (v1
  * grids), deliberately out of scope here.
+ *
+ * Both surfaces also take an optional `onEndReached`, which is the other half
+ * of infinite scroll (NFR-P5): windowing alone bounds the DOM but still only
+ * ever shows the one page the screen asked for. Paired with `usePagedQuery`'s
+ * `fetchNext` it walks the server's cursor as the reader scrolls. Both props
+ * are optional, so the callers that predate them are untouched.
  */
 import {
   useCallback,
+  useEffect,
   useLayoutEffect,
   useRef,
   useState,
@@ -33,6 +40,16 @@ import {
 
 /** Overscan hides the seam: rows kept mounted just past the viewport edges. */
 const DEFAULT_OVERSCAN = 6;
+
+/**
+ * How close to the last row the window has to get before `onEndReached` fires,
+ * counted in rows rather than pixels so it means the same thing whatever the
+ * row height is. Roughly a viewport ahead for a typical list — enough for the
+ * next page to land before the reader arrives at the seam, and small enough
+ * that a first page which already fills the screen does not immediately ask
+ * for a second.
+ */
+const DEFAULT_END_REACHED_THRESHOLD = 8;
 
 /** Cap that turns the list into its own scroller; short lists stay shorter. */
 const DEFAULT_MAX_HEIGHT = '70vh';
@@ -135,6 +152,58 @@ function useVirtualRows(
   return { containerRef, onScroll, window };
 }
 
+/**
+ * Fires `onEndReached` once per page as the window nears the last row.
+ *
+ * The virtualizer already knows which rows are on screen, so infinite scroll is
+ * a comparison here rather than an `IntersectionObserver` sentinel and a second
+ * source of truth about "the bottom".
+ *
+ * Two things keep it from firing per frame:
+ *
+ *   - The effect depends on `endIndex`, which moves in whole rows, not on
+ *     `scrollTop`. Dragging the bar through one row re-runs this at most once.
+ *   - `firedAtCount` records the row count the last call was made for. While
+ *     the window sits in the trailing zone the callback is not called again,
+ *     so the same cursor is never requested twice; a page arriving changes
+ *     `items.length` and re-arms it. Scrolling back out of the zone also
+ *     re-arms, which is what lets a filter reset ask again from the top.
+ *
+ * Whether there *is* another page is deliberately not this component's
+ * business — `usePagedQuery`'s `fetchNext` already no-ops when `hasNext` is
+ * false, so the list does not need to be told twice.
+ */
+function useEndReached(
+  count: number,
+  endIndex: number,
+  threshold: number,
+  onEndReached: (() => void) | undefined,
+): void {
+  const callbackRef = useRef(onEndReached);
+  const firedAtCount = useRef<number | null>(null);
+
+  // Kept in a ref, and updated before the effect below runs, so a caller that
+  // passes a fresh closure every render (the usual case) does not re-trigger
+  // the comparison — only the window moving or the data growing does.
+  useEffect(() => {
+    callbackRef.current = onEndReached;
+  });
+
+  useEffect(() => {
+    const fire = callbackRef.current;
+    if (!fire || count <= 0) return;
+
+    if (endIndex < count - threshold) {
+      firedAtCount.current = null;
+      return;
+    }
+    if (firedAtCount.current === count) return;
+
+    firedAtCount.current = count;
+    fire();
+  }, [count, endIndex, threshold]);
+}
+
 interface CommonProps<T> {
   items: T[];
   /** Uniform row height in px; drives the spacers and the window size. */
@@ -146,6 +215,14 @@ interface CommonProps<T> {
   viewportHeight?: number;
   /** Max scroller height; a CSS length. Defaults to `70vh`. */
   maxHeight?: number | string;
+  /**
+   * Called once when the visible window comes within `endReachedThreshold`
+   * rows of the end — the hook a paginated list wires `fetchNext` to. Omit it
+   * and the list behaves exactly as it did before.
+   */
+  onEndReached?: () => void;
+  /** Rows of slack before the end that count as "reached". Defaults to 8. */
+  endReachedThreshold?: number;
 }
 
 export interface VirtualListProps<T> extends CommonProps<T> {
@@ -166,6 +243,8 @@ export function VirtualList<T>({
   overscan = DEFAULT_OVERSCAN,
   viewportHeight,
   maxHeight = DEFAULT_MAX_HEIGHT,
+  onEndReached,
+  endReachedThreshold = DEFAULT_END_REACHED_THRESHOLD,
   label,
   className,
 }: VirtualListProps<T>): ReactElement {
@@ -175,6 +254,7 @@ export function VirtualList<T>({
     overscan,
     viewportHeight,
   );
+  useEndReached(items.length, window.endIndex, endReachedThreshold, onEndReached);
   const visible = items.slice(window.startIndex, window.endIndex);
 
   return (
@@ -217,6 +297,8 @@ export function VirtualTable<T>({
   overscan = DEFAULT_OVERSCAN,
   viewportHeight,
   maxHeight = DEFAULT_MAX_HEIGHT,
+  onEndReached,
+  endReachedThreshold = DEFAULT_END_REACHED_THRESHOLD,
   head,
   colSpan,
   caption,
@@ -228,6 +310,7 @@ export function VirtualTable<T>({
     overscan,
     viewportHeight,
   );
+  useEndReached(items.length, window.endIndex, endReachedThreshold, onEndReached);
   const visible = items.slice(window.startIndex, window.endIndex);
 
   return (

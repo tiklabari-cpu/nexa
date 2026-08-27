@@ -225,7 +225,7 @@ describe('every request is tagged and counted by the same call', () => {
 describe('a scenario cannot quietly opt out of the gate', () => {
   // 161.2 adds `rest`, 161.3 adds `rtm`. Extending this list is how each of
   // them signs up for the same guard.
-  const scenarioNames = ['smoke'];
+  const scenarioNames = ['smoke', 'rest'];
 
   for (const scenario of scenarioNames) {
     it(`${scenario}.js sets its thresholds and trend stats from the shared modules`, () => {

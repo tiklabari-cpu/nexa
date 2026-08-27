@@ -6,6 +6,7 @@
   "scripts": {
     "load": "k6 run scenarios/smoke.js",
     "load:smoke": "k6 run scenarios/smoke.js",
+    "load:rest": "k6 run scenarios/rest.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint lib scenarios test",
     "test": "vitest run",

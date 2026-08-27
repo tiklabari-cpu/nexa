@@ -20,7 +20,7 @@ produce a stamp without them.**
 | `lib/metrics.js`     | Custom metrics (429 counter, fan-out trend)     | 161.1     |
 | `lib/summary.js`     | stdout block + `results/<scenario>.json`        | 161.1     |
 | `scenarios/smoke.js` | Harness self-check — one read, end to end       | 161.1     |
-| `scenarios/rest.js`  | List + transcript + send mix → **NFR-P2**       | **161.2** |
+| `scenarios/rest.js`  | List + transcript + send mix → NFR-P2           | 161.2     |
 | `scenarios/rtm.js`   | N sockets + fan-out → **NFR-P1 / NFR-P8**       | **161.3** |
 
 `smoke.js` is not a capacity measurement and must not be quoted as one. It exercises the
@@ -70,10 +70,17 @@ make demo     # the containerised stack (docker-compose.full.yml) + smoke test
 Then, from this directory:
 
 ```sh
-pnpm --filter @nexa/load load     # == k6 run scenarios/smoke.js
-make load                         # the same thing, from the repo root
-k6 run scenarios/smoke.js         # directly, when passing env knobs
+pnpm --filter @nexa/load load       # == k6 run scenarios/smoke.js
+make load                           # the same thing, from the repo root
+k6 run scenarios/smoke.js           # directly, when passing env knobs
+
+pnpm --filter @nexa/load load:rest  # == k6 run scenarios/rest.js — NFR-P2
+make load-rest                      # the same thing, from the repo root
 ```
+
+`rest.js` **sends real messages** into the seed's one live conversation and
+needs `RATE_LIMIT_AGENT_PER_MIN` raised on the stack under test first — see
+§"Staying under the rate limit" below before running it.
 
 k6 exits non-zero if any threshold is crossed. That exit code is the result — a green
 summary with a non-zero exit is not a pass.
@@ -189,6 +196,29 @@ Sign-in itself is anonymous traffic (30/min per IP), which is why `lib/session.j
 `setup()` **once per run** and hands the token to every VU. A per-VU sign-in spends the
 whole run's anonymous quota during ramp-up.
 
+### `rest.js`'s choice: option 2, a raised limit
+
+`rest.js` sends 3 requests/iteration (list + transcript + send), so even the _default_
+profile (`LOAD_VUS=2`, `LOAD_PACING_SECONDS=1`) asks for `2 ÷ 1 × 60 × 3 = 360` req/min —
+already twice the 180/min cap on one account. Option 1 (several seeded agents) does not
+scale out of this: a richDemo tenant has exactly three identities (owner + 2 agents), so
+spreading VUs across them caps headroom at 3× no matter the profile, and the strategy would
+need re-deciding the moment someone raises `LOAD_VUS` past 3. Option 2 does not have that
+ceiling, so that is what `rest.js` uses — every VU shares the one session `setup()` signs in
+(same as `smoke.js`), and the precondition is on the stack, not the script:
+
+```sh
+export RATE_LIMIT_AGENT_PER_MIN=5000   # comfortably above LOAD_VUS ÷ LOAD_PACING_SECONDS × 60 × 3
+make dev                               # (or restart an already-running `pnpm dev`)
+```
+
+A shell-exported value wins over `.env` (`apps/api/src/config/load-env-file.ts` skips a key
+that is already set), and `RATE_LIMIT_AGENT_PER_MIN` is already in `turbo.json`'s passthrough
+env list, so this reaches every app `turbo run dev` starts without editing `.env` by hand.
+Forgetting this step is not silently wrong: the shared `nexa_rate_limited count==0`
+threshold still trips and the run exits non-zero, the same way it did in the deliberate
+over-quota run 161.1 recorded in `HANDOFF.md`.
+
 ## Where the numbers go
 
 Each run writes `results/<scenario>.json`: thresholds with pass/fail, every metric k6 kept
@@ -213,6 +243,23 @@ line: **nothing gets stamped that was not measured.**
 `rest.js` (161.2) sends real messages and grows the seeded database. Reset it with the seed,
 never with a drop — `pnpm db:reset` re-runs migrations and reseeds; dropping the `nexa`
 development database is out of bounds (CLAUDE.md).
+
+For a Claude Code window specifically: `prisma migrate reset` now refuses to run for an AI
+agent without a human's explicit, freshly-given consent (its own built-in guard, not
+something this repo added) — so `pnpm db:reset` will stop and ask rather than run. Measured
+running `rest.js` once: it replies with the same message text every iteration
+(`` `load rest.js — VU ${__VU} iter ${__ITER}` ``), so the honest and much smaller-blast-radius
+fix is a targeted delete rather than a full reset:
+
+```sh
+docker exec -i nexa-db psql -U nexa -d nexa \
+  -c "DELETE FROM events WHERE text LIKE 'load rest.js — VU%';"
+```
+
+This removes exactly the rows the run added and nothing else — no schema touched, no other
+tenant's data touched, no consent gate to clear. Reach for `pnpm db:reset` only when a human
+is present to approve it (e.g. the seed itself needs restoring, not just this scenario's
+messages).
 
 ## Gate behaviour
 

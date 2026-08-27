@@ -7376,10 +7376,10 @@
         "description": "Sunucu tarafı kusursuz: dört liste ucu ve transcript ucu opak keyset cursor ile sayfalanıyor, next_page_id dönüyor, sözleşme gerekçesini yazıyor. Panel bu cursor u KULLANMIYOR — sabit bir limit ile tek istek atıp bırakıyor: /chats limit=50 · transcript limit=200 · /tickets limit=50 · /customers limit=50 · /traffic limit=100. Pratik sonucu: 50 den fazla aktif sohbeti olan bir çalışma alanında 51. sohbete ulaşmanın yolu yok, 200 olaydan uzun bir konuşmanın başı görünmüyor. Tohum veriyle asla ortaya çıkmadığı için testler de yeşil kalıyor. Ayrıca PLAN §7.1 EK-B.1 satırı \"infinite scroll\" için ✅ taşıyor ama kanıtı yalnız VirtualList/Skeleton/EmptyState sayıyor; VirtualList saf penceremedir.",
         "details": "BULGU (2026-08-23 bağımsız denetim · §D124/2): beş çağrı yeri tarandı ve hiçbiri next_page_id okumuyor.\nSayfa zincirlemesi depoda YALNIZ iki yerde gerçekten var: Apps Marketplace ve Audit Log.\nBu bir performans ayarı değil, VERİ KAYBI gibi görünen bir üründür: kullanıcı 51. kaydı hiç göremez.\n\nZEMİN — SUNUCU HAZIR, PANEL KULLANMIYOR (tahmin etme, oku):\n/chats · /tickets · /customers · /traffic ve transcript ucu opak KEYSET cursor ile sayfalanıyor ve\nnext_page_id dönüyor. Sözleşme gerekçesini de yazıyor: packages/contract/openapi/paths/chats.yaml\niçinde \"Paginated by opaque keyset cursor rather than offset: an offset page shifts under you every\ntime a new message arrives\". Transcript ucu ayrıca after_event_id ve before_event_id taşıyor.\n\nREFERANS DESEN DEPODA VAR — YENİDEN İCAT ETME:\n- apps/web/src/features/audit/AuditLogPage.tsx: useInfiniteQuery + getNextPageParam: (lastPage) =>\n  lastPage.next_page_id + query.data.pages.flatMap(...). Sayfa zincirlemesinin kanonik örneği.\n- apps/web/src/features/apps/AppsMarketplace.tsx: aynı desen, filtreli sorgu ile.\n- apps/web/src/components/VirtualList.tsx: VirtualList + VirtualTable — SAF PENCERELEME, veri getirme\n  kancası YOK. Sonsuz kaydırma bugün hiçbir listede yok.\n\nFAZ-5'İN KONUSU: DENETİMİN BULDUĞU YANLIŞ (§D124). Bu faz YENİ ÖZELLİK AÇMAZ — iddia ile kodu\neşitler. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **P5-PAGE** (türetilmiş — NFR-P5 + FR-EK-B.1 + FR-MOD-02.3.1). Gereksinim satırı: `grep -n \"| P5-PAGE\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KP5-PAGE\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Yedi alt-görev done. Ölçülebilir kapanış kanıtı:\n1. e2e: 50 den fazla sohbet ve 200 den uzun bir transcript tohumlanmış durumda ikinci sayfa GERÇEKTEN geliyor.\n2. scripts/audit altındaki yeni tarayıcı \"sabit limit ile sayfalanmayan liste çağrısı\" için 0 bulgu veriyor.\n3. PLAN §7.1 EK-B.1 satırının kanıtı artık sonsuz kaydırmayı da içeriyor; §7.2 P5-PAGE \"✅ → KP5-PAGE\".",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T09:56:33.623Z",
+        "updatedAt": "2026-08-27T10:51:45.347Z",
         "subtasks": [
           {
             "id": 1,
@@ -7463,7 +7463,7 @@
             "description": "Sayfalama bir insanın yürüdüğü yolla kanıtlanıyor ve geri gelmesi engelleniyor.",
             "details": "NE YAPILACAK: üç iş.\n1. TOHUM: apps/api/prisma/seed.ts e sayfalamayı GÖRÜNÜR kılan veri — bir çalışma alanında 60+ sohbet\n   ve bir sohbette 250+ olay. Tohum idempotent kalmalı (mevcut \"already present, skipping\" deseni).\n   Var olan e2e senaryolarının saydığı sayılar bozulmamalı — gerekirse veriyi AYRI bir çalışma alanına koy.\n2. E2E: ikinci sayfanın gerçekten geldiğini yürüyen senaryolar (Inbox listesi + transcript geriye yürüme).\n3. NÖBETÇİ: scripts/audit/ altına yeni bir tarayıcı — web kaynağında sabit limit ile çağrılıp\n   next_page_id okunmayan liste çağrısı arar; bulursa listeler. package.json a pnpm audit:<ad> script i,\n   scripts/audit/README.md ye satır.\n\nDOSYALAR: apps/api/prisma/seed.ts · apps/e2e/tests/ (mevcut inbox spec ine ek ya da yeni spec) ·\nscripts/audit/<yeni>.cjs + README.md · package.json (kök script).\nREFERANS: scripts/audit/endpoint-ui.cjs — istemci kaynağını tarayıp sözleşmeyle karşılaştıran mevcut\ntarayıcı; yeni nöbetçi onun kardeşidir. README tablosuna aynı biçimde satır ekle.\n\nTUZAKLAR:\n1. E2E tohum sıfırlaması (NEXA_SEED_RESET) tüm süiti etkiler; 60 sohbet eklemek başka spec lerin\n   saydığı listeleri bozabilir. Ölç, gerekirse ayrı çalışma alanı kullan.\n2. Tarayıcı yanlış-pozitif verebilir (sayfalaması OLMAYAN uçlar da limit alır) — README de bunu yaz,\n   endpoint-ui.cjs in \"sonucu elle sınıflandır\" notu emsaldir.\n\nPLAN İŞİ (kalem burada kapanır): §7.2 P5-PAGE → \"✅ → KP5-PAGE\"; §7.1 EK-B.1 satırının kanıtı\n#### KEK-B.1 (yoksa aç) bloğunda sonsuz kaydırma maddesiyle tamamlanır — satırın damgası ✅ kalır,\nama kanıtı ilk kez iddiasını karşılar. #### KP5-PAGE bloğuna yedi alt-görevin maddesi.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **P5-PAGE** (türetilmiş — NFR-P5 + FR-EK-B.1). Gereksinim satırı: `grep -n \"| P5-PAGE\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KP5-PAGE\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- TAM e2e süiti yeşil (taban 205 + yeni senaryolar) · db:seed idempotent (iki kez koş, ikincisi atlıyor).\n- Yeni nöbetçi: pnpm audit:<ad> exit 0 ve 0 bulgu.\n- PLAN §7.2 P5-PAGE → \"✅ → KP5-PAGE\"; EK-B.1 kanıtı güncel.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "153.2",
               "153.3",
@@ -7472,7 +7472,7 @@
               "153.6"
             ],
             "parentId": "153",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-27T10:51:45.347Z"
           }
         ]
       },
@@ -8106,9 +8106,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T09:56:33.624Z",
+      "lastModified": "2026-08-27T10:51:45.349Z",
       "taskCount": 168,
-      "completedCount": 152,
+      "completedCount": 153,
       "tags": [
         "master"
       ]

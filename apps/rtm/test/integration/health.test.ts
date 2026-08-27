@@ -1,5 +1,8 @@
 /**
  * `GET /health` — the gateway's own readiness probe (M-ENV-b · §D113/K3).
+ * `GET /health/live` and `GET /health/ready` (M-OPS-a) sit alongside it: the
+ * liveness/readiness split from `apps/api/src/routes/health.ts`, mirrored here
+ * since the gateway probes the same Postgres for the same reason.
  *
  * Every agent login reads Postgres (`auth.ts`), so a health check that only
  * pings Redis can say `ok` while every login in the process is about to fail.
@@ -9,9 +12,11 @@
  * without ever bringing Redis down, so the failure is attributable to the
  * dependency the test broke.
  *
- * Since M-SEC-b2 (§D116 MEDIUM (b)) the body has two shapes, the same split
- * as `apps/api/src/routes/health.ts`: region/connection-count/dependency
- * detail is infrastructure fingerprinting, admin-role bearer token only.
+ * Since M-SEC-b2 (§D116 MEDIUM (b)) the `/health` body has two shapes, the
+ * same split as `apps/api/src/routes/health.ts`: region/connection-count/
+ * dependency detail is infrastructure fingerprinting, admin-role bearer token
+ * only. `/health/live` never touches a dependency and `/health/ready` never
+ * splits by identity — both are meant for an orchestrator, not a person.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedRtmFixtures } from '../helpers/fixtures.js';
@@ -22,6 +27,7 @@ interface HealthBody {
   service: string;
   region?: string;
   connections?: number;
+  uptime_s?: number;
   dependencies?: {
     database: { status: 'up' | 'down'; error?: string };
     redis: { status: 'up' | 'down'; error?: string };
@@ -32,7 +38,15 @@ async function getHealth(
   port: number,
   authorization?: string,
 ): Promise<{ statusCode: number; body: HealthBody }> {
-  const response = await fetch(`http://127.0.0.1:${port}/health`, {
+  return getHealthAt(port, '/health', authorization);
+}
+
+async function getHealthAt(
+  port: number,
+  path: string,
+  authorization?: string,
+): Promise<{ statusCode: number; body: HealthBody }> {
+  const response = await fetch(`http://127.0.0.1:${port}${path}`, {
     headers: authorization ? { authorization } : {},
   });
   return { statusCode: response.status, body: (await response.json()) as HealthBody };
@@ -149,6 +163,65 @@ describe('GET /health — anonymous and non-admin bodies are narrowed (M-SEC-b2 
     try {
       const { statusCode, body } = await getHealth(rtm.port, adminAuth);
 
+      expect(statusCode).toBe(503);
+      expect(body).toEqual({ status: 'degraded', service: 'rtm' });
+    } finally {
+      await rtm.close();
+    }
+  });
+});
+
+describe('GET /health/live — liveness never touches a dependency (M-OPS-a)', () => {
+  it('reports 200 even when Postgres is unreachable', async () => {
+    const brokenUrl = 'postgresql://baduser:badpass@127.0.0.1:1/nonexistent_db?connect_timeout=1';
+    const rtm = await startRtm({ DATABASE_URL: brokenUrl, DATABASE_APP_URL: brokenUrl });
+    try {
+      // Confirms /health/ready genuinely observes the break (otherwise this
+      // test would prove nothing about /health/live being different).
+      const ready = await getHealthAt(rtm.port, '/health/ready');
+      expect(ready.statusCode).toBe(503);
+
+      const { statusCode, body } = await getHealthAt(rtm.port, '/health/live');
+      expect(statusCode).toBe(200);
+      expect(body.status).toBe('ok');
+      expect(body.service).toBe('rtm');
+    } finally {
+      await rtm.close();
+    }
+  });
+
+  it('answers anonymously with no admin-only fields, same as an anonymous /health', async () => {
+    const rtm = await startRtm();
+    try {
+      const { statusCode, body } = await getHealthAt(rtm.port, '/health/live', adminAuth);
+      expect(statusCode).toBe(200);
+      expect(body).toEqual({ status: 'ok', service: 'rtm', uptime_s: expect.any(Number) });
+    } finally {
+      await rtm.close();
+    }
+  });
+});
+
+describe('GET /health/ready — readiness probes for real, narrow body always (M-OPS-a)', () => {
+  it('reports 200 with the narrow body when every dependency is up', async () => {
+    const rtm = await startRtm();
+    try {
+      const { statusCode, body } = await getHealthAt(rtm.port, '/health/ready');
+      expect(statusCode).toBe(200);
+      expect(body).toEqual({ status: 'ok', service: 'rtm' });
+    } finally {
+      await rtm.close();
+    }
+  });
+
+  it('reports 503 with the narrow body when Postgres is unreachable, even for an admin caller', async () => {
+    const brokenUrl = 'postgresql://baduser:badpass@127.0.0.1:1/nonexistent_db?connect_timeout=1';
+    const rtm = await startRtm({ DATABASE_URL: brokenUrl, DATABASE_APP_URL: brokenUrl });
+    try {
+      // No admin/anonymous split here (unlike /health) — an orchestrator
+      // probe never presents a bearer token, so the body stays narrow
+      // regardless of what is presented.
+      const { statusCode, body } = await getHealthAt(rtm.port, '/health/ready', adminAuth);
       expect(statusCode).toBe(503);
       expect(body).toEqual({ status: 'degraded', service: 'rtm' });
     } finally {

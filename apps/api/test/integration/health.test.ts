@@ -1,7 +1,8 @@
 /**
  * `GET /health`'s `scheduler` block (M-SCHED-b, sixth job M-SCHED-e · §D113/K1)
  * and, since M-SEC-b2 (§D116 MEDIUM (b)), the admin-only narrowing of the
- * whole body.
+ * whole body. Also `GET /health/live` and `GET /health/ready` (M-OPS-a), the
+ * liveness/readiness split alongside it.
  *
  * The dependency probes (`database`, `redis`) already existed and are
  * unchanged by this slice. What is new is the one thing `/health` used to be
@@ -252,6 +253,96 @@ describe('GET /health — degraded when a dependency is down (M4-a · §D113/K4-
         expect(adminBody.status).toBe('degraded');
         expect(adminBody.dependencies?.redis.status).toBe('down');
         expect(adminBody.dependencies?.database.status).toBe('up');
+      } finally {
+        broken.disconnect();
+      }
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('GET /health/live — liveness never touches a dependency (M-OPS-a)', () => {
+  it('reports 200 even while every dependency is down', async () => {
+    const server = await startTestServer();
+    try {
+      // Same technique as the "degraded" suite above: break redis on *this*
+      // server instance after boot, so the probe genuinely fails rather than
+      // never running.
+      const broken = new Redis('redis://127.0.0.1:1/0', {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        retryStrategy: () => null,
+      });
+      broken.on('error', () => {});
+      server.app.redis = broken;
+
+      try {
+        // Confirms /health/ready genuinely observes the break (otherwise this
+        // test would prove nothing about /health/live being different).
+        const ready = await server.get('/health/ready');
+        expect(ready.statusCode).toBe(503);
+
+        const live = await server.get('/health/live');
+        expect(live.statusCode).toBe(200);
+        const body = live.json() as { status: string; service: string; uptime_s: number };
+        expect(body.status).toBe('ok');
+        expect(body.service).toBe('api');
+        expect(body.uptime_s).toBeGreaterThanOrEqual(0);
+      } finally {
+        broken.disconnect();
+      }
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('answers anonymously with no admin-only fields, same as an anonymous /health', async () => {
+    const server = await startTestServer();
+    try {
+      const response = await server.get('/health/live', adminAuth);
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({
+        status: 'ok',
+        service: 'api',
+        uptime_s: expect.any(Number),
+      });
+    } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('GET /health/ready — readiness probes for real, narrow body always (M-OPS-a)', () => {
+  it('reports 200 with the narrow body when every dependency is up', async () => {
+    const server = await startTestServer();
+    try {
+      const response = await server.get('/health/ready');
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ status: 'ok', service: 'api' });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('reports 503 with the narrow body when a dependency is down, even for an admin caller', async () => {
+    const server = await startTestServer();
+    try {
+      const broken = new Redis('redis://127.0.0.1:1/0', {
+        lazyConnect: true,
+        maxRetriesPerRequest: 1,
+        retryStrategy: () => null,
+      });
+      broken.on('error', () => {});
+      server.app.redis = broken;
+
+      try {
+        // No admin/anonymous split here (unlike /health) — an orchestrator
+        // probe never presents a bearer token, so the body stays narrow
+        // regardless of what is presented.
+        const response = await server.get('/health/ready', adminAuth);
+        expect(response.statusCode).toBe(503);
+        expect(response.json()).toEqual({ status: 'degraded', service: 'api' });
       } finally {
         broken.disconnect();
       }

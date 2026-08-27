@@ -115,7 +115,8 @@ COPY --from=build --chown=nexa:nexa /repo/apps/rtm/package.json ./apps/rtm/packa
 WORKDIR /repo/apps/rtm
 USER nexa
 EXPOSE 4001
+# /health/ready (not /health/live, M-OPS-a) — same reasoning as apps/api/Dockerfile.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=15s --retries=5 \
-    CMD curl -fsS "http://127.0.0.1:${RTM_PORT:-4001}/health" || exit 1
+    CMD curl -fsS "http://127.0.0.1:${RTM_PORT:-4001}/health/ready" || exit 1
 
 CMD ["node", "dist/src/index.js"]

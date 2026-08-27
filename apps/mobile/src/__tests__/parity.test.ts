@@ -773,7 +773,9 @@ describe('module parity matrix — what is still owed', () => {
       // the console, and the handset does not manage credentials — it signs in
       // with them. The phone will meet two-factor when the *login* gate lands
       // (S11-2FA-e); setting one up is not a screen this app has.
-      contractEndpoints: 189,
+      // 189 → 191 with `/health/live` + `/health/ready` (M-OPS-a, tm 160.1).
+      // Orchestrator probes, not a screen — nothing here to re-scope.
+      contractEndpoints: 191,
       scopeBoundaries: 1,
     });
   });

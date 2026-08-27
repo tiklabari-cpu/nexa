@@ -136,6 +136,11 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Health" }
 
+  /health/live:
+    $ref: "./paths/health.yaml#/live"
+  /health/ready:
+    $ref: "./paths/health.yaml#/ready"
+
   /auth/login:
     $ref: "./paths/auth.yaml#/login"
   /auth/authorize:

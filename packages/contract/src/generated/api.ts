@@ -35,6 +35,55 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/health/live': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Liveness probe
+     * @description Answers as soon as the process is accepting connections — no dependency
+     *     is touched, ever. This is what an orchestrator's LIVENESS probe should
+     *     point at: killing this process because Postgres is unreachable removes
+     *     the one thing that could still serve `/health/ready` again once the
+     *     dependency recovers, and the replacement process starts no better off.
+     */
+    get: operations['getHealthLive'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/health/ready': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Readiness probe
+     * @description Probes Postgres and Redis for real and returns 503 when either is
+     *     unreachable, so an orchestrator takes the instance out of rotation. This
+     *     is the same dependency probe `/health` runs, but always answers the
+     *     narrow `{status, service}` body — an orchestrator probe never carries a
+     *     bearer token, so the admin-only detail `/health` can return would never
+     *     be reachable here anyway.
+     */
+    get: operations['getHealthReady'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/login': {
     parameters: {
       query?: never;
@@ -9859,6 +9908,55 @@ export interface operations {
     requestBody?: never;
     responses: {
       /** @description All dependencies reachable */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Health'];
+        };
+      };
+      /** @description At least one dependency is unreachable */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Health'];
+        };
+      };
+    };
+  };
+  getHealthLive: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The process is up. Always 200 — a down dependency does not affect this response. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Health'];
+        };
+      };
+    };
+  };
+  getHealthReady: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Every dependency reachable */
       200: {
         headers: {
           [name: string]: unknown;

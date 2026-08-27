@@ -3135,7 +3135,7 @@ Etiketler: dağıtım/güvenlik kararları `OPUS-MAX` (proxy hop + nginx profili
 | # | Kod | Kalem | Öncelik | Damga | tm | Alt-gör. | ~Pen |
 | :-: | --- | --- | :-: | --- | :-: | :-: | :-: |
 | 1 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır — boot yolu ilk kez koşulur · proxy hop env’e · nginx güvenlik profili · `.env.production.example` | high | ✅ → KM-PROD-CFG | 159 | 3 | 4 |
-| 2 | M-OPS | Ops dikişleri — `/health/live` ↔ `/health/ready` ayrımı · zarif drenaj · production log profili | high | ⬜ | 160 | 3 | 4 |
+| 2 | M-OPS | Ops dikişleri — `/health/live` ↔ `/health/ready` ayrımı · zarif drenaj · production log profili | high | ◐ → KM-OPS | 160 | 3 | 4 |
 | 3 | M-LOAD | Yük ayağı (k6) — NFR-M4’ün beşinci katmanı + NFR-P1/P2 doğrulaması + **NFR-P8’in ilk gerçek ölçümü** | high | ⬜ | 161 | 4 | 7 |
 | 4 | M-SCALE | Ölçek dikişleri — iki-pod doğrulaması · bağlantı havuzu + PgBouncer · read-replica okuma yolu | medium | ⬜ | 162 | 3 | 5 |
 | 5 | M-OTEL | Telemetri exporter seçim dikişi (M-PROV-a deseni) + RTM metrikleri | medium | ⬜ | 163 | 2 | 2 |
@@ -3302,7 +3302,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ⬜ |
 | M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-5 tm 157) | ⬜ |
 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır (**türetilmiş**: NFR-S3/S5/S6/S9 · NFR-M · Faz-6 tm 159) | ✅ → KM-PROD-CFG |
-| M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ⬜ |
+| M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ◐ → KM-OPS |
 | M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ⬜ |
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ⬜ |
 | M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ⬜ |
@@ -6873,6 +6873,8 @@ _(Faz-6 · tm 159 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
 #### KM-OPS — M-OPS · Ops dikişleri (NFR-R1/R2 · NFR-M5)
 
 _(Faz-6 · tm 160 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+- ✅ **M-OPS-a — `/health` üçe ayrıldı: `/health/live` · `/health/ready` · `/health` (2026-08-27):** Tek `/health` hem liveness hem readiness'ti — Postgres düştüğünde 503 dönüyordu, yani bir orkestratör onu öldürüyordu, tam da yeniden başlamanın çözemeyeceği bir problem için. **api** (`routes/health.ts`): `probeDependencies()` ortak yardımcıya çıkarıldı, `/health/live` hiçbir bağımlılığa dokunmadan her zaman 200 (+ `uptime_s`), `/health/ready` bugünkü probe + 503 davranışını dar `{status, service}` gövdesiyle (kimlik ayrımı yok — bir orkestratör probe'u bearer token taşımaz), `/health` değişmeden kalıyor (admin'e ayrıntı, M-SEC-b2). **rtm** (`server.ts`): aynı üçe ayrım, ham `http.createServer` içinde `pathname` üzerinden switch; `startedAt` eklendi (`uptime_s`). **Kontrat:** `packages/contract/openapi/paths/health.yaml` (yeni, `live`/`ready` anchor'ları) + `openapi.yaml`'a iki path, ikisi de mevcut `Health` şemasını paylaşıyor (dar gövde onun bir alt kümesi); `contract-parity.test.ts` ikisini de doğruluyor (189 → 191 path). **Dockerfile HEALTHCHECK** (api + rtm) `/health` yerine `/health/ready`'ye çevrildi — konteyner sağlığı artık gerçek bağımlılık durumunu yansıtıyor; `docker-compose.full.yml`'a dokunulmadı (compose'un `service_healthy` koşulu zaten imajın kendi `HEALTHCHECK`'ine bakıyor). **smoke.sh** dört yeni kontrol (api+rtm × live+ready) + `wait_for` artık `/health/ready`'yi bekliyor (`/health/live` DB/Redis hazır olmadan da 200 dönerdi, sonraki kontrolleri anlamsız kılardı). **Fiilen ölçüldü, varsayılmadı:** `docker compose -f docker-compose.full.yml up --build -d` gerçek altı-servis yığınını ayağa kaldırdı — `nexa-demo-api-1`/`nexa-demo-rtm-1` `/health/ready` HEALTHCHECK'iyle `healthy` oldu (init→api→rtm→web zinciri kırılmadı) — sonra `scripts/smoke.sh` **17/17 geçti**, yeni dört kontrol dahil. — `apps/api/src/routes/health.ts` · `apps/rtm/src/server.ts` · `packages/contract/openapi/openapi.yaml` · `packages/contract/openapi/paths/health.yaml` (yeni) · `packages/contract/src/generated/api.ts` (üretildi) · `apps/api/Dockerfile` · `apps/rtm/Dockerfile` · `scripts/smoke.sh` · test `apps/api/test/integration/health.test.ts` (+4) · `apps/rtm/test/integration/health.test.ts` (+4) · `apps/mobile/src/__tests__/parity.test.ts` (sürüklenme sayacı 189→191) · tm 160.1. **Kalan (M-OPS satırı hâlâ `◐`):** zarif drenaj (tm 160.2) + production log profili (tm 160.3).
 
 #### KM-LOAD — M-LOAD · Yük ayağı ve kapasite ölçümü (NFR-M4 · P1/P2/P8)
 

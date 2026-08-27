@@ -122,11 +122,27 @@ printf '  api %s · rtm %s · web %s · widget %s\n\n' \
   "$API_BASE" "$RTM_BASE" "$WEB_BASE" "$WIDGET_BASE"
 
 printf 'Readiness\n'
-wait_for 'the api' "$API_BASE/api/v1/health"
+# `/health/ready` (M-OPS-a), not `/health/live` — waiting on liveness alone
+# would return 200 before Postgres/Redis are reachable, and every check below
+# would then fail for a reason unrelated to itself.
+wait_for 'the api' "$API_BASE/api/v1/health/ready"
 
 printf '\nServices\n'
-# `/health` probes Postgres and Redis for real rather than reporting a cached
-# flag, so "status":"ok" here is also the datastores' result.
+# `/health/live` touches no dependency and must answer even before the
+# readiness wait above succeeds — proven here by checking it after, since a
+# stack already up trivially satisfies "always 200".
+check 'api /health/live is ok (no dependency probe)' \
+  GET "$API_BASE/api/v1/health/live" 200 '"status":"ok"'
+# `/health/ready` probes Postgres and Redis for real rather than reporting a
+# cached flag, so "status":"ok" here is also the datastores' result.
+check 'api /health/ready is ok (Postgres + Redis reachable)' \
+  GET "$API_BASE/api/v1/health/ready" 200 '"status":"ok"'
+check 'rtm /health/live is ok (no dependency probe)' \
+  GET "$RTM_BASE/health/live" 200 '"status":"ok"'
+check 'rtm /health/ready is ok (Postgres + Redis reachable)' \
+  GET "$RTM_BASE/health/ready" 200 '"status":"ok"'
+# `/health` stays backward compatible (M-OPS-a) — same dependency probe as
+# `/health/ready`, admin-gated detail on top.
 check 'api /health is ok (Postgres + Redis reachable)' \
   GET "$API_BASE/api/v1/health" 200 '"status":"ok"'
 # The detailed body (version/region/scheduler/providers, M-SEC-b2 · §D116

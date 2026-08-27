@@ -40,6 +40,7 @@ export interface RtmServer {
 
 export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   const log: Logger = pino({ level: env.LOG_LEVEL, name: 'nexa-rtm' });
+  const startedAt = Date.now();
 
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   const commands = new Redis(env.REDIS_URL, {
@@ -96,7 +97,37 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
   });
 
   const http = createServer((req, res) => {
-    if (req.url?.startsWith('/health')) {
+    const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+
+    // LIVENESS (M-OPS-a): no dependency touch, always 200 while the process
+    // is up — same reasoning as `apps/api/src/routes/health.ts`'s sibling
+    // route. A Postgres outage must not make an orchestrator kill the one
+    // process that could still recover once the dependency comes back.
+    if (pathname === '/health/live') {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          status: 'ok',
+          service: 'rtm',
+          uptime_s: Math.round((Date.now() - startedAt) / 100) / 10,
+        }),
+      );
+      return;
+    }
+
+    // READINESS (M-OPS-a): today's dependency probe, unchanged — 503 takes
+    // the instance out of rotation. Always the narrow body: an orchestrator
+    // probe never carries a bearer token, so the admin-gated detail below
+    // would never be reachable here anyway.
+    if (pathname === '/health/ready') {
+      void health(db, commands, version, env, registry).then(({ narrow }) => {
+        res.writeHead(narrow.status === 'ok' ? 200 : 503, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(narrow));
+      });
+      return;
+    }
+
+    if (pathname === '/health') {
       // Same narrowing as `apps/api/src/routes/health.ts` (M-SEC-b2 · §D116
       // MEDIUM (b)): region/connection-count/dependency detail is
       // infrastructure fingerprinting, admin-role callers only. Run alongside
@@ -116,6 +147,7 @@ export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
       });
       return;
     }
+
     res.writeHead(404, { 'content-type': 'application/json' });
     res.end(
       JSON.stringify({

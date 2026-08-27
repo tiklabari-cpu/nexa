@@ -120,8 +120,12 @@ RUN chmod +x ./apps/api/docker-entrypoint.sh
 WORKDIR /repo/apps/api
 USER nexa
 EXPOSE 4000
+# /health/ready (not /health/live, M-OPS-a): a process with no dependency
+# reachable is not ready to receive traffic, and the orchestrator should not
+# route to it — but should also not kill it, which is exactly what a
+# liveness probe pointed at the same URL would eventually do.
 HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=5 \
-    CMD curl -fsS "http://127.0.0.1:${API_PORT:-4000}/api/v1/health" || exit 1
+    CMD curl -fsS "http://127.0.0.1:${API_PORT:-4000}/api/v1/health/ready" || exit 1
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["node", "dist/src/index.js"]

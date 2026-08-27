@@ -336,6 +336,8 @@ function LeadsPill({ pinned }: { pinned: boolean }): ReactElement | null {
 
   const { data } = useQuery({
     queryKey: ['customers', 'leads', 'count'],
+    // paging-exempt: a counter, not a list — the one row is thrown away and only
+    // `total` is read, so there is no second page to want.
     queryFn: () => api.get<LeadsCount>('/customers?segment=leads&limit=1'),
     retry: false,
     refetchInterval: 60_000,

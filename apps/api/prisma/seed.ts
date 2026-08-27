@@ -11,6 +11,7 @@
  * `NEXA_SEED_RESET=1` to wipe first and lay the fixture down from scratch —
  * see `resetDemoData` for who needs that and why it is opt-in.
  */
+import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { embed, toVectorLiteral } from '@nexa/ai-mock';
 import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@nexa/types';
@@ -1541,6 +1542,215 @@ async function seedMisplacedUsWorkspace(passwordHash: string): Promise<void> {
   console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
 }
 
+/**
+ * The workspace list paging is proved against (NFR-P5 · P5-PAGE).
+ *
+ * Five console lists chain pages now, and on a three-conversation fixture not
+ * one of them can show it: where a second page never exists, a cursor that was
+ * never sent and a cursor that was sent and then ignored produce the same
+ * screen. So this workspace is deliberately larger than one page of anything —
+ * sixty conversations against the inbox's 50-row page, and one conversation of
+ * two hundred and fifty events against the transcript's 200-event page.
+ *
+ * A workspace of its own rather than sixty more rows in Acme, and that is the
+ * whole reason it exists as a fourth tenant. The e2e suite counts Acme's
+ * conversations in a dozen places (the inbox tab counters, the Reports figures,
+ * the chat-topics clusters); sixty more rows would have rewritten every one of
+ * those numbers to prove something none of them is about.
+ */
+const PAGING = {
+  organizationName: 'Paging Proving Ground',
+  slug: 'paging',
+  ownerName: 'Pat Ordonez',
+  /** Conversations here — ten past the console's 50-row chat page. */
+  chatCount: 60,
+  /** Events in the newest conversation — fifty past the 200-event transcript page. */
+  longTranscriptEvents: 250,
+  /** Spacing between consecutive events, and between one conversation and the next. */
+  stepMs: 60_000,
+} as const;
+
+/** `1` → `01`, so the row label reads in the same order the console lists it. */
+function pagingLabel(index: number): string {
+  return String(index + 1).padStart(2, '0');
+}
+
+async function seedPagingWorkspace(passwordHash: string): Promise<void> {
+  const existing = await prisma.organization.findFirst({
+    where: { name: PAGING.organizationName },
+    select: { id: true },
+  });
+  if (existing) {
+    console.log(`  ${PAGING.organizationName}: already present, skipping`);
+    return;
+  }
+
+  const organization = await prisma.organization.create({
+    data: { name: PAGING.organizationName, region: 'eu' },
+    select: { id: true },
+  });
+  const license = await prisma.license.create({
+    data: {
+      organizationId: organization.id,
+      plan: 'growth',
+      billingCycle: 'monthly',
+      status: 'trialing',
+      trialEndsAt: new Date(Date.now() + 14 * 86_400_000),
+      // Ships with data, so it must never open on the first-run wizard or the
+      // Reports survey popover — the same reasoning as the demo tenants above.
+      onboardingCompletedAt: new Date(),
+      demoSeededAt: new Date(),
+      surveyAnsweredAt: new Date(),
+    },
+    select: { id: true },
+  });
+  const licenseId = license.id;
+
+  const owner = await prisma.account.create({
+    data: { email: `owner@${PAGING.slug}.localhost`, name: PAGING.ownerName, passwordHash },
+    select: { id: true, email: true },
+  });
+  await prisma.agentMembership.create({
+    data: {
+      licenseId,
+      agentId: owner.id,
+      role: 'owner',
+      routingStatus: 'accepting_chats',
+      concurrentChatsLimit: 6,
+    },
+  });
+  // The console signs in through OAuth 2.1 + PKCE like any other workspace, and
+  // `listWorkspaces` reads the client id off the membership — without this row
+  // the owner authenticates and then cannot be granted a token.
+  await prisma.oauthClient.create({
+    data: {
+      id: `nexa-agent-app-${PAGING.slug}`,
+      organizationId: organization.id,
+      displayName: 'Nexa Agent App',
+      clientType: 'public',
+      redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
+      scopes: [],
+    },
+  });
+
+  const group = await prisma.group.create({
+    data: { licenseId, name: 'Support', languageCode: 'en' },
+    select: { id: true },
+  });
+  await prisma.groupAgent.create({
+    data: { licenseId, groupId: group.id, agentId: owner.id, priority: 'last' },
+  });
+
+  // Laid down backwards from a fixed base, so the console's order
+  // (`created_at DESC, id DESC`) *is* the numbering: `Paging Visitor 01` is the
+  // first row and `Paging Visitor 60` the last one, ten rows into the second
+  // page. That is what lets a test name the row only paging can reach rather
+  // than counting rows and hoping.
+  const base = new Date(Date.now() - 6 * 3_600_000);
+  const startedAt = (index: number): Date => new Date(base.getTime() - index * PAGING.stepMs);
+
+  /**
+   * The long conversation, which is the *first* row rather than a sixty-first
+   * one: it keeps the workspace at exactly one page plus ten, and it puts the
+   * transcript a test needs at the top of the list, where opening it needs no
+   * paging of its own.
+   */
+  const longMessages = Array.from({ length: PAGING.longTranscriptEvents }, (_, index) => ({
+    authorType: index % 2 === 0 ? 'customer' : 'agent',
+    // A marker no other seeded text contains, and which no shorter marker is a
+    // prefix of, so a test can address one message out of two hundred and fifty.
+    text: `paging-msg-${String(index + 1).padStart(3, '0')} — line ${index + 1} of the long conversation`,
+  }));
+
+  const customers = Array.from({ length: PAGING.chatCount }, (_, index) => ({
+    id: randomUUID(),
+    organizationId: organization.id,
+    name: `Paging Visitor ${pagingLabel(index)}`,
+    email: `visitor${pagingLabel(index)}@${PAGING.slug}-customer.localhost`,
+    countryCode: 'NL',
+    country: 'Netherlands',
+    chatsCount: 1,
+    lastActivityAt: startedAt(index),
+  }));
+
+  const conversations = customers.map((customer, index) => ({
+    chatId: generateShortId(),
+    threadId: generateShortId(),
+    customerId: customer.id,
+    createdAt: startedAt(index),
+    messages:
+      index === 0
+        ? longMessages
+        : [
+            { authorType: 'customer', text: `Question from ${customer.name}` },
+            { authorType: 'agent', text: 'Answered, and archived so the queue stays honest.' },
+          ],
+  }));
+
+  // Written in bulk rather than through `createConversation`. That helper is one
+  // round trip per row, and this fixture is some five hundred of them — a cost
+  // the e2e suite would pay in its global setup on every single run, for rows
+  // whose only job is to exist in quantity.
+  await prisma.customer.createMany({ data: customers });
+  await prisma.chat.createMany({
+    data: conversations.map((c) => ({
+      id: c.chatId,
+      licenseId,
+      customerId: c.customerId,
+      // Closed, all of them. Sixty active chats would sit in the routing queue
+      // and on the traffic board of a workspace that exists to be read rather
+      // than worked; `view=all` applies no active filter, so the list is the
+      // full sixty either way.
+      active: false,
+      createdAt: c.createdAt,
+    })),
+  });
+  await prisma.chatAccess.createMany({
+    data: conversations.map((c) => ({ chatId: c.chatId, groupId: group.id })),
+  });
+  await prisma.chatUser.createMany({
+    data: conversations.flatMap((c) => [
+      { chatId: c.chatId, userId: c.customerId, userType: 'customer', present: false },
+      { chatId: c.chatId, userId: owner.id, userType: 'agent', present: false },
+    ]),
+  });
+  await prisma.thread.createMany({
+    data: conversations.map((c) => ({
+      id: c.threadId,
+      chatId: c.chatId,
+      licenseId,
+      active: false,
+      assigneeId: owner.id,
+      createdAt: c.createdAt,
+      eventSequence: c.messages.length,
+      firstResponseAt: new Date(c.createdAt.getTime() + PAGING.stepMs),
+      closedAt: new Date(c.createdAt.getTime() + c.messages.length * PAGING.stepMs),
+      summary: 'Paging fixture conversation.',
+    })),
+  });
+  await prisma.event.createMany({
+    data: conversations.flatMap((c) =>
+      c.messages.map((message, index) => ({
+        id: buildEventId(c.threadId, index + 1),
+        threadId: c.threadId,
+        chatId: c.chatId,
+        licenseId,
+        type: 'message',
+        text: message.text,
+        authorId: message.authorType === 'customer' ? c.customerId : owner.id,
+        authorType: message.authorType,
+        recipients: 'all',
+        createdAt: new Date(c.createdAt.getTime() + index * PAGING.stepMs),
+      })),
+    ),
+  });
+
+  console.log(
+    `  ${PAGING.organizationName}  (paging fixture — ${PAGING.chatCount} conversations, one of ${PAGING.longTranscriptEvents} events)`,
+  );
+  console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
+}
+
 async function main(): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {
     throw new Error('The demo seed must never run against production.');
@@ -1562,6 +1772,7 @@ async function main(): Promise<void> {
     await seedTenant(spec, passwordHash);
   }
   await seedMisplacedUsWorkspace(passwordHash);
+  await seedPagingWorkspace(passwordHash);
 
   console.log('');
   console.log('  ⚠  Seed credentials are public and identical on every machine.');

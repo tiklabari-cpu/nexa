@@ -65,8 +65,10 @@ export const envSchema = z.object({
   /// app shows on the Email channel card (`VITE_INBOUND_EMAIL_DOMAIN`).
   INBOUND_EMAIL_DOMAIN: z.string().default('inbound.nexa.localhost'),
   /// Shared secret the mail provider presents on the inbound webhook, standing
-  /// in for a signed request. Optional: unset in dev/test leaves the endpoint
-  /// open (the recipient address is the only routing key), enforced when set.
+  /// in for a signed request. Optional in dev/test, where leaving it unset keeps
+  /// the endpoint open (the recipient address is the only routing key) and the
+  /// alternative would be a key nobody has. **Required in production** — see
+  /// `productionProblems` below, which is where "optional" stops being safe.
   INBOUND_EMAIL_SECRET: z.string().optional(),
 
   JWT_SIGNING_KEY: secret(32),
@@ -346,6 +348,61 @@ export type Env = z.infer<typeof envSchema> & {
   schedulerEnabled: boolean;
 };
 
+/**
+ * The keys `secret()` builds — everything this schema treats as key material.
+ *
+ * Exported so the production check below and its test read one list rather than
+ * two that drift: a sixth secret added to the schema and not here would boot in
+ * production still holding its published `dev-only-` placeholder, and
+ * `env.test.ts` derives the same set from `envSchema.shape`, so the omission
+ * fails the suite instead of shipping.
+ */
+export const SECRET_KEYS = [
+  'JWT_SIGNING_KEY',
+  'WEBHOOK_HMAC_SEED',
+  'CUSTOMER_TOKEN_SECRET',
+  'UPLOAD_SIGNING_KEY',
+  'AUDIT_CHAIN_SECRET',
+] as const;
+
+/**
+ * What production refuses, and why each one is a refusal rather than a default.
+ *
+ * Every problem is collected before anything is thrown. Failing on the first
+ * would turn a misconfigured deployment into a queue of one-line failures —
+ * fix, redeploy, discover the next — which defeats the reason this runs at boot
+ * at all: whoever is deploying should learn everything that is wrong before any
+ * traffic arrives, not one thing per attempt.
+ */
+function productionProblems(env: z.infer<typeof envSchema>): string[] {
+  const problems: string[] = [];
+
+  if (!env.DATABASE_APP_URL) {
+    problems.push(
+      'DATABASE_APP_URL is required in production: Postgres exempts table owners from row level security, so connecting as the owner silently disables every tenant policy.',
+    );
+  }
+
+  for (const key of SECRET_KEYS) {
+    if (env[key].startsWith('dev-only-')) {
+      problems.push(`${key} still holds its development placeholder value.`);
+    }
+  }
+
+  // Unset, `routes/channels.ts` skips its check entirely and the inbound mail
+  // webhook authenticates nobody: the recipient address is the only routing key,
+  // and a workspace hands that address to the customers it asks to forward mail
+  // to. Fine in development, where the alternative is a key nobody has; in
+  // production it is an open door into any workspace whose address is known.
+  if (!env.INBOUND_EMAIL_SECRET) {
+    problems.push(
+      'INBOUND_EMAIL_SECRET is required in production: unset, the inbound mail webhook accepts anyone who knows a workspace address.',
+    );
+  }
+
+  return problems;
+}
+
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const result = envSchema.safeParse(source);
   if (!result.success) {
@@ -355,21 +412,11 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const env = result.data;
 
   if (env.NODE_ENV === 'production') {
-    if (!env.DATABASE_APP_URL) {
+    const problems = productionProblems(env);
+    if (problems.length > 0) {
       throw new Error(
-        'DATABASE_APP_URL is required in production: connecting as the table owner bypasses row level security.',
+        `Invalid environment for NODE_ENV=production:\n${problems.map((p) => `  ${p}`).join('\n')}`,
       );
-    }
-    for (const key of [
-      'JWT_SIGNING_KEY',
-      'WEBHOOK_HMAC_SEED',
-      'CUSTOMER_TOKEN_SECRET',
-      'UPLOAD_SIGNING_KEY',
-      'AUDIT_CHAIN_SECRET',
-    ] as const) {
-      if (env[key].startsWith('dev-only-')) {
-        throw new Error(`${key} still holds its development placeholder value.`);
-      }
     }
   }
 

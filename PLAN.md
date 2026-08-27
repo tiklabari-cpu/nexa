@@ -3134,7 +3134,7 @@ Etiketler: dağıtım/güvenlik kararları `OPUS-MAX` (proxy hop + nginx profili
 
 | # | Kod | Kalem | Öncelik | Damga | tm | Alt-gör. | ~Pen |
 | :-: | --- | --- | :-: | --- | :-: | :-: | :-: |
-| 1 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır — boot yolu ilk kez koşulur · proxy hop env’e · nginx güvenlik profili · `.env.production.example` | high | ⬜ | 159 | 3 | 4 |
+| 1 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır — boot yolu ilk kez koşulur · proxy hop env’e · nginx güvenlik profili · `.env.production.example` | high | ◐ → KM-PROD-CFG | 159 | 3 | 4 |
 | 2 | M-OPS | Ops dikişleri — `/health/live` ↔ `/health/ready` ayrımı · zarif drenaj · production log profili | high | ⬜ | 160 | 3 | 4 |
 | 3 | M-LOAD | Yük ayağı (k6) — NFR-M4’ün beşinci katmanı + NFR-P1/P2 doğrulaması + **NFR-P8’in ilk gerçek ölçümü** | high | ⬜ | 161 | 4 | 7 |
 | 4 | M-SCALE | Ölçek dikişleri — iki-pod doğrulaması · bağlantı havuzu + PgBouncer · read-replica okuma yolu | medium | ⬜ | 162 | 3 | 5 |
@@ -3301,7 +3301,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-SEC-c | M-SEC denetiminin beş LOW bulgusu (**türetilmiş**: §D116 LOW · Faz-5 tm 155) | ⬜ |
 | M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ⬜ |
 | M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-5 tm 157) | ⬜ |
-| M-PROD-CFG | Production konfigürasyonu fiilen çalışır (**türetilmiş**: NFR-S3/S5/S6/S9 · NFR-M · Faz-6 tm 159) | ⬜ |
+| M-PROD-CFG | Production konfigürasyonu fiilen çalışır (**türetilmiş**: NFR-S3/S5/S6/S9 · NFR-M · Faz-6 tm 159) | ◐ → KM-PROD-CFG |
 | M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ⬜ |
 | M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ⬜ |
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ⬜ |
@@ -6864,6 +6864,8 @@ _(Faz-5 · tm 158 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
 #### KM-PROD-CFG — M-PROD-CFG · Production konfigürasyonu
 
 _(Faz-6 · tm 159 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+- ✅ **M-PROD-CFG-a — `NODE_ENV=production` boot yolu ilk kez fiilen koşuldu (2026-08-27):** `parseEnv`'in production dalı yazılıydı ama HİÇ ÇALIŞMAMIŞTI — repoda hiçbir yerde `NODE_ENV=production` yok, konteyner yığını bile bilerek `development`. Üç yüzey kapandı. **(1) api:** `env.test.ts`'e `production configuration` süiti (+12): `DATABASE_APP_URL` yokluğunun reddi (mesaj RLS gerekçesini söylüyor), beş `dev-only-` secret'in tek tek reddi, şemadaki secret kümesini davranıştan türetip `SECRET_KEYS` ile eşleyen sürüklenme nöbetçisi (altıncı secret eklenip kontrole yazılmazsa süit kırmızı), production'ın scheduler/otel varsayılanları, dev/test'in bozulmadığı. `parseEnv` artık production sorunlarını TEK hatada topluyor (eskiden ilkinde atıyordu → deploy başına bir satır). **Bulunan ve kapatılan kusur:** `INBOUND_EMAIL_SECRET` unset iken `/channels/email/inbound` (`public: true`) HİÇ KİMSEYİ doğrulamıyor; production'da artık boot reddi. **(2) rtm — aynı sınıf kusur, koruma HİÇ YOKTU:** gateway aynı veritabanını `auth.ts#scoped`'un `set_config` kiracı bağlamıyla okuyor, ama `DATABASE_APP_URL` zorunlu değildi (owner bağlantısı → Postgres sahibi RLS'den muaf tuttuğu için kiracı politikaları sessizce kapalı) ve iki secret `dev-only-` değerini kabul ediyordu. API ile birebir aynı disipline çekildi (+6). **(3) 12-factor kilidi:** `.env` yokken loader hiçbir şeyi DEĞİŞTİRMİYOR, ortamdaki değer dosyayı yeniyor, ve hiçbir workspace `dotenv`/`dotenv-flow`/`@dotenvx/dotenvx` taşımıyor (pnpm yalnız bildirilen bağımlılığı bağlar → manifest taraması kilidin kendisi, vekili değil). Ayrıca gerçek sunucu ilk kez production `Env`'iyle kuruldu: `/health` 200, CORS allowlist'i fiilen çalışıyor — yabancı origin `access-control-allow-origin` ALMIYOR, test modundaki aynı sunucu ALIYOR (sabit değil, dal). — `apps/api/src/config/env.ts` · `apps/rtm/src/config/env.ts` · test `apps/api/src/config/env.test.ts` (31) · `apps/api/src/config/load-env-file.test.ts` (4, yeni) · `apps/rtm/src/config/env.test.ts` (9) · `apps/api/test/integration/production-boot.test.ts` (4, yeni) · tm 159.1
 
 #### KM-OPS — M-OPS · Ops dikişleri (NFR-R1/R2 · NFR-M5)
 

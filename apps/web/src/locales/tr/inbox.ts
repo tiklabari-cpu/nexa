@@ -110,6 +110,7 @@ export const inbox: Messages = {
   // Transcript bubbles
   'inbox.transcript.ariaLabel': 'Sohbet dökümü',
   'inbox.transcript.noteLabel': 'Dahili not — müşteriye gönderilmez',
+  'inbox.transcript.loadingOlder': 'Önceki mesajlar yükleniyor…',
   'inbox.transcript.sending': 'Gönderiliyor…',
   'inbox.transcript.aiSuffix': 'AI',
 

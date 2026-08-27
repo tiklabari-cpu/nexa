@@ -118,6 +118,7 @@ export const inbox: Messages = {
   // Transcript bubbles
   'inbox.transcript.ariaLabel': 'Conversation transcript',
   'inbox.transcript.noteLabel': 'Internal note — not sent to the customer',
+  'inbox.transcript.loadingOlder': 'Loading earlier messages…',
   'inbox.transcript.sending': 'Sending…',
   'inbox.transcript.aiSuffix': 'AI',
 

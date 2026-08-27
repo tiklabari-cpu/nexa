@@ -43,7 +43,15 @@ function setup(events: ChatEvent[] = []): HTMLTextAreaElement {
     })),
   );
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  if (events.length > 0) queryClient.setQueryData(eventsKey('CHAT1'), { items: events });
+  // The shape a paged transcript keeps: pages newest-first, and newest-first
+  // inside each page (`useTranscript`). These fixtures read oldest-first, the
+  // order the transcript renders, so one page reversed is the same history.
+  if (events.length > 0) {
+    queryClient.setQueryData(eventsKey('CHAT1'), {
+      pages: [{ items: [...events].reverse() }],
+      pageParams: [undefined],
+    });
+  }
   render(
     <QueryClientProvider client={queryClient}>
       <Composer chatId="CHAT1" disabled={false} />

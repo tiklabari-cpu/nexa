@@ -8,13 +8,12 @@ import {
   type ReactElement,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { eventsKey, useSendMessage } from './useInbox.js';
+import { eventsKey, flattenTranscript, useSendMessage, type TranscriptCache } from './useInbox.js';
 import { useTypingStore } from './typing.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { uploadAttachment, type UploadedAttachment } from './uploadAttachment.js';
 import { replySuggestions, type SuggestionTurn } from './replySuggestions.js';
-import type { ChatEvent } from './types.js';
 import {
   activeShortcutQuery,
   applyShortcut,
@@ -173,8 +172,8 @@ export function Composer({
   // in an empty reply field; they are drawn from the transcript already in cache,
   // so no fetch and no round-trip stand between the keystroke and the chips.
   const openSuggestions = (): void => {
-    const cached = queryClient.getQueryData<{ items: ChatEvent[] }>(eventsKey(chatId));
-    const turns: SuggestionTurn[] = (cached?.items ?? [])
+    const cached = queryClient.getQueryData<TranscriptCache>(eventsKey(chatId));
+    const turns: SuggestionTurn[] = flattenTranscript(cached)
       .filter(
         (event) =>
           event.type === 'message' &&

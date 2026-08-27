@@ -206,7 +206,10 @@ export function InboxPage(): ReactElement {
   // screen — the Tickets tab leaves `selectedId`/`transcript` fetching in the
   // background, and that must not silently mark unseen messages as seen.
   const seenChatId = onTickets ? null : selectedId;
-  const lastVisibleEventAt = onTickets ? null : (transcript.data?.items.at(-1)?.created_at ?? null);
+  // The *newest* loaded event, which walking back through history cannot move:
+  // the pages arrive at the front of this list, so `at(-1)` stays the latest
+  // message however far back the agent reads (FR-MOD-02.2.2).
+  const lastVisibleEventAt = onTickets ? null : (transcript.events.at(-1)?.created_at ?? null);
   useMarkSeen(seenChatId, lastVisibleEventAt);
 
   const agent = useAuth((s) => s.agent);
@@ -613,9 +616,13 @@ export function InboxPage(): ReactElement {
                   </header>
 
                   <Transcript
-                    events={transcript.data?.items ?? []}
+                    chatId={selectedId}
+                    events={transcript.events}
                     loading={transcript.isPending}
                     currentAgentId={agent?.account_id ?? null}
+                    hasOlder={transcript.hasOlder}
+                    isLoadingOlder={transcript.isLoadingOlder}
+                    onLoadOlder={transcript.loadOlder}
                   />
 
                   <TypingIndicator

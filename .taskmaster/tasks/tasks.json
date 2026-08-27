@@ -7379,7 +7379,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T07:02:29.262Z",
+        "updatedAt": "2026-08-27T07:03:45.632Z",
         "subtasks": [
           {
             "id": 1,
@@ -7411,12 +7411,12 @@
             "description": "Uzun bir konuşmanın başı da okunabiliyor.",
             "details": "NE YAPILACAK: useTranscript bugün /chats/{id}/events?limit=200 ile tek sayfa çekiyor.\nNFR-P5 in asıl maddesi \"reverse infinite scroll + keyset pagination + skeleton\" diyor.\n- Transcript in ÜSTÜNE yaklaşınca before_event_id ile bir önceki sayfa yüklenir.\n- Yeni içerik BAŞA eklenirken (prepend) kullanıcının okuduğu yer ZIPLAMAMALI:\n  yükleme öncesi scrollHeight ölçülür, ekleme sonrası scrollTop farkla telafi edilir.\n- Yükleme sırasında üstte skeleton gösterilir.\n- Canlı mesaj akışı (RTM ile gelen yeni olaylar SONA eklenir) bozulmamalı; Transcript.tsx in\n  mevcut \"yalnız dipteyken otomatik kaydır\" davranışı korunmalı.\n\nDOSYALAR: apps/web/src/features/inbox/useInbox.ts (useTranscript) ·\napps/web/src/features/inbox/Transcript.tsx (kaydırma yönetimi — pinnedToBottom mantığı burada) ·\nTranscript testleri.\nSÖZLEŞME: paths/chats.yaml — events ucu after_event_id ve before_event_id taşıyor ve\nnext_page_id in her iki yönde nasıl kullanılacağını açıklıyor. OKU, tahmin etme.\n\nTUZAKLAR:\n1. Sıralama: olay id leri thread + sıra numarası kodluyor (TJ1H8CFKRV_7) — sıralama id den\n   çözülebilir, zaman damgası karşılaştırmasına GÜVENME (README \"Notable engineering choices\").\n2. Prepend telafisi yanlışsa kullanıcı her sayfa yüklemesinde yerini kaybeder — bunu bir testle kilitle.\n3. Okundu imleci (useMarkSeen) geriye yürürken YANLIŞ tetiklenmemeli: eski olayları görüntülemek\n   \"seen\" ilerletmemeli.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **P5-PAGE** (türetilmiş — NFR-P5 + FR-MOD-02.3.1). Gereksinim satırı: `grep -n \"| P5-PAGE\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KP5-PAGE\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+6 civarı): üste kaydırınca önceki sayfa geliyor · kaydırma konumu korunuyor\n  · skeleton görünüyor · dipteki otomatik kaydırma bozulmadı · seen imleci geriye gitmiyor.\n- e2e inbox spec leri yeşil.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "153.1"
             ],
             "parentId": "153",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-27T07:03:45.632Z"
           },
           {
             "id": 4,
@@ -8106,7 +8106,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T07:02:29.263Z",
+      "lastModified": "2026-08-27T07:03:45.633Z",
       "taskCount": 168,
       "completedCount": 152,
       "tags": [

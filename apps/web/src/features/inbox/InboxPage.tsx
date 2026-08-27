@@ -114,6 +114,13 @@ const TRAFFIC_TAB_LABEL_KEY: Record<TrafficTab, string> = {
   waiting: 'inbox.list.traffic.waiting',
 };
 
+/**
+ * How close to the bottom of the loaded rows counts as "the end" — roughly
+ * three list rows, so the next page is already on its way by the time the
+ * reader gets there.
+ */
+const END_OF_LIST_PX = 240;
+
 export function InboxPage(): ReactElement {
   const t = useTranslate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -231,7 +238,11 @@ export function InboxPage(): ReactElement {
     setPanelTab('details');
   }, [selectedId]);
 
-  const chats = useMemo(() => list.data?.items ?? [], [list.data]);
+  const chats = list.items;
+  // "The first page has landed" — the guard `list.data` used to be. Not
+  // `isPending`, which is also false once the list has *failed*: a load error
+  // must not read as an empty inbox and drop the open conversation.
+  const chatsLoaded = list.pages.length > 0;
 
   // The real-time tabs segment the loaded list, so the counts move with the
   // same data the rows render from. Selection stays validated against the full
@@ -241,16 +252,20 @@ export function InboxPage(): ReactElement {
   const visibleChats = useMemo(() => filterByTrafficTab(chats, trafficTab), [chats, trafficTab]);
 
   // Keep a selection valid as the list changes underneath — a chat can be
-  // transferred away while it is open. Gated on `list.data` so a deep-linked
-  // chat is not reset against the empty array that precedes the first load.
+  // transferred away while it is open. Gated on the first page having landed so
+  // a deep-linked chat is not reset against the empty array that precedes it.
+  //
+  // A chat that is real but sits on a page nobody has scrolled to yet would
+  // look "gone" here, so the reset waits until the list has stopped growing:
+  // while another page is still coming, absence proves nothing.
   useEffect(() => {
-    if (onTickets || !list.data) return;
-    if (selectedId && !chats.some((c) => c.id === selectedId)) {
+    if (onTickets || !chatsLoaded) return;
+    if (!selectedId) {
+      if (chats.length > 0) setSelectedId(chats[0]!.id);
+    } else if (!list.hasNext && !chats.some((c) => c.id === selectedId)) {
       setSelectedId(chats[0]?.id ?? null);
-    } else if (!selectedId && chats.length > 0) {
-      setSelectedId(chats[0]!.id);
     }
-  }, [chats, selectedId, onTickets, list.data]);
+  }, [chats, selectedId, onTickets, chatsLoaded, list.hasNext]);
 
   const ticketItems = useMemo(() => tickets.data?.items ?? [], [tickets.data]);
   const sortedTickets = useMemo(
@@ -448,7 +463,19 @@ export function InboxPage(): ReactElement {
                 })}
               </div>
 
-              <div className="flex-1 overflow-y-auto" role="tabpanel">
+              <div
+                className="flex-1 overflow-y-auto"
+                role="tabpanel"
+                // Reaching the end of what is loaded asks for the next page
+                // (NFR-P5). `fetchNext` is a no-op once the list has ended, so
+                // the last screenful can keep firing this harmlessly.
+                onScroll={(event) => {
+                  const el = event.currentTarget;
+                  if (el.scrollHeight - el.scrollTop - el.clientHeight < END_OF_LIST_PX) {
+                    list.fetchNext();
+                  }
+                }}
+              >
                 {list.isPending ? (
                   <ListSkeleton />
                 ) : visibleChats.length === 0 ? (
@@ -523,6 +550,21 @@ export function InboxPage(): ReactElement {
                       </li>
                     ))}
                   </ul>
+                )}
+                {/* Scrolling is the normal way to reach the next page; this is
+                    the same offer for a keyboard, and the only way out when a
+                    real-time tab filters the loaded page down to nothing. */}
+                {!list.isPending && list.hasNext && (
+                  <div className="flex justify-center border-t border-border p-3">
+                    <button
+                      type="button"
+                      onClick={list.fetchNext}
+                      disabled={list.isFetchingNext}
+                      className="rounded-md border border-border bg-inset px-3 py-1.5 text-sm font-medium text-content-secondary transition-colors hover:text-content disabled:opacity-60"
+                    >
+                      {list.isFetchingNext ? t('inbox.list.loading') : t('inbox.list.loadMore')}
+                    </button>
+                  </div>
                 )}
               </div>
             </section>

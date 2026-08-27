@@ -79,6 +79,8 @@ export const inbox: Messages = {
   'inbox.list.item.queuePosition': '#{position} in queue',
   'inbox.list.item.unreadAria': '{count} unread',
   'inbox.list.item.noMessages': 'No messages yet',
+  'inbox.list.loadMore': 'Load more',
+  'inbox.list.loading': 'Loading…',
 
   // Transcript header + empty state (InboxPage's own chrome around Transcript.tsx)
   'inbox.thread.visitorFallback': 'Visitor',

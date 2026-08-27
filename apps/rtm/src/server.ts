@@ -9,6 +9,7 @@
  * client SDK written against the original protocol still works.
  */
 import { createServer, type Server } from 'node:http';
+import type { Duplex } from 'node:stream';
 import { setTimeout as delay } from 'node:timers/promises';
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
@@ -38,6 +39,37 @@ import { TypingService } from './typing.js';
  * either way — but the deploy notices the twenty-five seconds.
  */
 const SOCKET_CLOSE_TIMEOUT_MS = 5_000;
+
+/**
+ * The listen backlog — how many completed TCP connections the kernel parks
+ * before the process has called `accept()` on them (M-LOAD-CAP · §D127).
+ *
+ * Chosen rather than inherited: `http.listen(port, host, cb)` left this at
+ * Node's default of 511, which was nobody's decision. The value matters here
+ * more than it does for a request-shaped service, because §D127 measured what
+ * overload actually looks like on this gateway — accepting sockets and running
+ * a fan-out compete for the one JS thread, so the accept queue drains in bursts
+ * separated by whole fan-outs rather than steadily.
+ *
+ * 1024 for two reasons:
+ *
+ *   - it absorbs those bursts. At the arrival rates the capacity ladder used
+ *     (100-200 sockets/s) a queue this deep covers seconds of arrivals, which
+ *     is far longer than any single fan-out pause measured;
+ *   - it moves the refusal from the kernel to this process. A queue overflow is
+ *     an anonymous `ECONNREFUSED` — indistinguishable, from the client's side,
+ *     from a load generator that ran out of ephemeral ports, which is a
+ *     confusion tm 161.3 had to spend an entire extra measurement run to
+ *     resolve. Queueing instead lets the upgrade handler below refuse *by name*
+ *     when {@link RtmEnv.maxConnections} says to, and say nothing at all when
+ *     it does not.
+ *
+ * Not higher: Linux silently clamps this to `net.core.somaxconn` (4096 on
+ * current kernels, 128 on older ones), so a larger number here would be a claim
+ * the OS may not honour — and a socket that waits in the queue long enough
+ * belongs to a client that has already given up on it.
+ */
+export const RTM_LISTEN_BACKLOG = 1024;
 
 // Defined in `@nexa/types` so the gateway and its clients cannot disagree about
 // it; re-exported here because this is where callers have always imported it.
@@ -75,6 +107,17 @@ export function buildRtmServer(
    * staying, rather than back into this one.
    */
   let draining = false;
+  /**
+   * True while upgrades are being turned away for hitting
+   * {@link RtmEnv.maxConnections} (M-LOAD-CAP).
+   *
+   * Held only so the two *transitions* can be logged rather than every refusal:
+   * at the ceiling, clients retry, so a line per refused upgrade would produce
+   * its heaviest logging in the moment the process has the least room — and
+   * "we started refusing" / "we stopped refusing" is the whole of what an
+   * operator needs anyway. The instantaneous count stays readable on `/health`.
+   */
+  let atCeiling = false;
 
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   const commands = new Redis(env.REDIS_URL, {
@@ -220,8 +263,40 @@ export function buildRtmServer(
     // reconnect straight back here, because nothing told it this instance is
     // leaving. Refusing sends it to one that is staying.
     if (draining) {
-      socket.write('HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n');
-      socket.destroy();
+      refuseUpgrade(
+        socket,
+        'draining',
+        'The gateway is shutting down and is not taking new connections.',
+      );
+      return;
+    }
+
+    // CONNECTION CEILING (M-LOAD-CAP · §D127). Before this, the gateway had no
+    // idea how many sockets it could serve and accepted them all: §D127
+    // measured the consequence, which is not a refusal but a silent slide into
+    // latency — the fan-out budget went first, and every already-connected
+    // agent paid for the ones still arriving. Refusing is the honest failure of
+    // the two, and it is the one a client and an orchestrator both know how to
+    // react to.
+    //
+    // Checked before the path and tenant validation below on purpose: at the
+    // ceiling the cheapest possible answer is the right one.
+    //
+    // `null` is unlimited, so an unconfigured deployment behaves exactly as it
+    // did before this branch existed.
+    if (env.maxConnections !== null && registry.size >= env.maxConnections) {
+      if (!atCeiling) {
+        atCeiling = true;
+        log.warn(
+          { connections: registry.size, max_connections: env.maxConnections },
+          'rtm at connection ceiling: refusing new upgrades',
+        );
+      }
+      refuseUpgrade(
+        socket,
+        'connection_limit_reached',
+        'The gateway is at its connection ceiling and is not taking new connections.',
+      );
       return;
     }
 
@@ -242,6 +317,17 @@ export function buildRtmServer(
       return;
     }
 
+    // Logged here rather than next to the ceiling check above, so the line
+    // means what it says: an upgrade is about to be accepted, not merely that
+    // one arrived while there was room and then turned out to be malformed.
+    if (atCeiling) {
+      atCeiling = false;
+      log.info(
+        { connections: registry.size, max_connections: env.maxConnections },
+        'rtm below connection ceiling: accepting upgrades again',
+      );
+    }
+
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
       attach({ ws, side, organizationId, registry, dispatcher, log });
@@ -258,8 +344,22 @@ export function buildRtmServer(
     },
     listen: () =>
       new Promise<void>((resolve) => {
-        http.listen(env.RTM_PORT, env.RTM_HOST, () => {
-          log.info({ port: env.RTM_PORT, host: env.RTM_HOST }, 'rtm listening');
+        // Options form rather than `(port, host, cb)` so the backlog is a
+        // decision this file makes — see {@link RTM_LISTEN_BACKLOG}. The
+        // ceiling rides along in the boot line: "how many will this process
+        // take" is the first thing anyone reading these logs during an
+        // incident wants, and `null` there says "unlimited" out loud rather
+        // than by omission.
+        http.listen({ port: env.RTM_PORT, host: env.RTM_HOST, backlog: RTM_LISTEN_BACKLOG }, () => {
+          log.info(
+            {
+              port: env.RTM_PORT,
+              host: env.RTM_HOST,
+              backlog: RTM_LISTEN_BACKLOG,
+              max_connections: env.maxConnections,
+            },
+            'rtm listening',
+          );
           resolve();
         });
       }),
@@ -302,6 +402,48 @@ export function buildRtmServer(
       ]);
     },
   };
+}
+
+/**
+ * Turn an upgrade away before the handshake, saying which of the gateway's two
+ * refusals this is (M-OPS-b's drain and M-LOAD-CAP's ceiling).
+ *
+ * One function for both, because they are one decision — "this process is not
+ * taking new sockets" — differing only in why, and a client that has to tell
+ * `503 draining` apart from `503 full` by prose is a client that will not.
+ * `service_unavailable` is the existing error type for exactly this
+ * (`packages/types/src/errors.ts` maps it to 503); the machine-readable half of
+ * "why" rides in `details.reason` rather than as a new type, since neither of
+ * these is a new *category* of failure.
+ *
+ * What the body deliberately does not carry is the configured ceiling. That an
+ * unauthenticated caller learns this instance is full is operationally
+ * necessary — it is the difference between "the pod refused me" and "my machine
+ * ran out of ports", which is the ambiguity §D127 had to pay a whole extra
+ * measurement run to resolve. What it would be *capacity* for is the number,
+ * and that stays where the rest of the fingerprintable detail is: behind
+ * `/health`'s admin gate (M-SEC-b2).
+ *
+ * `end()` rather than `write()` + `destroy()`: destroy tears the socket down
+ * immediately, including anything still buffered, so a body written that way
+ * arrives only when the write happened to flush synchronously.
+ */
+function refuseUpgrade(
+  socket: Duplex,
+  reason: 'draining' | 'connection_limit_reached',
+  message: string,
+): void {
+  const body = JSON.stringify({
+    error: { type: 'service_unavailable', message, request_id: '-', details: { reason } },
+  });
+  socket.end(
+    'HTTP/1.1 503 Service Unavailable\r\n' +
+      'Connection: close\r\n' +
+      'Content-Type: application/json\r\n' +
+      `Content-Length: ${Buffer.byteLength(body)}\r\n` +
+      '\r\n' +
+      body,
+  );
 }
 
 /**
@@ -421,6 +563,16 @@ async function health(
       version,
       region: env.NEXA_REGION,
       connections: registry.size,
+      // The ceiling next to the count it bounds (M-LOAD-CAP): a number of open
+      // sockets means nothing without the number this process will stop at, and
+      // reading them from two different places is how they get compared across
+      // two different moments. `null` is unlimited, stated rather than omitted
+      // — an absent field reads as "this build does not report it".
+      //
+      // Admin-only along with everything else in this body (M-SEC-b2): the
+      // ceiling is capacity intelligence, and the refusal an anonymous caller
+      // gets on the upgrade path names the *reason* without the number.
+      max_connections: env.maxConnections,
       dependencies: { database, redis: redisHealth },
     },
   };

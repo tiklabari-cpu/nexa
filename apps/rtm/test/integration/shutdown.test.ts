@@ -107,6 +107,42 @@ describe('new connections during the window', () => {
 
     await closing;
   });
+
+  it('says which refusal this is, so a drain is not read as a full gateway (M-LOAD-CAP)', async () => {
+    // The gateway now has two reasons to turn an upgrade away and they share a
+    // status code. `details.reason` is what tells them apart; without it, the
+    // response to "why did that pod refuse me" would be prose, and the answers
+    // are opposite ones — this instance is leaving on purpose, versus this
+    // instance is out of room.
+    const { port, close } = await start({ SHUTDOWN_DRAIN_MS: '1500' });
+    const closing = close();
+
+    const body = await new Promise<{ error?: Record<string, unknown> }>((resolve, reject) => {
+      const ws = new WebSocket(
+        `ws://127.0.0.1:${port}/v1/agent/rtm/ws?organization_id=${crypto.randomUUID()}`,
+      );
+      ws.on('unexpected-response', (_request, response) => {
+        const chunks: Buffer[] = [];
+        response.on('data', (chunk: Buffer) => chunks.push(chunk));
+        response.on('end', () =>
+          resolve(
+            JSON.parse(Buffer.concat(chunks).toString()) as {
+              error?: Record<string, unknown>;
+            },
+          ),
+        );
+      });
+      ws.on('error', (error: Error) => reject(error));
+      ws.on('open', () => reject(new Error('the upgrade was accepted')));
+    });
+
+    expect(body.error).toMatchObject({
+      type: 'service_unavailable',
+      details: { reason: 'draining' },
+    });
+
+    await closing;
+  });
 });
 
 describe('the sockets that were already open', () => {

@@ -55,6 +55,28 @@ const envSchema = z.object({
   CUSTOMER_TOKEN_SECRET: secret(32),
   RATE_LIMIT_RTM_PER_SEC: z.coerce.number().int().positive().default(10),
   /**
+   * How many concurrent WebSocket connections this gateway holds before it
+   * starts refusing upgrades by name (M-LOAD-CAP · §D127).
+   *
+   * Unset means unlimited — precisely what the gateway did before this key
+   * existed. Opening the seam is the point; changing what a running deployment
+   * does on the way is not, and a ceiling that appeared with a default would be
+   * a silent capacity regression rather than a control.
+   *
+   * `0` is refused rather than read as "no ceiling": zero accepts nobody, and
+   * reading the most restrictive value in the range as the least restrictive
+   * one is how a typo becomes an outage. Blank, however, *is* read as unset —
+   * unlike `SHUTDOWN_DRAIN_MS` above, where `z.coerce` turns `''` into a
+   * harmless `0`. Here `''` would coerce to exactly the value the previous
+   * sentence refuses, and a deployment template interpolating an unset variable
+   * (`RTM_MAX_CONNECTIONS=${RTM_MAX_CONNECTIONS}`) writes exactly that — so
+   * blank has to mean what whoever wrote it meant: no ceiling.
+   */
+  RTM_MAX_CONNECTIONS: z.preprocess(
+    (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+    z.coerce.number().int().positive().optional(),
+  ),
+  /**
    * Shutdown drain window in milliseconds (M-OPS-b). Same key, same meaning and
    * the same environment-following default as the API's
    * (`apps/api/src/config/env.ts`) — two processes reading one variable out of
@@ -112,6 +134,12 @@ export type RtmEnv = z.infer<typeof envSchema> & {
   JWT_SIGNING_KEY_CUSTOMER: string;
   /** Resolved shutdown drain window in milliseconds (M-OPS-b). */
   shutdownDrainMs: number;
+  /**
+   * Resolved connection ceiling (M-LOAD-CAP). `null` is "no ceiling", spelled
+   * as a value rather than as `undefined` so a call site that forgets to handle
+   * it fails to compile instead of comparing against `NaN`.
+   */
+  maxConnections: number | null;
 };
 
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
@@ -138,5 +166,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
     isTest: env.NODE_ENV === 'test',
     JWT_SIGNING_KEY_CUSTOMER: env.CUSTOMER_TOKEN_SECRET,
     shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
+    maxConnections: env.RTM_MAX_CONNECTIONS ?? null,
   };
 }

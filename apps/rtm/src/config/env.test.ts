@@ -37,6 +37,60 @@ describe('NEXA_REGION', () => {
 });
 
 /**
+ * The connection ceiling (M-LOAD-CAP · §D127).
+ *
+ * The behaviour worth pinning is not that a number parses — it is the three
+ * ways an operator can spell "no ceiling" and the one way they can spell a
+ * ceiling of zero, because those four spellings sit next to each other and mean
+ * opposite things. Unset has to keep meaning what the gateway did before this
+ * key existed; `0` must not quietly become that too.
+ */
+describe('RTM_MAX_CONNECTIONS', () => {
+  it('is unlimited when unset — today’s behaviour, unchanged', () => {
+    expect(parseEnv(BASE).maxConnections).toBeNull();
+    expect(parseEnv(BASE).RTM_MAX_CONNECTIONS).toBeUndefined();
+  });
+
+  it('reads a ceiling when one is set', () => {
+    expect(parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: '8000' }).maxConnections).toBe(8_000);
+    expect(parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: '1' }).maxConnections).toBe(1);
+  });
+
+  it('treats blank as unset, the way a template interpolating an unset variable writes it', () => {
+    // `RTM_MAX_CONNECTIONS=${RTM_MAX_CONNECTIONS}` in a compose file or a
+    // Helm values block produces exactly this. Coercing it would land on 0,
+    // which is the one value in range that accepts nobody.
+    expect(parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: '' }).maxConnections).toBeNull();
+    expect(parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: '   ' }).maxConnections).toBeNull();
+  });
+
+  it('refuses 0 and negatives rather than reading them as "no ceiling"', () => {
+    expect(() => parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: '0' })).toThrow(/RTM_MAX_CONNECTIONS/);
+    expect(() => parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: '-1' })).toThrow(/RTM_MAX_CONNECTIONS/);
+  });
+
+  it('refuses a fractional or non-numeric ceiling', () => {
+    expect(() => parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: '1.5' })).toThrow(/RTM_MAX_CONNECTIONS/);
+    expect(() => parseEnv({ ...BASE, RTM_MAX_CONNECTIONS: 'lots' })).toThrow(/RTM_MAX_CONNECTIONS/);
+  });
+
+  it('is not implied by production — a production gateway is unlimited until told otherwise', () => {
+    // Deliberate: unlike `SHUTDOWN_DRAIN_MS`, this one has no
+    // environment-following default. A ceiling is a property of the pod's size
+    // and of what sits in front of it, and inventing one at boot would cap a
+    // deployment at a number this repo measured on a laptop (§D127).
+    const env = parseEnv({
+      ...BASE,
+      NODE_ENV: 'production',
+      DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
+      JWT_SIGNING_KEY: 'jwt-0123456789abcdef0123456789abcdef',
+      CUSTOMER_TOKEN_SECRET: 'customer-0123456789abcdef0123456789abcdef',
+    });
+    expect(env.maxConnections).toBeNull();
+  });
+});
+
+/**
  * The production branch (M-PROD-CFG-a).
  *
  * The gateway had none. The API refused an owner connection and a published

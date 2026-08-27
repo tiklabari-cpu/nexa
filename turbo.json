@@ -22,6 +22,7 @@
     "RTM_PORT",
     "RTM_HOST",
     "RTM_BASE_URL",
+    "RTM_MAX_CONNECTIONS",
     "WEB_PORT",
     "WEB_ORIGIN",
     "WEB_APP_URL",

@@ -33,12 +33,16 @@ export function rtmTestEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): RtmEnv {
   });
 }
 
-export async function startRtm(overrides: Partial<NodeJS.ProcessEnv> = {}): Promise<{
+export async function startRtm(
+  overrides: Partial<NodeJS.ProcessEnv> = {},
+  /** Captures what the gateway's logger actually wrote (M-OPS-c). */
+  logStream?: NodeJS.WritableStream,
+): Promise<{
   server: RtmServer;
   port: number;
   close: () => Promise<void>;
 }> {
-  const server = buildRtmServer(rtmTestEnv(overrides));
+  const server = buildRtmServer(rtmTestEnv(overrides), '0.1.0', logStream);
   await server.listen();
   const port = server.address()?.port;
   if (!port) throw new Error('rtm server did not bind a port');

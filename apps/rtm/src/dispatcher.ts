@@ -107,7 +107,10 @@ export class Dispatcher {
       // a client that has to special-case one door per surface will eventually
       // get one of them wrong.
       if (result.reason === 'region_mismatch') {
-        this.deps.log.debug({ region: result.region }, 'rtm login refused: wrong region');
+        this.deps.log.debug(
+          { region: result.region, request_id: message.request_id },
+          'rtm login refused: wrong region',
+        );
         return encodeError(message.request_id, 'login', {
           type: 'misdirected_request',
           message: 'Wrong region for this organization.',
@@ -116,8 +119,13 @@ export class Dispatcher {
       }
 
       // The precise reason is logged, never returned: distinguishing "expired"
-      // from "never existed" confirms which tokens are real.
-      this.deps.log.debug({ reason: result.reason }, 'rtm login rejected');
+      // from "never existed" confirms which tokens are real. `request_id`
+      // rides along (NFR-M5) so the line can be matched to the response frame
+      // the client received for the same login attempt.
+      this.deps.log.debug(
+        { reason: result.reason, request_id: message.request_id },
+        'rtm login rejected',
+      );
       return this.#fail(message, 'authentication', 'Invalid or expired credentials.');
     }
 
@@ -250,7 +258,10 @@ export class Dispatcher {
           await conflictPublisher.publish(principal, chatId, decision.agents);
         }
       } catch (error) {
-        this.deps.log.error({ err: error, chat_id: chatId }, 'conflict detection failed');
+        this.deps.log.error(
+          { err: error, chat_id: chatId, request_id: message.request_id },
+          'conflict detection failed',
+        );
       }
     }
 

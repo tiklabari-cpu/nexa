@@ -52,8 +52,21 @@ export interface RtmServer {
   address: () => { port: number } | null;
 }
 
-export function buildRtmServer(env: RtmEnv, version = '0.1.0'): RtmServer {
-  const log: Logger = pino({ level: env.LOG_LEVEL, name: 'nexa-rtm' });
+export function buildRtmServer(
+  env: RtmEnv,
+  version = '0.1.0',
+  /**
+   * Where log lines go. Omitted, pino's default (stdout) — same contract as
+   * the API's `BuildServerOptions.logStream` (`apps/api/src/server.ts`): a
+   * test passes a stream to read back what was actually written, which is the
+   * only way to assert a log line's shape rather than that a call site exists.
+   */
+  logStream?: NodeJS.WritableStream,
+): RtmServer {
+  // Level follows `LOG_LEVEL` in every environment, same as the API
+  // (`apps/api/src/server.ts`) — there is no dev/production branch to get out
+  // of sync (M-OPS-c).
+  const log: Logger = pino({ level: env.LOG_LEVEL, name: 'nexa-rtm' }, logStream);
   const startedAt = Date.now();
   /**
    * Set the moment `close()` starts (M-OPS-b). Readiness turns false first and
@@ -463,8 +476,14 @@ function attach(params: {
       .then(
         (frame) => send(ws, frame),
         (error: unknown) => {
-          // Internals never reach the client; the log keeps the detail.
-          log.error({ err: error, action: decoded.value.action }, 'rtm dispatch failed');
+          // Internals never reach the client; the log keeps the detail. The
+          // failing request's own `request_id` rides along (NFR-M5) — without
+          // it this line cannot be pinned to the frame the client is still
+          // waiting on, the one correlation an operator actually needs here.
+          log.error(
+            { err: error, action: decoded.value.action, request_id: decoded.value.request_id },
+            'rtm dispatch failed',
+          );
           send(
             ws,
             encodeError(decoded.value.request_id, decoded.value.action, {

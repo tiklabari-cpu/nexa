@@ -7735,7 +7735,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T15:06:50.658Z",
+        "updatedAt": "2026-08-27T16:20:17.713Z",
         "subtasks": [
           {
             "id": 1,
@@ -7767,12 +7767,12 @@
             "description": "Canlı loglar hem okunabilir hem PII sızdırmıyor.",
             "details": "NE YAPILACAK: logların production davranışı netleştirilir.\n- Log seviyesi env den (LOG_LEVEL zaten turbo globalEnv de var — env.ts şemasında ve kullanımda mı, ÖLÇ).\n- request_id korelasyonu: server.ts genReqId zaten x-request-id başlığını ya da UUID kullanıyor;\n  her log satırının bunu taşıdığını ve yanıt başlığıyla eşleştiğini testle kilitle (NFR-M5).\n- lib/log-redact.ts in maskeleme listesi production da ZORUNLU olarak devrede olmalı;\n  bugün devrede mi, hangi yolla? ÖLÇ ve kilitle.\n- disableRequestLogging bugün yalnız test te kapalı; production da istek loglarının hacmi\n  ve içeriği (yol + durum + süre, gövde YOK) gözden geçirilir.\n\nDOSYALAR: apps/api/src/server.ts (logger yapılandırması) · apps/api/src/lib/log-redact.ts + testi ·\napps/api/src/config/env.ts (LOG_LEVEL) · apps/rtm de aynı profil.\nREFERANS: tm 155.3 (M-SEC-c3) sanitizeAuditMetadata i derinleştiriyor — log-redact ile ORTAK bir\nanahtar sözlüğü doğabilir; ikisini birbirinden kaydırma (o görev de aynı uyarıyı taşıyor).\n\nTUZAK: bu alt-görev YENİ bir gözlemlenebilirlik yığını kurmaz (o tm 163 · M-OTEL). Yalnız var olan\nlog yolunun production profilini netleştirir. Kapsam dışına çıkma.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-OPS** (türetilmiş — NFR-M5 · NFR-S9). Gereksinim satırı: `grep -n \"| M-OPS\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-OPS\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api unit/integration yeşil; log-redact testi production profilini kapsıyor.\n- Ölçülebilir: bir isteğin log satırındaki request_id, yanıtın X-Request-Id başlığıyla AYNI.\n- Ölçülebilir: hassas alan taşıyan bir gövde loglandığında maskeleniyor.\n- PLAN: §7.2 M-OPS → \"✅ → KM-OPS\" (üçüncü alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "160.1"
             ],
             "parentId": "160",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-27T16:20:17.713Z"
           }
         ]
       },
@@ -8118,7 +8118,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T15:06:50.659Z",
+      "lastModified": "2026-08-27T16:20:17.714Z",
       "taskCount": 169,
       "completedCount": 155,
       "tags": [

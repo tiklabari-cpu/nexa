@@ -7732,10 +7732,10 @@
         "description": "Bugün tek bir /health var ve hem canlılık hem hazırlık sorusunu birlikte cevaplıyor: bağımlılıklara dokunuyor ve düştüklerinde 503 veriyor. Bir orkestratör için bu ikisi FARKLI sorulardır — Postgres kısa süre düştüğünde süreç öldürülmemeli (liveness), ama rotasyondan çıkarılmalı (readiness). Ayrıca SIGTERM bugün doğrudan app.close() çağırıyor: uçuştaki istekler ve RTM soketleri için bir drenaj penceresi yok, yani her yeniden dağıtım bir miktar isteği kesiyor.",
         "details": "BULGU KAYNAĞI: 2026-08-23 bağımsız denetimi (§D124, production hazırlığı).\nZEMİN (oku, tahmin etme): apps/api/src/index.ts SIGINT/SIGTERM i ZATEN yakalıyor ve app.close()\nçağırıyor; apps/rtm/src/index.ts de aynısını yapıyor. Yani bu kalem sıfırdan bir kapanış yolu YAZMAZ,\nvar olanı DRENAJ SIRASIYLA değiştirir.\nroutes/health.ts kendi yorumunda \"readiness probe\" diyor ve bağımlılıklara gerçekten dokunuyor —\nyani bugünkü uç aslında readiness tir; eksik olan liveness.\n\nÇAKIŞMA UYARISI: tm 151.2 (M-SEC-b2) anonim /health yanıtını daraltıyor. İki görev aynı dosyaya\ndokunuyor. Hangisi sonra koşarsa DİĞERİNİN kararını korumalı: anonim yanıt dar kalır, ayrıntı\nkimlikli admin e verilir, ve liveness/readiness ayrımı bu daraltmanın ÜSTÜNE kurulur.\n\nFAZ-6'NIN KONUSU: CANLIDA AYAKTA KALMAK (§D124). Faz-5 ürünün DOĞRU olmasını sağladı;\nFaz-6 HAZIR olmasını sağlar — konfigürasyon, ops dikişleri, ölçek ölçümü, dağıtım manifestleri, runbook.\n\nSINIR (CLAUDE.md — pazarlık yok): production deploy / DNS / TLS sertifikası / gerçek secret YOK.\nBu fazın HER kalemi ya yerelde koşulabilir ya --dry-run / helm template ile doğrulanabilir olmak\nzorundadır. M-CONTAINER emsali (tm 140): dosyalar depoda, kubectl apply YOK.\n\nAYRICA KAPSAM DIŞI: mock sağlayıcıları gerçeğe çekmek (LLM · SMTP · S3 · Stripe · push · SIEM · AV ·\nbeş mesajlaşma kanalı). Kullanıcı bunu bu turda istemedi. Bir dikişi GERÇEK sağlayıcıya bağlama;\nyalnız seçim dikişini hazırla. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-OPS** (türetilmiş — NFR-R1/R2 · NFR-M5). Gereksinim satırı: `grep -n \"| M-OPS\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-OPS\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Üç alt-görev done. Ölçülebilir:\n1. /health/live bağımlılıklara DOKUNMADAN 200 dönüyor; /health/ready Postgres düştüğünde 503 dönüyor.\n2. SIGTERM sonrası readiness ÖNCE false oluyor, uçuştaki istek tamamlanıyor, sonra süreç kapanıyor.\n3. Dockerfile + compose + smoke.sh yeni uçlara göre güncel; make demo hâlâ yeşil.\n4. PLAN §7.2 M-OPS → \"✅ → KM-OPS\".",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T16:20:17.713Z",
+        "updatedAt": "2026-08-27T16:49:26.211Z",
         "subtasks": [
           {
             "id": 1,
@@ -7767,12 +7767,12 @@
             "description": "Canlı loglar hem okunabilir hem PII sızdırmıyor.",
             "details": "NE YAPILACAK: logların production davranışı netleştirilir.\n- Log seviyesi env den (LOG_LEVEL zaten turbo globalEnv de var — env.ts şemasında ve kullanımda mı, ÖLÇ).\n- request_id korelasyonu: server.ts genReqId zaten x-request-id başlığını ya da UUID kullanıyor;\n  her log satırının bunu taşıdığını ve yanıt başlığıyla eşleştiğini testle kilitle (NFR-M5).\n- lib/log-redact.ts in maskeleme listesi production da ZORUNLU olarak devrede olmalı;\n  bugün devrede mi, hangi yolla? ÖLÇ ve kilitle.\n- disableRequestLogging bugün yalnız test te kapalı; production da istek loglarının hacmi\n  ve içeriği (yol + durum + süre, gövde YOK) gözden geçirilir.\n\nDOSYALAR: apps/api/src/server.ts (logger yapılandırması) · apps/api/src/lib/log-redact.ts + testi ·\napps/api/src/config/env.ts (LOG_LEVEL) · apps/rtm de aynı profil.\nREFERANS: tm 155.3 (M-SEC-c3) sanitizeAuditMetadata i derinleştiriyor — log-redact ile ORTAK bir\nanahtar sözlüğü doğabilir; ikisini birbirinden kaydırma (o görev de aynı uyarıyı taşıyor).\n\nTUZAK: bu alt-görev YENİ bir gözlemlenebilirlik yığını kurmaz (o tm 163 · M-OTEL). Yalnız var olan\nlog yolunun production profilini netleştirir. Kapsam dışına çıkma.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-OPS** (türetilmiş — NFR-M5 · NFR-S9). Gereksinim satırı: `grep -n \"| M-OPS\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-OPS\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api unit/integration yeşil; log-redact testi production profilini kapsıyor.\n- Ölçülebilir: bir isteğin log satırındaki request_id, yanıtın X-Request-Id başlığıyla AYNI.\n- Ölçülebilir: hassas alan taşıyan bir gövde loglandığında maskeleniyor.\n- PLAN: §7.2 M-OPS → \"✅ → KM-OPS\" (üçüncü alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "160.1"
             ],
             "parentId": "160",
-            "updatedAt": "2026-08-27T16:20:17.713Z"
+            "updatedAt": "2026-08-27T16:49:26.211Z"
           }
         ]
       },
@@ -8118,9 +8118,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T16:20:17.714Z",
+      "lastModified": "2026-08-27T16:49:26.211Z",
       "taskCount": 169,
-      "completedCount": 155,
+      "completedCount": 156,
       "tags": [
         "master"
       ]

@@ -74,8 +74,16 @@ COPY --from=build --chown=nginx:nginx /repo/apps/web/dist /usr/share/nginx/html
 # through untouched. That is what makes `${API_UPSTREAM}`/`${RTM_UPSTREAM}`
 # safe to leave unbraced-`$`-free in nginx.conf: only those two get replaced.
 COPY apps/web/nginx.conf /etc/nginx/templates/default.conf.template
+# `CSP_CONNECT_EXTRA` is the origin list the panel's Content-Security-Policy
+# allows on top of `'self'` (M-PROD-CFG-b). Same-origin REST needs nothing here;
+# the RTM WebSocket does, because its address is baked into the bundle by
+# VITE_RTM_URL above and a WebSocket URL can never be same-origin-relative. The
+# default therefore has to track that build arg's default — both schemes,
+# because whether the deployment is behind TLS is not this image's decision.
+# Set to empty to drop RTM from the policy, or to your own RTM origin.
 ENV API_UPSTREAM=http://api:4000 \
-    RTM_UPSTREAM=http://rtm:4001
+    RTM_UPSTREAM=http://rtm:4001 \
+    CSP_CONNECT_EXTRA="ws://localhost:4001 wss://localhost:4001"
 
 EXPOSE 8080
 # BusyBox `wget` ships in the base Alpine image already — no extra package

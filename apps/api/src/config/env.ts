@@ -22,6 +22,47 @@ const secret = (minLength: number) =>
     .min(minLength, `must be at least ${minLength} characters`)
     .refine((v) => !/^(changeme|secret|password)$/i.test(v), 'must not be a placeholder value');
 
+/**
+ * Reads `WEB_ORIGIN` as a comma-separated origin list, or `null` if any entry is
+ * not an origin (M-PROD-CFG-b).
+ *
+ * Returning `null` rather than throwing lets the schema report the failure the
+ * way it reports every other one — `WEB_ORIGIN: <reason>` inside the single
+ * "Invalid environment" message — and it is what makes a malformed value
+ * fail *closed*: the process does not start, instead of starting with an
+ * allowlist that matches nothing (every panel request refused) or, worse, one
+ * silently widened by an entry a browser will never send.
+ *
+ * An origin is `scheme://host[:port]` and nothing more, because that is exactly
+ * what a browser puts in `Origin` and what `@fastify/cors` compares against. A
+ * trailing slash is accepted and normalised away — `new URL()` gives `/` a
+ * pathname whether or not one was typed, so refusing it would only punish a
+ * paste — but a real path, query, fragment or userinfo is refused: it means
+ * whoever set this pasted a URL, and the value would never match anything.
+ */
+function parseOriginList(value: string): string[] | null {
+  const entries = value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  if (entries.length === 0) return null;
+
+  const origins: string[] = [];
+  for (const entry of entries) {
+    let url: URL;
+    try {
+      url = new URL(entry);
+    } catch {
+      return null;
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.pathname !== '/' || url.search !== '' || url.hash !== '') return null;
+    if (url.username !== '' || url.password !== '') return null;
+    origins.push(url.origin);
+  }
+  return [...new Set(origins)];
+}
+
 /** Exported so `env.parity.test.ts` can enumerate keys off `.shape` rather than re-parsing this file as text. */
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -45,6 +86,41 @@ export const envSchema = z.object({
 
   API_PORT: z.coerce.number().int().positive().default(4000),
   API_HOST: z.string().default('0.0.0.0'),
+  /**
+   * How many reverse-proxy hops in front of this process are trusted, and so
+   * how far into `X-Forwarded-For` `request.ip` is allowed to read
+   * (NFR-S9 · M-PROD-CFG-b). See `server.ts`, which hands it to Fastify.
+   *
+   * A count, not a comfort setting: `request.ip` decides the anonymous
+   * rate-limit bucket, the customer IP ban and the agent IP allow-list, and
+   * proxy-addr returns the entry `hops` places from the right of the chain. Set
+   * it *higher* than the number of proxies that actually append to the header
+   * and that entry becomes one the caller wrote — the allow-list is then
+   * bypassed by a header anyone can send. Set it lower and every request appears
+   * to come from your own proxy, which quietly collapses all three decisions
+   * onto one address.
+   *
+   * `0` is the right value for a process reached directly, with no proxy in
+   * front: the header is ignored entirely and the socket peer is used. It is not
+   * a disabled state — it is the correct topology for a deployment that has no
+   * proxy, and leaving the default `1` there is what would be unsafe.
+   *
+   * Capped: past a handful this stops describing a topology and starts meaning
+   * "trust the whole chain", which is the failure it exists to prevent, so a
+   * fat-fingered `TRUST_PROXY_HOPS=100` fails at boot rather than becoming it.
+   */
+  TRUST_PROXY_HOPS: z
+    .preprocess(
+      // `z.coerce.number()` reads '' as 0, and 0 is a real value here rather
+      // than an absent one. Someone who wrote a bare `TRUST_PROXY_HOPS=` in a
+      // unit file meant "leave it at the default", not "ignore
+      // `X-Forwarded-For`" — and behind a proxy the difference is every agent
+      // being shut out by their own IP allow-list, because every request would
+      // appear to come from the proxy. Refuse it rather than guess.
+      (value) => (value === '' ? Number.NaN : value),
+      z.coerce.number().int().min(0).max(8),
+    )
+    .default(1),
   API_BASE_URL: z.string().url().default('http://localhost:4000'),
   /// Where invitation links point. The agent app, not the API.
   WEB_APP_URL: z.string().url().default('http://localhost:5173'),
@@ -55,7 +131,24 @@ export const envSchema = z.object({
   /// cross-tenant delivery would be visible as a file in the wrong directory.
   PUSH_DIR: z.string().default('.data/push'),
   RTM_BASE_URL: z.string().default('ws://localhost:4001'),
-  WEB_ORIGIN: z.string().default('http://localhost:5173'),
+  /**
+   * Origins the API answers cross-origin, as a comma-separated list
+   * (M-PROD-CFG-b). Read through `webOrigins` below; only production consults
+   * it, where `server.ts` hands the list to `@fastify/cors` as the allowlist.
+   *
+   * A list rather than one value because a deployment routinely serves the
+   * agent panel and the hosted chat page (FR-MOD-08.5.9) from separate hosts,
+   * and with `credentials: true` the alternative to naming them is reflecting
+   * whatever origin asks — which would let any page a signed-in agent visits
+   * read this API with that agent's session.
+   */
+  WEB_ORIGIN: z
+    .string()
+    .default('http://localhost:5173')
+    .refine((value) => parseOriginList(value) !== null, {
+      message:
+        'must be one or more comma-separated origins of the form scheme://host[:port] (e.g. "https://panel.example.com,https://chat.example.com") — no path, query or fragment',
+    }),
   /// Origin serving the widget loader + iframe. The install snippet points
   /// `window.__nexa.widgetOrigin` and the async `loader.js` at it.
   WIDGET_BASE_URL: z.string().url().default('http://localhost:5174'),
@@ -340,6 +433,8 @@ export const envSchema = z.object({
 export type Env = z.infer<typeof envSchema> & {
   /** Connection string the request path should use — app role when available. */
   runtimeDatabaseUrl: string;
+  /** `WEB_ORIGIN` parsed and normalised — the CORS allowlist production uses. */
+  webOrigins: string[];
   isProduction: boolean;
   isTest: boolean;
   /** Whether OpenTelemetry instrumentation is active for this process. */
@@ -423,6 +518,9 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   return {
     ...env,
     runtimeDatabaseUrl: env.DATABASE_APP_URL ?? env.DATABASE_URL,
+    // Non-null by construction: the schema's `refine` above already refused
+    // every value this returns `null` for, so the boot is over before here.
+    webOrigins: parseOriginList(env.WEB_ORIGIN) ?? [],
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',

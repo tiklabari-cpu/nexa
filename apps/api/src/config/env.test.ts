@@ -245,3 +245,122 @@ describe('production configuration', () => {
     }
   });
 });
+
+/**
+ * The trusted proxy hop count (M-PROD-CFG-b).
+ *
+ * `server.ts` used to hard-code `trustProxy: 1` under a comment that declared
+ * the assumption behind it — "the API is reached through exactly one trusted
+ * reverse proxy". A deployment that does not match cannot change the assumption
+ * without changing the image, and both directions of being wrong are bad in
+ * ways nothing reports: too high hands the caller control of `request.ip`, too
+ * low collapses every caller onto the proxy's address. What the count *does* to
+ * an authorization decision is measured end to end in
+ * `test/integration/trust-proxy.test.ts`; this is the parsing half.
+ */
+describe('TRUST_PROXY_HOPS', () => {
+  it('defaults to a single reverse proxy — the topology the code assumed before it was a knob', () => {
+    expect(parseEnv(BASE).TRUST_PROXY_HOPS).toBe(1);
+  });
+
+  it('takes a count from the environment, where everything is a string', () => {
+    expect(parseEnv({ ...BASE, TRUST_PROXY_HOPS: '2' }).TRUST_PROXY_HOPS).toBe(2);
+  });
+
+  it('accepts zero, which is a topology and not an off switch', () => {
+    // A process reached directly has nothing appending to `X-Forwarded-For`, so
+    // the only address it may believe is the socket peer. Leaving the default 1
+    // there is what would be unsafe — the header would then be the caller's.
+    expect(parseEnv({ ...BASE, TRUST_PROXY_HOPS: '0' }).TRUST_PROXY_HOPS).toBe(0);
+  });
+
+  it('refuses anything that is not a whole, non-negative count', () => {
+    for (const bad of ['-1', '1.5', 'one']) {
+      expect(() => parseEnv({ ...BASE, TRUST_PROXY_HOPS: bad }), bad).toThrow(/TRUST_PROXY_HOPS/);
+    }
+  });
+
+  it('refuses an empty value rather than reading it as zero', () => {
+    // `TRUST_PROXY_HOPS=` in a unit file means "leave it alone" to whoever wrote
+    // it; `Number('')` is 0. Behind a proxy that difference locks every agent
+    // out of a workspace with an IP allow-list, since all of them would suddenly
+    // appear to be the proxy.
+    expect(() => parseEnv({ ...BASE, TRUST_PROXY_HOPS: '' })).toThrow(/TRUST_PROXY_HOPS/);
+  });
+
+  it('refuses a count big enough to mean "trust the whole chain"', () => {
+    // At runtime a fat-fingered 100 is indistinguishable from `trustProxy: true`
+    // — proxy-addr walks past every real hop and returns the left-most entry,
+    // the one the caller wrote — which is the single failure this key exists to
+    // prevent. Better a boot that stops than an allow-list that does not.
+    expect(() => parseEnv({ ...BASE, TRUST_PROXY_HOPS: '100' })).toThrow(/TRUST_PROXY_HOPS/);
+  });
+});
+
+/**
+ * The CORS allowlist (M-PROD-CFG-b).
+ *
+ * Production answers exactly these origins with `credentials: true`, so the
+ * value is an authorization boundary rather than a convenience: an origin on
+ * this list can read the API with a signed-in agent's session. It used to be a
+ * single unvalidated string wrapped in an array at the point of use, which made
+ * both of the interesting cases impossible to express — a deployment serving
+ * the panel and the hosted chat page from different hosts, and a value that is
+ * not an origin at all.
+ */
+describe('WEB_ORIGIN', () => {
+  const origins = (value?: string): string[] =>
+    parseEnv(value === undefined ? BASE : { ...BASE, WEB_ORIGIN: value }).webOrigins;
+
+  it('defaults to the dev panel, as one origin', () => {
+    expect(origins()).toEqual(['http://localhost:5173']);
+  });
+
+  it('takes a comma-separated list, because a deployment has more than one front door', () => {
+    // The agent panel and the hosted chat page (FR-MOD-08.5.9) are routinely
+    // separate hosts; naming only one of them silently breaks the other.
+    expect(origins('https://panel.example.com,https://chat.example.com')).toEqual([
+      'https://panel.example.com',
+      'https://chat.example.com',
+    ]);
+  });
+
+  it('normalises what a person actually pastes', () => {
+    // Whitespace around a separator, a trailing slash `new URL` would add
+    // anyway, a mixed-case host, and the same origin written twice. All four
+    // reach `@fastify/cors` as the exact string a browser puts in `Origin`,
+    // which is the only spelling that ever matches.
+    expect(origins(' https://panel.example.com/ , HTTPS://Panel.Example.com ')).toEqual([
+      'https://panel.example.com',
+    ]);
+    expect(origins('https://panel.example.com:8443')).toEqual(['https://panel.example.com:8443']);
+  });
+
+  it('refuses a value that is not an origin, at boot', () => {
+    // Fail closed, and loudly. Every one of these parses today as a plain
+    // string, and the allowlist built from it would match nothing a browser
+    // sends — which looks exactly like CORS being broken for no reason.
+    for (const bad of [
+      '',
+      '   ',
+      ',',
+      'panel.example.com', // no scheme
+      'https://panel.example.com/app', // a URL, not an origin
+      'https://panel.example.com?x=1',
+      'https://user:pw@panel.example.com',
+      'file:///etc/passwd',
+      'javascript:alert(1)',
+      'https://ok.example.com,not-an-origin',
+    ]) {
+      expect(() => parseEnv({ ...BASE, WEB_ORIGIN: bad }), JSON.stringify(bad)).toThrow(
+        /WEB_ORIGIN/,
+      );
+    }
+  });
+
+  it('is only ever a list, so no caller has to remember to wrap it', () => {
+    // `server.ts` used to write `[env.WEB_ORIGIN]`. The array now comes from
+    // here, which is what makes the multi-origin case reachable at all.
+    expect(Array.isArray(parseEnv(BASE).webOrigins)).toBe(true);
+  });
+});

@@ -154,19 +154,29 @@ export async function buildServer({
     // Correlates the log line, the trace and the `request_id` the client sees.
     genReqId: (req) => (req.headers['x-request-id'] as string | undefined) ?? randomUUID(),
     requestIdHeader: 'x-request-id',
-    // Trust exactly one proxy hop, not the whole `X-Forwarded-For` chain.
+    // Trust exactly `TRUST_PROXY_HOPS` proxy hops, not the whole
+    // `X-Forwarded-For` chain.
     //
     // `request.ip` feeds security decisions — the anonymous rate-limit key, the
     // customer IP ban, and the agent IP allow-list (FR-MOD-08.9.6). With
     // `trustProxy: true` proxy-addr trusts every hop and returns the *left-most*
     // XFF entry, which is whatever the client wrote: a caller could send
     // `X-Forwarded-For: <an-allowed-ip>` and walk straight through the allow-list.
-    // Trusting a single hop makes proxy-addr return the *right-most* entry — the
-    // address our own reverse proxy attested — so a client-prepended value is
-    // ignored and cannot be spoofed. Assumption: the API is reached through
-    // exactly one trusted reverse proxy and is never exposed directly (if that
-    // ever changes, this must become the proxy's address/subnet, not a count).
-    trustProxy: 1,
+    // Trusting a bounded number of hops makes proxy-addr stop that many entries
+    // from the right — at the address the outermost proxy *we* operate attested
+    // — so a client-prepended value is ignored and cannot be spoofed.
+    //
+    // How many that is belongs to the deployment, not to this file
+    // (M-PROD-CFG-b): one reverse proxy is the common case and the default, a
+    // CDN in front of an ingress is two, and a process reached directly is zero.
+    // This used to be the literal `1` with a comment declaring the assumption,
+    // which meant a topology change silently produced either a bypass (count too
+    // high) or every request appearing to come from our own proxy (too low).
+    // `test/integration/trust-proxy.test.ts` runs both mistakes against the
+    // allow-list. Zero is not "off": Fastify skips the decoration entirely and
+    // `request.ip` is the socket peer, which is the correct — and the only safe
+    // — reading when nothing in front of us appends to the header.
+    trustProxy: env.TRUST_PROXY_HOPS,
     // A test that hands us a stream is asking to read the request line; every
     // other test keeps it off, because thousands of lines nobody reads is what
     // made it off in the first place.
@@ -186,7 +196,11 @@ export async function buildServer({
     crossOriginResourcePolicy: { policy: 'same-site' },
   });
   await app.register(cors, {
-    origin: env.isProduction ? [env.WEB_ORIGIN] : true,
+    // Production answers only the origins `WEB_ORIGIN` names — a list, because a
+    // deployment routinely serves the agent panel and the hosted chat page from
+    // different hosts (M-PROD-CFG-b). Everywhere else reflects whatever asks,
+    // which is what lets a dev server on any port and the e2e stack work.
+    origin: env.isProduction ? env.webOrigins : true,
     credentials: true,
     exposedHeaders: [
       'X-Request-Id',

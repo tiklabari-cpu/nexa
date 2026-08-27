@@ -7684,7 +7684,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T12:01:35.380Z",
+        "updatedAt": "2026-08-27T12:03:07.963Z",
         "subtasks": [
           {
             "id": 1,
@@ -7703,12 +7703,12 @@
             "description": "Dağıtım topolojisi değişince güvenlik kararları sessizce bozulmuyor.",
             "details": "NE YAPILACAK: üç yapılandırma yüzeyi.\n\n1. TRUST_PROXY_HOPS (env, varsayılan 1): apps/api/src/server.ts bugün trustProxy: 1 i KODA GÖMÜYOR.\n   Yorumu neden 1 olduğunu ve varsayımını açıkça yazıyor (\"if that ever changes, this must become\n   the proxy address/subnet, not a count\"). Env e taşı, varsayılanı 1 tut, .env.example + turbo.json\n   globalEnv + env.ts şemasına ekle (M-ENV-a nın parite kuralı).\n2. WEB_ORIGIN çoklu origin: CORS bugün production da tek origin e izin veriyor\n   (origin: env.isProduction ? [env.WEB_ORIGIN] : true). Gerçek bir dağıtımda panel + hosted chat\n   sayfası farklı originler olabilir. Virgülle ayrılmış liste kabul et; boş/hatalı girdi fail-closed olsun.\n3. nginx production güvenlik profili: apps/web/nginx.conf ve apps/widget/nginx.conf bugün yalnız\n   cache başlıkları taşıyor. Eklenecekler: Strict-Transport-Security · Content-Security-Policy\n   (SPA için; widget iframe i için AYRI ve daha dar) · X-Content-Type-Options · Referrer-Policy ·\n   X-Frame-Options / frame-ancestors (widget in iframe olarak gömülmesi GEREKİYOR — onu kırma).\n\nNEDEN OPUS-MAX VE BÖLÜNMEZ (§5.1.2 istisnası): request.ip üç güvenlik kararını besliyor —\nanonim hız sınırı (plugins/rate-limit.ts), müşteri IP yasağı (lib/banned-ip.ts) ve ajan IP\nallow-list i (FR-MOD-08.9.6, IpAllowlist). Hop sayısı yanlışsa proxy-addr EN SOLDAKİ XFF girdisini\ndöner — yani çağıranın kendi yazdığı değeri — ve allow-list baypas edilir. server.ts in yorumu\nbu senaryoyu birebir anlatıyor. Bu bir authZ sınırıdır, bölünmez.\n\nDOSYALAR: apps/api/src/server.ts (trustProxy + cors) · apps/api/src/config/env.ts · .env.example ·\nturbo.json (globalEnv) · apps/web/nginx.conf · apps/widget/nginx.conf ·\napps/api/src/config/env.test.ts (parite) · ilgili integration testleri.\n\nTUZAKLAR:\n1. WIDGET CSP İ KENDİ İZOLASYONUNU KIRMAMALI: widget cross-origin iframe olarak çalışıyor ve\n   README \"no allow-same-origin\" diyor (NFR-S6). frame-ancestors i widget için AÇIK bırak\n   (müşteri sitesine gömülecek), panel için KAPAT. İkisini karıştırmak ya widget i öldürür ya paneli açar.\n2. HSTS yalnız HTTPS arkasında anlamlıdır; bu depoda TLS YOK. Başlık yapılandırmada bulunur ama\n   yerel http yığınını bozmamalı — profili koşullu yap ve gerekçesini conf dosyasına yorum olarak yaz.\n3. CSP yi fazla sıkı yazarsan Vite in ürettiği SPA çalışmaz (inline stil/script). Ölç: make demo\n   yığınını kaldır, sayfayı aç, konsolda CSP ihlali OLMADIĞINI gör.\n4. env parite nöbetçisi (env.parity.test.ts) yeni anahtarı üç yerde birden ister: env.ts ↔ .env.example\n   ↔ turbo.json globalEnv. Birini unutursan kapı kırmızı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-PROD-CFG** (türetilmiş — NFR-S3/S5/S6/S9). Gereksinim satırı: `grep -n \"| M-PROD-CFG\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-PROD-CFG\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- ÖNCE KIRMIZI: iki hop luk bir XFF zinciri kurup allow-list davranışını ölç — hop sayısı yanlışken\n  çağıranın yazdığı IP kabul ediliyor, doğruyken reddediliyor.\n- api integration yeşil (rate-limit · banned-ip · ip-allowlist süitleri) · env parite testi yeşil.\n- Ölçülebilir: make demo yığını ayağa kalkıyor, scripts/smoke.sh exit 0, tarayıcı konsolunda CSP ihlali yok.\n- e2e TAM süit yeşil (taban 205) — widget in iframe akışı kırılmadı.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "159.1"
             ],
             "parentId": "159",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-27T12:03:07.963Z"
           },
           {
             "id": 3,
@@ -8118,7 +8118,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T12:01:35.380Z",
+      "lastModified": "2026-08-27T12:03:07.963Z",
       "taskCount": 169,
       "completedCount": 154,
       "tags": [

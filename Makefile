@@ -102,6 +102,10 @@ load: ## Run the k6 load harness against an ALREADY-RUNNING stack (see apps/load
 load-rest: ## REST mix (list+transcript+send) → NFR-P2; raise RATE_LIMIT_AGENT_PER_MIN first (see apps/load/README.md)
 	cd apps/load && K6_VERSION="$$(k6 version)" k6 run scenarios/rest.js
 
+.PHONY: load-rtm
+load-rtm: ## N WS sockets + fan-out → NFR-P1/P8; one rung of the ladder (LOAD_RTM_CONNECTIONS)
+	cd apps/load && K6_VERSION="$$(k6 version)" k6 run scenarios/rtm.js
+
 # --- Containerised stack (local only — no deploy, no TLS, no real secrets) ---
 
 .PHONY: demo

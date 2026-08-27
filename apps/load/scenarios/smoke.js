@@ -10,8 +10,8 @@
  * the numbers from `rest.js` / `rtm.js` mean nothing.
  *
  * The realistic mixes belong to their own files:
- *   - `scenarios/rest.js` — list + transcript + send, NFR-P2 (tm 161.2)
- *   - `scenarios/rtm.js`  — N sockets + fan-out, NFR-P1 / NFR-P8 (tm 161.3)
+ *   - `scenarios/rest.js` — list + transcript + send, NFR-P2
+ *   - `scenarios/rtm.js`  — N sockets + fan-out, NFR-P1 / NFR-P8 / NFR-R2
  */
 import { check, fail, sleep } from 'k6';
 import { CONFIG, stages } from '../lib/config.js';

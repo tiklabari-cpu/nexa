@@ -7785,7 +7785,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T18:22:01.894Z",
+        "updatedAt": "2026-08-27T18:23:21.669Z",
         "subtasks": [
           {
             "id": 1,
@@ -7817,12 +7817,12 @@
             "description": "WebSocket kapasitesi ve fan-out gecikmesi ilk kez ölçüldü.",
             "details": "NE YAPILACAK: apps/load/scenarios/rtm.js — WebSocket yük senaryosu.\n- N sanal kullanıcı RTM e bağlanır (ws://.../v1/agent/rtm/ws), login olur, sohbetlere abone olur.\n- Bir mesaj üretilir ve fan-out un aboneye ULAŞMA süresi ölçülür → NFR-P1 (p99 < 500 ms).\n- Bağlantı sayısı kademeli artırılır ve TEK POD un nerede bozulduğu bulunur → NFR-P8 in ilk sayısı.\n  \"Bozulma\" tanımı önceden yazılır: fan-out p99 bütçeyi aşıyor MU, bağlantı reddi başlıyor mu,\n  bellek/CPU doyuyor mu. Tanımı yazmadan ölçme — yoksa sayı yoruma açık kalır.\n- Reconnect + missed-event sync davranışı yük altında da çalışıyor mu (NFR-R2) gözlenir.\n\nDOSYALAR: apps/load/scenarios/rtm.js · apps/load/lib/.\nREFERANS: apps/rtm/test/integration/rtm.test.ts — protokol zarfı (ADR-15: {request_id, action,\npayload} → {request_id, action, type, success, payload}), login akışı ve abonelik mesajları orada;\nsenaryo aynı zarfı kullanmalı, tahmin etmemeli.\nADR-07: RTM WS 10 msg/sn/bağlantı sınırı — senaryo bunu aşmamalı.\n\nTUZAKLAR:\n1. ÖLÇÜMÜN SINIRINI DÜRÜSTÇE YAZ: tek bir geliştirme makinesinde 20.000 soket açmak işletim sistemi\n   sınırlarına (dosya tanıtıcı, efemeral port) takılır. Ulaşılan sayı ile ULAŞILAMAYAN sayının sebebi\n   AYRI AYRI raporlanmalı — \"20k a çıkamadık\" ile \"20k da ürün bozuldu\" çok farklı iki sonuçtur.\n   Bu ayrımı yapmayan bir rapor 161.4 ün kararını yanlış besler.\n2. k6 nin WebSocket desteği (k6/ws ya da k6/experimental/websockets) sürüme bağlıdır; hangisini\n   kullandığını README ye yaz.\n3. RTM in Redis pub/sub üzerinden fan-out yaptığını unutma — ölçtüğün gecikme Redis i de içerir.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-LOAD** (türetilmiş — NFR-P1 · NFR-P8 · NFR-R2). Gereksinim satırı: `grep -n \"| M-LOAD\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-LOAD\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Senaryo koşuyor; fan-out p99 sayısı üretiliyor ve NFR-P1 eşiğiyle karşılaştırılıyor.\n- Tek pod da ulaşılan eşzamanlı bağlantı sayısı raporlanıyor + bozulma tanımı ve sebebi yazılı.\n- İşletim sistemi sınırlarına takılan durumlar AYRI etiketleniyor (ürün kusuru DEĞİL).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "161.1"
             ],
             "parentId": "161",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-27T18:23:21.669Z"
           },
           {
             "id": 4,
@@ -8118,7 +8118,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T18:22:01.895Z",
+      "lastModified": "2026-08-27T18:23:21.670Z",
       "taskCount": 169,
       "completedCount": 156,
       "tags": [

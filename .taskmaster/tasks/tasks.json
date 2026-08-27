@@ -7379,7 +7379,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "high",
-        "updatedAt": "2026-08-27T09:02:59.527Z",
+        "updatedAt": "2026-08-27T09:56:33.623Z",
         "subtasks": [
           {
             "id": 1,
@@ -7450,12 +7450,12 @@
             "description": "Gerçek zamanlı ziyaretçi listesi 100 kayıtta bitmiyor.",
             "details": "NE YAPILACAK: TrafficPage.tsx içindeki sorgu 153.1 in kancasına taşınır.\nBu liste de canlıdır (sekme sayaçları + periyodik tazeleme) — 153.2 deki ile aynı kural:\ntazeleme yalnız ilk sayfayı yeniler, yüklenmiş sayfaları atmaz.\n\nDOSYALAR: apps/web/src/features/traffic/TrafficPage.tsx + testleri.\nREFERANS: 153.1 kancası · 153.2 nin canlı-liste kararı (aynı desen, daha basit hâli).\nTUZAK: 13.2 nin gelişmiş filtreleri ve ziyaretçi 360 paneli bu ekranda; filtre değişimi zinciri sıfırlamalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **P5-PAGE** (türetilmiş — NFR-P5). Gereksinim satırı: `grep -n \"| P5-PAGE\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KP5-PAGE\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+3 civarı): ikinci sayfa geliyor · filtre değişince sayfa zinciri sıfırlanıyor\n  · periyodik tazeleme yalnız ilk sayfayı yeniliyor, yüklenmiş sayfaları atmıyor.\n- e2e traffic.spec.ts yeşil (taban korunur) · 13.2’nin gelişmiş filtreleri ve ziyaretçi 360° paneli bozulmadı.\n- Ölçülebilir: TrafficPage artık sabit limit ile tek istek atmıyor (next_page_id okunuyor).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "153.1"
             ],
             "parentId": "153",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-27T09:56:33.623Z"
           },
           {
             "id": 7,
@@ -8106,7 +8106,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T09:02:59.528Z",
+      "lastModified": "2026-08-27T09:56:33.624Z",
       "taskCount": 168,
       "completedCount": 152,
       "tags": [

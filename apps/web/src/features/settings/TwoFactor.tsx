@@ -91,10 +91,11 @@ export function TwoFactor(): ReactElement {
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
   // Own-account resource, not a workspace setting: gated on the session's own
   // scope rather than a `canEdit` prop `SettingsPage.tsx` would compute from a
-  // workspace role. `DEFAULT_AGENT_SCOPES` not yet carrying this scope for the
-  // plain `agent` role is a known, separately-tracked gap (tm 152.5 HANDOFF) —
-  // this screen renders read-only for a session that lacks it, the same shape
-  // every other settings section falls back to.
+  // workspace role. Every role's default set carries it since S11-2FA-j — the
+  // `agent` role held only the read half until then, which left this screen
+  // permanently read-only for most of a workspace. A session that still lacks
+  // it (one narrowed on purpose by the client) renders read-only, the same
+  // shape every other settings section falls back to.
   const canEdit = scopes.includes('accounts--my:rw');
 
   const status = useQuery({

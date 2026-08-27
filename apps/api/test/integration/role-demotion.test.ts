@@ -191,7 +191,11 @@ describe('role change and credential authority', () => {
       // Everything an agent is entitled to survives: this narrows authority, it
       // does not end the session.
       expect(scopes).toContain('chats--access:rw');
-      expect(scopes).toContain('accounts--my:ro');
+      // The write half, not the read one: `DEFAULT_AGENT_SCOPES` spells this
+      // `accounts--my:rw` since S11-2FA-j, and the ceiling intersects rather
+      // than derives — so what survives is the string the session was minted
+      // with, never the narrower spelling that string happens to imply.
+      expect(scopes).toContain('accounts--my:rw');
     });
 
     it('closes every door that scope opened, not only the one that was reported', async () => {

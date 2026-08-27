@@ -30,6 +30,7 @@ import {
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { generateTotp, generateTotpForStep, totpStep } from '../../src/lib/totp.js';
+import { deriveCodeChallenge, generateToken } from '../../src/lib/crypto.js';
 
 /** `ABCDE-FGHJK`: two groups of five, no confusable characters, no lower case. */
 const DISPLAY_RE = /^[23456789ABCDEFGHJKMNPQRSTVWXYZ]{5}-[23456789ABCDEFGHJKMNPQRSTVWXYZ]{5}$/;
@@ -654,6 +655,178 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       const secret = await enroll();
       const me = await server.get('/auth/me', auth());
       expect(me.body).not.toContain(secret);
+    });
+  });
+
+  // =========================================================================
+  // The role that actually staffs the inbox (S11-2FA-j)
+  // =========================================================================
+
+  /**
+   * Every test above drives a *personal access token*, and `scopesWithinRole`
+   * deliberately leaves those alone (SEC-2, tm 146) — so not one of them could
+   * see the hole this block covers.
+   *
+   * A session is capped by the role its holder has now, and the ceiling is
+   * `defaultScopesForRole`. `DEFAULT_AGENT_SCOPES` carried `accounts--my:ro`
+   * and not the write half, while all four enrollment endpoints ask for
+   * `accounts--my:rw` — so the one role most of a workspace holds could not set
+   * up its own second factor from inside the product. Paired with S11-2FA-e
+   * that closes into a loop: `require_two_factor` refuses the sign-in of a
+   * member who has not enrolled, and enrollment refuses the member.
+   *
+   * These tests go through the real sign-in rather than `grantToken`, because
+   * the defect lives entirely in the difference between the two.
+   */
+  describe('a member whose role is agent (S11-2FA-j)', () => {
+    /** The real sign-in: authorize with PKCE, then exchange the code. */
+    async function signIn(email: string, code?: string): Promise<string> {
+      const verifier = generateToken(48).slice(0, 64);
+      const authorized = await server.post('/auth/authorize', {
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+        code_challenge: deriveCodeChallenge(verifier),
+        email,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+        ...(code === undefined ? {} : { code }),
+      });
+      expect(authorized.statusCode).toBe(200);
+
+      const granted = await server.post('/auth/token', {
+        grant_type: 'authorization_code',
+        code: authorized.json().code,
+        code_verifier: verifier,
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+      });
+      expect(granted.statusCode).toBe(200);
+      return granted.json().access_token as string;
+    }
+
+    it('carries the scope its own second factor sits behind', async () => {
+      const bearer = await signIn(fx.a.agentEmail);
+      const me = await server.get('/auth/me', auth(bearer));
+      expect(me.statusCode).toBe(200);
+      expect((me.json() as { scopes: string[] }).scopes).toContain('accounts--my:rw');
+    });
+
+    it('enrolls and activates from its own session', async () => {
+      const bearer = await signIn(fx.a.agentEmail);
+
+      const enrolled = await server.post('/auth/2fa/enroll', undefined, auth(bearer));
+      expect(enrolled.statusCode).toBe(200);
+      const secret = enrolled.json().secret as string;
+
+      const activated = await server.post(
+        '/auth/2fa/activate',
+        { code: generateTotp(secret, Date.now()) },
+        auth(bearer),
+      );
+      expect(activated.statusCode).toBe(200);
+      expect(activated.json().recovery_codes as string[]).toHaveLength(10);
+    });
+
+    it('reads its own two-factor state back from the profile', async () => {
+      const bearer = await signIn(fx.a.agentEmail);
+      expect((await server.get('/auth/me', auth(bearer))).json().two_factor).toEqual({
+        enabled: false,
+        pending: false,
+        recovery_codes_remaining: 0,
+      });
+
+      await server.post('/auth/2fa/enroll', undefined, auth(bearer));
+      expect((await server.get('/auth/me', auth(bearer))).json().two_factor).toEqual({
+        enabled: false,
+        pending: true,
+        recovery_codes_remaining: 0,
+      });
+    });
+
+    it('signs in to a workspace that requires a second factor once it holds one', async () => {
+      // Enroll, then switch the policy on — the order the console imposes,
+      // since S11-2FA-h counts the members who have not enrolled before it lets
+      // an admin turn it on.
+      const bearer = await signIn(fx.a.agentEmail);
+      const secret = (await server.post('/auth/2fa/enroll', undefined, auth(bearer))).json()
+        .secret as string;
+      const activated = await server.post(
+        '/auth/2fa/activate',
+        { code: generateTotp(secret, Date.now()) },
+        auth(bearer),
+      );
+      expect(activated.statusCode).toBe(200);
+
+      await requireTwoFactor(fx.a);
+
+      // The policy is live: the sign-in that worked a moment ago is refused
+      // without a code, so the session below is one the gate let past rather
+      // than one it never looked at.
+      const refused = await server.post('/auth/authorize', {
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+        code_challenge: deriveCodeChallenge(generateToken(48).slice(0, 64)),
+        email: fx.a.agentEmail,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+      });
+      expect(refused.statusCode).toBe(401);
+      expect(refused.json().error.type).toBe('two_factor_required');
+
+      // `Date.now()`'s own step was just spent by activation; +1 is inside the
+      // accepted drift window.
+      const session = await signIn(
+        fx.a.agentEmail,
+        generateTotpForStep(secret, totpStep(Date.now()) + 1),
+      );
+      expect((await server.get('/auth/me', auth(session))).statusCode).toBe(200);
+    });
+
+    it('gains nothing but its own account — the workspace surfaces stay shut', async () => {
+      const bearer = await signIn(fx.a.agentEmail);
+
+      // `accounts--my:rw` widens along `:rw → :ro` only, never along
+      // `--my → --all`, so nothing that reads or writes somebody *else* moved.
+      const settings = await server.patch(
+        '/settings/security',
+        { ip_allowlist_enforced: false },
+        auth(bearer),
+      );
+      expect(settings.statusCode).toBe(403);
+
+      const demote = await server.put(
+        `/agents/${fx.a.ownerAccountId}/role`,
+        { role: 'agent' },
+        auth(bearer),
+      );
+      expect(demote.statusCode).toBe(403);
+    });
+
+    /**
+     * The half this subtask does *not* close, pinned so it cannot be mistaken
+     * for working: a member holding no session, with no factor, whose only
+     * membership is in an enforcing workspace has no way in. The refusal is
+     * S11-2FA-e's and is correct; what is missing is a door to enrollment that
+     * does not already require a session. It is role-independent — an owner in
+     * the same position is just as stuck — so it is not the scope-shaped defect
+     * this subtask names.
+     */
+    it('is still shut out with no session, no factor and the policy on', async () => {
+      await requireTwoFactor(fx.a);
+
+      const refused = await server.post('/auth/authorize', {
+        client_id: fx.a.clientId,
+        redirect_uri: fx.a.redirectUri,
+        code_challenge: deriveCodeChallenge(generateToken(48).slice(0, 64)),
+        email: fx.a.agentEmail,
+        password: TEST_PASSWORD,
+        license_id: fx.a.licenseId.toString(),
+      });
+      expect(refused.statusCode).toBe(401);
+      expect(refused.json().error.details).toEqual({ enrollment_required: true });
+
+      // And there is no unauthenticated way round it.
+      expect((await server.post('/auth/2fa/enroll', undefined)).statusCode).toBe(401);
     });
   });
 });

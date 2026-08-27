@@ -23,13 +23,20 @@ import {
   type AuditEntry,
 } from '../services/audit/audit-log.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
+import type { IssuedToken } from '../services/auth/token-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
 import {
   NOTIFICATION_PREFERENCE_SELECT,
   serialiseNotificationPreferences,
 } from '../services/notifications/preferences.js';
 import { markWebsiteConnected } from '../services/websites/website-service.js';
-import { defaultScopesForRole, type AgentPrincipal } from '../services/auth/principal.js';
+import {
+  defaultScopesForRole,
+  selfAccountId,
+  ENROLLMENT_TICKET_SCOPES,
+  type AgentPrincipal,
+  type Principal,
+} from '../services/auth/principal.js';
 
 const emailSchema = z.string().trim().toLowerCase().email().max(320);
 const passwordSchema = z.string().min(1).max(512);
@@ -93,6 +100,36 @@ const createPatBody = z.object({
 
 /** The one field `POST /auth/2fa/activate` takes: what the app is showing now. */
 const activateTwoFactorBody = z.object({ code: z.string().trim().min(1).max(32) });
+
+/**
+ * Whose second factor a request is about, for the two endpoints that answer to
+ * both a session and an enrollment ticket (S11-2FA-k).
+ *
+ * The route's `principals` list has already refused every other kind, so this
+ * cannot fail in practice — it throws rather than casting because the previous
+ * `as AgentPrincipal` was true only for as long as the list said `['agent']`,
+ * and the point of this subtask is that the list no longer does.
+ */
+function requireSelfAccount(principal: Principal): string {
+  const accountId = selfAccountId(principal);
+  if (!accountId) throw ApiError.notFound('Resource not found.');
+  return accountId;
+}
+
+/**
+ * The audit metadata that tells an enrollment done from the sign-in screen apart
+ * from one done from Account Settings — nothing at all for the ordinary case.
+ *
+ * A workspace that has just switched `require_two_factor` on will see a run of
+ * these, and "they enrolled from the door they were refused at" is the expected
+ * shape; the same marker appearing weeks later, on an account that already had a
+ * session, is not. An absent key rather than `via: 'session'`, matching the
+ * break-glass marker on `auth.login` and for the same reason: a field that is
+ * always present is a field every query has to remember to ignore.
+ */
+function viaEnrollmentTicket(principal: Principal): { metadata?: Record<string, unknown> } {
+  return principal.kind === 'enrollment' ? { metadata: { via: 'enrollment_ticket' } } : {};
+}
 
 /**
  * Re-authentication for the two endpoints that change a live second factor.
@@ -253,6 +290,50 @@ export default async function authRoutes(
    * purpose — binding a second factor to it would mean typing a code to run a
    * cron job.
    */
+  /**
+   * Mint the credential that opens the two enrollment endpoints, and nothing
+   * else (NFR-S11 · FR-MOD-00.1 · S11-2FA-k).
+   *
+   * Every live ticket this account already holds in this workspace is revoked
+   * first. That is what makes "single use" true in both directions: a second
+   * refused sign-in kills the ticket from the first, so an abandoned attempt
+   * cannot be picked up later, and there is never more than one credential
+   * outstanding per person per workspace no matter how many times the sign-in
+   * is retried. Without it, a password holder could accumulate one ticket per
+   * attempt — each individually harmless, collectively a set of credentials
+   * with a longer effective life than any one of them.
+   *
+   * `TokenService.issue` prunes only `oauth` rows (#pruneOldest), by design:
+   * that cap is about a browser accumulating sessions. This is the same
+   * question with a different answer — not "at most 25", but "at most one".
+   *
+   * The scope list is `ENROLLMENT_TICKET_SCOPES` because the two endpoints are
+   * scope-gated like every other own-account route and the gate has to be
+   * satisfiable. It is not what confines the ticket: resolution replaces
+   * whatever is stored here with the same constant, and the route's
+   * `principals` list is what actually refuses it everywhere else.
+   */
+  async function mintEnrollmentTicket(
+    tenant: { licenseId: bigint; organizationId: string },
+    accountId: string,
+  ): Promise<IssuedToken> {
+    await withTenant(app.db, tenant, (tx) =>
+      tx.apiToken.updateMany({
+        where: { ownerId: accountId, kind: 'enrollment', revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    );
+
+    return app.tokens.issue({
+      licenseId: tenant.licenseId,
+      organizationId: tenant.organizationId,
+      ownerId: accountId,
+      kind: 'enrollment',
+      scopes: [...ENROLLMENT_TICKET_SCOPES],
+      ttlSeconds: env.TWO_FACTOR_ENROLLMENT_TICKET_TTL,
+    });
+  }
+
   async function enforceSecondFactor(
     request: FastifyRequest,
     tenant: { licenseId: bigint; organizationId: string },
@@ -272,15 +353,50 @@ export default async function authRoutes(
       // policy on needs to see who is now shut out, and that is a different
       // list from who is being attacked.
       await trail({ action: 'security.two_factor_enrollment_required', target });
+
+      // The way out of the refusal, handed over with it (S11-2FA-k). Minted
+      // here and only here, which is what keeps the three preconditions
+      // inseparable from the credential: the password has been verified, the
+      // membership resolved against `license_id`, and — one branch up — the
+      // account proved to hold no active factor. An account that *does* hold
+      // one never reaches this line, so the ticket can never be the way round
+      // the code prompt below.
+      //
+      // Best-effort. If minting fails the refusal still stands and still says
+      // why; a client that gets no ticket falls back to what S11-2FA-g always
+      // did, which is to point at Account Settings. Turning a failed mint into
+      // a 500 would replace a usable dead end with an unusable one.
+      let ticket: IssuedToken | null = null;
+      try {
+        ticket = await mintEnrollmentTicket(tenant, accountId);
+      } catch (err) {
+        request.log.warn({ err }, 'could not mint two-factor enrollment ticket');
+      }
+
       throw new ApiError(
         'two_factor_required',
         'This workspace requires two-factor authentication. Set it up on your account before signing in.',
-        // Named so the client can route to enrollment rather than render a code
-        // box nothing will satisfy — the same reasoning as the SSO refusal
-        // carrying its connection id. Absent rather than `false` in the ordinary
-        // "show me your code" refusal: a field that is always there is a field
-        // every reader has to remember to ignore.
-        { details: { enrollment_required: true } },
+        {
+          // Named so the client can route to enrollment rather than render a
+          // code box nothing will satisfy — the same reasoning as the SSO
+          // refusal carrying its connection id. Absent rather than `false` in
+          // the ordinary "show me your code" refusal: a field that is always
+          // there is a field every reader has to remember to ignore.
+          details: {
+            enrollment_required: true,
+            ...(ticket
+              ? {
+                  enrollment_ticket: ticket.token,
+                  enrollment_ticket_expires_in: env.TWO_FACTOR_ENROLLMENT_TICKET_TTL,
+                }
+              : {}),
+          },
+          // There is a bearer credential in this body. Every other response
+          // that carries one says so (`/auth/2fa/enroll`, the PAT mint, the
+          // SAML assertion path); an error body is not an exception just
+          // because it is an error.
+          headers: { 'Cache-Control': 'no-store' },
+        },
       );
     }
 
@@ -894,6 +1010,16 @@ export default async function authRoutes(
   // the personal-access-token family above — authenticated, resource-shaped, and
   // showing a secret exactly once — because that is what a second factor is.
   //
+  // Two of them — enroll and activate — also accept an `enrollment` principal:
+  // the ticket `/auth/authorize` hands back when it refuses an account that
+  // holds no factor in a workspace that demands one (S11-2FA-k). The other two
+  // do not, and that split is the whole safety argument. Removing a factor and
+  // reprinting a recovery sheet are the operations a stolen credential would
+  // want; both re-authenticate, and neither is reachable by a credential minted
+  // from a password alone. Adding `'enrollment'` to a third `principals` list
+  // would be the way to undo S11-2FA-e, so it is a line somebody has to write
+  // on purpose.
+  //
   // Brute force: these all sit behind the agent rate-limit bucket (180/min per
   // token) and each requires a session that already belongs to the account being
   // changed, so guessing a TOTP code here means guessing against an account one
@@ -912,19 +1038,20 @@ export default async function authRoutes(
    */
   app.post(
     '/auth/2fa/enroll',
-    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent', 'enrollment'] } },
     async (request, reply) => {
-      const principal = request.requirePrincipal() as AgentPrincipal;
+      const principal = request.requirePrincipal();
+      const accountId = requireSelfAccount(principal);
 
       // The label the authenticator app shows under "Nexa". The address rather
       // than the display name: it is what distinguishes two entries for somebody
       // who holds a personal and a work account.
       const account = await request.withTenant((tx) =>
-        tx.account.findUnique({ where: { id: principal.accountId }, select: { email: true } }),
+        tx.account.findUnique({ where: { id: accountId }, select: { email: true } }),
       );
       if (!account) throw ApiError.notFound('Resource not found.');
 
-      const enrollment = await twoFactor.beginEnrollment(principal.accountId, account.email);
+      const enrollment = await twoFactor.beginEnrollment(accountId, account.email);
 
       // The secret is deliberately not in the entry: an audit log is read by
       // people who are not its subject, and a TOTP secret in one would be a
@@ -935,7 +1062,8 @@ export default async function authRoutes(
         {},
         {
           action: 'security.two_factor_enrollment_started',
-          target: `account:${principal.accountId}`,
+          target: `account:${accountId}`,
+          ...viaEnrollmentTicket(principal),
         },
       );
 
@@ -957,18 +1085,37 @@ export default async function authRoutes(
    */
   app.post(
     '/auth/2fa/activate',
-    { config: { scopes: ['accounts--my:rw'], principals: ['agent'] } },
+    { config: { scopes: ['accounts--my:rw'], principals: ['agent', 'enrollment'] } },
     async (request, reply) => {
-      const principal = request.requirePrincipal() as AgentPrincipal;
+      const principal = request.requirePrincipal();
+      const accountId = requireSelfAccount(principal);
       const body = parse(activateTwoFactorBody, request.body);
 
-      const recoveryCodes = await twoFactor.activate(principal.accountId, body.code, Date.now());
+      const recoveryCodes = await twoFactor.activate(accountId, body.code, Date.now());
+
+      // The ticket is spent by the enrollment it existed for — after the
+      // activation, not before, so a wrong code leaves the person able to try
+      // again rather than back at a sign-in screen that will refuse them.
+      // Nothing needs it afterwards: the session comes from repeating
+      // `/auth/authorize` with a code the new factor produces, and the factor
+      // now exists.
+      if (principal.kind === 'enrollment') {
+        await app.tokens.revoke({
+          licenseId: principal.licenseId,
+          organizationId: principal.organizationId,
+          tokenId: principal.tokenId,
+        });
+      }
 
       await audit(
         request,
         request.tenant(),
         {},
-        { action: 'security.two_factor_enabled', target: `account:${principal.accountId}` },
+        {
+          action: 'security.two_factor_enabled',
+          target: `account:${accountId}`,
+          ...viaEnrollmentTicket(principal),
+        },
       );
 
       reply.header('Cache-Control', 'no-store');

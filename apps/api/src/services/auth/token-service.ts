@@ -13,7 +13,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { AgentRole, Region } from '@nexa/types';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import { withTenant, type TenantClient } from '../../lib/tenant.js';
-import { scopesWithinRole, type Principal } from './principal.js';
+import { ENROLLMENT_TICKET_SCOPES, scopesWithinRole, type Principal } from './principal.js';
 
 /** v2-03 §8.6: at most 25 live access tokens per (client, user). */
 export const MAX_ACTIVE_TOKENS_PER_OWNER = 25;
@@ -27,7 +27,7 @@ export interface IssuedToken {
 }
 
 /** Every bearer credential this product mints, by what it is allowed to reach. */
-export type TokenKind = 'pat' | 'oauth' | 'bot' | 'scim';
+export type TokenKind = 'pat' | 'oauth' | 'bot' | 'scim' | 'enrollment';
 
 interface ResolvedTokenRow {
   id: string;
@@ -165,6 +165,35 @@ export class TokenService {
     );
 
     if (!check.ok) return { ok: false, reason: check.reason };
+
+    // An enrollment ticket (S11-2FA-k). Below the membership read on purpose:
+    // the ticket is minted from a password that was verified against a live
+    // membership, and it must stop working the moment that membership does —
+    // suspended, unapproved, removed — exactly like the session it stands in
+    // for. What it does *not* inherit is the role: the ticket reaches two
+    // endpoints, neither asks who the holder is, and a role here would be a
+    // fact waiting to be used.
+    //
+    // `row.scopes` is ignored rather than filtered. Every other kind carries
+    // the list it was minted with (or the role's intersection of it); this one
+    // carries a constant, so a ticket written with a wider list — by a bug, a
+    // migration, a hand-edited row — still reaches nothing more.
+    if (row.kind === 'enrollment') {
+      return {
+        ok: true,
+        licenseStatus: row.license_status,
+        region,
+        principal: {
+          kind: 'enrollment',
+          accountId: row.owner_id,
+          licenseId: row.license_id,
+          organizationId: row.organization_id,
+          scopes: [...ENROLLMENT_TICKET_SCOPES],
+          tokenId: row.id,
+          tokenKind: 'enrollment',
+        },
+      };
+    }
 
     return {
       ok: true,

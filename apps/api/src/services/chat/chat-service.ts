@@ -1661,6 +1661,10 @@ function authorTypeOf(principal: Principal): 'agent' | 'bot' | 'customer' {
     // caught the customer bug described above.
     case 'scim':
       throw ApiError.authorization('Provisioning credentials cannot author events.');
+    // Likewise a two-factor enrollment ticket (S11-2FA-k): it is a step inside a
+    // sign-in, not a participant in a conversation.
+    case 'enrollment':
+      throw ApiError.authorization('Enrollment credentials cannot author events.');
   }
 }
 
@@ -1679,6 +1683,8 @@ function actorOf(principal: Principal): string {
       return principal.customerId;
     case 'scim':
       throw ApiError.authorization('Provisioning credentials cannot act on conversations.');
+    case 'enrollment':
+      throw ApiError.authorization('Enrollment credentials cannot act on conversations.');
   }
 }
 

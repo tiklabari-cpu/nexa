@@ -58,7 +58,13 @@ interface ResolvedTokenRow {
   license_id: bigint;
   organization_id: string;
   owner_id: string;
-  kind: 'pat' | 'oauth' | 'bot';
+  /**
+   * Read straight out of `auth_resolve_token`, so this is what the *column*
+   * says, not a promise about it. The API mints kinds this gateway has no
+   * concept of ('scim', 'enrollment'), which is why `#authenticateAgent`
+   * allow-lists the three below rather than assuming them.
+   */
+  kind: string;
   scopes: string[];
   expires_at: Date | null;
   revoked_at: Date | null;
@@ -110,6 +116,20 @@ export class SocketAuthenticator {
     }
     if (row.organization_id !== organizationId) {
       return { ok: false, reason: 'organization_mismatch' };
+    }
+    // Only the three credential kinds that mean "a person or a bot working in
+    // this workspace" open a socket. The API mints others — a SCIM provisioning
+    // token, and since S11-2FA-k a two-factor enrollment ticket — and both are
+    // refused at the REST edge by the route's `principals` list, a mechanism
+    // this process does not have. Without this line they would fall through to
+    // the `kind === 'bot' ? 'bot' : 'agent'` below and be handed an agent
+    // socket: "refused over HTTP, live over the socket" is the same split the
+    // residency check three lines down exists to prevent.
+    //
+    // An allow-list rather than a deny-list, so the next kind somebody adds is
+    // closed here until it is deliberately opened.
+    if (row.kind !== 'pat' && row.kind !== 'oauth' && row.kind !== 'bot') {
+      return { ok: false, reason: 'unknown' };
     }
     // Data residency (NFR-C4 · C4-b). The API refuses the same credential at its
     // own edge; this gateway is a *separate process* and would otherwise keep
@@ -239,7 +259,11 @@ export class SocketAuthenticator {
     if (row.revoked_at) return null;
     if (row.expires_at && row.expires_at.getTime() <= Date.now()) return null;
     if (row.license_status === 'canceled') return null;
-    if (row.kind === 'bot') return null;
+    // Same allow-list as `#authenticateAgent`, and for the same reason: a bot
+    // token has no membership to hold a role, and a SCIM or enrollment
+    // credential (S11-2FA-k) must not be able to read an ops surface the API
+    // would refuse it. Only the two kinds a *person* presents get this far.
+    if (row.kind !== 'pat' && row.kind !== 'oauth') return null;
 
     return this.#membershipRole(row.license_id, row.organization_id, row.owner_id);
   }

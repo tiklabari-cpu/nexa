@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useAuth, type Membership } from '../../lib/auth-store.js';
+import { useAuth, type Membership, type TwoFactorEnrollment } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
+import { downloadRecoveryCodes } from '../../lib/recovery-codes.js';
 
 /**
  * Sign-in.
@@ -44,10 +45,12 @@ import { FieldError, compose, email as emailRule, required, useForm } from '../.
  * actually a recovery sheet entry is the same field under a label toggle — the
  * server tells the two shapes apart, this screen does not have to. An account
  * with no factor at all, in a workspace that demands one, cannot be issued a
- * session no matter what is typed here (`details.enrollment_required`): there
- * is no signed-out enrollment endpoint (`POST /auth/2fa/enroll` requires a
- * bearer token), so this screen states the reason plainly and points at Account
- * Settings rather than rendering a code box nothing can satisfy.
+ * session no matter what is typed here (`details.enrollment_required`) — and
+ * since S11-2FA-k that is no longer a dead end: the refusal carries a
+ * short-lived credential good for the two enrollment endpoints only, so
+ * `EnrollmentPanel` at the foot of this file sets the factor up in place and
+ * hands the person on to the code box. A server that sends no such credential
+ * still gets the old panel, which says why and points at Account Settings.
  */
 
 /**
@@ -68,8 +71,41 @@ interface CodeStep {
   organizationName: string;
 }
 
+/**
+ * What the enrollment panel needs to take somebody from "refused" to "signed
+ * in" without leaving this screen (NFR-S11 · S11-2FA-k).
+ *
+ * The credentials are the same ones `CodeStep` keeps and for the same reason:
+ * the sign-in has to be repeated once the factor exists, and asking for a
+ * password that was already proved correct would be the screen forgetting what
+ * it just did.
+ */
 interface EnrollmentRequired {
   organizationName: string;
+  email: string;
+  password: string;
+  licenseId: string;
+  /**
+   * Absent when the server minted none — an older build, or a mint that failed
+   * and correctly did not turn a refusal into a 500. The panel then reads
+   * exactly as it did before this existed: it says why, and points at Account
+   * Settings.
+   */
+  ticket?: string;
+}
+
+/**
+ * The enrollment credential out of a `two_factor_required` refusal, if the
+ * server sent one.
+ *
+ * `error.details` is `Record<string, unknown>` read off the wire, so this is a
+ * narrowing rather than a cast: a server that sends the wrong shape leaves the
+ * panel in its no-ticket state, which is a working screen, instead of putting
+ * `[object Object]` in an Authorization header.
+ */
+function readTicket(details: Record<string, unknown>): string | undefined {
+  const ticket = details['enrollment_ticket'];
+  return typeof ticket === 'string' && ticket.length > 0 ? ticket : undefined;
 }
 
 /** A field-under or form-level reporter, named so its arrow never sits next to
@@ -152,7 +188,13 @@ export function SignInPage(): ReactElement {
     } catch (error) {
       if (error instanceof ApiClientError && error.type === 'two_factor_required') {
         if (error.details?.enrollment_required === true) {
-          setEnrollmentRequired({ organizationName });
+          setEnrollmentRequired({
+            organizationName,
+            email,
+            password,
+            licenseId,
+            ticket: readTicket(error.details),
+          });
         } else {
           setCodeStep({ email, password, licenseId, organizationName });
         }
@@ -240,8 +282,15 @@ export function SignInPage(): ReactElement {
           error.details?.enrollment_required === true
         ) {
           // The factor was live a moment ago and is not now (disabled from
-          // another tab mid-retry) — the same dead end as a first attempt.
-          setEnrollmentRequired({ organizationName: codeStep.organizationName });
+          // another tab mid-retry) — the same dead end as a first attempt, and
+          // the same way out of it: this refusal carries its own fresh ticket.
+          setEnrollmentRequired({
+            organizationName: codeStep.organizationName,
+            email: codeStep.email,
+            password: codeStep.password,
+            licenseId: codeStep.licenseId,
+            ticket: readTicket(error.details ?? {}),
+          });
           setCodeStep(null);
           return;
         }
@@ -323,29 +372,23 @@ export function SignInPage(): ReactElement {
             {t('auth.signin.ssoRedirecting')}
           </p>
         ) : enrollmentRequired ? (
-          <section
-            aria-label={t('auth.signin.enrollmentRequiredTitle')}
-            className="rounded-lg border border-border bg-surface p-4 shadow-xs"
-          >
-            <h2 className="mb-1 text-sm font-medium">{t('auth.signin.enrollmentRequiredTitle')}</h2>
-            <p className="mb-4 text-sm text-content-secondary">
-              {t('auth.signin.enrollmentRequiredBody', {
-                organization: enrollmentRequired.organizationName,
-              })}
-            </p>
-            <div className="flex items-center justify-between text-xs">
-              <Link to="/app/settings" className="text-content-brand underline">
-                {t('auth.signin.enrollmentRequiredLink')}
-              </Link>
-              <button
-                type="button"
-                onClick={dismissEnrollmentRequired}
-                className="text-content-secondary underline"
-              >
-                {t('auth.common.backToSignIn')}
-              </button>
-            </div>
-          </section>
+          <EnrollmentPanel
+            context={enrollmentRequired}
+            onCancel={dismissEnrollmentRequired}
+            onEnrolled={() => {
+              // Straight into the code step rather than signing in from here.
+              // The code that confirmed the enrollment is spent — its RFC 6238
+              // step became the replay floor — so the next one has to be typed,
+              // and the box that asks for it already exists two branches down.
+              setCodeStep({
+                email: enrollmentRequired.email,
+                password: enrollmentRequired.password,
+                licenseId: enrollmentRequired.licenseId,
+                organizationName: enrollmentRequired.organizationName,
+              });
+              setEnrollmentRequired(null);
+            }}
+          />
         ) : codeStep ? (
           <section
             aria-label={t('auth.signin.codeTitle')}
@@ -518,5 +561,262 @@ export function SignInPage(): ReactElement {
         </p>
       </div>
     </main>
+  );
+}
+
+/**
+ * Setting up a second factor from the sign-in screen (NFR-S11 · S11-2FA-k).
+ *
+ * The panel S11-2FA-g left here was honest about a dead end: a workspace that
+ * requires two-factor authentication refuses an account that has none, and the
+ * only enrollment endpoints wanted a session that refusal makes unobtainable.
+ * It said so and pointed at Account Settings, which is behind the same sign-in.
+ *
+ * The server now hands the refusal a credential that opens exactly two
+ * endpoints (`details.enrollment_ticket`), so the dead end has an exit and this
+ * walks it: start enrollment, show the setup key, take the first code, show the
+ * recovery sheet, hand back to the code step. It is three states rather than
+ * three screens for the same reason the code box replaced a second sign-in
+ * page — the person is in the middle of one action.
+ *
+ * No QR code, matching Account Settings and for the same measured reason: every
+ * authenticator app accepts manual entry, so a QR-rendering dependency would be
+ * bundle and maintenance cost for a convenience the setup key already covers.
+ *
+ * The recovery sheet is the one thing here that cannot be recovered later.
+ * Continue stays disabled until the box is checked — a stronger version of what
+ * Account Settings does with a close guard, because there is nowhere here to
+ * "go back and look again": the codes exist in this component's state and
+ * nowhere else in the world.
+ */
+function EnrollmentPanel({
+  context,
+  onCancel,
+  onEnrolled,
+}: {
+  context: EnrollmentRequired;
+  onCancel: () => void;
+  onEnrolled: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const enrollWithTicket = useAuth((s) => s.enrollWithTicket);
+  const activateWithTicket = useAuth((s) => s.activateWithTicket);
+
+  const [enrollment, setEnrollment] = useState<TwoFactorEnrollment | null>(null);
+  const [recoveryCodes, setRecoveryCodes] = useState<string[] | null>(null);
+  const [saved, setSaved] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<'secret' | 'uri' | null>(null);
+
+  const { ticket } = context;
+
+  const start = async (): Promise<void> => {
+    if (!ticket) return;
+    setStarting(true);
+    setStartError(null);
+    try {
+      setEnrollment(await enrollWithTicket(ticket));
+    } catch (error) {
+      // A ticket that has expired or been replaced by a later attempt is the
+      // common failure and it is not recoverable here — the way to a fresh one
+      // is another sign-in, which is what this says.
+      setStartError(
+        error instanceof ApiClientError && error.status === 401
+          ? t('auth.signin.enroll.expired')
+          : t('auth.signin.enroll.failed'),
+      );
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const codeForm = useForm({
+    initial: { code: '' },
+    validators: { code: required(t('auth.signin.enroll.codeRequired')) },
+    onSubmit: async (values, { setFieldError }) => {
+      if (!ticket) return;
+      try {
+        setRecoveryCodes(await activateWithTicket(ticket, values.code.trim()));
+      } catch (error) {
+        if (error instanceof ApiClientError && error.type === 'not_found') {
+          // The ticket died between starting and confirming. Under the field
+          // would be a lie — nothing is wrong with the code.
+          setStartError(t('auth.signin.enroll.expired'));
+          setEnrollment(null);
+          return;
+        }
+        setFieldError('code', t('auth.signin.enroll.codeInvalid'));
+      }
+    },
+  });
+
+  function copy(field: 'secret' | 'uri', text: string): void {
+    void navigator.clipboard?.writeText(text).then(
+      () => {
+        setCopied(field);
+        window.setTimeout(() => setCopied(null), 1_500);
+      },
+      () => setCopied(null),
+    );
+  }
+
+  const codeError = codeForm.errorFor('code');
+
+  return (
+    <section
+      aria-label={t('auth.signin.enrollmentRequiredTitle')}
+      className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+    >
+      <h2 className="mb-1 text-sm font-medium">{t('auth.signin.enrollmentRequiredTitle')}</h2>
+
+      {recoveryCodes ? (
+        <>
+          <p className="mb-3 text-sm text-content-secondary">
+            {t('auth.signin.enroll.recoveryBody')}
+          </p>
+          <ul className="mb-3 grid grid-cols-2 gap-1.5 rounded-md border border-border bg-inset p-3">
+            {recoveryCodes.map((code) => (
+              <li key={code}>
+                <code className="text-2xs">{code}</code>
+              </li>
+            ))}
+          </ul>
+          <button
+            type="button"
+            onClick={() => downloadRecoveryCodes(recoveryCodes)}
+            className="mb-3 rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('auth.signin.enroll.downloadButton')}
+          </button>
+          <label className="mb-3 flex items-start gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={saved}
+              onChange={(event) => setSaved(event.target.checked)}
+            />
+            <span>{t('auth.signin.enroll.savedConfirm')}</span>
+          </label>
+          <button
+            type="button"
+            onClick={onEnrolled}
+            disabled={!saved}
+            className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+          >
+            {t('auth.signin.enroll.continueButton')}
+          </button>
+        </>
+      ) : enrollment ? (
+        <>
+          <p className="mb-3 text-sm text-content-secondary">{t('auth.signin.enroll.scanBody')}</p>
+
+          <div className="mb-3 flex flex-col gap-1">
+            <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('auth.signin.enroll.secretLabel')}
+            </span>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs">
+                {enrollment.secret}
+              </code>
+              <button
+                type="button"
+                onClick={() => copy('secret', enrollment.secret)}
+                aria-label={t('auth.signin.enroll.copySecretAriaLabel')}
+                className="shrink-0 rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white hover:bg-brand-600"
+              >
+                {copied === 'secret'
+                  ? t('auth.signin.enroll.copied')
+                  : t('auth.signin.enroll.copy')}
+              </button>
+            </div>
+          </div>
+
+          <div className="mb-3 flex flex-col gap-1">
+            <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              {t('auth.signin.enroll.uriLabel')}
+            </span>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 truncate rounded-md border border-border bg-inset px-2 py-1.5 text-2xs">
+                {enrollment.otpauth_uri}
+              </code>
+              <button
+                type="button"
+                onClick={() => copy('uri', enrollment.otpauth_uri)}
+                aria-label={t('auth.signin.enroll.copyUriAriaLabel')}
+                className="shrink-0 rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white hover:bg-brand-600"
+              >
+                {copied === 'uri' ? t('auth.signin.enroll.copied') : t('auth.signin.enroll.copy')}
+              </button>
+            </div>
+          </div>
+
+          <form onSubmit={codeForm.handleSubmit} noValidate className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="enroll-code" className="text-xs font-medium">
+                {t('auth.signin.enroll.codeLabel')}
+              </label>
+              <input
+                id="enroll-code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={codeForm.values.code}
+                onChange={(event) =>
+                  codeForm.setValue('code', event.target.value.replace(/\D/g, '').slice(0, 6))
+                }
+                onBlur={() => codeForm.blur('code')}
+                aria-invalid={codeError ? true : undefined}
+                aria-describedby={codeError ? 'enroll-code-error' : undefined}
+                className="rounded-md border border-border bg-inset px-3 py-2 text-sm tracking-widest"
+              />
+              <FieldError id="enroll-code-error" message={codeError} />
+            </div>
+            <button
+              type="submit"
+              disabled={!codeForm.canSubmit}
+              className="rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              {codeForm.isSubmitting
+                ? t('auth.signin.enroll.activating')
+                : t('auth.signin.enroll.activateButton')}
+            </button>
+          </form>
+        </>
+      ) : (
+        <>
+          <p className="mb-4 text-sm text-content-secondary">
+            {t(
+              ticket ? 'auth.signin.enrollmentRequiredHere' : 'auth.signin.enrollmentRequiredBody',
+              { organization: context.organizationName },
+            )}
+          </p>
+          {startError && (
+            <p role="alert" className="mb-3 text-xs text-danger">
+              {startError}
+            </p>
+          )}
+          {ticket ? (
+            <button
+              type="button"
+              onClick={() => void start()}
+              disabled={starting}
+              className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+            >
+              {starting ? t('auth.signin.enroll.starting') : t('auth.signin.enroll.startButton')}
+            </button>
+          ) : (
+            <Link to="/app/settings" className="text-xs text-content-brand underline">
+              {t('auth.signin.enrollmentRequiredLink')}
+            </Link>
+          )}
+        </>
+      )}
+
+      <div className="mt-3 flex justify-end text-xs">
+        <button type="button" onClick={onCancel} className="text-content-secondary underline">
+          {t('auth.common.backToSignIn')}
+        </button>
+      </div>
+    </section>
   );
 }

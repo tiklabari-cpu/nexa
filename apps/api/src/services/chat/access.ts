@@ -80,6 +80,13 @@ export async function resolveVisibility(
   if (principal.kind === 'scim') {
     throw ApiError.authorization('Provisioning credentials cannot access conversations.');
   }
+  // A two-factor enrollment ticket (S11-2FA-k) reaches two endpoints and this is
+  // not one of them; it is refused here for the same reason, one step earlier.
+  // Its holder has proved a password and nothing more — a conversation is the
+  // last thing that should be visible from that position.
+  if (principal.kind === 'enrollment') {
+    throw ApiError.authorization('Enrollment credentials cannot access conversations.');
+  }
 
   const actorId = principal.kind === 'agent' ? principal.accountId : principal.botId;
 

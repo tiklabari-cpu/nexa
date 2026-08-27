@@ -141,6 +141,15 @@ authorize:
       "ask for something else". Attempts are budgeted per account
       (`RATE_LIMIT_TWO_FACTOR_PER_HOUR`), and running out is a 429.
 
+      The `enrollment_required` refusal also carries `details.enrollment_ticket`
+      (S11-2FA-k): a short-lived bearer credential that reaches
+      `POST /auth/2fa/enroll` and `POST /auth/2fa/activate` and **nothing else**,
+      so somebody whose only membership is in an enforcing workspace can set a
+      factor up from the sign-in screen instead of needing a session they cannot
+      obtain. It is not a session — every other endpoint answers it 404 — it is
+      minted only when the account holds no active factor, and it is spent by the
+      activation it exists for. Sign-in is then repeated with the new `code`.
+
       The SAML assertion path is deliberately exempt: a federated sign-in has
       already been vouched for by the identity provider, which is where the
       workspace's MFA lives. Refresh-token rotation and personal access tokens
@@ -204,9 +213,13 @@ authorize:
           The credentials were refused, or a second factor is missing or wrong.
           `two_factor_required` means present a code — or, with
           `details.enrollment_required`, that this workspace will not admit an
-          account that has not set one up. `authentication` on its own means the
-          code was wrong, expired or already spent; which of the three is
-          deliberately not said.
+          account that has not set one up. That refusal also carries
+          `details.enrollment_ticket` (an opaque bearer credential for the two
+          enrollment endpoints, and only those) and
+          `details.enrollment_ticket_expires_in` (seconds). `authentication` on
+          its own means the code was wrong, expired or already spent; which of
+          the three is deliberately not said. Sent `Cache-Control: no-store`,
+          because a credential is in the body.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
@@ -400,6 +413,12 @@ twoFactorEnroll:
       only find out when their own app started being rejected.
 
       The secret is in this response and nowhere else it can be read back from.
+
+      Two credentials open this endpoint: an ordinary session carrying
+      `accounts--my:rw`, and the `enrollment_ticket` a `two_factor_required` ·
+      `enrollment_required` refusal from `POST /auth/authorize` hands back
+      (S11-2FA-k). The ticket reaches this endpoint and `/auth/2fa/activate`
+      only.
     responses:
       "200":
         description: Enrollment started
@@ -452,6 +471,11 @@ twoFactorActivate:
       Activation also sets `two_factor_enabled` on **every** membership the
       account holds — that flag is a derived copy of this fact, not a second
       source of truth for it.
+
+      Accepts the same two credentials as `POST /auth/2fa/enroll`. An
+      `enrollment_ticket` is **spent** by a successful activation: it exists to
+      finish one enrollment, and the session that follows comes from repeating
+      `POST /auth/authorize` with a code the new factor produces.
     requestBody:
       required: true
       content:

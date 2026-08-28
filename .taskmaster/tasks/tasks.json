@@ -7485,7 +7485,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-27T23:30:09.249Z",
+        "updatedAt": "2026-08-28T00:18:56.136Z",
         "subtasks": [
           {
             "id": 1,
@@ -7493,10 +7493,10 @@
             "description": "Ajan gelen kutusunu eskiden yeniye de sıralayabiliyor.",
             "details": "NE YAPILACAK: Inbox liste başlığına sıralama kontrolü (Oldest / Newest) eklenir ve seçim\nURL sorgu parametresine yazılır (paylaşılabilir/kalıcı olsun).\nSUNUCU DEĞİŞMEZ: apps/api/src/routes/chats.ts listeleme sorgusu sort: z.enum([newest, oldest])\nparametresini ZATEN kabul ediyor ve sözleşmede de belgeli (paths/chats.yaml sort parametresi).\nYani bu iş yalnız istemci tarafıdır.\n\nDOSYALAR: apps/web/src/features/inbox/InboxPage.tsx (liste başlığı) · useInbox.ts (sorgu) ·\nlocales/{en,tr}/inbox.ts · testleri.\nREFERANS DESEN: Tickets grid inin sıralama + deep-link davranışı (02.7-a) ve AuditLogPage in\n\"URL filtrelerin tek doğruluk kaynağıdır\" yaklaşımı.\n\nTUZAK: 153.2 sayfalamayı ekliyorsa sıralama değişimi sayfa zincirini SIFIRLAMALI.\nİki görev aynı dosyaya dokunuyor — hangisi sonra koşarsa diğerinin davranışını korumalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **02.2.1** (PRD — FR-MOD-02.2.1 (Should)). Gereksinim satırı: `grep -n \"| 02.2.1\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### K02.2.1\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+3): kontrol görünüyor · seçim URL e yazılıyor · sorgu sort parametresini taşıyor.\n- e2e inbox spec ine +1 senaryo (sırala → ilk satır değişti).\n- PLAN: 02.2.1 için damgalı satır (bugün gruplu 🔒 satırda) ✅ yapılır + K bloğu maddesi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "154",
-            "updatedAt": "2026-08-27T23:30:09.249Z"
+            "updatedAt": "2026-08-28T00:18:56.136Z"
           },
           {
             "id": 2,
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T23:30:09.250Z",
+      "lastModified": "2026-08-28T00:18:56.137Z",
       "taskCount": 170,
       "completedCount": 158,
       "tags": [

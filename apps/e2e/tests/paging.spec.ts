@@ -67,6 +67,30 @@ test.describe('list paging', () => {
     await page.screenshot({ path: 'kanit/P5-PAGE-inbox-second-page.png', fullPage: true });
   });
 
+  test('the sort control asks the server for a different order, not a client-side reshuffle of the loaded page (FR-MOD-02.2.1)', async ({
+    page,
+  }) => {
+    await openPagingInbox(page);
+
+    const conversations = page.getByRole('region', { name: 'Conversations' });
+    const rows = conversations.getByRole('listitem');
+
+    // Newest first is the default — the row a client-side re-sort of only the
+    // fifty already loaded could also have produced.
+    await expect(rows.first()).toContainText('Paging Visitor 01');
+
+    await page.getByLabel('Sort conversations').selectOption('oldest');
+
+    // The oldest conversation across the whole 60-row fixture, not merely the
+    // last of the fifty on screen a moment ago — reaching it without first
+    // paging to a second page is only possible because the request itself
+    // changed (`sort=oldest`), not the order of what was already fetched.
+    await expect(rows.first()).toContainText('Paging Visitor 60');
+    await expect(page).toHaveURL(/chat_sort=oldest/);
+
+    await page.screenshot({ path: 'kanit/02.2.1-inbox-sorted-oldest.png', fullPage: true });
+  });
+
   test('the transcript walks back to the first message of a 250-event conversation', async ({
     page,
   }) => {

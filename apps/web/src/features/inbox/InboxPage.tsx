@@ -53,6 +53,7 @@ import {
   writeTicketSort,
   type TicketSortKey,
 } from './ticket-grid.js';
+import { parseChatSort, writeChatSort, type ChatSort } from './chat-sort.js';
 import type { InboxView, TicketView, TrafficTab } from './types.js';
 
 const VIEWS: Array<{ id: InboxView; icon: string }> = [
@@ -192,12 +193,23 @@ export function InboxPage(): ReactElement {
     });
   };
 
+  // The chat list sort (FR-MOD-02.2.1) is the URL's job too, same reasoning as
+  // the Tickets grid above: shareable, survives a reload. Unlike the grid this
+  // asks the server for a different page chain rather than re-ordering a loaded
+  // page — see `chat-sort.ts` — so changing it has to start `list` a fresh
+  // query, which passing `chatSort` into `useChatList`'s query key (below)
+  // already does; nothing here resets the page chain by hand.
+  const chatSort = useMemo(() => parseChatSort(searchParams), [searchParams]);
+  const changeChatSort = (sort: ChatSort): void => {
+    setSearchParams(writeChatSort(searchParams, sort), { replace: true });
+  };
+
   // Turn incoming messages into sound / desktop / tab-title alerts. The socket
   // is shared: the same push updates the cache and drives the notification.
   const notifier = useNotifications();
   const rtmStatus = useRealtime(notifier.handlePush);
   const counts = useViewCounts();
-  const list = useChatList(view);
+  const list = useChatList(view, chatSort);
   const chat = useChat(selectedId);
   const transcript = useTranscript(selectedId);
   const tickets = useTicketList(ticketView, ticketSort, onTickets);
@@ -431,9 +443,23 @@ export function InboxPage(): ReactElement {
               aria-label={t('inbox.list.ariaLabel')}
               className="flex w-list shrink-0 flex-col border-r border-border bg-surface"
             >
-              <header className="flex h-topbar items-center justify-between border-b border-border px-4">
-                <h2 className="text-sm font-semibold">{t(VIEW_LABEL_KEY[view])}</h2>
-                <span className="tabular text-2xs text-content-tertiary">
+              <header className="flex h-topbar items-center justify-between gap-2 border-b border-border px-4">
+                <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+                  {t(VIEW_LABEL_KEY[view])}
+                </h2>
+                {/* Sort control (FR-MOD-02.2.1): the server's own `sort` param
+                    (`chat-sort.ts`), not a client-side re-order — see there for
+                    why that has to be true for a list that keeps paging. */}
+                <select
+                  aria-label={t('inbox.list.sort.ariaLabel')}
+                  value={chatSort}
+                  onChange={(event) => changeChatSort(event.target.value as ChatSort)}
+                  className="shrink-0 rounded-md border border-border bg-inset px-1.5 py-1 text-2xs text-content-secondary"
+                >
+                  <option value="newest">{t('inbox.list.sort.newest')}</option>
+                  <option value="oldest">{t('inbox.list.sort.oldest')}</option>
+                </select>
+                <span className="tabular shrink-0 text-2xs text-content-tertiary">
                   {visibleChats.length}
                 </span>
               </header>

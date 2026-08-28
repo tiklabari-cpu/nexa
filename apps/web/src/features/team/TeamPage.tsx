@@ -7,7 +7,7 @@
  * available agents using their priority within that team (ADR-08).
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useMemo, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
 import {
   Card,
   CardSkeleton,
@@ -94,6 +94,15 @@ const STATUS_TONE: Record<Agent['routing_status'], StatusTone> = {
 /** Assignment order within a team — ADR-08 step 2. */
 const PRIORITY_ORDER = ['primary', 'first', 'normal', 'last'] as const;
 
+/** Roster filter options — every rank the roster can hold, in the order RoleMenu ranks them. */
+const ROLE_OPTIONS: Role[] = ['owner', 'viceowner', 'admin', 'agent'];
+const STATUS_OPTIONS: Agent['routing_status'][] = [
+  'accepting_chats',
+  'not_accepting_chats',
+  'offline',
+];
+type TwoFactorFilter = '' | 'on' | 'off';
+
 export function TeamPage(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -130,6 +139,40 @@ export function TeamPage(): ReactElement {
     .reduce((sum, a) => sum + a.concurrent_chats_limit, 0);
 
   const byId = useMemo(() => new Map(items.map((a) => [a.id, a])), [items]);
+
+  // Teammates search + filters (FR-MOD-04.3.2). The roster already arrives in
+  // full on one request (no server paging on `/agents`), so filtering happens
+  // client-side rather than round-tripping — the CustomersPage debounce timing
+  // is kept for consistency (EK-A.2), not because a request is in flight.
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<Role | ''>('');
+  const [statusFilter, setStatusFilter] = useState<Agent['routing_status'] | ''>('');
+  const [twoFactorFilter, setTwoFactorFilter] = useState<TwoFactorFilter>('');
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search.trim().toLowerCase()), 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const filteredItems = useMemo(
+    () =>
+      items.filter((agent) => {
+        if (
+          debouncedSearch &&
+          !`${agent.name} ${agent.email}`.toLowerCase().includes(debouncedSearch)
+        ) {
+          return false;
+        }
+        if (roleFilter && agent.role !== roleFilter) return false;
+        if (statusFilter && agent.routing_status !== statusFilter) return false;
+        if (twoFactorFilter && (twoFactorFilter === 'on') !== agent.two_factor_enabled) {
+          return false;
+        }
+        return true;
+      }),
+    [items, debouncedSearch, roleFilter, statusFilter, twoFactorFilter],
+  );
 
   // Who this admin may act on. The server is the final word (roles + scope), but
   // an unusable button is worse than an absent one, so the UI mirrors the rule:
@@ -182,6 +225,70 @@ export function TeamPage(): ReactElement {
           </Section>
 
           <Section title={t('team.page.teammatesTitle')}>
+            {!agents.isPending && items.length > 0 && (
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2">
+                  <span className="sr-only">{t('team.page.filters.searchLabel')}</span>
+                  <input
+                    type="search"
+                    value={search}
+                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                      setSearch(event.target.value)
+                    }
+                    placeholder={t('team.page.filters.searchPlaceholder')}
+                    className="w-64 rounded-md border border-border bg-inset px-3 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+                  />
+                </label>
+                <label className="flex items-center gap-2 text-xs text-content-secondary">
+                  <span className="sr-only">{t('team.page.filters.roleLabel')}</span>
+                  <select
+                    value={roleFilter}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setRoleFilter(event.target.value as Role | '')
+                    }
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
+                  >
+                    <option value="">{t('team.page.filters.roleAll')}</option>
+                    {ROLE_OPTIONS.map((role) => (
+                      <option key={role} value={role}>
+                        {t(`team.role.${role}`)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-content-secondary">
+                  <span className="sr-only">{t('team.page.filters.statusLabel')}</span>
+                  <select
+                    value={statusFilter}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setStatusFilter(event.target.value as Agent['routing_status'] | '')
+                    }
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
+                  >
+                    <option value="">{t('team.page.filters.statusAll')}</option>
+                    {STATUS_OPTIONS.map((status) => (
+                      <option key={status} value={status}>
+                        {t(STATUS_KEY[status])}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-content-secondary">
+                  <span className="sr-only">{t('team.page.filters.twoFactorLabel')}</span>
+                  <select
+                    value={twoFactorFilter}
+                    onChange={(event: ChangeEvent<HTMLSelectElement>) =>
+                      setTwoFactorFilter(event.target.value as TwoFactorFilter)
+                    }
+                    className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
+                  >
+                    <option value="">{t('team.page.filters.twoFactorAll')}</option>
+                    <option value="on">{t('team.status.on')}</option>
+                    <option value="off">{t('team.status.off')}</option>
+                  </select>
+                </label>
+              </div>
+            )}
             <Card>
               {agents.isPending ? (
                 <ListSkeleton rows={4} />
@@ -190,9 +297,14 @@ export function TeamPage(): ReactElement {
                   title={t('team.page.empty.noTeammatesTitle')}
                   description={t('team.page.empty.noTeammatesDescription')}
                 />
+              ) : filteredItems.length === 0 ? (
+                <EmptyState
+                  title={t('team.page.empty.noMatchesTitle')}
+                  description={t('team.page.empty.noMatchesDescription')}
+                />
               ) : (
                 <VirtualTable
-                  items={items}
+                  items={filteredItems}
                   rowHeight={56}
                   caption={t('team.page.table.caption')}
                   colSpan={canManage ? 7 : 6}

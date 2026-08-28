@@ -130,7 +130,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      | ✅ · 03.2.2 alt sekmeler (All/Leads/Last 30 days/Banned) kodda teslim ama PLAN'da damgalı satırı yoktu → §D121 |
 | MOD-03.3 Campaigns            |     |  ●  |  ○  |      |          ✅ alt sekme+builder+kart (tm 43)          |
 | Engage/Goals + Sales tracker  |     |     |  ●  |      | ✅ Engage 360° + Goals hunisi + Sales tracker → K13.2 · K13.3 · K13.5 |
-| MOD-04 Team/roller/teams      |  ●  |  ○  |  ○  |  ○   | ✅ (invite Dilim 12) · 04.3.2 Teammates arama+filtre (role/status/2FA) açık = Should, §D121 |
+| MOD-04 Team/roller/teams      |  ●  |  ○  |  ○  |  ○   | ✅ (invite Dilim 12) · 04.3.2 Teammates arama+filtre (role/status/2FA) kapandı → K04.3.2 (tm 154.3) |
 | MOD-05 Playbook               |     |  ●  |  ○  |      |     ✅ **v1 payı tam** (05.1–05.5 sayıldı §4.1) · v2 §5     |
 | MOD-06 AI Agent + RAG         |     |  ●  |  ○  |  ○   |  ✅ **v1 payı tam** (06.1–06.5 sayıldı §4.2) · 06.3.2-bulk v2 §5.1  |
 | Görsel Workflow builder       |     |     |  ●  |      |               ⛔ ADR-14 (UI yok)                |
@@ -6847,7 +6847,7 @@ _(Kanıt 2026-08-27'de hücreden buraya taşındı — CONVENTIONS §1.2. Damga 
 
 #### K04.3.2 — 04.3.2 · Teammates arama + rol/durum/2FA filtresi
 
-_(Faz-5 · tm 154 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ Team → Teammates tablosunun üstüne bir araç çubuğu eklendi: debounce'lu (250 ms, `CustomersPage.tsx`'in zamanlamasıyla aynı) ad/e-posta arama kutusu + rol/müsaitlik/2FA `<select>`'leri. `/agents` sunucu tarafında arama/filtre parametresi almıyor (tüm roster zaten tek istekte geliyor) — bu yüzden filtreleme istemci tarafında, `items`'ın üzerinde bir `useMemo`; kontrat değişmedi. Filtre sonucu boşsa (roster doluyken) `team.page.empty.noMatchesTitle` ("No teammates match") gösteriliyor — `team.page.empty.noTeammatesTitle` ("No teammates yet", gerçek boş roster) ile karışmayan ayrı bir metin. `apps/web/src/features/team/TeamPage.tsx` · `locales/{en,tr}/team.ts` · test `TeamPage.test.tsx` (yeni, 5: arama debounce sonrası filtreliyor · rol filtresi · müsaitlik filtresi · 2FA filtresi · filtrelenmiş boş durum ≠ gerçek boş durum) · tm 154.3.
 
 #### KM-SEC-c — M-SEC-c · §D116 LOW bulguları
 

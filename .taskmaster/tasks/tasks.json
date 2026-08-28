@@ -7482,10 +7482,10 @@
         "description": "GL-10 (tm 143) kapanış turu bu üç PRD kodunu \"v1 e kilitlenip hiçbir v1 satırına taşınmayan\" pay olarak §D121 e yazdı ve Faz-4 kapsamına ALMADI; §F.3 gereği kullanıcı seçimine bırakıldı. 2026-08-23 denetimi üçünü de kodda tek tek doğruladı: gerçekten yoklar. Üçü de Should önceliğinde, hiçbiri faz kapanışını bloklamaz, her biri bir pencerelik iş. Faz-5 onları kapatır ki PRD kapsamında ismen bilinen açık kalem kalmasın.",
         "details": "BULGU KAYNAĞI: PLAN §D121 (GL-10 turu) + 2026-08-23 denetiminin kod doğrulaması.\nÜçü de birbirinden bağımsız; sırayla ya da paralel koşulabilir.\n\nFAZ-5'İN KONUSU: DENETİMİN BULDUĞU YANLIŞ (§D124). Bu faz YENİ ÖZELLİK AÇMAZ — iddia ile kodu\neşitler. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **D121-3** (PRD kimlikli — FR-MOD-02.2.1 · 03.1.2 · 04.3.2). Gereksinim satırı: `grep -n \"| D121-3\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KD121-3\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Üç alt-görev done; her biri kendi PRD satırını damgalar.\nÖlçülebilir: PLAN da 02.2.1 · 03.1.2 · 04.3.2 kodlarının damgalı satırları ✅ (bugün gruplu 🔒 satırlarda saklılar).",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T09:57:40.062Z",
+        "updatedAt": "2026-08-28T10:35:36.123Z",
         "subtasks": [
           {
             "id": 1,
@@ -7515,10 +7515,10 @@
             "description": "Kalabalık bir ekipte doğru kişi bulunabiliyor.",
             "details": "NE YAPILACAK: Team → Teammates tablosuna arama kutusu (debounce 250 ms) ve üç filtre eklenir:\nrol · durum (routing_status) · 2FA. Tablo bu sütunları ZATEN gösteriyor; eksik olan kontroller.\nFiltre sonucu boşsa \"eşleşen yok\" boş durumu gösterilir (tüm liste boş durumundan farklı metin).\n\nDOSYALAR: apps/web/src/features/team/TeamPage.tsx + testleri · locales/{en,tr}/team.ts.\nREFERANS DESEN: CustomersPage.tsx in debounce li arama + segment filtresi (EK-A.2 ortak girdi\ndavranışları: debounce arama, dropdown) ve components/EmptyState.tsx.\n\nTUZAK: 2FA filtresi 152 (S11-2FA) ile birlikte anlam kazanır — o kalem two_factor_enabled i gerçekten\nyazmaya başlar. Bu görev ondan BAĞIMSIZ koşabilir (sütun bugün de var), ama filtrenin bugün her zaman\n\"kapalı\" döneceğini bil ve testini ona göre kur.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **04.3.2** (PRD — FR-MOD-04.3.2 (Should)). Gereksinim satırı: `grep -n \"| 04.3.2\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### K04.3.2\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+5): arama filtreliyor · üç filtre çalışıyor · filtrelenmiş boş durum görünüyor.\n- e2e team.spec.ts yeşil · i18n nöbetçisi yeşil.\n- PLAN: 04.3.2 damgalı satırı ✅ + K bloğu maddesi.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "154",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-28T10:35:36.123Z"
           }
         ]
       },
@@ -8132,9 +8132,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T09:57:40.063Z",
+      "lastModified": "2026-08-28T10:35:36.123Z",
       "taskCount": 170,
-      "completedCount": 158,
+      "completedCount": 159,
       "tags": [
         "master"
       ]

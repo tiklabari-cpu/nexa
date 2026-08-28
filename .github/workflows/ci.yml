@@ -105,14 +105,14 @@ jobs:
       - name: Format check
         run: pnpm format:check
 
+      - name: Build
+        run: pnpm build
+
       - name: Unit tests
         run: turbo run test:unit --filter=!@nexa/mobile
 
       - name: Integration tests
         run: pnpm test:integration
-
-      - name: Build
-        run: pnpm build
 
   mobile:
     name: Mobile (Jest)

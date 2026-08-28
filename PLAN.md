@@ -3301,7 +3301,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | S11-2FA | İki adımlı doğrulama: TOTP · ikinci adım · politika zorlaması (**türetilmiş**: NFR-S11 + FR-MOD-00.1 · §D124/3 · Faz-5 tm 152) | ✅ → KS11-2FA |
 | P5-PAGE | Liste sayfalaması istemciye bağlanır (**türetilmiş**: NFR-P5 + FR-EK-B.1 · §D124/2 · Faz-5 tm 153) | ✅ → KP5-PAGE |
 | M-SEC-c | M-SEC denetiminin beş LOW bulgusu (**türetilmiş**: §D116 LOW · Faz-5 tm 155) | ✅ → KM-SEC-c |
-| M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ⬜ |
+| M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ◐ → KM-GUARD |
 | M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-5 tm 157) | ⬜ |
 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır (**türetilmiş**: NFR-S3/S5/S6/S9 · NFR-M · Faz-6 tm 159) | ✅ → KM-PROD-CFG |
 | M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ✅ → KM-OPS |
@@ -6862,6 +6862,8 @@ _(Faz-5 · tm 155 — açıldı 2026-08-24. Alt-görevler kapandıkça bu bloğu
 #### KM-GUARD — M-GUARD · Nöbetçi borçları (NFR-P3 · NFR-A11Y · §D124)
 
 _(Faz-5 · tm 156 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+- ◐ **M-GUARD-a kapandı (tm 156.1) — CI'da Build artık Unit tests'ten ÖNCE koşuyor + bundle-size.test.ts sessiz atlamıyor (§D122):** `.github/workflows/ci.yml`'de `verify` job'ının adım sırası `Typecheck → Lint → Format → Build → Unit tests → Integration tests` oldu (eskiden Build en sonda, Unit tests'ten sonraydı). Kök nedeni CI sırası değil `turbo.json` idi: `test:unit`/`test` görevleri yalnız `^build`'e (bağımlılıkların build'ine) bağlıydı, paketin KENDİ build'ine değil — bu yüzden `@nexa/widget#test:unit` `apps/widget/dist`'i asla garanti etmiyordu, temiz checkout'ta bütçe testi `describe.skipIf(!existsSync(distDir))` ile SESSİZCE atlanıyordu. İki taraflı düzeltme: **(1)** `turbo.json`'a paket-özel görev override'ı — `"@nexa/widget#test"` ve `"@nexa/widget#test:unit"` artık `dependsOn: ["^build", "build"]` (kendi build'i dahil); ölçüldü (`--dry=json`), `dist` silindiyken bile turbo artık `@nexa/widget#build`'i otomatik tetikliyor, YEREL `pnpm -w test` de dahil (TUZAK 2 — yerel geliştiriciyi kilitlemiyor). **(2)** `bundle-size.test.ts`'teki `describe.skipIf` kaldırıldı; `dist` yoksa artık iki test de AÇIK bir `expect(existsSync(...), 'run pnpm --filter @nexa/widget build first')` mesajıyla kırmızı düşüyor, sessiz yeşil yok. **Ölçüldü (kanıt, regresyon aranmadı — TUZAK 3):** loader 1,64 KB + widget 16,87 KB gzip = ~18,5 KB, bütçe 51.200 B — geniş marj korunuyor. — `.github/workflows/ci.yml` · `turbo.json` · `apps/widget/test/bundle-size.test.ts` · tm 156.1
 
 #### KM-SEC-d — M-SEC-d · Faz-5 güvenlik denetimi
 

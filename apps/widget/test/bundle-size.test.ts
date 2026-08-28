@@ -29,7 +29,7 @@ function collectAssets(dir: string): string[] {
   });
 }
 
-describe.skipIf(!existsSync(distDir))('widget bundle budget', () => {
+describe('widget bundle budget', () => {
   it('keeps the host-page loader under 8 KB gzipped', () => {
     const loader = join(distDir, 'loader.js');
     expect(existsSync(loader), 'run `pnpm --filter @nexa/widget build` first').toBe(true);
@@ -39,6 +39,7 @@ describe.skipIf(!existsSync(distDir))('widget bundle budget', () => {
   });
 
   it('keeps everything the browser downloads under 50 KB gzipped (NFR-P3)', () => {
+    expect(existsSync(distDir), 'run `pnpm --filter @nexa/widget build` first').toBe(true);
     const assets = collectAssets(distDir);
     expect(assets.length).toBeGreaterThan(0);
 

@@ -115,6 +115,14 @@
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
+    "@nexa/widget#test": {
+      "dependsOn": ["^build", "build"],
+      "outputs": ["coverage/**"]
+    },
+    "@nexa/widget#test:unit": {
+      "dependsOn": ["^build", "build"],
+      "outputs": ["coverage/**"]
+    },
     "test:integration": {
       "dependsOn": ["^build"],
       "cache": false,

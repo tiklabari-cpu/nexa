@@ -30,7 +30,7 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
@@ -41,6 +41,7 @@ import { formatCount } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { usePagedQuery, type PagedResponse } from '../../lib/paged-query.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
+import { canReadChannels } from '../inbox/views.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
 import { TrafficFilters } from './TrafficFilters.js';
 import {
@@ -64,6 +65,9 @@ const TAB_PARAM = 'tab';
 const TRAFFIC_PAGE_SIZE = 100;
 /** How often the first page is re-read to keep the board feeling live. */
 const TRAFFIC_REFRESH_MS = 8_000;
+
+/** Where the all-tab empty state's CTA sends you to connect a channel (03.1.2-b). */
+const CHANNELS_HREF = '/app/settings#section-channels';
 
 function trafficKey(tab: TrafficTab, conditions: readonly TrafficCondition[]): unknown[] {
   return ['traffic', tab, conditions];
@@ -225,6 +229,11 @@ export function TrafficPage(): ReactElement {
     canChatRead: hasAny(scopes, 'chats--all:ro', 'chats--access:ro'),
     canEditCustomer: hasAny(scopes, 'customers:rw'),
   };
+  // Same gate Settings → Channels and the Inbox Views group read the channel
+  // list behind (`canReadChannels`, `views.ts`): an ordinary agent holds
+  // neither `channels--all` scope, so the CTA would only land them on a 403 —
+  // the courtesy check `AuditLogPage` sets the precedent for.
+  const canManageChannels = canReadChannels(scopes);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get(TAB_PARAM);
@@ -459,6 +468,16 @@ export function TrafficPage(): ReactElement {
             <EmptyState
               title={t(EMPTY_STATE_KEY[tab].title)}
               description={t(EMPTY_STATE_KEY[tab].description)}
+              action={
+                tab === 'all' && canManageChannels ? (
+                  <Link
+                    to={CHANNELS_HREF}
+                    className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
+                  >
+                    {t('traffic.empty.addChannelsCta')}
+                  </Link>
+                ) : undefined
+              }
             />
           ) : (
             <VirtualTable

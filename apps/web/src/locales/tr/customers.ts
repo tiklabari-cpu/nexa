@@ -135,6 +135,7 @@ export const customers: Messages = {
   'traffic.empty.browsing.title': 'Sadece gezinen kimse yok',
   'traffic.empty.browsing.description':
     'Sitenizde henüz sohbeti olmayan ziyaretçiler burada görünür.',
+  'traffic.empty.addChannelsCta': 'Daha fazla kanal ekle',
 
   'traffic.action.startChat': 'Sohbet başlat',
   'traffic.action.superviseChat': 'Sohbeti gözetle',

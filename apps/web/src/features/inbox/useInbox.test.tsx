@@ -26,6 +26,7 @@ import {
 import { useConflictStore } from './conflict.js';
 import { ConflictBanner } from './ConflictBanner.js';
 import type { PagedResponse } from '../../lib/paged-query.js';
+import type { ChatSort } from './chat-sort.js';
 import type { ChatEvent, ChatSummary, InboxView } from './types.js';
 
 const { api } = vi.hoisted(() => ({
@@ -310,6 +311,63 @@ describe('useChatList — paging', () => {
 
     await waitFor(() => expect(result.current.items).toHaveLength(3));
     expect(result.current.items.map((c) => c.id)).toEqual(['c1', 'c2', 'c3']);
+  });
+});
+
+describe('useChatList — sort (FR-MOD-02.2.1)', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+  });
+
+  it('carries the server default when no sort is given', async () => {
+    api.get.mockResolvedValue(chatPage([chat('c1', 14)]));
+    const { result } = renderChatList();
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(String(api.get.mock.calls[0]?.[0])).toContain('sort=newest');
+  });
+
+  it('carries the chosen sort on the request', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    api.get.mockResolvedValue(chatPage([chat('c1', 14)]));
+    const { result } = renderHook(() => useChatList('all', 'oldest'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+    expect(String(api.get.mock.calls[0]?.[0])).toContain('sort=oldest');
+  });
+
+  it('switching sort starts a fresh page chain rather than paging on the old one', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('sort=oldest')
+          ? chatPage([chat('c9', 1)])
+          : chatPage([chat('c1', 14), chat('c2', 13)], 'cursor-1'),
+      ),
+    );
+
+    const { result, rerender } = renderHook(
+      ({ sort }: { sort: ChatSort }) => useChatList('all', sort),
+      {
+        initialProps: { sort: 'newest' as ChatSort },
+        wrapper: ({ children }: { children: ReactNode }) => (
+          <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+        ),
+      },
+    );
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    expect(result.current.hasNext).toBe(true);
+
+    rerender({ sort: 'oldest' });
+
+    // A fresh query for the new sort, not a continuation: the newest-sorted
+    // page chain (its cursor included) is left exactly where it was, in its
+    // own cache entry — nothing here asks for `page_id=cursor-1`.
+    await waitFor(() => expect(result.current.items).toEqual([chat('c9', 1)]));
+    expect(result.current.hasNext).toBe(false);
+    expect(cursorRequests()).toHaveLength(0);
   });
 });
 

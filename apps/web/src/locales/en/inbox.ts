@@ -81,6 +81,9 @@ export const inbox: Messages = {
   'inbox.list.item.noMessages': 'No messages yet',
   'inbox.list.loadMore': 'Load more',
   'inbox.list.loading': 'Loading…',
+  'inbox.list.sort.ariaLabel': 'Sort conversations',
+  'inbox.list.sort.newest': 'Newest',
+  'inbox.list.sort.oldest': 'Oldest',
 
   // Transcript header + empty state (InboxPage's own chrome around Transcript.tsx)
   'inbox.thread.visitorFallback': 'Visitor',

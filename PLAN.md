@@ -125,7 +125,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | ----------------------------- | :-: | :-: | :-: | :--: | :---------------------------------------------: |
 | MOD-00 Auth + trial           |  ●  |     |     |      |                 ✅ (00.4 dahil)                 |
 | MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      | ✅ ⌘K + trial rozeti + sağ panel + v2 AI komutları → K01.1.3 · kabuk tamamlayıcıları (01.1.1/.2/.4/.5 · 01.4 · 01.5) Faz-4'te kapandı → K01.1 · K01.1.2 (tm 139.1–.5) |
-| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      | ✅ 3-pane + ticket + Copy link + 02.4 Details/ziyaret bilgisi → K02.4.1-.6 · 02.2.3 "Take tour" Faz-4'te kapandı → K02.2.3 (tm 139.5) · kalan 02.2.1 sıralaması = Should, §D121 |
+| MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      | ✅ 3-pane + ticket + Copy link + 02.4 Details/ziyaret bilgisi → K02.4.1-.6 · 02.2.3 "Take tour" Faz-4'te kapandı → K02.2.3 (tm 139.5) · 02.2.1 sıralaması (Oldest/Newest) kapandı → K02.2.1 (tm 154.1) |
 | MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      | ✅ sekmeler (tm 19) + anlamlı empty state'ler (EK-B.1) · 03.1.2'nin "Add more channels" CTA payı açık = Should, §D121 |
 | MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      | ✅ · 03.2.2 alt sekmeler (All/Leads/Last 30 days/Banned) kodda teslim ama PLAN'da damgalı satırı yoktu → §D121 |
 | MOD-03.3 Campaigns            |     |  ●  |  ○  |      |          ✅ alt sekme+builder+kart (tm 43)          |
@@ -6839,7 +6839,7 @@ _(Kanıt 2026-08-27'de hücreden buraya taşındı — CONVENTIONS §1.2. Damga 
 
 #### K02.2.1 — 02.2.1 · Sohbet listesi sıralaması (Oldest/Newest)
 
-_(Faz-5 · tm 154 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ Liste başlığına sıralama kontrolü (Newest/Oldest) eklendi, seçim `?chat_sort=` URL parametresine yazılıyor (`chat-sort.ts`) ve sunucunun zaten kabul ettiği `GET /chats?sort=` parametresine taşınıyor — Tickets grid'in aksine (yüklenmiş sayfayı istemci tarafında yeniden sıralar) bu, sunucudan farklı bir sayfa zinciri istiyor. `useChatList`'in sorgu anahtarına `sort` eklenerek sıralama değişimi P5-PAGE-b'nin (tm 153.2) sayfa zincirini otomatik sıfırlıyor (aynı dosyaya dokunan iki görev arasındaki TUZAK not edilmişti). Canlı yenileme (`refreshHead`/`mergeChatHead`) yalnız `newest` için kısmi baş-sayfa birleştirmesini korudu; `oldest` altında yeni bir sohbet her zaman görünümün en altına düştüğü için (asla en üste değil) o dal `queryClient.refetchQueries` ile yüklü her sayfayı düzgünce yeniden okuyor — `apps/web/src/features/inbox/useInbox.ts` · `InboxPage.tsx` · `chat-sort.ts` (yeni) · test `chat-sort.test.ts` (6) · `useInbox.test.tsx` (+3, sort describe bloğu) · e2e `paging.spec.ts` (+1: sıralama sunucudan farklı sayfa zinciri istiyor, `Paging Visitor 01` → `Paging Visitor 60`) · tm 154.1.
 
 #### K03.1.2 — 03.1.2 · Real-time boş durumunda "Add more channels" CTA
 

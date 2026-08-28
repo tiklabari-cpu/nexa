@@ -22,6 +22,7 @@ import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
 import { useTypingStore } from './typing.js';
 import { useConflictStore, type ConflictAgent } from './conflict.js';
+import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
 import type { ChatDetail, ChatEvent, ChatSummary, InboxView } from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
@@ -42,16 +43,16 @@ const TRANSCRIPT_PAGE_SIZE = 200;
  */
 const CHAT_HEAD_REFRESH_MS = 30_000;
 
-export function chatsKey(view: InboxView): unknown[] {
-  return ['chats', view];
+export function chatsKey(view: InboxView, sort: ChatSort = DEFAULT_CHAT_SORT): unknown[] {
+  return ['chats', view, sort];
 }
 export function eventsKey(chatId: string): unknown[] {
   return ['events', chatId];
 }
 
-function chatListUrl(view: InboxView, pageId: string | undefined): string {
+function chatListUrl(view: InboxView, sort: ChatSort, pageId: string | undefined): string {
   const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
-  return `/chats?view=${view}&limit=${CHAT_PAGE_SIZE}${cursor}`;
+  return `/chats?view=${view}&sort=${sort}&limit=${CHAT_PAGE_SIZE}${cursor}`;
 }
 
 /**
@@ -88,6 +89,12 @@ function isOlderChat(a: ChatSummary, b: ChatSummary): boolean {
 /**
  * Folds a freshly read first page into a paged chat list without disturbing the
  * pages below it.
+ *
+ * Newest-first only (`useChatList`'s default and only user of this): a chat
+ * this new is always the newest row there is, which is what lets a refresh
+ * stop at page 1. Sorted oldest-first, page 1 holds the *oldest* chats, a set
+ * a fresh arrival can never join — see `useChatList`'s `refreshHead` for the
+ * plain re-read that sort uses instead.
  *
  * This is the whole reason the contract pages by keyset cursor rather than by
  * offset. The cursor is `(created_at, id)` and a chat's `created_at` never
@@ -151,21 +158,31 @@ export function mergeChatHead(
  * `useTypingStore.setEmitter` already uses for the same reason: the socket
  * outlives any one component.
  */
-const headRefreshers = new Map<symbol, { view: InboxView; run: () => Promise<void> }>();
-const headInFlight = new Set<InboxView>();
-const headPending = new Set<InboxView>();
+const headRefreshers = new Map<
+  symbol,
+  { view: InboxView; sort: ChatSort; run: () => Promise<void> }
+>();
+const headInFlight = new Set<string>();
+const headPending = new Set<string>();
 let headTicker: ReturnType<typeof setInterval> | null = null;
 
+/** The dedup/collapse key for one mounted list — a view can be mounted twice at once (below), each at its own sort. */
+function headKey(view: InboxView, sort: ChatSort): string {
+  return `${view}:${sort}`;
+}
+
 /**
- * Re-reads the first page of every mounted chat list, once per view — the
- * sidebar counts mount a list for all seven views and the open one mounts an
- * eighth for whichever it is showing, so the same view is registered twice.
+ * Re-reads every mounted chat list, once per (view, sort) pair — the sidebar
+ * counts mount a list for all seven views (always the default sort) and the
+ * open one mounts an eighth for whichever it is showing, at whichever sort the
+ * agent picked, so the same view can be registered twice at once.
  */
 export function refreshChatHeads(): void {
-  const done = new Set<InboxView>();
+  const done = new Set<string>();
   for (const entry of headRefreshers.values()) {
-    if (done.has(entry.view)) continue;
-    done.add(entry.view);
+    const key = headKey(entry.view, entry.sort);
+    if (done.has(key)) continue;
+    done.add(key);
     void entry.run();
   }
 }
@@ -178,13 +195,24 @@ export function refreshChatHeads(): void {
  * and `patchChatInPages` (a row that changed). Rows are de-duplicated on the
  * way out — a chat that leaves the view lets the fresh window reach one row
  * further down, which can briefly put that row on two pages.
+ *
+ * `sort` (FR-MOD-02.2.1, `chat-sort.ts`) is part of the query key, so picking
+ * a different one starts an entirely fresh page chain rather than continuing
+ * the old one — the newest-sorted pages an agent already scrolled through
+ * stay cached under their own key, not spliced into the oldest-sorted list.
  */
-export function useChatList(view: InboxView): PagedQueryResult<ChatSummary> {
+export function useChatList(
+  view: InboxView,
+  sort: ChatSort = DEFAULT_CHAT_SORT,
+): PagedQueryResult<ChatSummary> {
   const api = useApiClient();
   const queryClient = useQueryClient();
 
-  const buildUrl = useCallback((pageId: string | undefined) => chatListUrl(view, pageId), [view]);
-  const query = usePagedQuery<ChatSummary>({ queryKey: chatsKey(view), buildUrl });
+  const buildUrl = useCallback(
+    (pageId: string | undefined) => chatListUrl(view, sort, pageId),
+    [view, sort],
+  );
+  const query = usePagedQuery<ChatSummary>({ queryKey: chatsKey(view, sort), buildUrl });
 
   // Read through a ref, not a dependency: the merge writes the page array that
   // an in-flight `fetchNext` is about to overwrite with the snapshot it took
@@ -195,9 +223,9 @@ export function useChatList(view: InboxView): PagedQueryResult<ChatSummary> {
 
   const refreshHead = useCallback(async (): Promise<void> => {
     if (fetchingNextRef.current) return;
-    const key = chatsKey(view);
+    const cacheKey = chatsKey(view, sort);
     // Nothing loaded yet: the query's own first fetch is the refresh.
-    if (!queryClient.getQueryData(key)) return;
+    if (!queryClient.getQueryData(cacheKey)) return;
 
     // A burst collapses to one read in flight plus at most one repeat, rather
     // than one read per push. The repeat is not optional: a chat starting and
@@ -205,29 +233,48 @@ export function useChatList(view: InboxView): PagedQueryResult<ChatSummary> {
     // read already in flight when the second lands is usually too early to
     // contain it — dropping it would leave the row saying "no messages yet"
     // until the next tick.
-    if (headInFlight.has(view)) {
-      headPending.add(view);
+    const burstKey = headKey(view, sort);
+    if (headInFlight.has(burstKey)) {
+      headPending.add(burstKey);
       return;
     }
-    headInFlight.add(view);
+    headInFlight.add(burstKey);
     try {
       do {
-        headPending.delete(view);
-        const fresh = await api.get<PagedResponse<ChatSummary>>(chatListUrl(view, undefined));
-        queryClient.setQueryData<ChatListCache>(key, (cache) => mergeChatHead(cache, fresh));
-      } while (headPending.has(view));
+        headPending.delete(burstKey);
+        if (sort === 'newest') {
+          const fresh = await api.get<PagedResponse<ChatSummary>>(
+            chatListUrl(view, sort, undefined),
+          );
+          queryClient.setQueryData<ChatListCache>(cacheKey, (cache) => mergeChatHead(cache, fresh));
+        } else {
+          // Sorted oldest-first, page 1 holds the *oldest* chats in the view —
+          // a set a brand-new arrival never joins (it is always the newest row
+          // there is), so there is no stable "head" to partially re-read the
+          // way `mergeChatHead` does above. A plain re-read of every page
+          // already loaded is correct rather than cheap, and bounded: this
+          // branch only runs for the one list an agent has actually switched
+          // to "Oldest" for.
+          //
+          // `refetchQueries`, not the paged-query's own `refetch` — that one
+          // is deliberately fire-and-forget (`void refetch()`) for a scroll
+          // button, and this loop's collapsing logic needs to actually await
+          // the read to know when it is safe to check `headPending` again.
+          await queryClient.refetchQueries({ queryKey: cacheKey, exact: true });
+        }
+      } while (headPending.has(burstKey));
     } catch {
       // Best-effort, like the interval it replaces: a dropped refresh leaves
       // the list one beat stale until the next push or tick.
-      headPending.delete(view);
+      headPending.delete(burstKey);
     } finally {
-      headInFlight.delete(view);
+      headInFlight.delete(burstKey);
     }
-  }, [api, queryClient, view]);
+  }, [api, queryClient, view, sort]);
 
   useEffect(() => {
     const token = Symbol('chat-head');
-    headRefreshers.set(token, { view, run: refreshHead });
+    headRefreshers.set(token, { view, sort, run: refreshHead });
     // One timer for all views rather than one per mounted list, so the eight
     // lists on screen cost seven requests every interval, not eight.
     headTicker ??= setInterval(refreshChatHeads, CHAT_HEAD_REFRESH_MS);
@@ -238,7 +285,7 @@ export function useChatList(view: InboxView): PagedQueryResult<ChatSummary> {
         headTicker = null;
       }
     };
-  }, [view, refreshHead]);
+  }, [view, sort, refreshHead]);
 
   const items = useMemo(() => {
     const seen = new Set<string>();

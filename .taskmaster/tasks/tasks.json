@@ -7482,10 +7482,10 @@
         "description": "GL-10 (tm 143) kapanış turu bu üç PRD kodunu \"v1 e kilitlenip hiçbir v1 satırına taşınmayan\" pay olarak §D121 e yazdı ve Faz-4 kapsamına ALMADI; §F.3 gereği kullanıcı seçimine bırakıldı. 2026-08-23 denetimi üçünü de kodda tek tek doğruladı: gerçekten yoklar. Üçü de Should önceliğinde, hiçbiri faz kapanışını bloklamaz, her biri bir pencerelik iş. Faz-5 onları kapatır ki PRD kapsamında ismen bilinen açık kalem kalmasın.",
         "details": "BULGU KAYNAĞI: PLAN §D121 (GL-10 turu) + 2026-08-23 denetiminin kod doğrulaması.\nÜçü de birbirinden bağımsız; sırayla ya da paralel koşulabilir.\n\nFAZ-5'İN KONUSU: DENETİMİN BULDUĞU YANLIŞ (§D124). Bu faz YENİ ÖZELLİK AÇMAZ — iddia ile kodu\neşitler. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **D121-3** (PRD kimlikli — FR-MOD-02.2.1 · 03.1.2 · 04.3.2). Gereksinim satırı: `grep -n \"| D121-3\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KD121-3\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Üç alt-görev done; her biri kendi PRD satırını damgalar.\nÖlçülebilir: PLAN da 02.2.1 · 03.1.2 · 04.3.2 kodlarının damgalı satırları ✅ (bugün gruplu 🔒 satırlarda saklılar).",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-24T12:36:02.013Z",
+        "updatedAt": "2026-08-27T23:30:09.249Z",
         "subtasks": [
           {
             "id": 1,
@@ -7493,10 +7493,10 @@
             "description": "Ajan gelen kutusunu eskiden yeniye de sıralayabiliyor.",
             "details": "NE YAPILACAK: Inbox liste başlığına sıralama kontrolü (Oldest / Newest) eklenir ve seçim\nURL sorgu parametresine yazılır (paylaşılabilir/kalıcı olsun).\nSUNUCU DEĞİŞMEZ: apps/api/src/routes/chats.ts listeleme sorgusu sort: z.enum([newest, oldest])\nparametresini ZATEN kabul ediyor ve sözleşmede de belgeli (paths/chats.yaml sort parametresi).\nYani bu iş yalnız istemci tarafıdır.\n\nDOSYALAR: apps/web/src/features/inbox/InboxPage.tsx (liste başlığı) · useInbox.ts (sorgu) ·\nlocales/{en,tr}/inbox.ts · testleri.\nREFERANS DESEN: Tickets grid inin sıralama + deep-link davranışı (02.7-a) ve AuditLogPage in\n\"URL filtrelerin tek doğruluk kaynağıdır\" yaklaşımı.\n\nTUZAK: 153.2 sayfalamayı ekliyorsa sıralama değişimi sayfa zincirini SIFIRLAMALI.\nİki görev aynı dosyaya dokunuyor — hangisi sonra koşarsa diğerinin davranışını korumalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **02.2.1** (PRD — FR-MOD-02.2.1 (Should)). Gereksinim satırı: `grep -n \"| 02.2.1\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### K02.2.1\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+3): kontrol görünüyor · seçim URL e yazılıyor · sorgu sort parametresini taşıyor.\n- e2e inbox spec ine +1 senaryo (sırala → ilk satır değişti).\n- PLAN: 02.2.1 için damgalı satır (bugün gruplu 🔒 satırda) ✅ yapılır + K bloğu maddesi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "154",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-27T23:30:09.249Z"
           },
           {
             "id": 2,
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-27T23:28:45.193Z",
+      "lastModified": "2026-08-27T23:30:09.250Z",
       "taskCount": 170,
       "completedCount": 158,
       "tags": [

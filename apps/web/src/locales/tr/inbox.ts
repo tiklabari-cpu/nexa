@@ -73,6 +73,9 @@ export const inbox: Messages = {
   'inbox.list.item.noMessages': 'Henüz mesaj yok',
   'inbox.list.loadMore': 'Daha fazla yükle',
   'inbox.list.loading': 'Yükleniyor…',
+  'inbox.list.sort.ariaLabel': 'Sohbetleri sırala',
+  'inbox.list.sort.newest': 'En yeni',
+  'inbox.list.sort.oldest': 'En eski',
 
   // Transcript header + empty state
   'inbox.thread.visitorFallback': 'Ziyaretçi',

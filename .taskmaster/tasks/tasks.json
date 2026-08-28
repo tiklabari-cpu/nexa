@@ -7531,7 +7531,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T10:37:17.591Z",
+        "updatedAt": "2026-08-28T11:20:51.652Z",
         "subtasks": [
           {
             "id": 1,
@@ -7539,10 +7539,10 @@
             "description": "Kimliği geçersiz istek yığını artık veritabanına ulaşmıyor.",
             "details": "NE YAPILACAK (§D116 LOW/1): bugün kimlik doğrulama onRequest kancasında\n(apps/api/src/plugins/auth.ts), hız sınırı ise preHandler da (apps/api/src/plugins/rate-limit.ts).\nFastify yaşam döngüsünde onRequest preHandler dan ÖNCEDİR — yani geçersiz bir bearer token seli,\nhız sınırına takılmadan önce istek başına bir auth_resolve_token sorgusu harcatıyor.\nÇözüm: kimliği doğrulanamayan / anonim istekler için sınırın auth tan ÖNCE değerlendirilmesi.\nKimlikli isteklerin hesap-bazlı sınırı (ADR-07: agent 180/dk) bugünkü yerinde kalabilir —\nçünkü o sınır kimliği bilmeyi gerektirir. Yani iki kova iki farklı aşamada olabilir; kararı gerekçesiyle yaz.\n\nDOSYALAR: apps/api/src/plugins/auth.ts (onRequest kancası) · apps/api/src/plugins/rate-limit.ts\n(anon kovası ve preHandler kaydı) · ilgili integration testleri.\n\nTUZAKLAR:\n1. Kanca sırasını değiştirmek TÜM rotaları etkiler — 429/401 sırası değişirse mevcut testler kırılır.\n   Hangi durumda hangi kodun döneceğini önce yaz, sonra uygula.\n2. ADR-07 in sözleşmesi korunmalı: her 429 Retry-After + X-RateLimit-* taşır.\n3. /health ve public uçların davranışı bozulmamalı (151.2 ile çakışabilir — o görev anon /health\n   sınırına dokunuyor; hangisi sonra koşarsa diğerinin kararını korumalı).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-c** (türetilmiş — §D116 LOW/1). Gereksinim satırı: `grep -n \"| M-SEC-c\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-c\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- ÖNCE KIRMIZI: geçersiz bearer ile N istek → bugün N sorgu; düzeltmeden sonra sınıra takılıyor.\n- api integration yeşil; rate-limit ve auth süitleri korunuyor.\n- Ölçülebilir: sınır aşıldığında yanıt 429 ve Retry-After taşıyor.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "155",
-            "updatedAt": "2026-08-28T10:37:17.591Z"
+            "updatedAt": "2026-08-28T11:20:51.652Z"
           },
           {
             "id": 2,
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T10:37:17.591Z",
+      "lastModified": "2026-08-28T11:20:51.653Z",
       "taskCount": 170,
       "completedCount": 159,
       "tags": [

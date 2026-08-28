@@ -126,7 +126,7 @@ PRD'nin kendi matrisi, üzerine teslim durumu işlenmiş hâliyle.
 | MOD-00 Auth + trial           |  ●  |     |     |      |                 ✅ (00.4 dahil)                 |
 | MOD-01 Global shell + ⌘K      |  ●  |  ○  |  ○  |      | ✅ ⌘K + trial rozeti + sağ panel + v2 AI komutları → K01.1.3 · kabuk tamamlayıcıları (01.1.1/.2/.4/.5 · 01.4 · 01.5) Faz-4'te kapandı → K01.1 · K01.1.2 (tm 139.1–.5) |
 | MOD-02 Inbox 3-pane + Archive |  ●  |  ○  |     |      | ✅ 3-pane + ticket + Copy link + 02.4 Details/ziyaret bilgisi → K02.4.1-.6 · 02.2.3 "Take tour" Faz-4'te kapandı → K02.2.3 (tm 139.5) · 02.2.1 sıralaması (Oldest/Newest) kapandı → K02.2.1 (tm 154.1) |
-| MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      | ✅ sekmeler (tm 19) + anlamlı empty state'ler (EK-B.1) · 03.1.2'nin "Add more channels" CTA payı açık = Should, §D121 |
+| MOD-03.1 Real-time traffic    |  ○  |  ○  |  ○  |      | ✅ sekmeler (tm 19) + anlamlı empty state'ler (EK-B.1) · 03.1.2'nin "Add more channels" CTA'sı kapandı → K03.1.2 (tm 154.2) |
 | MOD-03.2 Contacts CRM         |  ●  |  ○  |     |      | ✅ · 03.2.2 alt sekmeler (All/Leads/Last 30 days/Banned) kodda teslim ama PLAN'da damgalı satırı yoktu → §D121 |
 | MOD-03.3 Campaigns            |     |  ●  |  ○  |      |          ✅ alt sekme+builder+kart (tm 43)          |
 | Engage/Goals + Sales tracker  |     |     |  ●  |      | ✅ Engage 360° + Goals hunisi + Sales tracker → K13.2 · K13.3 · K13.5 |
@@ -6843,7 +6843,7 @@ _(Kanıt 2026-08-27'de hücreden buraya taşındı — CONVENTIONS §1.2. Damga 
 
 #### K03.1.2 — 03.1.2 · Real-time boş durumunda "Add more channels" CTA
 
-_(Faz-5 · tm 154 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ All sekmesinin boş durumuna bir eylem düğmesi eklendi — `channels--all` (ro veya rw) kapsamına sahip çağrı için Settings → Channels'a (`/app/settings#section-channels`) götürüyor; kapsamı olmayan çağrıda hiç gösterilmiyor (`canReadChannels`, `views.ts`'ten paylaşılan gate — Settings → Channels ve Inbox Views grubunun zaten okuduğu aynı kontrol, AuditLogPage'in nezaket kontrolü emsali: 403'e giden bir düğme yok). Filtreli sekmelerde (Chatting/Queued/…) CTA görünmüyor — Campaigns/Goals'un "yalnız All sekmesinde" emsaliyle aynı — `apps/web/src/features/traffic/TrafficPage.tsx` · test `TrafficPage.test.tsx` (+3: CTA var/href doğru · yetkisiz gizli · filtreli sekmede yok) · tm 154.2
 
 #### K04.3.2 — 04.3.2 · Teammates arama + rol/durum/2FA filtresi
 

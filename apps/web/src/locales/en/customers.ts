@@ -144,6 +144,7 @@ export const customers: Messages = {
   'traffic.empty.browsing.title': 'No one is just browsing',
   'traffic.empty.browsing.description':
     'Visitors on your site with no conversation yet appear here.',
+  'traffic.empty.addChannelsCta': 'Add more channels',
 
   'traffic.action.startChat': 'Start chat',
   'traffic.action.superviseChat': 'Supervise chat',

@@ -143,6 +143,35 @@ describe('TrafficPage status tabs', () => {
     ).toBeInTheDocument();
   });
 
+  it('offers an "Add more channels" CTA on the empty All board for a caller who can manage channels', async () => {
+    scopes.current = ['chats--all:rw', 'customers:rw', 'channels--all:rw'];
+    api.get.mockResolvedValue({ items: [], total: 0 });
+    renderPage();
+
+    const cta = await screen.findByRole('link', { name: 'Add more channels' });
+    expect(cta).toHaveAttribute('href', '/app/settings#section-channels');
+  });
+
+  it('hides the "Add more channels" CTA for a caller without channel-management scope (03.1.2-b)', async () => {
+    // Default scopes carry no `channels--all` scope — the ordinary-agent case
+    // (`DEFAULT_AGENT_SCOPES`, `packages/types/src/role-scopes.ts`). Showing the
+    // CTA here would only send the click into a 403.
+    api.get.mockResolvedValue({ items: [], total: 0 });
+    renderPage();
+
+    await screen.findByText('No live visitors right now');
+    expect(screen.queryByRole('link', { name: 'Add more channels' })).not.toBeInTheDocument();
+  });
+
+  it('does not offer the "Add more channels" CTA on a filtered tab\'s empty state', async () => {
+    scopes.current = ['chats--all:rw', 'customers:rw', 'channels--all:rw'];
+    api.get.mockResolvedValue({ items: [], total: 0 });
+    renderPage(['/?tab=queued']);
+
+    await screen.findByText('The queue is empty');
+    expect(screen.queryByRole('link', { name: 'Add more channels' })).not.toBeInTheDocument();
+  });
+
   it('writes the selected tab to the URL and restores it on reload', async () => {
     const user = userEvent.setup();
     api.get.mockResolvedValue({ items: [], total: 0 });

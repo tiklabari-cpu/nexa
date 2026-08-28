@@ -7485,7 +7485,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T00:18:56.136Z",
+        "updatedAt": "2026-08-28T09:22:32.482Z",
         "subtasks": [
           {
             "id": 1,
@@ -7504,10 +7504,10 @@
             "description": "Boş trafik ekranı kullanıcıyı kanal eklemeye götürüyor.",
             "details": "NE YAPILACAK: Customers → Real-time (Traffic) ekranının boş durumuna bir eylem düğmesi eklenir;\ntıklayınca Settings → Channels a gider. Anlamlı boş durum metni ZATEN var (EK-B.1, tm 30);\neksik olan yalnız kanal ekleme yoluna dönen CTA.\n\nDOSYALAR: apps/web/src/features/traffic/TrafficPage.tsx · apps/web/src/components/EmptyState.tsx\n(eylem desteği var mı, yoksa opsiyonel olarak ekle) · locales/{en,tr}.\nREFERANS DESEN: depodaki diğer anlamlı boş durumlar (Contacts/Skills/Tickets) ve\nSettings → Channels rotasının derin link biçimi.\nTUZAK: CTA yalnız kanal eklemeye YETKİSİ olan role gösterilmeli (scope kontrolü) — yetkisiz\nkullanıcıya 403 e giden bir düğme gösterme; AuditLogPage in scope nezaket kontrolü emsaldir.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **03.1.2** (PRD — FR-MOD-03.1.2 (Should)). Gereksinim satırı: `grep -n \"| 03.1.2\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### K03.1.2\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+3): boş durumda CTA var · tıklayınca doğru rotaya gidiyor · yetkisiz rolde görünmüyor.\n- i18n nöbetçisi yeşil · PLAN: 03.1.2 damgalı satırı ✅ + K bloğu maddesi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "154",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-28T09:22:32.482Z"
           },
           {
             "id": 3,
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T00:18:56.137Z",
+      "lastModified": "2026-08-28T09:22:32.483Z",
       "taskCount": 170,
       "completedCount": 158,
       "tags": [

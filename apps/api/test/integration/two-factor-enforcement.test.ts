@@ -32,6 +32,7 @@ import {
   seedDefaultBrand,
   seedFixtures,
   testEnv,
+  TEST_PASSWORD,
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
@@ -87,11 +88,17 @@ describe('two-factor enforcement (S11-2FA-e)', () => {
     });
     const headers = { authorization: `Bearer ${bearer}` };
 
-    const enrolled = await server.post('/auth/2fa/enroll', undefined, headers);
+    // Installing a factor proves the account, not the session (M-SEC-d2) - and
+    // every account this suite enrols holds a password.
+    const enrolled = await server.post('/auth/2fa/enroll', { password: TEST_PASSWORD }, headers);
     expect(enrolled.statusCode).toBe(200);
     const secret = enrolled.json().secret as string;
 
-    const activated = await server.post('/auth/2fa/activate', { code: code(secret) }, headers);
+    const activated = await server.post(
+      '/auth/2fa/activate',
+      { code: code(secret), password: TEST_PASSWORD },
+      headers,
+    );
     expect(activated.statusCode).toBe(200);
     return { secret, recoveryCodes: activated.json().recovery_codes as string[] };
   }

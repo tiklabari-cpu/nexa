@@ -742,6 +742,18 @@ export const settings: Messages = {
   'settings.twoFactor.disableBlockedByWorkspaces':
     'Two-factor authentication is required by {names}. It cannot be turned off while you are a member there.',
 
+  'settings.twoFactor.enrollPasswordUnavailable':
+    'This account signs in through an identity provider and belongs to more than one workspace. Set a password on it first — otherwise one workspace would be choosing the second factor that guards all of them.',
+
+  'settings.twoFactor.enrollPassword.title': 'Confirm it is you, to turn two-factor on',
+  'settings.twoFactor.enrollPassword.description':
+    'A second factor covers every workspace this account can sign in to, so setting one up asks for your password — the same as turning it off.',
+  'settings.twoFactor.enrollPassword.label': 'Password',
+  'settings.twoFactor.enrollPassword.error': 'This field is required.',
+  'settings.twoFactor.enrollPassword.confirmButton': 'Continue',
+  'settings.twoFactor.enrollPassword.confirming': 'Checking…',
+  'settings.twoFactor.enrollPassword.discardConfirm': 'Discard this?',
+
   'settings.twoFactor.enroll.title': 'Set up two-factor authentication',
   'settings.twoFactor.enroll.description':
     'Enter this into your authenticator app, then enter the code it shows.',

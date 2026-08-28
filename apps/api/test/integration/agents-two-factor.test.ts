@@ -10,7 +10,13 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  seedFixtures,
+  TEST_PASSWORD,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { generateTotp } from '../../src/lib/totp.js';
 
@@ -60,11 +66,17 @@ describe('GET /agents two-factor column (S11-2FA-h)', () => {
     expect(before.statusCode).toBe(200);
     expect(rowFor(before.json(), fx.a.ownerAccountId)?.two_factor_enabled).toBe(false);
 
-    const enroll = await server.post('/auth/2fa/enroll', undefined, auth(ownerSession));
+    // The password: installing a factor proves the account, not the session
+    // (M-SEC-d2), and this owner holds one.
+    const enroll = await server.post(
+      '/auth/2fa/enroll',
+      { password: TEST_PASSWORD },
+      auth(ownerSession),
+    );
     expect(enroll.statusCode).toBe(200);
     const activate = await server.post(
       '/auth/2fa/activate',
-      { code: generateTotp(enroll.json().secret as string, Date.now()) },
+      { code: generateTotp(enroll.json().secret as string, Date.now()), password: TEST_PASSWORD },
       auth(ownerSession),
     );
     expect(activate.statusCode).toBe(200);

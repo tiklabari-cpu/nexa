@@ -46,8 +46,16 @@ export type CustomerTokenVerification =
   | { ok: true; principal: CustomerPrincipal; region: Region }
   | { ok: false; reason: CustomerTokenRejection };
 
-/** Distinguishes these from any other HMAC the system produces. */
-const TOKEN_PREFIX = 'nxc1';
+/**
+ * Distinguishes these from any other HMAC the system produces.
+ *
+ * Exported because the rate limiter has to tell a customer token from a bearer
+ * token *before* authentication runs (M-SEC-c1): the first is verified in
+ * process, the second costs a database lookup, and only the second needs the
+ * pre-auth budget. `lib/credential.ts` reads it from here rather than spelling
+ * the four characters a second time.
+ */
+export const CUSTOMER_TOKEN_PREFIX = 'nxc1';
 
 export class CustomerTokenService {
   constructor(
@@ -81,14 +89,14 @@ export class CustomerTokenService {
 
     const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
     return {
-      token: `${TOKEN_PREFIX}.${body}.${this.#sign(body)}`,
+      token: `${CUSTOMER_TOKEN_PREFIX}.${body}.${this.#sign(body)}`,
       expiresIn: this.ttlSeconds,
     };
   }
 
   verify(token: string): CustomerTokenVerification {
     const parts = token.split('.');
-    if (parts.length !== 3 || parts[0] !== TOKEN_PREFIX) {
+    if (parts.length !== 3 || parts[0] !== CUSTOMER_TOKEN_PREFIX) {
       return { ok: false, reason: 'malformed' };
     }
     const [, body, signature] = parts as [string, string, string];
@@ -145,6 +153,8 @@ export class CustomerTokenService {
   }
 
   #sign(body: string): string {
-    return createHmac('sha256', this.secret).update(`${TOKEN_PREFIX}.${body}`).digest('base64url');
+    return createHmac('sha256', this.secret)
+      .update(`${CUSTOMER_TOKEN_PREFIX}.${body}`)
+      .digest('base64url');
   }
 }

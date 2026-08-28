@@ -63,6 +63,64 @@ describe('sanitizeAuditMetadata', () => {
       count: 2,
     });
   });
+
+  it('drops a credential-shaped key nested inside an object, not only at the top', () => {
+    // The gap this task closes: a caller that spreads a request body in
+    // (`{ details: requestBody }`) used to write `details.password` verbatim.
+    expect(sanitizeAuditMetadata({ details: { password: 'hunter2', field: 'name' } })).toEqual({
+      details: { field: 'name' },
+    });
+  });
+
+  it('drops credential-shaped keys inside objects nested in an array', () => {
+    expect(
+      sanitizeAuditMetadata({
+        changes: [{ field: 'email', token: 'nxc1.secret' }, { field: 'role' }],
+      }),
+    ).toEqual({ changes: [{ field: 'email' }, { field: 'role' }] });
+  });
+
+  it('honours the allow-list at nested depths too', () => {
+    expect(sanitizeAuditMetadata({ details: { request_id: 'req-1', password: 'x' } })).toEqual({
+      details: { request_id: 'req-1' },
+    });
+  });
+
+  it('survives a circular reference instead of recursing forever', () => {
+    const details: Record<string, unknown> = { role: 'admin' };
+    details.self = details;
+
+    let result: Record<string, unknown> | undefined;
+    expect(() => {
+      result = sanitizeAuditMetadata({ details });
+    }).not.toThrow();
+    expect(result).toEqual({ details: { role: 'admin', self: '[circular]' } });
+  });
+
+  it('shares the same object across two branches without falsely calling it a cycle', () => {
+    // Not a cycle: `shared` is reachable twice, but neither path revisits its
+    // own ancestor. A cycle guard keyed on "ever seen" rather than "on the
+    // current path" would wrongly flag the second branch too.
+    const shared = { count: 1 };
+    expect(sanitizeAuditMetadata({ a: shared, b: shared })).toEqual({
+      a: { count: 1 },
+      b: { count: 1 },
+    });
+  });
+
+  it('drops a value once it is nested past the depth limit, rather than walking forever', () => {
+    // Six levels down (`sanitizeAuditMetadata` itself starts nested values at
+    // depth 1) is well past anything a real caller produces (grep finds no
+    // metadata literal nested even two levels deep) — this proves a payload
+    // that goes deeper is truncated, not that it is a realistic shape.
+    let deep: Record<string, unknown> = { password: 'buried-secret' };
+    for (let i = 0; i < 10; i++) {
+      deep = { nested: deep };
+    }
+    const result = sanitizeAuditMetadata({ top: deep });
+    expect(JSON.stringify(result)).not.toContain('buried-secret');
+    expect(JSON.stringify(result)).toContain('[max_depth_exceeded]');
+  });
 });
 
 describe('AUDIT_ACTIONS', () => {

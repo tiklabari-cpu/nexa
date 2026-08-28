@@ -412,22 +412,109 @@ const FORBIDDEN_METADATA_KEY = /pass|secret|token|verifier|credential|hash|autho
 const METADATA_KEY_ALLOWLIST = new Set(['request_id', 'scim_token_id']);
 
 /**
- * Drop any metadata key that looks like a credential.
+ * How many levels deep {@link sanitizeAuditMetadata} will walk into a nested
+ * object or array before it stops trusting the shape of the input.
  *
- * The callers in this codebase never pass a secret; this exists so that if one
- * ever starts to — a refactor that spreads a whole request body into metadata,
- * say — the secret is removed here rather than persisted forever in an
- * append-only table nobody can scrub.
+ * No caller in this codebase nests metadata more than one level (`grep` for
+ * `metadata: {` finds nothing with a second `{`), so this is headroom, not a
+ * realistic ceiling — it exists to bound recursion depth against a caller
+ * that spreads an arbitrarily deep value in by mistake, the same class of
+ * refactor the doc comment below is written for. Anything past the limit is
+ * dropped rather than walked, so a secret hidden below it can never survive
+ * by being deep enough to outrun the scan (fail closed, not fail silent).
+ */
+const MAX_METADATA_DEPTH = 6;
+
+/** What a value becomes when it is dropped rather than walked. */
+const MAX_DEPTH_MARKER = '[max_depth_exceeded]';
+const CIRCULAR_MARKER = '[circular]';
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
+}
+
+/**
+ * Recurse into a single metadata value, dropping forbidden keys at every
+ * level rather than only the top one.
+ *
+ * `ancestors` holds the objects/arrays currently on the path from the root —
+ * added before recursing into a container's contents and removed once that
+ * container is done — so a genuine cycle (`obj.self = obj`) is caught, while
+ * the same object reachable twice from two different, non-overlapping
+ * branches (a DAG, not a cycle) is still sanitized both times.
+ *
+ * Anything that is not a plain object or array (a string, a Date, …) is
+ * returned unchanged: this codebase's metadata is "JSON scalars/arrays by
+ * construction" (see `writeAuditEntry`), and a value shaped like a class
+ * instance is outside what this function was ever asked to understand —
+ * passing it through unchanged matches the pre-recursive behaviour instead
+ * of silently discarding it via `Object.entries`.
+ */
+function sanitizeValue(value: unknown, depth: number, ancestors: Set<object>): unknown {
+  if (Array.isArray(value)) {
+    if (ancestors.has(value)) return CIRCULAR_MARKER;
+    if (depth >= MAX_METADATA_DEPTH) return MAX_DEPTH_MARKER;
+    ancestors.add(value);
+    const clean = value.map((item) => sanitizeValue(item, depth + 1, ancestors));
+    ancestors.delete(value);
+    return clean;
+  }
+
+  if (isPlainObject(value)) {
+    if (ancestors.has(value)) return CIRCULAR_MARKER;
+    if (depth >= MAX_METADATA_DEPTH) return MAX_DEPTH_MARKER;
+    ancestors.add(value);
+    const clean: Record<string, unknown> = {};
+    for (const [key, entryValue] of Object.entries(value)) {
+      if (!METADATA_KEY_ALLOWLIST.has(key) && FORBIDDEN_METADATA_KEY.test(key)) continue;
+      if (entryValue === undefined) continue;
+      clean[key] = sanitizeValue(entryValue, depth + 1, ancestors);
+    }
+    ancestors.delete(value);
+    return clean;
+  }
+
+  return value;
+}
+
+/**
+ * Drop any metadata key that looks like a credential — at any depth, not
+ * only the top one.
+ *
+ * The callers in this codebase never pass a secret; this exists so that if
+ * one ever starts to — a refactor that spreads a whole request body into
+ * metadata, say — the secret is removed here rather than persisted forever
+ * in an append-only table nobody can scrub. That request body is exactly the
+ * shape most likely to nest (`{ details: { password: '…' } }`), which is why
+ * this walks in rather than only checking the object's own keys.
+ *
+ * Deliberately not sharing `FORBIDDEN_METADATA_KEY`'s fragment list with
+ * `lib/log-redact.ts`'s `SENSITIVE_QUERY_KEY`, despite both being "keys that
+ * look like a credential" lists: they test different things. This one is an
+ * unanchored substring test against an arbitrary object key (`'pass'` must
+ * catch `password_hash`, `user_password`, …); that one is an exact match
+ * against a URL query key between `?`/`&` and `=` (its `'password'` would
+ * not match a query key with `pass` as a mere substring). Building one list's
+ * pattern out of the other's fragments would either narrow this function's
+ * matching (an exact `'password'` fragment stops catching `passphrase`) or
+ * widen the URL masker's (a bare `'pass'` alternative would need its own
+ * anchoring to avoid becoming a substring test URLs were never meant to get).
+ * Keeping the two lists next to their one caller each, with this note
+ * pointing between them, is safer than forcing a shared shape onto two
+ * different problems.
  */
 export function sanitizeAuditMetadata(
   metadata: Record<string, unknown> | undefined,
 ): Record<string, unknown> {
   if (!metadata) return {};
+  const ancestors = new Set<object>([metadata]);
   const clean: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(metadata)) {
     if (!METADATA_KEY_ALLOWLIST.has(key) && FORBIDDEN_METADATA_KEY.test(key)) continue;
     if (value === undefined) continue;
-    clean[key] = value;
+    clean[key] = sanitizeValue(value, 1, ancestors);
   }
   return clean;
 }

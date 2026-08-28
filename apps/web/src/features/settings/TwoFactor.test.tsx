@@ -68,20 +68,36 @@ function errorJson(failure: ApiFailure): Response {
 }
 
 let twoFactorStatus: TwoFactorStatus;
-let activateBodies: Array<{ code: string }>;
+let enrollBodies: Array<Record<string, unknown>>;
+let activateBodies: Array<Record<string, unknown>>;
 let deleteBodies: Array<Record<string, unknown>>;
 let recoveryBodies: Array<Record<string, unknown>>;
+let nextEnrollError: ApiFailure | null;
 let nextActivateError: ApiFailure | null;
 let nextDeleteError: ApiFailure | null;
 let nextRecoveryError: ApiFailure | null;
+
+/**
+ * What the server answers an enrollment that has not proved the account
+ * (M-SEC-d2): a validation refusal naming the `password` field, which is the
+ * only thing telling this screen the account holds one.
+ */
+const PASSWORD_OWED: ApiFailure = {
+  status: 400,
+  type: 'validation',
+  message: 'password: your password is required to set up two-factor authentication.',
+  details: { fields: [{ field: 'password', message: 'Required.' }] },
+};
 
 const RECOVERY_CODES = Array.from({ length: 10 }, (_, i) => `ABCDE-${i}FGHJ`);
 
 function stubFetch(initial: TwoFactorStatus): void {
   twoFactorStatus = initial;
+  enrollBodies = [];
   activateBodies = [];
   deleteBodies = [];
   recoveryBodies = [];
+  nextEnrollError = null;
   nextActivateError = null;
   nextDeleteError = null;
   nextRecoveryError = null;
@@ -97,6 +113,8 @@ function stubFetch(initial: TwoFactorStatus): void {
         return okJson({ two_factor: twoFactorStatus });
       }
       if (path.endsWith('/auth/2fa/enroll') && method === 'POST') {
+        enrollBodies.push(body);
+        if (nextEnrollError) return errorJson(nextEnrollError);
         return okJson({
           secret: 'JBSWY3DPEHPK3PXP',
           otpauth_uri: 'otpauth://totp/Nexa:demo%40nexa.test?secret=JBSWY3DPEHPK3PXP&issuer=Nexa',
@@ -105,7 +123,7 @@ function stubFetch(initial: TwoFactorStatus): void {
         });
       }
       if (path.endsWith('/auth/2fa/activate') && method === 'POST') {
-        activateBodies.push(body as { code: string });
+        activateBodies.push(body);
         if (nextActivateError) return errorJson(nextActivateError);
         return okJson({
           enabled: true,
@@ -197,6 +215,59 @@ describe('TwoFactor', () => {
     );
     expect(await screen.findByText('On')).toBeInTheDocument();
     expect(screen.getByText('10 recovery codes left')).toBeInTheDocument();
+  });
+
+  it('asks for the password when the account has one, and carries it into activation', async () => {
+    // The refusal is staged for the first call only: Enable posts nothing, the
+    // server names the field it wants, and the retry carries it (M-SEC-d2).
+    nextEnrollError = PASSWORD_OWED;
+    renderTwoFactor();
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Enable two-factor authentication' }),
+    );
+
+    const prompt = await screen.findByRole('dialog', {
+      name: 'Confirm it is you, to turn two-factor on',
+    });
+    // No setup key is on screen yet — nothing was minted by the refused call.
+    expect(screen.queryByText('JBSWY3DPEHPK3PXP')).not.toBeInTheDocument();
+
+    nextEnrollError = null;
+    await userEvent.type(within(prompt).getByLabelText('Password'), 'hunter2');
+    await userEvent.click(within(prompt).getByRole('button', { name: 'Continue' }));
+
+    const setupDialog = await screen.findByRole('dialog', {
+      name: 'Set up two-factor authentication',
+    });
+    expect(setupDialog).toHaveTextContent('JBSWY3DPEHPK3PXP');
+    expect(enrollBodies).toEqual([{}, { password: 'hunter2' }]);
+
+    await userEvent.type(screen.getByLabelText('Authentication code'), '123456');
+    await userEvent.click(screen.getByRole('button', { name: 'Verify & activate' }));
+
+    // Activation proves the account again — the same rule, the same credential.
+    await waitFor(() => expect(activateBodies).toEqual([{ code: '123456', password: 'hunter2' }]));
+  });
+
+  it('says what to do when there is no password to ask for', async () => {
+    nextEnrollError = {
+      status: 403,
+      type: 'not_allowed',
+      message: 'refused',
+      details: { password_required: true },
+    };
+    renderTwoFactor();
+
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Enable two-factor authentication' }),
+    );
+
+    expect(await screen.findByText(/Set a password on it first/)).toBeInTheDocument();
+    // A password box would be a dead end: the account has none to type.
+    expect(
+      screen.queryByRole('dialog', { name: 'Confirm it is you, to turn two-factor on' }),
+    ).not.toBeInTheDocument();
   });
 
   it('asks before closing the recovery sheet unconfirmed, and drops the codes for good once closed', async () => {

@@ -212,6 +212,23 @@ test.describe('two-factor authentication', () => {
     ).toBeVisible();
     await section.getByRole('button', { name: 'Enable two-factor authentication' }).click();
 
+    // The password, before anything is minted (M-SEC-d2). A second factor is
+    // account-global while a session belongs to one workspace, so installing
+    // one proves the account — which is what stops a workspace's identity
+    // provider from installing one on somebody else's behalf. The prompt is not
+    // rendered on a guess: it appears because the server refused the first,
+    // bodiless call and named the field it wanted, so this click is also the
+    // proof that the refusal reaches a browser intact.
+    const confirmIdentity = page.getByRole('dialog', {
+      name: 'Confirm it is you, to turn two-factor on',
+    });
+    await expect(confirmIdentity).toBeVisible();
+    await expect(
+      page.getByRole('dialog', { name: 'Set up two-factor authentication' }),
+    ).toHaveCount(0);
+    await confirmIdentity.getByLabel('Password').fill(owner.password);
+    await confirmIdentity.getByRole('button', { name: 'Continue' }).click();
+
     const setup = page.getByRole('dialog', { name: 'Set up two-factor authentication' });
     const secret = ((await setup.locator('code').first().textContent()) ?? '').trim();
     const otpauthUri = ((await setup.locator('code').nth(1).textContent()) ?? '').trim();

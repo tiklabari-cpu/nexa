@@ -15,6 +15,7 @@ import { verifyPassword } from '../lib/crypto.js';
 import { poweredByFor } from '../lib/entitlements.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant, type TenantContext } from '../lib/tenant.js';
+import type { Mailer } from '../services/mail/mailer.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import {
@@ -98,8 +99,22 @@ const createPatBody = z.object({
   expires_in_days: z.number().int().min(1).max(365).optional(),
 });
 
-/** The one field `POST /auth/2fa/activate` takes: what the app is showing now. */
-const activateTwoFactorBody = z.object({ code: z.string().trim().min(1).max(32) });
+/**
+ * What the two enrollment endpoints take besides their own payload
+ * (NFR-S11 · FR-MOD-00.1 · M-SEC-d2).
+ *
+ * Optional in the schema and required by the *account*, exactly like
+ * `reauthenticateBody`: whether a password is owed depends on state the caller
+ * cannot see, so a missing one is a refusal naming what is missing rather than
+ * a shape error. Nothing is trimmed — leading and trailing space is part of a
+ * password.
+ */
+const enrollTwoFactorBody = z.object({ password: passwordSchema.optional() });
+
+/** The code the app is showing now, and the proof that this is your account. */
+const activateTwoFactorBody = enrollTwoFactorBody.extend({
+  code: z.string().trim().min(1).max(32),
+});
 
 /**
  * Whose second factor a request is about, for the two endpoints that answer to
@@ -117,18 +132,37 @@ function requireSelfAccount(principal: Principal): string {
 }
 
 /**
- * The audit metadata that tells an enrollment done from the sign-in screen apart
- * from one done from Account Settings — nothing at all for the ordinary case.
- *
- * A workspace that has just switched `require_two_factor` on will see a run of
- * these, and "they enrolled from the door they were refused at" is the expected
- * shape; the same marker appearing weeks later, on an account that already had a
- * session, is not. An absent key rather than `via: 'session'`, matching the
- * break-glass marker on `auth.login` and for the same reason: a field that is
- * always present is a field every query has to remember to ignore.
+ * What made a caller the account holder, for the two endpoints that install a
+ * second factor (`proveAccountForEnrollment`).
  */
-function viaEnrollmentTicket(principal: Principal): { metadata?: Record<string, unknown> } {
-  return principal.kind === 'enrollment' ? { metadata: { via: 'enrollment_ticket' } } : {};
+type EnrollmentProof = 'password' | 'enrollment_ticket' | 'sole_membership';
+
+/**
+ * The audit metadata for an enrollment — nothing at all for the ordinary case.
+ *
+ * Two of the three proofs are worth a marker. `via: 'enrollment_ticket'` tells
+ * an enrollment done from the sign-in screen apart from one done from Account
+ * Settings: a workspace that has just switched `require_two_factor` on will see
+ * a run of these, and "they enrolled from the door they were refused at" is the
+ * expected shape; the same marker appearing weeks later, on an account that
+ * already had a session, is not. `proof: 'sole_membership'` marks the one branch
+ * that installs an account-global credential without the account holder
+ * producing a secret of their own (M-SEC-d2) — it is the residual this fix
+ * accepts, so it is the one a review has to be able to find.
+ *
+ * An absent key for the password case rather than `proof: 'password'`, matching
+ * the break-glass marker on `auth.login` and for the same reason: a field that
+ * is always present is a field every query has to remember to ignore.
+ */
+function enrollmentProvenance(proof: EnrollmentProof): { metadata?: Record<string, unknown> } {
+  switch (proof) {
+    case 'enrollment_ticket':
+      return { metadata: { via: 'enrollment_ticket' } };
+    case 'sole_membership':
+      return { metadata: { proof: 'sole_membership' } };
+    case 'password':
+      return {};
+  }
 }
 
 /**
@@ -180,9 +214,9 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function authRoutes(
   app: FastifyInstance,
-  options: { env: Env },
+  options: { env: Env; mailer: Mailer },
 ): Promise<void> {
-  const { env } = options;
+  const { env, mailer } = options;
   // Our own widget origin. A token request whose host resolves to this is the
   // hosted Chat page (FR-MOD-08.5.9), exempt from the trusted-domain allowlist.
   const selfHost = originHost(env.WIDGET_BASE_URL);
@@ -1028,6 +1062,147 @@ export default async function authRoutes(
   // away — and that endpoint (S11-2FA-e) is where it should land.
 
   /**
+   * Prove the request is the *account holder*, not merely a session on the
+   * account (NFR-S11 · FR-MOD-00.1 · M-SEC-d2 · tm 172).
+   *
+   * A second factor is account-global — `account_two_factor` is keyed
+   * `PRIMARY KEY (account_id)`, above the tenant boundary, deliberately, so one
+   * person's single secret covers every workspace they belong to. A *session*
+   * is not: it is minted by one workspace, and `routes/saml.ts` mints one from
+   * an assertion its identity provider signed. tm 157 measured what the two
+   * together allow. The chain was five deliberate links — a just-in-time
+   * membership gets `agent`, `DEFAULT_AGENT_SCOPES` carries `accounts--my:rw`
+   * (tm 152.10), the SAML path is deliberately outside `enforceSecondFactor`,
+   * these two endpoints take a plain session, and the factor they write is
+   * global — and at the end of it a workspace could install *its own*
+   * authenticator as somebody's account-wide second factor and take the ten
+   * recovery codes out of the response body. The victim was then refused at
+   * every password sign-in everywhere, with no way back: removing a factor
+   * needs a session, and a session needs the code the attacker holds.
+   *
+   * So the rule is the one `DELETE /auth/2fa` already states in the other
+   * direction — a stolen session must not be able to remove the control
+   * protecting the account it came from, and installing one is the same act
+   * pointed the other way. Three branches, in the order of what they prove:
+   *
+   *   **An `enrollment` ticket.** Minted at `/auth/authorize` one call after
+   *   `authenticateAccount` verified the password (S11-2FA-k), single-use, at
+   *   most one outstanding, and it opens these two endpoints and nothing else.
+   *   It is a password proof, delegated — asking for the password again would
+   *   be asking the sign-in screen to carry it forward for no gain.
+   *
+   *   **A password on the account.** Required, and nothing else will do. This
+   *   is the branch that breaks the chain: an assertion proves what an identity
+   *   provider is willing to say, and the workspace behind it does not hold the
+   *   account's own secret.
+   *
+   *   **No password, and exactly one workspace.** Allowed. That workspace's
+   *   identity provider is the account's *only* authority — it can already act
+   *   as this person everywhere they exist — and there is no second workspace
+   *   to be shut out of. This is the branch that keeps §D116's loop closed:
+   *   refusing here would leave a purely federated account unable to enroll,
+   *   which is the "policy shut them out; enrollment shut them out" dead end
+   *   `role-scopes.ts` was widened to remove. The moment a second membership
+   *   exists it stops being true, and the refusal names the way out — a
+   *   password reset proves the inbox and gives the account a secret of its own.
+   *
+   * Memberships come from `auth_list_memberships`, so suspended ones do not
+   * count, and a canceled licence does not either: a workspace nobody can enter
+   * is not one somebody can be locked out of. Same reading
+   * `auth_two_factor_enforcing_licenses` gives a suspension.
+   *
+   * Called *before* anything is written, so an unproven caller cannot even
+   * replace a pending secret. That costs the 409 an already-enrolled account
+   * would otherwise get first — a small and deliberate loss, since confirming
+   * the state of a factor to a caller who has not proved the account is itself
+   * something to withhold.
+   */
+  async function proveAccountForEnrollment(
+    principal: Principal,
+    accountId: string,
+    passwordHash: string | null,
+    body: { password?: string },
+  ): Promise<EnrollmentProof> {
+    if (principal.kind === 'enrollment') return 'enrollment_ticket';
+
+    if (passwordHash !== null) {
+      if (body.password === undefined) {
+        throw ApiError.validation(
+          'password: your password is required to set up two-factor authentication.',
+          { fields: [{ field: 'password', message: 'Required.' }] },
+        );
+      }
+      if (!(await verifyPassword(body.password, passwordHash))) {
+        throw ApiError.authentication('That password is not correct.');
+      }
+      return 'password';
+    }
+
+    const memberships = (await oauth.listMemberships(accountId)).filter(
+      (m) => m.license_status !== 'canceled',
+    );
+    if (memberships.length > 1) {
+      throw new ApiError(
+        'not_allowed',
+        'This account signs in through an identity provider and belongs to more than one workspace. Set a password on it first — otherwise one workspace would be choosing the second factor that guards all of them.',
+        // Named so the screen can send somebody to the password-reset flow
+        // rather than render a password box the account cannot fill.
+        { details: { password_required: true } },
+      );
+    }
+    return 'sole_membership';
+  }
+
+  /**
+   * Tell the account holder that a second factor now stands in front of their
+   * account (M-SEC-d2).
+   *
+   * The audit entry above records this too, but an audit log is a workspace's
+   * trail, read by the workspace — it is exactly the wrong place for the one
+   * person who needs to know when the workspace is the party they would want to
+   * hear about. The `sole_membership` branch is why: there, an identity
+   * provider installs an account-global credential and the account holder
+   * produced nothing. This is what makes that branch loud instead of silent.
+   * Sent on every activation, not just that one, because "we only mail you when
+   * we are suspicious" is a signal an attacker reads too.
+   *
+   * The workspace is named — an account belongs to several and "from where" is
+   * the only part that is actionable. The secret and the recovery codes are
+   * not: this goes to a mailbox, and surviving the loss of a mailbox is what a
+   * second factor is for.
+   *
+   * Best-effort, like the audit write beside it. The factor is on; failing the
+   * request now would tell the caller it is not.
+   */
+  async function notifyTwoFactorEnabled(request: FastifyRequest, email: string): Promise<void> {
+    try {
+      const tenant = request.tenant();
+      const organization = await withTenant(app.db, tenant, (tx) =>
+        tx.organization.findUnique({
+          where: { id: tenant.organizationId },
+          select: { name: true },
+        }),
+      );
+      await mailer.send({
+        to: email,
+        kind: 'notification',
+        subject: 'Two-factor authentication is now on for your Nexa account',
+        body:
+          `Two-factor authentication was just turned on for ${email}, from the ` +
+          `workspace "${organization?.name ?? 'Nexa'}". It applies to every ` +
+          `workspace this account can sign in to.\n\n` +
+          `If this was you, keep your recovery codes somewhere safe — they are ` +
+          `the way back in if you lose your authenticator app.\n\n` +
+          `If it was not you, somebody else can now decide whether you get in. ` +
+          `Turn it off from Account Settings while you are still signed in, and ` +
+          `tell an owner of that workspace.`,
+      });
+    } catch (err) {
+      request.log.warn({ err }, 'could not send the two-factor enrollment notice');
+    }
+  }
+
+  /**
    * Mint a secret. Nothing is enabled until `/auth/2fa/activate` proves the
    * authenticator app and this server agree about the time.
    *
@@ -1042,14 +1217,26 @@ export default async function authRoutes(
     async (request, reply) => {
       const principal = request.requirePrincipal();
       const accountId = requireSelfAccount(principal);
+      const body = parse(enrollTwoFactorBody, request.body ?? {});
 
       // The label the authenticator app shows under "Nexa". The address rather
       // than the display name: it is what distinguishes two entries for somebody
-      // who holds a personal and a work account.
+      // who holds a personal and a work account. Read with the password hash the
+      // proof below needs, because both are one row.
       const account = await request.withTenant((tx) =>
-        tx.account.findUnique({ where: { id: accountId }, select: { email: true } }),
+        tx.account.findUnique({
+          where: { id: accountId },
+          select: { email: true, passwordHash: true },
+        }),
       );
       if (!account) throw ApiError.notFound('Resource not found.');
+
+      const proof = await proveAccountForEnrollment(
+        principal,
+        accountId,
+        account.passwordHash,
+        body,
+      );
 
       const enrollment = await twoFactor.beginEnrollment(accountId, account.email);
 
@@ -1063,7 +1250,7 @@ export default async function authRoutes(
         {
           action: 'security.two_factor_enrollment_started',
           target: `account:${accountId}`,
-          ...viaEnrollmentTicket(principal),
+          ...enrollmentProvenance(proof),
         },
       );
 
@@ -1082,6 +1269,12 @@ export default async function authRoutes(
    *
    * This is the only response in the system that carries recovery codes in the
    * clear. Regeneration produces a new sheet; nothing ever re-reads an old one.
+   *
+   * Proved the same way as `/auth/2fa/enroll` (M-SEC-d2). Gating the first
+   * endpoint is what actually breaks the chain — without a secret there is
+   * nothing to confirm — but the rule these two obey is "a write to the
+   * account's global factor proves the account", and a rule written once for
+   * two endpoints is one that cannot drift between them.
    */
   app.post(
     '/auth/2fa/activate',
@@ -1090,6 +1283,22 @@ export default async function authRoutes(
       const principal = request.requirePrincipal();
       const accountId = requireSelfAccount(principal);
       const body = parse(activateTwoFactorBody, request.body);
+
+      // The address the factor is about to guard, and the hash the proof needs.
+      const account = await request.withTenant((tx) =>
+        tx.account.findUnique({
+          where: { id: accountId },
+          select: { email: true, passwordHash: true },
+        }),
+      );
+      if (!account) throw ApiError.notFound('Resource not found.');
+
+      const proof = await proveAccountForEnrollment(
+        principal,
+        accountId,
+        account.passwordHash,
+        body,
+      );
 
       const recoveryCodes = await twoFactor.activate(accountId, body.code, Date.now());
 
@@ -1114,9 +1323,11 @@ export default async function authRoutes(
         {
           action: 'security.two_factor_enabled',
           target: `account:${accountId}`,
-          ...viaEnrollmentTicket(principal),
+          ...enrollmentProvenance(proof),
         },
       );
+
+      await notifyTwoFactorEnabled(request, account.email);
 
       reply.header('Cache-Control', 'no-store');
       return reply.send({

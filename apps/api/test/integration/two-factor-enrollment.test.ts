@@ -78,19 +78,32 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       payload: payload as object,
     });
 
-  /** Enroll and return the secret the authenticator app would have imported. */
-  async function enroll(bearer = token): Promise<string> {
-    const response = await server.post('/auth/2fa/enroll', undefined, auth(bearer));
+  /**
+   * Enroll and return the secret the authenticator app would have imported.
+   *
+   * The password rides along because installing a factor proves the *account*,
+   * not the session (M-SEC-d2 / tm 172) - every account in this file holds one
+   * except the SSO-provisioned ones below, which pass `null`.
+   */
+  async function enroll(bearer = token, password: string | null = TEST_PASSWORD): Promise<string> {
+    const response = await server.post(
+      '/auth/2fa/enroll',
+      password === null ? {} : { password },
+      auth(bearer),
+    );
     expect(response.statusCode).toBe(200);
     return response.json().secret as string;
   }
 
   /** Enroll, confirm with a live code, and hand back the recovery sheet. */
-  async function activate(bearer = token): Promise<{ secret: string; recoveryCodes: string[] }> {
-    const secret = await enroll(bearer);
+  async function activate(
+    bearer = token,
+    password: string | null = TEST_PASSWORD,
+  ): Promise<{ secret: string; recoveryCodes: string[] }> {
+    const secret = await enroll(bearer, password);
     const response = await server.post(
       '/auth/2fa/activate',
-      { code: generateTotp(secret, Date.now()) },
+      { code: generateTotp(secret, Date.now()), ...(password === null ? {} : { password }) },
       auth(bearer),
     );
     expect(response.statusCode).toBe(200);
@@ -123,7 +136,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
 
   describe('POST /auth/2fa/enroll', () => {
     it('hands over a secret and an otpauth URI without enabling anything', async () => {
-      const response = await server.post('/auth/2fa/enroll', undefined, auth());
+      const response = await server.post('/auth/2fa/enroll', { password: TEST_PASSWORD }, auth());
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
@@ -161,14 +174,14 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       // who lost the phone mid-enrollment unable to finish or to start over.
       const withOldSecret = await server.post(
         '/auth/2fa/activate',
-        { code: generateTotp(abandoned, Date.now()) },
+        { code: generateTotp(abandoned, Date.now()), password: TEST_PASSWORD },
         auth(),
       );
       expect(withOldSecret.statusCode).toBe(401);
 
       const withNewSecret = await server.post(
         '/auth/2fa/activate',
-        { code: generateTotp(fresh, Date.now()) },
+        { code: generateTotp(fresh, Date.now()), password: TEST_PASSWORD },
         auth(),
       );
       expect(withNewSecret.statusCode).toBe(200);
@@ -177,7 +190,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
     it('refuses to replace a live factor, which is what a stolen session would do', async () => {
       const { secret } = await activate();
 
-      const response = await server.post('/auth/2fa/enroll', undefined, auth());
+      const response = await server.post('/auth/2fa/enroll', { password: TEST_PASSWORD }, auth());
       expect(response.statusCode).toBe(409);
       expect(response.json().error.type).toBe('two_factor_already_enabled');
 
@@ -214,7 +227,11 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
     it('refuses a wrong code and leaves the enrollment pending', async () => {
       await enroll();
 
-      const response = await server.post('/auth/2fa/activate', { code: '000000' }, auth());
+      const response = await server.post(
+        '/auth/2fa/activate',
+        { code: '000000', password: TEST_PASSWORD },
+        auth(),
+      );
       expect(response.statusCode).toBe(401);
       expect(response.json().error.type).toBe('authentication');
 
@@ -225,7 +242,11 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
     });
 
     it('refuses when nothing is enrolled to confirm', async () => {
-      const response = await server.post('/auth/2fa/activate', { code: '000000' }, auth());
+      const response = await server.post(
+        '/auth/2fa/activate',
+        { code: '000000', password: TEST_PASSWORD },
+        auth(),
+      );
       expect(response.statusCode).toBe(401);
       expect(response.json().error.type).toBe('two_factor_required');
     });
@@ -244,7 +265,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       const at = Date.now();
       const response = await server.post(
         '/auth/2fa/activate',
-        { code: generateTotp(secret, at) },
+        { code: generateTotp(secret, at), password: TEST_PASSWORD },
         auth(),
       );
       expect(response.statusCode).toBe(200);
@@ -304,7 +325,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
 
       const response = await server.post(
         '/auth/2fa/activate',
-        { code: generateTotp(secret, Date.now()) },
+        { code: generateTotp(secret, Date.now()), password: TEST_PASSWORD },
         auth(),
       );
       expect(response.statusCode).toBe(409);
@@ -436,7 +457,9 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       // would leave such an account able to switch two-factor on and never able
       // to switch it off.
       const { accountId, bearer } = await ssoOnlyAccount();
-      const secret = await enroll(bearer);
+      // `null`: there is no password to prove the account with, and none is
+      // owed - the account belongs to one workspace (M-SEC-d2).
+      const secret = await enroll(bearer, null);
       const at = Date.now();
       expect(
         (await server.post('/auth/2fa/activate', { code: generateTotp(secret, at) }, auth(bearer)))
@@ -469,7 +492,9 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       // The authenticator is gone — which is the situation the sheet exists for
       // — and this account has no password to fall back on.
       const { accountId, bearer } = await ssoOnlyAccount();
-      const secret = await enroll(bearer);
+      // `null`: there is no password to prove the account with, and none is
+      // owed - the account belongs to one workspace (M-SEC-d2).
+      const secret = await enroll(bearer, null);
       const activated = await server.post(
         '/auth/2fa/activate',
         { code: generateTotp(secret, Date.now()) },
@@ -638,7 +663,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       )?.secret;
       const activated = await server.post(
         '/auth/2fa/activate',
-        { code: generateTotp(secret ?? '', Date.now()) },
+        { code: generateTotp(secret ?? '', Date.now()), password: TEST_PASSWORD },
         auth(),
       );
       expect(activated.statusCode).toBe(200);
@@ -714,13 +739,17 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
     it('enrolls and activates from its own session', async () => {
       const bearer = await signIn(fx.a.agentEmail);
 
-      const enrolled = await server.post('/auth/2fa/enroll', undefined, auth(bearer));
+      const enrolled = await server.post(
+        '/auth/2fa/enroll',
+        { password: TEST_PASSWORD },
+        auth(bearer),
+      );
       expect(enrolled.statusCode).toBe(200);
       const secret = enrolled.json().secret as string;
 
       const activated = await server.post(
         '/auth/2fa/activate',
-        { code: generateTotp(secret, Date.now()) },
+        { code: generateTotp(secret, Date.now()), password: TEST_PASSWORD },
         auth(bearer),
       );
       expect(activated.statusCode).toBe(200);
@@ -735,7 +764,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
         recovery_codes_remaining: 0,
       });
 
-      await server.post('/auth/2fa/enroll', undefined, auth(bearer));
+      await server.post('/auth/2fa/enroll', { password: TEST_PASSWORD }, auth(bearer));
       expect((await server.get('/auth/me', auth(bearer))).json().two_factor).toEqual({
         enabled: false,
         pending: true,
@@ -748,11 +777,12 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       // since S11-2FA-h counts the members who have not enrolled before it lets
       // an admin turn it on.
       const bearer = await signIn(fx.a.agentEmail);
-      const secret = (await server.post('/auth/2fa/enroll', undefined, auth(bearer))).json()
-        .secret as string;
+      const secret = (
+        await server.post('/auth/2fa/enroll', { password: TEST_PASSWORD }, auth(bearer))
+      ).json().secret as string;
       const activated = await server.post(
         '/auth/2fa/activate',
-        { code: generateTotp(secret, Date.now()) },
+        { code: generateTotp(secret, Date.now()), password: TEST_PASSWORD },
         auth(bearer),
       );
       expect(activated.statusCode).toBe(200);
@@ -981,7 +1011,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
         (
           await server.post(
             '/auth/2fa/activate',
-            { code: generateTotp(secret, Date.now()) },
+            { code: generateTotp(secret, Date.now()), password: TEST_PASSWORD },
             auth(agentSession),
           )
         ).statusCode,

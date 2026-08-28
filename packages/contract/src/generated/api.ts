@@ -592,6 +592,23 @@ export interface paths {
      *     `enrollment_required` refusal from `POST /auth/authorize` hands back
      *     (S11-2FA-k). The ticket reaches this endpoint and `/auth/2fa/activate`
      *     only.
+     *
+     *     **A session is not enough on its own** (M-SEC-d2). A second factor is
+     *     account-global — one secret covers every workspace the account belongs to
+     *     — while a session is minted by one workspace, including from a SAML
+     *     assertion its identity provider signed. So this endpoint proves the
+     *     *account*, in the same way and for the same reason `DELETE /auth/2fa`
+     *     does in the other direction:
+     *
+     *     * an `enrollment_ticket` is accepted on its own — it was minted one call
+     *       after `POST /auth/authorize` verified a password;
+     *     * otherwise, an account that has a password must send it, and nothing
+     *       else will do;
+     *     * an account with no password (SSO-provisioned) that belongs to exactly
+     *       one workspace needs neither — that workspace's identity provider is its
+     *       only authority, and there is no second workspace to be shut out of. With
+     *       a second membership it is refused 403 `not_allowed`
+     *       (`details.password_required`), and the way out is to set a password.
      */
     post: operations['enrollTwoFactor'];
     delete?: never;
@@ -625,10 +642,19 @@ export interface paths {
      *     account holds — that flag is a derived copy of this fact, not a second
      *     source of truth for it.
      *
-     *     Accepts the same two credentials as `POST /auth/2fa/enroll`. An
-     *     `enrollment_ticket` is **spent** by a successful activation: it exists to
-     *     finish one enrollment, and the session that follows comes from repeating
+     *     Accepts the same two credentials as `POST /auth/2fa/enroll`, and proves the
+     *     account the same way (M-SEC-d2) — `password` is required here too whenever
+     *     the account holds one. Gating the enrollment endpoint is what makes the
+     *     chain unwalkable; the rule is repeated here so it cannot drift between two
+     *     endpoints that write the same account-global state.
+     *
+     *     An `enrollment_ticket` is **spent** by a successful activation: it exists
+     *     to finish one enrollment, and the session that follows comes from repeating
      *     `POST /auth/authorize` with a code the new factor produces.
+     *
+     *     Activation also e-mails the account holder at the address the factor now
+     *     guards. It names the workspace it was done from and carries neither the
+     *     secret nor a recovery code.
      */
     post: operations['activateTwoFactor'];
     delete?: never;
@@ -9766,6 +9792,14 @@ export interface components {
        */
       code?: string;
     };
+    twoFactorEnrollmentProof: {
+      /**
+       * @description The caller's own account password. Required whenever the account has
+       *     one; ignored for an `enrollment_ticket`, which already carries a
+       *     password proof.
+       */
+      password?: string;
+    };
     /**
      * @description A registered handset, as everything except the sender is allowed to see it.
      *     There is no `token` field, and there is no operation that adds one.
@@ -10872,7 +10906,11 @@ export interface operations {
       path?: never;
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        'application/json': components['schemas']['twoFactorEnrollmentProof'];
+      };
+    };
     responses: {
       /** @description Enrollment started */
       200: {
@@ -10917,7 +10955,7 @@ export interface operations {
     };
     requestBody: {
       content: {
-        'application/json': {
+        'application/json': components['schemas']['twoFactorEnrollmentProof'] & {
           /** @description The six digits the authenticator app is showing. */
           code: string;
         };

@@ -740,6 +740,19 @@ export const settings: Messages = {
   'settings.twoFactor.disableBlockedByWorkspaces':
     'İki adımlı doğrulama {names} tarafından zorunlu tutuluyor. Orada üye olduğunuz sürece kapatılamaz.',
 
+  'settings.twoFactor.enrollPasswordUnavailable':
+    'Bu hesap kimlik sağlayıcı üzerinden giriş yapıyor ve birden fazla çalışma alanına ait. Önce hesaba bir parola belirleyin — aksi hâlde tek bir çalışma alanı, hepsini koruyan ikinci faktörü seçmiş olur.',
+
+  'settings.twoFactor.enrollPassword.title':
+    'İki adımlı doğrulamayı açmak için kimliğinizi doğrulayın',
+  'settings.twoFactor.enrollPassword.description':
+    'İkinci faktör, bu hesabın girebildiği her çalışma alanını kapsar; bu yüzden kurmak da kapatmak gibi parolanızı ister.',
+  'settings.twoFactor.enrollPassword.label': 'Parola',
+  'settings.twoFactor.enrollPassword.error': 'Bu alan zorunludur.',
+  'settings.twoFactor.enrollPassword.confirmButton': 'Devam et',
+  'settings.twoFactor.enrollPassword.confirming': 'Kontrol ediliyor…',
+  'settings.twoFactor.enrollPassword.discardConfirm': 'Bundan vazgeçilsin mi?',
+
   'settings.twoFactor.enroll.title': 'İki adımlı doğrulamayı kur',
   'settings.twoFactor.enroll.description':
     'Bunu doğrulayıcı uygulamanıza girin, sonra uygulamanın gösterdiği kodu girin.',

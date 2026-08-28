@@ -27,6 +27,17 @@
  * advance, so the reauth form defaults to a password field and switches to a code
  * field the moment the server answers `two_factor_required`, which is exactly the
  * signal `reauthenticate()` sends for that case.
+ *
+ * TURNING IT *ON* ASKS FOR THE PASSWORD TOO (M-SEC-d2). A second factor is
+ * account-global while a session belongs to one workspace — including a session
+ * a workspace's identity provider minted — so installing one proves the account,
+ * exactly as removing one does. Which credential is owed is again invisible from
+ * here, and again discovered rather than guessed: Enable posts with no body, and
+ * a `validation` refusal naming `password` is what opens the prompt. An account
+ * with no password and one workspace never sees it; one with no password and
+ * several is refused outright (`not_allowed`), and the notice says the way out is
+ * to set a password. The password then lives in this component's state until the
+ * setup dialog closes, because `activate` proves the account again.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -72,6 +83,22 @@ function workspaceNames(details: Record<string, unknown> | undefined): string[] 
   return Array.isArray(raw) ? raw.filter((v): v is string => typeof v === 'string') : [];
 }
 
+/**
+ * Is this refusal "you owe me your password", or an ordinary validation error?
+ *
+ * The field list is the signal rather than an error type of its own: `password`
+ * is a field of the request, and a missing one is answered here the same way
+ * `DELETE /auth/2fa` already answers it.
+ */
+function wantsPassword(error: ApiClientError): boolean {
+  if (error.type !== 'validation') return false;
+  const fields = error.details?.['fields'];
+  if (!Array.isArray(fields)) return false;
+  return fields.some(
+    (f) => typeof f === 'object' && f !== null && (f as { field?: unknown }).field === 'password',
+  );
+}
+
 export function TwoFactor(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -94,11 +121,46 @@ export function TwoFactor(): ReactElement {
   const [enrollment, setEnrollment] = useState<EnrollmentStart | null>(null);
   const [recoverySheet, setRecoverySheet] = useState<string[] | null>(null);
   const [reauthAction, setReauthAction] = useState<ReauthAction | null>(null);
+  /** Asked for only after the server says so, and carried into `activate`. */
+  const [enrollPassword, setEnrollPassword] = useState<string | null>(null);
+  const [passwordPrompt, setPasswordPrompt] = useState(false);
+  const [passwordUnavailable, setPasswordUnavailable] = useState(false);
 
   const enroll = useMutation({
-    mutationFn: () => api.post<EnrollmentStart>('/auth/2fa/enroll'),
-    onSuccess: (data) => setEnrollment(data),
+    mutationFn: (password?: string) =>
+      api.post<EnrollmentStart>('/auth/2fa/enroll', password === undefined ? {} : { password }),
   });
+
+  function closeEnrollment(): void {
+    setEnrollment(null);
+    setEnrollPassword(null);
+  }
+
+  /**
+   * Start setup, and find out on the way which credential the account owes.
+   *
+   * A refusal naming the `password` field means the account has one; a
+   * `not_allowed` means it has none and belongs to more than one workspace, so
+   * there is no credential to ask for and the notice has to say so instead.
+   */
+  async function beginEnrollment(password?: string): Promise<void> {
+    setPasswordUnavailable(false);
+    try {
+      setEnrollment(await enroll.mutateAsync(password));
+      setEnrollPassword(password ?? null);
+      setPasswordPrompt(false);
+    } catch (error) {
+      if (error instanceof ApiClientError && error.type === 'not_allowed') {
+        setPasswordPrompt(false);
+        setPasswordUnavailable(true);
+        return;
+      }
+      if (error instanceof ApiClientError && wantsPassword(error)) {
+        setPasswordPrompt(true);
+        return;
+      }
+    }
+  }
 
   function applyStatus(next: TwoFactorStatus): void {
     queryClient.setQueryData<TwoFactorStatus>(QUERY_KEY, next);
@@ -120,26 +182,40 @@ export function TwoFactor(): ReactElement {
             t={t}
             status={status.data}
             canEdit={canEdit}
-            onEnable={() => enroll.mutate()}
+            onEnable={() => void beginEnrollment()}
             enabling={enroll.isPending}
-            enableErrorMessage={enroll.isError ? t(errorMessageKey(enroll.error)) : null}
+            enableErrorMessage={
+              passwordUnavailable
+                ? t('settings.twoFactor.enrollPasswordUnavailable')
+                : enroll.isError && !passwordPrompt
+                  ? t(errorMessageKey(enroll.error))
+                  : null
+            }
             onDisable={() => setReauthAction('disable')}
             onRegenerate={() => setReauthAction('regenerate')}
           />
         )}
       </Card>
 
+      {passwordPrompt && (
+        <EnrollPasswordModal
+          onClose={() => setPasswordPrompt(false)}
+          onConfirm={(password) => beginEnrollment(password)}
+        />
+      )}
+
       {enrollment && (
         <EnrollmentModal
           enrollment={enrollment}
-          onClose={() => setEnrollment(null)}
+          password={enrollPassword}
+          onClose={closeEnrollment}
           onActivated={(result) => {
             applyStatus({
               enabled: true,
               pending: false,
               recovery_codes_remaining: result.recovery_codes_remaining,
             });
-            setEnrollment(null);
+            closeEnrollment();
             setRecoverySheet(result.recovery_codes);
           }}
         />
@@ -254,12 +330,106 @@ function TwoFactorStatusPanel({
   );
 }
 
+/**
+ * The password step, shown only when the server has asked for it.
+ *
+ * Deliberately not folded into the setup dialog below: `enroll` has to answer
+ * before that dialog has anything to show, so the credential is owed one call
+ * earlier than the code is.
+ */
+function EnrollPasswordModal({
+  onClose,
+  onConfirm,
+}: {
+  onClose: () => void;
+  onConfirm: (password: string) => Promise<void>;
+}): ReactElement {
+  const t = useTranslate();
+
+  const form = useForm<{ password: string }>({
+    initial: { password: '' },
+    validators: { password: required(t('settings.twoFactor.enrollPassword.error')) },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        await onConfirm(values.password);
+      } catch (error) {
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+
+  const close = useCloseGuard({
+    isDirty: form.values.password.length > 0,
+    message: t('settings.twoFactor.enrollPassword.discardConfirm'),
+    onClose,
+  });
+
+  return (
+    <Modal
+      onClose={close}
+      title={t('settings.twoFactor.enrollPassword.title')}
+      description={t('settings.twoFactor.enrollPassword.description')}
+      className="w-[24rem]"
+    >
+      <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
+        <label htmlFor="two-factor-enroll-password" className="flex flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('settings.twoFactor.enrollPassword.label')}
+          </span>
+          <input
+            id="two-factor-enroll-password"
+            type="password"
+            autoComplete="current-password"
+            value={form.values.password}
+            onChange={(event) => form.setValue('password', event.target.value)}
+            onBlur={() => form.blur('password')}
+            aria-invalid={form.errorFor('password') ? true : undefined}
+            aria-describedby={
+              form.errorFor('password') ? 'two-factor-enroll-password-error' : undefined
+            }
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          />
+        </label>
+        <FieldError id="two-factor-enroll-password-error" message={form.errorFor('password')} />
+
+        {form.submitError && (
+          <p role="alert" className="text-2xs text-danger">
+            {form.submitError}
+          </p>
+        )}
+
+        <div className="mt-1 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={close}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('settings.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          >
+            {form.isSubmitting
+              ? t('settings.twoFactor.enrollPassword.confirming')
+              : t('settings.twoFactor.enrollPassword.confirmButton')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
 function EnrollmentModal({
   enrollment,
+  password,
   onClose,
   onActivated,
 }: {
   enrollment: EnrollmentStart;
+  /** What `enroll` was proved with, if anything — `activate` proves it again. */
+  password: string | null;
   onClose: () => void;
   onActivated: (result: ActivationResult) => void;
 }): ReactElement {
@@ -268,7 +438,11 @@ function EnrollmentModal({
   const [copied, setCopied] = useState<'secret' | 'uri' | null>(null);
 
   const activate = useMutation({
-    mutationFn: (code: string) => api.post<ActivationResult>('/auth/2fa/activate', { code }),
+    mutationFn: (code: string) =>
+      api.post<ActivationResult>('/auth/2fa/activate', {
+        code,
+        ...(password === null ? {} : { password }),
+      }),
   });
 
   const form = useForm<{ code: string }>({

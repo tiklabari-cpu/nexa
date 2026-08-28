@@ -272,7 +272,7 @@ export async function buildServer({
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { env, version: VERSION });
-      await api.register(authRoutes, { env });
+      await api.register(authRoutes, { env, mailer });
       // Its own plugin scope, not part of `authRoutes`: the SAML response
       // arrives as a form post, and the content-type parser that reads it is
       // encapsulated here rather than loosened across the whole auth surface.

@@ -372,6 +372,43 @@ describe('restore', () => {
     expect(session.getState().status).toBe('signed-out');
     expect(register).not.toHaveBeenCalled();
   });
+
+  it('shares its rotation with a concurrent refresh() instead of presenting the same refresh token twice (M-SEC-c2)', async () => {
+    let issued = 0;
+    const { session, sessionStore, calls } = build({
+      'POST /auth/token': () => {
+        issued += 1;
+        return json({
+          ...GRANT,
+          access_token: `access-${issued}`,
+          refresh_token: `refresh-${issued}`,
+        });
+      },
+      'GET /auth/me': () => json(ME),
+    });
+    await sessionStore.write({
+      refreshToken: 'refresh-0',
+      clientId: 'nexa-agent-app-1',
+      licenseId: '42',
+      accountId: 'acct-1',
+    });
+    // A first, uncontested restore populates the in-memory session — the
+    // state a resumed app is already in by the time something else (a 401
+    // interceptor) calls `refresh()` while a second `restore()` is also mid-flight.
+    await session.restore();
+    const before = calls.filter((c) => c.url.endsWith('/auth/token')).length;
+
+    // `restore()` reads the store before it ever looks at the single-flight
+    // guard, so calling it first and `refresh()` right after (both still
+    // synchronous at this point) reproduces the race: `refresh()` claims the
+    // guard while `restore()` is still awaiting its store read.
+    await Promise.all([session.restore(), session.refresh()]);
+
+    // Presenting the same rotated refresh token twice is exactly what the
+    // server reads as theft (the reason `refresh()` has a guard at all) —
+    // `restore()` bypassing it used to cost a second, redundant rotation here.
+    expect(calls.filter((c) => c.url.endsWith('/auth/token')).length).toBe(before + 1);
+  });
 });
 
 describe('refresh', () => {

@@ -2657,6 +2657,10 @@ function readIdpCertificate(pem: string, now: Date): CertificateFacts {
       throw ApiError.validation(
         `That certificate's key is below ${MIN_RSA_MODULUS_BITS} bits and is not strong enough to be trusted with sign-in.`,
       );
+    case 'weak_curve':
+      throw ApiError.validation(
+        "That certificate's elliptic curve is not strong enough to be trusted with sign-in. Use a certificate signed with P-256 or a stronger curve.",
+      );
     default:
       throw ApiError.validation(
         'That is not a certificate we can read. Paste the PEM block your identity provider publishes, BEGIN and END lines included.',

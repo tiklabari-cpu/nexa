@@ -4,10 +4,12 @@ import {
   EXPIRED_CERTIFICATE_PEM,
   NOT_YET_VALID_CERTIFICATE_PEM,
   ROTATED_CERTIFICATE_PEM,
+  STRONG_EC_CERTIFICATE_PEM,
   UNPARSEABLE_CERTIFICATE_PEM,
   VALID_CERTIFICATE_FINGERPRINT,
   VALID_CERTIFICATE_PEM,
   WEAK_CERTIFICATE_PEM,
+  WEAK_EC_CERTIFICATE_PEM,
 } from '../../test/helpers/certificates.js';
 import {
   activePreviousCertificate,
@@ -88,6 +90,16 @@ describe('inspectIdpCertificate', () => {
     // 1024-bit RSA, in date, correctly formed. Everything about it looks fine
     // except the one property that decides whether a signature can be forged.
     expect(certificateVerdict(WEAK_CERTIFICATE_PEM)).toBe('weak_key');
+  });
+
+  it('rejects an EC key on a curve below P-256', () => {
+    // P-192, in date, correctly formed. RSA has a bit-count check; EC keys need
+    // the same guard by curve, since "how many bits" isn't how EC strength works.
+    expect(certificateVerdict(WEAK_EC_CERTIFICATE_PEM)).toBe('weak_curve');
+  });
+
+  it('accepts an EC key on P-256', () => {
+    expect(certificateVerdict(STRONG_EC_CERTIFICATE_PEM)).toBe('accepted');
   });
 
   // --- What it accepts, and what it reports ---------------------------------

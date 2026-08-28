@@ -7531,7 +7531,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T11:43:52.866Z",
+        "updatedAt": "2026-08-28T12:44:02.878Z",
         "subtasks": [
           {
             "id": 1,
@@ -7561,10 +7561,10 @@
             "description": "Denetim kaydı artık iç içe geçmiş sırları da maskeliyor.",
             "details": "NE YAPILACAK (§D116 LOW/3): apps/api/src/services/audit/audit-log.ts içindeki sanitizeAuditMetadata\nYALNIZ üst düzey anahtarlara bakıyor; {details: {password: ...}} biçimindeki iç içe bir yapı\ndenetim kaydına AYNEN yazılıyor. Fonksiyon özyinelemeli hale getirilir (derinlik sınırı ve döngü koruması ile).\n\nDOSYALAR: apps/api/src/services/audit/audit-log.ts (sanitizeAuditMetadata) + testleri.\nREFERANS: apps/api/src/lib/log-redact.ts — log tarafında zaten var olan maskeleme listesi;\nanahtar sözlüğünü ORADAN al ya da ortak bir yere çıkar, iki liste tutup birbirinden kaydırma.\n\nTUZAKLAR:\n1. Derinlik sınırı ve dairesel referans koruması olmalı (denetim yazımı asla asılı kalmamalı).\n2. Diziler de taranmalı.\n3. Denetim zinciri satır HMAC i metadata üzerinden hesaplanıyorsa maskeleme SIRASI önemlidir —\n   maskelenmiş hâli imzalanmalı ki doğrulama tutarlı olsun. Mevcut zincir testleri yeşil kalmalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-c** (türetilmiş — §D116 LOW/3). Gereksinim satırı: `grep -n \"| M-SEC-c\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-c\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- ÖNCE KIRMIZI: iç içe hassas anahtar testi bugün başarısız, sonra maskeleniyor.\n- api integration audit-log süiti yeşil (zincir bütünlüğü dahil).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "155",
-            "updatedAt": "2026-08-28T11:43:52.866Z"
+            "updatedAt": "2026-08-28T12:20:49.404Z"
           },
           {
             "id": 4,
@@ -7572,10 +7572,10 @@
             "description": "IdP sertifikası artık zayıf eğrilerle kabul edilmiyor.",
             "details": "NE YAPILACAK (§D116 LOW/4): apps/api/src/lib/sso-connection.ts içindeki inspectIdpCertificate\nmodül tabanını YALNIZ RSA / RSA-PSS / DSA için zorluyor; EC anahtarlar için eğri kontrolü yok,\nyani küçük eğrili (zayıf) bir EC sertifikası kabul ediliyor.\nÇözüm: EC için izin verilen eğri listesi (P-256 ve üstü) ve dışındakinin reddi + anlamlı hata mesajı.\n\nDOSYALAR: apps/api/src/lib/sso-connection.ts (inspectIdpCertificate) + sso-connection.test.ts.\nREFERANS: aynı fonksiyondaki RSA modül tabanı kontrolü — aynı biçimde, aynı hata zarfıyla.\n\nTUZAKLAR:\n1. Node un KeyObject asymmetricKeyDetails alanı EC için namedCurve verir; sürüm farklarına dikkat.\n2. Mevcut e2e sso.spec.ti nin mock IdP sertifikası hangi algoritmayı kullanıyor — kırma.\n3. Hata mesajı sertifikanın içeriğini SIZDIRMAMALI; mevcut hata zarfı desenine uy (ADR-06).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-c** (türetilmiş — §D116 LOW/4). Gereksinim satırı: `grep -n \"| M-SEC-c\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-c\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api unit/integration yeşil; zayıf eğri reddi ve güçlü eğri kabulü ayrı testlerle.\n- e2e sso.spec.ts yeşil.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "155",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-28T12:44:02.878Z"
           },
           {
             "id": 5,
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T11:43:52.866Z",
+      "lastModified": "2026-08-28T12:44:02.879Z",
       "taskCount": 170,
       "completedCount": 159,
       "tags": [

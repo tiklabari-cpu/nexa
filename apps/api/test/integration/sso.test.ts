@@ -35,6 +35,7 @@ import {
   VALID_CERTIFICATE_FINGERPRINT,
   VALID_CERTIFICATE_PEM,
   WEAK_CERTIFICATE_PEM,
+  WEAK_EC_CERTIFICATE_PEM,
 } from '../helpers/certificates.js';
 import {
   grantToken,
@@ -388,6 +389,20 @@ describe('sso connections', () => {
       auth(ownerWriteToken),
     );
     expect(res.statusCode).toBe(400);
+  });
+
+  it('refuses an EC key on a curve below P-256', async () => {
+    // P-192: in date, well-formed, forgeable — the EC equivalent of the RSA case
+    // above, proving the curve rule is wired into the endpoint, not just the
+    // pure function (`sso-connection.test.ts` covers the curve list itself).
+    const res = await server.post(
+      '/settings/sso',
+      createBody({ idp_certificate_pem: WEAK_EC_CERTIFICATE_PEM }),
+      auth(ownerWriteToken),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(errorType(res)).toBe('validation');
+    expect(await owner.ssoConnection.count()).toBe(0);
   });
 
   // --- Write surface: the domains a connection may provision from (§D116) ----

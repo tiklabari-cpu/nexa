@@ -31,6 +31,16 @@ import { SSO_ATTRIBUTE_MAPPING_KEYS, type SsoAttributeMapping } from '@nexa/type
 export const MIN_RSA_MODULUS_BITS = 2048;
 
 /**
+ * EC curves a signing certificate may use. Node reports a certificate's curve by
+ * its ASN.1 name (`asymmetricKeyDetails.namedCurve`), not its NIST label, so this
+ * is `prime256v1`/`secp384r1`/`secp521r1` — P-256, P-384 and P-521 — the curves at
+ * or above the security level {@link MIN_RSA_MODULUS_BITS} draws for RSA. Anything
+ * smaller (P-192, P-224, and the non-NIST curves OpenSSL will still parse) is a
+ * forgeable trust anchor for the same reason a 1024-bit RSA key is.
+ */
+export const ALLOWED_EC_CURVES = new Set(['prime256v1', 'secp384r1', 'secp521r1']);
+
+/**
  * How much clock skew a not-yet-valid certificate is forgiven. An IdP that mints
  * a certificate and publishes it in the same minute would otherwise be rejected
  * by a host whose clock runs a little slow — a confusing failure with no security
@@ -73,7 +83,9 @@ export type CertificateRejection =
   /** `notBefore` is in the future beyond the skew grace. */
   | 'not_yet_valid'
   /** RSA/DSA key below {@link MIN_RSA_MODULUS_BITS}. */
-  | 'weak_key';
+  | 'weak_key'
+  /** EC key on a curve outside {@link ALLOWED_EC_CURVES}. */
+  | 'weak_curve';
 
 /**
  * The parts of a certificate worth recording. `fingerprint` is the SHA-256 of
@@ -141,6 +153,12 @@ export function inspectIdpCertificate(pem: string, now: Date): CertificateInspec
     (modulusLength === undefined || modulusLength < MIN_RSA_MODULUS_BITS)
   ) {
     return { ok: false, reason: 'weak_key' };
+  }
+  if (key.asymmetricKeyType === 'ec') {
+    const namedCurve = key.asymmetricKeyDetails?.namedCurve;
+    if (namedCurve === undefined || !ALLOWED_EC_CURVES.has(namedCurve)) {
+      return { ok: false, reason: 'weak_curve' };
+    }
   }
 
   return {

@@ -3300,7 +3300,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-SEC-b | M-SEC denetiminin iki MEDIUM bulgusu (**türetilmiş**: §D116 MEDIUM · Faz-5 tm 151) | ✅ → KM-SEC-b |
 | S11-2FA | İki adımlı doğrulama: TOTP · ikinci adım · politika zorlaması (**türetilmiş**: NFR-S11 + FR-MOD-00.1 · §D124/3 · Faz-5 tm 152) | ✅ → KS11-2FA |
 | P5-PAGE | Liste sayfalaması istemciye bağlanır (**türetilmiş**: NFR-P5 + FR-EK-B.1 · §D124/2 · Faz-5 tm 153) | ✅ → KP5-PAGE |
-| M-SEC-c | M-SEC denetiminin beş LOW bulgusu (**türetilmiş**: §D116 LOW · Faz-5 tm 155) | ⬜ |
+| M-SEC-c | M-SEC denetiminin beş LOW bulgusu (**türetilmiş**: §D116 LOW · Faz-5 tm 155) | ◐ → KM-SEC-c |
 | M-GUARD | Nöbetçi borçları: CI adım sırası · design-system a11y testleri · borç kayıtları (**türetilmiş**: NFR-P3 · NFR-A11Y · §D122/§D124 · Faz-5 tm 156) | ⬜ |
 | M-SEC-d | Faz-5 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-5 tm 157) | ⬜ |
 | M-PROD-CFG | Production konfigürasyonu fiilen çalışır (**türetilmiş**: NFR-S3/S5/S6/S9 · NFR-M · Faz-6 tm 159) | ✅ → KM-PROD-CFG |
@@ -6851,7 +6851,9 @@ _(Kanıt 2026-08-27'de hücreden buraya taşındı — CONVENTIONS §1.2. Damga 
 
 #### KM-SEC-c — M-SEC-c · §D116 LOW bulguları
 
-_(Faz-5 · tm 155 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+_(Faz-5 · tm 155 — açıldı 2026-08-24. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+
+- ◐ **LOW/1 kapandı (tm 155.1)** — hız sınırı artık kimlik doğrulamadan ÖNCE de değerlendiriliyor. `rate-limit` eklentisi `auth`'tan önce kaydediliyor (`server.ts`) ve iki kancaya bölündü: `onRequest` (kimlik bilinmeden karar verilebilen sınır) + `preHandler` (ADR-07'nin hesap-bazlı kovaları, yerinde). Geçersiz bearer seli artık istek başına bir `auth_resolve_token` sorgusu ödetmiyor — başarısız çözümler IP başına bir bütçeye (`rl:authfail:<ip>`, `RATE_LIMIT_AUTH_FAILURES_PER_MIN`=60) yazılıyor, bütçe bitince sonraki kimlik bilgisi **sorgulanmadan** 429 alıyor. Kimliksiz istekler de artık korumalı rotalarda ölçülüyor (eskiden `onRequest`'teki 401 `preHandler`'ı atladığı için hiç ölçülmüyordu). `Bearer nxc1.…` müşteri jetonu bilerek DIŞARIDA: süreç içinde HMAC ile doğrulanıyor, sorgu maliyeti yok. — `apps/api/src/plugins/rate-limit.ts` · `apps/api/src/plugins/auth.ts` · `apps/api/src/lib/credential.ts` (yeni) · `apps/api/src/server.ts` · test `apps/api/test/integration/rate-limit.test.ts` (7) · tm 155.1
 
 #### KM-GUARD — M-GUARD · Nöbetçi borçları (NFR-P3 · NFR-A11Y · §D124)
 

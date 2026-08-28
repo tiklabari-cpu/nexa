@@ -227,6 +227,29 @@ export const envSchema = z.object({
   /** Unauthenticated callers, per IP: sign-in, token exchange, widget tokens. */
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
   /**
+   * Failed token resolutions, per IP (M-SEC-c1 · §D116 LOW/1).
+   *
+   * Not a traffic bucket like the others — this one bounds a *cost*. Every
+   * bearer token that is not a customer token is resolved by an indexed lookup
+   * in `auth_resolve_token`, and until this existed a flood of invalid ones
+   * bought that lookup per request without ever reaching a limit, because
+   * authentication refuses in `onRequest` and the limits ran in `preHandler`.
+   * The budget is spent by failures and read before the next credential from
+   * the same address is looked up at all, so a flood costs at most this many
+   * queries a minute instead of as many as it cares to send.
+   *
+   * 60 rather than the anon bucket's 30, and it is a different question: a
+   * correct client produces a failed *resolution* only when a token has just
+   * died, so this is one refusal a second for an address that is producing
+   * nothing but refusals — while leaving an order of magnitude of headroom for
+   * a shared office address where a deploy expired everyone's session at once.
+   * An address that does trip it recovers on its own within the 60s window, is
+   * told when by `Retry-After`, and can re-authenticate meanwhile: sign-in and
+   * token exchange are public routes that carry no `Authorization` header, so
+   * this budget never touches them.
+   */
+  RATE_LIMIT_AUTH_FAILURES_PER_MIN: z.coerce.number().int().positive().default(60),
+  /**
    * Anonymous public-KB reads, per IP (PUBKB-c). Higher than the general anon
    * limit because this is the SEO surface a search crawler indexes — the shared
    * 30/min would throttle a legitimate crawl. Its own `rl:pubkb:<ip>` bucket.

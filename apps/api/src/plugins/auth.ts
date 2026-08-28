@@ -15,8 +15,10 @@ import fp from 'fastify-plugin';
 import { hasAnyScope, servesRegion, type AgentRole, type Region } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { costsTokenResolution, readCredential } from '../lib/credential.js';
 import { decideIpAccess } from '../lib/ip-allowlist.js';
 import { UUID_RE, withTenant, type TenantClient, type TenantContext } from '../lib/tenant.js';
+import { authFailureBucket } from './rate-limit.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
 import { roleAtLeast, tenantOf, type Principal } from '../services/auth/principal.js';
@@ -74,42 +76,6 @@ declare module 'fastify' {
 
 const DEFAULT_PRINCIPALS: Array<Principal['kind']> = ['agent', 'bot'];
 
-/**
- * Reads `Authorization`.
- *
- * Supports `Bearer <token>` (OAuth access token, bot token or customer token)
- * and `Basic base64(account_id:pat)` — the personal access token scheme from
- * v2-03 §1.4, which server integrations expect.
- */
-function readCredential(
-  request: FastifyRequest,
-): { scheme: 'bearer' | 'basic'; value: string } | null {
-  const header = request.headers.authorization;
-  if (!header) return null;
-
-  const separator = header.indexOf(' ');
-  if (separator < 0) return null;
-
-  const scheme = header.slice(0, separator).toLowerCase();
-  const value = header.slice(separator + 1).trim();
-  if (!value) return null;
-
-  if (scheme === 'bearer') return { scheme: 'bearer', value };
-  if (scheme === 'basic') {
-    let decoded: string;
-    try {
-      decoded = Buffer.from(value, 'base64').toString('utf8');
-    } catch {
-      return null;
-    }
-    const colon = decoded.indexOf(':');
-    if (colon < 0) return null;
-    // The account id half is informational; the PAT is what is verified.
-    return { scheme: 'basic', value: decoded.slice(colon + 1) };
-  }
-  return null;
-}
-
 async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
   const { env } = options;
 
@@ -165,6 +131,29 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   }
 
   /**
+   * Record one failed token resolution against the caller's address.
+   *
+   * The budget itself belongs to `plugins/rate-limit.ts`, which is why the key
+   * and the ceiling come from there rather than being spelled again here: this
+   * is the half that *spends*, the pre-auth hook is the half that *checks*, and
+   * a limit whose two halves disagree about the key is not a limit.
+   *
+   * Fails open, like every other bucket in this product: an unreachable Redis
+   * must not turn into an authentication outage. Logged at error level so the
+   * degradation is visible rather than inferred — while it lasts, an invalid
+   * bearer flood is back to costing a query each, which is the state this
+   * exists to end and therefore worth a line in the log.
+   */
+  async function recordAuthFailure(request: FastifyRequest): Promise<void> {
+    const bucket = authFailureBucket(request.ip, env);
+    try {
+      await app.rateLimiter.consume(bucket.key, bucket.limit, bucket.windowMs);
+    } catch (error) {
+      request.log.error({ err: error }, 'auth failure budget unavailable — failure not recorded');
+    }
+  }
+
+  /**
    * `public: true` short-circuits authentication, so a route that also declares
    * scopes or a minimum role would silently accept anonymous callers — the
    * declaration would read as protected while being wide open. Fail at boot
@@ -197,6 +186,15 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
 
     const resolved = await resolvePrincipal();
     if (!resolved) {
+      // Charge the query this failure just cost to the address that asked for
+      // it (M-SEC-c1 · §D116 LOW/1). Only lookups that actually reached the
+      // database count — `costsTokenResolution` says which — because the budget
+      // exists to bound `auth_resolve_token`, not to punish a malformed header.
+      // Once the budget is gone, `plugins/rate-limit.ts` turns the *next*
+      // credential from this address away in `onRequest`, before it can spend
+      // another lookup. Which means the ceiling is what a flood costs per
+      // minute, rather than the flood costing whatever it cares to send.
+      if (costsTokenResolution(credential)) await recordAuthFailure(request);
       if (config.public) return; // a bad token on a public route is simply ignored
       throw ApiError.authentication();
     }

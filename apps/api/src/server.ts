@@ -237,12 +237,22 @@ export async function buildServer({
   // After both stores it reads through, before anything request-facing: the
   // five sweeps are background work, not part of answering a request.
   await app.register(scheduler, { env, mailer, telemetry: telemetryInstance });
+  // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
+  // Fastify runs every `onRequest` hook before any `preHandler`, and within a
+  // phase in registration order — so this is what puts the rate limiter's
+  // pre-auth hook ahead of authentication's, which is what stops a flood of
+  // invalid bearer tokens buying one `auth_resolve_token` lookup per request
+  // before any limit is consulted. The account-scoped buckets still run in
+  // `preHandler`, after authentication has resolved the principal; both hooks
+  // and the reasoning are in `plugins/rate-limit.ts`. Swapping these two lines
+  // back would silently restore the unbounded path, so `rate-limit.test.ts`
+  // asserts the ordering by its effect rather than trusting this comment.
+  await app.register(rateLimit, { env });
   await app.register(auth, { env });
   await app.register(audit, { env });
   // After `audit`, which it writes through, and before the routes that declare
   // `aiInference` (NFR-C4 · C4-e).
   await app.register(aiResidency, { env });
-  await app.register(rateLimit, { env });
   await app.register(licenseGate);
   // After the licence gate, so an expired trial is told it is read-only rather
   // than told what its plan does not include — the first is the reason it

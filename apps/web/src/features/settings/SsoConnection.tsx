@@ -53,6 +53,21 @@ interface SsoAttributeMapping {
   name?: string;
 }
 
+/**
+ * One claimed domain and how far its ownership proof has got (PLAN §D134).
+ *
+ * The token is never here: it exists in the message sent to the domain's
+ * reserved mailbox and as a digest on the server's row, and this screen only
+ * ever passes it back in the direction it came from.
+ */
+interface SsoDomainRecord {
+  domain: string;
+  verified: boolean;
+  verified_at: string | null;
+  challenge_mailbox: string | null;
+  challenge_sent_at: string | null;
+}
+
 interface SsoConnectionRecord {
   id: string;
   name: string;
@@ -62,12 +77,20 @@ interface SsoConnectionRecord {
   previous_certificate_pem: string | null;
   previous_certificate_expires_at: string | null;
   /**
-   * The e-mail domains this identity provider is authoritative for. Just-in-time
-   * provisioning — SAML sign-in and this workspace's SCIM connector alike — is
-   * confined to them, so a connection cannot adopt a stranger's account or
-   * occupy an address that never signed up (PLAN §D116).
+   * The domains this connection may actually provision from: the ones whose
+   * ownership has been proved. Just-in-time provisioning — SAML sign-in and this
+   * workspace's SCIM connector alike — is confined to them, so a connection
+   * cannot adopt a stranger's account or occupy an address that never signed up
+   * (PLAN §D116, §D134).
    */
   verified_domains: string[];
+  /**
+   * Every domain the connection claims, proved or not. Claiming and proving are
+   * two acts, so this list is longer than the one above until each domain's
+   * challenge comes back — and the screen has to show that difference, or an
+   * owner reads "provisions nobody" with no way to tell why.
+   */
+  domains: SsoDomainRecord[];
   attribute_mapping: SsoAttributeMapping;
   allow_idp_initiated: boolean;
   enabled: boolean;
@@ -275,6 +298,140 @@ function attributeMappingFrom(values: {
   const name = values.attribute_name.trim();
   if (!email && !name) return undefined;
   return { ...(email ? { email } : {}), ...(name ? { name } : {}) };
+}
+
+/**
+ * The domains one connection claims, and the state of each one's proof (§D134).
+ *
+ * Its own component because it holds per-domain state — which challenge is open,
+ * what the owner has typed into which box — and lifting that into the list would
+ * make every keystroke re-render every connection.
+ *
+ * Nothing here is a rule: the server decides which mailboxes may be challenged,
+ * how long a code lasts and how often one may be sent, and answers with a
+ * sentence when it refuses. This shows the state and passes the code back.
+ */
+function DomainProofs({
+  connection,
+  canEdit,
+  onChanged,
+}: {
+  connection: SsoConnectionRecord;
+  canEdit: boolean;
+  onChanged: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  /** Which domain's code box is open, and what has been typed into it. */
+  const [answering, setAnswering] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+
+  const path = (domain: string, action: 'challenge' | 'verify') =>
+    `/settings/sso/${connection.id}/domains/${encodeURIComponent(domain)}/${action}`;
+
+  const challenge = useMutation({
+    mutationFn: (domain: string) => api.post<SsoDomainRecord>(path(domain, 'challenge'), {}),
+    onSuccess: (_result, domain) => {
+      setAnswering(domain);
+      setCode('');
+      onChanged();
+    },
+  });
+
+  const verify = useMutation({
+    mutationFn: (input: { domain: string; token: string }) =>
+      api.post<SsoDomainRecord>(path(input.domain, 'verify'), { token: input.token }),
+    onSuccess: () => {
+      setAnswering(null);
+      setCode('');
+      onChanged();
+    },
+  });
+
+  // Both refusals are sentences the owner has to act on — "wait a minute", "that
+  // code has expired", "that code does not match" — so the server's own message
+  // is shown rather than a generic one that would strand them.
+  const failure = challenge.error ?? verify.error;
+
+  return (
+    <div className="mt-1 space-y-1">
+      {connection.domains.map((domain) => (
+        <div key={domain.domain} className="flex flex-wrap items-center gap-2 text-2xs">
+          <StatusDot
+            tone={domain.verified ? 'success' : 'warning'}
+            label={
+              domain.verified
+                ? t('settings.sso.domainVerified')
+                : t('settings.sso.domainPendingStatus')
+            }
+          />
+          <span className="font-mono text-content-secondary">{domain.domain}</span>
+          {!domain.verified && (
+            <span className="text-content-tertiary">
+              {domain.challenge_mailbox
+                ? t('settings.sso.domainChallengeSent', { mailbox: domain.challenge_mailbox })
+                : t('settings.sso.domainPending')}
+            </span>
+          )}
+          {canEdit && !domain.verified && (
+            <>
+              <button
+                type="button"
+                onClick={() => challenge.mutate(domain.domain)}
+                disabled={challenge.isPending}
+                className="rounded-md border border-border px-2 py-0.5 transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                {domain.challenge_mailbox
+                  ? t('settings.sso.domainResend')
+                  : t('settings.sso.domainSendCode')}
+              </button>
+              {domain.challenge_mailbox && answering !== domain.domain && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAnswering(domain.domain);
+                    setCode('');
+                  }}
+                  className="rounded-md border border-border px-2 py-0.5 transition-colors hover:bg-surface-2"
+                >
+                  {t('settings.sso.domainEnterCode')}
+                </button>
+              )}
+              {answering === domain.domain && (
+                <>
+                  <input
+                    type="text"
+                    value={code}
+                    aria-label={t('settings.sso.domainCodeLabel', { domain: domain.domain })}
+                    onChange={(event) => setCode(event.target.value)}
+                    className="w-56 rounded-md border border-border bg-surface-1 px-2 py-0.5 font-mono"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => verify.mutate({ domain: domain.domain, token: code })}
+                    disabled={verify.isPending || code.trim() === ''}
+                    className="rounded-md bg-brand-500 px-2 py-0.5 font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                  >
+                    {t('settings.sso.domainVerifyAction')}
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </div>
+      ))}
+      {failure && (
+        <ErrorNotice
+          message={
+            failure instanceof ApiClientError
+              ? // i18n-ignore — the server names the exact obstacle (wait a minute, the code expired, it does not match); a generic sentence would leave the owner guessing which.
+                failure.message
+              : t('settings.sso.domainErrorFallback')
+          }
+        />
+      )}
+    </div>
+  );
 }
 
 function SsoConnections({
@@ -656,12 +813,24 @@ function SsoConnections({
                     <p className="truncate font-mono text-2xs text-content-tertiary">
                       {connection.idp_sso_url}
                     </p>
+                    {/* Claiming a domain and proving it are two acts (§D134),
+                        and the gap between them is exactly the state an owner
+                        needs to see: a connection whose domains are all still
+                        pending provisions nobody, and a summary line listing the
+                        claims would read as if it did. */}
                     {connection.verified_domains.length > 0 && (
                       <p className="truncate text-2xs text-content-tertiary">
                         {t('settings.sso.verifiedDomainsSummary', {
                           domains: connection.verified_domains.join(', '),
                         })}
                       </p>
+                    )}
+                    {connection.domains.length > 0 && (
+                      <DomainProofs
+                        connection={connection}
+                        canEdit={canEdit}
+                        onChanged={invalidate}
+                      />
                     )}
                     {connection.previous_certificate_expires_at && (
                       <p className="text-2xs text-warning">

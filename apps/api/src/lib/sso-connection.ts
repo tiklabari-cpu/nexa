@@ -211,7 +211,45 @@ export type VerifiedDomainRejection =
    * hyphen. Also a single label with no dot — `localhost` names a machine, not
    * a domain an identity provider can be authoritative for.
    */
-  | 'malformed';
+  | 'malformed'
+  /** A consumer mailbox provider — see {@link PUBLIC_EMAIL_PROVIDERS}. */
+  | 'public_provider';
+
+/**
+ * Domains no workspace may claim, however it claims them (§D134).
+ *
+ * These are consumer mailbox providers: millions of unrelated people hold an
+ * address at each one, so "this identity provider is authoritative for
+ * gmail.com" is not a statement that can be true. The ownership challenge would
+ * refuse them anyway — nobody configuring a workspace reads
+ * `postmaster@gmail.com` — but refusing them by name is worth more than
+ * refusing them by silence: the owner who typed their own address's domain into
+ * the field gets a sentence explaining why it cannot work, instead of a
+ * challenge that is never answered and a federation that never provisions.
+ *
+ * Deliberately short and deliberately not exhaustive. A long list would imply
+ * completeness this cannot have — there is no registry of consumer providers —
+ * and the security of the feature does not rest on it: the proof does. This is
+ * the common typo, named.
+ */
+export const PUBLIC_EMAIL_PROVIDERS = new Set([
+  'aol.com',
+  'gmail.com',
+  'googlemail.com',
+  'hotmail.com',
+  'icloud.com',
+  'live.com',
+  'mail.com',
+  'me.com',
+  'msn.com',
+  'outlook.com',
+  'proton.me',
+  'protonmail.com',
+  'yahoo.com',
+  'yandex.com',
+  'yandex.ru',
+  'zoho.com',
+]);
 
 export type VerifiedDomainCheck =
   { ok: true; domain: string } | { ok: false; reason: VerifiedDomainRejection };
@@ -249,7 +287,83 @@ export function readVerifiedDomain(raw: string): VerifiedDomainCheck {
   if (!domain) return { ok: false, reason: 'blank' };
   if (domain.length > SSO_VERIFIED_DOMAIN_MAX_LENGTH) return { ok: false, reason: 'too_long' };
   if (!HOSTNAME.test(domain)) return { ok: false, reason: 'malformed' };
+  if (PUBLIC_EMAIL_PROVIDERS.has(domain)) return { ok: false, reason: 'public_provider' };
   return { ok: true, domain };
+}
+
+/**
+ * The mailboxes a domain's ownership challenge may be sent to (§D134).
+ *
+ * RFC 2142's reserved local parts, minus the ones that name a service rather
+ * than the operator. Whoever reads one of these speaks for the domain — that is
+ * what makes the answer a proof rather than a claim — and the set is closed for
+ * exactly that reason: letting the caller nominate the mailbox would let the
+ * attacker in §D116 nominate one they control, which is the vulnerability with
+ * an extra step. `postmaster@` is first because RFC 5321 requires every domain
+ * that receives mail to have it.
+ *
+ * Order matters: it is the order the screen offers, and the first entry is the
+ * default when a request names none.
+ */
+export const DOMAIN_CHALLENGE_MAILBOXES = [
+  'postmaster',
+  'admin',
+  'administrator',
+  'hostmaster',
+  'webmaster',
+] as const;
+
+export type DomainChallengeMailbox = (typeof DOMAIN_CHALLENGE_MAILBOXES)[number];
+
+/**
+ * How long a mailed challenge token stays answerable.
+ *
+ * Three days rather than an hour: the person who has to read
+ * `postmaster@acme.test` is usually not the person configuring the federation,
+ * so the token has to survive being forwarded to another team and picked up the
+ * next working day. Rather than an unbounded window, because the token is a
+ * secret sitting in a shared mailbox and its whole value is that it expires
+ * before the mailbox is archived, forwarded or breached.
+ */
+export const DOMAIN_CHALLENGE_TTL_MS = 72 * 3_600_000;
+
+/**
+ * How soon a challenge for the same domain may be sent again.
+ *
+ * The challenge endpoint sends mail to an address chosen by the *caller's*
+ * claim, so an unbounded one is a way to make this product mail a stranger's
+ * postmaster on demand. A minute is long enough that the loop is worthless and
+ * short enough that "it did not arrive, send it again" is not an obstacle.
+ * Enforced from the row's own `challenge_sent_at` rather than from a counter in
+ * Redis: this bound must not disappear when a cache does (§D133/3).
+ */
+export const DOMAIN_CHALLENGE_RESEND_INTERVAL_MS = 60_000;
+
+export type DomainChallengeRejection =
+  /** No challenge has been sent, or the previous one was consumed. */
+  | 'no_challenge'
+  /** Sent more than {@link DOMAIN_CHALLENGE_TTL_MS} ago. */
+  | 'expired';
+
+/**
+ * Is this row's challenge still answerable, and if not, why?
+ *
+ * The single place the token's lifetime is interpreted, for the same reason
+ * {@link activePreviousCertificate} is the single place a rotation overlap is:
+ * an expiry that two callers compute two ways is an expiry one of them gets
+ * wrong. A row with no digest reads as "no challenge" whatever its timestamps
+ * say — the digest is cleared when a token is spent, so this also closes replay
+ * of a token that already worked.
+ */
+export function openDomainChallenge(
+  row: { tokenHash: string | null; challengeSentAt: Date | null },
+  now: Date,
+): { ok: true; tokenHash: string } | { ok: false; reason: DomainChallengeRejection } {
+  if (!row.tokenHash || !row.challengeSentAt) return { ok: false, reason: 'no_challenge' };
+  if (now.getTime() - row.challengeSentAt.getTime() > DOMAIN_CHALLENGE_TTL_MS) {
+    return { ok: false, reason: 'expired' };
+  }
+  return { ok: true, tokenHash: row.tokenHash };
 }
 
 export type FederationUrlRejection =

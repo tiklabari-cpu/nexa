@@ -775,7 +775,12 @@ describe('module parity matrix — what is still owed', () => {
       // (S11-2FA-e); setting one up is not a screen this app has.
       // 189 → 191 with `/health/live` + `/health/ready` (M-OPS-a, tm 160.1).
       // Orchestrator probes, not a screen — nothing here to re-scope.
-      contractEndpoints: 191,
+      // 191 → 193 with the two SSO domain-ownership routes (M-SEC-d1, tm 171):
+      // `/settings/sso/{connectionId}/domains/{domain}/challenge` and
+      // `.../verify`. Owner-only workspace configuration on the console, in the
+      // same block as the connection write surface this app has never had —
+      // nothing here to re-scope.
+      contractEndpoints: 193,
       scopeBoundaries: 1,
     });
   });

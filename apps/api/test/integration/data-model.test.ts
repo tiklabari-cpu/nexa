@@ -1921,6 +1921,114 @@ describe('data model invariants', () => {
       // The certificate is stored as it arrives — public, so nothing is hashed.
       expect(saved.idpCertificatePem).toBe(PEM);
     });
+
+    // --- Domain ownership proofs (§D134) ------------------------------------
+
+    it('opens a proof row per claimed domain, and destroys it when the claim goes', async () => {
+      // The claim list and the proof rows are kept in step by a trigger rather
+      // than by a route, on the principle the gate itself follows: a rule a
+      // caller has to remember is a rule some later caller will not.
+      const row = await owner.ssoConnection.create({
+        data: connection({ verifiedDomains: ['acme.test', 'corp.acme.test'] }),
+        select: { id: true },
+      });
+      const claimed = async () =>
+        (
+          await owner.ssoDomainVerification.findMany({
+            where: { connectionId: row.id },
+            orderBy: { domain: 'asc' },
+          })
+        ).map((v) => v.domain);
+      expect(await claimed()).toEqual(['acme.test', 'corp.acme.test']);
+
+      // Proved, then re-saved with the same list plus one: an idempotent write
+      // must not reset a verification, or every form submission would.
+      await owner.ssoDomainVerification.updateMany({
+        where: { connectionId: row.id, domain: 'acme.test' },
+        data: { verifiedAt: new Date() },
+      });
+      await owner.ssoConnection.update({
+        where: { id: row.id },
+        data: { verifiedDomains: ['acme.test', 'corp.acme.test', 'new.acme.test'] },
+      });
+      const afterAdd = await owner.ssoDomainVerification.findFirst({
+        where: { connectionId: row.id, domain: 'acme.test' },
+      });
+      expect(afterAdd!.verifiedAt).not.toBeNull();
+      expect(await claimed()).toEqual(['acme.test', 'corp.acme.test', 'new.acme.test']);
+
+      // And dropping a claim destroys its proof, so a domain cannot be removed
+      // from view and quietly keep provisioning.
+      await owner.ssoConnection.update({
+        where: { id: row.id },
+        data: { verifiedDomains: ['corp.acme.test'] },
+      });
+      expect(await claimed()).toEqual(['corp.acme.test']);
+    });
+
+    it("hides and refuses another tenant's domain proofs", async () => {
+      // A cross-tenant write here would be a workspace granting itself proof of
+      // somebody else's domain — the whole finding in one INSERT — so WITH CHECK
+      // matters at least as much as USING.
+      const theirs = await owner.ssoConnection.create({
+        data: connection({ licenseId: fx.b.licenseId }),
+        select: { id: true },
+      });
+      const asA = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
+
+      const visible = await withTenant(app, asA, (tx) =>
+        tx.ssoDomainVerification.findMany({ where: { connectionId: theirs.id } }),
+      );
+      expect(visible).toEqual([]);
+
+      const proved = await withTenant(app, asA, (tx) =>
+        tx.ssoDomainVerification.updateMany({
+          where: { connectionId: theirs.id },
+          data: { verifiedAt: new Date() },
+        }),
+      );
+      expect(proved.count).toBe(0);
+
+      await expect(
+        withTenant(app, asA, (tx) =>
+          tx.ssoDomainVerification.create({
+            data: {
+              connectionId: theirs.id,
+              licenseId: fx.b.licenseId,
+              domain: 'acme.test',
+              verifiedAt: new Date(),
+            },
+          }),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it('refuses a proof row that could never match an address, or a token in the clear', async () => {
+      const row = await owner.ssoConnection.create({ data: connection(), select: { id: true } });
+      const proof = (overrides: Record<string, unknown>) => ({
+        connectionId: row.id,
+        licenseId: fx.a.licenseId,
+        domain: 'other.test',
+        ...overrides,
+      });
+
+      // Uppercase can never equal a normalised address's domain, so a row
+      // holding it is a proof that looks real and works never.
+      await expect(
+        owner.ssoDomainVerification.create({ data: proof({ domain: 'OTHER.test' }) }),
+      ).rejects.toThrow(/sso_domain_verifications_domain_check/i);
+      // A digest or nothing — not hex, not truncated, not a stray `=`.
+      await expect(
+        owner.ssoDomainVerification.create({ data: proof({ tokenHash: 'plaintext' }) }),
+      ).rejects.toThrow(/sso_domain_verifications_token_hash_check/i);
+      // A challenge is a mailbox and a moment together; half of one leaves a
+      // token whose expiry cannot be computed.
+      await expect(
+        owner.ssoDomainVerification.create({
+          data: proof({ challengeMailbox: 'postmaster@other.test' }),
+        }),
+      ).rejects.toThrow(/sso_domain_verifications_challenge_check/i);
+    });
   });
 
   // =========================================================================

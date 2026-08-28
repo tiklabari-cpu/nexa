@@ -32,6 +32,7 @@ import { issueAssertion, MOCK_IDP_CERTIFICATE, MOCK_IDP_ENTITY_ID } from '../hel
 import {
   grantToken,
   ownerClient,
+  proveSsoDomains,
   seedFixtures,
   testEnv,
   type Fixtures,
@@ -119,6 +120,10 @@ describe('sso end-to-end verification', () => {
       },
       select: { id: true },
     });
+    // Claiming a domain is not proving it (§D134); provisioning honours only
+    // the claims somebody at the domain answered a challenge for. That flow has
+    // its own suite — here it is setup, so its end state is written directly.
+    await proveSsoDomains(owner, row.id);
     return {
       id: row.id,
       entityId: `${apiBase}/auth/saml/${row.id}`,

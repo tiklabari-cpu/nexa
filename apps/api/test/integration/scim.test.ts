@@ -38,7 +38,13 @@ import { hashToken } from '../../src/lib/crypto.js';
 import { SCIM_SEAT_CEILING } from '../../src/lib/entitlements.js';
 import { MAX_ACTIVE_SCIM_TOKENS } from '../../src/routes/settings.js';
 import { AUDIT_ACTIONS } from '../../src/services/audit/audit-log.js';
-import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
+import {
+  grantToken,
+  ownerClient,
+  proveSsoDomains,
+  seedFixtures,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const SCIM_JSON = 'application/scim+json';
@@ -138,7 +144,7 @@ describe('scim server core', () => {
    * without federating sign-in configures this.
    */
   async function verifyDomains(licenseId: bigint, domains = ['example.test']): Promise<void> {
-    await owner.ssoConnection.create({
+    const row = await owner.ssoConnection.create({
       data: {
         licenseId,
         name: 'Directory',
@@ -147,7 +153,13 @@ describe('scim server core', () => {
         idpCertificatePem: '-----BEGIN CERTIFICATE-----\nunused\n-----END CERTIFICATE-----\n',
         verifiedDomains: domains,
       },
+      select: { id: true },
     });
+    // Claiming is not proving (§D134). The list above says which domains this
+    // workspace asserts; provisioning only honours the ones somebody reading a
+    // reserved mailbox at the domain answered a challenge for. That flow is its
+    // own suite — here it is setup, so the state it ends in is written directly.
+    await proveSsoDomains(owner, row.id);
   }
 
   // --- Authentication --------------------------------------------------------

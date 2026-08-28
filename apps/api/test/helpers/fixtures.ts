@@ -311,3 +311,24 @@ export async function grantToken(
   });
   return token;
 }
+
+/**
+ * Mark every domain a connection claims as proved (§D134).
+ *
+ * Claiming a domain no longer confines provisioning to it; *proving* it does,
+ * and the proof is a token mailed to a reserved mailbox at the domain. That
+ * flow has its own suite (`sso-domain-ownership.test.ts`), which drives it end
+ * to end through the spool. Everywhere else the flow is setup rather than
+ * subject, so this writes the state it ends in.
+ *
+ * The rows themselves are not created here — a trigger on `sso_connections`
+ * opens one per claimed domain and destroys it when the claim goes, so a
+ * fixture that invented rows could produce a shape the product never reaches.
+ * All this does is answer the challenge.
+ */
+export async function proveSsoDomains(db: PrismaClient, connectionId: string): Promise<void> {
+  await db.ssoDomainVerification.updateMany({
+    where: { connectionId },
+    data: { verifiedAt: new Date(), tokenHash: null },
+  });
+}

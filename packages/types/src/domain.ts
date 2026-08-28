@@ -608,6 +608,33 @@ export interface PublicSsoConnection {
   client_id: string | null;
 }
 
+/**
+ * One domain an SSO connection claims, and how far its ownership proof has got
+ * (NFR-S11 · PLAN §D134).
+ *
+ * Claiming a domain and proving it are two acts. The claim is written with the
+ * connection; the proof is a token mailed to a reserved mailbox at the domain
+ * itself (`postmaster@`, `admin@`, `administrator@`, `hostmaster@`,
+ * `webmaster@`) and returned through the API. Until it comes back the domain is
+ * inert: it appears here, it does not appear in {@link
+ * SsoConnection.verified_domains}, and just-in-time provisioning ignores it.
+ *
+ * The token itself never appears in a response — it exists in the message and as
+ * a digest on the row, and the digest is discarded the moment it is spent.
+ */
+export interface SsoDomain {
+  /** Lowercase, no trailing dot — the form it is matched in. */
+  domain: string;
+  /** Whether ownership has been proved. The field that decides everything. */
+  verified: boolean;
+  /** When the challenge token came back. `null` while unproved. */
+  verified_at: string | null;
+  /** Where the outstanding (or last) challenge went. `null` when none was sent. */
+  challenge_mailbox: string | null;
+  /** When it was sent. The token stops being answerable 72 hours later. */
+  challenge_sent_at: string | null;
+}
+
 export interface SsoConnection {
   id: string;
   /** Human label for the connection, e.g. `Okta (corp)`. */
@@ -630,19 +657,30 @@ export interface SsoConnection {
   /** When the overlap above stops being trusted. `null` when there is none. */
   previous_certificate_expires_at: string | null;
   /**
-   * The e-mail domains this identity provider has been declared authoritative
-   * for. Just-in-time provisioning — SAML sign-in and the workspace's SCIM
-   * connector alike — may only name addresses inside them, so an identity
-   * provider cannot adopt a stranger's account or occupy the address of
-   * somebody who never signed up (PLAN §D116).
+   * The domains this connection may actually provision from: the subset of
+   * {@link domains} whose ownership has been proved. Just-in-time provisioning —
+   * SAML sign-in and the workspace's SCIM connector alike — may only *create* an
+   * account or a membership for an address inside them, so an identity provider
+   * cannot adopt a stranger's account or occupy the address of somebody who
+   * never signed up (PLAN §D116, §D134).
    *
    * Stored lowercase and matched *exactly*, never by suffix: a workspace that
-   * verified `acme.test` has said nothing about `mail.acme.test`, and one form
-   * of suffix matching is all it takes for "verified" to stop meaning "we
-   * checked this exact name". An empty list provisions nobody — the fail-closed
-   * reading, which is why the write surface requires at least one.
+   * proved `acme.test` has said nothing about `mail.acme.test`, and one form of
+   * suffix matching is all it takes for "verified" to stop meaning "we checked
+   * this exact name". An empty list provisions nobody — the fail-closed reading,
+   * which is why the write surface requires at least one claim.
+   *
+   * A domain the workspace has merely *claimed* is not here. The claim list is
+   * written by the workspace about itself, so on its own it is an assertion
+   * rather than a fact — and the actor the finding is about is the workspace's
+   * own owner.
    */
   verified_domains: string[];
+  /**
+   * Every domain this connection claims, proved or not, in the order the
+   * workspace wrote them. Writing `verified_domains` replaces this list.
+   */
+  domains: SsoDomain[];
   attribute_mapping: SsoAttributeMapping;
   /**
    * Accept an assertion the IdP sends unsolicited, with no AuthnRequest of ours

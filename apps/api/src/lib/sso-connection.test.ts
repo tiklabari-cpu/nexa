@@ -15,9 +15,13 @@ import {
   activePreviousCertificate,
   checkFederationUrl,
   CERTIFICATE_NOT_BEFORE_GRACE_MS,
+  DOMAIN_CHALLENGE_MAILBOXES,
+  DOMAIN_CHALLENGE_TTL_MS,
   inspectIdpCertificate,
   isEnforcingSso,
   isLoopbackHost,
+  openDomainChallenge,
+  readVerifiedDomain,
 } from './sso-connection.js';
 
 /** A fixed "now" inside every usable fixture's validity window. */
@@ -301,5 +305,112 @@ describe('isEnforcingSso', () => {
     // there would leave that workspace with no door at all — SAML refusing
     // everyone and passwords refused on its behalf.
     expect(isEnforcingSso({ enabled: false, enforced: true })).toBe(false);
+  });
+});
+
+describe('readVerifiedDomain', () => {
+  it('normalises the three ways one domain gets typed', () => {
+    // Case, surrounding space and the DNS root's trailing dot are the same
+    // domain. Normalising here is what lets the storage compare with plain
+    // equality — three spellings stored as three rows would mean an address
+    // matching one of them and not the others.
+    for (const raw of ['ACME.test', ' acme.test ', 'acme.test.', 'Acme.Test.']) {
+      expect(readVerifiedDomain(raw)).toEqual({ ok: true, domain: 'acme.test' });
+    }
+  });
+
+  it('refuses everything an asserted address can never contain', () => {
+    for (const raw of [
+      'https://acme.test',
+      'acme.test/path',
+      'acme.test:443',
+      'user@acme.test',
+      '*.acme.test',
+      '.acme.test',
+      'acme_corp.test',
+      '-acme.test',
+      'localhost',
+      '',
+      '   ',
+    ]) {
+      expect(readVerifiedDomain(raw).ok, raw).toBe(false);
+    }
+  });
+
+  it('refuses a consumer mailbox provider by name, not by silence', () => {
+    // The claim "this identity provider is authoritative for gmail.com" is not
+    // a statement that can be true — millions of unrelated people hold an
+    // address there. The ownership challenge would refuse it anyway; refusing
+    // it here is what turns a challenge nobody ever answers into a sentence the
+    // owner can act on (§D134).
+    for (const raw of ['gmail.com', 'GMail.com.', 'outlook.com', 'yandex.ru', 'proton.me']) {
+      expect(readVerifiedDomain(raw), raw).toEqual({ ok: false, reason: 'public_provider' });
+    }
+  });
+
+  it('still accepts a company domain that merely looks like one', () => {
+    // The refusal above is a named list, not a heuristic about free mail. A
+    // domain that happens to start with `mail` or `gmail` is somebody's real
+    // company, and guessing would be worse than the typo it prevents.
+    expect(readVerifiedDomain('gmail.com.acme.test').ok).toBe(true);
+    expect(readVerifiedDomain('mail.acme.test').ok).toBe(true);
+  });
+});
+
+describe('openDomainChallenge', () => {
+  const sent = new Date('2026-08-28T00:00:00.000Z');
+  const hash = 'a'.repeat(64);
+
+  it('is answerable inside the window', () => {
+    expect(
+      openDomainChallenge({ tokenHash: hash, challengeSentAt: sent }, new Date(sent.getTime())),
+    ).toEqual({ ok: true, tokenHash: hash });
+    expect(
+      openDomainChallenge(
+        { tokenHash: hash, challengeSentAt: sent },
+        new Date(sent.getTime() + DOMAIN_CHALLENGE_TTL_MS),
+      ).ok,
+    ).toBe(true);
+  });
+
+  it('closes one millisecond past the window', () => {
+    expect(
+      openDomainChallenge(
+        { tokenHash: hash, challengeSentAt: sent },
+        new Date(sent.getTime() + DOMAIN_CHALLENGE_TTL_MS + 1),
+      ),
+    ).toEqual({ ok: false, reason: 'expired' });
+  });
+
+  it('reads a spent token as no challenge at all, whatever the timestamps say', () => {
+    // The digest is cleared when a token is accepted, so this is the branch
+    // that closes replay: a second presentation of a code that already worked
+    // finds nothing to compare against, inside the window or not.
+    expect(openDomainChallenge({ tokenHash: null, challengeSentAt: sent }, sent)).toEqual({
+      ok: false,
+      reason: 'no_challenge',
+    });
+    expect(openDomainChallenge({ tokenHash: hash, challengeSentAt: null }, sent)).toEqual({
+      ok: false,
+      reason: 'no_challenge',
+    });
+  });
+});
+
+describe('DOMAIN_CHALLENGE_MAILBOXES', () => {
+  it('is a closed set of reserved local parts, postmaster first', () => {
+    // The security property, not a nicety: an arbitrary mailbox would let the
+    // claimant nominate one they already control, which is the vulnerability
+    // this flow exists to close with an extra step. `postmaster` leads because
+    // RFC 5321 requires every mail-receiving domain to have it, so it is the
+    // default with the best chance of reaching somebody.
+    expect(DOMAIN_CHALLENGE_MAILBOXES[0]).toBe('postmaster');
+    expect([...DOMAIN_CHALLENGE_MAILBOXES]).toEqual([
+      'postmaster',
+      'admin',
+      'administrator',
+      'hostmaster',
+      'webmaster',
+    ]);
   });
 });

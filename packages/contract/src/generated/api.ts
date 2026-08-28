@@ -2621,6 +2621,14 @@ export interface paths {
      *     never signed up and could then never register. A workspace's own SCIM
      *     connector reads the union of these lists for the same reason.
      *
+     *     Sending it **claims** those domains; it does not prove them, and a claim
+     *     provisions nobody. Each one comes back in `domains` as unproved, and has to
+     *     answer a challenge mailed to a reserved mailbox at the domain itself
+     *     (`POST /settings/sso/{connectionId}/domains/{domain}/challenge`) before it
+     *     appears in the response's `verified_domains`. A consumer mailbox provider —
+     *     `gmail.com`, `outlook.com` and the like — is refused outright: no identity
+     *     provider can be authoritative for one.
+     *
      *     `enabled` defaults to off. Saving the configuration and opening the door
      *     are two decisions.
      *
@@ -2701,6 +2709,88 @@ export interface paths {
      *     forever. Every break-glass sign-in is marked in the audit trail.
      */
     patch: operations['updateSsoConnection'];
+    trace?: never;
+  };
+  '/settings/sso/{connectionId}/domains/{domain}/challenge': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+        /** @description One of the connection's claimed domains. Normalised before it is looked up, so `ACME.test.` finds `acme.test`. */
+        domain: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mail an ownership challenge to a claimed domain
+     * @description **Enterprise only** and **owner only**, for the reasons given on
+     *     `POST /settings/sso`.
+     *
+     *     Claiming a domain does not prove it. `verified_domains` is a list a
+     *     workspace writes about itself, so on its own it says only that this
+     *     workspace would like to speak for that domain — and the actor who worries
+     *     us most is the workspace's own owner, who holds the narrowest role gate in
+     *     the product and is not constrained by it (PLAN §D134). This endpoint is
+     *     where the claim becomes a fact.
+     *
+     *     A random token is mailed to a **reserved mailbox at the domain being
+     *     claimed**: `postmaster@`, `admin@`, `administrator@`, `hostmaster@` or
+     *     `webmaster@`, the local parts RFC 2142 sets aside for whoever operates a
+     *     domain. The caller may choose which of those five, and nothing else —
+     *     nominating an arbitrary mailbox would let the claimant pick one they
+     *     already control, which is the vulnerability with an extra step.
+     *
+     *     The token never appears in a response. It is answerable for 72 hours,
+     *     one challenge per domain at a time, and another may be sent a minute after
+     *     the last — the endpoint sends mail to an address the *caller* names, so it
+     *     is bounded whether or not a cache is up.
+     *
+     *     Refused for a domain that is already proved: there is nothing left to
+     *     prove, and re-sending would mail a stranger's postmaster for no reason.
+     */
+    post: operations['sendSsoDomainChallenge'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/sso/{connectionId}/domains/{domain}/verify': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+        domain: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Answer a domain's ownership challenge
+     * @description **Enterprise only** and **owner only**. Present the token from the message
+     *     sent to the domain's reserved mailbox. Whoever read that mailbox speaks for
+     *     the domain; that is what makes this a proof rather than a second claim.
+     *
+     *     On success the domain joins `verified_domains` and just-in-time
+     *     provisioning may create accounts and memberships for addresses inside it.
+     *     The stored digest is discarded at the same moment, so the token cannot be
+     *     presented twice.
+     *
+     *     A wrong or expired token is refused with `validation` and changes nothing
+     *     — including the challenge, which stays answerable until it expires, because
+     *     invalidating it would let anyone holding a stale token lock the workspace
+     *     out of proving its own domain by guessing wrong on purpose.
+     */
+    post: operations['verifySsoDomain'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
     trace?: never;
   };
   '/settings/scim-tokens': {
@@ -6577,8 +6667,14 @@ export interface components {
        * @description When the overlap stops being trusted. Null when there is none.
        */
       previous_certificate_expires_at: string | null;
-      /** @description The e-mail domains this identity provider has been declared authoritative for. Just-in-time provisioning — SAML sign-in and the workspace's SCIM connector alike — is confined to addresses inside them, so a workspace's own IdP cannot adopt a stranger's account or occupy the address of somebody who never signed up. Stored lowercase and matched exactly, never by suffix: verifying `acme.test` says nothing about `mail.acme.test`. An empty list provisions nobody. */
+      /**
+       * @description The domains this connection may actually provision from: the subset of `domains` whose ownership has been proved. Just-in-time provisioning — SAML sign-in and the workspace's SCIM connector alike — may only create an account or a membership for an address inside them, so a workspace's own IdP cannot adopt a stranger's account or occupy the address of somebody who never signed up. Stored lowercase and matched exactly, never by suffix: proving `acme.test` says nothing about `mail.acme.test`. An empty list provisions nobody.
+       *
+       *     A domain a workspace has merely *claimed* is not here. That is the whole of PLAN §D134: the claim list is written by the workspace about itself, so on its own it is an assertion rather than a fact.
+       */
       verified_domains: string[];
+      /** @description Every domain claimed by this connection, proved or not, in the order the workspace wrote them. Writing `verified_domains` on `POST`/`PATCH` replaces this list; a domain added here starts unproved and one removed loses its proof. */
+      domains: components['schemas']['SsoDomain'][];
       attribute_mapping: components['schemas']['SsoAttributeMapping'];
       /** @description Whether an assertion the IdP sends unsolicited is accepted. False by default — an IdP-initiated flow gives up the `InResponseTo` binding that makes replay detectable, so it is a choice, never inherited. */
       allow_idp_initiated: boolean;
@@ -6590,6 +6686,39 @@ export interface components {
       created_at: string;
       /** Format: date-time */
       updated_at: string;
+    };
+    /**
+     * @description One domain an SSO connection claims, and how far its ownership proof has
+     *     got (NFR-S11 · PLAN §D134).
+     *
+     *     Claiming a domain and proving it are two acts. The claim is written with
+     *     the connection; the proof is a token mailed to a reserved mailbox at the
+     *     domain itself — `postmaster@`, `admin@`, `administrator@`, `hostmaster@`
+     *     or `webmaster@` — and returned through
+     *     `POST /settings/sso/{connectionId}/domains/{domain}/verify`. Until it
+     *     comes back the domain is inert: it appears here, it does not appear in
+     *     `verified_domains`, and just-in-time provisioning ignores it.
+     *
+     *     The token itself is never in a response. It exists in the message and as
+     *     a digest on the row, and the digest is discarded the moment it is spent.
+     */
+    SsoDomain: {
+      /** @description Lowercase, no trailing dot — the form it is matched in. */
+      domain: string;
+      /** @description Whether ownership has been proved. The one field that decides whether this domain provisions anybody. */
+      verified: boolean;
+      /**
+       * Format: date-time
+       * @description When the challenge token came back. Null while unproved.
+       */
+      verified_at: string | null;
+      /** @description The address the outstanding (or last) challenge was sent to, so the screen can say where to look for it. Null when none has been sent. */
+      challenge_mailbox: string | null;
+      /**
+       * Format: date-time
+       * @description When that challenge was sent. The token stops being answerable 72 hours later, and another may be sent a minute after this.
+       */
+      challenge_sent_at: string | null;
     };
     /**
      * @description A bearer credential a workspace pastes into its identity provider's
@@ -13949,7 +14078,7 @@ export interface operations {
           idp_sso_url: string;
           /** @description The IdP's public signing certificate, PEM-encoded. */
           idp_certificate_pem: string;
-          /** @description The e-mail domains this identity provider is authoritative for. Just-in-time provisioning is confined to them, so a connection cannot adopt a stranger's account or occupy an address that never signed up. Bare domains only — no scheme, port, path or `@` — normalised to lowercase and deduplicated. A `*.` wildcard is refused rather than expanded: verifying `acme.test` says nothing about who controls `payroll.acme.test`, and one form of suffix matching is all it takes for "verified" to stop meaning "we checked this exact name". At least one is required — an empty list would configure a federation that silently refuses every first sign-in. */
+          /** @description The e-mail domains this identity provider claims to be authoritative for. Just-in-time provisioning is confined to the ones whose ownership is then proved, so a connection cannot adopt a stranger's account or occupy an address that never signed up. Bare domains only — no scheme, port, path or `@` — normalised to lowercase and deduplicated. A `*.` wildcard is refused rather than expanded: proving `acme.test` says nothing about who controls `payroll.acme.test`, and one form of suffix matching is all it takes for "verified" to stop meaning "we checked this exact name". A consumer mailbox provider is refused by name. At least one is required — an empty list would configure a federation that silently refuses every first sign-in. */
           verified_domains: string[];
           attribute_mapping?: components['schemas']['SsoAttributeMapping'];
           /** @default false */
@@ -14028,7 +14157,7 @@ export interface operations {
           idp_entity_id?: string;
           idp_sso_url?: string;
           idp_certificate_pem?: string;
-          /** @description Replaces the whole list. Still at least one: a workspace that wants this connection to provision nobody switches it off, rather than reaching the same state by emptying a field. */
+          /** @description Replaces the whole list. Still at least one: a workspace that wants this connection to provision nobody switches it off, rather than reaching the same state by emptying a field. A domain already in the list keeps whatever proof it has; one that is new starts unproved; one dropped from the list loses its proof, so a domain cannot be removed from view and quietly keep provisioning. */
           verified_domains?: string[];
           attribute_mapping?: components['schemas']['SsoAttributeMapping'];
           allow_idp_initiated?: boolean;
@@ -14058,6 +14187,113 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  sendSsoDomainChallenge: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+        /** @description One of the connection's claimed domains. Normalised before it is looked up, so `ACME.test.` finds `acme.test`. */
+        domain: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * @description Which reserved local part to send to. Defaults to `postmaster`, the one RFC 5321 requires every mail-receiving domain to have.
+           * @default postmaster
+           * @enum {string}
+           */
+          mailbox?: 'postmaster' | 'admin' | 'administrator' | 'hostmaster' | 'webmaster';
+        };
+      };
+    };
+    responses: {
+      /** @description Sent */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SsoDomain'];
+        };
+      };
+      /** @description Already proved, or another challenge was sent less than a minute ago. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description No such connection, or the connection does not claim that domain. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  verifySsoDomain: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        connectionId: string;
+        domain: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The token from the challenge message. */
+          token: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Proved */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SsoDomain'];
+        };
+      };
+      /** @description No challenge outstanding, the token has expired, or it does not match. */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      /** @description No such connection, or the connection does not claim that domain. */
+      404: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       429: components['responses']['TooManyRequests'];
     };
   };

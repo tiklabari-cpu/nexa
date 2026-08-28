@@ -49,12 +49,40 @@ const CONNECTIONS = {
       previous_certificate_pem: null,
       previous_certificate_expires_at: null,
       verified_domains: ['acme.com'],
+      domains: [
+        {
+          domain: 'acme.com',
+          verified: true,
+          verified_at: '2026-01-01T00:00:00.000Z',
+          challenge_mailbox: 'postmaster@acme.com',
+          challenge_sent_at: '2026-01-01T00:00:00.000Z',
+        },
+      ],
       attribute_mapping: {},
       allow_idp_initiated: false,
       enabled: true,
       enforced: false,
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
+    },
+  ],
+};
+
+/** A connection whose one domain is claimed and not yet proved (§D134). */
+const PENDING_CONNECTIONS = {
+  items: [
+    {
+      ...CONNECTIONS.items[0]!,
+      verified_domains: [],
+      domains: [
+        {
+          domain: 'acme.com',
+          verified: false,
+          verified_at: null,
+          challenge_mailbox: null,
+          challenge_sent_at: null,
+        },
+      ],
     },
   ],
 };
@@ -304,6 +332,93 @@ describe('SsoConnection', () => {
   it('shows which domains a connection may provision from', async () => {
     renderComponent(<SsoConnection canEdit />);
     expect(await screen.findByText('Provisions: acme.com')).toBeInTheDocument();
+  });
+
+  it('shows a claimed domain as provisioning nobody until it is verified', async () => {
+    // The gap between claiming and proving is the state an owner most needs to
+    // see (§D134): a connection whose domains are all pending provisions
+    // nobody, and a screen that only listed the claims would read as if it did.
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso' ? Promise.resolve(PENDING_CONNECTIONS) : mockGet(path),
+    );
+    renderComponent(<SsoConnection canEdit />);
+
+    await screen.findByText('acme.com');
+    expect(screen.queryByText(/^Provisions:/)).not.toBeInTheDocument();
+    expect(screen.getByText('provisions nobody until you verify it')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send verification code' })).toBeInTheDocument();
+  });
+
+  it('sends the code, then answers the challenge with what came back', async () => {
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso' ? Promise.resolve(PENDING_CONNECTIONS) : mockGet(path),
+    );
+    api.post.mockResolvedValue({
+      domain: 'acme.com',
+      verified: false,
+      verified_at: null,
+      challenge_mailbox: 'postmaster@acme.com',
+      challenge_sent_at: '2026-01-01T00:00:00.000Z',
+    });
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('acme.com');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send verification code' }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/settings/sso/conn-1/domains/acme.com/challenge', {}),
+    );
+
+    // The code box opens on the domain that was just challenged, and what is
+    // typed goes back the way it came — this screen never sees the token
+    // otherwise, and never stores it.
+    await userEvent.type(
+      await screen.findByLabelText('Verification code for acme.com'),
+      'the-code',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Verify' }));
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/settings/sso/conn-1/domains/acme.com/verify', {
+        token: 'the-code',
+      }),
+    );
+  });
+
+  it('shows the server’s refusal verbatim when a code is wrong or too soon', async () => {
+    // Each refusal names the obstacle — wait a minute, that code has expired,
+    // that code does not match — and only the owner can act on the difference.
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso' ? Promise.resolve(PENDING_CONNECTIONS) : mockGet(path),
+    );
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message:
+          'A verification message for that domain was just sent. Wait a minute before sending another.',
+        requestId: '-',
+      }),
+    );
+    renderComponent(<SsoConnection canEdit />);
+    await screen.findByText('acme.com');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Send verification code' }));
+    expect(await screen.findByText(/Wait a minute before sending another/)).toBeInTheDocument();
+  });
+
+  it('offers no verification controls to somebody who cannot edit', async () => {
+    api.get.mockImplementation((path: string) =>
+      path === '/settings/sso' ? Promise.resolve(PENDING_CONNECTIONS) : mockGet(path),
+    );
+    renderComponent(<SsoConnection canEdit={false} />);
+
+    await screen.findByText('acme.com');
+    // The state is still visible — an admin has to be able to see why the
+    // federation provisions nobody — but the buttons belong to the owner, the
+    // way the routes behind them do.
+    expect(screen.getByText('provisions nobody until you verify it')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: 'Send verification code' }),
+    ).not.toBeInTheDocument();
   });
 
   it('asks for confirmation before removing a connection, and only removes on confirm', async () => {

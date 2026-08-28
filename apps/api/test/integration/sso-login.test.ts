@@ -36,7 +36,13 @@ import {
   MOCK_IDP_ENTITY_ID,
   type IssueAssertionOptions,
 } from '../helpers/mock-idp.js';
-import { ownerClient, seedFixtures, testEnv, type Fixtures } from '../helpers/fixtures.js';
+import {
+  ownerClient,
+  proveSsoDomains,
+  seedFixtures,
+  testEnv,
+  type Fixtures,
+} from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { deriveCodeChallenge, generateToken } from '../../src/lib/crypto.js';
 import { API_PREFIX } from '../../src/server.js';
@@ -95,6 +101,10 @@ describe('saml sign-in', () => {
       },
       select: { id: true },
     });
+    // Claiming a domain is not proving it (§D134); provisioning honours only
+    // the claims somebody at the domain answered a challenge for. That flow has
+    // its own suite — here it is setup, so its end state is written directly.
+    await proveSsoDomains(owner, row.id);
     return {
       id: row.id,
       entityId: `${apiBase}/auth/saml/${row.id}`,

@@ -237,6 +237,14 @@ sso:
       never signed up and could then never register. A workspace's own SCIM
       connector reads the union of these lists for the same reason.
 
+      Sending it **claims** those domains; it does not prove them, and a claim
+      provisions nobody. Each one comes back in `domains` as unproved, and has to
+      answer a challenge mailed to a reserved mailbox at the domain itself
+      (`POST /settings/sso/{connectionId}/domains/{domain}/challenge`) before it
+      appears in the response's `verified_domains`. A consumer mailbox provider —
+      `gmail.com`, `outlook.com` and the like — is refused outright: no identity
+      provider can be authoritative for one.
+
       `enabled` defaults to off. Saving the configuration and opening the door
       are two decisions.
 
@@ -281,17 +289,19 @@ sso:
                 maxItems: 20
                 items: { type: string, minLength: 1, maxLength: 253 }
                 description: >-
-                  The e-mail domains this identity provider is authoritative for.
-                  Just-in-time provisioning is confined to them, so a connection
-                  cannot adopt a stranger's account or occupy an address that
-                  never signed up. Bare domains only — no scheme, port, path or
-                  `@` — normalised to lowercase and deduplicated. A `*.` wildcard
-                  is refused rather than expanded: verifying `acme.test` says
-                  nothing about who controls `payroll.acme.test`, and one form of
-                  suffix matching is all it takes for "verified" to stop meaning
-                  "we checked this exact name". At least one is required — an
-                  empty list would configure a federation that silently refuses
-                  every first sign-in.
+                  The e-mail domains this identity provider claims to be
+                  authoritative for. Just-in-time provisioning is confined to the
+                  ones whose ownership is then proved, so a connection cannot
+                  adopt a stranger's account or occupy an address that never
+                  signed up. Bare domains only — no scheme, port, path or `@` —
+                  normalised to lowercase and deduplicated. A `*.` wildcard is
+                  refused rather than expanded: proving `acme.test` says nothing
+                  about who controls `payroll.acme.test`, and one form of suffix
+                  matching is all it takes for "verified" to stop meaning "we
+                  checked this exact name". A consumer mailbox provider is
+                  refused by name. At least one is required — an empty list would
+                  configure a federation that silently refuses every first
+                  sign-in.
               attribute_mapping: { $ref: "../openapi.yaml#/components/schemas/SsoAttributeMapping" }
               allow_idp_initiated:
                 type: boolean
@@ -394,6 +404,10 @@ ssoConnection:
                   Replaces the whole list. Still at least one: a workspace that
                   wants this connection to provision nobody switches it off,
                   rather than reaching the same state by emptying a field.
+                  A domain already in the list keeps whatever proof it has; one
+                  that is new starts unproved; one dropped from the list loses
+                  its proof, so a domain cannot be removed from view and quietly
+                  keep provisioning.
               attribute_mapping: { $ref: "../openapi.yaml#/components/schemas/SsoAttributeMapping" }
               allow_idp_initiated: { type: boolean }
               enabled: { type: boolean }
@@ -438,6 +452,148 @@ ssoConnection:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ssoDomainChallenge:
+  parameters:
+    - name: connectionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: domain
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 253 }
+      description: >-
+        One of the connection's claimed domains. Normalised before it is looked
+        up, so `ACME.test.` finds `acme.test`.
+
+  post:
+    tags: [Settings]
+    operationId: sendSsoDomainChallenge
+    summary: Mail an ownership challenge to a claimed domain
+    description: |
+      **Enterprise only** and **owner only**, for the reasons given on
+      `POST /settings/sso`.
+
+      Claiming a domain does not prove it. `verified_domains` is a list a
+      workspace writes about itself, so on its own it says only that this
+      workspace would like to speak for that domain — and the actor who worries
+      us most is the workspace's own owner, who holds the narrowest role gate in
+      the product and is not constrained by it (PLAN §D134). This endpoint is
+      where the claim becomes a fact.
+
+      A random token is mailed to a **reserved mailbox at the domain being
+      claimed**: `postmaster@`, `admin@`, `administrator@`, `hostmaster@` or
+      `webmaster@`, the local parts RFC 2142 sets aside for whoever operates a
+      domain. The caller may choose which of those five, and nothing else —
+      nominating an arbitrary mailbox would let the claimant pick one they
+      already control, which is the vulnerability with an extra step.
+
+      The token never appears in a response. It is answerable for 72 hours,
+      one challenge per domain at a time, and another may be sent a minute after
+      the last — the endpoint sends mail to an address the *caller* names, so it
+      is bounded whether or not a cache is up.
+
+      Refused for a domain that is already proved: there is nothing left to
+      prove, and re-sending would mail a stranger's postmaster for no reason.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: false
+            properties:
+              mailbox:
+                type: string
+                enum: [postmaster, admin, administrator, hostmaster, webmaster]
+                default: postmaster
+                description: >-
+                  Which reserved local part to send to. Defaults to `postmaster`,
+                  the one RFC 5321 requires every mail-receiving domain to have.
+    responses:
+      "202":
+        description: Sent
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SsoDomain" }
+      "400":
+        description: >-
+          Already proved, or another challenge was sent less than a minute ago.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404":
+        description: No such connection, or the connection does not claim that domain.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+ssoDomainVerify:
+  parameters:
+    - name: connectionId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: domain
+      in: path
+      required: true
+      schema: { type: string, minLength: 1, maxLength: 253 }
+
+  post:
+    tags: [Settings]
+    operationId: verifySsoDomain
+    summary: Answer a domain's ownership challenge
+    description: |
+      **Enterprise only** and **owner only**. Present the token from the message
+      sent to the domain's reserved mailbox. Whoever read that mailbox speaks for
+      the domain; that is what makes this a proof rather than a second claim.
+
+      On success the domain joins `verified_domains` and just-in-time
+      provisioning may create accounts and memberships for addresses inside it.
+      The stored digest is discarded at the same moment, so the token cannot be
+      presented twice.
+
+      A wrong or expired token is refused with `validation` and changes nothing
+      — including the challenge, which stays answerable until it expires, because
+      invalidating it would let anyone holding a stale token lock the workspace
+      out of proving its own domain by guessing wrong on purpose.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token]
+            additionalProperties: false
+            properties:
+              token:
+                type: string
+                minLength: 1
+                maxLength: 512
+                description: The token from the challenge message.
+    responses:
+      "200":
+        description: Proved
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SsoDomain" }
+      "400":
+        description: No challenge outstanding, the token has expired, or it does not match.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404":
+        description: No such connection, or the connection does not claim that domain.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 scimTokens:

@@ -328,6 +328,10 @@ paths:
     $ref: "./paths/settings.yaml#/sso"
   /settings/sso/{connectionId}:
     $ref: "./paths/settings.yaml#/ssoConnection"
+  /settings/sso/{connectionId}/domains/{domain}/challenge:
+    $ref: "./paths/settings.yaml#/ssoDomainChallenge"
+  /settings/sso/{connectionId}/domains/{domain}/verify:
+    $ref: "./paths/settings.yaml#/ssoDomainVerify"
   /settings/scim-tokens:
     $ref: "./paths/settings.yaml#/scimTokens"
   /settings/scim-tokens/{tokenId}:
@@ -1217,6 +1221,7 @@ components:
           previous_certificate_pem,
           previous_certificate_expires_at,
           verified_domains,
+          domains,
           attribute_mapping,
           allow_idp_initiated,
           enabled,
@@ -1259,13 +1264,28 @@ components:
           maxItems: 20
           items: { type: string, maxLength: 253 }
           description: >-
-            The e-mail domains this identity provider has been declared
-            authoritative for. Just-in-time provisioning — SAML sign-in and the
-            workspace's SCIM connector alike — is confined to addresses inside
+            The domains this connection may actually provision from: the subset
+            of `domains` whose ownership has been proved. Just-in-time
+            provisioning — SAML sign-in and the workspace's SCIM connector alike
+            — may only create an account or a membership for an address inside
             them, so a workspace's own IdP cannot adopt a stranger's account or
             occupy the address of somebody who never signed up. Stored lowercase
-            and matched exactly, never by suffix: verifying `acme.test` says
+            and matched exactly, never by suffix: proving `acme.test` says
             nothing about `mail.acme.test`. An empty list provisions nobody.
+
+
+            A domain a workspace has merely *claimed* is not here. That is the
+            whole of PLAN §D134: the claim list is written by the workspace about
+            itself, so on its own it is an assertion rather than a fact.
+        domains:
+          type: array
+          maxItems: 20
+          items: { $ref: "#/components/schemas/SsoDomain" }
+          description: >-
+            Every domain claimed by this connection, proved or not, in the order
+            the workspace wrote them. Writing `verified_domains` on `POST`/`PATCH`
+            replaces this list; a domain added here starts unproved and one
+            removed loses its proof.
         attribute_mapping: { $ref: "#/components/schemas/SsoAttributeMapping" }
         allow_idp_initiated:
           type: boolean
@@ -1288,6 +1308,52 @@ components:
             and every such sign-in is marked in the audit trail.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
+
+    SsoDomain:
+      type: object
+      description: |
+        One domain an SSO connection claims, and how far its ownership proof has
+        got (NFR-S11 · PLAN §D134).
+
+        Claiming a domain and proving it are two acts. The claim is written with
+        the connection; the proof is a token mailed to a reserved mailbox at the
+        domain itself — `postmaster@`, `admin@`, `administrator@`, `hostmaster@`
+        or `webmaster@` — and returned through
+        `POST /settings/sso/{connectionId}/domains/{domain}/verify`. Until it
+        comes back the domain is inert: it appears here, it does not appear in
+        `verified_domains`, and just-in-time provisioning ignores it.
+
+        The token itself is never in a response. It exists in the message and as
+        a digest on the row, and the digest is discarded the moment it is spent.
+      required: [domain, verified, verified_at, challenge_mailbox, challenge_sent_at]
+      properties:
+        domain:
+          type: string
+          maxLength: 253
+          description: Lowercase, no trailing dot — the form it is matched in.
+        verified:
+          type: boolean
+          description: >-
+            Whether ownership has been proved. The one field that decides whether
+            this domain provisions anybody.
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the challenge token came back. Null while unproved.
+        challenge_mailbox:
+          type: string
+          nullable: true
+          description: >-
+            The address the outstanding (or last) challenge was sent to, so the
+            screen can say where to look for it. Null when none has been sent.
+        challenge_sent_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            When that challenge was sent. The token stops being answerable 72
+            hours later, and another may be sent a minute after this.
 
     ScimToken:
       type: object

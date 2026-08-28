@@ -129,6 +129,7 @@ model License {
   siemExportCursors      SiemExportCursor[]
   ipAllowlistEntries     IpAllowlistEntry[]
   ssoConnections         SsoConnection[]
+  ssoDomainVerifications SsoDomainVerification[]
   securitySettings       SecuritySettings[]
   inboxSettings          InboxSettings[]
   widgetSettings         WidgetSettings[]
@@ -426,6 +427,11 @@ model SsoConnection {
   /// must not read as "everything verified", which is why the migration
   /// back-fills existing rows from their members' own domains instead of
   /// treating empty as open.
+  ///
+  /// This is the list the workspace *claims*, not the list provisioning reads
+  /// (PLAN §D134). A claim only counts once its `SsoDomainVerification` row
+  /// carries a `verifiedAt`; the two are kept in step by a trigger, so adding a
+  /// domain here opens a pending proof and removing one destroys it.
   verifiedDomains   String[] @default([]) @map("verified_domains")
   /// Accept an assertion sent with no AuthnRequest of ours to correlate it
   /// against. Off by default — that flow gives up the `InResponseTo` binding
@@ -444,7 +450,8 @@ model SsoConnection {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license           License                 @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  domainVerifications SsoDomainVerification[]
 
   /// One connection per IdP within a license. Two rows for one EntityID would
   /// make "which connection issued this assertion?" ambiguous exactly where the
@@ -453,6 +460,51 @@ model SsoConnection {
   /// separate `@@index([licenseId])`.
   @@unique([licenseId, idpEntityId])
   @@map("sso_connections")
+}
+
+/// Proof that a workspace controls one of the domains its SSO connection claims
+/// (NFR-S11 · PLAN §D134).
+///
+/// `SsoConnection.verifiedDomains` is a list the workspace writes about itself,
+/// so on its own it proves nothing: the threat actor in §D116 MEDIUM (a) is the
+/// workspace's own owner, and the write surface being `exactRole: 'owner'` does
+/// not constrain them. This row is where the claim becomes a fact — a token
+/// mailed to a reserved mailbox at the domain (`postmaster@`, `admin@`,
+/// `administrator@`, `hostmaster@`, `webmaster@`) and returned through the API.
+///
+/// Only a row with `verifiedAt` takes part in just-in-time provisioning, and the
+/// resolvers intersect it with the claim list, so a proof that outlived its
+/// claim provisions nobody. Rows are created and destroyed by a trigger on the
+/// connection, never by a route: a rule a caller has to remember is a rule some
+/// later caller will not.
+model SsoDomainVerification {
+  id           String @id @default(uuid()) @db.Uuid
+  connectionId String @map("connection_id") @db.Uuid
+  /// Denormalised from the connection so this table carries the same ordinary
+  /// tenant policy as every other one, rather than reaching through a join.
+  licenseId    BigInt @map("license_id")
+  /// Normalised exactly as `readVerifiedDomain` produces it — lowercase, no
+  /// trailing dot — because it is compared with plain equality against both the
+  /// claim list and the domain half of an asserted address.
+  domain       String
+  /// SHA-256 of the challenge token, never the token. Null before the first
+  /// challenge and again after a successful one: a spent secret left in the row
+  /// is a secret waiting to be replayed.
+  tokenHash        String?   @map("token_hash")
+  /// The address the challenge went to, so the screen can say where to look.
+  challengeMailbox String?   @map("challenge_mailbox")
+  challengeSentAt  DateTime? @map("challenge_sent_at") @db.Timestamptz(6)
+  /// When the token came back. Null means claimed but unproved — inert.
+  verifiedAt       DateTime? @map("verified_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  connection SsoConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  license    License       @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  /// One proof per domain per connection; also the only read this table has.
+  @@unique([connectionId, domain])
+  @@map("sso_domain_verifications")
 }
 
 /// Bearer credentials: OAuth access tokens, personal access tokens and bot

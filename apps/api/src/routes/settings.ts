@@ -22,9 +22,16 @@ import {
   WIDGET_THEMES,
 } from '@nexa/types';
 import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@nexa/types';
-import type { Region, SandboxView, SsoAttributeMappingKey, SsoConnection } from '@nexa/types';
+import type {
+  Region,
+  SandboxView,
+  SsoAttributeMappingKey,
+  SsoConnection,
+  SsoDomain,
+} from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import { constantTimeEqual, generateToken, hashToken } from '../lib/crypto.js';
 import { normaliseIp } from '../lib/banned-ip.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
@@ -33,11 +40,15 @@ import { normaliseTrustedDomain } from '../lib/origin.js';
 import {
   activePreviousCertificate,
   checkFederationUrl,
+  DOMAIN_CHALLENGE_MAILBOXES,
+  DOMAIN_CHALLENGE_RESEND_INTERVAL_MS,
+  DOMAIN_CHALLENGE_TTL_MS,
   inspectIdpCertificate,
   isEnforcingSso,
   MAX_CERTIFICATE_OVERLAP_HOURS,
   MAX_VERIFIED_DOMAINS,
   MIN_RSA_MODULUS_BITS,
+  openDomainChallenge,
   readSsoAttributeMapping,
   readVerifiedDomain,
   SSO_CERTIFICATE_MAX_LENGTH,
@@ -48,6 +59,7 @@ import {
   type CertificateFacts,
 } from '../lib/sso-connection.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
+import type { Mailer } from '../services/mail/mailer.js';
 import {
   readSiemExportRow,
   readSiemExportStatus,
@@ -210,6 +222,72 @@ const updateSsoBody = z
     (body) => !(body.revoke_previous_certificate && body.idp_certificate_pem !== undefined),
     'revoke_previous_certificate cannot be combined with a new idp_certificate_pem — a rotation already decides what happens to the old one',
   );
+
+/**
+ * Which reserved mailbox an ownership challenge goes to (§D134).
+ *
+ * A closed enum, not a free string, and that is the security property rather
+ * than a nicety: an arbitrary mailbox would let the claimant nominate one they
+ * already control, which is the vulnerability this whole flow exists to close,
+ * with an extra step. `postmaster` is the default because RFC 5321 requires
+ * every mail-receiving domain to have it.
+ */
+const ssoDomainChallengeBody = z.object({
+  mailbox: z.enum(DOMAIN_CHALLENGE_MAILBOXES).default(DOMAIN_CHALLENGE_MAILBOXES[0]),
+});
+
+/**
+ * The answer to a challenge. Bounded generously rather than pinned to the
+ * token's own length: a caller who pastes a code with a stray line break should
+ * get "that does not match", not a schema error that reads like a bug in the
+ * form. The comparison is a digest, so length carries no meaning past this.
+ */
+const ssoDomainVerifyBody = z.object({
+  token: z.string().trim().min(1).max(512),
+});
+
+/**
+ * The columns every read of a proof row needs, and the one it must never take.
+ *
+ * `tokenHash` is here because {@link openDomainChallenge} decides on it; nothing
+ * downstream of that puts it in a response. Written once and shared so a fourth
+ * reader cannot quietly select the whole row.
+ */
+const DOMAIN_VERIFICATION_SELECT = {
+  domain: true,
+  tokenHash: true,
+  challengeMailbox: true,
+  challengeSentAt: true,
+  verifiedAt: true,
+} as const;
+
+/**
+ * What lands in `postmaster@<domain>`.
+ *
+ * Written for somebody who did not ask for it and may never have heard of this
+ * product: it names the domain, says what the code does, and says plainly that
+ * ignoring the message is safe. That last sentence is the point — this message
+ * is sent to an address the *requester* chose, so its most likely reader is
+ * somebody who has no idea who asked, and a message that pressures them is a
+ * phishing template we wrote ourselves.
+ */
+function domainChallengeBody(domain: string, token: string): string {
+  const hours = Math.round(DOMAIN_CHALLENGE_TTL_MS / 3_600_000);
+  return [
+    `Somebody is configuring single sign-on for ${domain} and has asked us to`,
+    `confirm that they operate the domain.`,
+    ``,
+    `Verification code: ${token}`,
+    ``,
+    `If you were expecting this, pass the code to whoever is setting up the`,
+    `connection. It stops working in ${hours} hours.`,
+    ``,
+    `If you were not expecting this, ignore this message. Without the code`,
+    `nothing about ${domain} changes, and nobody can sign in as one of your`,
+    `addresses.`,
+    ``,
+  ].join('\n');
+}
 
 /**
  * How many live SCIM provisioning tokens one workspace may hold (NFR-S11).
@@ -603,8 +681,10 @@ function serialiseExpertise(area: { id: bigint; name: string; slug: string }) {
 
 export default async function settingsRoutes(
   app: FastifyInstance,
-  options: { env: Env },
+  options: { env: Env; mailer: Mailer },
 ): Promise<void> {
+  const { mailer } = options;
+
   // --- Trusted domains -------------------------------------------------------
 
   app.get(
@@ -907,7 +987,10 @@ export default async function settingsRoutes(
     async (request, reply) => {
       const now = new Date();
       const items = await request.withTenant((tx) =>
-        tx.ssoConnection.findMany({ orderBy: { name: 'asc' } }),
+        tx.ssoConnection.findMany({
+          orderBy: { name: 'asc' },
+          include: { domainVerifications: true },
+        }),
       );
       return reply.send({ items: items.map((row) => serialiseSsoConnection(row, now)) });
     },
@@ -948,6 +1031,7 @@ export default async function settingsRoutes(
           if (isEnforcingSso(body)) await assertEnforcementHasAKey(tx, tenant.licenseId);
 
           const row = await tx.ssoConnection.create({
+            include: { domainVerifications: true },
             data: {
               licenseId: tenant.licenseId,
               name: body.name,
@@ -1074,6 +1158,7 @@ export default async function settingsRoutes(
 
           const row = await tx.ssoConnection.update({
             where: { id: existing.id },
+            include: { domainVerifications: true },
             data: {
               ...(body.name !== undefined ? { name: body.name } : {}),
               ...(body.idp_entity_id !== undefined ? { idpEntityId: body.idp_entity_id } : {}),
@@ -1148,6 +1233,191 @@ export default async function settingsRoutes(
       if (deleted === 0) throw ApiError.notFound('SSO connection not found.');
 
       return reply.status(204).send();
+    },
+  );
+
+  // --- Domain ownership (NFR-S11 · §D134) -------------------------------------
+  //
+  // The half `verified_domains` never had. That list is written by the workspace
+  // about itself, so it says only that this workspace would *like* to speak for
+  // a domain — and the actor §D116 MEDIUM (a) is about is the workspace's own
+  // owner, who already holds the narrowest role gate in the product. Narrowing a
+  // door is not a defence against the person standing behind it, so the claim
+  // has to be answered by somebody at the domain: a token mailed to a reserved
+  // mailbox there and returned here.
+  //
+  // Both routes carry the same gate as the writes above — `exactRole: 'owner'`,
+  // `access_rules:rw`, `entitlement: 'sso'` — because proving a domain widens
+  // what the connection may provision, which is the same class of change as
+  // writing the certificate.
+
+  /**
+   * Find the proof row for one claimed domain, or say why there is none.
+   *
+   * Two 404s that mean different things collapse into one on the wire, on
+   * purpose: "no such connection" and "that connection does not claim that
+   * domain" are both answered as not-found, so the endpoint cannot be used to
+   * enumerate what another workspace federates (NFR-S5). RLS does the tenant
+   * half — a foreign connection id simply matches nothing.
+   *
+   * The row is reached through the connection rather than by `(connectionId,
+   * domain)` alone so a proof that outlived its claim is invisible here too. It
+   * is already inert at the resolvers (`sso_connection_proved_domains`
+   * intersects with the claim list); showing it on this surface would be the one
+   * place the two answers could disagree.
+   */
+  async function readClaimedDomain(
+    tx: Prisma.TransactionClient,
+    connectionId: string,
+    domain: string,
+  ): Promise<DomainVerificationRow> {
+    const connection = await tx.ssoConnection.findFirst({
+      where: { id: connectionId },
+      select: { verifiedDomains: true },
+    });
+    if (!connection) throw ApiError.notFound('SSO connection not found.');
+    if (!connection.verifiedDomains.includes(domain)) {
+      throw ApiError.notFound('That connection does not list that domain.');
+    }
+
+    const row = await tx.ssoDomainVerification.findFirst({
+      where: { connectionId, domain },
+      select: DOMAIN_VERIFICATION_SELECT,
+    });
+    // The trigger creates a row for every claimed domain, so a missing one means
+    // the two have drifted — a state nothing here can repair and nothing here
+    // may paper over, since papering over it would mean minting a challenge for
+    // a domain the proof table does not know about.
+    if (!row) throw ApiError.notFound('That domain has no verification record.');
+    return row;
+  }
+
+  app.post<{ Params: { connectionId: string; domain: string } }>(
+    '/settings/sso/:connectionId/domains/:domain/challenge',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner', entitlement: 'sso' } },
+    async (request, reply) => {
+      const connectionId = parse(uuid, request.params.connectionId);
+      // Normalised with the same function that normalised it on the way in, so
+      // `ACME.test.` in a URL finds the row `acme.test` was stored as.
+      const domain = readSsoDomain(request.params.domain);
+      const body = parse(ssoDomainChallengeBody, request.body ?? {});
+      const now = new Date();
+
+      const token = generateToken();
+      const mailbox = `${body.mailbox}@${domain}`;
+
+      const state = await request.withTenant(async (tx) => {
+        const row = await readClaimedDomain(tx, connectionId, domain);
+
+        if (row.verifiedAt) {
+          throw ApiError.validation(
+            'That domain is already verified, so there is nothing left to prove.',
+          );
+        }
+        // Bounded from the row's own timestamp rather than from a counter in a
+        // cache: this endpoint sends mail to an address the *caller* names, so
+        // the loop it would otherwise allow — mail a stranger's postmaster on
+        // demand — must not reopen when Redis is down (§D133/3).
+        if (
+          row.challengeSentAt &&
+          now.getTime() - row.challengeSentAt.getTime() < DOMAIN_CHALLENGE_RESEND_INTERVAL_MS
+        ) {
+          throw ApiError.validation(
+            'A verification message for that domain was just sent. Wait a minute before sending another.',
+          );
+        }
+
+        const updated = await tx.ssoDomainVerification.update({
+          where: { connectionId_domain: { connectionId, domain } },
+          data: { tokenHash: hashToken(token), challengeMailbox: mailbox, challengeSentAt: now },
+          select: DOMAIN_VERIFICATION_SELECT,
+        });
+
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.security_updated',
+          target: `sso_connection:${connectionId}`,
+          // The domain and the mailbox, never the token. Both are things an
+          // incident reviewer needs — which domain this workspace tried to
+          // claim, and who was asked to vouch for it — and neither is a secret.
+          metadata: { resource: 'sso_domain', operation: 'challenge_sent', domain, mailbox },
+        });
+
+        return updated;
+      });
+
+      // After the commit, so a workspace can never be told a message went out
+      // that the transaction then rolled back. The reverse — a committed
+      // challenge whose mail fails — costs one retry a minute later and leaves
+      // nothing false behind.
+      await mailer.send({
+        to: mailbox,
+        kind: 'notification',
+        subject: `Verify ${domain} for single sign-on`,
+        body: domainChallengeBody(domain, token),
+      });
+
+      return reply.status(202).send(serialiseSsoDomain(domain, state));
+    },
+  );
+
+  app.post<{ Params: { connectionId: string; domain: string } }>(
+    '/settings/sso/:connectionId/domains/:domain/verify',
+    { config: { scopes: ['access_rules:rw'], exactRole: 'owner', entitlement: 'sso' } },
+    async (request, reply) => {
+      const connectionId = parse(uuid, request.params.connectionId);
+      const domain = readSsoDomain(request.params.domain);
+      const body = parse(ssoDomainVerifyBody, request.body);
+      const now = new Date();
+
+      const state = await request.withTenant(async (tx) => {
+        const row = await readClaimedDomain(tx, connectionId, domain);
+        // Already proved: answered as success rather than as "no challenge
+        // outstanding", because a retried request must not read as a failure of
+        // the thing it is retrying.
+        if (row.verifiedAt) return row;
+
+        const challenge = openDomainChallenge(row, now);
+        if (!challenge.ok) {
+          throw ApiError.validation(
+            challenge.reason === 'expired'
+              ? 'That verification code has expired. Send a new one to the domain and try again.'
+              : 'No verification code is outstanding for that domain. Send one first.',
+          );
+        }
+        // Compared as digests, so this branch never handles the plaintext of a
+        // token the process did not just generate; constant-time because the
+        // caller controls one side and a length-or-prefix oracle here would leak
+        // the shape of a secret that is otherwise unguessable.
+        if (!constantTimeEqual(hashToken(body.token), challenge.tokenHash)) {
+          // The outstanding challenge deliberately survives a wrong answer.
+          // Consuming it would let anybody holding a stale token — or simply
+          // guessing — lock the workspace out of proving its own domain.
+          throw ApiError.validation('That verification code does not match. Check it and retry.');
+        }
+
+        const updated = await tx.ssoDomainVerification.update({
+          where: { connectionId_domain: { connectionId, domain } },
+          // The digest goes when the token is spent: a secret that has done its
+          // work and stayed in the row is a secret waiting to be replayed.
+          data: { verifiedAt: now, tokenHash: null },
+          select: DOMAIN_VERIFICATION_SELECT,
+        });
+
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.security_updated',
+          target: `sso_connection:${connectionId}`,
+          metadata: {
+            resource: 'sso_domain',
+            operation: 'verified',
+            domain,
+            mailbox: row.challengeMailbox,
+          },
+        });
+
+        return updated;
+      });
+
+      return reply.send(serialiseSsoDomain(domain, state));
     },
   );
 
@@ -2515,6 +2785,40 @@ function serialiseSalesTracker(
 }
 
 /**
+ * The stored half of one domain's ownership proof (§D134).
+ *
+ * Named rather than inlined because three places have to agree on it: the
+ * connection serialiser, the challenge endpoint and the verify endpoint. The
+ * digest is in the row and never in this shape's output.
+ */
+interface DomainVerificationRow {
+  domain: string;
+  tokenHash: string | null;
+  challengeMailbox: string | null;
+  challengeSentAt: Date | null;
+  verifiedAt: Date | null;
+}
+
+/**
+ * One claimed domain on the wire (§D134).
+ *
+ * A claim with no row at all reads exactly like a claim whose challenge has
+ * never been sent, and that is correct rather than lenient: both are unproved,
+ * and `verified` is the only field anything downstream reads. The `undefined`
+ * case is the instant between a claim being written and the trigger's row being
+ * read back in a different transaction — never a state a domain rests in.
+ */
+function serialiseSsoDomain(domain: string, row: DomainVerificationRow | undefined): SsoDomain {
+  return {
+    domain,
+    verified: row?.verifiedAt != null,
+    verified_at: row?.verifiedAt?.toISOString() ?? null,
+    challenge_mailbox: row?.challengeMailbox ?? null,
+    challenge_sent_at: row?.challengeSentAt?.toISOString() ?? null,
+  };
+}
+
+/**
  * One SAML connection on the wire (NFR-S11). The certificate is sent in full:
  * it is the IdP's public signing certificate, the field an admin compares
  * against their IdP console to confirm a rotation landed, so masking it would
@@ -2536,6 +2840,7 @@ function serialiseSsoConnection(
     previousCertificatePem: string | null;
     previousCertificateExpiresAt: Date | null;
     verifiedDomains: string[];
+    domainVerifications: DomainVerificationRow[];
     attributeMapping: Prisma.JsonValue;
     allowIdpInitiated: boolean;
     enabled: boolean;
@@ -2546,6 +2851,13 @@ function serialiseSsoConnection(
   now: Date,
 ): SsoConnection {
   const previous = activePreviousCertificate(row, now);
+  // Driven by the claim list, not by the proof rows: the order an owner typed
+  // is the order they read, and a proof that outlived its claim is exactly what
+  // the resolvers refuse to honour — so it must not appear here either.
+  const proofs = new Map(row.domainVerifications.map((v) => [v.domain, v]));
+  const domains = row.verifiedDomains.map((domain) =>
+    serialiseSsoDomain(domain, proofs.get(domain)),
+  );
   return {
     id: row.id,
     name: row.name,
@@ -2554,11 +2866,15 @@ function serialiseSsoConnection(
     idp_certificate_pem: row.idpCertificatePem,
     previous_certificate_pem: previous?.pem ?? null,
     previous_certificate_expires_at: previous?.expiresAt.toISOString() ?? null,
-    // As stored. An empty list is reported as empty rather than hidden or
+    // Proved domains only, and the difference is the point (§D134). A claim is
+    // something the workspace wrote about itself; this field is what provisioning
+    // reads, so it may only carry domains whose ownership came back through a
+    // challenge. An empty list is reported as empty rather than hidden or
     // defaulted: a connection that provisions nobody is a state the screen has
-    // to be able to show, and it is exactly the state a workspace whose
-    // back-fill found nothing lands in.
-    verified_domains: row.verifiedDomains,
+    // to be able to show, and it is exactly the state a freshly configured
+    // connection — and every connection this migration inherited — lands in.
+    verified_domains: domains.filter((d) => d.verified).map((d) => d.domain),
+    domains,
     attribute_mapping: readSsoAttributeMapping(row.attributeMapping),
     allow_idp_initiated: row.allowIdpInitiated,
     enabled: row.enabled,
@@ -2619,6 +2935,10 @@ function readSsoDomain(raw: string): string {
   switch (checked.reason) {
     case 'too_long':
       throw ApiError.validation('That domain is too long to be a domain name.');
+    case 'public_provider':
+      throw ApiError.validation(
+        'That is a public mailbox provider, so no identity provider can be authoritative for it — millions of unrelated people hold an address there. List the domain your organisation operates instead.',
+      );
     case 'malformed':
       throw ApiError.validation(
         raw.trim().startsWith('*')

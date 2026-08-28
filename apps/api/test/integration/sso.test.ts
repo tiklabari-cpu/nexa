@@ -72,6 +72,13 @@ describe('sso connections', () => {
     previous_certificate_pem: string | null;
     previous_certificate_expires_at: string | null;
     verified_domains: string[];
+    domains: Array<{
+      domain: string;
+      verified: boolean;
+      verified_at: string | null;
+      challenge_mailbox: string | null;
+      challenge_sent_at: string | null;
+    }>;
     attribute_mapping: Record<string, string>;
     allow_idp_initiated: boolean;
     enabled: boolean;
@@ -414,7 +421,48 @@ describe('sso connections', () => {
     const created = await create({
       verified_domains: ['ACME.test', ' acme.test. ', 'Corp.Acme.Test'],
     });
-    expect(created.verified_domains).toEqual(['acme.test', 'corp.acme.test']);
+    expect(created.domains.map((d) => d.domain)).toEqual(['acme.test', 'corp.acme.test']);
+  });
+
+  it('claims a domain without verifying it — the two are different acts (§D134)', async () => {
+    // The finding this closes: `verified_domains` was a list the workspace
+    // wrote about itself, and the actor §D116 MEDIUM (a) is about is that
+    // workspace's own owner. So a claim now arrives unproved, and the field
+    // provisioning reads comes back empty until somebody at the domain answers.
+    const created = await create({ verified_domains: ['acme.test'] });
+
+    expect(created.verified_domains).toEqual([]);
+    expect(created.domains).toEqual([
+      {
+        domain: 'acme.test',
+        verified: false,
+        verified_at: null,
+        challenge_mailbox: null,
+        challenge_sent_at: null,
+      },
+    ]);
+
+    // And the claim really is stored — this is a state, not a rejection.
+    const row = await owner.ssoConnection.findFirst({ where: { id: created.id } });
+    expect(row!.verifiedDomains).toEqual(['acme.test']);
+  });
+
+  it('refuses a consumer mailbox provider by name', async () => {
+    // No identity provider can be authoritative for gmail.com. The challenge
+    // would refuse it anyway — nobody configuring a workspace reads
+    // `postmaster@gmail.com` — but a named refusal turns a challenge that is
+    // never answered into a sentence the owner can act on.
+    const res = await server.post(
+      '/settings/sso',
+      createBody({ verified_domains: ['gmail.com'] }),
+      auth(ownerWriteToken),
+    );
+    expect(res.statusCode).toBe(400);
+    expect(errorType(res)).toBe('validation');
+    expect((res.json() as { error: { message: string } }).error.message).toContain(
+      'public mailbox provider',
+    );
+    expect(await owner.ssoConnection.count()).toBe(0);
   });
 
   it('refuses a wildcard rather than expanding it', async () => {
@@ -476,7 +524,7 @@ describe('sso connections', () => {
       auth(ownerWriteToken),
     );
     expect(res.statusCode).toBe(200);
-    expect(wire(res).verified_domains).toEqual(['acme.test']);
+    expect(wire(res).domains.map((d) => d.domain)).toEqual(['acme.test']);
     // The certificate is untouched: a domain change is not a rotation.
     expect(wire(res).idp_certificate_pem).toBe(created.idp_certificate_pem);
 

@@ -300,7 +300,7 @@ export async function buildServer({
       await api.register(reportRoutes, { env });
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
-      await api.register(settingsRoutes, { env });
+      await api.register(settingsRoutes, { env, mailer });
       await api.register(onboardingRoutes);
       await api.register(websiteRoutes, { env });
       await api.register(brandRoutes);

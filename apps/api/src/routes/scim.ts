@@ -89,6 +89,7 @@
 import { Prisma } from '@prisma/client';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { ApiError, isApiError } from '../lib/api-error.js';
+import { assertScimSeatCeiling } from '../lib/entitlements.js';
 import type { TenantClient } from '../lib/tenant.js';
 import {
   SCIM_CONTENT_TYPE,
@@ -560,6 +561,18 @@ export default async function scimRoutes(
     if (!parsed.ok) throw scimProblem('validation', parsed.detail, parsed.scimType);
     const { user } = parsed;
 
+    // Checked before any write — including the SECURITY DEFINER call below —
+    // so a workspace at the ceiling gets no membership at all rather than one
+    // `applySeatEffect` then has no seat to cover (§D116 LOW (5)). A user
+    // provisioned `active: false` occupies no seat (see `applySeatEffect`), so
+    // there is nothing to guard for one.
+    if (user.active) {
+      const headcount = await request.withTenant((tx) =>
+        tx.agentMembership.count({ where: { suspended: false } }),
+      );
+      assertScimSeatCeiling(headcount + 1);
+    }
+
     // The account may already exist in another workspace, where this tenant
     // context cannot see it (`accounts` visibility is derived from shared
     // membership). A SECURITY DEFINER resolver settles find-or-create and the
@@ -701,6 +714,16 @@ export default async function scimRoutes(
 
       try {
         const updated = await request.withTenant(async (tx) => {
+          // Only a reinstatement can grow the headcount (a suspension never
+          // does — see the seat-effect note below), so only it is checked, and
+          // checked inside this same transaction: a refusal here rolls the
+          // whole patch back with it, rather than leaving the member reinstated
+          // with no seat behind them (§D116 LOW (5)).
+          if (changes.active === true && existing.suspended) {
+            const headcount = await tx.agentMembership.count({ where: { suspended: false } });
+            assertScimSeatCeiling(headcount + 1);
+          }
+
           if (changes.externalId !== undefined) {
             await tx.agentMembership.update({
               // Keyed by the composite primary key *and* run under RLS, so it

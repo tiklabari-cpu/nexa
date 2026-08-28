@@ -31,9 +31,11 @@
  * happened". A provisioning run that leaves no trail, or that grows a workspace
  * without growing its bill, is inside the boundary and still wrong.
  */
+import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hashToken } from '../../src/lib/crypto.js';
+import { SCIM_SEAT_CEILING } from '../../src/lib/entitlements.js';
 import { MAX_ACTIVE_SCIM_TOKENS } from '../../src/routes/settings.js';
 import { AUDIT_ACTIONS } from '../../src/services/audit/audit-log.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
@@ -752,6 +754,27 @@ describe('scim server core', () => {
     const seatsOf = async (licenseId: bigint) =>
       (await owner.subscription.findFirst({ where: { licenseId } }))?.seats ?? null;
 
+    /**
+     * Push a workspace's active headcount up by `count`, without going through
+     * SCIM — the seat-ceiling tests need a workspace already sitting near
+     * {@link SCIM_SEAT_CEILING} before the request under test, and creating
+     * that many members one directory call at a time would make the *setup*
+     * the slow part of the suite rather than the assertion.
+     */
+    const addActiveMembers = async (licenseId: bigint, count: number, prefix: string) => {
+      const ids = Array.from({ length: count }, () => randomUUID());
+      await owner.account.createMany({
+        data: ids.map((id, i) => ({
+          id,
+          email: `${prefix}-${i}@example.test`,
+          name: `${prefix} ${i}`,
+        })),
+      });
+      await owner.agentMembership.createMany({
+        data: ids.map((id) => ({ licenseId, agentId: id, role: 'agent' })),
+      });
+    };
+
     beforeEach(async () => {
       const row = await owner.apiToken.findFirst({ where: { tokenHash: hashToken(scimA) } });
       scimTokenIdA = row!.id;
@@ -950,6 +973,77 @@ describe('scim server core', () => {
         await subscribe(2);
         await server.post('/scim/v2/Users', { userName: 'ada@example.test' }, scimBody(scimA));
         expect(await seatsOf(fx.b.licenseId)).toBe(2);
+      });
+
+      // --- The ceiling (§D116 LOW (5)) ---------------------------------------
+      //
+      // The rules above are deliberately unbounded — the bill following the
+      // headcount is the point. This is the safety rail on top: past
+      // `SCIM_SEAT_CEILING`, a directory stops being able to grow the bill
+      // unattended, and an administrator has to confirm it instead.
+
+      it('refuses to provision past the seat ceiling, and writes nothing', async () => {
+        // 2 members are seeded (owner + agent); fill the rest of the ceiling.
+        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING - 2, 'filler');
+
+        const res = await server.post(
+          '/scim/v2/Users',
+          { userName: 'over-ceiling@example.test' },
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(429);
+        // No account, no membership, no audit trail — a refusal that still
+        // left a member behind would be the bug this exists to close.
+        expect(await owner.account.count({ where: { email: 'over-ceiling@example.test' } })).toBe(
+          0,
+        );
+        expect(await entriesFor('member.invited')).toHaveLength(0);
+        expect(await entriesFor('billing.subscription_updated')).toHaveLength(0);
+      });
+
+      it('provisions the member that brings the workspace exactly to the ceiling', async () => {
+        // 2 seeded + (ceiling - 3) filler = ceiling - 1 active members; one more
+        // reaches the ceiling exactly rather than crossing it.
+        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING - 3, 'filler');
+
+        const res = await server.post(
+          '/scim/v2/Users',
+          { userName: 'at-ceiling@example.test' },
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(201);
+      });
+
+      it('refuses to reinstate a member once the workspace is at the seat ceiling', async () => {
+        await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
+        // Deprovisioning left 1 active member (the owner); fill the rest.
+        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING - 1, 'filler');
+
+        const res = await server.patch(
+          `/scim/v2/Users/${fx.a.agentAccountId}`,
+          reactivate,
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(429);
+
+        const membership = await owner.agentMembership.findUnique({
+          where: { licenseId_agentId: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId } },
+        });
+        expect(membership!.suspended).toBe(true);
+        expect(await entriesFor('member.unsuspended')).toHaveLength(0);
+      });
+
+      it('does not gate a suspension — only growth is bounded', async () => {
+        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING, 'filler');
+        // Already over the ceiling from filler alone; deactivating a member
+        // still shrinks headcount and must never be refused for it.
+        const res = await server.patch(
+          `/scim/v2/Users/${fx.a.agentAccountId}`,
+          deactivate,
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(200);
+        expect(asUser(res).active).toBe(false);
       });
     });
 

@@ -7528,10 +7528,10 @@
         "description": "tm 142 (M-SEC-a) STRIDE denetiminin beş LOW bulgusu CONVENTIONS §4.1 gereği o turda görevleşmedi ve PLAN §D116 içinde listeli kaldı. Hiçbiri tek başına acil değil ama beşi de gerçek ve hepsi bir pencerelik iş; sahipsiz bırakıldıkları için her denetim turunda yeniden bulunuyorlar. Faz-5 beşini de kapatır.",
         "details": "BULGU KAYNAĞI: PLAN §D116 LOW listesi (tm 142 denetiminin görevleşmemiş payı).\nBeş alt-görev birbirinden BAĞIMSIZDIR; sırayla ya da paralel koşulabilir.\nHer biri tek pencerelik ve dar kapsamlı — kapsam genişletme (CONVENTIONS §5).\n\nFAZ-5'İN KONUSU: DENETİMİN BULDUĞU YANLIŞ (§D124). Bu faz YENİ ÖZELLİK AÇMAZ — iddia ile kodu\neşitler. Kapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-c** (türetilmiş — §D116 LOW bulguları). Gereksinim satırı: `grep -n \"| M-SEC-c\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-c\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "Beş alt-görev done; her biri kendi önce-kırmızı testini taşır.\nPLAN §7.2 M-SEC-c satırı \"✅ → KM-SEC-c\"; §D116 nın LOW listesine \"kapandı → tm 155.x\" notu düşülür.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T12:44:02.878Z",
+        "updatedAt": "2026-08-28T14:44:46.429Z",
         "subtasks": [
           {
             "id": 1,
@@ -7583,10 +7583,10 @@
             "description": "SCIM sağlama artık plan tavanını aşamıyor.",
             "details": "NE YAPILACAK (§D116 LOW/5): apps/api/src/routes/scim.ts içindeki applySeatEffect koltuk sayısını\ntavansız yükseltiyor. Bu KASITLIYDI (denetim öyle yazıyor) ama gözetimsiz bir konnektör faturayı\nbüyütebilir. Entitlement tavanı uygulanır ve aşımda limit_reached hata tipiyle reddedilir.\n\nDOSYALAR: apps/api/src/routes/scim.ts (applySeatEffect) · apps/api/src/lib/entitlements.ts\n(tavan kaynağı) · scim.test.ts.\nREFERANS: entitlement kapısının diğer kullanımları (plugins/entitlement-gate.ts) ve\nlimit_reached hata tipinin mevcut kullanımı.\n\nTUZAKLAR:\n1. SCIM in RFC yanıt biçimi ADR-06 hata zarfından farklıdır — SCIM ucunun kendi hata biçimini koru\n   (routes/scim.ts te zaten bir dönüşüm var; ona bak).\n2. Tavan aşımı kısmi başarı yaratmamalı: bir grup üyeliği yazılıp koltuk artışı reddedilmemeli (işlem bütünlüğü).\n3. Tavanın nereden geldiğini (plan/entitlement) koda yorum olarak yaz; sabit sayı GÖMME.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-c** (türetilmiş — §D116 LOW/5). Gereksinim satırı: `grep -n \"| M-SEC-c\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-c\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- ÖNCE KIRMIZI: tavanın üstünde koltuk isteyen SCIM sağlama bugün geçiyor, sonra reddediliyor.\n- api integration scim süiti yeşil (taban korunur).\n- PLAN: §7.2 M-SEC-c → \"✅ → KM-SEC-c\" (beşinci alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "155",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-28T14:44:46.429Z"
           }
         ]
       },
@@ -8132,9 +8132,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T12:44:02.879Z",
+      "lastModified": "2026-08-28T14:44:46.430Z",
       "taskCount": 170,
-      "completedCount": 159,
+      "completedCount": 160,
       "tags": [
         "master"
       ]

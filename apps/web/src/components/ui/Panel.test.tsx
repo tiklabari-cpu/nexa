@@ -45,6 +45,15 @@ describe('Panel', () => {
     );
     expect(screen.queryByRole('button', { name: 'Collapse details panel' })).toBeNull();
   });
+
+  it('names the collapse control from the catalogue when no explicit label is given', () => {
+    render(
+      <Panel label="Details" title="Details" onCollapse={vi.fn()}>
+        <p>Body</p>
+      </Panel>,
+    );
+    expect(screen.getByRole('button', { name: 'Collapse panel' })).toBeInTheDocument();
+  });
 });
 
 describe('PanelSection', () => {

@@ -14,9 +14,24 @@
  *   all ask before discarding — one gate, every exit.
  * - Focus moves into the dialog on open unless the content already claimed it
  *   (an `autoFocus`ed field keeps it), and returns to the trigger on close.
+ * - Tab is trapped inside the panel: it cycles through the panel's own
+ *   focusable elements rather than escaping to the page behind the backdrop.
  */
 import { useEffect, useId, useRef, type ReactElement, type ReactNode } from 'react';
 import { cn } from './cn.js';
+
+// Elements a Tab press can land on. `[tabindex]:not([tabindex="-1"])` picks up
+// anything a caller made focusable without an intervening element; the panel
+// itself carries `tabindex="-1"` (focus target, not a Tab stop) so it is
+// deliberately excluded here rather than matched and filtered out.
+const FOCUSABLE_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'textarea:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(', ');
 
 interface ModalProps {
   onClose: () => void;
@@ -47,12 +62,37 @@ export function Modal({
   const headingId = useId();
 
   // Escape is a dismissal path like any other — routed through the same
-  // `onClose` so a dirty guard covers it too.
+  // `onClose` so a dirty guard covers it too. Tab is trapped in the same
+  // handler: cycling past either end of the panel's focusable elements wraps
+  // back around instead of reaching the page behind the backdrop.
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') {
         event.preventDefault();
         onClose();
+        return;
+      }
+      if (event.key !== 'Tab') return;
+      const panel = panelRef.current;
+      if (!panel) return;
+      const focusable = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+      if (focusable.length === 0) {
+        // Nothing to cycle through — keep focus pinned on the panel itself.
+        event.preventDefault();
+        panel.focus();
+        return;
+      }
+      const first = focusable[0]!;
+      const last = focusable[focusable.length - 1]!;
+      const active = document.activeElement;
+      if (event.shiftKey) {
+        if (active === first || !panel.contains(active)) {
+          event.preventDefault();
+          last.focus();
+        }
+      } else if (active === last || !panel.contains(active)) {
+        event.preventDefault();
+        first.focus();
       }
     };
     document.addEventListener('keydown', onKeyDown);

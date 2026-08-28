@@ -9,7 +9,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { Banner, bannerDismissKey } from './index.js';
+import { Banner, bannerDismissKey, type BannerTone } from './index.js';
 
 beforeEach(() => {
   localStorage.clear();
@@ -33,6 +33,28 @@ describe('Banner', () => {
   it('has no dismiss control unless asked for one', () => {
     render(<Banner tone="info">Heads up.</Banner>);
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+  });
+
+  it('is a status region for every tone except danger, which is an alert', () => {
+    const nonDanger: BannerTone[] = ['info', 'success', 'warning', 'brand', 'neutral'];
+    for (const tone of nonDanger) {
+      const { unmount } = render(<Banner tone={tone}>Message.</Banner>);
+      expect(screen.getByRole('status')).toBeInTheDocument();
+      unmount();
+    }
+
+    render(<Banner tone="danger">Something failed.</Banner>);
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+
+  it('lets a caller override the tone default role', () => {
+    render(
+      <Banner tone="danger" role="status">
+        Recoverable, not urgent enough to interrupt.
+      </Banner>,
+    );
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
   it('remembers a keyed dismissal across remounts', async () => {

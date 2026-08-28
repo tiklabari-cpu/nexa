@@ -7599,7 +7599,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T14:48:07.690Z",
+        "updatedAt": "2026-08-28T15:07:31.420Z",
         "subtasks": [
           {
             "id": 1,
@@ -7607,10 +7607,10 @@
             "description": "Widget bundle bütçesi CI da gerçekten ölçülüyor.",
             "details": "NE YAPILACAK (§D122): iki küçük ama belirleyici düzeltme.\n1. .github/workflows/ci.yml — verify job unda \"Build\" adımı \"Unit tests\" ADIMINDAN ÖNCE koşar.\n   Bugün sıra: Typecheck → Lint → Format → Unit tests → Integration tests → Build.\n   turbo.json da test:unit yalnız ^build e (bağımlılıkların build ine) bağlı, paketin KENDİ build ine değil;\n   bu yüzden temiz checkout ta apps/widget/dist yoktur ve bütçe testi atlanır.\n2. apps/widget/test/bundle-size.test.ts — describe.skipIf(!existsSync(distDir)) sessiz atlaması kalkar.\n   dist yoksa test AÇIK BİR HATA vermeli (\"önce build koş\") ya da turbo bağımlılığı ile dist in\n   varlığı garanti edilmeli. Sessiz yeşil KABUL EDİLEMEZ — bir NFR damgası, onu ölçen komut fiilen\n   koşmuyorsa iddiadan ibarettir (§D122 nin dersi).\n\nDOSYALAR: .github/workflows/ci.yml · apps/widget/test/bundle-size.test.ts · turbo.json (gerekirse\nwidget in test:unit görevine kendi build bağımlılığı).\n\nTUZAKLAR:\n1. Sıra değişimi CI süresini uzatabilir; kabul edilebilir — ölçülmeyen bütçe ölçülmemiş demektir.\n2. YEREL koşuda da bozmamalı: pnpm -w test in build siz koşulduğu durumlar var; seçtiğin çözüm\n   yerel geliştiriciyi kilitlememeli (turbo bağımlılığı en temiz yol).\n3. Bütçenin kendisi geniş marjla geçiyor (2026-08-23 ölçümü: loader 1.646 B + widget 16.705 B gzip\n   = 18,4 KB, bütçe 51.200 B). Yani bu görev bir REGRESYON aramıyor, NÖBETÇİYİ onarıyor.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-GUARD** (türetilmiş — NFR-P3 nöbetçisi · §D122). Gereksinim satırı: `grep -n \"| M-GUARD\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-GUARD\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Ölçülebilir: dist silinip pnpm --filter @nexa/widget test koşulduğunda test ATLAMIYOR (hata ya da build tetikliyor).\n- pnpm -w test ve pnpm -w build yeşil; ci.yml adım sırası değişmiş (diff te görünür).\n- PLAN: §D122 ye \"kapandı → tm 156.1\" notu.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "156",
-            "updatedAt": "2026-08-28T14:48:07.690Z"
+            "updatedAt": "2026-08-28T15:06:10.582Z"
           },
           {
             "id": 2,
@@ -7618,10 +7618,10 @@
             "description": "Elle yazılmış primitiflerin klavye davranışı artık testle kilitli.",
             "details": "NE YAPILACAK: apps/web/src/components/ui/ altındaki dört primitifin klavye ve odak davranışları\nbirim testleriyle kilitlenir. Bunlar Radix in bedava verdiği davranışlardır; depo primitifleri elle\nyazdığı için bugün hiçbiri testle korunmuyor (§D124 bulgu 7).\n- Modal: açılınca odak içeri girer · Tab döngüsü içeride kalır (focus trap) · Escape kapatır\n  · kapanınca odak açan öğeye GERİ döner.\n- Dropdown: ok tuşlarıyla gezinme (roving tabindex) · Home/End · Escape kapatır · dışarı tıklama kapatır.\n- Panel: rol ve etiketleme (aria-label / aria-labelledby) · kapatma düğmesinin erişilebilir adı.\n- Banner: rol (status/alert ayrımı) · kalıcı dismiss davranışı erişilebilir.\nKOD DAVRANIŞI DEĞİŞTİRME hedefi değil — ölçüp eksik bulursan DÜZELT, ama kapsamı bu dört dosyada tut.\n\nDOSYALAR: apps/web/src/components/ui/{Modal,Dropdown,Panel,Banner}.tsx ve .test.tsx dosyaları.\nREFERANS: mevcut testler (Modal.test.tsx vb.) + e2e a11y.spec.ts in axe kullanımı.\nNOT: axe taraması bu davranışları GÖREMEZ (statik ihlal arar); klavye davranışı ancak\netkileşimli birim testiyle kilitlenir. İkisi birbirinin yerine geçmez.\n\nTUZAK: NFR-A11Y4 \"sürükle-bırak yeniden sıralamaya klavye alternatifi\" istiyor; bu görev o kalemi\nAÇMAZ (kapsam dışı) — ama primitiflerde bir eksik bulursan HANDOFF a yaz.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-GUARD** (türetilmiş — NFR-A11Y1-6 · §D124/7). Gereksinim satırı: `grep -n \"| M-GUARD\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-GUARD\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- web test yeşil (+12 civarı); dört primitifin her biri için klavye/odak testleri adıyla görünür.\n- e2e a11y süiti yeşil (59 tarama, blocking 0) — bozulmadı.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "156",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-28T15:07:31.420Z"
           },
           {
             "id": 3,
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T14:48:07.691Z",
+      "lastModified": "2026-08-28T15:07:31.422Z",
       "taskCount": 170,
       "completedCount": 160,
       "tags": [

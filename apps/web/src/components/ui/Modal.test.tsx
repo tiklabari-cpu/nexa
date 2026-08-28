@@ -79,4 +79,59 @@ describe('Modal', () => {
     );
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveFocus();
   });
+
+  it('returns focus to the element that opened it, once closed', () => {
+    render(<button type="button">Open</button>);
+    const trigger = screen.getByRole('button', { name: 'Open' });
+    trigger.focus();
+
+    const { unmount } = render(
+      <Modal onClose={vi.fn()} title="Confirm">
+        <p>Body</p>
+      </Modal>,
+    );
+    expect(screen.getByRole('dialog', { name: 'Confirm' })).toHaveFocus();
+
+    unmount();
+    expect(trigger).toHaveFocus();
+  });
+
+  it('traps Tab inside the panel, wrapping at both ends', async () => {
+    const user = userEvent.setup();
+    render(
+      <Modal onClose={vi.fn()} title="Confirm">
+        <button type="button">First</button>
+        <button type="button">Last</button>
+      </Modal>,
+    );
+    const first = screen.getByRole('button', { name: 'First' });
+    const last = screen.getByRole('button', { name: 'Last' });
+
+    first.focus();
+    await user.tab();
+    expect(last).toHaveFocus();
+
+    // Forward past the last item wraps back to the first, rather than
+    // escaping to the page behind the backdrop.
+    await user.tab();
+    expect(first).toHaveFocus();
+
+    // Backward past the first item wraps to the last.
+    await user.tab({ shift: true });
+    expect(last).toHaveFocus();
+  });
+
+  it('keeps focus pinned to the panel when it has no focusable content', async () => {
+    const user = userEvent.setup();
+    render(
+      <Modal onClose={vi.fn()} title="Confirm">
+        <p>Nothing to focus here.</p>
+      </Modal>,
+    );
+    const dialog = screen.getByRole('dialog', { name: 'Confirm' });
+    expect(dialog).toHaveFocus();
+
+    await user.tab();
+    expect(dialog).toHaveFocus();
+  });
 });

@@ -89,4 +89,96 @@ describe('Dropdown', () => {
     await user.click(screen.getByRole('button', { name: 'Sign out' }));
     expect(screen.getByRole('button', { name: 'Sign out' })).not.toBeVisible();
   });
+
+  it('roves focus across items with the arrow keys, wrapping at both ends', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dropdown label="Actions" trigger="⋮">
+        {() => (
+          <>
+            <button type="button">One</button>
+            <button type="button">Two</button>
+            <button type="button">Three</button>
+          </>
+        )}
+      </Dropdown>,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Actions' });
+    await user.click(trigger);
+    trigger.focus();
+    const [one, two, three] = ['One', 'Two', 'Three'].map((name) =>
+      screen.getByRole('button', { name }),
+    );
+
+    // ArrowDown from the trigger lands on the first item.
+    await user.keyboard('{ArrowDown}');
+    expect(one).toHaveFocus();
+
+    await user.keyboard('{ArrowDown}');
+    expect(two).toHaveFocus();
+
+    // Past the last item, ArrowDown wraps back to the first.
+    await user.keyboard('{ArrowDown}');
+    expect(three).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(one).toHaveFocus();
+
+    // Past the first item, ArrowUp wraps to the last.
+    await user.keyboard('{ArrowUp}');
+    expect(three).toHaveFocus();
+  });
+
+  it('moves to the first and last items with Home and End', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dropdown label="Actions" trigger="⋮">
+        {() => (
+          <>
+            <button type="button">One</button>
+            <button type="button">Two</button>
+            <button type="button">Three</button>
+          </>
+        )}
+      </Dropdown>,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Actions' });
+    await user.click(trigger);
+    trigger.focus();
+    const one = screen.getByRole('button', { name: 'One' });
+    const three = screen.getByRole('button', { name: 'Three' });
+
+    await user.keyboard('{End}');
+    expect(three).toHaveFocus();
+
+    await user.keyboard('{Home}');
+    expect(one).toHaveFocus();
+  });
+
+  it('leaves Home/End alone when focus is on a text field inside the panel', async () => {
+    const user = userEvent.setup();
+    render(
+      <Dropdown label="Save view" trigger="Save">
+        {() => (
+          <>
+            <label htmlFor="view-name">Name</label>
+            <input id="view-name" defaultValue="abcdef" />
+            <button type="button">Confirm</button>
+          </>
+        )}
+      </Dropdown>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Save view' }));
+    const input = screen.getByLabelText('Name') as HTMLInputElement;
+    input.focus();
+    input.setSelectionRange(3, 3);
+
+    await user.keyboard('{Home}');
+    // The field's own Home moved the text cursor; focus did not jump to the
+    // menu's first item.
+    expect(input).toHaveFocus();
+    expect(input.selectionStart).toBe(0);
+  });
 });

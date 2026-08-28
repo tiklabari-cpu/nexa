@@ -7599,7 +7599,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T15:41:20.239Z",
+        "updatedAt": "2026-08-28T15:42:38.912Z",
         "subtasks": [
           {
             "id": 1,
@@ -7629,12 +7629,12 @@
             "description": "Üç bilinçli borç artık planda yazılı ve sahipli.",
             "details": "NE YAPILACAK: PLAN a ÜÇ kayıt. Ürün kodu DEĞİŞMEZ — bu bir belge görevidir.\n\n1. RADIX/SHADCN SAPMASI (§D yeni madde). MASTER-PROMPT kilitli kararı ve design-brief.md §6.1\n   shadcn/ui (Radix) tabanını istiyor; apps/web dört primitifi elle yazdı (Banner/Dropdown/Modal/Panel)\n   ve bu sapma 123 kayıtlı sapmanın arasında YOK. Kayıt şunu yazar: sapmanın kendisi, gerekçesi\n   (bağımlılık yüzeyi küçük kaldı · bundle bütçesi · axe taraması temiz), ve GÖÇ YAPILMAYACAĞI kararı\n   (kullanıcı kararı, 2026-08-24). Nöbetçi olarak tm 156.2 nin klavye testlerine referans verir.\n\n2. NFR-I18N1 · KOD / İÇERİK AYRIMI (§D yeni madde). §D97 nin KOD/SÜREÇ ayrımının kardeşi:\n   widget i18n MEKANİZMASI + RTL + nöbetçi KOD PAYIDIR ve teslimdir (8 dil: ar/de/en/es/fr/it/pt/tr;\n   apps/widget/src/i18n.ts kendi yorumunda dokuzuncu dilin kod değişikliği gerektirmediğini yazıyor).\n   Kalan 37 katalog İÇERİK PAYIDIR (lokalizasyon teslimi, mühendislik değil).\n   §7.2 nin I18N1/2 satırının METNİ bu ayrımı taşıyacak biçimde daraltılır — DAMGA ✅ KALIR.\n   ◐ YAZMA: \"◐ + kuyrukta açık görev yok\" durumu §F.00 ı bloklar (§6A nın panel notu).\n\n3. NFR-P8 · NFR-M4 YÜK AYAĞI → FAZ-6 (§D yeni madde). apps/rtm ws kullanıyor (MASTER-PROMPT kilitli\n   kararı), PRD nin \"~20k WS/pod (uWebSockets.js)\" hedefi ne uygulandı ne ÖLÇÜLDÜ; NFR-M4 ün beşinci\n   ayağı (k6/Gatling yük testi) depoda hiç yok. İkisi de Faz-6 M-LOAD kalemine (tm 161) atanır ve\n   §7.2 de öyle işaretlenir.\n\nDOSYALAR: PLAN.md yalnız — §D bölümü (yeni maddeler, en sona; mevcut numaralandırmayı sürdür) ·\n§7.2 tablosunun I18N1/2 ve M4 satırlarının metni · §7.1 in EK-C.2 satırı (Radix e referans varsa).\nHANDOFF.md ye kısa not.\n\nDİSİPLİN (CONVENTIONS §1.2): tablo hücresine KANIT YAZMA. Hücre yalnız damga + referans taşır;\ngerekçe §D maddesine ve K bloğuna gider. Faz özet tablosu bu kuralın dışındadır, ona dokunma.\n\nTUZAK: bu görev ÜRÜN KODU YAZMAZ. git diff yalnız PLAN.md + HANDOFF.md + .taskmaster olmalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-GUARD** (türetilmiş — §D124 kabul edilen borçlar). Gereksinim satırı: `grep -n \"| M-GUARD\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-GUARD\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- pnpm -w format:check exit 0 (PLAN.md prettier dan geçer).\n- git diff --stat: yalnız PLAN.md · HANDOFF.md · .taskmaster — ürün kodu diff i SIFIR.\n- Ölçülebilir: PLAN da üç yeni §D maddesi var ve §7.2 nin I18N1/2 satırı 8 dil ayrımını yazıyor.\n- PLAN: §7.2 M-GUARD → \"✅ → KM-GUARD\" (üçüncü alt-görev kalemi kapatır).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "156.2"
             ],
             "parentId": "156",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-28T15:42:38.912Z"
           }
         ]
       },
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T15:41:20.240Z",
+      "lastModified": "2026-08-28T15:42:38.913Z",
       "taskCount": 170,
       "completedCount": 160,
       "tags": [

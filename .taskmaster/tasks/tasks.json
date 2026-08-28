@@ -7531,7 +7531,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T11:20:51.652Z",
+        "updatedAt": "2026-08-28T11:25:48.074Z",
         "subtasks": [
           {
             "id": 1,
@@ -7550,10 +7550,10 @@
             "description": "Mobil oturum tazeleme yarışı artık hesabı kilitlemiyor.",
             "details": "NE YAPILACAK (§D116 LOW/2): apps/mobile/src/auth/session.ts içindeki restore() metodu,\ntek-uçuş (single-flight) muhafızını atlayarak #rotate ı DOĞRUDAN çağırıyor.\nEşzamanlı bir refresh() aynı refresh token ı ikinci kez sunar; sunucu bunu token hırsızlığı sayar\nve refresh ailesini iptal eder (oauth-service.ts in rotasyon savunması) — kullanıcı sebepsiz çıkış yer.\nÇözüm: restore() de aynı muhafızlı yolu kullanmak.\n\nDOSYALAR: apps/mobile/src/auth/session.ts (restore + #rotate + tek-uçuş muhafızı) + testleri.\nREFERANS: aynı dosyadaki refresh() — muhafızı DOĞRU kullanan kardeş yol.\n\nTUZAKLAR:\n1. Bugün dar bir kusur: unknown durumunda yalnız splash monteli (RootNavigator), yani yarış nadiren\n   oluşuyor. Yine de düzeltilir — 152 (2FA) ve ileride push ile açılış yolları bu dar pencereyi genişletebilir.\n2. apps/mobile testleri jest ile koşar ve tsconfig node tiplerini taşır; jest.mock fabrikası yerel bir\n   const a KAPANMAMALI (hoisting kuralı) — mevcut testlerin desenine bak.\n3. Eşzamanlılık testi zamanlayıcıya değil, iki promise in aynı anda başlatılmasına dayanmalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6B.` (bul: `grep -n \"^## 6B\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SEC-c** (türetilmiş — §D116 LOW/2). Gereksinim satırı: `grep -n \"| M-SEC-c\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SEC-c\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 5 (Doğruluk) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- ÖNCE KIRMIZI: restore() ve refresh() eşzamanlı çağrılınca bugün iki rotasyon; sonra tek rotasyon.\n- pnpm --filter @nexa/mobile test yeşil (taban 506).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "155",
-            "updatedAt": "2026-08-24T12:36:02.013Z"
+            "updatedAt": "2026-08-28T11:25:48.074Z"
           },
           {
             "id": 3,
@@ -8132,7 +8132,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T11:20:51.653Z",
+      "lastModified": "2026-08-28T11:25:48.075Z",
       "taskCount": 170,
       "completedCount": 159,
       "tags": [

@@ -172,9 +172,9 @@ export class MobileSession {
     }
 
     this.#persisted = persisted;
-    const accessToken = await this.#rotate(persisted);
+    const accessToken = await this.#guardedRotate();
     if (accessToken === null) {
-      await this.#drop();
+      // `#guardedRotate` has already dropped the session and told subscribers.
       return;
     }
 
@@ -298,24 +298,7 @@ export class MobileSession {
    * handle that failure; they only have to notice they got nothing back.
    */
   async refresh(): Promise<string | null> {
-    if (this.#refreshing) return this.#refreshing;
-
-    const persisted = this.#persisted;
-    if (persisted === null) return null;
-
-    this.#refreshing = (async () => {
-      const accessToken = await this.#rotate(persisted);
-      if (accessToken === null) {
-        await this.#drop();
-        return null;
-      }
-      this.#set({ ...this.#current, status: 'signed-in', accessToken });
-      return accessToken;
-    })().finally(() => {
-      this.#refreshing = null;
-    });
-
-    return this.#refreshing;
+    return this.#guardedRotate();
   }
 
   // --- Ending ----------------------------------------------------------------
@@ -389,6 +372,38 @@ export class MobileSession {
     this.#set({ status: 'signed-in', accessToken: grant.access_token, principal });
 
     await this.#deviceTokens.onSignedIn(grant.access_token);
+  }
+
+  /**
+   * `#rotate`, but behind the one-in-flight guard (§M-SEC-c2) — the entry
+   * point shared by `restore()` and `refresh()`.
+   *
+   * Both read the same persisted refresh token, and the server treats a
+   * second presentation of it as theft and revokes the whole family. A
+   * launch that fires both at once (a resumed session whose access token
+   * has already expired) used to rotate twice for exactly that reason; now
+   * the second caller waits on the first caller's in-flight promise instead
+   * of starting its own.
+   */
+  async #guardedRotate(): Promise<string | null> {
+    if (this.#refreshing) return this.#refreshing;
+
+    const persisted = this.#persisted;
+    if (persisted === null) return null;
+
+    this.#refreshing = (async () => {
+      const accessToken = await this.#rotate(persisted);
+      if (accessToken === null) {
+        await this.#drop();
+        return null;
+      }
+      this.#set({ ...this.#current, status: 'signed-in', accessToken });
+      return accessToken;
+    })().finally(() => {
+      this.#refreshing = null;
+    });
+
+    return this.#refreshing;
   }
 
   /**

@@ -20,6 +20,7 @@
     "db:reset": "prisma migrate reset --force",
     "db:seed": "tsx prisma/seed.ts",
     "db:check-drift": "tsx scripts/check-drift.ts",
+    "measure:concurrent-migrate": "tsx scripts/measure-concurrent-migrate.ts",
     "retention:run": "tsx src/services/retention/run.ts",
     "chat-timeout:run": "tsx src/services/chat/chat-timeout-run.ts",
     "scheduled-reports:run": "tsx src/services/reports/scheduled-reports-run.ts",

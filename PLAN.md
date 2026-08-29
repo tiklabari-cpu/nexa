@@ -7054,7 +7054,52 @@ _(Faz-6 · tm 162 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
   tamamen çevrimdışı) **17/17 valid, 0 invalid, 0 error** (`-strict`). tm
   164.2.
 
-_(M-IAC-c/d hâlâ açık. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ M-IAC-c: Migration stratejisi KARARI — üç sorunun cevabı **ölçülerek** verildi ve
+  `CONVENTIONS §6` olarak yazıldı. **(1) Nerede koşar:** dağıtımda tek atımlık
+  **hook Job** (yeni `infra/helm/nexa/templates/migrate-job.yaml`,
+  `helm.sh/hook: pre-install,pre-upgrade`, `hook-delete-policy: before-hook-creation`
+  — başarısız Job'ın logu bir sonraki sürüme kadar durur), api pod'larının kendi
+  entrypoint adımı ConfigMap'ten `NEXA_MIGRATE_ON_START: "false"` ile KAPATILIR.
+  `apps/api/docker-entrypoint.sh` bu dikişi kazandı ama **varsayılanı `true`
+  kalmıştır** — compose/`docker run` yolu ve tm 140'ın yazdığı her talimat
+  imajın kendini göç ettirmesine dayanıyor; varsayılanı çevirmek belgelenmiş
+  tek-konteyner durumunu, kendini zaten yapılandıran çok-replikalı durum uğruna
+  bozardı. init-container ELENDİ: aynı N-yollu yarışı taşır, üstelik her
+  scale-up ve şemayla ilgisiz her pod restart'ında tekrarlar.
+  **(2) Yarış ÖLÇÜLDÜ** (yeni `apps/api/scripts/measure-concurrent-migrate.ts`,
+  `pnpm --filter @nexa/api measure:concurrent-migrate 3`): 3 süreç + boş veritabanı
+  → 1 süreç 72 migration uyguladı, 2 süreç no-op, **üçü de exit 0** (~1,7 s); 3 süreç
+  + göç etmiş veritabanı → 3 no-op, exit 0 (~1,0 s); her migration **tam olarak bir
+  kez** uygulandı (72 bulundu / toplam 72 uygulandı). Kilit `pg_advisory_lock(72707369)`
+  — `pg_locks`ten gözlemlendi, varsayılmadı. **KARARI DEĞİŞTİREN BULGU: bekleme
+  sınırlı.** Kilit dışarıdan 15 s tutulduğunda `migrate deploy` **exit 1** veriyor
+  (`P1002 … Timeout: 10000ms`, ~15 s sonra) — entrypoint'te bu, uygulamanın hiç
+  başlamaması ve pod'un CrashLoopBackOff'a girmesi demek, hem de şemayı değiştiren
+  rollout sırasında. **(3) Geri alınamaz migration politikası:** CONVENTIONS §6.3
+  — genişlet→taşı→daralt (üç sürüm), tek sürümde kolon/tablo düşürme · yeniden
+  adlandırma · tip daraltma · `DEFAULT`'suz `NOT NULL` · eski kodun ihlal
+  edebileceği unique kısıtı YASAK. İki destekleyici davranış da ölçüldü (geçici
+  şema kopyası + tek migration, koşu sonrası silindi): yarıda patlayan bir
+  migration **atomik geri alınır** ama `_prisma_migrations`te `finished_at IS NULL`
+  satır bırakır ve sonraki her koşu **P3009** ile reddeder (`migrate resolve` ile
+  elle kurtarma) — Job'ın `activeDeadlineSeconds: 1800` değeri bu yüzden zamanlama
+  bütçesi değil emniyet frenidir; ve `CREATE INDEX CONCURRENTLY` bu depoda
+  **çalışır, ama yalnız dosyadaki tek ifadeyse** (yanına ikinci ifade konunca
+  Postgres'in örtük transaction'ı devreye girip `25001` veriyor).
+  **seed dağıtımda KOŞMUYOR** (compose'un `init` servisi migrate+seed koşar; Job
+  yalnız migrate — render'da yorum dışı tek `seed` eşleşmesi `WEBHOOK_HMAC_SEED`
+  anahtar adı). Yeni birim testi `apps/api/src/config/migrate-on-start.test.ts` (5)
+  entrypoint ↔ chart kuplajını metin olarak çiviliyor (hiçbir derleyici bağlamıyor;
+  yarısı silinse sessizce yarışa dönülürdü) — vacuous olmadığı values.yaml'ı
+  bilerek bozarak kanıtlandı (kırmızı). Entrypoint'in her iki dalı stub `npx` ile
+  fiilen koşuldu (unset→migrate · `false`→atla · `true`→migrate, üçünde de
+  uygulama exec'lendi). Doğrulama: `helm template`/`helm lint` konteynerde exit 0 →
+  **4 Deployment + 4 Service + 4 PDB + 3 HPA + 1 ConfigMap + 1 Secret + 1 Job**;
+  `kubectl --dry-run=client` bu makinede yine KULLANILAMADI (bağımsız olarak
+  doğrulandı: `--validate=false` ile bile `localhost:8080`e bağlanmayı deniyor) —
+  yerine `kubeconform -strict` **18/18 valid** (164.2'nin 17'si + Job). tm 164.3.
+
+_(M-IAC-d hâlâ açık. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
 
 #### KM-BACKUP — M-BACKUP · Yedekleme ve geri yükleme provası (NFR-R5)
 

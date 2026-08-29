@@ -1,0 +1,116 @@
+{{- if .Values.migrationJob.enabled }}
+# Schema migration for a multi-replica deployment (tm 164.3, M-IAC-c).
+#
+# WHY A JOB AND NOT THE ENTRYPOINT. The api image migrates itself on every
+# container start (apps/api/docker-entrypoint.sh), which is correct for one
+# container and unsafe for several. `prisma migrate deploy` does serialise —
+# measured, not assumed: with three processes started at once against an empty
+# database, one applied all 72 migrations and the other two waited on
+# `pg_advisory_lock(72707369)` and then reported nothing pending, all exit 0
+# (scripts/measure-concurrent-migrate.ts). But the wait is *bounded at 10 s*:
+# with the lock held longer than that, `migrate deploy` gives up with P1002 and
+# exits 1 after ~15 s. In a Deployment that exit is the entrypoint's exit, so
+# the app never starts and the pod crash-loops — and the migration slow enough
+# to cause it (an index build on a populated table) is exactly the one you are
+# rolling out. The race is not hypothetical either way; what changes is whether
+# losing it costs nothing or costs the replicas.
+#
+# WHY NOT AN INIT-CONTAINER. It moves the same N-way race into a different
+# container without removing it, and repeats it on every scale-up and every pod
+# restart — including the restarts that have nothing to do with a schema change.
+# A Job runs the migration once per release, when the schema actually changes.
+#
+# WHAT THIS DOES NOT FIX, stated rather than implied: the app pods still carry
+# the owner credential. `DATABASE_URL` is a required key in
+# apps/api/src/config/env.ts (the app connects through `DATABASE_APP_URL`, but
+# the owner URL is still parsed and compared), so moving the migration out does
+# not yet let a pod drop it. Making that key optional is a change to the config
+# schema and its production guards — a separate task, not this one.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ .Release.Name }}-migrate
+  labels:
+    app.kubernetes.io/name: migrate
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+  annotations:
+    # pre-install *and* pre-upgrade: the schema has to be in place before the
+    # first pod of a new version starts, and Helm blocks the release if this
+    # hook fails — a failed migration stops the rollout instead of producing a
+    # half-rolled Deployment against a schema that never changed.
+    "helm.sh/hook": pre-install,pre-upgrade
+    # `before-hook-creation`, NOT `hook-succeeded`: the finished Job (and its
+    # pod's logs) survives until the *next* release needs the name. A migration
+    # that failed is the one thing here worth reading afterwards, and
+    # `hook-succeeded` would delete the successful ones while `hook-failed`
+    # would delete precisely the evidence.
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  # One retry, not zero and not Kubernetes' default six. Zero turns a transient
+  # connection blip into a failed release; six turns a genuinely broken
+  # migration into six attempts at it. Note that a *partially applied* migration
+  # is not retryable by itself — see CONVENTIONS §6 on `prisma migrate resolve`.
+  backoffLimit: {{ .Values.migrationJob.backoffLimit }}
+  # An upper bound so a wedged migration cannot hold the release open forever.
+  # HAZARD, deliberately generous because of it: hitting this deadline kills
+  # `migrate deploy` mid-statement, which leaves the migration recorded as
+  # failed and the next run refusing to proceed (P3009) until someone resolves
+  # it by hand. The deadline is a backstop against a hang, not a scheduling
+  # convenience — size it above the slowest migration this deployment has,
+  # never near it.
+  activeDeadlineSeconds: {{ .Values.migrationJob.activeDeadlineSeconds }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: migrate
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      # `Never`, so a failed attempt leaves its pod (and its logs) behind
+      # instead of restarting in place and overwriting them.
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: "{{ if .Values.image.registry }}{{ .Values.image.registry }}/{{ end }}{{ .Values.apps.api.repository }}:{{ .Values.apps.api.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Overrides the image's ENTRYPOINT rather than going through it: the
+          # entrypoint's job is "migrate, then start the server", and this Job
+          # must do the first half and then exit. Same command the entrypoint
+          # runs, same working directory (/repo/apps/api, set by the Dockerfile).
+          #
+          # SEED IS NOT RUN HERE, and that is a decision, not an omission.
+          # docker-compose.full.yml's `init` service runs migrate *and*
+          # `dist/prisma/seed.js` because a local demo stack is worthless empty.
+          # A deployment's database is not a demo: the seed writes fixture
+          # organisations, agents and chats, and running it against real data is
+          # a data-integrity incident, not a convenience.
+          command:
+            - npx
+            - prisma
+            - migrate
+            - deploy
+            - --schema=./prisma/schema.prisma
+          envFrom:
+            - configMapRef:
+                name: {{ .Release.Name }}-config
+            - secretRef:
+                name: {{ .Release.Name }}-secrets
+          env:
+            # Belt and braces: this container bypasses the entrypoint anyway, so
+            # the ConfigMap's `false` never reaches the migrate step. Set
+            # explicitly so that a future change routing this Job *through* the
+            # entrypoint does not silently turn the migration into a no-op.
+            - name: NEXA_MIGRATE_ON_START
+              value: "true"
+          # The migration client is thin — Postgres does the work — so this
+          # reuses the api's own request/limit block rather than inventing a
+          # second set of numbers to keep in step.
+          resources:
+            requests:
+              cpu: {{ .Values.apps.api.resources.requests.cpu }}
+              memory: {{ .Values.apps.api.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.apps.api.resources.limits.cpu }}
+              memory: {{ .Values.apps.api.resources.limits.memory }}
+{{- end }}

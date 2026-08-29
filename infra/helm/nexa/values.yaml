@@ -6,12 +6,15 @@
 # Deliberately NOT in this chart, and why:
 #   - Postgres / Redis:  M-IAC's own scope (PLAN.md §6C row 6) assumes a managed
 #     datastore, not an in-cluster one — connection strings are values, below.
-#   - Migration strategy (init-container vs Job, multi-replica race): tm 164.3
-#     (M-IAC-c) decides this; today's api Dockerfile entrypoint still runs
-#     `prisma migrate deploy` on every start (fine at replicas: 1, a race once
-#     replicas > 1 — that decision is 164.3's, not repeated here).
 #   - values.production.example.yaml + a real secret-manager story: tm 164.4
 #     (M-IAC-d).
+#
+# Migration strategy is no longer on that list: tm 164.3 decided it, and the
+# answer is `migrationJob` below plus `NEXA_MIGRATE_ON_START: "false"` in
+# `config` — a pre-install/pre-upgrade hook Job migrates, and the api pods'
+# own entrypoint step is switched off. The reasoning (including the measured
+# 10 s advisory-lock bound that decided it) is in
+# templates/migrate-job.yaml and CONVENTIONS §6.
 
 image:
   # Empty registry means "just <repository>:<tag>", i.e. an image already
@@ -50,11 +53,12 @@ apps:
       # Docker HEALTHCHECK budget (apps/api/Dockerfile:
       # start-period=20s + interval=10s * retries=5 = 70s) rather than
       # inventing a new number — same tolerance tm 160.1 already chose, a
-      # k8s mechanism instead of Docker's. Today that covers
-      # docker-entrypoint.sh's `prisma migrate deploy` (runs to completion
-      # *before* the process starts listening at all — tm 164.3's own scope
-      # to change how migrations run under >1 replica) plus Fastify plugin
-      # registration.
+      # k8s mechanism instead of Docker's. Kept at 70 s even though tm 164.3
+      # took the migrate step out of this pod's boot path
+      # (`NEXA_MIGRATE_ON_START: "false"` below): the number was never
+      # derived from the migration, it mirrors the image's own vetted
+      # HEALTHCHECK budget, and shrinking it now would trade a real
+      # tolerance for a cosmetic one.
       failureThreshold: 14
     resources:
       # UNMEASURED placeholder, stated rather than hidden (this task's own
@@ -193,6 +197,24 @@ apps:
     pdb:
       maxUnavailable: 1
 
+# Schema migration (tm 164.3, M-IAC-c). Rendered as a pre-install/pre-upgrade
+# hook Job — templates/migrate-job.yaml carries the full reasoning, including
+# the measurement that ruled out leaving it in the api pods' entrypoint.
+migrationJob:
+  # Set false only if migrations are applied from somewhere this chart does not
+  # see — a CI step, or a DBA. Then `NEXA_MIGRATE_ON_START` above has to be
+  # revisited too, or nothing migrates at all.
+  enabled: true
+  # One retry: zero fails the release on a transient connection blip, and
+  # Kubernetes' default of six retries a genuinely broken migration six times.
+  backoffLimit: 1
+  # 30 minutes. A backstop against a hung migration, NOT a scheduling budget —
+  # hitting it kills `migrate deploy` mid-statement and leaves a failed
+  # migration for someone to resolve by hand (CONVENTIONS §6). This repo's
+  # whole set applies in ~1.8 s against an empty database, but the migration
+  # this deadline exists for is an index build on a populated one.
+  activeDeadlineSeconds: 1800
+
 # Known gap, stated rather than hidden: the web image's RTM WebSocket address
 # (`VITE_RTM_URL`) is baked in at *build* time (apps/web/Dockerfile), not read
 # from the environment at container start the way API_UPSTREAM/RTM_UPSTREAM
@@ -213,6 +235,13 @@ apps:
 config:
   NODE_ENV: production
   NEXA_REGION: eu
+  # tm 164.3: the api image migrates itself on every container start unless
+  # this says otherwise (apps/api/docker-entrypoint.sh). Under more than one
+  # replica that is a race whose loser exits 1 after Prisma's 10 s advisory-
+  # lock wait — measured, see templates/migrate-job.yaml — so this chart turns
+  # it off and migrates from the pre-upgrade Job instead. Quoted because a
+  # ConfigMap value is a string; the entrypoint compares it as one.
+  NEXA_MIGRATE_ON_START: "false"
   LOG_LEVEL: info
   API_PORT: "4000"
   API_HOST: "0.0.0.0"

@@ -156,3 +156,83 @@ dağıtılırsa gerçek düzeltmelerin önünü keser ve öncelik sırası anlam
 
 - Bir pencere yalnız kendi hedef task'ını yapar. "Bu arada şunu da düzelteyim" YOK — o ayrı
   task'tır, Task Master'a not/yeni task olarak eklenir.
+
+## 6) Şema göçü (migration) politikası — çok replikalı dağıtımda güvenli değişiklik (tm 164.3)
+
+Bu bölüm bir **karar** ve onun gerekçesidir. Üç sorunun cevabı; hepsi ölçüldü, varsayılmadı
+(yeniden koşulabilir: `pnpm --filter @nexa/api measure:concurrent-migrate 3`).
+
+### 6.1 Migration NEREDE koşar
+
+| Ortam                                                        | Migration'ı kim koşar           | Nasıl                                                                                                                                  |
+| ------------------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Yerel (`make dev`, tek konteyner, `docker-compose.full.yml`) | api imajının kendi entrypoint'i | `apps/api/docker-entrypoint.sh` → `prisma migrate deploy` (varsayılan **değişmedi**)                                                   |
+| Dağıtım (Helm, replika > 1)                                  | **tek atımlık hook Job**        | `infra/helm/nexa/templates/migrate-job.yaml` (`helm.sh/hook: pre-install,pre-upgrade`) + ConfigMap'te `NEXA_MIGRATE_ON_START: "false"` |
+
+**Neden entrypoint DEĞİL (replika > 1 iken).** `prisma migrate deploy` gerçekten sıraya
+giriyor — üç süreç aynı anda boş bir veritabanına saldırdığında biri 72 migration'ı uyguladı,
+diğer ikisi `pg_advisory_lock(72707369)` üzerinde bekleyip "uygulanacak bir şey yok" dedi,
+üçü de exit 0. **Ama bekleme sınırlı: 10 000 ms.** Kilit bundan uzun tutulduğunda `migrate
+deploy` P1002 ile vazgeçip **exit 1** veriyor (ölçüm: ~15 s sonra). Entrypoint'te bu exit
+uygulamanın exit'idir: süreç hiç başlamaz, pod CrashLoopBackOff'a girer — hem de tam şemayı
+değiştiren rollout sırasında. 10 sn'yi aşan migration hayali değil: dolu bir tabloda tek bir
+index build'i yeter. Yarış her iki durumda da var; değişen, **kaybetmenin bedeli**.
+
+**Neden init-container DEĞİL.** Aynı N-yollu yarışı başka bir konteynere taşır, ortadan
+kaldırmaz — üstelik her scale-up'ta ve şema değişikliğiyle hiç ilgisi olmayan her pod
+yeniden başlatmasında tekrarlar. Job, migration'ı **sürüm başına bir kez**, şema fiilen
+değiştiğinde koşar; başarısız olursa Helm sürümü bloklar (yarım rollout yerine durmuş
+rollout).
+
+**seed dağıtımda KOŞMAZ.** `docker-compose.full.yml`'in `init` servisi migrate + seed
+koşar, çünkü boş bir demo yığını işe yaramaz. Dağıtımın veritabanı demo değildir: seed
+kurgu organizasyon/agent/chat yazar; gerçek veriye karşı koşması bir veri bütünlüğü olayıdır.
+Job yalnız `prisma migrate deploy` çalıştırır.
+
+### 6.2 Yarış — ölçülen davranış
+
+| Senaryo                             | Sonuç (ölçüldü)                                                                               |
+| ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| 3 süreç, boş veritabanı             | 1 süreç 72 migration uyguladı · 2 süreç no-op · **hepsi exit 0** · ~1,7 s                     |
+| 3 süreç, zaten göç etmiş veritabanı | 3 no-op · hepsi exit 0 · ~1,0 s                                                               |
+| Kilit dışarıdan 15 s tutuluyor      | **exit 1**, `P1002 — Timed out trying to acquire a postgres advisory lock … Timeout: 10000ms` |
+
+Her migration **tam olarak bir kez** uygulandı (72 bulundu, yarışan süreçlerin toplamı 72).
+Yani veri açısından yarış güvenli; tehlike süreçlerin **exit code'u**, sonuç değil.
+
+**Yarıda kalan migration atomiktir ama serbest değildir** (ölçüldü): bir migration dosyasının
+ikinci ifadesi patladığında birinci ifadenin etkisi de geri alınır (Postgres, çok ifadeli
+basit sorguyu örtük transaction'a sarar), fakat `_prisma_migrations` tablosunda
+`finished_at IS NULL` bir satır kalır ve **sonraki her `migrate deploy` P3009 ile reddeder**.
+Kurtarma elle yapılır: `prisma migrate resolve --rolled-back <migration_adı>` (düzeltip
+yeniden uygulamak için) ya da `--applied` (etki fiilen yerindeyse). Bu yüzden Job'ın
+`activeDeadlineSeconds` değeri bir zamanlama bütçesi değil, **askıda kalmaya karşı emniyet
+freni**dir: en yavaş migration'ın çok üstünde tutulur, yakınında değil.
+
+### 6.3 Geri alınamaz migration politikası — genişlet, sonra daralt
+
+Rollout sırasında **eski sürüm pod'lar hâlâ trafiğe cevap veriyor** ve hook Job şemayı
+onlardan ÖNCE değiştiriyor. Dolayısıyla kural:
+
+> Bir migration, o sırada koşan **eski** kodla da **yeni** kodla da uyumlu olmak zorundadır.
+
+Tek sürümde YASAK (her biri iki sürüm ister):
+
+- Hâlâ okunan bir kolonu/tabloyu **düşürmek**.
+- **Yeniden adlandırmak** (düşür + ekle demektir).
+- Tipi **daraltmak**, ya da `DEFAULT` vermeden `NOT NULL` eklemek.
+- Eski kodun hâlâ ihlal edebileceği veriye **unique/check kısıtı** eklemek.
+
+Doğru sıra (üç sürüm, "expand → migrate → contract"):
+
+1. **Genişlet** — yeni kolonu nullable/`DEFAULT`'lu ekle. Kod eskiyi okur, **ikisine de yazar**.
+2. **Taşı** — geri dolduran migration + kod yeniyi okumaya geçer. Eski kolon hâlâ duruyor.
+3. **Daralt** — 2. sürüm her yerde ayakta olduğuna göre eski kolonu düşür.
+
+Ek kural — **uzun kilit**: `ALTER TABLE`/`CREATE INDEX` dolu bir tabloda ACCESS EXCLUSIVE
+kilidi alır ve o süre boyunca **eski pod'ların sorguları bloklanır**. `CREATE INDEX
+CONCURRENTLY` bunu önler ve bu depoda **kullanılabilir** (ölçüldü) — ama yalnız migration
+dosyasındaki **tek ifade** olduğunda. Yanına bir ifade daha koyulduğunda Postgres'in çok
+ifadeli sorgu için açtığı örtük transaction devreye girer ve migration
+`25001 — CREATE INDEX CONCURRENTLY cannot run inside a transaction block` ile düşer.
+Yani: eşzamanlı index'in kendi migration dosyası olur.

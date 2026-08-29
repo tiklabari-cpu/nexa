@@ -7934,7 +7934,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T17:37:18.668Z",
+        "updatedAt": "2026-08-29T17:39:13.006Z",
         "subtasks": [
           {
             "id": 1,
@@ -7980,13 +7980,13 @@
             "description": "Manifestler kullanılabilir ve sınırı yazılı.",
             "details": "NE YAPILACAK:\n1. values.production.example.yaml: gerçek bir dağıtımın doldurması gereken her değer, tek satır\n   gerekçesiyle. Gerçek secret YOK — \"<dış secret yöneticisinden>\" biçiminde talimat.\n2. Secret sağlama yolu belgelenir: chart Secret şablonunu üretir ama değerler nereden gelir\n   (Kubernetes Secret · dış secret yöneticisi · CI). Bir yol ÖNERİLİR, gerekçesiyle.\n3. Doğrulama: helm template | kubectl apply --dry-run=client -f - komutunun exit 0 verdiği gösterilir.\n4. README ye \"Deployment\" bölümü: chart nasıl render edilir, ne DOĞRULANMIŞTIR ve — en önemlisi —\n   NE DOĞRULANMAMIŞTIR. Açıkça yaz: bu manifestler HİÇBİR KÜMEYE UYGULANMADI; TLS, DNS, ingress\n   sertifikası ve gerçek secret bu deponun sınırı dışındadır (CLAUDE.md). README nin\n   \"This is a local stack, not a deployment\" cümlesiyle aynı dürüstlük seviyesini koru.\n\nDOSYALAR: infra/helm/nexa/values.production.example.yaml · README.md · .gitignore\n(values.production.example.yaml ın ignore edilmediğini DOĞRULA — .env.* deseni bunu yakalamaz ama\nsecrets/ deseni ve *.key/*.pem desenleri var; yine de git status ile kontrol et).\nREFERANS: tm 159.3 ün .env.production.example i — aynı ton, aynı \"gerçek secret yok\" disiplini.\n\nTUZAK: README nin mevcut \"Run the whole stack in containers\" bölümüyle ÇELİŞMEMELİ; o yerel yığını,\nbu dağıtım manifestlerini anlatır. İkisini birbirine referansla ayır.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-IAC** (türetilmiş — MASTER-PROMPT teslim paketi). Gereksinim satırı: `grep -n \"| M-IAC\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-IAC\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- helm template | kubectl apply --dry-run=client exit 0 (çıktı HANDOFF ta).\n- git ls-files ile values.production.example.yaml İZLENİYOR.\n- README de sınır cümlesi var (deploy edilmedi · TLS/DNS yok).\n- PLAN: §7.2 M-IAC → \"✅ → KM-IAC\" (dördüncü alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "164.2",
               "164.3"
             ],
             "parentId": "164",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-29T17:39:13.006Z"
           }
         ]
       },
@@ -8160,7 +8160,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T17:37:18.669Z",
+      "lastModified": "2026-08-29T17:39:13.007Z",
       "taskCount": 172,
       "completedCount": 166,
       "tags": [

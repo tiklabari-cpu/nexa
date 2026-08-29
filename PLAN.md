@@ -3308,7 +3308,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ✅ → KM-LOAD |
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ✅ → KM-SCALE |
 | M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ✅ → KM-OTEL |
-| M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ◐ → KM-IAC |
+| M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ✅ → KM-IAC |
 | M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ⬜ |
 | M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ⬜ |
 | M-SEC-e | Faz-6 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-6 tm 167) | ⬜ |
@@ -7099,7 +7099,53 @@ _(Faz-6 · tm 162 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
   doğrulandı: `--validate=false` ile bile `localhost:8080`e bağlanmayı deniyor) —
   yerine `kubeconform -strict` **18/18 valid** (164.2'nin 17'si + Job). tm 164.3.
 
-_(M-IAC-d hâlâ açık. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ M-IAC-d: Yeni `infra/helm/nexa/values.production.example.yaml` — gerçek bir
+  dağıtımın doldurması gereken HER değer (`.env.production.example`'ın aynı
+  disiplini: gerçek secret yok, her satır ya `<placeholder>` ya üretim talimatı):
+  `image.registry` + her app'in `tag`/`replicas` (2 — **1 (chart varsayılanı) +
+  PDB'nin `maxUnavailable: 1`'i (tm 164.2) her voluntary eviction'ı sonsuza
+  bloklar**, gerekçe tek satır) · `config` altında `API_BASE_URL`/`RTM_BASE_URL`/
+  `WEB_ORIGIN`/`WIDGET_BASE_URL`/`INBOUND_EMAIL_DOMAIN` (values.yaml'ın
+  skeleton'ında YOK, `configmap.yaml`'ın generic `range`i sayesinde şablon
+  değişikliği gerekmeden ulaşıyor) · `secrets` altında 8 anahtarın tamamı
+  (`openssl rand -hex 32` üretim talimatı + DB/Redis host placeholder'ı).
+  **Secret sağlama yolu üç seçenekle belgelendi, biri gerekçeyle ÖNERİLDİ**
+  (dış secret yöneticisi → aynı `<release>-secrets` adına senkron,
+  `secrets.enabled: false` — gerekçe: gerçek değerler hiçbir values dosyasında/
+  `helm install` komutunda/CI logunda düz metin olarak yaşamıyor). **Bilinçli
+  boşluk, gizlenmeden yazıldı:** `INBOUND_EMAIL_SECRET` (production'da ZORUNLU,
+  `env.ts`'in `productionProblems`i) ve `DATABASE_REPLICA_URL` (opsiyonel,
+  M-SCALE-c) için `templates/secret.yaml`de hiç slot yok — o dosya
+  `.Values.secrets` üzerinde generic range değil, sabit 8 anahtar listeliyor;
+  önerilen dış-secret-yöneticisi yolu bunu by-pass ediyor (`envFrom` bir
+  Secret'ın TÜM anahtarlarını yükler, yalnız şablonun isim verdiklerini değil).
+  **Kod kapısını etkileyen gerçek bulgu:** `secrets.enabled: false`'ı
+  doğrularken `templates/secret.yaml`nin `{{- if .Values.secrets.enabled |
+  default true }}` satırı bir Sprig/Helm tuzağına düşüyordu — `default`
+  boolean `false`'u da "boş" sayıp sessizce `true`'ya çeviriyor, yani override
+  hiçbir zaman ULAŞILAMIYORDU (ölçüldü: `false` ile bile Secret hep render
+  oldu). `hpa.yaml`/`pdb.yaml` aynı desenle YAZILMAMIŞ (`| default` yok),
+  yalnız `secret.yaml`de var — tek dosyalık izole düzeltme:
+  `{{- if .Values.secrets.enabled }}` (values.yaml zaten `true` gerçek
+  varsayılanı veriyor, `default`e ihtiyaç yok). Düzeltme sonrası doğrulandı:
+  `secrets.enabled: false` render'ında Secret **0**, `true`de (chart
+  varsayılanı) **1** — iki render de `helm lint` + `kubeconform -strict`
+  yeşil. README'ye "Deployment" bölümü eklendi ("Run the whole stack in
+  containers"tan AYRI — biri yerel demo, biri hiç uygulanmamış manifest);
+  migration stratejisi TEKRARLANMADI, `CONVENTIONS.md §6`ya referans verildi.
+  **Doğrulama:** `helm template` (values.yaml + production overlay) exit 0 →
+  **17 kaynak** (Secret hariç: 4 Deployment + 4 Service + 4 PDB + 3 HPA + 1
+  ConfigMap + 1 Job); yalnız values.yaml (chart varsayılanı) → **18 kaynak**
+  (164.3'ün tabanıyla birebir). `helm lint` her iki render için de exit 0.
+  `kubeconform -strict`: **18/18 valid** (varsayılan) + **17/17 valid**
+  (production overlay). `kubectl apply --dry-run=client` bu makinede YİNE
+  KULLANILAMADI (164.1/164.2/164.3 emsali — bağımsız doğrulandı: `--validate=false`
+  ile bile canlı API keşfine bağlanmaya çalışıp `dial tcp [::1]:8080: … actively
+  refused` ile exit 1 veriyor, herhangi bir kaynağı değerlendirmeden). `git
+  check-ignore -v` yeni dosya için boş çıktı + exit 1 → İZLENİYOR, `.gitignore`
+  değişikliği gerekmedi. tm 164.4.
+
+_(Dördüncü alt-görev tm 164.4 ile kapandı — §7.2 `M-IAC` satırı artık `✅`.)_
 
 #### KM-BACKUP — M-BACKUP · Yedekleme ve geri yükleme provası (NFR-R5)
 

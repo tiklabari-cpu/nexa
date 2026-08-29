@@ -1,0 +1,170 @@
+# Nexa — production values overlay (tm 164.4, M-IAC-d). Sibling of
+# ../../../.env.production.example (same discipline: no real secrets, one
+# instruction per line) but for `helm template`/`helm install`, not a
+# process environment file directly.
+#
+# NOT a complete values file on its own — Helm deep-merges every -f flag, so
+# render/install it ALONGSIDE the chart's own values.yaml (loaded
+# automatically; naming it below is for clarity, not necessity), this file
+# LAST so its overrides win:
+#
+#   helm template nexa infra/helm/nexa \
+#     -f infra/helm/nexa/values.yaml \
+#     -f infra/helm/nexa/values.production.example.yaml
+#
+# Copy this file, fill in every <placeholder>, and do not commit the copy —
+# this file stays a template with no real values, exactly like
+# .env.production.example. See README "Deployment" for what `helm
+# template`/`helm lint`/kubeconform on this chart have actually verified,
+# and what they have not — no cluster has ever seen this chart (CLAUDE.md:
+# deploy YOK).
+
+image:
+  # Where the four M-CONTAINER (tm 140) images live once pushed. The chart
+  # default ("") means "already on the node", true only for a local
+  # kind/k3d smoke test — a real deployment pushes nexa-{api,rtm,web,widget}
+  # here first.
+  registry: "<container-registry>/nexa"
+
+apps:
+  api:
+    # Never the chart default `local`, and never `latest` — a rollback needs
+    # an immutable, previously-built tag to point back at.
+    tag: "<image tag, e.g. git SHA or semver>"
+    # 1 (chart default) plus the PDB's maxUnavailable: 1 (templates/pdb.yaml)
+    # means every voluntary eviction — a node drain, a cluster upgrade — is
+    # blocked forever: there is no second pod to keep the budget satisfied
+    # while one is away. Real availability during a drain needs at least 2.
+    replicas: 2
+  rtm:
+    tag: "<image tag, e.g. git SHA or semver>"
+    replicas: 2
+  web:
+    tag: "<image tag, e.g. git SHA or semver>"
+    replicas: 2
+  widget:
+    tag: "<image tag, e.g. git SHA or semver>"
+    # Same PDB reasoning as api/rtm/web above — a single widget pod is a
+    # single point of failure for every customer-facing chat iframe on every
+    # tenant's site, not just an internal surface.
+    replicas: 2
+
+# Config keys the chart's skeleton (values.yaml) leaves unset because they
+# have no safe generic default. templates/configmap.yaml renders this map
+# with a plain `range`, so anything added here reaches the container as an
+# env var without any template change.
+config:
+  # Public URL agents/customers reach this deployment's API at — used to
+  # build absolute links (invitations, webhook docs), not for routing.
+  API_BASE_URL: "https://<api-hostname>"
+  RTM_BASE_URL: "wss://<rtm-hostname>"
+  # REQUIRED to change: left at the chart default (http://localhost:4000,
+  # inherited from apps/api/src/config/env.ts's own dev default), every real
+  # browser request from the agent panel is refused by CORS.
+  WEB_ORIGIN: "https://panel.<your-domain>"
+  # Origin serving the widget loader + iframe — the install snippet and
+  # loader.js point at this.
+  WIDGET_BASE_URL: "https://widget.<your-domain>"
+  # Domain a workspace's support mail forwards to; must match what the web
+  # app shows on the Email channel card (VITE_INBOUND_EMAIL_DOMAIN, apps/web's
+  # own build-time env — this chart does not set it, see values.yaml's
+  # VITE_RTM_URL note on why web's build-time env is out of this chart's
+  # reach).
+  INBOUND_EMAIL_DOMAIN: "inbound.<your-domain>"
+  # How many reverse-proxy hops in front of api/rtm are trusted to have
+  # appended to X-Forwarded-For — decides rate-limit bucketing and the
+  # customer IP ban / agent IP allow-list. The chart default (1) assumes
+  # only this chart's own web/widget nginx sidecar sits in front; add your
+  # Ingress controller's own hop (usually +1) if one terminates in front of
+  # this chart's Services. See README "Choosing TRUST_PROXY_HOPS" — wrong in
+  # either direction is a security bug, not a cosmetic one.
+  # TRUST_PROXY_HOPS: "2"
+  # Prisma connection pool size for api/rtm (M-SCALE-b) — set once total
+  # replicas > 1: pool size x (api + rtm replicas) must stay within
+  # Postgres' max_connections, with headroom for the standalone job scripts
+  # and Postgres' own reserved connections. See README "Connection pool
+  # budget".
+  # DATABASE_POOL_SIZE: "10"
+
+# Real secret material. Every value below is a placeholder or a generation
+# instruction, never a working default — same discipline as
+# .env.production.example, and for the same reason: apps/api/src/config/env.ts's
+# `parseEnv` refuses to boot under NODE_ENV=production while any of the five
+# key-material fields still starts with `dev-only-` (the chart default,
+# M-PROD-CFG-a), so a `helm install` with this block untouched fails loudly
+# at container start instead of quietly running with a guessable key.
+#
+# --- Known gap, stated rather than hidden ---
+# Two production-relevant keys have NO slot in templates/secret.yaml, which
+# renders a FIXED set of stringData keys rather than ranging over
+# `.Values.secrets` the way configmap.yaml ranges over `.Values.config` —
+# adding either key under `secrets:` below does nothing by itself:
+#
+#   INBOUND_EMAIL_SECRET — REQUIRED in production (env.ts's own
+#                          `productionProblems`: unset, the inbound mail
+#                          webhook authenticates nobody — the recipient
+#                          address is the only routing key, and a workspace
+#                          hands that address to the customers it asks to
+#                          forward mail to).
+#   DATABASE_REPLICA_URL — OPTIONAL (M-SCALE-c); only matters if this
+#                          deployment runs a read replica.
+#
+# The provisioning path recommended right below sidesteps this cleanly:
+# envFrom loads every key a Secret object holds, not just the ones
+# templates/secret.yaml's Go template happens to name, so add both keys to
+# whatever your secret manager writes under the `<release>-secrets` name.
+# Staying on the chart's own built-in Secret (`secrets.enabled: true`, the
+# default) means these two keys never reach the pod — extending
+# templates/secret.yaml's stringData block is a template change, out of
+# this task's scope.
+#
+# --- Secret provisioning: three paths, one recommended ---
+#
+# 1. This chart's own Secret (secrets.enabled: true, the chart default) —
+#    every value below goes through `helm install --set-string` or a values
+#    file kept OUT of git. Simplest, but every value passes through Helm's
+#    own process (and `--set` through your shell history / CI logs), and per
+#    the gap above it cannot carry INBOUND_EMAIL_SECRET or
+#    DATABASE_REPLICA_URL at all.
+# 2. An externally managed Secret (a Kubernetes Secret applied by hand,
+#    never checked into a values file or git) named `<release>-secrets`,
+#    with `secrets.enabled: false` here so templates/secret.yaml never
+#    renders and never fights it for ownership of that name.
+# 3. A dedicated secret manager (e.g. External Secrets Operator, Sealed
+#    Secrets, or a cloud provider's own) that syncs INTO a Kubernetes Secret
+#    named `<release>-secrets` — same `secrets.enabled: false` here.
+#
+# RECOMMENDED: path 3. The real values then never exist as plaintext in a
+# values file, a `helm install` command, or CI logs (path 1's exposure), and
+# are not a manually-applied YAML someone has to remember to keep in sync
+# across environments (path 2's operational cost) — they live once, in the
+# secret manager, and every environment's Secret is a generated projection
+# of it. Path 2 is the fallback when no secret manager is available yet:
+# strictly better than path 1, strictly more manual than path 3.
+#
+# The placeholders below document the exact keys and value formats every
+# path has to produce under `<release>-secrets`, regardless of which path
+# fills them in — set `enabled: false` and use path 2 or 3, or leave
+# `enabled: true` and fill every value in for path 1.
+secrets:
+  enabled: false
+  JWT_SIGNING_KEY: "<generate: openssl rand -hex 32>"
+  WEBHOOK_HMAC_SEED: "<generate: openssl rand -hex 32>"
+  # Must be byte-identical between the api and rtm pods — both verify
+  # customer tokens with it; a mismatch fails every widget connection.
+  CUSTOMER_TOKEN_SECRET: "<generate: openssl rand -hex 32>"
+  UPLOAD_SIGNING_KEY: "<generate: openssl rand -hex 32>"
+  # Root of the audit hash chain (NFR-C6) — deliberately never stored in the
+  # database, so a database compromise alone cannot recompute a chain that
+  # hides a deleted row. Keep every old value on rotation: entries already
+  # written only verify under the value they were written with.
+  AUDIT_CHAIN_SECRET: "<generate: openssl rand -hex 32>"
+  # Owner role: runs migrations (templates/migrate-job.yaml). Never used by
+  # the request path — see DATABASE_APP_URL below.
+  DATABASE_URL: "postgresql://<owner_user>:<owner_password>@<db-host>:5432/<db>"
+  # REQUIRED, and DIFFERENT from DATABASE_URL: the non-owner nexa_app role.
+  # Postgres exempts table owners from row level security, so pointing this
+  # at the owner (or omitting it, which falls back to DATABASE_URL) silently
+  # disables every tenant isolation policy while every test still passes.
+  DATABASE_APP_URL: "postgresql://nexa_app:<app_password>@<db-host>:5432/<db>"
+  REDIS_URL: "redis://<redis-host>:6379"

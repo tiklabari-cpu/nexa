@@ -557,6 +557,66 @@ mechanism whose retries add load would not be one.
 
 ---
 
+## Deployment
+
+`infra/helm/nexa/` is a Helm chart for the four M-CONTAINER images (api, rtm, web,
+widget) — Deployment + Service per app, a ConfigMap/Secret pair, PodDisruptionBudgets,
+HorizontalPodAutoscalers, and a pre-install/pre-upgrade migration Job. It is a different
+thing from "Run the whole stack in containers" above: that section boots this same set of
+images locally with `docker compose`, on one host, for a demo. This chart describes how a
+real Kubernetes deployment of the same images would be shaped — its manifests have **never
+been applied to a cluster** (CLAUDE.md / MASTER-PROMPT limit: no production deploy). Render
+it, read it, adapt it; do not `helm install` it against anything that matters without a
+review this repo cannot give it.
+
+Render the chart (needs Helm; not required for anything else in this repo):
+
+```bash
+helm template nexa infra/helm/nexa \
+  -f infra/helm/nexa/values.yaml \
+  -f infra/helm/nexa/values.production.example.yaml
+```
+
+[`values.production.example.yaml`](infra/helm/nexa/values.production.example.yaml) is the
+production overlay — every value a real deployment has to fill in (image registry/tags,
+public URLs, `TRUST_PROXY_HOPS`, secret material), one line of reasoning each, no real
+secrets, exactly the discipline [`.env.production.example`](.env.production.example)
+follows for the non-container path. It also documents the recommended way to supply real
+secret values (an externally managed Secret / secret-manager sync into the same
+`<release>-secrets` name, `secrets.enabled: false`) rather than passing them through
+`helm install --set`.
+
+Migration strategy — where `prisma migrate deploy` runs in a multi-replica deployment, the
+race that ruled out running it from each pod's own entrypoint, and the expand/contract
+rule for writing a migration that survives a rolling upgrade — is a deliberate decision,
+not a default; it is documented once, in [CONVENTIONS.md](CONVENTIONS.md) §6, and this
+section does not repeat it.
+
+**What is verified, and how:**
+
+- `helm lint infra/helm/nexa` — passes (one non-blocking suggestion: add a chart icon).
+- `helm template` — renders successfully: 4 Deployments, 4 Services, 4 PodDisruptionBudgets,
+  3 HorizontalPodAutoscalers (api/rtm/web — widget opts out, see `values.yaml`), 1
+  ConfigMap, 1 Job, and 1 Secret (0 with the production overlay's
+  `secrets.enabled: false`) — 18 or 17 resources depending on that flag.
+- Every rendered resource validates against real Kubernetes OpenAPI schemas, fully
+  offline, with [`kubeconform`](https://github.com/yannh/kubeconform) `-strict`: 18/18
+  valid (default values) and 17/17 valid (production overlay).
+- `kubectl apply --dry-run=client` against the rendered YAML was attempted and does **not**
+  work on a machine with no reachable cluster: even with `--validate=false`, `kubectl
+apply` still needs live API-server discovery to compute its strategic-merge patch, and
+  fails with a connection error before evaluating anything client-side. This is a property
+  of `kubectl apply`'s dry-run mode, not of the chart — `kubeconform` above is the offline
+  equivalent this repo actually runs, consistent with §D124's "no real cluster" decision.
+
+**What this cannot verify, stated rather than implied:** whether the chart actually
+reconciles cleanly against a live API server, whether the images it names exist in the
+registry it points at, and everything downstream of "a cluster accepts this YAML" — TLS
+termination, DNS, an Ingress certificate, and real (non-`dev-only-…`) secret values. None
+of that is in this repository's scope.
+
+---
+
 ## Status
 
 See [PLAN.md](PLAN.md) for what is done and what is next, and [HANDOFF.md](HANDOFF.md)

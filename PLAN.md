@@ -3307,7 +3307,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ✅ → KM-OPS |
 | M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ✅ → KM-LOAD |
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ✅ → KM-SCALE |
-| M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ⬜ |
+| M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ◐ → KM-OTEL |
 | M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ⬜ |
 | M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ⬜ |
 | M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ⬜ |
@@ -6933,7 +6933,24 @@ _(Faz-6 · tm 162 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
 
 #### KM-OTEL — M-OTEL · Telemetri exporter dikişi + RTM metrikleri (NFR-M5)
 
-_(Faz-6 · tm 163 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ◐ Exporter seçim dikişi: `OTEL_EXPORTER=console|otlp|none` M-PROV-a deseniyle (sözlük
+  `telemetry.ts`te, `env.ts` oradan `z.enum(...)`e import ediyor — `MAIL_PROVIDERS` birebir
+  kopya). `console` (varsayılan, değişmedi) stdout'a basar; `otlp` gerçek bir collector'a
+  (`OTEL_EXPORTER_OTLP_ENDPOINT`, OpenTelemetry'nin kendi standart anahtarı, base URL — factory
+  `/v1/traces`/`/v1/metrics`i kendi ekler) gönderir; `none` enstrümantasyonu AÇIK bırakır
+  (span'ler hâlâ `request_id` taşır) ama her export'u maliyetsiz + sessizce (konsola basmadan,
+  ağa göndermeden) başarıyla sonuçlandırır (`NoopSpanExporter`/`NoopMetricExporter`) — canlıda
+  `OTEL_ENABLED=true` iken konsol exporter'ın her istekte stdout'u basması sorununu çözer.
+  Gerçek collector'a bağlanmak kapsam dışı (proje sınırı); otlp yolunun doğruluğu birim testiyle
+  kanıtlandı, canlı bağlantıyla değil. Test enjeksiyon yolu (integration `telemetry.test.ts`in
+  somut `InMemorySpanExporter`/`InMemoryMetricExporter` nesnesi geçmesi) dokunulmadan kaldı —
+  `typeof === 'string'` dalı yalnız env'den gelen isimler için çalışıyor. — `apps/api/src/telemetry/telemetry.ts`
+  (sözlük + factory) · `apps/api/src/config/env.ts` (`OTEL_EXPORTER` · `OTEL_EXPORTER_OTLP_ENDPOINT`)
+  · `apps/api/src/server.ts` (wiring) · `.env.example` · `.env.production.example` · `turbo.json`
+  globalEnv · test `apps/api/src/telemetry/telemetry.test.ts` (5) + `apps/api/src/config/env.test.ts`
+  provider-selection tablosuna eklenen satır · tm 163.1. **Eksik (M-OTEL-b, tm 163.2):** RTM
+  telemetrisi — eşzamanlı bağlantı sayısı · fan-out gecikmesi · kopma nedeni metrikleri; o kadar
+  bitmeden M-OTEL satırı ✅ olmaz.
 
 #### KM-IAC — M-IAC · Dağıtım manifestleri (deploy yok)
 

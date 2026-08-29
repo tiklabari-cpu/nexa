@@ -91,7 +91,9 @@
     "UPLOAD_URL_TTL",
     "STRIPE_PROVIDER",
     "VIRUS_SCANNER",
-    "OTEL_ENABLED"
+    "OTEL_ENABLED",
+    "OTEL_EXPORTER",
+    "OTEL_EXPORTER_OTLP_ENDPOINT"
   ],
   "tasks": {
     "build": {

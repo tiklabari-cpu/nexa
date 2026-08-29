@@ -7934,7 +7934,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T16:19:16.858Z",
+        "updatedAt": "2026-08-29T16:39:30.613Z",
         "subtasks": [
           {
             "id": 1,
@@ -7942,10 +7942,10 @@
             "description": "Dört uygulamanın dağıtım manifesti depoda.",
             "details": "NE YAPILACAK: infra/helm/nexa/ altında bir Helm chart iskeleti.\n- Chart.yaml · values.yaml · templates/ (dört uygulama için Deployment + Service, ConfigMap,\n  Secret ŞABLONU — gerçek secret İÇERMEZ).\n- İmaj adları M-CONTAINER ın (tm 140) ürettiği dört imajla eşleşmeli:\n  apps/api/Dockerfile · apps/rtm/Dockerfile · apps/web/Dockerfile · apps/widget/Dockerfile.\n- Ortam değişkenleri ConfigMap ten (secret olmayanlar) ve Secret ten (JWT_SIGNING_KEY ·\n  WEBHOOK_HMAC_SEED · CUSTOMER_TOKEN_SECRET · UPLOAD_SIGNING_KEY · AUDIT_CHAIN_SECRET ·\n  DATABASE_URL · DATABASE_APP_URL · REDIS_URL) beslenir.\n- Postgres ve Redis chart a DAHİL EDİLMEZ (yönetilen servis varsayımı); bağlantı dizeleri değer olarak gelir.\n  Bu bir karardır — values.yaml a yorum olarak yaz.\n\nDOSYALAR: infra/helm/nexa/ (yeni) · .prettierignore (Helm şablonları Go template sözdizimi taşır ve\nprettier onları bozabilir — gerekirse ignore et; format:check kapısı YEŞİL kalmalı).\nREFERANS: docker-compose.full.yml — hangi servisin hangi env i aldığı, healthcheck bağımlılık zinciri\nve init servisi orada yazılı; chart onun dağıtım karşılığıdır.\napps/api/docker-entrypoint.sh — entrypoint bugün migrate deploy koşuyor; 164.3 bunu tartışacak.\n\nTUZAKLAR:\n1. format:check kapısı yaml dosyalarını da kapsıyor (**/*.{...,yaml,yml}). Helm şablonları\n   {{ }} taşıdığı için prettier onları geçersiz sayabilir — .prettierignore a ekle ve GEREKÇESİNİ yaz.\n2. GERÇEK SECRET KOYMA. Secret şablonu yalnız anahtar adlarını taşır; değerler values dosyasından\n   ya da dış bir secret yöneticisinden gelir (164.4 te belgelenir).\n3. kubectl ya da helm bu makinede kurulu OLMAYABİLİR (make de değildi). Kuruluysa koş; değilse\n   doğrulamayı bir konteyner içinde yap ve nasıl yaptığını HANDOFF a yaz (tm 143 ün make -n emsali).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-IAC** (türetilmiş — MASTER-PROMPT teslim paketi). Gereksinim satırı: `grep -n \"| M-IAC\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-IAC\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- helm template infra/helm/nexa exit 0 ve dört Deployment + dört Service üretiyor.\n- pnpm -w format:check exit 0 (Helm şablonları kapıyı kırmadı).\n- Ölçülebilir: üretilen YAML de gerçek secret YOK (grep ile doğrula).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "164",
-            "updatedAt": "2026-08-29T16:19:16.858Z"
+            "updatedAt": "2026-08-29T16:39:30.613Z"
           },
           {
             "id": 2,
@@ -8160,7 +8160,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T16:19:16.858Z",
+      "lastModified": "2026-08-29T16:39:30.614Z",
       "taskCount": 172,
       "completedCount": 166,
       "tags": [

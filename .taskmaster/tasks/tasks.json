@@ -7934,7 +7934,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T17:02:20.374Z",
+        "updatedAt": "2026-08-29T17:37:18.668Z",
         "subtasks": [
           {
             "id": 1,
@@ -7967,12 +7967,12 @@
             "description": "Şema göçü çok replikalı bir dağıtımda güvenli.",
             "details": "NE YAPILACAK: bir karar ve onun manifesti.\nBUGÜNKÜ DURUM: apps/api/docker-entrypoint.sh her konteyner başlangıcında prisma migrate deploy\nkoşuyor. Tek konteynerde sorunsuz; ÜÇ REPLİKALI bir dağıtımda üç süreç aynı anda migration koşar.\nPrisma nın kendi kilidi bunu tolere eder ama sonuç yine de gözden geçirilmeli.\n\nKARAR VERİLECEK ÜÇ SORU (her birinin cevabı ve GEREKÇESİ yazılır):\n1. Migration nerede koşar: her pod un init-container ı mı, tek seferlik bir Job mu, yoksa entrypoint\n   olduğu gibi mi kalır? (Job en yaygın ve en açık olanıdır: dağıtım sırası netleşir.)\n2. Yarış: iki migration aynı anda başlarsa ne olur? Prisma nın advisory lock davranışı ÖLÇÜLÜR\n   (iki süreçle deneyerek), varsayılmaz.\n3. Geri alınamaz migration politikası: sütun silen / tip daraltan bir migration, eski sürüm pod lar\n   hâlâ ayaktayken koşarsa onları kırar. Kural yazılır (ör. genişlet-sonra-daralt / iki aşamalı dağıtım)\n   ve CONVENTIONS ya da README ye eklenir.\n\nNEDEN OPUS-XHIGH: bu bir dağıtım tasarımı kararı ve yanlışı veri kaybına ya da kesintiye yol açar.\n\nDOSYALAR: infra/helm/nexa/templates/ (Job ya da init-container) · apps/api/docker-entrypoint.sh\n(değişecekse) · docker-compose.full.yml (init servisi — YEREL yığında zaten tek atımlık bir init var,\nonun emsalini OKU) · README ya da CONVENTIONS (politika).\nREFERANS: docker-compose.full.yml in init servisi — migrate + seed i tek atımlık koşuyor ve\ndiğer servisler ona bağlı. Kubernetes karşılığı budur.\n\nTUZAK: seed PRODUCTION DA KOŞMAMALI. Yerel init hem migrate hem seed yapıyor; manifest yalnız\nmigrate yapmalı ve bu ayrım açıkça yazılmalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-IAC** (türetilmiş — NFR-R5 · dağıtım güvenliği). Gereksinim satırı: `grep -n \"| M-IAC\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-IAC\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Üç sorunun cevabı ve gerekçesi yazılı (README/CONVENTIONS + HANDOFF).\n- Prisma nın eşzamanlı migration davranışı ÖLÇÜLDÜ (iki süreçle), varsayılmadı.\n- helm template + kubectl --dry-run=client ile Job/init-container kabul ediliyor.\n- Ölçülebilir: manifest seed KOŞMUYOR (yalnız migrate).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "164.1"
             ],
             "parentId": "164",
-            "updatedAt": "2026-08-29T17:02:20.374Z"
+            "updatedAt": "2026-08-29T17:37:18.668Z"
           },
           {
             "id": 4,
@@ -8160,7 +8160,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T17:02:20.375Z",
+      "lastModified": "2026-08-29T17:37:18.669Z",
       "taskCount": 172,
       "completedCount": 166,
       "tags": [

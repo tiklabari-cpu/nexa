@@ -52,3 +52,11 @@ HANDOFF.md
 # hold, and the next run would turn `format:check` red on a repo nobody broke.
 # Same reason as the two state files above.
 apps/load/results/
+
+# Helm templates (tm 164.1, M-IAC-a). `templates/*.yaml` carry Go template
+# syntax (`{{ }}`) inside YAML — prettier's yaml parser reads the `{{ ... }}`
+# block as invalid YAML (measured: `SyntaxError` on `configmap.yaml`'s
+# `{{ $key }}: {{ $value | quote }}` line) and would fail `format:check` on
+# files that were never valid YAML on their own, only after Helm renders them.
+# `Chart.yaml`/`values.yaml` (plain YAML, no template syntax) are NOT ignored.
+infra/helm/nexa/templates/

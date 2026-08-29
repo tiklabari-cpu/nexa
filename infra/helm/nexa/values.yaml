@@ -1,0 +1,123 @@
+# Nexa — Helm chart skeleton (tm 164.1, M-IAC-a). Deploy manifests only: nothing
+# in this chart is ever `helm install`ed against a real cluster by this repo
+# (CLAUDE.md / MASTER-PROMPT limits — no production deploy). `helm template`
+# is the acceptance check; see infra/helm/nexa/README.md.
+#
+# Deliberately NOT in this chart, and why:
+#   - Postgres / Redis:  M-IAC's own scope (PLAN.md §6C row 6) assumes a managed
+#     datastore, not an in-cluster one — connection strings are values, below.
+#   - Liveness/readiness probes, resources (requests/limits), HPA, PDB: tm
+#     164.1's own task text hands these to tm 164.2 (M-IAC-b). Adding them here
+#     would be scope creep the next window would have to untangle.
+#   - Migration strategy (init-container vs Job, multi-replica race): tm 164.3
+#     (M-IAC-c) decides this; today's api Dockerfile entrypoint still runs
+#     `prisma migrate deploy` on every start (fine at replicas: 1, a race once
+#     replicas > 1 — that decision is 164.3's, not repeated here).
+#   - values.production.example.yaml + a real secret-manager story: tm 164.4
+#     (M-IAC-d).
+
+image:
+  # Empty registry means "just <repository>:<tag>", i.e. an image already
+  # present on the node — what M-CONTAINER's `nexa-<app>:local` tags are.
+  # A real deployment sets this to wherever those four images are pushed
+  # (tm 164.4 documents the registry/tag story).
+  registry: ""
+  pullPolicy: IfNotPresent
+
+# One entry per app M-CONTAINER (tm 140) builds an image for. `repository`
+# matches that image's tag in docker-compose.full.yml (`nexa-api:local`, …).
+# `needsSecrets` gates whether the Secret below is mounted — only api/rtm talk
+# to Postgres/Redis/sign tokens; web/widget are static-file nginx containers
+# and get none of that surface for no reason.
+apps:
+  api:
+    repository: nexa-api
+    tag: local
+    port: 4000
+    replicas: 1
+    needsSecrets: true
+  rtm:
+    repository: nexa-rtm
+    tag: local
+    port: 4001
+    replicas: 1
+    needsSecrets: true
+  web:
+    repository: nexa-web
+    tag: local
+    port: 8080
+    replicas: 1
+    needsSecrets: false
+  widget:
+    repository: nexa-widget
+    tag: local
+    port: 8080
+    replicas: 1
+    needsSecrets: false
+
+# Known gap, stated rather than hidden: the web image's RTM WebSocket address
+# (`VITE_RTM_URL`) is baked in at *build* time (apps/web/Dockerfile), not read
+# from the environment at container start the way API_UPSTREAM/RTM_UPSTREAM
+# below are — a WebSocket URL cannot default to a same-origin relative path
+# (see that Dockerfile's own comment). This chart cannot override it at
+# deploy time; a real rollout either builds a per-target web image or routes
+# RTM through the nginx proxy location that image already carries
+# (`/v1/agent/rtm/ws`, see templates/configmap.yaml's RTM_UPSTREAM) by
+# rebuilding with `VITE_RTM_URL` pointed at this chart's own web Service.
+
+# Non-secret configuration, becomes the ConfigMap every container loads with
+# envFrom (templates/configmap.yaml). Mirrors .env.example's non-secret keys;
+# docker-compose.full.yml is this same configuration's local-compose analogue.
+# Not exhaustive of every tunable in .env.example on purpose — a skeleton
+# ships what boots the four apps, not every rate-limit/billing constant that
+# already has a safe in-code default; tm 164.4's values.production.example.yaml
+# is where a real deployment's full tuning belongs.
+config:
+  NODE_ENV: production
+  NEXA_REGION: eu
+  LOG_LEVEL: info
+  API_PORT: "4000"
+  API_HOST: "0.0.0.0"
+  RTM_PORT: "4001"
+  RTM_HOST: "0.0.0.0"
+  # How many reverse proxies in front of the API are trusted (request.ip
+  # derivation — see .env.example). 1 because nginx (web/widget images) is
+  # the one hop this chart itself puts in front; a real Ingress adds another
+  # and a deployment overrides this value accordingly.
+  TRUST_PROXY_HOPS: "1"
+  # Mocked providers (MASTER-PROMPT: dış servisleri mock'la) — unchanged from
+  # dev/demo. A real deployment overrides these once a real provider exists;
+  # none does yet, so shipping anything else here would be a manifest that
+  # boots and then fails its first request.
+  LLM_PROVIDER: mock
+  MAIL_PROVIDER: file
+  PUSH_PROVIDER: file
+  STORAGE_PROVIDER: local
+  STRIPE_PROVIDER: mock
+  VIRUS_SCANNER: mock
+  SIEM_PROVIDER: file
+
+# Secret template — key NAMES only conceptually; the values below are the
+# SAME `dev-only-…` placeholders `.env.example` ships, not real secrets
+# (CLAUDE.md: gerçek secret YOK). Kept as placeholders rather than blanked
+# because `parseEnv` (apps/api/src/config/env.ts, M-PROD-CFG-a) already
+# refuses to boot under NODE_ENV=production on an unrotated `dev-only-…`
+# value — that guard is a feature this chart should trip, not route around,
+# so a `helm install` with these untouched fails loudly instead of quietly
+# running with a guessable key. A real deployment overrides every key here
+# from its own secret manager (tm 164.4 documents that path) or supplies its
+# own Secret object and skips templates/secret.yaml (see that file's note).
+secrets:
+  # Set false once a real deployment supplies its own externally-managed
+  # Secret under the same `<release>-secrets` name (templates/secret.yaml's
+  # own note) — skips rendering this template instead of overriding every
+  # key in it.
+  enabled: true
+  JWT_SIGNING_KEY: dev-only-jwt-signing-key-change-me-0123456789abcdef
+  WEBHOOK_HMAC_SEED: dev-only-webhook-hmac-seed-change-me-0123456789abcdef
+  CUSTOMER_TOKEN_SECRET: dev-only-customer-token-secret-change-me-0123456789
+  UPLOAD_SIGNING_KEY: dev-only-upload-signing-key-change-me-0123456789
+  AUDIT_CHAIN_SECRET: dev-only-audit-chain-secret-change-me-0123456789abcdef
+  DATABASE_URL: postgresql://nexa:CHANGE_ME@CHANGE_ME:5432/nexa
+  DATABASE_APP_URL: postgresql://nexa_app:CHANGE_ME@CHANGE_ME:5432/nexa
+  REDIS_URL: redis://CHANGE_ME:6379

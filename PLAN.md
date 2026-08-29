@@ -3308,7 +3308,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ✅ → KM-LOAD |
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ✅ → KM-SCALE |
 | M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ✅ → KM-OTEL |
-| M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ⬜ |
+| M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ◐ → KM-IAC |
 | M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ⬜ |
 | M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ⬜ |
 | M-SEC-e | Faz-6 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-6 tm 167) | ⬜ |
@@ -7001,7 +7001,25 @@ _(Faz-6 · tm 162 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
 
 #### KM-IAC — M-IAC · Dağıtım manifestleri (deploy yok)
 
-_(Faz-6 · tm 164 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ M-IAC-a: `infra/helm/nexa/` Helm iskeleti — Chart.yaml · values.yaml (dört
+  app'in image/port/replicas + `config` ConfigMap + `secrets` Secret şablonu,
+  dev-only placeholder'lar) · `templates/deployment.yaml` + `service.yaml`
+  (`.Values.apps` üzerinde tek `range`, dört Deployment + dört Service üretir)
+  · `templates/configmap.yaml` (statik anahtarlar + hesaplanan `API_UPSTREAM`/
+  `RTM_UPSTREAM`) · `templates/secret.yaml` (yalnız anahtar adları + placeholder
+  değer, `secrets.enabled` ile devre dışı bırakılabilir). Postgres/Redis
+  BİLİNÇLİ olarak chart'a dahil değil (yönetilen servis varsayımı, values.yaml
+  başlığında gerekçeli). Doğrulama: `helm` bu makinede kurulu değil — konteyner
+  içinde (`alpine/helm:3.15.3`, PowerShell'den `-v` mount, Bash/MSYS path
+  dönüşümü mount'u kırdığı için) `helm template nexa infra/helm/nexa` **exit 0**,
+  çıktı **4 Deployment + 4 Service + 1 ConfigMap + 1 Secret**; `helm lint`
+  exit 0; Secret çıktısında yalnız `dev-only-…`/`CHANGE_ME` placeholder'lar var
+  (grep ile doğrulandı, gerçek secret yok). `.prettierignore`'a
+  `infra/helm/nexa/templates/` eklendi (Go template `{{ }}` sözdizimi prettier'ın
+  yaml parser'ını kırıyor — ölçüldü, `configmap.yaml` üstünde `SyntaxError`;
+  `Chart.yaml`/`values.yaml` düz YAML, ignore edilmedi). tm 164.1.
+
+_(M-IAC-b/c/d hâlâ açık. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
 
 #### KM-BACKUP — M-BACKUP · Yedekleme ve geri yükleme provası (NFR-R5)
 

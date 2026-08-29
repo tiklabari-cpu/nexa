@@ -1,0 +1,28 @@
+# One ClusterIP Service per app, fronting the matching Deployment in
+# deployment.yaml (same ranged-template rationale — see that file's header).
+{{- range $name, $app := .Values.apps }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  # None — deliberately (tm 162.1, M-SCALE-a, §D136): a pod-affinity sticky
+  # session is not what an RTM WebSocket needs, the upgrade itself pins a
+  # client to one pod for the socket's lifetime, and cross-pod fan-out
+  # (measured in that task) is what makes the other pod's clients reachable.
+  sessionAffinity: None
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+  ports:
+    - name: http
+      port: {{ $app.port }}
+      targetPort: http
+{{- end }}

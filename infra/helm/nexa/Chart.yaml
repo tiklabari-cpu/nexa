@@ -1,0 +1,10 @@
+apiVersion: v2
+name: nexa
+description: >-
+  Nexa — canlı destek + AI müşteri hizmetleri platformu. Dört uygulama
+  (api · rtm · web · widget), M-CONTAINER (tm 140) imajlarını dağıtır.
+  Postgres/Redis bu chart'a DAHİL DEĞİL (values.yaml'daki not — yönetilen
+  servis varsayımı, tm 164.1).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

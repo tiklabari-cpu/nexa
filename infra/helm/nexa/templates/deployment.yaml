@@ -1,0 +1,49 @@
+# One Deployment per app in .Values.apps (api/rtm/web/widget — M-CONTAINER's
+# four images). A single ranged template rather than four near-identical
+# files: the four apps differ only in the values.yaml fields already listed
+# per app (image/port/replicas/needsSecrets), so four copies would be the
+# same 25 lines drifting apart one field at a time, not four genuinely
+# different manifests.
+#
+# Deliberately NOT here (tm 164.2/164.3/164.4's scope, not this task's —
+# see values.yaml's header): liveness/readiness probes, resources
+# (requests/limits), and anything about how `prisma migrate deploy` runs
+# under more than one replica.
+{{- range $name, $app := .Values.apps }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  replicas: {{ $app.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ $name }}
+        app.kubernetes.io/instance: {{ $.Release.Name }}
+    spec:
+      containers:
+        - name: {{ $name }}
+          image: "{{ if $.Values.image.registry }}{{ $.Values.image.registry }}/{{ end }}{{ $app.repository }}:{{ $app.tag }}"
+          imagePullPolicy: {{ $.Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $app.port }}
+          envFrom:
+            - configMapRef:
+                name: {{ $.Release.Name }}-config
+            {{- if $app.needsSecrets }}
+            - secretRef:
+                name: {{ $.Release.Name }}-secrets
+            {{- end }}
+{{- end }}

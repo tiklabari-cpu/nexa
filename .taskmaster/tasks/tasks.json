@@ -7996,10 +7996,10 @@
         "description": "NFR-R5 yedekleme + point-in-time recovery istiyor ve \"yedekler de retention politikasına tabi\" diyor. Depoda bugün HİÇBİR yedekleme yolu yok. Daha önemlisi: bir yedeğin var olması onu geri yüklenebilir yapmaz — ölçülmesi gereken şey \"yedek alındı\" değil \"yedek GERİ YÜKLENDİ ve veri tutuyor\" olmalı.",
         "details": "BULGU KAYNAĞI: 2026-08-23 bağımsız denetimi (§D124: NFR-R5 hiç yok).\n\nCLAUDE.md SINIRI — DİKKAT: \"DB drop YOK\". Geri yükleme provası, nexa geliştirme veritabanına\nDOKUNMAZ; kendi GEÇİCİ veritabanını yaratır, yedeği oraya yükler, doğrular ve düşürür.\nEmsal: apps/api/scripts/with-test-datastores.ts — her koşuya kendi nexa_test_<id> veritabanını\nverip sonunda düşüren mevcut harness. Aynı disiplin.\n\nFAZ-6'NIN KONUSU: CANLIDA AYAKTA KALMAK (§D124). Faz-5 ürünün DOĞRU olmasını sağladı;\nFaz-6 HAZIR olmasını sağlar.\n\nSINIR (CLAUDE.md): production deploy / DNS / TLS / gerçek secret YOK. Her kalem ya yerelde koşulabilir\nya --dry-run / helm template ile doğrulanabilir olmalı. M-CONTAINER emsali (tm 140): dosyalar depoda,\nkubectl apply YOK. Mock sağlayıcıları gerçeğe çekmek de KAPSAM DIŞI.\nKapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-BACKUP** (türetilmiş — NFR-R5 · NFR-C8). Gereksinim satırı: `grep -n \"| M-BACKUP\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-BACKUP\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "İki alt-görev done. Ölçülebilir:\n1. Yedekleme scripti koşuyor ve bir dosya üretiyor; CronJob manifesti dry-run dan geçiyor.\n2. restore-drill scripti GEÇİCİ bir veritabanına yedeği yüklüyor, migration durumunu ve satır sayılarını\n   doğruluyor, sonra düşürüyor — exit code ile.\n3. nexa geliştirme veritabanına DOKUNULMADI.\n4. PLAN §7.2 M-BACKUP → \"✅ → KM-BACKUP\".",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T18:28:50.184Z",
+        "updatedAt": "2026-08-29T18:58:54.901Z",
         "subtasks": [
           {
             "id": 1,
@@ -8018,12 +8018,12 @@
             "description": "Yedeğin gerçekten geri yüklenebildiği kanıtlandı.",
             "details": "NE YAPILACAK: scripts/restore-drill.sh — çalıştırılabilir bir prova.\nAdımlar:\n1. GEÇİCİ bir veritabanı yaratır (ör. nexa_restore_drill_<zaman>) — nexa ya DOKUNMAZ.\n2. 165.1 in ürettiği yedeği oraya yükler.\n3. DOĞRULAR:\n   - _prisma_migrations tablosundaki uygulanmış migration sayısı beklenenle aynı mı,\n   - kritik tabloların satır sayıları kaynak ile tutuyor mu (organizations · accounts · chats · events),\n   - RLS politikaları geri geldi mi (tm 150 nin partisyon politikaları DAHİL — mantıksal yedek\n     bunları taşıyor mu, ÖLÇ; taşımıyorsa bu bir BULGUDUR ve raporlanır),\n   - pgvector uzantısı ve SECURITY DEFINER fonksiyonlar yerinde mi.\n4. Geçici veritabanını DÜŞÜRÜR (başarısız olsa bile — trap ile temizlik).\n5. Exit code ile sonuç verir.\n\nNEDEN OPUS-XHIGH: doğrulama listesinin ne içereceği bir yargı işidir; eksik bir liste \"yedek çalışıyor\"\ndiye yanlış güven verir. Ayrıca RLS/uzantı/fonksiyon gibi şema nesnelerinin mantıksal yedekte\nnasıl davrandığı ölçülmeli, varsayılmamalı.\n\nCLAUDE.md SINIRI: \"DB drop YOK\" — bu script YALNIZ kendi yarattığı geçici veritabanını düşürür.\nnexa ya ve nexa_test_* dışındaki hiçbir veritabanına dokunmaz. Bu koruma script in kendisinde\nbir isim kontrolüyle ZORLANMALI (yanlışlıkla nexa yazılırsa reddetsin).\n\nDOSYALAR: scripts/restore-drill.sh (yeni) · Makefile (hedef) · README (kısa bölüm).\nREFERANS: apps/api/scripts/with-test-datastores.ts — geçici veritabanı yaratma/düşürme deseni\nve temizlik disiplini (ölen koşunun bıraktığını sonraki koşu süpürür).\n\nTUZAK: pg_dump/pg_restore sürüm uyumu; konteyner içindeki Postgres 17 ile aynı sürümü kullan\n(make psql deseni).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-BACKUP** (türetilmiş — NFR-R5). Gereksinim satırı: `grep -n \"| M-BACKUP\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-BACKUP\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- restore-drill.sh elle koşuluyor: exit 0 ve doğrulama çıktısı HANDOFF ta.\n- Ölçülebilir: koşu sonrası geçici veritabanı YOK (psql \\l ile doğrula) ve nexa DOKUNULMAMIŞ.\n- Ölçülebilir: isim koruması çalışıyor (nexa verilirse script reddediyor).\n- RLS politikalarının yedekten geri gelip gelmediği ÖLÇÜLDÜ ve sonuç yazıldı.\n- PLAN: §7.2 M-BACKUP → \"✅ → KM-BACKUP\" (ikinci alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "165.1"
             ],
             "parentId": "165",
-            "updatedAt": "2026-08-29T18:28:50.184Z"
+            "updatedAt": "2026-08-29T18:58:54.901Z"
           }
         ]
       },
@@ -8160,9 +8160,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T18:28:50.185Z",
+      "lastModified": "2026-08-29T18:58:54.901Z",
       "taskCount": 172,
-      "completedCount": 167,
+      "completedCount": 168,
       "tags": [
         "master"
       ]

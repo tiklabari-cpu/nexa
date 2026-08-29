@@ -1,0 +1,38 @@
+# One HorizontalPodAutoscaler per app that opts in
+# (`.Values.apps.<name>.hpa.enabled` — see values.yaml's own per-app comment
+# for which apps that is today and why widget is not one of them).
+#
+# CPU-based (`autoscaling/v2`, a plain Resource metric) for every app that
+# has one — even rtm, where CPU is a known-imperfect proxy for its real load
+# (open WebSocket connections, not request CPU). See values.yaml's
+# `apps.rtm.hpa` comment and PLAN.md's `KM-LOAD` (tm 161.4) for the
+# measurement that established the gap and why closing it is out of this
+# task's scope.
+{{- range $name, $app := .Values.apps }}
+{{- if $app.hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ $.Release.Name }}-{{ $name }}
+  minReplicas: {{ $app.hpa.minReplicas }}
+  maxReplicas: {{ $app.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $app.hpa.targetCPUUtilizationPercentage }}
+{{- end }}
+{{- end }}

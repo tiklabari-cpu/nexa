@@ -7019,7 +7019,42 @@ _(Faz-6 · tm 162 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
   yaml parser'ını kırıyor — ölçüldü, `configmap.yaml` üstünde `SyntaxError`;
   `Chart.yaml`/`values.yaml` düz YAML, ignore edilmedi). tm 164.1.
 
-_(M-IAC-b/c/d hâlâ açık. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ M-IAC-b: Probe/kaynak/HPA/PDB eklendi — `templates/deployment.yaml`'a her
+  app için `startupProbe` (liveness ile aynı check, yalnız `failureThreshold`
+  app'e göre değişir — her app'in kendi Dockerfile `HEALTHCHECK`
+  `start-period`+`interval*retries` bütçesini birebir yansıtır: api 70s ·
+  rtm 65s · web/widget 60s) · `livenessProbe`/`readinessProbe` (api/rtm
+  `/api/v1/health/live|ready` ve `/health/live|ready` — tm 160.1'in
+  ayrımı; web/widget kendi Docker HEALTHCHECK'lerinin AYNI dosyasını
+  probluyor: `/index.html` · `/loader.js`) · `resources.requests/limits`.
+  Yeni `templates/hpa.yaml` (api/rtm/web, CPU tabanlı, `autoscaling/v2`,
+  minReplicas 1 · maxReplicas 4 · %70 — widget BİLİNÇLİ dışında, task metni
+  yalnız api+web'i istiyordu) · yeni `templates/pdb.yaml` (dört app'in
+  tamamı, `maxUnavailable: 1` — `minAvailable: 1` DEĞİL: bugünkü
+  `replicas: 1`'de `minAvailable` her voluntary eviction'ı sonsuza kadar
+  bloklardı, bilinen bir PDB tuzağı). **rtm kaynakları ÖLÇÜLDÜ, uydurulmadı**
+  (tm 161.4'ün KM-LOAD kanıtı): CPU limiti "1" tam ölçülen tek-thread
+  tavanında (2000-6000 soket arası 0,54-1,23 çekirdek), memory limiti 512Mi
+  ölçülen RSS eğrisinin üstünde (101MB boşta → 312MB@6000 soket). **rtm HPA
+  yorumu tm 161.4'ün kendi bulgusunu taşıyor:** CPU rtm için YANLIŞ metrik
+  (görev metninin kendi uyarısı) — NFR-P1'in kırıldığı 8000 soket basamağında
+  makine %96 boştaydı, doygun olan tek JS iş parçacığıydı; doğru metrik
+  `rtm.connections.active` (tm 163.2), custom-metrics adaptörü gerektirir,
+  kapsam dışı. **api kaynakları UNMEASURED placeholder** olarak işaretlendi
+  (tm 161.2 yalnız REST gecikmesini ölçtü, api'nin kendi CPU'sunu değil) —
+  görevin kendi TUZAK uyarısına uygun, tahmin uydurulmadı. Doğrulama:
+  `helm template`/`helm lint` konteynerde (PowerShell, `-v` mount — Bash/MSYS
+  path dönüşümü kırıyor, tm 164.1 emsali) **exit 0**, çıktı **4 Deployment +
+  4 Service + 4 PodDisruptionBudget + 3 HorizontalPodAutoscaler (widget
+  hariç) + 1 ConfigMap + 1 Secret**. `kubectl --dry-run=client` bu makinede
+  KULLANILAMADI (kubectl v1.36.1 `apply`/`create` dry-run=client'ta bile
+  RESTMapper için canlı kümeye bağlanmayı deniyor, hiç küme yok — §D124'ün
+  "gerçek küme kullanılmaz" kararıyla tutarlı) — yerine `kubeconform`
+  (`ghcr.io/yannh/kubeconform`, gerçek k8s OpenAPI şemalarına karşı,
+  tamamen çevrimdışı) **17/17 valid, 0 invalid, 0 error** (`-strict`). tm
+  164.2.
+
+_(M-IAC-c/d hâlâ açık. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
 
 #### KM-BACKUP — M-BACKUP · Yedekleme ve geri yükleme provası (NFR-R5)
 

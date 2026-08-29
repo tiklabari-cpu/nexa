@@ -1,14 +1,22 @@
 # One Deployment per app in .Values.apps (api/rtm/web/widget — M-CONTAINER's
 # four images). A single ranged template rather than four near-identical
 # files: the four apps differ only in the values.yaml fields already listed
-# per app (image/port/replicas/needsSecrets), so four copies would be the
-# same 25 lines drifting apart one field at a time, not four genuinely
-# different manifests.
+# per app (image/port/replicas/needsSecrets/probes/resources), so four
+# copies would be the same lines drifting apart one field at a time, not
+# four genuinely different manifests.
 #
-# Deliberately NOT here (tm 164.2/164.3/164.4's scope, not this task's —
-# see values.yaml's header): liveness/readiness probes, resources
-# (requests/limits), and anything about how `prisma migrate deploy` runs
-# under more than one replica.
+# Deliberately still NOT here (tm 164.3's scope, not this task's — M-IAC-b
+# only adds probes/resources/HPA/PDB): anything about how `prisma migrate
+# deploy` runs under more than one replica (today's docker-entrypoint.sh
+# still runs it inline on every start, which the startupProbe below merely
+# tolerates rather than fixes).
+#
+# `terminationGracePeriodSeconds` is deliberately left at Kubernetes' own
+# default (30s) rather than set explicitly: M-OPS-b's graceful drain
+# (apps/api/src/lib/shutdown.ts, apps/rtm/src/server.ts#close) budgets
+# `SHUTDOWN_DRAIN_MS` (5s in production) + a 15s in-flight-request timeout —
+# 20s, already inside the 30s default with headroom, so there is nothing for
+# an override to fix.
 {{- range $name, $app := .Values.apps }}
 ---
 apiVersion: apps/v1
@@ -46,4 +54,50 @@ spec:
             - secretRef:
                 name: {{ $.Release.Name }}-secrets
             {{- end }}
+          # startupProbe first: while it is failing, kubelet skips
+          # liveness/readiness entirely, so a slow boot (api's inline
+          # `prisma migrate deploy`) cannot be mistaken for a dead or
+          # not-ready process by either. periodSeconds fixed at 5s here;
+          # only the tolerance (failureThreshold) varies per app — see
+          # values.yaml's own per-app comment for where each number comes
+          # from. Points at the SAME check as livenessProbe (standard k8s
+          # pairing): once it succeeds, live/ready take over unmodified.
+          startupProbe:
+            httpGet:
+              path: {{ $app.probes.liveness }}
+              port: http
+            periodSeconds: 5
+            failureThreshold: {{ $app.startupProbe.failureThreshold }}
+          # LIVENESS: never touches a dependency for api/rtm (see
+          # values.yaml's probes comment) — a process that is up but cannot
+          # reach Postgres must not be killed for a problem restarting it
+          # cannot fix. periodSeconds/timeoutSeconds mirror this app's own
+          # already-vetted Docker HEALTHCHECK cadence (tm 140/160.1), not a
+          # new decision.
+          livenessProbe:
+            httpGet:
+              path: {{ $app.probes.liveness }}
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # READINESS: takes the pod out of rotation without restarting it —
+          # for api/rtm this is the real dependency probe (503 while
+          # Postgres/Redis are down, or while draining — M-OPS-b), for
+          # web/widget the same static-file check as liveness (nginx has no
+          # dependency of its own to be not-ready for).
+          readinessProbe:
+            httpGet:
+              path: {{ $app.probes.readiness }}
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: {{ $app.resources.requests.cpu }}
+              memory: {{ $app.resources.requests.memory }}
+            limits:
+              cpu: {{ $app.resources.limits.cpu }}
+              memory: {{ $app.resources.limits.memory }}
 {{- end }}

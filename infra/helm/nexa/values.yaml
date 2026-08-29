@@ -6,9 +6,6 @@
 # Deliberately NOT in this chart, and why:
 #   - Postgres / Redis:  M-IAC's own scope (PLAN.md §6C row 6) assumes a managed
 #     datastore, not an in-cluster one — connection strings are values, below.
-#   - Liveness/readiness probes, resources (requests/limits), HPA, PDB: tm
-#     164.1's own task text hands these to tm 164.2 (M-IAC-b). Adding them here
-#     would be scope creep the next window would have to untangle.
 #   - Migration strategy (init-container vs Job, multi-replica race): tm 164.3
 #     (M-IAC-c) decides this; today's api Dockerfile entrypoint still runs
 #     `prisma migrate deploy` on every start (fine at replicas: 1, a race once
@@ -29,6 +26,10 @@ image:
 # `needsSecrets` gates whether the Secret below is mounted — only api/rtm talk
 # to Postgres/Redis/sign tokens; web/widget are static-file nginx containers
 # and get none of that surface for no reason.
+#
+# `probes` / `startupProbe` / `resources` / `hpa` / `pdb` are tm 164.2's own
+# addition (M-IAC-b) — see templates/deployment.yaml, hpa.yaml, pdb.yaml for
+# how each is consumed.
 apps:
   api:
     repository: nexa-api
@@ -36,24 +37,161 @@ apps:
     port: 4000
     replicas: 1
     needsSecrets: true
+    probes:
+      # Same split tm 160.1 built and for the same reason an orchestrator
+      # needs it (apps/api/src/routes/health.ts's own header): liveness never
+      # touches a dependency (a Postgres outage must not get this pod
+      # killed), readiness does (and takes it out of rotation instead).
+      liveness: /api/v1/health/live
+      readiness: /api/v1/health/ready
+    startupProbe:
+      # failureThreshold only — periodSeconds is fixed at 5s in
+      # templates/deployment.yaml. Mirrors this app's own already-vetted
+      # Docker HEALTHCHECK budget (apps/api/Dockerfile:
+      # start-period=20s + interval=10s * retries=5 = 70s) rather than
+      # inventing a new number — same tolerance tm 160.1 already chose, a
+      # k8s mechanism instead of Docker's. Today that covers
+      # docker-entrypoint.sh's `prisma migrate deploy` (runs to completion
+      # *before* the process starts listening at all — tm 164.3's own scope
+      # to change how migrations run under >1 replica) plus Fastify plugin
+      # registration.
+      failureThreshold: 14
+    resources:
+      # UNMEASURED placeholder, stated rather than hidden (this task's own
+      # TUZAK warning). tm 161/M-LOAD measured REST request *latency*
+      # (PLAN.md KM-LOAD tm 161.2: read p99 116 ms, write p99 88 ms), never
+      # api's own CPU/memory under that load — unlike rtm below, which tm
+      # 161.4 did instrument. Revisit with a dedicated api CPU/memory
+      # profile before trusting these at scale.
+      requests:
+        cpu: 250m
+        memory: 256Mi
+      limits:
+        cpu: "1"
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      maxUnavailable: 1
   rtm:
     repository: nexa-rtm
     tag: local
     port: 4001
     replicas: 1
     needsSecrets: true
+    probes:
+      liveness: /health/live
+      readiness: /health/ready
+    startupProbe:
+      # Mirrors apps/rtm/Dockerfile's own HEALTHCHECK budget (start-period=15s
+      # + interval=10s * retries=5 = 65s). No migration step in this
+      # entrypoint (only api's runs `prisma migrate deploy`), so this is
+      # boot time alone.
+      failureThreshold: 13
+    resources:
+      # GROUNDED in tm 161.4's actual measurement (PLAN.md KM-LOAD), not a
+      # guess: rtm's own process CPU at 2000/6000 concurrent WebSocket
+      # sockets was 0.54-0.62 cores (connect) + 0.08-0.22 cores (fan-out),
+      # peaking at 1.10-1.23 cores in any single second — the ceiling of the
+      # one JS thread rtm runs on, which it cannot exceed regardless of the
+      # limit set here. RSS was 101 MB idle -> 312 MB @ 6000 sockets
+      # (~36-66 KB/socket).
+      requests:
+        cpu: 250m
+        memory: 128Mi
+      limits:
+        # "1" full core: set AT the measured single-thread ceiling — higher
+        # would never be used by this process, lower would throttle it
+        # below its own measured capacity.
+        cpu: "1"
+        memory: 512Mi
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      # CPU is the WRONG metric for rtm's real load (this task's own text) —
+      # rtm is bounded by open WebSocket connections, not request CPU, and
+      # tm 161.4 measured exactly that gap: the load step where rtm's own
+      # fan-out budget broke (8000 sockets, NFR-P1 missed) left the *machine*
+      # ~96% idle (rtm 0.22 + api 0.01 + k6 0.55 of 20 logical cores) — a
+      # single-threaded accept/fan-out contention, not CPU saturation. This
+      # CPU HPA is kept as a floor (it still catches a genuinely CPU-bound
+      # pod) but does not track the failure this app actually measured. The
+      # metric that does is `rtm.connections.active` (tm 163.2's OTEL
+      # gauge) — scaling on it needs a custom-metrics adapter (e.g.
+      # Prometheus Adapter) reading that gauge, which needs a metrics
+      # pipeline this chart does not deploy (CLAUDE.md: deploy yok) and is
+      # therefore out of this task's scope, not silently solved by the
+      # block below.
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      maxUnavailable: 1
   web:
     repository: nexa-web
     tag: local
     port: 8080
     replicas: 1
     needsSecrets: false
+    probes:
+      # Same file apps/web/Dockerfile's own HEALTHCHECK already probes — a
+      # real static file, not a synthetic endpoint, and importantly one that
+      # does not depend on the api/rtm upstreams this image proxies to (a
+      # liveness probe that did would violate the same rule
+      # /api/v1/health/live follows: never kill a process for another
+      # process's outage).
+      liveness: /index.html
+      readiness: /index.html
+    startupProbe:
+      # Mirrors apps/web/Dockerfile's own HEALTHCHECK budget (start-period=10s
+      # + interval=10s * retries=5 = 60s).
+      failureThreshold: 12
+    resources:
+      # Static nginx, no application logic — sized well below api/rtm.
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    hpa:
+      enabled: true
+      minReplicas: 1
+      maxReplicas: 4
+      targetCPUUtilizationPercentage: 70
+    pdb:
+      maxUnavailable: 1
   widget:
     repository: nexa-widget
     tag: local
     port: 8080
     replicas: 1
     needsSecrets: false
+    probes:
+      # Same file apps/widget/Dockerfile's own HEALTHCHECK already probes.
+      liveness: /loader.js
+      readiness: /loader.js
+    startupProbe:
+      failureThreshold: 12
+    resources:
+      requests:
+        cpu: 50m
+        memory: 32Mi
+      limits:
+        cpu: 200m
+        memory: 128Mi
+    hpa:
+      # NOT enabled — the task text names only api and web for CPU-based
+      # autoscaling (M-IAC-b's own description); widget is structurally
+      # identical to web (static nginx) but turning this on for it too would
+      # be an assumption beyond what tm 164.2 asked for, not a technical
+      # necessity. A follow-up can flip this on with the same three fields
+      # web uses above.
+      enabled: false
+    pdb:
+      maxUnavailable: 1
 
 # Known gap, stated rather than hidden: the web image's RTM WebSocket address
 # (`VITE_RTM_URL`) is baked in at *build* time (apps/web/Dockerfile), not read

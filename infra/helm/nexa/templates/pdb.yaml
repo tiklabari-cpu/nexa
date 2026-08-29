@@ -1,0 +1,39 @@
+# One PodDisruptionBudget per app. A PDB bounds VOLUNTARY disruption (a node
+# drain, a cluster-autoscaler eviction) — it has no say over a rolling
+# deploy, which is the Deployment's own `strategy.rollingUpdate` (untouched,
+# still the Kubernetes default here). It is meaningful together with tm
+# 160.2's graceful drain (apps/api/src/lib/shutdown.ts,
+# apps/rtm/src/server.ts#close): the PDB is what makes an eviction remove
+# pods one at a time instead of all at once, and the readiness-then-SIGTERM
+# sequence in that drain is what makes each single eviction not drop
+# traffic.
+#
+# `maxUnavailable: 1` rather than `minAvailable: 1`, deliberately: at
+# today's `replicas: 1` (every app, values.yaml) a `minAvailable: 1` PDB
+# would forbid ANY voluntary eviction of the only replica there is — a node
+# drain would hang forever waiting on a constraint it can never satisfy,
+# which is a documented Kubernetes PDB footgun, not a safety property.
+# `maxUnavailable: 1` has no such deadlock at any replica count, and once an
+# app's `replicas` rises above 1 it does exactly what this task asks: a
+# drain takes one pod at a time, not the whole app. At `replicas: 1` today
+# it does not buy a zero-downtime drain — nothing can, with a single
+# replica; that is a `values.yaml` replica-count decision, not this
+# budget's.
+{{- range $name, $app := .Values.apps }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $.Release.Name }}-{{ $name }}
+  labels:
+    app.kubernetes.io/name: {{ $name }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/managed-by: {{ $.Release.Service }}
+spec:
+  maxUnavailable: {{ $app.pdb.maxUnavailable }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $name }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+{{- end }}

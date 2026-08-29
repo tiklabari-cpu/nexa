@@ -7849,7 +7849,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-28T21:45:23.593Z",
+        "updatedAt": "2026-08-29T12:33:02.436Z",
         "subtasks": [
           {
             "id": 1,
@@ -7868,10 +7868,10 @@
             "description": "Pod sayısı arttığında veritabanı bağlantıları tükenmiyor.",
             "details": "NE YAPILACAK:\n1. Prisma bağlantı havuzu boyutu env den yapılandırılabilir olsun (bugün varsayılan).\n   Yeni anahtar env.ts + .env.example + turbo.json globalEnv üçlüsüne birden eklenir (parite nöbetçisi).\n2. max_connections BÜTÇESİ belgelenir: docker-compose.yml postgres i -c max_connections=200 ile\n   koşuyor. Pod başına havuz × pod sayısı ≤ bütçe ilişkisini README de bir tabloyla yaz.\n3. PgBouncer transaction-mode uyumluluğu: PRD (NFR-S4) PgBouncer transaction-mode + SET LOCAL\n   öngörüyor ve depo ZATEN SET LOCAL kullanıyor (kiracı bağlamı için) — yani uyumlu.\n   Bunu DOĞRULA ve belgele; uyumsuz bir kullanım (oturum-ömürlü SET, prepared statement varsayımı)\n   varsa bul ve raporla.\n\nDOSYALAR: apps/api/src/plugins/database.ts (havuz yapılandırması) · apps/api/src/config/env.ts ·\n.env.example · turbo.json · README.md (yeni alt bölüm) · apps/api/src/lib/tenant.ts\n(SET LOCAL kullanımı — OKU, kiracı bağlamının nasıl kurulduğunu gör).\nREFERANS: README nin \"Notable engineering choices\" bölümündeki DATABASE_URL ↔ DATABASE_APP_URL\nayrımı anlatımı — aynı ton ve aynı yer.\n\nTUZAK: prepared statement lar PgBouncer transaction-mode ile sorunludur. Prisma nın bu ortamda\nnasıl davrandığını ARAŞTIR ve bulgunu yaz; gerekirse bağlantı dizesi parametresi öner.\nGerçek bir PgBouncer KURMA (kapsam dışı) — belgele ve uyumsuzluk varsa raporla.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SCALE** (türetilmiş — NFR-R1/R4 · NFR-S4). Gereksinim satırı: `grep -n \"| M-SCALE\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SCALE\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- env parite testi yeşil (yeni anahtar üç yerde birden).\n- api integration yeşil.\n- README de bağlantı bütçesi tablosu var; PgBouncer uyumluluğu ya doğrulanmış ya uyumsuzluk raporlanmış.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "162",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-29T12:33:02.436Z"
           },
           {
             "id": 3,
@@ -8160,7 +8160,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-28T21:45:23.594Z",
+      "lastModified": "2026-08-29T12:33:02.437Z",
       "taskCount": 172,
       "completedCount": 164,
       "tags": [

@@ -43,6 +43,14 @@ const envSchema = z.object({
    * `productionProblems`.
    */
   DATABASE_APP_URL: z.string().url().optional(),
+  /**
+   * Prisma connection pool size for this process (M-SCALE-b). Kept identical
+   * to the API's (`apps/api/src/config/env.ts`) — both processes read the
+   * same variable out of the same environment and each opens its own pool
+   * against the same `max_connections` budget. See "Connection pool budget"
+   * in README.md.
+   */
+  DATABASE_POOL_SIZE: z.coerce.number().int().positive().optional(),
   REDIS_URL: z.string().url(),
 
   // 0 is allowed on purpose: it asks the OS for an ephemeral port, which is how
@@ -142,6 +150,21 @@ export type RtmEnv = z.infer<typeof envSchema> & {
   maxConnections: number | null;
 };
 
+/**
+ * Applies `DATABASE_POOL_SIZE` to a Postgres connection string as Prisma's
+ * `connection_limit` query parameter. Kept identical to the API's
+ * (`apps/api/src/config/env.ts`). A URL that already names `connection_limit`
+ * is left alone — a deployment default, not a way to fight a more specific
+ * override.
+ */
+function withPoolSize(url: string, poolSize: number | undefined): string {
+  if (poolSize === undefined) return url;
+  const parsed = new URL(url);
+  if (parsed.searchParams.has('connection_limit')) return url;
+  parsed.searchParams.set('connection_limit', String(poolSize));
+  return parsed.toString();
+}
+
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
   const result = envSchema.safeParse(source);
   if (!result.success) {
@@ -161,7 +184,10 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
 
   return {
     ...env,
-    runtimeDatabaseUrl: env.DATABASE_APP_URL ?? env.DATABASE_URL,
+    runtimeDatabaseUrl: withPoolSize(
+      env.DATABASE_APP_URL ?? env.DATABASE_URL,
+      env.DATABASE_POOL_SIZE,
+    ),
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     JWT_SIGNING_KEY_CUSTOMER: env.CUSTOMER_TOKEN_SECRET,

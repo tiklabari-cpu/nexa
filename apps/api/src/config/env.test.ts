@@ -266,6 +266,55 @@ describe('production configuration', () => {
 });
 
 /**
+ * The Prisma pool size (M-SCALE-b).
+ *
+ * The behaviour worth pinning is not that the number parses — it's where it
+ * lands: as `connection_limit` on `runtimeDatabaseUrl`, and only when the URL
+ * does not already name one, because a URL set by hand (or by the test
+ * harness's `withTestConnectionBudget`) is a more specific choice than this
+ * deployment-wide default.
+ */
+describe('DATABASE_POOL_SIZE', () => {
+  it('leaves the connection string untouched when unset', () => {
+    expect(parseEnv(BASE).runtimeDatabaseUrl).toBe(BASE['DATABASE_URL']);
+  });
+
+  it('applies as connection_limit on the runtime url', () => {
+    const url = new URL(parseEnv({ ...BASE, DATABASE_POOL_SIZE: '15' }).runtimeDatabaseUrl);
+    expect(url.searchParams.get('connection_limit')).toBe('15');
+  });
+
+  it('applies to DATABASE_APP_URL when one is configured, not the owner url', () => {
+    const env = parseEnv({
+      ...BASE,
+      DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
+      DATABASE_POOL_SIZE: '15',
+    });
+    const url = new URL(env.runtimeDatabaseUrl);
+    expect(url.origin + url.pathname).toBe(
+      new URL('postgresql://nexa_app:app-password@127.0.0.1:5432/nexa').origin + '/nexa',
+    );
+    expect(url.searchParams.get('connection_limit')).toBe('15');
+    expect(new URL(env.DATABASE_URL).searchParams.get('connection_limit')).toBeNull();
+  });
+
+  it('leaves an explicit connection_limit already on the url alone', () => {
+    const env = parseEnv({
+      ...BASE,
+      DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa?connection_limit=3',
+      DATABASE_POOL_SIZE: '15',
+    });
+    expect(new URL(env.runtimeDatabaseUrl).searchParams.get('connection_limit')).toBe('3');
+  });
+
+  it('refuses zero, negative or fractional pool sizes', () => {
+    for (const bad of ['0', '-1', '2.5']) {
+      expect(() => parseEnv({ ...BASE, DATABASE_POOL_SIZE: bad })).toThrow(/DATABASE_POOL_SIZE/);
+    }
+  });
+});
+
+/**
  * The trusted proxy hop count (M-PROD-CFG-b).
  *
  * `server.ts` used to hard-code `trustProxy: 1` under a comment that declared

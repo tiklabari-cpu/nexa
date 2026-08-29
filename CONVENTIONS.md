@@ -107,8 +107,10 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   ```
 
   Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
-  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api 54 + 90 = 144). HANDOFF'a
-  "parçalandı" diye yaz ki bir sonraki pencere sayıları eşleştirebilsin.
+  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **70 + 110 = 180**; sayı
+  2026-08-30'da GL-11 · tm 158 turunda yeniden ölçüldü — metin "54 + 90 = 144" ile bayattı,
+  Faz-5/Faz-6 arayı doldurdu). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
+  eşleştirebilsin.
 
 ## 2) Git kuralları
 

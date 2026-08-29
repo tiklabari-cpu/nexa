@@ -51,6 +51,7 @@ make help
 | `make migrate` / `make seed` | Apply migrations / load demo data                     |
 | `make psql`                  | Open a psql shell inside the database container       |
 | `make backup`                | Back up the dev datastore — see "Backups" below       |
+| `make restore-drill`         | Prove that backup restores — see "Backups" below      |
 | `make verify`                | Everything CI runs: typecheck, lint, tests            |
 | `make test-e2e`              | Playwright end-to-end suite                           |
 
@@ -647,9 +648,54 @@ whole-file retention window. **Database only**, stated rather than hidden: the c
 mounts no shared volume for uploads (`STORAGE_PROVIDER` only has a `local` provider
 today, ephemeral to each pod — see
 [`apps/api/src/services/storage/object-store.ts`](apps/api/src/services/storage/object-store.ts)),
-so there is nothing durable yet for a CronJob to archive alongside the database. A
-backup existing is not the same claim as a backup being restorable — that is a
-separate, later task (`M-BACKUP-b`, PLAN.md).
+so there is nothing durable yet for a CronJob to archive alongside the database.
+
+### Restore drill
+
+A backup existing is not the same claim as a backup being restorable, so
+[`scripts/restore-drill.sh`](scripts/restore-drill.sh) (`make restore-drill`) measures
+the second one:
+
+```bash
+make restore-drill                                  # back up, then drill that backup
+./scripts/restore-drill.sh --dump backups/db-….dump # drill an archive you already have
+```
+
+It takes a fresh backup, creates a **scratch** database, restores into it, verifies,
+and drops it again — including when a check fails or the run is interrupted. `nexa` is
+only ever read from: the sole DDL is `CREATE`/`DROP DATABASE` against a name that has
+to match `nexa_restore_drill_<digits>`, enforced in the script (`DRILL_DB=nexa` is
+refused), so CLAUDE.md's "no DB drop" boundary holds by construction rather than by
+care. Same discipline as
+[`apps/api/scripts/test-datastores.ts`](apps/api/scripts/test-datastores.ts), which
+provisions and drops the per-run `nexa_test_<id>` databases.
+
+Verified on every run, with exit codes: the applied-migration set matches (and none is
+half-applied — the P3009 state, `CONVENTIONS.md` §6.2) · row counts for
+`organizations`/`accounts`/`chats`/`events` match · the row-level-security surface
+(every table, policy name, `USING` and `WITH CHECK` body) is identical · so are the
+extensions and the `SECURITY DEFINER` functions including their `SET search_path` ·
+every `events` partition came back with RLS on and exactly one policy (the hole tm 150
+found lives per-partition, not on the parent) · and, connecting as the non-owner
+`nexa_app` role, the restore hands out **no** rows without a tenant context and the
+right rows once `app.current_license` is set.
+
+That last check needs both halves. Measured while building it: an archive restored with
+every policy deliberately filtered out does **not** leak — `relrowsecurity` rides on the
+table entry rather than the policy entries, and a table with RLS on and no policy denies
+everyone, so unscoped reads still return 0. What breaks is the other direction: the
+correct tenant's rows return 0 as well. A lost policy produces a silently _empty_
+application, not an open one, so "sees nothing" is not evidence of a good restore.
+
+**One thing the archive does not carry, stated because it is a restore step:** roles are
+cluster-wide, and a per-database `pg_dump` has no `CREATE ROLE` in it. This archive
+references `nexa_app` 146 times (grants, policy roles) and creates it zero times.
+Restoring into a _fresh_ cluster therefore aborts on the first
+`GRANT USAGE ON SCHEMA public TO nexa_app` with `role "nexa_app" does not exist`
+(measured, and green once the role exists). Create it first with
+[`infra/db/init/00-extensions.sql`](infra/db/init/00-extensions.sql) — which the
+compose stack runs automatically — or capture globals separately with
+`pg_dumpall --globals-only`.
 
 ---
 

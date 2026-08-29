@@ -5,11 +5,13 @@
 # copies would be the same lines drifting apart one field at a time, not
 # four genuinely different manifests.
 #
-# Deliberately still NOT here (tm 164.3's scope, not this task's — M-IAC-b
-# only adds probes/resources/HPA/PDB): anything about how `prisma migrate
-# deploy` runs under more than one replica (today's docker-entrypoint.sh
-# still runs it inline on every start, which the startupProbe below merely
-# tolerates rather than fixes).
+# Migrations are deliberately NOT part of any pod here — no init-container,
+# and the api image's own inline `prisma migrate deploy` is switched off by
+# `NEXA_MIGRATE_ON_START: "false"` in the ConfigMap. tm 164.3 moved that step
+# to a pre-install/pre-upgrade hook Job (templates/migrate-job.yaml), which
+# carries the measurement behind the decision: Prisma serialises concurrent
+# migrations on an advisory lock but waits only 10 s for it, so under more
+# than one replica the losers exit 1 and crash-loop the app.
 #
 # `terminationGracePeriodSeconds` is deliberately left at Kubernetes' own
 # default (30s) rather than set explicitly: M-OPS-b's graceful drain
@@ -55,9 +57,11 @@ spec:
                 name: {{ $.Release.Name }}-secrets
             {{- end }}
           # startupProbe first: while it is failing, kubelet skips
-          # liveness/readiness entirely, so a slow boot (api's inline
-          # `prisma migrate deploy`) cannot be mistaken for a dead or
-          # not-ready process by either. periodSeconds fixed at 5s here;
+          # liveness/readiness entirely, so a slow boot cannot be mistaken
+          # for a dead or not-ready process by either. (Until tm 164.3 the
+          # slow part was api's inline `prisma migrate deploy`; that now runs
+          # in the hook Job, and the tolerance below is kept for the image's
+          # own boot — see values.yaml.) periodSeconds fixed at 5s here;
           # only the tolerance (failureThreshold) varies per app — see
           # values.yaml's own per-app comment for where each number comes
           # from. Points at the SAME check as livenessProbe (standard k8s

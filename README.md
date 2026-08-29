@@ -650,6 +650,16 @@ today, ephemeral to each pod — see
 [`apps/api/src/services/storage/object-store.ts`](apps/api/src/services/storage/object-store.ts)),
 so there is nothing durable yet for a CronJob to archive alongside the database.
 
+**That volume holds every tenant's personal data in the clear**, which makes it the
+richest single target the chart creates and the one object whose contents outlive
+every pod — so set `backup.storageClassName` to an at-rest-encrypted StorageClass
+(`values.production.example.yaml` names it). Left empty the claim omits the field and
+inherits whatever class the cluster administrator made default, which the chart can
+make no claim about. The CronJob's own pod is scoped to match: it gets `DATABASE_URL`
+alone rather than the whole Secret — a backup pod holding `AUDIT_CHAIN_SECRET` would
+hand one attacker both the rows and the key to recompute a chain that hides a deleted
+one — and it runs as uid 70, non-root, with no service-account token.
+
 ### Restore drill
 
 A backup existing is not the same claim as a backup being restorable, so

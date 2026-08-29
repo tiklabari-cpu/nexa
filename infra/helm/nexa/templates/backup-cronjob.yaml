@@ -13,6 +13,12 @@
 # own command prunes archives past `backup.retentionDays` on every run, the
 # same whole-file, no-partial-redaction rule scripts/backup.sh documents for
 # the local stack.
+#
+# THIS IS THE MOST SENSITIVE POD THE CHART SCHEDULES (tm 173, M-SEC-e1). It
+# writes every tenant's personal data, in the clear, to a volume that outlives
+# it (templates/backup-pvc.yaml). The credential and uid decisions below follow
+# from that one sentence rather than from a generic hardening checklist — see
+# the blocks marked LEAST PRIVILEGE and NON-ROOT.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -45,16 +51,100 @@ spec:
             app.kubernetes.io/instance: {{ .Release.Name }}
         spec:
           restartPolicy: Never
+          # This Job makes no Kubernetes API call of any kind, so a token that
+          # would let it make one is pure attack surface on the pod holding the
+          # dump.
+          automountServiceAccountToken: false
+          # --- NON-ROOT ---
+          # MEASURED, not assumed (tm 167): this container ran as uid 0.
+          # `postgres:17-alpine` declares no `USER` (`Config.User` is empty) and
+          # the `command:` below replaces the ENTRYPOINT, so the image's own
+          # gosu step down to `postgres` never happens:
+          #   docker run --rm --entrypoint /bin/sh postgres:17-alpine -c 'id'
+          #     -> uid=0(root) gid=0(root)
+          #   docker run --rm --entrypoint /bin/sh postgres:17-alpine -c 'id postgres'
+          #     -> uid=70(postgres) gid=70(postgres)
+          # 70/70 is that image's own postgres account, so the dump runs as the
+          # user the image was built for instead of as root. `fsGroup: 70` is
+          # what keeps the PVC writable after the drop — without it the volume
+          # stays root-owned and the first dump fails on open(). And
+          # `runAsNonRoot: true` is the assertion rather than the mechanism: it
+          # makes the kubelet refuse to start the pod at all if an
+          # `image.repository` override ever reintroduces a root image, instead
+          # of quietly running the dump as root again.
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 70
+            runAsGroup: 70
+            fsGroup: 70
+            # Pod level rather than container level deliberately: there is one
+            # container today, and a profile scoped to the pod also covers a
+            # sidecar a later change adds without that change having to
+            # remember this line.
+            seccompProfile:
+              type: RuntimeDefault
           containers:
             - name: backup
               image: {{ .Values.backup.image | quote }}
-              envFrom:
-                # DATABASE_URL is the owner credential (templates/secret.yaml)
-                # — the same one templates/migrate-job.yaml uses, and for the
-                # same reason: a backup has to read every row regardless of
-                # RLS, which the non-owner DATABASE_APP_URL is scoped against.
-                - secretRef:
-                    name: {{ .Release.Name }}-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: [ALL]
+              # --- LEAST PRIVILEGE ---
+              # ONE key, by name — NOT `envFrom: - secretRef:` over the whole
+              # Secret (tm 173, the audit's first High). pg_dump needs exactly
+              # DATABASE_URL; loading the Secret whole also handed this pod
+              # JWT_SIGNING_KEY, WEBHOOK_HMAC_SEED, CUSTOMER_TOKEN_SECRET,
+              # UPLOAD_SIGNING_KEY, DATABASE_APP_URL, REDIS_URL and — the one
+              # that makes this a High rather than tidiness —
+              # AUDIT_CHAIN_SECRET.
+              #
+              # apps/api/src/config/env.ts states that key's founding
+              # assumption in as many words: it is "held here precisely so that
+              # whoever holds the database does not hold it, which is what
+              # makes a hash chain evidence of tampering rather than a checksum
+              # against corruption", and values.production.example.yaml repeats
+              # it ("deliberately never stored in the database"). The pod that
+              # PRODUCES the dump holding the chain root cancels exactly that
+              # sentence: one compromised backup then yields both the rows and
+              # the key to recompute a chain that hides a deleted one, and
+              # NFR-C6's evidence value drops to zero. The chart was declaring
+              # the guarantee in one file and breaking it in another.
+              #
+              # DATABASE_URL itself is the owner credential
+              # (templates/secret.yaml) — the same one
+              # templates/migrate-job.yaml uses, and for the same reason: a
+              # backup has to read every row regardless of RLS, which the
+              # non-owner DATABASE_APP_URL is scoped against.
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Release.Name }}-secrets
+                      key: DATABASE_URL
+              # The URI stays in pg_dump's argv, and that is a decision with a
+              # measurement behind it rather than an oversight (tm 173, item 3
+              # of the finding). Measured in this image: libpq does not scrub
+              # argv (`/proc/<pid>/cmdline` reads back
+              # `pg_dump postgresql://someuser:sup3rsecret@…`), and cmdline is
+              # mode 0444 while environ is 0400 — so the gap is real, but only
+              # for a reader under a DIFFERENT uid inside this pod's PID
+              # namespace. One container, one uid, no sidecar and no
+              # shareProcessNamespace: today argv and environ have the same
+              # audience, and it is a second container under another uid that
+              # would make this exploitable.
+              # Each env-only alternative was checked and fails here.
+              # PGDATABASE is NOT expanded as a URI (measured: it is taken as a
+              # literal database name and libpq falls back to the local socket,
+              # `connection to server on socket "/var/run/postgresql/…" failed`).
+              # PGPASSWORD and .pgpass both need the URI split into parts, and
+              # the split can only happen at runtime in `sh`, because the
+              # recommended provisioning path (values.production.example.yaml
+              # path 3, `secrets.enabled: false`) means this chart never sees
+              # the value at template time. A POSIX-sh split cannot percent-
+              # decode, and a password containing `@`, `/`, `:` or `#` MUST be
+              # percent-encoded in a URI — so that path would trade a same-uid
+              # argv read for backups that fail nightly on a legal password.
               command:
                 - /bin/sh
                 - -c

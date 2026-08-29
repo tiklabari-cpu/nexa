@@ -7897,7 +7897,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T14:50:54.552Z",
+        "updatedAt": "2026-08-29T15:21:42.387Z",
         "subtasks": [
           {
             "id": 1,
@@ -7905,10 +7905,10 @@
             "description": "Telemetri hedefi artık yapılandırma, varsayım değil.",
             "details": "NE YAPILACAK: telemetry.ts in exporter seçimi env e taşınır.\n- OTEL_EXPORTER: console (bugünkü davranış, varsayılan) | otlp | none.\n- otlp seçilirse OTLP HTTP exporter kullanılır ve hedef adresi de env den gelir\n  (OTEL_EXPORTER_OTLP_ENDPOINT — OpenTelemetry nin kendi standart anahtarı).\n- none seçilirse hiçbir exporter kurulmaz ve telemetri maliyetsiz kapanır.\n- Sözlük (vocabulary) exporter fabrikasının YANINDA tanımlanır ve env.ts oradan import eder —\n  M-PROV-a nın kuralı: \"env in kabul ettiği bir değeri hiçbir fabrika uygulamıyorsa, bu tam olarak\n  M-PROV-a nın kapattığı sürüklenmedir; bir liste iki uçtan okunursa sürüklenemez\".\n- Yeni anahtarlar env.ts ↔ .env.example ↔ turbo.json globalEnv üçlüsüne birden eklenir.\n\nDOSYALAR: apps/api/src/telemetry/telemetry.ts (exporter fabrikası + sözlük) ·\napps/api/src/plugins/telemetry.ts · apps/api/src/config/env.ts · apps/api/src/config/env.test.ts ·\n.env.example · turbo.json · apps/api/package.json (OTLP exporter bağımlılığı).\nREFERANS DESEN (BİREBİR KOPYALA): apps/api/src/services/mail/mailer.ts in MAIL_PROVIDERS sözlüğü ve\nenv.ts in onu import edip z.enum(...) e vermesi. Aynısını OTEL_EXPORTER için yap.\n\nTUZAKLAR:\n1. Test davranışı DEĞİŞMEMELİ: telemetry testi bugün in-memory exporter enjekte ediyor ve\n   NODE_ENV=test te yığın kapalı. Bu yolu koru — env seçimi test enjeksiyonunu EZMEMELİ.\n2. otlp bağımlılığı eklenirse bundle/kurulum maliyeti doğar; yalnız api paketine ekle,\n   web/widget e sızdırma.\n3. env parite nöbetçisi yeni anahtarı üç yerde birden ister — birini unutursan kapı kırmızı.\n4. GERÇEK BİR COLLECTOR A BAĞLANMA (kapsam dışı); otlp yolunun doğruluğu birim testiyle\n   (fabrika doğru exporter i üretiyor mu) kanıtlanır, canlı bağlantıyla değil.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-OTEL** (türetilmiş — NFR-M5). Gereksinim satırı: `grep -n \"| M-OTEL\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-OTEL\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api unit/integration yeşil; env.test.ts sözlük paritesi yeni anahtarı kapsıyor.\n- Ölçülebilir: üç değerin her biri için fabrika doğru exporter i üretiyor (none → hiçbiri).\n- Mevcut telemetry testi (in-memory exporter) değişmeden geçiyor.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "163",
-            "updatedAt": "2026-08-29T14:50:54.552Z"
+            "updatedAt": "2026-08-29T15:21:42.387Z"
           },
           {
             "id": 2,
@@ -8160,7 +8160,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T14:50:54.554Z",
+      "lastModified": "2026-08-29T15:21:42.387Z",
       "taskCount": 172,
       "completedCount": 165,
       "tags": [

@@ -62,6 +62,38 @@ apps:
 backup:
   storageClassName: "<an at-rest-encrypted StorageClass, e.g. gp3-encrypted>"
 
+# Who may reach the api pods (tm 174, M-SEC-e2). The chart already ships
+# `enabled: true` and a rule allowing only this release's web pods, which is the
+# whole policy for a deployment where every browser request enters through web.
+# This block is here because two real deployments need more, and both need an
+# address only you know — templates/networkpolicy.yaml and values.yaml have the
+# reasoning, this is the checklist:
+#
+#   - Serving the WIDGET means api is published on its own hostname (the widget
+#     bundle calls the API cross-origin; its nginx proxies nothing), so your
+#     Ingress controller's pods have to be listed here. Adding that path also
+#     changes the TRUST_PROXY_HOPS question above: a request through web behind
+#     the controller has one more appending hop than one straight from it, and a
+#     single count cannot be right for both. Route everything through web, or
+#     give each path its own release with its own count.
+#   - If your CNI enforces NetworkPolicy against kubelet probe traffic (most do
+#     not — see values.yaml), add the node CIDR as an `ipBlock`, `except:` the
+#     pod CIDR. The symptom of needing it is loud: readiness probes fail and the
+#     pods leave rotation.
+#
+# Leave the list empty if neither applies. Set `enabled: false` only for a
+# cluster whose CNI does not implement NetworkPolicy at all, where the object is
+# accepted and enforced by nobody.
+networkPolicy:
+  api:
+    extraIngressFrom: []
+    # - namespaceSelector:
+    #     matchLabels:
+    #       kubernetes.io/metadata.name: "<ingress controller namespace>"
+    #   podSelector:
+    #     matchLabels:
+    #       app.kubernetes.io/name: "<ingress controller pod label>"
+
 # Config keys the chart's skeleton (values.yaml) leaves unset because they
 # have no safe generic default. templates/configmap.yaml renders this map
 # with a plain `range`, so anything added here reaches the container as an
@@ -84,13 +116,20 @@ config:
   # VITE_RTM_URL note on why web's build-time env is out of this chart's
   # reach).
   INBOUND_EMAIL_DOMAIN: "inbound.<your-domain>"
-  # How many reverse-proxy hops in front of api/rtm are trusted to have
-  # appended to X-Forwarded-For — decides rate-limit bucketing and the
-  # customer IP ban / agent IP allow-list. The chart default (1) assumes
-  # only this chart's own web/widget nginx sidecar sits in front; add your
-  # Ingress controller's own hop (usually +1) if one terminates in front of
-  # this chart's Services. See README "Choosing TRUST_PROXY_HOPS" — wrong in
+  # How many reverse-proxy hops in front of api are trusted to have appended to
+  # X-Forwarded-For — decides rate-limit bucketing and the customer IP ban /
+  # agent IP allow-list. (api only: apps/rtm never reads the header.) The chart
+  # default (1) is the chart's own chain, browser -> web nginx -> api; an
+  # Ingress or CDN terminating in front of that adds its own hop, so uncomment
+  # the 2 below if one does. See README "Choosing TRUST_PROXY_HOPS" — wrong in
   # either direction is a security bug, not a cosmetic one.
+  #
+  # SET THIS TOGETHER WITH `networkPolicy` BELOW, never alone (tm 174,
+  # M-SEC-e2). The count is only sound while every request that reaches api has
+  # really crossed that many appending proxies, and the policy is what makes
+  # that true; measured without it, a caller reaching api directly is believed
+  # about its own address and walks through an enforced allow-list
+  # (apps/api/test/integration/trust-proxy.test.ts).
   # TRUST_PROXY_HOPS: "2"
   # Prisma connection pool size for api/rtm (M-SCALE-b) — set once total
   # replicas > 1: pool size x (api + rtm replicas) must stay within

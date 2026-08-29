@@ -49,6 +49,14 @@ const NO_REDIS = {
 
 export interface SchedulerJobsOptions {
   db: PrismaClient;
+  /**
+   * The read path (M-SCALE-c) — `app.dbRead`, which is the replica when one is
+   * configured. Only the scheduled-report sweep uses it, and only to build the
+   * CSV: the other four jobs exist to *change* rows, so there is nothing here to
+   * move off the primary. Defaults to `db` for callers that have no replica to
+   * offer, which is every test and both CLI entry points.
+   */
+  readDb?: PrismaClient;
   env: Env;
   /** Same mailer the server answers requests with — an idle-chat transcript,
    *  an SLA alert and a scheduled report are all outgoing mail like any other
@@ -61,7 +69,12 @@ export interface SchedulerJobsOptions {
  * Every job the scheduler registers, in the order `/health` lists them —
  * {@link import('./intervals.js').SCHEDULER_JOB_NAMES}, in full.
  */
-export function buildSchedulerJobs({ db, env, mailer }: SchedulerJobsOptions): JobDefinition[] {
+export function buildSchedulerJobs({
+  db,
+  readDb = db,
+  env,
+  mailer,
+}: SchedulerJobsOptions): JobDefinition[] {
   const intervals = jobIntervals(env);
 
   // Built once and reused across passes, the same instance a long-lived
@@ -123,7 +136,7 @@ export function buildSchedulerJobs({ db, env, mailer }: SchedulerJobsOptions): J
       name: 'scheduled_reports',
       intervalMs: intervals.scheduled_reports,
       async run() {
-        const report = await new ScheduledReportSweeper(db, mailer).run();
+        const report = await new ScheduledReportSweeper(db, mailer, readDb).run();
         return {
           counts: {
             tenants: report.totals.tenants,

@@ -73,12 +73,16 @@ export async function withTenant<T>(
   db: PrismaClient,
   context: TenantContext,
   fn: (tx: TenantClient) => Promise<T>,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; readOnly?: boolean } = {},
 ): Promise<T> {
   assertValidContext(context);
 
   return db.$transaction(
     async (tx) => {
+      // Before anything else, because Postgres refuses `SET TRANSACTION` once
+      // the transaction has run a statement — and the three `set_config` calls
+      // below are statements.
+      if (options.readOnly) await tx.$executeRawUnsafe('SET TRANSACTION READ ONLY');
       // set_config(..., true) is the function form of SET LOCAL: scoped to this
       // transaction, discarded on commit or rollback.
       await tx.$executeRaw`SELECT set_config('app.current_license', ${context.licenseId.toString()}, true)`;
@@ -90,6 +94,33 @@ export async function withTenant<T>(
     },
     { timeout: options.timeoutMs ?? TENANT_TRANSACTION_TIMEOUT_MS },
   );
+}
+
+/**
+ * Run `fn` on the read path (M-SCALE-c) — same tenant context, same RLS, but
+ * the transaction is declared `READ ONLY`.
+ *
+ * The read-only declaration is the point, and it is deliberately *not* only
+ * for the days a replica is configured. When `DATABASE_REPLICA_URL` is unset
+ * this runs against the primary, where a write would succeed — so the seam
+ * would be correct in the configuration nobody runs and quietly wrong in
+ * production, discovered as a `cannot execute INSERT in a read-only
+ * transaction` from a real standby. Declaring it here makes every suite in this
+ * repo, all of which run without a replica, test the constraint the replica
+ * would impose.
+ *
+ * `SET TRANSACTION READ ONLY` also blocks writes on the primary, which is the
+ * second thing worth having: a report builder that grows a write — an audit
+ * row, a cached total — fails at the moment it is introduced rather than
+ * becoming a bug that only appears once someone points this at a standby.
+ */
+export function withTenantRead<T>(
+  db: PrismaClient,
+  context: TenantContext,
+  fn: (tx: TenantClient) => Promise<T>,
+  options: { timeoutMs?: number } = {},
+): Promise<T> {
+  return withTenant(db, context, fn, { ...options, readOnly: true });
 }
 
 /**

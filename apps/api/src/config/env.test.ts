@@ -315,6 +315,83 @@ describe('DATABASE_POOL_SIZE', () => {
 });
 
 /**
+ * The read replica seam (M-SCALE-c).
+ *
+ * Two properties, and only one of them is about parsing. The first is that an
+ * unset key changes nothing — the whole design rests on the primary staying the
+ * read path everywhere this repo runs. The second is the one worth a boot
+ * failure: a replica connecting as the table owner is exempt from row level
+ * security, so it would answer report queries with every tenant's rows and look
+ * like a working replica doing it. That is refused, and refused in every
+ * environment rather than only under `production`, because a developer who
+ * wires it up that way is testing tenant isolation that is not there.
+ */
+describe('DATABASE_REPLICA_URL', () => {
+  const APP_URL = 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa';
+
+  it('is undefined when unset, so reads stay on the primary', () => {
+    expect(parseEnv(BASE).replicaDatabaseUrl).toBeUndefined();
+    expect(parseEnv({ ...BASE, DATABASE_APP_URL: APP_URL }).replicaDatabaseUrl).toBeUndefined();
+  });
+
+  it('is carried through when set', () => {
+    const replica = 'postgresql://nexa_app:app-password@replica.internal:5432/nexa';
+    const env = parseEnv({ ...BASE, DATABASE_APP_URL: APP_URL, DATABASE_REPLICA_URL: replica });
+    expect(env.replicaDatabaseUrl).toBe(replica);
+  });
+
+  it('gets the same pool size as the primary — its connections come out of the same budget', () => {
+    const env = parseEnv({
+      ...BASE,
+      DATABASE_APP_URL: APP_URL,
+      DATABASE_REPLICA_URL: 'postgresql://nexa_app:app-password@replica.internal:5432/nexa',
+      DATABASE_POOL_SIZE: '15',
+    });
+    expect(new URL(env.replicaDatabaseUrl!).searchParams.get('connection_limit')).toBe('15');
+    expect(new URL(env.runtimeDatabaseUrl).searchParams.get('connection_limit')).toBe('15');
+  });
+
+  it('refuses a replica that connects as the table owner while the primary does not', () => {
+    // The failure being bought out: `nexa` owns the tables, Postgres exempts
+    // owners from RLS, and this URL would be handed to every report query.
+    expect(() =>
+      parseEnv({
+        ...BASE,
+        DATABASE_APP_URL: APP_URL,
+        DATABASE_REPLICA_URL: 'postgresql://nexa:nexa@replica.internal:5432/nexa',
+      }),
+    ).toThrow(/DATABASE_REPLICA_URL/);
+  });
+
+  it('refuses it under development and test too, not only production', () => {
+    for (const nodeEnv of ['development', 'test', 'production'] as const) {
+      expect(() =>
+        parseEnv({
+          ...BASE,
+          NODE_ENV: nodeEnv,
+          DATABASE_APP_URL: APP_URL,
+          DATABASE_REPLICA_URL: 'postgresql://nexa:nexa@replica.internal:5432/nexa',
+        }),
+      ).toThrow(/row level security/);
+    }
+  });
+
+  it('allows a third read-only role — the rule is "not the owner", not "must be nexa_app"', () => {
+    const replica = 'postgresql://nexa_reporting:reporting-password@replica.internal:5432/nexa';
+    const env = parseEnv({ ...BASE, DATABASE_APP_URL: APP_URL, DATABASE_REPLICA_URL: replica });
+    expect(env.replicaDatabaseUrl).toBe(replica);
+  });
+
+  it('says nothing about the owner role when the primary is already the owner', () => {
+    // No DATABASE_APP_URL: development and the test suites, where the runtime
+    // connection is the owner and RLS is already off. Refusing here would
+    // forbid a configuration that gives up nothing that was there to lose.
+    const env = parseEnv({ ...BASE, DATABASE_REPLICA_URL: BASE['DATABASE_URL']! });
+    expect(env.replicaDatabaseUrl).toBe(BASE['DATABASE_URL']);
+  });
+});
+
+/**
  * The trusted proxy hop count (M-PROD-CFG-b).
  *
  * `server.ts` used to hard-code `trustProxy: 1` under a comment that declared

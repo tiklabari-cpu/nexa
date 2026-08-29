@@ -7849,7 +7849,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T13:15:32.691Z",
+        "updatedAt": "2026-08-29T13:16:59.903Z",
         "subtasks": [
           {
             "id": 1,
@@ -7879,12 +7879,12 @@
             "description": "Ağır raporlar artık OLTP yolunu yormayabiliyor.",
             "details": "NE YAPILACAK: bir okuma yolu dikişi — GERÇEK bir replika kurulmaz (kapsam dışı), seçim dikişi hazırlanır.\n- Yeni env: DATABASE_REPLICA_URL (opsiyonel). Yoksa okuma birincile düşer — davranış BUGÜNKÜYLE AYNI.\n- Ağır ve SALT-OKUNUR sorgular (reports servisleri: report-csv · reports-metrics · access-review)\n  replika istemcisini kullanır.\n- Kiracı izolasyonu replika yolunda da GEÇERLİ olmalı: RLS ve SET LOCAL bağlamı aynı biçimde kurulur\n  (replika da nexa_app rolüyle bağlanır — sahip rolüyle DEĞİL).\n- Replika gecikmesi (replication lag) okunan verinin bayat olabileceği anlamına gelir; hangi\n  raporların bunu tolere ettiğini yaz. Faturalama sayaçları (ADR-09 ai_resolutions) TOLERE ETMEZ —\n  onlar birincil kalır.\n\nNEDEN OPUS-XHIGH: çok yüzeyli bir dikiş (env + plugin + servis seçimi) ve bir izolasyon riski\ntaşıyor — yanlış kurulursa replika yolunda RLS baypas edilir (tam olarak tm 150 nin kapattığı sınıf).\n\nDOSYALAR: apps/api/src/plugins/database.ts (ikinci istemci) · apps/api/src/config/env.ts ·\n.env.example · turbo.json · apps/api/src/services/reports/* (okuma yolu seçimi) ·\napps/api/src/lib/tenant.ts (bağlam kurulumu replika için de).\nREFERANS DESEN: M-PROV-a (tm 131.2) sağlayıcı seçim dikişleri — \"env fiilen seçer, NODE_ENV değil\"\nkuralı burada da geçerli.\n\nTUZAKLAR:\n1. RLS: replika istemcisi de nexa_app ile bağlanmalı; DATABASE_URL (sahip) kullanılırsa RLS sessizce\n   devre dışı kalır. Bunu bir testle KİLİTLE.\n2. Replika YOKKEN hiçbir davranış değişmemeli — tam integration süiti yeşil kalmalı.\n3. Yazma sorgusu replikaya GİTMEMELİ; seçim yalnız salt-okunur yollarda.\n4. Gerçek bir replika kurup test etmek kapsam dışı; dikişi aynı veritabanına ikinci bir istemciyle\n   yönlendirerek doğrulayabilirsin (davranış eşdeğerliği + RLS kilidi).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-SCALE** (türetilmiş — NFR-P7 · NFR-R4). Gereksinim satırı: `grep -n \"| M-SCALE\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-SCALE\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- api integration yeşil (replika yokken davranış birebir aynı).\n- Ölçülebilir: replika istemcisi yapılandırıldığında rapor sorguları oraya gidiyor ve RLS hâlâ zorlanıyor\n  (çapraz-kiracı negatif testi replika yolunda da yeşil).\n- env parite testi yeşil.\n- PLAN: §7.2 M-SCALE → \"✅ → KM-SCALE\" (üçüncü alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "162.2"
             ],
             "parentId": "162",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-29T13:16:59.903Z"
           }
         ]
       },
@@ -8160,7 +8160,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T13:15:32.691Z",
+      "lastModified": "2026-08-29T13:16:59.904Z",
       "taskCount": 172,
       "completedCount": 164,
       "tags": [

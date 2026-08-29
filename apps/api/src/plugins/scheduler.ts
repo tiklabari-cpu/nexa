@@ -45,7 +45,12 @@ async function schedulerPlugin(
     jitterPct: options.env.SCHEDULE_JITTER_PCT,
   });
 
-  for (const job of buildSchedulerJobs({ db: app.db, env: options.env, mailer: options.mailer })) {
+  for (const job of buildSchedulerJobs({
+    db: app.db,
+    readDb: app.dbRead,
+    env: options.env,
+    mailer: options.mailer,
+  })) {
     scheduler.register(job);
   }
 

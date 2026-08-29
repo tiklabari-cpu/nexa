@@ -407,6 +407,50 @@ deployment that adds one sets
 `DATABASE_APP_URL=postgresql://…@pgbouncer-host:6432/nexa?pgbouncer=true` and leaves
 `DATABASE_URL` aimed at Postgres' own port.
 
+### Read replica
+
+`DATABASE_REPLICA_URL` is optional and unset everywhere in this repo. Set it and the
+report read path — every `GET /reports/*` group, `GET /reports/export`,
+`GET /reports/access-review` and the scheduled-report sweep's CSV — runs against that
+connection instead of the primary. Leave it unset and those reads go to the primary
+exactly as they always have; there is no third behaviour, and no deployment here has a
+standby to point it at (CLAUDE.md's infrastructure boundary), so the seam is what ships,
+not the replica.
+
+The point is NFR-P7. A report is a full-window aggregation over `chats`, `threads` and
+`events` that one caller can aim at a quarter of history, and it competes for the same
+connection pool as the live inbox — the surface least able to absorb a slow query.
+NFR-R4 wants the same split from the other direction: a read replica is the bottleneck
+relief a growing deployment reaches for first.
+
+Three rules the seam holds to, each of which is enforced rather than documented:
+
+- **The replica may not be more privileged than the primary.** It must connect as the
+  same non-owner role `DATABASE_APP_URL` uses. PostgreSQL exempts table owners from row
+  level security, so a replica carrying the owner's credentials would return _every_
+  tenant's rows through an endpoint whose only isolation is RLS — and would look like a
+  working replica while doing it, since the responses get bigger, not broken. `parseEnv`
+  refuses that combination at boot, in every environment, not just production.
+- **The read path is read-only.** `withTenantRead` opens the transaction with
+  `SET TRANSACTION READ ONLY`, so a report builder that grows a write fails immediately
+  rather than passing here and failing against a real standby later. This holds with no
+  replica configured too — which is what makes the constraint testable in a repo that has
+  none.
+- **Anything that reads its own writes stays on the primary.** `GET /billing/subscription`
+  and every mutation keep using `withTenant`. Replication lag makes a chat-volume chart
+  slightly stale; it makes a seat count or an ADR-09 `ai_resolutions` total _wrong_, and
+  a caller who just changed their plan seeing the old one is a support ticket.
+
+Tenant isolation is unchanged on the replica: `withTenantRead` sets the same
+`app.current_license` / `app.current_organization` / `app.current_brand` through
+`SET LOCAL`, so the same RLS policies apply to the same rows.
+`test/integration/read-replica.test.ts` runs a second client against the same database to
+prove all of it — equal responses, cross-tenant reads still empty, writes still refused.
+
+The replica's pool is sized by the same `DATABASE_POOL_SIZE`, so remember it in the budget
+above: a two-pod API with a replica holds `2 × pool` connections on the primary and
+`2 × pool` on the standby.
+
 ### Choosing `TRUST_PROXY_HOPS`
 
 `request.ip` — the anonymous rate-limit bucket, the customer IP ban and the agent IP

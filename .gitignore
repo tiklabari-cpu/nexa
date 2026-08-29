@@ -58,3 +58,6 @@ test-results/
 
 # --- Yerel çalışma verisi (dev runtime: mock mail + uploads) ---
 .data/
+
+# --- Yedekler (scripts/backup.sh çıktısı — asla commit'lenmez) ---
+backups/

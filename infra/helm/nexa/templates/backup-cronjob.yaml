@@ -1,0 +1,82 @@
+{{- if .Values.backup.enabled }}
+# Scheduled Postgres backup for a real deployment (tm 165.1, M-BACKUP-a).
+#
+# SCOPE: database only, not uploads — see values.yaml's backup block for why
+# (no shared volume exists for STORAGE_PROVIDER=local's pod-local files).
+#
+# WHY A DEDICATED CLIENT IMAGE, NOT THIS CHART'S OWN api IMAGE: pg_dump only
+# needs to match the server's major version, and reusing api's image would
+# tie a backup Job's correctness to whatever the api release happens to bundle
+# — the api image is not built to ship a pg_dump binary at all today.
+#
+# RETENTION (NFR-C8 — README "Backups" carries the full policy): this Job's
+# own command prunes archives past `backup.retentionDays` on every run, the
+# same whole-file, no-partial-redaction rule scripts/backup.sh documents for
+# the local stack.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ .Release.Name }}-backup
+  labels:
+    app.kubernetes.io/name: backup
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  schedule: {{ .Values.backup.schedule | quote }}
+  # A still-running backup (a slow dump on a large database) must not overlap
+  # its own next tick — two concurrent pg_dumps against the same database
+  # waste I/O for no benefit, and Forbid is the built-in way to skip the next
+  # tick entirely rather than queueing it.
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      # One retry, same reasoning as templates/migrate-job.yaml: zero turns a
+      # transient connection blip into a missed backup, and Kubernetes'
+      # default of six is excessive for a nightly job with another chance
+      # tomorrow regardless.
+      backoffLimit: 1
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: backup
+            app.kubernetes.io/instance: {{ .Release.Name }}
+        spec:
+          restartPolicy: Never
+          containers:
+            - name: backup
+              image: {{ .Values.backup.image | quote }}
+              envFrom:
+                # DATABASE_URL is the owner credential (templates/secret.yaml)
+                # — the same one templates/migrate-job.yaml uses, and for the
+                # same reason: a backup has to read every row regardless of
+                # RLS, which the non-owner DATABASE_APP_URL is scoped against.
+                - secretRef:
+                    name: {{ .Release.Name }}-secrets
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -eu
+                  ts="$(date -u +%Y%m%dT%H%M%SZ)"
+                  echo "backing up to /backups/db-$ts.dump"
+                  pg_dump "$DATABASE_URL" -Fc -f "/backups/db-$ts.dump"
+                  find /backups -maxdepth 1 -type f -name 'db-*.dump' \
+                    -mtime +{{ .Values.backup.retentionDays }} -print -delete
+              volumeMounts:
+                - name: backups
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: {{ .Values.backup.resources.requests.cpu }}
+                  memory: {{ .Values.backup.resources.requests.memory }}
+                limits:
+                  cpu: {{ .Values.backup.resources.limits.cpu }}
+                  memory: {{ .Values.backup.resources.limits.memory }}
+          volumes:
+            - name: backups
+              persistentVolumeClaim:
+                claimName: {{ .Release.Name }}-backups
+{{- end }}

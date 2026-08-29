@@ -3309,7 +3309,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ✅ → KM-SCALE |
 | M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ✅ → KM-OTEL |
 | M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ✅ → KM-IAC |
-| M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ⬜ |
+| M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ◐ → KM-BACKUP |
 | M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ⬜ |
 | M-SEC-e | Faz-6 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-6 tm 167) | ⬜ |
 
@@ -7149,7 +7149,7 @@ _(Dördüncü alt-görev tm 164.4 ile kapandı — §7.2 `M-IAC` satırı artık
 
 #### KM-BACKUP — M-BACKUP · Yedekleme ve geri yükleme provası (NFR-R5)
 
-_(Faz-6 · tm 165 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ M-BACKUP-a: `scripts/backup.sh` (pg_dump `-Fc` via `docker compose exec db` — psql/pg_dump not assumed on host, same pattern as `make psql` — + tar of `.data/uploads`) + `infra/helm/nexa/templates/backup-cronjob.yaml` (daily CronJob, official `postgres:17-alpine` client image, not this chart's own api image) + `templates/backup-pvc.yaml` (durable landing spot for the dump — a CronJob pod's own disk is ephemeral) + `values.yaml` `backup:` block (schedule/image/retentionDays/pvcSize/resources) — `make backup` target · `backups/` in `.gitignore` · README "Backups" section states the retention policy explicitly (NFR-C8): whole-file deletion past `BACKUP_RETENTION_DAYS`/`backup.retentionDays` (default 30, mirrors GDPR Art. 12(3)'s one-month erasure-response window), with a documented manual-purge procedure for an urgent single-subject erasure that cannot wait. `scripts/backup.sh` run by hand against the live `make dev` datastore — produced a real `pg_dump` custom-format archive (verified with `file`), exit 0; retention pruning verified by back-dating a fixture file past the window and confirming the next run deleted it; `git check-ignore -v` confirms `backups/` output is never tracked. Chart: `helm template`/`helm lint` (PowerShell + Docker, Bash mount breaks on this machine — tm 164.1 precedent) exit 0, default values → 20 resources (+1 CronJob +1 PVC over tm 164.4's 18), production overlay → 19; `kubeconform -strict` 20/20 and 19/19 valid. `kubectl apply --dry-run=client` independently re-confirmed unusable on this machine even against just the two new resources (`dial tcp [::1]:8080: connect: connection refused`, no cluster reachable) — same tm 164.1–164.4 precedent, `kubeconform` is this repo's offline equivalent. **M-BACKUP-b (tm 165.2, the restore drill) is still open** — this task proves a backup is produced and retained correctly, not that it is restorable; row stays `◐` until that lands. tm 165.1.
 
 #### KM-RUNBOOK — M-RUNBOOK · Checklist ve runbook’lar
 

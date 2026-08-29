@@ -65,6 +65,10 @@ migrate: ## Apply database migrations
 seed: ## Load demo seed data
 	pnpm db:seed
 
+.PHONY: backup
+backup: ## Back up the dev datastore (pg_dump + .data/uploads) — see scripts/backup.sh
+	./scripts/backup.sh
+
 .PHONY: dev
 dev: install up migrate seed ## One command: datastores + migrations + seed + all apps
 	pnpm dev

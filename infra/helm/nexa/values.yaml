@@ -215,6 +215,40 @@ migrationJob:
   # this deadline exists for is an index build on a populated one.
   activeDeadlineSeconds: 1800
 
+# Scheduled Postgres backup (tm 165.1, M-BACKUP-a). Database only, stated
+# rather than hidden: this chart mounts no shared volume for uploads (api/rtm
+# write STORAGE_PROVIDER=local files to their own pod's ephemeral disk, and
+# STORAGE_PROVIDERS only has 'local' today — apps/api/src/services/storage/
+# object-store.ts), so there is nothing durable for this CronJob to archive
+# alongside the database. templates/backup-cronjob.yaml carries the full
+# reasoning; templates/backup-pvc.yaml is where the dump lands.
+backup:
+  enabled: true
+  # 03:00 UTC daily — off the migration Job's own deploy-time window and off
+  # every region's typical business hours; not measured against this
+  # deployment's real traffic (no deployment exists yet, CLAUDE.md).
+  schedule: "0 3 * * *"
+  # Official image, not this chart's own api image: pg_dump only needs to
+  # match the server's major version (pgvector/pgvector:pg17, docker-compose.yml),
+  # and a dedicated client image is smaller and has no application code to
+  # keep in step with the api release this Job otherwise has nothing to do with.
+  image: postgres:17-alpine
+  # Same policy as scripts/backup.sh (the local-stack equivalent) and for the
+  # same reason (NFR-C8 §README "Backups"): a whole-file archive has no
+  # smaller deletable unit, and 30 days mirrors GDPR Art. 12(3)'s one-month
+  # erasure-request response window.
+  retentionDays: 30
+  # Unmeasured placeholder (no deployment exists to size this against) —
+  # revisit once a real database's dump size is known.
+  pvcSize: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+
 # Known gap, stated rather than hidden: the web image's RTM WebSocket address
 # (`VITE_RTM_URL`) is baked in at *build* time (apps/web/Dockerfile), not read
 # from the environment at container start the way API_UPSTREAM/RTM_UPSTREAM

@@ -50,6 +50,7 @@ make help
 | `make clean`                 | Stop **and drop** the data volumes                    |
 | `make migrate` / `make seed` | Apply migrations / load demo data                     |
 | `make psql`                  | Open a psql shell inside the database container       |
+| `make backup`                | Back up the dev datastore — see "Backups" below       |
 | `make verify`                | Everything CI runs: typecheck, lint, tests            |
 | `make test-e2e`              | Playwright end-to-end suite                           |
 
@@ -614,6 +615,41 @@ reconciles cleanly against a live API server, whether the images it names exist 
 registry it points at, and everything downstream of "a cluster accepts this YAML" — TLS
 termination, DNS, an Ingress certificate, and real (non-`dev-only-…`) secret values. None
 of that is in this repository's scope.
+
+---
+
+## Backups
+
+[`scripts/backup.sh`](scripts/backup.sh) (`make backup`) backs up the dev/demo
+datastore: a `pg_dump` of Postgres — via `docker compose exec`, the same
+container-side pattern `make psql` uses, since psql/pg_dump are not assumed to be on
+the host — plus a tar of `.data/uploads` (`STORAGE_LOCAL_DIR`, what
+`STORAGE_PROVIDER=local` writes to). Output lands in `backups/` (gitignored, never
+committed) as `db-<timestamp>.dump` + `uploads-<timestamp>.tar.gz`.
+
+**Retention policy (NFR-C8 — backups are subject to the retention policy too, not
+exempt from it):** backups older than `BACKUP_RETENTION_DAYS` (default 30,
+overridable) are deleted whole-file on the next run — a `pg_dump` archive has no
+smaller deletable unit than itself. 30 days mirrors GDPR Art. 12(3)'s one-month
+response window for an Art. 17 erasure request (the live-database side of NFR-C8 is
+[`apps/api/src/services/retention/policy.ts`](apps/api/src/services/retention/policy.ts)):
+a request honoured live today is gone from every backup within roughly the same
+window. For an urgent single-subject erasure that cannot wait that long: identify
+which backup(s) were taken between the subject's creation and the erasure (filenames
+are UTC timestamps) and delete those files by hand — there is no partial-file
+redaction, deleting the archive is the procedure.
+
+The Helm chart's analogue is
+[`infra/helm/nexa/templates/backup-cronjob.yaml`](infra/helm/nexa/templates/backup-cronjob.yaml)
+(schedule/image/retention in `values.yaml`'s `backup:` block) — a daily `pg_dump`
+into a PersistentVolumeClaim (`templates/backup-pvc.yaml`), pruned by the same
+whole-file retention window. **Database only**, stated rather than hidden: the chart
+mounts no shared volume for uploads (`STORAGE_PROVIDER` only has a `local` provider
+today, ephemeral to each pod — see
+[`apps/api/src/services/storage/object-store.ts`](apps/api/src/services/storage/object-store.ts)),
+so there is nothing durable yet for a CronJob to archive alongside the database. A
+backup existing is not the same claim as a backup being restorable — that is a
+separate, later task (`M-BACKUP-b`, PLAN.md).
 
 ---
 

@@ -7999,7 +7999,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T18:01:55.722Z",
+        "updatedAt": "2026-08-29T18:27:31.895Z",
         "subtasks": [
           {
             "id": 1,
@@ -8007,10 +8007,10 @@
             "description": "Yedek alma yolu depoda ve zamanlanabilir.",
             "details": "NE YAPILACAK:\n1. scripts/backup.sh: pg_dump ile mantıksal yedek + .data/uploads (object storage yerel dizini)\n   arşivi. Çıktı adı zaman damgalı. psql/pg_dump HOST TA KURULU OLMAYABİLİR — Makefile in\n   make psql hedefi bunu KONTEYNER İÇİNDE koşuyor; aynı yolu kullan.\n2. Retention: kaç yedek tutulur, ne zaman silinir. NFR-C8 \"yedekler de retention politikasına tabi\"\n   diyor — yani GDPR silme talebi yedekleri de kapsar. Bunu politikada AÇIKÇA yaz\n   (yedek saklama süresi ≤ retention penceresi ya da yedekten silme prosedürü).\n3. infra/helm/nexa/templates/ altına CronJob manifesti (dry-run ile doğrulanır).\n\nDOSYALAR: scripts/backup.sh (yeni) · infra/helm/nexa/templates/backup-cronjob.yaml (yeni) ·\nREADME (kısa bölüm) · Makefile (hedef).\nREFERANS: Makefile in psql hedefi (konteyner içinde çalıştırma deseni) · scripts/smoke.sh\n(bash script stili: exit code, retry, açıklayıcı yorumlar).\napps/api/src/services/retention/policy.ts — retention pencerelerinin kaynağı; politika onunla tutarlı olmalı.\n\nTUZAK: yedek dosyaları depoya COMMIT LENMEMELİ — .gitignore a çıktı dizinini ekle.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-BACKUP** (türetilmiş — NFR-R5 · NFR-C8). Gereksinim satırı: `grep -n \"| M-BACKUP\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-BACKUP\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- scripts/backup.sh elle koşuluyor ve bir yedek dosyası üretiyor (exit 0).\n- kubectl --dry-run=client ile CronJob kabul ediliyor.\n- Ölçülebilir: yedek çıktı dizini .gitignore da; git status temiz kalıyor.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "165",
-            "updatedAt": "2026-08-29T18:01:55.722Z"
+            "updatedAt": "2026-08-29T18:27:31.895Z"
           },
           {
             "id": 2,
@@ -8160,7 +8160,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T18:01:55.722Z",
+      "lastModified": "2026-08-29T18:27:31.895Z",
       "taskCount": 172,
       "completedCount": 167,
       "tags": [

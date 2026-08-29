@@ -8036,7 +8036,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-29T23:10:08.728Z",
+        "updatedAt": "2026-08-29T23:41:55.401Z",
         "subtasks": [
           {
             "id": 1,
@@ -8044,10 +8044,10 @@
             "description": "Çıkış öncesi kontrol listesi koşulabilir.",
             "details": "NE YAPILACAK: docs/production-checklist.md — her satır ya çalıştırılabilir bir komut ya işaret edilen\nbir kanıt taşır. \"Güvenlik gözden geçirildi\" gibi ölçülemeyen madde YAZILMAZ.\nKapsanacak başlıklar (kaynakları Faz-6 nın diğer kalemleridir):\n- Konfigürasyon: NODE_ENV=production · beş secret üretilmiş ve dev-only DEĞİL · DATABASE_APP_URL\n  ayrı ve nexa_app rolü · TRUST_PROXY_HOPS topolojiye göre (tm 159).\n- Ops: /health/live ve /health/ready probe ları bağlı · zarif drenaj penceresi ayarlı (tm 160).\n- Kapasite: yük testi koşuldu ve sayılar kabul edildi (tm 161) · kaynak sınırları o sayılara göre (tm 164.2).\n- Ölçek: iki-pod doğrulaması geçti · sticky session kararı uygulandı (tm 162).\n- Dağıtım: manifestler dry-run dan geçti · migration stratejisi seçildi (tm 164).\n- Yedek: yedekleme zamanlandı VE geri yükleme provası koşuldu (tm 165) — ikincisi olmadan birincisi sayılmaz.\n- Gözlemlenebilirlik: OTEL_EXPORTER ayarlı, collector erişilebilir (tm 163).\n- Uyum: retention politikası gözden geçirildi, RETENTION_ENABLED bilinçli olarak açıldı/kapatıldı.\n- KAPSAM DIŞI OLANLAR AÇIKÇA: TLS/DNS sertifikası · gerçek sağlayıcılar · SOC2/ISO/BAA süreçleri.\n  Bunlar \"yapılmadı\" değil \"bu deponun dışında\" diye işaretlenir (§D97 KOD/SÜREÇ ayrımı).\n\nDOSYALAR: docs/production-checklist.md (yeni; docs/ dizini de yeni) · README (referans linki).\nREFERANS TON: README nin \"This is a local stack, not a deployment\" dürüstlüğü ve PLAN §F.1 in\n\"her madde ölçülür, tahmin edilmez\" disiplini.\n\nTUZAK: bu belge Faz-6 nın diğer kalemleri bitmeden yazılırsa uydurma olur. Koşulduğunda hangi\nkalemlerin bitmiş olduğunu KONTROL ET; bitmemiş bir kalemin maddesini \"beklemede (tm N)\" diye işaretle,\nsahte bir onay kutusu koyma.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-RUNBOOK** (türetilmiş — NFR-M). Gereksinim satırı: `grep -n \"| M-RUNBOOK\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-RUNBOOK\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- format:check yeşil · README den link çalışıyor.\n- Ölçülebilir: her madde bir komut ya da bir dosya/kanıt referansı taşıyor (elle sayılır ve HANDOFF a yazılır).\n- Bitmemiş kalemler \"beklemede (tm N)\" olarak işaretli, sahte onay yok.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "166",
-            "updatedAt": "2026-08-29T23:10:08.728Z"
+            "updatedAt": "2026-08-29T23:41:55.401Z"
           },
           {
             "id": 2,
@@ -8188,7 +8188,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T23:10:08.729Z",
+      "lastModified": "2026-08-29T23:41:55.401Z",
       "taskCount": 174,
       "completedCount": 172,
       "tags": [

@@ -82,6 +82,24 @@ export const envSchema = z.object({
    * the owner would silently disable every tenant isolation policy.
    */
   DATABASE_APP_URL: z.string().url().optional(),
+  /**
+   * Prisma connection pool size for this process, applied as the
+   * `connection_limit` query parameter on {@link Env.runtimeDatabaseUrl}
+   * (M-SCALE-b · NFR-R4).
+   *
+   * Unset, Prisma sizes the pool from the CPU count
+   * (`num_physical_cpus * 2 + 1`) — a sensible default for one process against
+   * a database nobody else uses, and the wrong one once pod count becomes a
+   * scaling knob: every pod's default pool grows with cluster capacity, not
+   * with a budget anyone chose, while Postgres enforces a hard
+   * `max_connections` (200 in `docker-compose.yml`) regardless of what any
+   * client asks for. See "Connection pool budget" in README.md for the
+   * arithmetic before raising pod count in production.
+   *
+   * A connection string that already names `connection_limit` is left alone —
+   * this is a deployment default, not a way to override an explicit one.
+   */
+  DATABASE_POOL_SIZE: z.coerce.number().int().positive().optional(),
   REDIS_URL: z.string().url(),
 
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -547,6 +565,21 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
   return problems;
 }
 
+/**
+ * Applies `DATABASE_POOL_SIZE` to a Postgres connection string as Prisma's
+ * `connection_limit` query parameter. A URL that already names
+ * `connection_limit` — set by hand, or by the test harness's
+ * `withTestConnectionBudget` — is left alone; this is a deployment default,
+ * not a way to fight a more specific override.
+ */
+function withPoolSize(url: string, poolSize: number | undefined): string {
+  if (poolSize === undefined) return url;
+  const parsed = new URL(url);
+  if (parsed.searchParams.has('connection_limit')) return url;
+  parsed.searchParams.set('connection_limit', String(poolSize));
+  return parsed.toString();
+}
+
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const result = envSchema.safeParse(source);
   if (!result.success) {
@@ -566,7 +599,10 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
 
   return {
     ...env,
-    runtimeDatabaseUrl: env.DATABASE_APP_URL ?? env.DATABASE_URL,
+    runtimeDatabaseUrl: withPoolSize(
+      env.DATABASE_APP_URL ?? env.DATABASE_URL,
+      env.DATABASE_POOL_SIZE,
+    ),
     // Non-null by construction: the schema's `refine` above already refused
     // every value this returns `null` for, so the boot is over before here.
     webOrigins: parseOriginList(env.WEB_ORIGIN) ?? [],

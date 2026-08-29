@@ -91,6 +91,37 @@ describe('RTM_MAX_CONNECTIONS', () => {
 });
 
 /**
+ * The Prisma pool size (M-SCALE-b). Kept parallel to the API's
+ * (`apps/api/src/config/env.test.ts`) — same key, same behaviour, two
+ * processes.
+ */
+describe('DATABASE_POOL_SIZE', () => {
+  it('leaves the connection string untouched when unset', () => {
+    expect(parseEnv(BASE).runtimeDatabaseUrl).toBe(BASE['DATABASE_URL']);
+  });
+
+  it('applies as connection_limit on the runtime url', () => {
+    const url = new URL(parseEnv({ ...BASE, DATABASE_POOL_SIZE: '15' }).runtimeDatabaseUrl);
+    expect(url.searchParams.get('connection_limit')).toBe('15');
+  });
+
+  it('leaves an explicit connection_limit already on the url alone', () => {
+    const env = parseEnv({
+      ...BASE,
+      DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa?connection_limit=3',
+      DATABASE_POOL_SIZE: '15',
+    });
+    expect(new URL(env.runtimeDatabaseUrl).searchParams.get('connection_limit')).toBe('3');
+  });
+
+  it('refuses zero, negative or fractional pool sizes', () => {
+    for (const bad of ['0', '-1', '2.5']) {
+      expect(() => parseEnv({ ...BASE, DATABASE_POOL_SIZE: bad })).toThrow(/DATABASE_POOL_SIZE/);
+    }
+  });
+});
+
+/**
  * The production branch (M-PROD-CFG-a).
  *
  * The gateway had none. The API refused an owner connection and a published

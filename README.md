@@ -354,6 +354,59 @@ every tenant's rows are now readable by every other tenant's queries. `parseEnv`
 that gap the only way that actually holds: it refuses to boot in production without
 `DATABASE_APP_URL` set to something other than the owner connection.
 
+### Connection pool budget
+
+Every process that reaches Postgres — `apps/api`, `apps/rtm`, and each of the five
+standalone job scripts (`retention:run`, `chat-timeout:run`, `scheduled-reports:run`,
+`siem:run`, `sla:run`) — opens its own Prisma connection pool. Left unset, Prisma sizes
+a pool from the CPU count (`num_physical_cpus * 2 + 1`), which is a reasonable default
+for one process on a laptop and the wrong one the moment pod count becomes a scaling
+knob: two pods do not halve each pool, they double the total held against the database.
+`docker-compose.yml` runs Postgres with `max_connections=200` — a hard ceiling the
+server enforces no matter what any client asks for — so the budget across a deployment
+is, roughly:
+
+```
+(api pool size × api pod count) + (rtm pool size × rtm pod count) + headroom <= max_connections
+```
+
+"Headroom" covers the standalone job scripts (each opens a short-lived pool of its own
+when invoked) and Postgres' own `superuser_reserved_connections` (3 by default); leave
+at least 10-20 connections unclaimed by either pool.
+
+Set `DATABASE_POOL_SIZE` (see `.env.example`) to size both pools explicitly instead of
+leaving them at the CPU-derived default — both `apps/api` and `apps/rtm` read the same
+key and apply it as Prisma's `connection_limit` query parameter on the runtime
+connection. A URL that already names `connection_limit` is left alone.
+
+**PgBouncer transaction-mode compatibility (NFR-S4).** This repo's tenant scoping
+(`apps/api/src/lib/tenant.ts#withTenant`) is already compatible with PgBouncer running
+in transaction-pooling mode: it sets `app.current_license`/`app.current_organization`/
+`app.current_brand` with `SET LOCAL` inside a `$transaction`, which unwinds when the
+transaction commits or rolls back rather than persisting on the pooled connection — the
+one property transaction-mode pooling requires, since the next transaction on that
+connection may belong to a different tenant. The two advisory locks in the codebase
+(`token-service.ts`'s per-owner session cap, `siem-sink.ts`'s per-license delivery lock)
+use `pg_advisory_xact_lock`, the transaction-scoped variant, for the same reason — the
+session-scoped `pg_advisory_lock` would leak across whichever tenant's transaction
+happens to reuse that connection next. Nothing in the request path uses `LISTEN`/`NOTIFY`
+or a session-scoped `SET`.
+
+The one incompatibility is Prisma's own prepared statements: transaction-mode pooling
+can hand two consecutive transactions on the same client different physical
+connections, and a statement prepared on one is not visible on the other — Postgres
+answers with `prepared statement "s0" does not exist`. Prisma's documented fix is a
+connection-string flag, not a code change: append `?pgbouncer=true` to whatever URL a
+deployment points at PgBouncer's port, which tells the query engine to skip named
+prepared statements. `DATABASE_URL` (migrations) must keep reaching Postgres directly,
+never through PgBouncer — `prisma migrate` relies on session-level locking that
+transaction-mode pooling does not provide, which is also why this repo already keeps it
+separate from the pooled `DATABASE_APP_URL` runtime connection (see above). This
+repository has no PgBouncer instance to point at (CLAUDE.md's deploy boundary); a
+deployment that adds one sets
+`DATABASE_APP_URL=postgresql://…@pgbouncer-host:6432/nexa?pgbouncer=true` and leaves
+`DATABASE_URL` aimed at Postgres' own port.
+
 ### Choosing `TRUST_PROXY_HOPS`
 
 `request.ip` — the anonymous rate-limit bucket, the customer IP ban and the agent IP

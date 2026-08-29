@@ -480,6 +480,29 @@ itself:
 Capped at `8` — past a handful this stops describing a topology and starts meaning "trust
 the whole chain", which is what the setting exists to prevent.
 
+**Counting is only half of it: something has to guarantee the count.** Hops are counted
+from the right because the entries a real proxy appended are the ones nobody else could
+have written — but that reasoning holds only for a request that actually crossed those
+proxies. A caller who reaches the process _beside_ the proxy instead of _through_ it
+writes the one entry itself and is believed, at any non-zero count. Measured, not argued:
+in [`apps/api/test/integration/trust-proxy.test.ts`](apps/api/test/integration/trust-proxy.test.ts)
+an enforced IP allow-list answers `200` to an invented address at `TRUST_PROXY_HOPS=1`,
+and refuses the identical header on the identical server once a proxy really appended to
+it. Raising the count does not help — the direct caller just prepends one more entry.
+
+So `TRUST_PROXY_HOPS` is worth exactly what the network guarantees about which paths
+reach the process, and the two have to be set together. In the Helm chart that guarantee
+is [`templates/networkpolicy.yaml`](infra/helm/nexa/templates/networkpolicy.yaml) (on by
+default), which is why that file and the `TRUST_PROXY_HOPS` value in `values.yaml` each
+tell you to re-read the other. It is also what makes a _second_ public path to the API a
+decision rather than a convenience: two paths with different hop counts cannot share one
+number.
+
+The local stacks make no such guarantee, and do not need to — `make demo` publishes the
+API's own port (`4000`) beside the nginx that also proxies it, which is exactly the shape
+described above. That is fine there and only there: a single-host development stack on
+`NODE_ENV=development`, not a deployment (see "Run the whole stack in containers").
+
 ### `WEB_ORIGIN`
 
 Comma-separated list of origins the API answers cross-origin (only production enforces
@@ -563,7 +586,8 @@ mechanism whose retries add load would not be one.
 
 `infra/helm/nexa/` is a Helm chart for the four M-CONTAINER images (api, rtm, web,
 widget) — Deployment + Service per app, a ConfigMap/Secret pair, PodDisruptionBudgets,
-HorizontalPodAutoscalers, and a pre-install/pre-upgrade migration Job. It is a different
+HorizontalPodAutoscalers, a pre-install/pre-upgrade migration Job, a nightly backup
+CronJob with its PersistentVolumeClaim, and a NetworkPolicy. It is a different
 thing from "Run the whole stack in containers" above: that section boots this same set of
 images locally with `docker compose`, on one host, for a demo. This chart describes how a
 real Kubernetes deployment of the same images would be shaped — its manifests have **never
@@ -594,16 +618,27 @@ rule for writing a migration that survives a rolling upgrade — is a deliberate
 not a default; it is documented once, in [CONVENTIONS.md](CONVENTIONS.md) §6, and this
 section does not repeat it.
 
+[`templates/networkpolicy.yaml`](infra/helm/nexa/templates/networkpolicy.yaml)
+(`networkPolicy.enabled`, **on by default**) restricts ingress to the api pods to this
+release's web pods. It is not a generic hardening extra: it is the half of
+`TRUST_PROXY_HOPS` that the application cannot enforce for itself, and "Choosing
+`TRUST_PROXY_HOPS`" above explains why neither half is sound alone. Two things a real
+deployment has to decide are listed in `values.yaml` under `networkPolicy` — an Ingress
+controller that reaches the API directly (required to serve the widget, and it changes the
+hop-count question), and whether the cluster's CNI enforces policy against kubelet probe
+traffic. rtm is deliberately **not** covered; that file says why.
+
 **What is verified, and how:**
 
 - `helm lint infra/helm/nexa` — passes (one non-blocking suggestion: add a chart icon).
 - `helm template` — renders successfully: 4 Deployments, 4 Services, 4 PodDisruptionBudgets,
   3 HorizontalPodAutoscalers (api/rtm/web — widget opts out, see `values.yaml`), 1
-  ConfigMap, 1 Job, and 1 Secret (0 with the production overlay's
-  `secrets.enabled: false`) — 18 or 17 resources depending on that flag.
+  ConfigMap, 1 Job, 1 CronJob, 1 PersistentVolumeClaim, 1 NetworkPolicy, and 1 Secret
+  (0 with the production overlay's `secrets.enabled: false`) — 21 or 20 resources
+  depending on that flag, and one fewer again with `networkPolicy.enabled: false`.
 - Every rendered resource validates against real Kubernetes OpenAPI schemas, fully
-  offline, with [`kubeconform`](https://github.com/yannh/kubeconform) `-strict`: 18/18
-  valid (default values) and 17/17 valid (production overlay).
+  offline, with [`kubeconform`](https://github.com/yannh/kubeconform) `-strict`: 21/21
+  valid (default values) and 20/20 valid (production overlay).
 - `kubectl apply --dry-run=client` against the rendered YAML was attempted and does **not**
   work on a machine with no reachable cluster: even with `--validate=false`, `kubectl
 apply` still needs live API-server discovery to compute its strategic-merge patch, and

@@ -195,6 +195,54 @@ describe('trusted proxy hops (TRUST_PROXY_HOPS)', () => {
     expect(peer.statusCode).toBe(200);
   });
 
+  // --- The right hop count on the wrong path (M-SEC-e2, tm 174) ---------------
+
+  it('believes whatever the caller wrote when the request never crossed a proxy', async () => {
+    // The count is not too high here. `1` is exactly what the deployment that
+    // ships this process declares (infra/helm/nexa/values.yaml's
+    // TRUST_PROXY_HOPS) and exactly how many hops the path through that
+    // deployment's web nginx really has. What is wrong is the *path*: this
+    // request reached the process without crossing that nginx at all, so the
+    // single entry in the header is not an address our proxy attested — it is
+    // the first thing the caller typed, and the one trusted hop is spent
+    // skipping the caller's own socket to arrive at it.
+    //
+    // In the chart this is any pod on the cluster network dialling
+    // `<release>-api:4000` *beside* the web Service instead of *through* it
+    // (tm 167 finding 2). Nothing in the request distinguishes the two paths —
+    // both arrive with one XFF entry over a trusted socket peer — so no header
+    // discipline can close it and no other value of TRUST_PROXY_HOPS is safer
+    // (see the pair below). The fix is a NetworkPolicy that stops the second
+    // path from existing: infra/helm/nexa/templates/networkpolicy.yaml.
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const res = await at('1').get('/auth/me', { ...auth(), 'x-forwarded-for': ALLOWED });
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('refuses that same header on that same server once a real proxy appended to it', async () => {
+    // The mirror, and the reason the case above is a topology finding rather
+    // than a misconfiguration: same process, same hop count, same allow-list,
+    // the same hostile value in the header — refused, because a proxy appended
+    // the real caller after it and one hop in from the right lands there.
+    //
+    // The two together are the whole argument. A single TRUST_PROXY_HOPS cannot
+    // be correct for both a path that crosses the proxy and one that skips it,
+    // so the number is only worth what the network guarantees about which paths
+    // exist. Raising it does not help either: at `2` this request would be
+    // refused and the direct caller would simply prepend one more entry.
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const res = await at('1').get('/auth/me', {
+      ...auth(),
+      'x-forwarded-for': `${ALLOWED}, ${CLIENT}`,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect((res.json() as { error: { type: string } }).error.type).toBe('not_allowed');
+  });
+
   // --- The default ------------------------------------------------------------
 
   it('defaults to one hop, so the behaviour every other suite pins is unchanged', async () => {

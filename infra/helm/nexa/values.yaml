@@ -261,6 +261,70 @@ backup:
       cpu: 500m
       memory: 256Mi
 
+# Who is allowed to reach the api pods (tm 174, M-SEC-e2). This is not a
+# hardening extra — it is the other half of `config.TRUST_PROXY_HOPS` below, and
+# neither half is sound alone. templates/networkpolicy.yaml carries the full
+# reasoning and the measurement; the short version is that deriving `request.ip`
+# by counting `X-Forwarded-For` hops is only as good as the guarantee that every
+# request reached the process through the proxies it counts, and a bare ClusterIP
+# gives no such guarantee.
+networkPolicy:
+  # Default ON. A skeleton that ships the tighter default and asks a deployment
+  # to loosen it deliberately is the right way round: the loose version fails
+  # silently (a spoofed address is believed and nothing logs a thing) and the
+  # tight version fails loudly (a caller that should be allowed gets no
+  # connection at all).
+  #
+  # Turn it off for a cluster whose CNI does not implement NetworkPolicy — where
+  # the object is accepted by the API server and then enforced by nobody, which
+  # is worse than absent because it reads like protection. Set here in values.yaml
+  # rather than with a `| default true` in the template on purpose: Sprig's
+  # `default` treats `false` as empty and would quietly ignore anyone switching
+  # it off (measured in tm 164.4, templates/secret.yaml).
+  enabled: true
+  api:
+    # EXTRA peers appended to the built-in "from the web pods of this release"
+    # rule. Empty by default, and the default is not laziness — see the two
+    # cases it exists for, both of which need an address this chart cannot know:
+    #
+    #   1. AN INGRESS CONTROLLER THAT REACHES api DIRECTLY. The widget's browser
+    #      code calls the API cross-origin (apps/widget/nginx.conf's
+    #      `connect-src`; that image proxies nothing), so a deployment that
+    #      serves the widget publishes api on its own hostname. Add that
+    #      controller's pods here — e.g.
+    #        - namespaceSelector:
+    #            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+    #          podSelector:
+    #            matchLabels: { app.kubernetes.io/name: ingress-nginx }
+    #      READ THIS BEFORE YOU DO: every path you add is its own hop count, and
+    #      TRUST_PROXY_HOPS is one number. Through web nginx behind that same
+    #      controller is two appending hops; straight from the controller is one.
+    #      Allowing both makes the number wrong for one of them — too high on the
+    #      short path is the bypass this policy exists to close. Either route
+    #      everything through web (one shape, one count) or terminate the two
+    #      paths on separate deployments of this chart with their own values.
+    #
+    #   2. A CNI THAT ENFORCES kubelet PROBE TRAFFIC. Probes originate in the
+    #      NODE's network namespace, and no `podSelector`/`namespaceSelector` can
+    #      name a node — only an `ipBlock` can. Most CNIs exempt node -> local-pod
+    #      traffic from NetworkPolicy precisely so probes survive rules like this
+    #      one (it is why the usual "allow only from X" policy never mentions the
+    #      kubelet), but that exemption is implementation behaviour, not part of
+    #      the NetworkPolicy API, and it varies by CNI and by configuration. If
+    #      yours enforces it, the node CIDR goes here:
+    #        - ipBlock: { cidr: <node CIDR>, except: [<pod CIDR>] }
+    #
+    #      This chart does NOT guess that CIDR, and the reason is specific rather
+    #      than cautious: on a typical cluster any plausible guess (10.0.0.0/8,
+    #      172.16.0.0/12) also covers the POD network, so a guessed default would
+    #      re-open the very bypass this policy closes — while looking like it had
+    #      closed it. The cost of leaving it empty is the opposite kind of
+    #      failure: readiness probes fail, pods leave rotation, and the deployment
+    #      says so immediately. Loud and wrong beats quiet and wrong. The
+    #      `except:` above matters for the same reason — an ipBlock over the node
+    #      range must not swallow the pod range with it.
+    extraIngressFrom: []
+
 # Known gap, stated rather than hidden: the web image's RTM WebSocket address
 # (`VITE_RTM_URL`) is baked in at *build* time (apps/web/Dockerfile), not read
 # from the environment at container start the way API_UPSTREAM/RTM_UPSTREAM
@@ -293,10 +357,29 @@ config:
   API_HOST: "0.0.0.0"
   RTM_PORT: "4001"
   RTM_HOST: "0.0.0.0"
-  # How many reverse proxies in front of the API are trusted (request.ip
-  # derivation — see .env.example). 1 because nginx (web/widget images) is
-  # the one hop this chart itself puts in front; a real Ingress adds another
-  # and a deployment overrides this value accordingly.
+  # How many reverse proxies in front of the API are trusted to have appended
+  # to `X-Forwarded-For`. `request.ip` is read that many entries in from the
+  # RIGHT (apps/api/src/server.ts), and it is what the agent IP allow-list, the
+  # customer IP ban and the anonymous rate-limit bucket decide on — so this is a
+  # security value, not a logging one. README "Choosing TRUST_PROXY_HOPS" has
+  # the table.
+  #
+  # THIS CHART'S OWN CHAIN IS ONE HOP: browser -> web nginx -> api. The `/api/`
+  # location in apps/web/nginx.conf appends the caller with
+  # `$proxy_add_x_forwarded_for`, and it is the only appending hop the chart
+  # itself deploys — there is no Ingress here (out of scope, CLAUDE.md). Put a
+  # TLS-terminating Ingress or CDN in front of web and this becomes 2; see
+  # values.production.example.yaml.
+  #
+  # The number is only meaningful because templates/networkpolicy.yaml makes it
+  # true. Counting hops from the right is exactly right for a request that
+  # crossed those hops and exactly wrong for one that did not: reached directly
+  # over the bare ClusterIP, a caller writes the one entry itself and this value
+  # of 1 is spent skipping the caller's own socket to believe it — MEASURED, an
+  # enforced IP allow-list answers 200 to an invented address
+  # (apps/api/test/integration/trust-proxy.test.ts, tm 174). Change one of these
+  # two and re-read the other; `networkPolicy.api.extraIngressFrom` above spells
+  # out why adding a second path to api breaks a single hop count.
   TRUST_PROXY_HOPS: "1"
   # Mocked providers (MASTER-PROMPT: dış servisleri mock'la) — unchanged from
   # dev/demo. A real deployment overrides these once a real provider exists;

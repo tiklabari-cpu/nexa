@@ -1,0 +1,101 @@
+# Ingress NetworkPolicy for the api pods (tm 174, M-SEC-e2).
+#
+# WHY THIS FILE EXISTS — a specific bypass, not "defence in depth" in general.
+#
+# apps/api/src/server.ts derives `request.ip` from `X-Forwarded-For` by trusting
+# exactly `TRUST_PROXY_HOPS` hops counted from the RIGHT, and that address then
+# decides three things: the agent IP allow-list (FR-MOD-08.9.6,
+# plugins/auth.ts), the customer IP ban (routes/auth.ts) and the anonymous
+# rate-limit bucket (plugins/rate-limit.ts). Counting from the right is the
+# correct way to read that header, and the count this chart ships is correct
+# too — 1, earned by the web image's `/api/` location, which appends the caller
+# with `$proxy_add_x_forwarded_for` (apps/web/nginx.conf). What the header
+# discipline cannot check is whether a given request crossed that proxy at all.
+#
+# templates/service.yaml fronts these pods with an ordinary ClusterIP, so
+# without this policy ANY pod on the cluster network can dial
+# `<release>-api:<port>` beside the web Service instead of through it, write one
+# `X-Forwarded-For` entry of its own choosing, and be believed: the single
+# trusted hop is spent skipping the caller's own socket, landing on the value
+# the caller invented.
+#
+# MEASURED at the HTTP layer, not argued — apps/api/test/integration/
+# trust-proxy.test.ts, "believes whatever the caller wrote when the request
+# never crossed a proxy": against an ENFORCED allow-list, an invented address
+# returns 200 (asserting 403 there fails with "expected 200 to be 403"). The
+# test beside it shows the same process, the same hop count and the same hostile
+# header being refused 403 once a real proxy appended the caller after it. One
+# value of TRUST_PROXY_HOPS cannot be correct for both of those paths, and
+# raising it does not help — a direct caller simply prepends one more entry. So
+# the number is worth exactly what the network guarantees about which paths
+# exist, and this file is that guarantee.
+#
+# SCOPE — api only, deliberately.
+#
+#   rtm is NOT selected here. Its server (apps/rtm/src/server.ts) has no
+#   `trustProxy`, no proxy-addr and never reads `X-Forwarded-For` — a repo-wide
+#   grep for all three over apps/rtm/src returns nothing — so the mechanism this
+#   policy closes does not exist there. It also could not be closed the same way
+#   without inventing a decision the chart has explicitly left open: rtm's socket
+#   is dialled by a BROWSER, and values.yaml's `VITE_RTM_URL` note names two
+#   supported topologies for that (through web's own `/v1/agent/rtm/ws` proxy
+#   location, or a per-target web image pointing at rtm's public address). A
+#   web-only rule would silently kill the second. rtm has its own open item, and
+#   it is a different one: PLAN.md §D137, its three health endpoints carry no
+#   rate limit.
+#
+#   Nothing else in this chart talks to api. The migration Job
+#   (templates/migrate-job.yaml) runs `prisma migrate deploy` and the backup
+#   CronJob runs `pg_dump`; both address Postgres, neither addresses api. web is
+#   the only in-cluster client, which is why the rule below is a single peer.
+#
+#   Ingress only (`policyTypes`), not Egress. An egress policy would have to name
+#   Postgres and Redis, and this chart deploys neither (values.yaml's own header:
+#   managed datastores, connection strings are values) — it would be a rule
+#   written against addresses the chart cannot see.
+#
+# NOT APPLIED ANYWHERE. Like the rest of this chart, this manifest has never met
+# a cluster (CLAUDE.md: no production deploy). It is verified by rendering and
+# schema validation, and by nothing else; whether a given CNI enforces it at all
+# is the deployment's own question — see `networkPolicy` in values.yaml.
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-api
+  labels:
+    app.kubernetes.io/name: api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  # Selecting these pods with an Ingress policyType is what makes them
+  # default-deny for ingress: after this, only the peers listed below reach
+  # them. Pods NOT selected by any policy stay fully open, which is why this
+  # names api explicitly rather than relying on a namespace-wide rule.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: api
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    # A `from` list that renders EMPTY would mean "from anywhere" — the exact
+    # opposite of this file. The web peer below is unconditional for that
+    # reason: `networkPolicy.api.extraIngressFrom` can only ever add to it.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: web
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        {{- with .Values.networkPolicy.api.extraIngressFrom }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      # A bare `podSelector` peer is namespace-scoped to this policy's own
+      # namespace, so a second release of this chart elsewhere cannot reach
+      # these pods; the instance label makes a second release in the SAME
+      # namespace unable to either.
+      ports:
+        - protocol: TCP
+          port: {{ .Values.apps.api.port }}
+{{- end }}

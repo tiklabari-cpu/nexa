@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 166.1 — M-RUNBOOK-a: docs/production-checklist.md — done — 2026-08-30 UTC
+
+- **Yapıldı:** New `docs/production-checklist.md` (+ new `docs/` dir) — 8 sections (Configuration/Ops/Capacity/Scale/Deployment/Backup/Observability/Compliance) + an "Explicitly out of scope" section (TLS/DNS · real providers · SOC2/ISO/BAA). Every line carries either a runnable command or a pointer to already-existing evidence (file + test + count) — no unmeasurable "reviewed" language. README got one reference link (`## Status`).
+- **Doğrulama:** `typecheck` 13/13 · `lint` 10/10 · `format:check` clean (after fixing a prettier bug, see below) · `build` 8/8 — all `FULL TURBO` cache-hit except `@nexa/api:test`/`test:integration` which ran fresh (no cache for this input change): `test` 180 files/3844 tests · `test:integration` 110 files/2670 tests, both exit 0. `test:e2e` **consciously not run** — same precedent as tm 165.1/164.x: a markdown file and a README link sit on no e2e-exercised flow. `db:check-drift`/`contract:generate` not applicable — no migration, no OpenAPI change.
+- **Varsayımlar:** all 8 checklist topics were already `✅` in PLAN §7.2 before this task (tm 159/160/161/162/163/164/165) — nothing here is invented, and nothing is marked "pending (tm N)" because nothing covered is actually incomplete. PLAN §7.2's `M-RUNBOOK` row is `◐ → KM-RUNBOOK`, not `✅` — this task is 1 of 2 subtasks (`M-RUNBOOK-b`, `docs/runbooks/`, is tm 166.2 and still open).
+- **Sonraki pencereye not:** `prettier --write`'ın ilk geçişi, `- [ ]` liste maddesi içine gömülü üçlü ters-tırnak kod bloklarını bozuyor (tek ters tırnağa indirip kapanışı ayrı satıra düşürüyor, geçersiz markdown çıkıyor) — bir sonraki Markdown checklist/liste yazan pencere kod bloklarını liste maddesinin İÇİNE gömmesin, satır-içi tek ters-tırnak komut kullansın. tm 166.2 (`docs/runbooks/`) şimdi açılabilir, bağımlılığı bu task.
+
 ## 158 — GL-11 · F5-KAPAT: Faz-5 §F.00 kapanış turu + §F.1 tam sürüm + §F.2 raporu — done — 2026-08-30 UTC
 
 - **Yapıldı (ürün kodu SIFIR satır — `git status` yalnız `PLAN.md` · `HANDOFF.md` · `CONVENTIONS.md` · `.taskmaster/tasks/tasks.json`):** Faz-5 §F.00 kapısı **8 ✅ · 0 ◐ · 0 ⬜** ile kapandı; üst tablonun Faz-5 satırı `⬜ AÇIK` → **`✅ KAPALI`**, §6B'ye kapanış paragrafı, §F.00'a Faz-5 kapısı, `#### KGL-11` bloğu dolduruldu, yeni `#### KD121-3` şemsiye bloğu açıldı, §D143–§D146 yazıldı.

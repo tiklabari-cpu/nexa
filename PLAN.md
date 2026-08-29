@@ -3333,7 +3333,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ✅ → KM-OTEL |
 | M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ✅ → KM-IAC |
 | M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ✅ → KM-BACKUP |
-| M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ⬜ |
+| M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ◐ → KM-RUNBOOK |
 | M-SEC-e | Faz-6 salt-okuma güvenlik denetimi (**türetilmiş**: NFR-S1–S12 · Faz-6 tm 167) | ✅ → KM-SEC-e |
 
 ---
@@ -7216,7 +7216,7 @@ _(Dördüncü alt-görev tm 164.4 ile kapandı — §7.2 `M-IAC` satırı artık
 
 #### KM-RUNBOOK — M-RUNBOOK · Checklist ve runbook’lar
 
-_(Faz-6 · tm 166 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kapandıkça bu bloğun SONUNA madde eklenir; CONVENTIONS §1.2: tablo hücresine kanıt yazılmaz.)_
+- ✅ **M-RUNBOOK-a — `docs/production-checklist.md` (yeni; `docs/` dizini de yeni) (2026-08-30):** Sekiz bölüm — Configuration (tm 159) · Ops (tm 160) · Capacity (tm 161 + 164.2) · Scale (tm 162) · Deployment (tm 164) · Backup (tm 165) · Observability (tm 163) · Compliance (retention) — artı ayrı bir "Explicitly out of scope" bölümü (TLS/DNS · gerçek sağlayıcılar · SOC2/ISO/BAA, CLAUDE.md sınırına referans). Her satır ya çalıştırılabilir bir komut (`openssl rand -hex 32` · `make load-rest`/`make load-rtm` · `helm template` + `helm lint` · `make restore-drill`) ya da o kalemin zaten var olan kanıtına referans (dosya yolu + test dosyası + sayı) taşıyor — hiçbiri "gözden geçirildi" gibi ölçülemeyen bir ifade değil. **Tuzağa saygı gösterildi:** kapsanan sekiz başlığın hepsi bu turdan ÖNCE zaten `✅`ydı (§7.2: M-PROD-CFG/M-OPS/M-LOAD/M-SCALE/M-OTEL/M-IAC/M-BACKUP), yani hiçbir madde uydurma değil; hiçbir kalem "beklemede (tm N)" değil çünkü hiçbiri yarım değildi. README'ye tek referans linki eklendi ("## Status"). **Ölçülen tuzak:** ilk `prettier --write` geçişi, `- [ ]` liste öğesi içine iç içe geçmiş üç kod bloğunu (üçlü ters tırnak) BOZDU — tek ters tırnağa indirgeyip kapanış çitini ayrı bir metin satırına düşürdü, sonuç geçersiz markdown; üç yeri de listeyle aynı satırda tek satırlık komutlara çevirerek düzeltildi, `prettier --write` yeniden koşuldu ve "unchanged" verdi. Referans verilen 17 dosya yolunun (test dosyaları + Helm şablonları + script'ler) hepsi `ls` ile doğrulandı. — `docs/production-checklist.md` (yeni) · `README.md` (§"Status") · tm 166.1. **Kalan (M-RUNBOOK satırı hâlâ `◐`):** `docs/runbooks/` — DB düştü · Redis düştü · webhook kuyruğu şişti · RTM bağlantı fırtınası · kiracı izolasyon olayı (tm 166.2).
 
 #### KM-SEC-e — M-SEC-e · Faz-6 güvenlik denetimi
 

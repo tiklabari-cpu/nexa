@@ -747,4 +747,7 @@ compose stack runs automatically — or capture globals separately with
 ## Status
 
 See [PLAN.md](PLAN.md) for what is done and what is next, and [HANDOFF.md](HANDOFF.md)
-for the current state summary.
+for the current state summary. Before taking any of this to production, work through
+[docs/production-checklist.md](docs/production-checklist.md) — every item there is a
+command to run or a piece of evidence already recorded in this repository, not a box to
+tick from memory.

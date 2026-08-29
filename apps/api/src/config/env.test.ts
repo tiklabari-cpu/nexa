@@ -17,6 +17,7 @@ import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
 import { MAIL_PROVIDERS } from '../services/mail/mailer.js';
 import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
 import { STORAGE_PROVIDERS } from '../services/storage/object-store.js';
+import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 import { SECRET_KEYS, envSchema, parseEnv } from './env.js';
 
 /** The minimum a boot needs, so a failure below is about the region and nothing else. */
@@ -71,6 +72,7 @@ describe('provider selection', () => {
     { key: 'STORAGE_PROVIDER', vocabulary: STORAGE_PROVIDERS, fallback: 'local' },
     { key: 'STRIPE_PROVIDER', vocabulary: PAYMENT_PROVIDERS, fallback: 'mock' },
     { key: 'SIEM_PROVIDER', vocabulary: SIEM_PROVIDERS, fallback: 'file' },
+    { key: 'OTEL_EXPORTER', vocabulary: OTEL_EXPORTERS, fallback: 'console' },
   ] as const;
 
   for (const { key, vocabulary, fallback } of PROVIDERS) {

@@ -81,8 +81,9 @@ export interface BuildServerOptions {
   push?: PushProvider;
   /**
    * OpenTelemetry instrumentation. Omitted, it follows `env.otelEnabled`
-   * (console exporter in dev/prod, off under test). Pass an instance to inject
-   * in-memory exporters, or `null` to force it off.
+   * (off under test) and `env.OTEL_EXPORTER` (console by default when on —
+   * M-OTEL-a). Pass an instance to inject in-memory exporters, or `null` to
+   * force it off.
    */
   telemetry?: Telemetry | null;
   /**
@@ -109,7 +110,13 @@ export async function buildServer({
     telemetry !== undefined
       ? telemetry
       : env.otelEnabled
-        ? createTelemetry({ serviceName: 'nexa-api', serviceVersion: VERSION })
+        ? createTelemetry({
+            serviceName: 'nexa-api',
+            serviceVersion: VERSION,
+            spanExporter: env.OTEL_EXPORTER,
+            metricExporter: env.OTEL_EXPORTER,
+            otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
+          })
         : null;
   const app = Fastify({
     logger: {

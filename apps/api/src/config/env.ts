@@ -15,6 +15,7 @@ import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
 import { MAIL_PROVIDERS } from '../services/mail/mailer.js';
 import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
 import { STORAGE_PROVIDERS } from '../services/storage/object-store.js';
+import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 
 const secret = (minLength: number) =>
   z
@@ -513,6 +514,27 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => (v === undefined ? undefined : v === 'true')),
+  /**
+   * Which exporter the OpenTelemetry stack uses once `OTEL_ENABLED` turns it
+   * on (M-OTEL-a · M-PROV-a). See `OTEL_EXPORTERS` in telemetry.ts for what
+   * each value does — in short, `console` (default, today's behaviour) prints
+   * to stdout, `otlp` sends to a real collector, `none` keeps the
+   * instrumentation running (spans still carry `request_id`) but exports
+   * nothing, at no cost. The vocabulary is imported rather than duplicated
+   * here for the same reason `MAIL_PROVIDER` is: a value this schema accepts
+   * and no factory implements is exactly the drift M-PROV-a exists to close.
+   */
+  OTEL_EXPORTER: z.enum(OTEL_EXPORTERS).default('console'),
+  /**
+   * The collector `OTEL_EXPORTER=otlp` sends to. OpenTelemetry's own standard
+   * key, not one invented here — this is the base URL; the per-signal path
+   * (`/v1/traces`, `/v1/metrics`) is appended by the factory. Optional even
+   * when `otlp` is chosen: the OTLP exporter's own default
+   * (`http://localhost:4318`) is a reasonable one for a collector running
+   * alongside this process, and reaching a live collector is out of scope
+   * here regardless (a project boundary — see telemetry.ts).
+   */
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema> & {

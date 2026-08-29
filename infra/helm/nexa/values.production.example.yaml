@@ -49,6 +49,19 @@ apps:
     # tenant's site, not just an internal surface.
     replicas: 2
 
+# The one backup setting a real deployment has to make a decision about (tm
+# 173, M-SEC-e1). templates/backup-pvc.yaml holds a `pg_dump` of the whole
+# database — every tenant's accounts, transcripts and audit entries, in the
+# clear, for `retentionDays` days. Left empty (the chart default) the claim
+# omits the field and takes whatever class the cluster administrator made
+# default, which the chart can make no claim about; name an at-rest-encrypted
+# class here so a detached or snapshotted volume is not a plaintext copy of
+# the product. Everything else in values.yaml's `backup:` block (schedule,
+# image, retentionDays, pvcSize, resources) has a defensible default and is
+# left out of this file on purpose.
+backup:
+  storageClassName: "<an at-rest-encrypted StorageClass, e.g. gp3-encrypted>"
+
 # Config keys the chart's skeleton (values.yaml) leaves unset because they
 # have no safe generic default. templates/configmap.yaml renders this map
 # with a plain `range`, so anything added here reaches the container as an

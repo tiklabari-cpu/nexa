@@ -4,6 +4,18 @@
 # PVC is the minimal "somewhere that survives the Job" answer this chart can
 # give without inventing an object-storage integration it doesn't have (see
 # values.yaml's backup block for that gap, stated there rather than here).
+#
+# WHAT IS ACTUALLY ON THIS VOLUME (tm 173, M-SEC-e1 — it used to say only
+# "durable landing spot", which is true and useless): a `pg_dump` of the whole
+# database. Every organisation's accounts, every visitor's chat transcript,
+# every audit entry — every tenant's personal data, unencrypted, in one file,
+# for `backup.retentionDays` days. It is the single richest target the chart
+# creates, and it is the one object here whose contents outlive every pod.
+#
+# So `backup.storageClassName` is not a convenience knob: an at-rest-encrypted
+# class is what keeps a detached or snapshotted volume from being a plaintext
+# copy of the product. Left empty it falls through to the cluster's default
+# class, which this chart cannot make any claim about — see values.yaml.
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -16,6 +28,15 @@ metadata:
 spec:
   accessModes:
     - ReadWriteOnce
+  {{- if .Values.backup.storageClassName }}
+  # A bare `if` on the string, not `| default` — Sprig's `default` treats an
+  # empty string as absent and would make an explicit "" unreachable, the same
+  # trap templates/secret.yaml documents for the boolean case (tm 164.4). An
+  # omitted field is what selects the cluster default; `storageClassName: ""`
+  # would mean "no class at all", which is a different and rarely intended
+  # request.
+  storageClassName: {{ .Values.backup.storageClassName | quote }}
+  {{- end }}
   resources:
     requests:
       storage: {{ .Values.backup.pvcSize }}

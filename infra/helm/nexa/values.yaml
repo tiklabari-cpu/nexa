@@ -241,6 +241,18 @@ backup:
   # Unmeasured placeholder (no deployment exists to size this against) —
   # revisit once a real database's dump size is known.
   pvcSize: 10Gi
+  # StorageClass for the backup PVC. Empty means the field is omitted from the
+  # claim entirely, so the cluster's default class is used.
+  #
+  # SET THIS TO AN AT-REST-ENCRYPTED CLASS FOR A REAL DEPLOYMENT (tm 173,
+  # M-SEC-e1). This volume is not general-purpose storage: it holds a `pg_dump`
+  # of the whole database — every organisation's accounts, every visitor's
+  # transcript, every audit entry, unencrypted, for `retentionDays` days. It is
+  # the richest single target this chart creates. The default class is whatever
+  # the cluster administrator made default, which this chart can neither read
+  # nor make any claim about, so leaving this empty is a decision to inherit an
+  # unknown — fine for a scratch cluster, not for one holding real tenants.
+  storageClassName: ""
   resources:
     requests:
       cpu: 100m

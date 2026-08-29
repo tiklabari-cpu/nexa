@@ -69,6 +69,10 @@ seed: ## Load demo seed data
 backup: ## Back up the dev datastore (pg_dump + .data/uploads) — see scripts/backup.sh
 	./scripts/backup.sh
 
+.PHONY: restore-drill
+restore-drill: ## Prove the backup restores: load it into a scratch DB, verify, drop it
+	./scripts/restore-drill.sh
+
 .PHONY: dev
 dev: install up migrate seed ## One command: datastores + migrations + seed + all apps
 	pnpm dev

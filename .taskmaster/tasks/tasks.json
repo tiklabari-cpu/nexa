@@ -7894,10 +7894,10 @@
         "description": "NFR-M5 yapılandırılmış log + OpenTelemetry izleme + metrikler istiyor. Kod var: apps/api/src/telemetry/telemetry.ts istek başına span ve request/latency/error metrikleri üretiyor, hepsi request_id ile etiketli. Ama iki eksik var: (1) exporter CONSOLE a sabit — dosyanın kendi yorumu \"bu ortamda collector yok\" diyerek bunu gerekçelendiriyor, yani bir seçim değil bir varsayım; (2) RTM in kendi telemetrisi YOK — NFR-M5 in saydığı metrikler arasında \"RTM bağlantı, event/sn\" var ve bugün hiçbiri ölçülmüyor.",
         "details": "BULGU KAYNAĞI: 2026-08-23 bağımsız denetimi (§D124, NFR-M5: OTel var ama yalnız console exporter).\nZEMİN (oku): apps/api/src/telemetry/telemetry.ts yorumu neden console exporter kullandığını yazıyor\nve sağlayıcıları BİLEREK OpenTelemetry global larına kaydetmiyor (test sızıntısını önlemek için).\nO tasarım kararına dokunma; yalnız exporter SEÇİMİNİ env e taşı.\n\nBU KALEM GERÇEK BİR COLLECTOR KURMAZ — sağlayıcı seçim dikişi hazırlanır, bağlantı kurulmaz.\nMock → gerçek geçişi bu turun kapsamı dışında (kullanıcı kararı).\n\nFAZ-6'NIN KONUSU: CANLIDA AYAKTA KALMAK (§D124). Faz-5 ürünün DOĞRU olmasını sağladı;\nFaz-6 HAZIR olmasını sağlar.\n\nSINIR (CLAUDE.md): production deploy / DNS / TLS / gerçek secret YOK. Her kalem ya yerelde koşulabilir\nya --dry-run / helm template ile doğrulanabilir olmalı. M-CONTAINER emsali (tm 140): dosyalar depoda,\nkubectl apply YOK. Mock sağlayıcıları gerçeğe çekmek de KAPSAM DIŞI.\nKapsam dışına çıkma (CONVENTIONS §5).\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-OTEL** (türetilmiş — NFR-M5). Gereksinim satırı: `grep -n \"| M-OTEL\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-OTEL\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
         "testStrategy": "İki alt-görev done. Ölçülebilir:\n1. OTEL_EXPORTER env i fiilen seçiyor (console | otlp | none); none sessizce ve maliyetsiz çalışıyor.\n2. RTM üç metriği üretiyor ve testle kilitli.\n3. PLAN §7.2 M-OTEL → \"✅ → KM-OTEL\"; NFR-M5 satırının RTM payı artık dolu.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "updatedAt": "2026-08-29T15:23:13.548Z",
+        "updatedAt": "2026-08-29T16:17:17.499Z",
         "subtasks": [
           {
             "id": 1,
@@ -7916,12 +7916,12 @@
             "description": "WebSocket katmanı artık kendini ölçüyor.",
             "details": "NE YAPILACAK: apps/rtm e telemetri eklenir — api dekiyle AYNI desen (kendi Telemetry örneği,\nglobal lara kaydetmeden).\nÜç metrik (NFR-M5 in saydıkları):\n- Eşzamanlı bağlantı sayısı (gauge / up-down counter).\n- Fan-out gecikmesi (histogram): olay üretiminden sokete yazılmasına kadar geçen süre.\n  NFR-P1 in bütçesi bu metriktir (p99 < 500 ms) — tm 161.3 yük altında ölçecek, bu metrik\n  ÜRETİMDE sürekli görünür kılar.\n- Kopma nedeni (counter, etiketli): normal kapanış · protokol ihlali · kimlik zaman aşımı ·\n  hız sınırı · sunucu kapanışı (tm 160.2 nin drenajı).\nExporter seçimi 163.1 in dikişini kullanır (aynı env anahtarı).\n\nDOSYALAR: apps/rtm/src/ (yeni telemetri modülü + gateway/dispatcher bağlama) ·\napps/rtm/src/index.ts · apps/rtm package.json (OTel bağımlılıkları) · rtm testleri.\nREFERANS: apps/api/src/telemetry/telemetry.ts (yapı) ve apps/api/src/plugins/telemetry.ts (bağlama).\nKopma nedenleri için apps/rtm/src/dispatcher.ts ve protokol limitleri (ADR-07: 10 msg/sn/bağlantı,\n15 sn kimlik penceresi) — mevcut kapanış yollarını OKU, tahmin etme.\n\nTUZAKLAR:\n1. Metrik etiketleri KİRACI KİMLİĞİ TAŞIMAMALI (kardinalite patlaması + PII). Kopma nedeni gibi\n   sınırlı kümeler kullan.\n2. Test ortamında telemetri kapalı kalmalı (api deki NODE_ENV=test kuralının kardeşi) —\n   106 rtm testi yavaşlamamalı.\n3. Fan-out gecikmesi ölçümü sıcak yolda; ölçümün kendisi maliyetli olmamalı.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-OTEL** (türetilmiş — NFR-M5 · NFR-P1). Gereksinim satırı: `grep -n \"| M-OTEL\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-OTEL\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- rtm test yeşil (taban 106) ve koşu süresi belirgin artmadı (HANDOFF a yaz).\n- Ölçülebilir: üç metrik in-memory exporter ile okunabiliyor (birim testi).\n- PLAN: §7.2 M-OTEL → \"✅ → KM-OTEL\" (ikinci alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "163.1"
             ],
             "parentId": "163",
-            "updatedAt": "2026-08-29T15:23:13.548Z"
+            "updatedAt": "2026-08-29T16:17:17.499Z"
           }
         ]
       },
@@ -8160,9 +8160,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T15:23:13.549Z",
+      "lastModified": "2026-08-29T16:17:17.500Z",
       "taskCount": 172,
-      "completedCount": 165,
+      "completedCount": 166,
       "tags": [
         "master"
       ]

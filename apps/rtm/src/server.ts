@@ -25,6 +25,11 @@ import { Dispatcher } from './dispatcher.js';
 import { Fanout } from './fanout.js';
 import { decodeRequest, encodeError } from './protocol.js';
 import { SyncService } from './sync.js';
+import {
+  classifyDisconnectReason,
+  createTelemetry,
+  type Telemetry,
+} from './telemetry/telemetry.js';
 import { TypingService } from './typing.js';
 
 /**
@@ -94,12 +99,35 @@ export function buildRtmServer(
    * only way to assert a log line's shape rather than that a call site exists.
    */
   logStream?: NodeJS.WritableStream,
+  /**
+   * OpenTelemetry instrumentation (M-OTEL-b). Omitted, it follows
+   * `env.otelEnabled` (off under test) and `env.OTEL_EXPORTER` — same
+   * contract as the API's `BuildServerOptions.telemetry`. Pass an instance to
+   * inject an in-memory exporter, or `null` to force it off.
+   */
+  telemetry?: Telemetry | null,
 ): RtmServer {
   // Level follows `LOG_LEVEL` in every environment, same as the API
   // (`apps/api/src/server.ts`) — there is no dev/production branch to get out
   // of sync (M-OPS-c).
   const log: Logger = pino({ level: env.LOG_LEVEL, name: 'nexa-rtm' }, logStream);
   const startedAt = Date.now();
+
+  // Same `telemetry !== undefined ? telemetry : env.otelEnabled ? … : null`
+  // contract as the API's `buildServer` (M-OTEL-b): an explicit `null` or
+  // instance always wins over the env-driven default, which is the path
+  // tests take to inject an in-memory exporter.
+  const telemetryInstance: Telemetry | null =
+    telemetry !== undefined
+      ? telemetry
+      : env.otelEnabled
+        ? createTelemetry({
+            serviceName: 'nexa-rtm',
+            serviceVersion: version,
+            metricExporter: env.OTEL_EXPORTER,
+            otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
+          })
+        : null;
   /**
    * Set the moment `close()` starts (M-OPS-b). Readiness turns false first and
    * new upgrades are refused, so the orchestrator stops routing here — and a
@@ -145,6 +173,11 @@ export function buildRtmServer(
   }
 
   const registry = new ConnectionRegistry();
+  // Pull-based: the gauge is only actually read when a collection happens
+  // (on export or `flushMetrics`), so this costs nothing between exports.
+  telemetryInstance?.instruments.activeConnections.addCallback((result) => {
+    result.observe(registry.size);
+  });
   const authenticator = new SocketAuthenticator(db, env.JWT_SIGNING_KEY_CUSTOMER, env.NEXA_REGION);
   const sync = new SyncService(db);
   // Typing flags are written on the command connection: a subscriber-mode client
@@ -155,7 +188,7 @@ export function buildRtmServer(
   // which emits the warning on the dedicated publish connection.
   const conflict = new ConflictDetectionService(db, commands);
   const conflictPublisher = new ConflictPublisher(db, publisher, log);
-  const fanout = new Fanout(subscriber, registry, log);
+  const fanout = new Fanout(subscriber, registry, log, telemetryInstance);
 
   const dispatcher = new Dispatcher({
     registry,
@@ -330,7 +363,16 @@ export function buildRtmServer(
 
     wss.handleUpgrade(request, socket, head, (ws) => {
       wss.emit('connection', ws, request);
-      attach({ ws, side, organizationId, registry, dispatcher, log });
+      attach({
+        ws,
+        side,
+        organizationId,
+        registry,
+        dispatcher,
+        log,
+        telemetry: telemetryInstance,
+        isDraining: () => draining,
+      });
     });
   });
 
@@ -399,6 +441,18 @@ export function buildRtmServer(
         subscriber.quit().catch(() => subscriber.disconnect()),
         publisher.quit().catch(() => publisher.disconnect()),
         db.$disconnect(),
+        // A plain `shutdown()` would discard whatever the periodic reader has
+        // not exported yet — and the disconnect reason this drain itself just
+        // produced for every socket above (`server_shutdown`) is exactly that:
+        // recorded a moment ago, never yet flushed. Flushing first is what
+        // lets that count actually reach the exporter instead of only ever
+        // existing in memory the process is about to leave.
+        telemetryInstance
+          ? telemetryInstance
+              .flushMetrics()
+              .catch(() => {})
+              .then(() => telemetryInstance.shutdown())
+          : Promise.resolve(),
       ]);
     },
   };
@@ -585,9 +639,25 @@ function attach(params: {
   registry: ConnectionRegistry;
   dispatcher: Dispatcher;
   log: Logger;
+  telemetry: Telemetry | null;
+  /** Read at close time, not captured once — the drain can start mid-connection. */
+  isDraining: () => boolean;
 }): void {
-  const { ws, side, organizationId, registry, dispatcher, log } = params;
+  const { ws, side, organizationId, registry, dispatcher, log, telemetry, isDraining } = params;
   const connection = registry.add({ ws, side, organizationId });
+
+  // Set when `ws` itself detects a framing problem (oversized payload, bad
+  // opcode, invalid UTF-8, …) — its own errors all carry a `WS_ERR_*` code
+  // (`ws/lib/receiver.js#createError`). This has to be read here rather than
+  // from the close code below: a self-detected error already leaves the
+  // receiver in an errored state, so `websocket.close()` tears the socket
+  // down immediately instead of waiting out the normal two-way handshake —
+  // which means the *local* close code comes back as the generic 1006 ("no
+  // status received"), not the specific violation code that was actually
+  // sent to the peer. `classifyDisconnectReason`'s code-based check still
+  // covers the other, legitimate case: a remote peer closing on its own with
+  // one of these codes, which *does* complete a normal handshake.
+  let protocolViolation = false;
 
   // An unauthenticated socket is closed after the login window.
   const loginTimer = setTimeout(() => {
@@ -650,13 +720,22 @@ function attach(params: {
       });
   });
 
-  ws.on('close', () => {
+  ws.on('close', (code) => {
     clearTimeout(loginTimer);
     clearInterval(idleTimer);
     registry.remove(connection.id);
+    telemetry?.instruments.disconnects.add(1, {
+      reason: protocolViolation
+        ? 'protocol_violation'
+        : classifyDisconnectReason(code, isDraining()),
+    });
   });
 
   ws.on('error', (error) => {
+    if (typeof (error as NodeJS.ErrnoException).code === 'string') {
+      protocolViolation =
+        protocolViolation || (error as NodeJS.ErrnoException).code!.startsWith('WS_ERR_');
+    }
     log.warn({ err: error, connection_id: connection.id, side }, 'socket error');
   });
 }

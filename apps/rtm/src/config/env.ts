@@ -12,6 +12,7 @@
  */
 import { z } from 'zod';
 import { DEFAULT_REGION, REGIONS } from '@nexa/types';
+import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 
 /**
  * Same shape as the API's `secret()`: a minimum length and a refusal of the
@@ -99,6 +100,21 @@ const envSchema = z.object({
   SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(0).max(120_000).optional(),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
+
+  /**
+   * OpenTelemetry metrics (NFR-M5 · M-OTEL-b). Same key, same "follows the
+   * environment unless told otherwise" default as the API's
+   * (`apps/api/src/config/env.ts`) — one variable, two processes, so pointing
+   * the stack at a real collector does not mean forgetting the gateway half.
+   */
+  OTEL_ENABLED: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  /** Which exporter carries the three RTM metrics once `OTEL_ENABLED` is on — see `telemetry.ts`. */
+  OTEL_EXPORTER: z.enum(OTEL_EXPORTERS).default('console'),
+  /** The collector `OTEL_EXPORTER=otlp` sends to — same key the API reads. */
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
 });
 
 /**
@@ -142,6 +158,12 @@ export type RtmEnv = z.infer<typeof envSchema> & {
   JWT_SIGNING_KEY_CUSTOMER: string;
   /** Resolved shutdown drain window in milliseconds (M-OPS-b). */
   shutdownDrainMs: number;
+  /**
+   * Resolved telemetry switch (M-OTEL-b). Same computation as the API's
+   * `otelEnabled` — on by default everywhere except under test, so the 106+
+   * existing rtm suites do not pay for a stack they never asked for.
+   */
+  otelEnabled: boolean;
   /**
    * Resolved connection ceiling (M-LOAD-CAP). `null` is "no ceiling", spelled
    * as a value rather than as `undefined` so a call site that forgets to handle
@@ -193,5 +215,6 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): RtmEnv {
     JWT_SIGNING_KEY_CUSTOMER: env.CUSTOMER_TOKEN_SECRET,
     shutdownDrainMs: env.SHUTDOWN_DRAIN_MS ?? (env.NODE_ENV === 'production' ? 5_000 : 0),
     maxConnections: env.RTM_MAX_CONNECTIONS ?? null,
+    otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',
   };
 }

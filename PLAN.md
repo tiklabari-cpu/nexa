@@ -3307,7 +3307,7 @@ Faz-0 kapanışında doğrulanacak olanlar:
 | M-OPS | Ops dikişleri: live/ready ayrımı · zarif drenaj · log profili (**türetilmiş**: NFR-R1/R2 · NFR-M5 · Faz-6 tm 160) | ✅ → KM-OPS |
 | M-LOAD | Yük ayağı + NFR-P1/P2/P8 ölçümü (**türetilmiş**: NFR-M4’ün beşinci katmanı · Faz-6 tm 161) | ✅ → KM-LOAD |
 | M-SCALE | Ölçek dikişleri: iki-pod · havuz · read-replica (**türetilmiş**: NFR-R1/R4 · NFR-P7 · Faz-6 tm 162) | ✅ → KM-SCALE |
-| M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ◐ → KM-OTEL |
+| M-OTEL | Telemetri exporter dikişi + RTM metrikleri (**türetilmiş**: NFR-M5 · Faz-6 tm 163) | ✅ → KM-OTEL |
 | M-IAC | Dağıtım manifestleri, deploy YOK (**türetilmiş**: NFR-R1 · MASTER-PROMPT teslim paketi · Faz-6 tm 164) | ⬜ |
 | M-BACKUP | Yedekleme + geri yükleme provası (**türetilmiş**: NFR-R5 · NFR-C8 · Faz-6 tm 165) | ⬜ |
 | M-RUNBOOK | Production checklist + olay runbook’ları (**türetilmiş**: NFR-M · Faz-6 tm 166) | ⬜ |
@@ -6951,6 +6951,53 @@ _(Faz-6 · tm 162 — açıldı 2026-08-24, henüz kanıt yok. Alt-görevler kap
   provider-selection tablosuna eklenen satır · tm 163.1. **Eksik (M-OTEL-b, tm 163.2):** RTM
   telemetrisi — eşzamanlı bağlantı sayısı · fan-out gecikmesi · kopma nedeni metrikleri; o kadar
   bitmeden M-OTEL satırı ✅ olmaz.
+- ✅ **M-OTEL-b — RTM'e api'yle AYNI desende kendi `Telemetry`'si eklendi (globallere kayıt yok);
+  üç metrik gerçek soket ve gerçek drenajla kanıtlandı (2026-08-29):** Yeni
+  `apps/rtm/src/telemetry/telemetry.ts` — `OTEL_EXPORTERS` sözlüğü + `createTelemetry` api'nin
+  birebir deseni, ama yalnız metrik (span/tracer YOK: her RTM log satırı zaten `request_id`
+  taşıyor — M-OPS-c/KM-OPS — bir soket-ömürlü span'in bağlayacağı bir istek sınırı yok). Üç
+  enstrüman: **(1)** `rtm.connections.active` — `ObservableGauge`, `server.ts` `registry.size`'ı
+  okuyan bir callback kaydediyor (pull-based, iki export arası maliyetsiz). **(2)**
+  `rtm.fanout.delay` — histogram, saniye; `fanout.ts#handle` her başarılı `connection.ws.send()`
+  sonrası `(Date.now() - envelope.at) / 1000` kaydediyor (`envelope.at` zaten
+  `realtime-bus.ts`ta "used only for observability" diye belgeliydi — NFR-P1'in p99 < 500ms
+  bütçesi bu metrik). **(3)** `rtm.connections.closed` — counter, `reason` etiketli
+  (`classifyDisconnectReason(code, draining)`): `identity_timeout` (4401) · `idle_timeout` (4408)
+  · `server_shutdown` (drenaj — kod değil `draining` bayrağı karar veriyor, çünkü 1001 bir
+  istemcinin KENDİ isteğiyle de gelebilir) · `protocol_violation` · `normal` (kalan). **BİLİNÇLİ
+  OLARAK YOK: `rate_limit` etiketi** — `dispatcher.ts#withinRateLimit` TASARIM GEREĞİ kapatmıyor,
+  kısıtlıyor ("dropping the connection would cost the agent their live conversation"); kapatan
+  bir yol yokken o etiketi eklemek ölü/hiç tetiklenmeyen bir dal olurdu. **İki gerçek tuzak
+  ÖLÇÜLEREK bulundu (ikisi de entegrasyon testiyle önce KIRMIZI gösterildi):** (a) `ws`nin kendi
+  algıladığı bir çerçeveleme ihlalinde (`maxPayload` aşımı) YEREL kapanma kodu 1009 DEĞİL 1006
+  ("no status received") geliyor — alıcı zaten hata durumundayken `websocket.close()` karşı
+  tarafın yankısını beklemeden soketi hemen sonlandırıyor; 1009 yalnız UZAK uca gidiyor. Çözüm:
+  `attach()` artık `ws.on('error', ...)`teki `error.code`nin (`ws`nin `WS_ERR_*` öneki)
+  kendisini bir `protocolViolation` bayrağı olarak tutuyor ve kapanışta ÖNCELİKLİ okunuyor —
+  yalnız koda güvenmek testi sessizce `normal`e düşürüyordu. (b) `close()`, `telemetryInstance
+  .shutdown()`u ÖNCESİNDE bir `flushMetrics()` olmadan çağırıyordu — `PeriodicExportingMetricReader
+  .shutdown()` kendiliğinden son bir export YAPMIYOR, yani drenajın ürettiği EN İLGİNÇ örnek
+  (`server_shutdown`) hiçbir zaman exporter'a ulaşmıyordu; `close()` artık kapatmadan önce flush
+  ediyor. **Test disiplini:** `identity_timeout`/`idle_timeout` gerçek 30 sn `RTM_LIMITS`
+  beklemesi ister — entegrasyon süitine bindirilmedi, `classifyDisconnectReason` birim testinde
+  doğrudan sabitlendi; kalan üçü (`normal`/`protocol_violation`/`server_shutdown`) + iki metrik
+  gerçek `startRtm` + gerçek soket + in-memory exporter'la kanıtlandı. **rtm testleri 145 → 168**
+  (+23: birim 12 + entegrasyon 6 + `env.test.ts` OTEL 5), koşu süresi belirgin artmadı (§1
+  `pnpm -w test` turu ~60 sn, önceki turlarla aynı mertebede). Tam kapı: `typecheck` 13/13 ·
+  `lint` 10/10 · `format:check` · `build` 8/8 · `db:check-drift` ("no drift", migration/kontrat
+  dokunulmadı) · `test` (`turbo --force --filter=!@nexa/e2e --filter=!@nexa/api` 11/11 + `@nexa/api
+  test:unit` 69/1169) · `test:integration` (`@nexa/api` 3 shard 37+37+36 dosya = 1069+920+679 =
+  **2668/2668**, değişmedi — bu görev api integration'a dokunmadı) · `pnpm -w test:e2e`
+  **210/210** (12.3 dk, ~85 `kanit` PNG'si koşu gürültüsüyle yeniden üretildi — tm 172/162.1
+  emsali, ürün kodu e2e akışlarında davranış değiştirmedi). — `apps/rtm/src/telemetry/telemetry.ts`
+  (yeni) + `telemetry.test.ts` (yeni, 12) · `apps/rtm/src/config/env.ts` (`OTEL_ENABLED` ·
+  `OTEL_EXPORTER` · `OTEL_EXPORTER_OTLP_ENDPOINT` · `otelEnabled` — aynı env anahtarı, 163.1'in
+  dikişini kullanıyor) + `env.test.ts` (+5) · `apps/rtm/src/server.ts` (telemetri kurulumu,
+  gauge callback, `attach()`e `telemetry`/`isDraining`, `protocolViolation` bayrağı, `close()`
+  flush-then-shutdown) · `apps/rtm/src/fanout.ts` (`telemetry` opsiyonel ctor param, delay kaydı)
+  · `apps/rtm/test/helpers/rtm-harness.ts` (`startRtm` 3. parametre) · test
+  `apps/rtm/test/integration/telemetry.test.ts` (yeni, 6) · `apps/rtm/package.json` (6 OTel
+  bağımlılığı, api ile aynı sürümler) · tm 163.2.
 
 #### KM-IAC — M-IAC · Dağıtım manifestleri (deploy yok)
 

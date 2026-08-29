@@ -9,6 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { REGIONS } from '@nexa/types';
+import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 import { SECRET_KEYS, parseEnv } from './env.js';
 
 const BASE: NodeJS.ProcessEnv = {
@@ -87,6 +88,49 @@ describe('RTM_MAX_CONNECTIONS', () => {
       CUSTOMER_TOKEN_SECRET: 'customer-0123456789abcdef0123456789abcdef',
     });
     expect(env.maxConnections).toBeNull();
+  });
+});
+
+/**
+ * `OTEL_EXPORTER` (M-OTEL-b) — same vocabulary as the API's
+ * (`apps/api/src/config/env.test.ts`'s `provider selection` suite), read from
+ * the factory rather than duplicated as a literal for the reason M-PROV-a
+ * exists: a value this schema accepted and no factory implemented would be
+ * exactly the drift that pattern closes.
+ */
+describe('OTEL_EXPORTER', () => {
+  it('accepts every value its factory implements', () => {
+    for (const value of OTEL_EXPORTERS) {
+      expect(parseEnv({ ...BASE, OTEL_EXPORTER: value }).OTEL_EXPORTER).toBe(value);
+    }
+  });
+
+  it('defaults to console — the same default as the API', () => {
+    expect(parseEnv(BASE).OTEL_EXPORTER).toBe('console');
+  });
+
+  it('refuses a value its factory does not implement', () => {
+    expect(() => parseEnv({ ...BASE, OTEL_EXPORTER: 'datadog' })).toThrow(/OTEL_EXPORTER/);
+  });
+});
+
+/**
+ * `otelEnabled` (M-OTEL-b). Same "follows the environment unless told
+ * otherwise" resolution as the API's `env.otelEnabled` — off under test so
+ * the rtm suites (163 tests as of this key existing) do not pay for a stack
+ * none of them asked for.
+ */
+describe('otelEnabled', () => {
+  it('is off under test and on everywhere else, unless overridden', () => {
+    expect(parseEnv(BASE).otelEnabled).toBe(false);
+    expect(parseEnv({ ...BASE, NODE_ENV: 'development' }).otelEnabled).toBe(true);
+  });
+
+  it('OTEL_ENABLED overrides the environment-following default in either direction', () => {
+    expect(parseEnv({ ...BASE, OTEL_ENABLED: 'true' }).otelEnabled).toBe(true);
+    expect(parseEnv({ ...BASE, NODE_ENV: 'development', OTEL_ENABLED: 'false' }).otelEnabled).toBe(
+      false,
+    );
   });
 });
 

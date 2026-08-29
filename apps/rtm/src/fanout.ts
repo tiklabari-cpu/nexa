@@ -15,6 +15,7 @@ import type { Logger } from 'pino';
 import { isBusEnvelope, licenseChannel, type BusEnvelope } from '@nexa/types';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import { encodePush } from './protocol.js';
+import type { Telemetry } from './telemetry/telemetry.js';
 
 export class Fanout {
   #subscribedLicenses = new Set<string>();
@@ -23,6 +24,8 @@ export class Fanout {
     private readonly subscriber: Redis,
     private readonly registry: ConnectionRegistry,
     private readonly log: Logger,
+    /** Null when telemetry is off (NODE_ENV=test default) — every call below is then a no-op. */
+    private readonly telemetry: Telemetry | null = null,
   ) {
     this.subscriber.on('message', (channel, message) => {
       this.#handle(channel, message);
@@ -72,6 +75,15 @@ export class Fanout {
 
       try {
         connection.ws.send(frame);
+        // NFR-P1's p99 < 500ms budget is measured against this: the gap
+        // between the API deciding something happened (`envelope.at`) and
+        // this gateway actually handing it to the socket. Recorded per
+        // delivered connection, once per successful send, matching what the
+        // metric name promises rather than once per envelope regardless of
+        // whether anyone on this node was reachable.
+        this.telemetry?.instruments.fanoutDelay.record((Date.now() - envelope.at) / 1000, {
+          action: envelope.action,
+        });
       } catch (error) {
         this.log.debug({ err: error, connection_id: connection.id }, 'push delivery failed');
       }

@@ -100,6 +100,26 @@ export const envSchema = z.object({
    * this is a deployment default, not a way to override an explicit one.
    */
   DATABASE_POOL_SIZE: z.coerce.number().int().positive().optional(),
+  /**
+   * Optional read replica for the heavy, read-only report path
+   * (M-SCALE-c · NFR-P7 · NFR-R4). Unset — the normal case, and every
+   * deployment in this repo — reads fall back to the primary and behaviour is
+   * byte-for-byte what it has always been.
+   *
+   * Two things it is not. It is not a general read/write split: only the
+   * surfaces named in `plugins/database.ts` route here, and everything that
+   * has to read its own writes (billing counters, ADR-09's `ai_resolutions`,
+   * every mutation path) stays on the primary, because a replica is behind by
+   * an amount nobody controls.
+   *
+   * And it is not an escape from row level security. This connection must use
+   * the same non-owner role as {@link Env.runtimeDatabaseUrl}: PostgreSQL
+   * exempts table owners from RLS, so a replica URL carrying the owner's
+   * credentials would answer report queries with every tenant's rows and look
+   * exactly like a working replica while doing it. `parseEnv` refuses that
+   * combination outright rather than trusting a deployment to notice.
+   */
+  DATABASE_REPLICA_URL: z.string().url().optional(),
   REDIS_URL: z.string().url(),
 
   API_PORT: z.coerce.number().int().positive().default(4000),
@@ -498,6 +518,11 @@ export const envSchema = z.object({
 export type Env = z.infer<typeof envSchema> & {
   /** Connection string the request path should use — app role when available. */
   runtimeDatabaseUrl: string;
+  /**
+   * Connection string the read-only report path should use, or undefined when
+   * no replica is configured and those reads stay on the primary (M-SCALE-c).
+   */
+  replicaDatabaseUrl: string | undefined;
   /** `WEB_ORIGIN` parsed and normalised — the CORS allowlist production uses. */
   webOrigins: string[];
   isProduction: boolean;
@@ -580,6 +605,32 @@ function withPoolSize(url: string, poolSize: number | undefined): string {
   return parsed.toString();
 }
 
+/**
+ * The replica may not be a way to reconnect as the table owner (M-SCALE-c).
+ *
+ * The failure this refuses is silent by construction. PostgreSQL exempts table
+ * owners from row level security, so a `DATABASE_REPLICA_URL` carrying the
+ * owner's credentials produces report responses that are *bigger* — every
+ * tenant's rows, through an endpoint whose only isolation is RLS — and nothing
+ * anywhere errors, logs or looks unusual. It is the same class of mistake
+ * `DATABASE_APP_URL` exists to prevent, arriving through a second door.
+ *
+ * The comparison is against the primary rather than against a hard-coded
+ * `nexa_app`: a replica connecting as some third read-only role is a perfectly
+ * reasonable deployment, and this should not forbid it. What it forbids is a
+ * replica that is *more* privileged than the connection the request path
+ * already uses. Which is also why a deployment with no `DATABASE_APP_URL` at
+ * all (development, the test suites) is exempt: there the primary is already
+ * the owner, RLS is already off, and a replica on the same credentials takes
+ * nothing away that was there to lose.
+ */
+function replicaEscalatesPrivilege(env: z.infer<typeof envSchema>): boolean {
+  if (!env.DATABASE_REPLICA_URL || !env.DATABASE_APP_URL) return false;
+  const owner = new URL(env.DATABASE_URL).username;
+  if (new URL(env.DATABASE_APP_URL).username === owner) return false;
+  return new URL(env.DATABASE_REPLICA_URL).username === owner;
+}
+
 export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const result = envSchema.safeParse(source);
   if (!result.success) {
@@ -587,6 +638,17 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     throw new Error(`Invalid environment:\n${lines.join('\n')}`);
   }
   const env = result.data;
+
+  // Checked in every environment, unlike the production list below: this is not
+  // a deployment default someone might reasonably want to override locally, it
+  // is a configuration that turns tenant isolation off on the report path. A
+  // developer who wires it up that way should learn at boot, not from a support
+  // ticket.
+  if (replicaEscalatesPrivilege(env)) {
+    throw new Error(
+      "Invalid environment:\n  DATABASE_REPLICA_URL connects as the table owner while DATABASE_APP_URL does not: Postgres exempts owners from row level security, so report queries on the replica would return every tenant's rows.",
+    );
+  }
 
   if (env.NODE_ENV === 'production') {
     const problems = productionProblems(env);
@@ -603,6 +665,14 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
       env.DATABASE_APP_URL ?? env.DATABASE_URL,
       env.DATABASE_POOL_SIZE,
     ),
+    // The same pool size as the primary, for the same reason it exists: the
+    // replica's connections are drawn from a `max_connections` ceiling too, and
+    // a second pool that sized itself from the CPU count would put the budget in
+    // README's "Connection pool budget" table quietly back out of reach.
+    replicaDatabaseUrl:
+      env.DATABASE_REPLICA_URL === undefined
+        ? undefined
+        : withPoolSize(env.DATABASE_REPLICA_URL, env.DATABASE_POOL_SIZE),
     // Non-null by construction: the schema's `refine` above already refused
     // every value this returns `null` for, so the boot is over before here.
     webOrigins: parseOriginList(env.WEB_ORIGIN) ?? [],

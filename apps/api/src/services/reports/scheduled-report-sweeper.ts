@@ -41,7 +41,7 @@
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { ScheduledExportFrequency } from '@nexa/types';
-import { type TenantContext, withTenant } from '../../lib/tenant.js';
+import { type TenantContext, withTenant, withTenantRead } from '../../lib/tenant.js';
 import { exportFilename, reportGroup, toCsv } from '../../routes/reports-export.js';
 import type { Mailer } from '../mail/mailer.js';
 import { buildGroupCsv } from './report-csv.js';
@@ -108,10 +108,25 @@ interface DefinitionRow {
 
 export class ScheduledReportSweeper {
   readonly #db: PrismaClient;
+  readonly #readDb: PrismaClient;
   readonly #mailer: Mailer;
 
-  constructor(db: PrismaClient, mailer: Mailer) {
+  /**
+   * `readDb` is the read path (M-SCALE-c): the replica when one is configured,
+   * the primary otherwise, and it defaults to `db` so a caller with no opinion
+   * — every test in this repo, both CLI entry points — behaves as before.
+   *
+   * Only the CSV is built there. The claim and the resolution stay on `db`, and
+   * that split is guard 2 above, not a preference: the whole point of INSERTing
+   * the run row before the mail is that the database serialises the race, and a
+   * claim written to the primary but *read back* from a replica that has not
+   * caught up would let two sweeps both believe they won. Nothing here reads the
+   * claim back — the constraint violation is the answer — but a future guard
+   * that does must not find it on a lagging connection.
+   */
+  constructor(db: PrismaClient, mailer: Mailer, readDb: PrismaClient = db) {
     this.#db = db;
+    this.#readDb = readDb;
     this.#mailer = mailer;
   }
 
@@ -241,7 +256,7 @@ export class ScheduledReportSweeper {
     let recipientCount = 0;
     let rowCount = 0;
     try {
-      const table = await withTenant(this.#db, context, (tx) =>
+      const table = await withTenantRead(this.#readDb, context, (tx) =>
         buildGroupCsv(tx, context.licenseId, definition.groupId, period.from, period.to),
       );
       rowCount = table.rows.length;

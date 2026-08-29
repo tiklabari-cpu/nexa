@@ -1418,6 +1418,27 @@ export async function buildStaffingForecastReport(
   };
 }
 
+/**
+ * Which of these routes read from the replica, and which may not (M-SCALE-c).
+ *
+ * Every `GET /reports/*` group, the export and the access review go through
+ * `request.withTenantRead` — `app.dbRead`, which is the replica when
+ * `DATABASE_REPLICA_URL` is configured and the primary when it is not, inside a
+ * `READ ONLY` transaction. These are the queries NFR-P7 is about: full-window
+ * aggregations over `chats`/`threads`/`events` that a single caller can point
+ * at a quarter of history, run on a connection pool the live inbox is also
+ * competing for.
+ *
+ * The two `/billing/subscription` handlers stay on `withTenant`, and that is the
+ * line worth stating rather than leaving to be inferred. A replica is behind the
+ * primary by an amount no application controls; for a chat-volume chart that is
+ * a cosmetic staleness, but the subscription view reads the metering counters
+ * ADR-09 bills from, and the PATCH writes. A seat count or an `ai_resolutions`
+ * total read a few seconds behind its own write is not a slightly-old figure —
+ * it is a wrong invoice, and a caller who just changed their plan seeing the old
+ * one is a support ticket. Same reason nothing else in this repo's write paths
+ * is on the read seam.
+ */
 export default async function reportRoutes(
   app: FastifyInstance,
   options: { env: Env },
@@ -1431,7 +1452,7 @@ export default async function reportRoutes(
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) =>
+    const body = await request.withTenantRead((tx) =>
       buildOverviewReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
@@ -1444,7 +1465,7 @@ export default async function reportRoutes(
       const { from, to, baseline } = resolveReportQuery(request.query);
       const tenant = request.tenant();
 
-      const body = await request.withTenant((tx) =>
+      const body = await request.withTenantRead((tx) =>
         buildBreakdownReport(tx, tenant.licenseId, from, to, baseline),
       );
       return reply.send(body);
@@ -1455,7 +1476,7 @@ export default async function reportRoutes(
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) =>
+    const body = await request.withTenantRead((tx) =>
       buildAiAgentReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
@@ -1465,7 +1486,7 @@ export default async function reportRoutes(
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) =>
+    const body = await request.withTenantRead((tx) =>
       buildReviewsReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
@@ -1475,7 +1496,7 @@ export default async function reportRoutes(
   // and trend. Clustering is deterministic and on-the-fly (@nexa/ai-mock, no real
   // LLM); below the floor the report is an honest "not enough conversations yet"
   // — a 200 state, not an error, so no new ApiError type. Same reports_read +
-  // withTenant surface as the other tabs.
+  // withTenantRead surface as the other tabs.
   app.get('/reports/topics', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
@@ -1486,7 +1507,7 @@ export default async function reportRoutes(
     // window arithmetic cannot drift from theirs.
     const window = benchmarkWindow(from, to, baseline);
 
-    const report = await request.withTenant((tx) =>
+    const report = await request.withTenantRead((tx) =>
       buildTopicsReport(tx, tenant.licenseId, from, to, window.from, window.to),
     );
 
@@ -1511,12 +1532,12 @@ export default async function reportRoutes(
 
   // Cases (FR-MOD-07.7, v2 payload): the asynchronous half of the inbox
   // (tickets, FR-MOD-02.6) counted by day, current status and queue priority.
-  // Same reports_read + withTenant surface as the other tabs.
+  // Same reports_read + withTenantRead surface as the other tabs.
   app.get('/reports/cases', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) =>
+    const body = await request.withTenantRead((tx) =>
       buildCasesReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
@@ -1526,12 +1547,12 @@ export default async function reportRoutes(
   // UTC day they first touched this license. The count is license-bound through
   // a chat/ticket join, never the organization-wide is_lead total (see
   // buildLeadsReport / leadFirstTouch) — the isolation core of this report.
-  // Same reports_read + withTenant surface as the other tabs.
+  // Same reports_read + withTenantRead surface as the other tabs.
   app.get('/reports/leads', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) =>
+    const body = await request.withTenantRead((tx) =>
       buildLeadsReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
@@ -1540,7 +1561,7 @@ export default async function reportRoutes(
   // Team performance (FR-MOD-07.7, v2 payload): the Breakdown tab's by-agent
   // chat split, extended per agent with response times, CSAT and transfers
   // (see buildTeamPerformanceReport / teamPerformanceByAgent). Same
-  // reports_read + withTenant surface as the other tabs.
+  // reports_read + withTenantRead surface as the other tabs.
   app.get(
     '/reports/team-performance',
     { config: { scopes: ['reports_read'] } },
@@ -1548,7 +1569,7 @@ export default async function reportRoutes(
       const { from, to, baseline } = resolveReportQuery(request.query);
       const tenant = request.tenant();
 
-      const body = await request.withTenant((tx) =>
+      const body = await request.withTenantRead((tx) =>
         buildTeamPerformanceReport(tx, tenant.licenseId, from, to, baseline),
       );
       return reply.send(body);
@@ -1557,14 +1578,14 @@ export default async function reportRoutes(
 
   // Sales (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the honest
   // "not configured" skeleton until the Sales tracker wires a real source (see
-  // buildSalesReport). Same reports_read + withTenant surface as the other
+  // buildSalesReport). Same reports_read + withTenantRead surface as the other
   // tabs, so the endpoint's permission and range handling never need to change
   // once 13.5 fills the figures in.
   app.get('/reports/sales', { config: { scopes: ['reports_read'] } }, async (request, reply) => {
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) =>
+    const body = await request.withTenantRead((tx) =>
       buildSalesReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
@@ -1581,7 +1602,7 @@ export default async function reportRoutes(
     const { from, to, baseline } = resolveReportQuery(request.query);
     const tenant = request.tenant();
 
-    const body = await request.withTenant((tx) =>
+    const body = await request.withTenantRead((tx) =>
       buildGoalsReport(tx, tenant.licenseId, from, to, baseline),
     );
     return reply.send(body);
@@ -1590,7 +1611,7 @@ export default async function reportRoutes(
   // Staffing forecast (PRD §5.3-Vardiya): required / scheduled / rostered agents
   // per UTC weekday-hour, derived from historical volume, the presence event log
   // and the saved work schedules (see buildStaffingForecastReport). Same
-  // reports_read + withTenant surface as the other report tabs — no new scope:
+  // reports_read + withTenantRead surface as the other report tabs — no new scope:
   // this is aggregate reporting over data `reports_read` already covers, and a
   // scope of its own would let a token read staffing without being able to read
   // the volume every figure here is derived from.
@@ -1609,7 +1630,7 @@ export default async function reportRoutes(
       assertForecastRange(from, to);
       const tenant = request.tenant();
 
-      const body = await request.withTenant((tx) =>
+      const body = await request.withTenantRead((tx) =>
         buildStaffingForecastReport(tx, tenant.licenseId, from, to),
       );
       return reply.send(body);
@@ -1670,7 +1691,7 @@ export default async function reportRoutes(
     }
 
     const tenant = request.tenant();
-    const table = await request.withTenant((tx) =>
+    const table = await request.withTenantRead((tx) =>
       buildGroupCsv(tx, tenant.licenseId, group.id, from, to, parsed.data.baseline),
     );
 
@@ -1740,7 +1761,7 @@ export default async function reportRoutes(
       // three times would let a review generated across a second boundary
       // disagree with its own filename.
       const generatedAt = new Date();
-      const report = await request.withTenant((tx) => buildAccessReview(tx, generatedAt));
+      const report = await request.withTenantRead((tx) => buildAccessReview(tx, generatedAt));
 
       // An access review is a point-in-time snapshot of who holds the keys —
       // the last thing that should be served from a shared cache or sniffed

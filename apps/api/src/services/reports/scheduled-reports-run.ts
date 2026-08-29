@@ -162,6 +162,15 @@ async function main(): Promise<void> {
   const now = new Date();
 
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
+  // The CSV this job builds is the same full-window aggregation the export
+  // endpoint runs (M-SCALE-c), so it belongs on the replica for the same reason
+  // — more so, in fact: a sweep touches every workspace in one pass. Null when
+  // no replica is configured, and `ScheduledReportSweeper` then reads the
+  // primary exactly as it always has.
+  const readDb =
+    env.replicaDatabaseUrl === undefined
+      ? null
+      : new PrismaClient({ datasourceUrl: env.replicaDatabaseUrl });
   try {
     if (dryRun) {
       const report = await preview(db, now);
@@ -177,6 +186,7 @@ async function main(): Promise<void> {
     const report = await new ScheduledReportSweeper(
       db,
       createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+      readDb ?? db,
     ).run({ now });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     const { totals } = report;
@@ -186,6 +196,7 @@ async function main(): Promise<void> {
     );
   } finally {
     await db.$disconnect();
+    if (readDb) await readDb.$disconnect();
   }
 }
 

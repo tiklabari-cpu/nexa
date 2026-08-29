@@ -17,7 +17,13 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { costsTokenResolution, readCredential } from '../lib/credential.js';
 import { decideIpAccess } from '../lib/ip-allowlist.js';
-import { UUID_RE, withTenant, type TenantClient, type TenantContext } from '../lib/tenant.js';
+import {
+  UUID_RE,
+  withTenant,
+  withTenantRead,
+  type TenantClient,
+  type TenantContext,
+} from '../lib/tenant.js';
 import { authFailureBucket } from './rate-limit.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
@@ -52,6 +58,19 @@ declare module 'fastify' {
     tenant: () => TenantContext;
     /** Run a query with this request's tenant context established. */
     withTenant: <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>;
+    /**
+     * The same, on the read path (M-SCALE-c): `app.dbRead` — the replica when
+     * one is configured, the primary otherwise — inside a `READ ONLY`
+     * transaction.
+     *
+     * Same tenant context and therefore the same RLS: the replica connects with
+     * the same non-owner role (`parseEnv` refuses anything else), so a report
+     * run through here sees exactly the rows the primary would show and no
+     * others. For surfaces that must read their own writes — anything billing
+     * touches, ADR-09's metering counters — use `withTenant`; a replica is
+     * behind by an amount nobody controls.
+     */
+    withTenantRead: <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>;
   }
 
   interface FastifyContextConfig {
@@ -107,6 +126,9 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   });
   app.decorateRequest('withTenant', function (this: FastifyRequest, fn) {
     return withTenant(app.db, this.tenant(), fn);
+  });
+  app.decorateRequest('withTenantRead', function (this: FastifyRequest, fn) {
+    return withTenantRead(app.dbRead, this.tenant(), fn);
   });
 
   /**

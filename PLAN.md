@@ -4071,6 +4071,157 @@ bağımlılıklar kardeş kimliğiyle. Öncelik: tm 150–153 `high` · 154–15
 | `M-SEC-e` | Faz-6 salt-okuma güvenlik denetimi (STRIDE): production konfig · proxy hop · nginx başlıkla… | M-SEC-e | `OPUS-MAX` | tm 159, 160, 162, 164 | V6-5 | 2 | tm 167 |
 | `GL-12 · F6-KAPAT` | Faz-6 §F.00 kapanış turu: §6C tablosu SAYILARAK + §F.1 in 10 maddesi tam sürüm + tam DoD ka… | GL-12 | `OPUS-MAX` | tm 159, 160, 161, 162, 163, 164, 165, 166, 167 | V6-5 | 2 | tm 168 |
 
+
+## 7C. Faz-7 (PRD uyum düzeltmesi) — atomik kırılım
+
+Kaynak: `prd-uyum-denetimi.md` — 24 ajanlı, iki turlu adversaryal denetim. 247 gereksinim
+maddesinin 93'ü TAM, 141'i KISMİ, 13'ü YOK çıktı; çürütme turu ilk turun 27 `TAM` verdictini
+düşürdü. Bu bölüm o denetimin eylem listesidir: **10 kalem · 40 iş kalemi**.
+
+Etiketler §5.1.1 matrisine göre: erişim kontrolü (takım üyeliği = kimin hangi sohbeti göreceği),
+teslimat garantisi, çok-pod depolama ve soket yaşam döngüsü `OPUS-MAX`; mekanik ekran ve
+sorgu işleri `SONNET-XHIGH`. **Güvenlik işi sonnet'e verilmedi** — §5.1.1'in "bu planın en
+pahalı hatası" dediği durum.
+
+**Kapsam dışı (sahip kararı, 2026-08-31):** KVKK/VERBIS ve Türkiye pazarına dair her şey ·
+tanıtım sayfası/blog · GDPR sözleşme metinleri (hukuki metin hazır değil) · görsel Workflow
+builder (ADR-14 v2) · masaüstü uygulaması. Denetimin 13 `YOK` maddesinin 9'u buradadır.
+
+#### 7C.1 · `M-TEAM` — Teams yazma yolları — `GET /groups` tek uçtu, sıfırdan açılan workspace yönlendiremiyordu (denetim K1) · tm 175 · `high` · dilim V7-1
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-TEAM-a` | BÖLÜNMEZ: grup CRUD uçlarını doğrula + tenant izolasyonu ve iki silme korumasının testi | `OPUS-MAX` | yok | 2 |
+| `M-TEAM-b` | Üyelik uçları: routing gerçekten değişiyor mu + priority tiers + audit | `OPUS-XHIGH` | M-TEAM-a | 1 |
+| `M-TEAM-c` | KABUL: signup ile açılan taze workspace yönlendirebiliyor | `OPUS-XHIGH` | M-TEAM-a, M-TEAM-b | 1 |
+| `M-TEAM-d` | Teams konsol ekranı: liste + CRUD + üye yönetimi + Priority dropdown | `SONNET-XHIGH` | M-TEAM-c | 1 |
+| `M-TEAM-e` | BÖLÜNMEZ: SCIM /Groups yazma — provizyon yolu konsoldan gevşek olamaz | `OPUS-MAX` | M-TEAM-b | 2 |
+
+#### 7C.1 · `M-CAMP` — Kampanya teslimatı — eşleşen ziyaretçiye yalnız bir `campaign_sends` satırı yazılıyor (denetim K2) · tm 176 · `high` · dilim V7-1
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-CAMP-a` | campaign_sends.delivered_at migration + teslimat sorgusuna indeks kararı | `SONNET-XHIGH` | yok | 1 |
+| `M-CAMP-b` | BÖLÜNMEZ: yoklama cevabına bekleyen kampanya + delivered_at damgası (teslimat garantisi) | `OPUS-MAX` | M-CAMP-a | 2 |
+| `M-CAMP-c` | Widget kampanya kartı — mevcut proaktif kart mekanizmasını yeniden kullan | `SONNET-XHIGH` | M-CAMP-b | 1 |
+| `M-CAMP-d` | engaged bayrağı gerçekten set edilsin + etkileşim tanımı | `SONNET-XHIGH` | M-CAMP-c | 1 |
+| `M-CAMP-e` | BÖLÜNMEZ: yeni ziyaretçi çalışan kampanyaları tetiklesin (sıcak yol + idempotanslık) | `OPUS-MAX` | M-CAMP-a | 2 |
+| `M-CAMP-f` | Kampanya durumu okuma anında yeniden değerlendirilsin | `OPUS-XHIGH` | M-CAMP-e | 1 |
+
+#### 7C.1 · `M-STORE` — Paylaşılan nesne deposu — yüklemeler pod-yerel diske gidiyor, HPA maxReplicas 4 (denetim D6) · tm 177 · `high` · dilim V7-1
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-STORE-a` | BÖLÜNMEZ: S3 uyumlu ObjectStore — güvenlik sınırları ve hata yolları | `OPUS-MAX` | yok | 2 |
+| `M-STORE-b` | MinIO servisi + bucket bootstrap + geliştirici talimatı (varsayılan local kalır) | `SONNET-XHIGH` | M-STORE-a | 1 |
+| `M-STORE-c` | Çok-pod ek doğrulaması: pod A yükler, pod B indirir | `OPUS-XHIGH` | M-STORE-b | 1 |
+| `M-STORE-d` | BÖLÜNMEZ: virüs taraması + imzalı URL güvenlik paritesi (local ↔ s3) | `OPUS-MAX` | M-STORE-b | 2 |
+
+#### 7C.1 · `M-RPT` — Rapor metrik doğruluğu — deflection ajan-ajan devirlerini AI devri sayıyor, fixture kör (denetim D7) · tm 178 · `high` · dilim V7-2
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-RPT-a` | transferCount reason filtresi + ikinci kopyanın tek yardımcıya indirilmesi | `SONNET-XHIGH` | yok | 1 |
+| `M-RPT-b` | skill_runs sayımını AI Agent`a kilitle (üç çağrı yeri) — önce varsayımı doğrula | `SONNET-XHIGH` | yok | 1 |
+| `M-RPT-c` | Kör fixture`ı düzelt + körlüğü KANITLA + diğer rapor fixture`larını tara | `OPUS-XHIGH` | M-RPT-a, M-RPT-b | 1 |
+
+#### 7C.1 · `M-COUNT` — Sunucu tarafı sayaç ve sıralama — "yüklenen pencere gerçek toplam sanılıyor" (denetim D3) · tm 179 · `high` · dilim V7-2
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-COUNT-a` | AI resolution sayacını sunucudan besle — toplam nereden gelecek kararı | `OPUS-XHIGH` | yok | 1 |
+| `M-COUNT-b` | Tickets sıralamasını sunucuya taşı — keyset imleciyle etkileşimi çöz | `OPUS-XHIGH` | yok | 1 |
+| `M-COUNT-c` | Tickets görünüm filtresi deep-link`lensin | `SONNET-XHIGH` | M-COUNT-b | 1 |
+| `M-COUNT-d` | Traffic sekme sayaçlarını sunucu toplamına bağla (sekme mantığına dokunma) | `SONNET-XHIGH` | M-COUNT-a | 1 |
+
+#### 7C.1 · `M-READY` — AI Agent readiness — operatör ters (`||` yerine `&&`) ve `active` bayrağı hiç okunmuyor (denetim D8) · tm 180 · `high` · dilim V7-2
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-READY-a` | Operatörü çevir + active bayrağını oku + testleri PRD kriterine göre yeniden yaz | `SONNET-XHIGH` | yok | 1 |
+
+#### 7C.1 · `M-UI` — Eksik konsol yüzeyleri — "API`de var, konsolda yok" deseni (denetim D2) · tm 181 · `medium` · dilim V7-3
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-UI-a` | Etiket grup kapsamı ekranı — ucun ölü kolon olmadığını da doğrula | `SONNET-XHIGH` | yok | 1 |
+| `M-UI-b` | Kişisel erişim jetonu (PAT) ekranı — kimlik bilgisi yüzeyi | `OPUS-XHIGH` | yok | 1 |
+| `M-UI-c` | Bilet yönlendirme kuralı: POST/DELETE uçları + ekran (fallback tekilliği) | `OPUS-XHIGH` | M-TEAM-d | 1 |
+| `M-UI-d` | BÖLÜNMEZ: bildirimleri AppShell`e taşı — soket yaşam döngüsü sahipliği | `OPUS-MAX` | yok | 2 |
+| `M-UI-e` | Denetim kaydı detayı: GET /audit-log/:id + genişletilebilir satır (gizlilik kararı) | `OPUS-XHIGH` | yok | 1 |
+| `M-UI-f` | Form kütüphanesi pilotu: Payment ve Add-website (PRD adıyla sayıyor) | `SONNET-XHIGH` | yok | 1 |
+| `M-UI-g` | Form kütüphanesi süpürmesi: kalan formların envanteri ve taşınması | `SONNET-MAX` | M-UI-f | 2 |
+| `M-UI-h` | AI Agent şablon rozetleri — tip ve veri var, render yok | `SONNET-XHIGH` | yok | 1 |
+| `M-UI-i` | Skill preview özet narrasyonu + editörün ilk testleri | `SONNET-XHIGH` | yok | 1 |
+| `M-UI-j` | Ajan bazlı AI performansı (şu an lisans geneli) | `SONNET-XHIGH` | yok | 1 |
+
+#### 7C.1 · `M-CO` — Şirket bilgileri — şemada, uçta ve konsolda hiç yok (denetim YOK listesi) · tm 182 · `medium` · dilim V7-3
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-CO-a` | Organization şema alanları + migration + GET/PATCH /settings/company | `SONNET-XHIGH` | yok | 1 |
+| `M-CO-b` | Ayarlar ekranı bölümü + saat dilimi tek doğruluk kaynağı kararı | `OPUS-XHIGH` | M-CO-a | 1 |
+
+#### 7C.1 · `M-CHOBS` — Kanal mesaj gözlemlenebilirliği — G1`in bıraktığı borç, `channel_messages` okunamıyor · tm 183 · `low` · dilim V7-3
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-CHOBS-a` | GET /channels/:type/messages — yeni yetkili uç, müşteri içeriği taşır | `OPUS-XHIGH` | yok | 1 |
+
+#### 7C.1 · `M-TRACE` — Kalite kapısı — "kabul kriterinin KENDİSİ test ediliyor mu" ölçülmüyor (denetim §2, §8) · tm 184 · `medium` · dilim V7-4
+
+| ID | Başlık | Etiket | Bağımlılık | Pen |
+| --- | --- | --- | --- | :-: |
+| `M-TRACE-a` | BÖLÜNMEZ: test↔gereksinim izlenebilirlik konvansiyonu (b ve c bunun üstüne kuruluyor) | `OPUS-MAX` | yok | 2 |
+| `M-TRACE-b` | Kapsama raporu script`i + sınırının açıkça belgelenmesi | `OPUS-XHIGH` | M-TRACE-a | 1 |
+| `M-TRACE-c` | Kapsama kapısını CI`a bağla + CONVENTIONS §1`i güncelle | `SONNET-XHIGH` | M-TRACE-b | 1 |
+| `M-TRACE-d` | EN SONA BIRAK: PLAN.md yanlış kapanışlarının taranması | `SONNET-MAX` | M-TRACE-b | 2 |
+
+### Faz 7 (PRD uyum) — düz tablo (Task Master aktarım kaynağı)
+
+| ID | Başlık | Kalem | PRD | Etiket | Bağımlılık | Dilim | Pen | tm |
+| --- | --- | --- | --- | --- | --- | --- | :-: | --- |
+| `M-TEAM-a` | BÖLÜNMEZ: grup CRUD uçlarını doğrula + tenant izolasyonu ve iki silme korumasının testi | M-TEAM | 04.5 | `OPUS-MAX` | yok | V7-1 | 2 | tm 175.1 |
+| `M-TEAM-b` | Üyelik uçları: routing gerçekten değişiyor mu + priority tiers + audit | M-TEAM | 04.5 | `OPUS-XHIGH` | M-TEAM-a | V7-1 | 1 | tm 175.2 |
+| `M-TEAM-c` | KABUL: signup ile açılan taze workspace yönlendirebiliyor | M-TEAM | 04.5 | `OPUS-XHIGH` | M-TEAM-a, M-TEAM-b | V7-1 | 1 | tm 175.3 |
+| `M-TEAM-d` | Teams konsol ekranı: liste + CRUD + üye yönetimi + Priority dropdown | M-TEAM | 04.5 | `SONNET-XHIGH` | M-TEAM-c | V7-1 | 1 | tm 175.4 |
+| `M-TEAM-e` | BÖLÜNMEZ: SCIM /Groups yazma — provizyon yolu konsoldan gevşek olamaz | M-TEAM | 04.5 | `OPUS-MAX` | M-TEAM-b | V7-1 | 2 | tm 175.5 |
+| `M-CAMP-a` | campaign_sends.delivered_at migration + teslimat sorgusuna indeks kararı | M-CAMP | 03.3.2 | `SONNET-XHIGH` | yok | V7-1 | 1 | tm 176.1 |
+| `M-CAMP-b` | BÖLÜNMEZ: yoklama cevabına bekleyen kampanya + delivered_at damgası (teslimat garantisi) | M-CAMP | 03.3.2 | `OPUS-MAX` | M-CAMP-a | V7-1 | 2 | tm 176.2 |
+| `M-CAMP-c` | Widget kampanya kartı — mevcut proaktif kart mekanizmasını yeniden kullan | M-CAMP | 03.3.2 | `SONNET-XHIGH` | M-CAMP-b | V7-1 | 1 | tm 176.3 |
+| `M-CAMP-d` | engaged bayrağı gerçekten set edilsin + etkileşim tanımı | M-CAMP | 03.3.2 | `SONNET-XHIGH` | M-CAMP-c | V7-1 | 1 | tm 176.4 |
+| `M-CAMP-e` | BÖLÜNMEZ: yeni ziyaretçi çalışan kampanyaları tetiklesin (sıcak yol + idempotanslık) | M-CAMP | 03.3.2 | `OPUS-MAX` | M-CAMP-a | V7-1 | 2 | tm 176.5 |
+| `M-CAMP-f` | Kampanya durumu okuma anında yeniden değerlendirilsin | M-CAMP | 03.3.2 | `OPUS-XHIGH` | M-CAMP-e | V7-1 | 1 | tm 176.6 |
+| `M-STORE-a` | BÖLÜNMEZ: S3 uyumlu ObjectStore — güvenlik sınırları ve hata yolları | M-STORE | NFR-R1 | `OPUS-MAX` | yok | V7-1 | 2 | tm 177.1 |
+| `M-STORE-b` | MinIO servisi + bucket bootstrap + geliştirici talimatı (varsayılan local kalır) | M-STORE | NFR-R1 | `SONNET-XHIGH` | M-STORE-a | V7-1 | 1 | tm 177.2 |
+| `M-STORE-c` | Çok-pod ek doğrulaması: pod A yükler, pod B indirir | M-STORE | NFR-R1 | `OPUS-XHIGH` | M-STORE-b | V7-1 | 1 | tm 177.3 |
+| `M-STORE-d` | BÖLÜNMEZ: virüs taraması + imzalı URL güvenlik paritesi (local ↔ s3) | M-STORE | NFR-R1 | `OPUS-MAX` | M-STORE-b | V7-1 | 2 | tm 177.4 |
+| `M-RPT-a` | transferCount reason filtresi + ikinci kopyanın tek yardımcıya indirilmesi | M-RPT | 07.4 | `SONNET-XHIGH` | yok | V7-2 | 1 | tm 178.1 |
+| `M-RPT-b` | skill_runs sayımını AI Agent`a kilitle (üç çağrı yeri) — önce varsayımı doğrula | M-RPT | 07.4 | `SONNET-XHIGH` | yok | V7-2 | 1 | tm 178.2 |
+| `M-RPT-c` | Kör fixture`ı düzelt + körlüğü KANITLA + diğer rapor fixture`larını tara | M-RPT | 07.4 | `OPUS-XHIGH` | M-RPT-a, M-RPT-b | V7-2 | 1 | tm 178.3 |
+| `M-COUNT-a` | AI resolution sayacını sunucudan besle — toplam nereden gelecek kararı | M-COUNT | 02.1.2, 02.7 | `OPUS-XHIGH` | yok | V7-2 | 1 | tm 179.1 |
+| `M-COUNT-b` | Tickets sıralamasını sunucuya taşı — keyset imleciyle etkileşimi çöz | M-COUNT | 02.1.2, 02.7 | `OPUS-XHIGH` | yok | V7-2 | 1 | tm 179.2 |
+| `M-COUNT-c` | Tickets görünüm filtresi deep-link`lensin | M-COUNT | 02.1.2, 02.7 | `SONNET-XHIGH` | M-COUNT-b | V7-2 | 1 | tm 179.3 |
+| `M-COUNT-d` | Traffic sekme sayaçlarını sunucu toplamına bağla (sekme mantığına dokunma) | M-COUNT | 02.1.2, 02.7 | `SONNET-XHIGH` | M-COUNT-a | V7-2 | 1 | tm 179.4 |
+| `M-READY-a` | Operatörü çevir + active bayrağını oku + testleri PRD kriterine göre yeniden yaz | M-READY | 06.1 | `SONNET-XHIGH` | yok | V7-2 | 1 | tm 180.1 |
+| `M-UI-a` | Etiket grup kapsamı ekranı — ucun ölü kolon olmadığını da doğrula | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `SONNET-XHIGH` | yok | V7-3 | 1 | tm 181.1 |
+| `M-UI-b` | Kişisel erişim jetonu (PAT) ekranı — kimlik bilgisi yüzeyi | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `OPUS-XHIGH` | yok | V7-3 | 1 | tm 181.2 |
+| `M-UI-c` | Bilet yönlendirme kuralı: POST/DELETE uçları + ekran (fallback tekilliği) | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `OPUS-XHIGH` | M-TEAM-d | V7-3 | 1 | tm 181.3 |
+| `M-UI-d` | BÖLÜNMEZ: bildirimleri AppShell`e taşı — soket yaşam döngüsü sahipliği | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `OPUS-MAX` | yok | V7-3 | 2 | tm 181.4 |
+| `M-UI-e` | Denetim kaydı detayı: GET /audit-log/:id + genişletilebilir satır (gizlilik kararı) | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `OPUS-XHIGH` | yok | V7-3 | 1 | tm 181.5 |
+| `M-UI-f` | Form kütüphanesi pilotu: Payment ve Add-website (PRD adıyla sayıyor) | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `SONNET-XHIGH` | yok | V7-3 | 1 | tm 181.6 |
+| `M-UI-g` | Form kütüphanesi süpürmesi: kalan formların envanteri ve taşınması | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `SONNET-MAX` | M-UI-f | V7-3 | 2 | tm 181.7 |
+| `M-UI-h` | AI Agent şablon rozetleri — tip ve veri var, render yok | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `SONNET-XHIGH` | yok | V7-3 | 1 | tm 181.8 |
+| `M-UI-i` | Skill preview özet narrasyonu + editörün ilk testleri | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `SONNET-XHIGH` | yok | V7-3 | 1 | tm 181.9 |
+| `M-UI-j` | Ajan bazlı AI performansı (şu an lisans geneli) | M-UI | 08.7.1, 08.6.2, 08.9.7, 13.8, EK-A.1, 05.2, 06.2.5, 04.2 | `SONNET-XHIGH` | yok | V7-3 | 1 | tm 181.10 |
+| `M-CO-a` | Organization şema alanları + migration + GET/PATCH /settings/company | M-CO | 08.3 | `SONNET-XHIGH` | yok | V7-3 | 1 | tm 182.1 |
+| `M-CO-b` | Ayarlar ekranı bölümü + saat dilimi tek doğruluk kaynağı kararı | M-CO | 08.3 | `OPUS-XHIGH` | M-CO-a | V7-3 | 1 | tm 182.2 |
+| `M-CHOBS-a` | GET /channels/:type/messages — yeni yetkili uç, müşteri içeriği taşır | M-CHOBS | 08.5.4 | `OPUS-XHIGH` | yok | V7-3 | 1 | tm 183.1 |
+| `M-TRACE-a` | BÖLÜNMEZ: test↔gereksinim izlenebilirlik konvansiyonu (b ve c bunun üstüne kuruluyor) | M-TRACE | EK-A | `OPUS-MAX` | yok | V7-4 | 2 | tm 184.1 |
+| `M-TRACE-b` | Kapsama raporu script`i + sınırının açıkça belgelenmesi | M-TRACE | EK-A | `OPUS-XHIGH` | M-TRACE-a | V7-4 | 1 | tm 184.2 |
+| `M-TRACE-c` | Kapsama kapısını CI`a bağla + CONVENTIONS §1`i güncelle | M-TRACE | EK-A | `SONNET-XHIGH` | M-TRACE-b | V7-4 | 1 | tm 184.3 |
+| `M-TRACE-d` | EN SONA BIRAK: PLAN.md yanlış kapanışlarının taranması | M-TRACE | EK-A | `SONNET-MAX` | M-TRACE-b | V7-4 | 2 | tm 184.4 |
+
 ---
 
 > Bu bölümden itibaren **tarihçedir**: tamamlanmış işin kaydı ve gerekçeleri.

@@ -8187,19 +8187,19 @@
       },
       {
         "id": "175",
-        "title": "G2.1 — Teams yazma uclari: WIP dalini dogrula + entegrasyon testleri yaz",
-        "description": "FR-MOD-04.5 (Must/MVP) yalniz OKUMA olarak vardi: `GET /groups` tek uctu, repoda `group.create`/`groupAgent.*` icin tek bir yazma cagrisi yoktu. Yonlendirme tumuyle `group_agents`e bagli oldugundan (ADR-08 adim 2) sifirdan acilan bir workspace hicbir sohbeti yonlendiremiyordu. PLAN.md:218 bu maddeyi \"✅ Dilim 8 · /groups\" diye kapatmisti. Uclar + signup tohumu `feat/g2-group-write-paths` dalinda YAZILI ama TESTSIZ; bu gorev onu dogrular, test yazar ve main e alir.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §5 K1 (kritik bulgu) · PRD `urun-gereksinim-dokumani-PRD.md` satır **536-551** (FR-MOD-04 tablosu, 04.5 satırı)\n\n**Model:** sonnet — kod yazılı, iş test yazmak ve doğrulamak.\n\n### DAL — yeni dal AÇMA, mevcut dalı kullan\n```bash\ngit fetch origin && git checkout feat/g2-group-write-paths\n```\nBu dalda `6ebc898` commit'i var: **wip(teams): group write endpoints, default team on signup — TESTS PENDING**. Typecheck yeşil, test YOK, konsol ekranı YOK.\n\n### DALDA HALİHAZIRDA NE VAR (doğrula, yeniden yazma)\n- `apps/api/src/routes/agents.ts` — `POST /groups`, `PATCH|DELETE /groups/:groupId`, `PUT|DELETE /groups/:groupId/agents/:agentId` + üstlerinde yardımcılar (`groupBody`, `groupPatchBody`, `membershipBody`, `parseGroupBody`, `parseGroupPatchBody`, `parseMembershipBody`, `groupIdParam`, `loadGroup`, `serialiseGroup`). Scope: hepsi `groups--all:rw` (katalogda ZATEN vardı — uçlar planlanmış, yazılmamış).\n- **Silme korumaları:** `routing_rules.target_group_id` ve `chat_access.group_id` **FK TAŞIMIYOR** — veritabanı yanlış silmeyi durdurmaz. Bu yüzden iki refüz var: (a) bir yönlendirme kuralı takımı hedefliyorsa 409 `group_in_use`, (b) yalnız o takım üzerinden görünen AÇIK sohbet varsa 409. Arşivlenmiş sohbetlerin `chat_access` satırları bilerek bırakılıyor (grup id'leri yeniden kullanılmaz, yetim satır kimseye yetki vermez).\n- `packages/types/src/errors.ts` — `group_in_use` (409).\n- `apps/api/src/services/audit/audit-log.ts` — `group.created|updated|deleted|member_set|member_removed`.\n- `apps/api/src/services/auth/lifecycle-service.ts` — `#seedDefaultTeam`: signup'ta `General` takımı + owner `primary` üye. **Görevin varlık nedeni bu:** `chat-service.ts` içindeki `defaultGroupIds` \"ilk takıma düş\" emniyetini YALNIZCA bir takım varsa uygulayabiliyor; hiç takımı olmayan workspace'in ilk sohbeti boş `chat_access` ile açılıyordu ve hiçbir ajan göremiyordu.\n- OpenAPI: `GroupWrite` şeması, `GroupIdPath`/`AgentIdPath` parametreleri, `/groups/{groupId}` ve `/groups/{groupId}/agents/{agentId}` blokları + üretilmiş tipler.\n\n### YAPILACAK\n1. Yukarıdakini kodu okuyarak doğrula. Yanlış/eksik bulursan düzelt — ama davranışı değiştiriyorsan gerekçesini commit mesajına yaz.\n2. Entegrasyon testlerini yaz (aşağıdaki alt görevler).\n3. Tam DoD kapısı, PLAN.md + HANDOFF.md, `main`'e merge.\n\n### TEST DOSYASI\nYeni: `apps/api/test/integration/groups.test.ts`. Desen için `apps/api/test/integration/channels-adapters.test.ts` (fixture + `grantToken` + tenant izolasyon kalıbı) ve `agents` uçlarını test eden mevcut dosyalara bak.\n\n### DİKKAT\n- `priority` sözlüğü `GROUP_PRIORITIES = ['primary','first','normal','last']` (`packages/types/src/domain.ts:14`) ve DB'de `group_agents_priority_check` CHECK kısıtı var.\n- `Group` bileşik anahtarlı: `@@id([licenseId, id])`, yani Prisma `where` `licenseId_id`.\n- Konsol ekranı ve SCIM bu görevde DEĞİL — 176 ve 177.",
-        "testStrategy": "Tam DoD kapısı (WINDOW-BOOTSTRAP §3). Yeni `groups.test.ts` şunları kanıtlamalı: (1) CRUD — oluştur/yeniden adlandır/sil, dönen gövde `GET /groups` şekliyle birebir; (2) **tenant izolasyonu** — B lisansının takımına A ile erişilemez (404, 403 değil); (3) scope reddi — `groups--all:ro` ile POST/PATCH/DELETE 403; (4) **silme koruması A** — takımı hedefleyen routing rule varken 409 `group_in_use`, `details.rule_id` dolu; (5) **silme koruması B** — o takım üzerinden görünen AÇIK sohbet varken 409, `details.active_chats`; arşivlenmiş sohbet silmeyi ENGELLEMEZ; (6) üyelik — ekle → `routing-service` o ajanı aday görüyor, çıkar → görmüyor; aynı çağrı priority değiştiriyor (idempotent upsert); (7) workspace üyesi olmayan uuid için 404; (8) **kabul kriteri** — signup ile açılan taze workspace `General` takımı + owner üyeliği alıyor VE gelen ilk sohbet yönlendirilebiliyor (boş `chat_access` DEĞİL). Bu sonuncusu görevin varlık nedeni, atlanamaz. (9) Her yazma bir audit kaydı bırakıyor.",
+        "title": "M-TEAM — Teams yazma yollari — FR-MOD-04.5 (Must/MVP) yalniz OKUMA olarak vardi",
+        "description": "`GET /groups` tek uctu; repoda `group.create`/`groupAgent.*` icin tek bir yazma cagrisi yoktu. Yonlendirme tumuyle `group_agents`e bagli oldugundan (ADR-08 adim 2) sifirdan acilan workspace hicbir sohbeti yonlendiremiyordu. PLAN.md:218 bu maddeyi \"✅ Dilim 8 · /groups\" diye kapatmisti — denetimin K1 kritik bulgusu.",
+        "details": "PRD `urun-gereksinim-dokumani-PRD.md` satır **536-551** (FR-MOD-04.5) · denetim `prd-uyum-denetimi.md` §5 K1.\n\n**DAL — yeni dal AÇMA.** Uçlar `feat/g2-group-write-paths` dalında commit `6ebc898` ile YAZILI (typecheck yeşil, test YOK, konsol ekranı YOK). `git fetch origin && git checkout feat/g2-group-write-paths`.\n\n**Dalda hazır olan:** `routes/agents.ts` grup CRUD + üyelik uçları ve yardımcıları · `errors.ts` `group_in_use` (409) · `audit-log.ts` beş `group.*` eylemi · `lifecycle-service.ts` `#seedDefaultTeam` (signup → `General` takımı + owner `primary`) · OpenAPI `GroupWrite`/`GroupIdPath`/`AgentIdPath` + üretilmiş tipler. Doğrula, yeniden yazma.\n\n**Neden güvenlik işi:** takım üyeliği erişim kontrolüdür — hangi ajanın hangi sohbeti göreceğini belirler. `routing_rules.target_group_id` ve `chat_access.group_id` **FK taşımıyor**, yani yanlış bir silmeyi veritabanı durdurmaz; uçtaki iki refüz tek savunmadır.",
+        "testStrategy": "Her iş kalemi kendi DoD kapısından geçer (CONVENTIONS §1). Kalem bütününün kabul kriteri: sıfırdan açılan bir workspace gelen ilk sohbeti bir takıma yönlendirebiliyor (boş `chat_access` DEĞİL) ve konsoldan takım kurulabiliyor.",
         "status": "pending",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
           {
             "id": 1,
-            "title": "WIP dalını doğrula: kodu oku, typecheck koş, sapma varsa not al",
-            "description": "`git checkout feat/g2-group-write-paths`; `npx turbo run typecheck --filter=@nexa/api --filter=@nexa/types --filter=@nexa/contract`. agents.ts uçlarını, errors.ts/audit-log.ts eklerini, lifecycle-service.ts `#seedDefaultTeam` metodunu ve OpenAPI bloklarını oku. Beklenenden sapma varsa düzelt.",
-            "details": "",
+            "title": "M-TEAM-a [OPUS-MAX] BÖLÜNMEZ: grup CRUD uçlarını doğrula + tenant izolasyonu ve silme korumalarının testi",
+            "description": "WIP dalını kodu okuyarak doğrula. `groups.test.ts` aç: CRUD; B lisansının takımına A ile 404 (403 değil — enumeration koruması); `groups--all:ro` ile 403; **silme koruması A** takımı hedefleyen routing rule varken 409 `group_in_use` + `details.rule_id`; **silme koruması B** o takım üzerinden görünen AÇIK sohbet varken 409 + `details.active_chats`; arşivlenmiş sohbet silmeyi engellemez. Desen: `test/integration/channels-adapters.test.ts` (fixture + grantToken + tenant izolasyon kalıbı).",
+            "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "175",
@@ -8207,9 +8207,9 @@
           },
           {
             "id": 2,
-            "title": "groups.test.ts iskeleti + CRUD ve tenant izolasyonu testleri",
-            "description": "Yeni dosya. Fixture/token deseni için channels-adapters.test.ts. CRUD, dönen gövde şekli, B lisansının takımına A ile 404, `groups--all:ro` ile 403.",
-            "details": "",
+            "title": "M-TEAM-b [OPUS-XHIGH] Üyelik uçları: routing gerçekten değişiyor mu + priority tiers",
+            "description": "PUT ile ekle → `RoutingService` o ajanı aday görüyor; DELETE ile çıkar → görmüyor; aynı PUT priority değiştiriyor (idempotent upsert); workspace üyesi olmayan uuid → 404. `GROUP_PRIORITIES = [primary, first, normal, last]` (`packages/types/src/domain.ts:14`) ve DB `group_agents_priority_check` kısıtı. Beş `group.*` audit kaydının yazıldığını doğrula.",
+            "details": "Bağımlılık: M-TEAM-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "175",
@@ -8217,9 +8217,9 @@
           },
           {
             "id": 3,
-            "title": "Silme korumalarının testi (routing rule + açık sohbet)",
-            "description": "İki 409 `group_in_use` senaryosu ve details alanları. Arşivlenmiş sohbetin silmeyi engellemediği pozitif durum. Bu korumalar FK olmadığı için tek savunma — testsiz bırakılamaz.",
-            "details": "",
+            "title": "M-TEAM-c [OPUS-XHIGH] KABUL: signup ile açılan taze workspace yönlendirebiliyor",
+            "description": "Kalemin varlık nedeni. Signup → `General` takımı + owner `primary` üyeliği → gelen ilk sohbet boş `chat_access` ile DEĞİL, o takıma açılıyor. `chat-service.ts` `defaultGroupIds` \"ilk takıma düş\" emniyetini yalnız bir takım varsa uygulayabiliyor; bu test o emniyetin artık devreye girdiğini kanıtlar. DoD yeşilse `main`e merge.",
+            "details": "Bağımlılık: M-TEAM-a, M-TEAM-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "175",
@@ -8227,9 +8227,9 @@
           },
           {
             "id": 4,
-            "title": "Üyelik testleri: ekle/çıkar/priority + routing gerçekten değişiyor",
-            "description": "PUT ile ekle → RoutingService o ajanı aday görüyor; DELETE ile çıkar → görmüyor. Aynı PUT ile priority değişiyor. Workspace üyesi olmayan uuid → 404.",
-            "details": "",
+            "title": "M-TEAM-d [SONNET-XHIGH] Teams konsol ekranı: liste + CRUD + üye yönetimi + Priority dropdown",
+            "description": "PRD KK: \"Routing hedefi; edit sayfası; Priority dropdown\". `apps/web/src/features/team/` altı; mevcut Team sayfası desenleri ve `apps/web/src/lib/form.tsx` (elle useState ile form kurma). 409 `group_in_use` gövdesi **görünür alan-altı hataya** dönüşmeli, sessizce yutulmamalı. Ajan seçici `GET /agents`. i18n en+tr; yeni rotayı `apps/e2e/tests/a11y.spec.ts` rota listesine ekle yoksa router-parse pini kırmızıya çeker. e2e: takım oluştur → ajan ekle → sohbet o takıma düşüyor; `kanit/04.5-teams.png`.",
+            "details": "Bağımlılık: M-TEAM-c. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "175",
@@ -8237,19 +8237,9 @@
           },
           {
             "id": 5,
-            "title": "KABUL: taze workspace yönlendirebiliyor",
-            "description": "Signup → `General` takımı ve owner `primary` üyeliği var → gelen ilk sohbet boş `chat_access` ile DEĞİL, o takıma açılıyor. Görevin varlık nedeni.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "175",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 6,
-            "title": "Audit kayıtları + tam DoD kapısı + PLAN.md/HANDOFF + merge",
-            "description": "Beş `group.*` eyleminin yazıldığını doğrula. WINDOW-BOOTSTRAP §3 kapısının tamamı, §4 kapanışı. PLAN.md 04.5 satırı ve K bloğu. `main`e merge + push.",
-            "details": "",
+            "title": "M-TEAM-e [OPUS-MAX] BÖLÜNMEZ: SCIM /Groups yazma — provizyon yolu konsoldan gevşek olamaz",
+            "description": "`routes/scim.ts` şu an /Groups için salt-okunur. POST/PUT/PATCH(add|remove members)/DELETE. `displayName`→`Group.name`, `members`→`group_agents`, priority varsayılan `normal`. **M-TEAM-a silme korumaları SCIM yolunda da uygulanmalı** — servis katmanını paylaş, mantığı kopyalama. Mevcut /Users yazma yollarının hata biçimi, filtre ve sayfalama desenini izle; testler /Users testleriyle aynı sertlikte.",
+            "details": "Bağımlılık: M-TEAM-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "175",
@@ -8260,21 +8250,19 @@
       },
       {
         "id": "176",
-        "title": "G2.2 — Teams konsol ekrani (Team > Teams): grup CRUD + uye yonetimi + priority",
-        "description": "FR-MOD-04.5 kabul kriteri \"Routing hedefi; edit sayfasi; Priority dropdown\" diyor. 175 uclari acti; bu gorev konsol yuzeyini yazar. Ekran olmadan bir yonetici takim kuramaz, yani ozellik kullanicilar icin hala yok.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §5 K1 · PRD satır **536-551** (04.5 satırı) · 175 nolu görevin açtığı uçların OpenAPI blokları (`packages/contract/openapi/paths/agents.yaml#/group`, `#/groupMember`)\n\n**Model:** sonnet — mevcut Team sayfası desenini izleyen CRUD ekranı.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g2-teams-console\n```\n\n### NEREYE\n`apps/web/src/features/team/` altı. Mevcut Team sayfasının desenlerini (liste + satır menüsü + modal) ve `apps/web/src/lib/form.tsx` ortak form kütüphanesini kullan — elle `useState` ile form kurma (bu, 202 nolu görevin temizlediği borcun ta kendisi).\n\n### UÇLAR (175'te açıldı)\n- `GET /groups` → `{ items: [{ id, name, language_code, agents: [{agent_id, priority}] }] }`\n- `POST /groups` `{name, language_code?}` → 201\n- `PATCH /groups/:groupId` `{name?, language_code?}` (en az biri)\n- `DELETE /groups/:groupId` → 204 · **409 `group_in_use`** (kural hedefliyor / açık sohbet var)\n- `PUT /groups/:groupId/agents/:agentId` `{priority}` → grubu döner\n- `DELETE /groups/:groupId/agents/:agentId` → 204\n\n### GEREKENLER\n1. Takım listesi (ad, dil, üye sayısı) + oluştur / yeniden adlandır / sil.\n2. Üye ekle/çıkar; ajan seçici `GET /agents`ten beslenir.\n3. **Priority dropdown** — `primary / first / normal / last`; PRD'nin \"Primary agent önceliği\" kriteri budur. Ne anlama geldiğini kullanıcıya bir cümleyle söyle (tam bir kademe atlanır, arkasında kuyruğa girilmez).\n4. **409 gövdesi alan-altı hataya dönüşmeli** — \"Bu takımı bir yönlendirme kuralı kullanıyor\" gibi; sessizce yutma. `details.rule_id` / `details.active_chats` mesajı somutlaştırır.\n5. Erişilebilirlik: kapı zaten axe ile iki temada tarıyor (`apps/e2e/tests/a11y.spec.ts`); yeni ekran onu kırmamalı.\n6. i18n: `apps/web/src/locales` — İngilizce ve Türkçe anahtarlar.\n\n### KAPSAM DIŞI\nSCIM (177), yönlendirme kuralı ekranı (198).",
-        "testStrategy": "Tam DoD kapısı. Bileşen testi (`apps/web`, vitest + testing-library): takım oluştur → listede görünür; yeniden adlandır; üye ekle → priority değiştir → çıkar; **409 yanıtı görünür alan-altı hata üretir** (sessiz yutma regresyonu bu testle kapanır); geçersiz/boş ad ile Submit pasif. e2e (`apps/e2e/tests/`): oturum aç → Team → takım oluştur → ajan ekle → o takıma düşen bir sohbetin ajana göründüğü uçtan uca akış; `kanit/04.5-teams.png` ekran görüntüsü. a11y taraması yeni rotayı kapsıyor olmalı (a11y.spec.ts rota listesi güncellenir), aksi halde `router-parse` pini kırmızıya çeker.",
+        "title": "M-CAMP — Kampanya teslimati — modulun asil vaadi bosta",
+        "description": "Eslesen ziyaretciye YALNIZ bir `campaign_sends` satiri yaziliyor (campaign-service.ts:240); hicbir chat event, RTM push ya da widget mesaji uretilmiyor. `apps/widget` ve `apps/rtm` icinde \"campaign\" kelimesi bile gecmiyor, `engaged` uretimde hic true yapilmiyor, ve durum yalniz yazma aninda hesaplandigi icin sekme filtreleri zamanla yanlisa donuyor. Denetimin K2 kritik bulgusu.",
+        "details": "PRD satır **522-535** (FR-MOD-03.3.2) · denetim `prd-uyum-denetimi.md` §5 K2.\n\n**KARAR (verilmiş, tartışma değil):** teslimat **mevcut widget yoklaması** üzerinden — widget zaten 4 sn'de bir sunucuyu yokluyor (`apps/widget/src/widget.ts:24` `POLL_INTERVAL_MS = 4_000`) ve proaktif karşılama kartı mekanizması var (`GREETING`, `GREETING_DISMISSED_KEY`). **Yeni taşıma katmanı (soket) EKLENMEYECEK** — ayrı ve büyük bir iş, bu kalemde kapsam dışı.\n\n**Yeniden kullan:** `matchesConditions` ve `visitorPageUrls` (`campaign-matching.ts`) mevcut ve testli; yeni eşleştirici yazma. İdempotanslık `(campaign, customer)` unique + `skipDuplicates` ile korunuyor — bozma.",
+        "testStrategy": "Kalem bütününün kabul kriteri: kampanya oluştur → eşleşen ziyaretçi gelsin → widget yoklamasında kart **bir kez** görünsün → tıklayınca sohbet açılsın ve `engaged` true olsun. Cross-tenant: B lisansının kampanyası A ziyaretçisine asla ulaşmaz.",
         "status": "pending",
-        "dependencies": [
-          "175"
-        ],
+        "dependencies": [],
         "priority": "high",
         "subtasks": [
           {
             "id": 1,
-            "title": "Takım listesi + oluştur/yeniden adlandır/sil UI",
-            "description": "Team altında Teams bölümü. lib/form.tsx kullan. Silmede onay + 409 gövdesini alan-altı hataya çevir.",
-            "details": "",
+            "title": "M-CAMP-a [SONNET-XHIGH] campaign_sends.delivered_at migration + teslimat sorgusuna indeks kararı",
+            "description": "`deliveredAt DateTime? @map(\"delivered_at\") @db.Timestamptz(6)`. Yeni migration aç — uygulanmış olanı düzenleme. NULL = henüz teslim edilmedi (geriye dönük zaman uydurma). `-b`nin sorgu şekline göre `(license_id, customer_id, delivered_at)` indeksi gerekiyor mu ölç; gerekmiyorsa açma ve nedenini yaz. `db:check-drift` exit 0.",
+            "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "176",
@@ -8282,9 +8270,9 @@
           },
           {
             "id": 2,
-            "title": "Üye yönetimi + priority dropdown",
-            "description": "Ajan seçici GET /agents; PUT/DELETE üyelik uçları; priority `primary|first|normal|last` ve kısa açıklaması.",
-            "details": "",
+            "title": "M-CAMP-b [OPUS-MAX] BÖLÜNMEZ: yoklama cevabına bekleyen kampanya + delivered_at damgası (teslimat garantisi)",
+            "description": "`routes/customer.ts` yoklama ucu: `delivered_at IS NULL` gönderim varsa mesajı cevaba ekle ve **aynı işlemde** damgala. Karar ver ve yorumla: (1) birden çok bekleyen gönderimde seçim kuralı (öneri: en eski, tek seferde bir tane); (2) damgalama ile cevabın ulaşması arasında kopan bağlantı — **en-fazla-bir-kez mi en-az-bir-kez mi**, kampanya mesajı için hangisi daha az zararlı? Kontrat: `customer-chat.yaml` + `contract:generate` + generated senkron. Cross-tenant izolasyon zorunlu.",
+            "details": "Bağımlılık: M-CAMP-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "176",
@@ -8292,9 +8280,9 @@
           },
           {
             "id": 3,
-            "title": "i18n anahtarları (en + tr) ve a11y rota kaydı",
-            "description": "locales altına anahtarlar; a11y.spec.ts taranan rota listesine yeni ekranı ekle.",
-            "details": "",
+            "title": "M-CAMP-c [SONNET-XHIGH] Widget kampanya kartı — mevcut proaktif kart mekanizmasını yeniden kullan",
+            "description": "İkinci bir kart sistemi kurma. Kapatma davranışı `GREETING_DISMISSED_KEY` desenine uysun. Karşılama kartı ile çakışırsa biri kazanmalı — kararı yorumla (öneri: kampanya, çünkü hedeflenmiş). Widget çapraz-origin iframe içinde: workspace metni **kaçışsız basılmaz** (NFR-S6); `<script>` metin olarak görünmeli. 8 dil (ar/de/en/es/fr/it/pt/tr) — kampanya metni çevrilmez, düğmeler çevrilir. `kanit/03.3.2-campaign-card.png`.",
+            "details": "Bağımlılık: M-CAMP-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "176",
@@ -8302,9 +8290,9 @@
           },
           {
             "id": 4,
-            "title": "Bileşen testleri",
-            "description": "Oluştur/yeniden adlandır/üye/priority akışları + 409 görünür hata + boş ad ile pasif submit.",
-            "details": "",
+            "title": "M-CAMP-d [SONNET-XHIGH] engaged bayrağı gerçekten set edilsin + etkileşim tanımı",
+            "description": "Üretimde hiç true yapılmıyor; kampanya başarısının tek sinyali bu. Tanım: **sohbet açmak** = engaged (görüntülenme zaten `delivered_at`). Ziyaretçi kartı kapatıp sonra kendi başına sohbet açarsa bu sayılır mı — zaman penceresi mi, yalnız karttan gelen tıklama mı? Seçimini yorumla ve teste bağla; rapor okuyan biri bu ayrımı bilmeden oranı yanlış yorumlar.",
+            "details": "Bağımlılık: M-CAMP-c. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "176",
@@ -8312,9 +8300,9 @@
           },
           {
             "id": 5,
-            "title": "e2e akışı + kanıt görüntüsü",
-            "description": "Takım oluştur → ajan ekle → sohbet o takıma düşüyor ve ajana görünüyor. kanit/04.5-teams.png.",
-            "details": "",
+            "title": "M-CAMP-e [OPUS-MAX] BÖLÜNMEZ: yeni ziyaretçi çalışan kampanyaları tetiklesin (sıcak yol + idempotanslık)",
+            "description": "Tetikleme şu an YALNIZ create/update anında, son `LIVE_WINDOW_MINUTES` içindeki ziyaretçilere karşı — yani kampanya kaydedildikten SONRA gelen ziyaretçi hiç eşleşmiyor. `visits` yazma yolunda değerlendir. **Asıl tasarım sorusu maliyet:** ziyaret yazma yolu her sayfa görüntülemesinde çalışan sıcak yoldur; her ziyarette tüm çalışan kampanyaları değerlendirmek pahalı olabilir — senkron mu, işlem sonrası mı, kısa önbellek arkasında mı? Kararı ve ölçümü yorumla; `apps/load/test/budgets.test.ts` NFR-P2 bütçesi yeşil kalmalı.",
+            "details": "Bağımlılık: M-CAMP-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "176",
@@ -8322,9 +8310,9 @@
           },
           {
             "id": 6,
-            "title": "DoD kapısı + PLAN.md/HANDOFF + merge",
-            "description": "WINDOW-BOOTSTRAP §3 ve §4.",
-            "details": "",
+            "title": "M-CAMP-f [OPUS-XHIGH] Kampanya durumu okuma anında yeniden değerlendirilsin",
+            "description": "`computeCampaignStatus` yalnız create (`campaign-service.ts:108`) ve update (`:169`) yolundan çağrılıyor; zamanlayıcı yok, `starts_at` geçmişe kayan kampanya sonsuza dek `scheduled` görünüyor. Tercih: okuma anında yeniden hesaplama (zamanlayıcı altyapısı gerektirmez); alternatif mevcut sweep deseni (`retention.ts`). Eşzamanlı iki okuma aynı satırı güncelleyebilir — **idempotent güncelleme** yaz. Sekme filtreleri (All/Ongoing/Scheduled/Inactive) bu değerden beslenir.",
+            "details": "Bağımlılık: M-CAMP-e. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "176",
@@ -8335,21 +8323,19 @@
       },
       {
         "id": "177",
-        "title": "G2.3 — SCIM /Groups yazma (saglayici uzerinden takim provizyonu)",
-        "description": "`apps/api/src/routes/scim.ts` su an /Groups icin salt-okunur. 175 takim yazma yollarini actigina gore SCIM tarafi da yazilabilir hale gelmeli; aksi halde kurumsal kimlik saglayicisi takim provizyonu yapamaz.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `apps/api/src/routes/scim.ts` (mevcut salt-okunur `/Groups`) · SCIM 2.0 Group şeması · 175 nolu görevin açtığı servis yolları\n\n**Model:** sonnet — mevcut SCIM desenini genişletmek.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g2-scim-groups\n```\n\n### YAPILACAK\n`POST /scim/v2/Groups`, `PATCH` (SCIM patch ops — `add`/`remove` members), `PUT`, `DELETE`. Mevcut `/Users` yazma yollarındaki hata biçimi, sayfalama ve filtre desenini birebir izle.\n\n### DİKKAT\n- 175'teki silme korumaları burada da geçerli olmalı — SCIM üzerinden silmek, konsoldan silmekten daha az güvenli olamaz. Servis katmanını paylaş, mantığı kopyalama.\n- SCIM `displayName` → `Group.name`; `members` → `group_agents`. Priority SCIM'de yok; varsayılan `normal`.\n- Tenant izolasyonu ve scope: mevcut SCIM kimlik doğrulaması neyse o.",
-        "testStrategy": "Tam DoD kapısı. `apps/api/test/integration/` altında SCIM grup testleri: oluştur/güncelle/üye ekle-çıkar/sil; SCIM patch op şekli; **175 silme korumalarının SCIM üzerinden de geçerli olduğu** (konsoldan daha gevşek olmadığı); tenant izolasyonu; yetkisiz çağrı reddi. Mevcut SCIM /Users testleriyle aynı sertlikte.",
+        "title": "M-STORE — Paylasilan nesne deposu — NFR-R1 stateless ihlali bugun uretimde kiriliyor",
+        "description": "Yuklemeler pod-yerel diske gidiyor (`LocalStore`, `STORAGE_LOCAL_DIR`), `attachment.ts:36` capraz-pod eki REDDEDIYOR ve Helm charti ayni poda `maxReplicas: 4` HPA takiyor. Yani yatay olcek altinda ek indirmeleri rastgele basarisiz olur.",
+        "details": "PRD satır **768-777** (NFR-R1) · denetim `prd-uyum-denetimi.md` §3 D6.\n\n**Genişleme noktası HAZIR:** `ObjectStore` arayüzü (`services/storage/object-store.ts`) `put`/`get`/`exists` ile var; `createObjectStore` fabrikası `STORAGE_PROVIDERS` enum'u üzerinden seçiyor ve kodun kendi yorumu bunu öngörüyor: *\"the exhaustive form is what makes adding `s3` to the enum later a compile error here\"*.\n\n**Çağrı yerlerine dokunulmaz:** `routes/chats.ts:93`, `routes/customer.ts:203`, `routes/uploads.ts:63` zaten fabrikadan geçiyor. Üçünü de değiştirmen gerekiyorsa tasarımı yanlış kurmuşsundur.",
+        "testStrategy": "Kalem bütününün kabul kriteri: iki API örneği ayakta; birinden yüklenen ek diğerinden indirilebiliyor, ve `virus-scanner.ts` fail-closed davranışı ile `upload-url.ts` imzalı PUT akışı her iki sağlayıcıda da aynı.",
         "status": "pending",
-        "dependencies": [
-          "175"
-        ],
-        "priority": "medium",
+        "dependencies": [],
+        "priority": "high",
         "subtasks": [
           {
             "id": 1,
-            "title": "POST + PUT /scim/v2/Groups",
-            "description": "displayName → Group.name; members → group_agents. Servis katmanını 175 ile paylaş.",
-            "details": "",
+            "title": "M-STORE-a [OPUS-MAX] BÖLÜNMEZ: S3 uyumlu ObjectStore — güvenlik sınırları ve hata yolları",
+            "description": "`services/storage/s3-store.ts`. `STORAGE_PROVIDERS`'a `s3` ekle → fabrika switch'i derleme hatası verir, oradan doldur. Env `STORAGE_S3_*` (`config/env.ts:426-428` yanına); gerçek secret YOK. **Korunacak garantiler:** `attachment.ts` `exists` kontrolü bir güvenlik sınırıdır (verilmiş ama kullanılmamış anahtara işaret eden `attachment_url`'i reddeder) — S3'te aynı kesinlikte çalışmalı; **ağ hatası ile \"yok\" karışmamalı**, `exists` ağ hatasında `false` dönerse güvenlik kontrolü sessizce açılır; `local-store.ts` yol kaçışı doğrulamasının S3 karşılığı anahtar doğrulamasıdır (`../` kabul edilmez).",
+            "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "177",
@@ -8357,9 +8343,9 @@
           },
           {
             "id": 2,
-            "title": "PATCH (SCIM patch ops: add/remove members)",
-            "description": "SCIM 2.0 patch op şekli; mevcut /Users PATCH desenini izle.",
-            "details": "",
+            "title": "M-STORE-b [SONNET-XHIGH] MinIO servisi (iki compose dosyası) + bucket bootstrap + geliştirici talimatı",
+            "description": "`docker-compose.yml` ve `docker-compose.full.yml`. `nexa-*` adlandırma deseni, port çakışması yok (db 5433, redis 6380 kullanılıyor). Bucket servis hazır olunca mevcut olsun. **Varsayılan `STORAGE_PROVIDER=local` KALMALI** — mevcut geliştirici akışını ve CI'ı bozma, S3 opt-in. `docker compose config` geçerli.",
+            "details": "Bağımlılık: M-STORE-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "177",
@@ -8367,9 +8353,9 @@
           },
           {
             "id": 3,
-            "title": "DELETE + 175 silme korumalarının devreye girmesi",
-            "description": "Routing rule / açık sohbet koruması SCIM yolunda da uygulanır.",
-            "details": "",
+            "title": "M-STORE-c [OPUS-XHIGH] Çok-pod ek doğrulaması: pod A yükler, pod B indirir",
+            "description": "Kalemin asıl iddiası bu; testsiz düzeltme düzeltme sayılmaz. Desen: `apps/rtm/test/integration/two-pod.test.ts` iki örnek kaldırıp aralarındaki davranışı doğruluyor. İçerik ve content-type korunur; `attachment.ts` doğrulaması B üzerinde de geçer. `STORAGE_PROVIDER=local` ile aynı senaryonun **neden geçmediğini** belgelendir — testin gerçekten bir şey ölçtüğünün kanıtı. Helm `maxReplicas: 4` durumunu HANDOFF'a yaz.",
+            "details": "Bağımlılık: M-STORE-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "177",
@@ -8377,9 +8363,9 @@
           },
           {
             "id": 4,
-            "title": "Entegrasyon testleri + DoD + merge",
-            "description": "SCIM /Users testleriyle aynı sertlik. WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
+            "title": "M-STORE-d [OPUS-MAX] BÖLÜNMEZ: virüs taraması + imzalı URL güvenlik paritesi (local ↔ s3)",
+            "description": "Depolama değişikliği sessiz bir güvenlik gerilemesi olmamalı. **Yalnız güvenlik testlerini** iki sağlayıcıda parametrik koş (tüm yükleme süitini ikiye katlama — kapı süresi). Korunacak: fail-closed AV (tarayıcı cevap veremiyorsa dosya kabul EDİLMEZ), imzalı PUT (geçersiz imza / süresi geçmiş / yeniden kullanım reddi), izin verilen tür ve boyut sınırları, `nosniff`. İki sağlayıcıda sonuç farklıysa parite yok demektir ve kalem tamamlanmamıştır.",
+            "details": "Bağımlılık: M-STORE-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "177",
@@ -8390,19 +8376,19 @@
       },
       {
         "id": "178",
-        "title": "G3.1 — campaign_sends.delivered_at migration (teslimat damgasi)",
-        "description": "Kampanya teslimati (179) ayni mesajin her yoklamada tekrar donmesini engelleyecek bir damgaya ihtiyac duyuyor. Bu gorev yalniz sema degisikligi + migration; teslimat mantigi 179da.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §5 K2 · PRD satır **522-535** (FR-MOD-03.3.2) · `apps/api/prisma/schema.prisma` `CampaignSend` modeli\n\n**Model:** sonnet — tek kolon + migration.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g3-campaign-delivered-at\n```\n\n### YAPILACAK\n`campaign_sends` tablosuna `delivered_at TIMESTAMPTZ NULL` ekle (Prisma: `deliveredAt DateTime? @map(\"delivered_at\") @db.Timestamptz(6)`). Yeni migration aç — uygulanmış migration'ı düzenleme.\n\n### NEDEN NULL\nVar olan satırlar \"henüz teslim edilmedi\" demektir; geriye dönük bir teslim zamanı uydurmak yanlış olur. 179 bu alanı NULL olanları seçip damgalayacak.\n\n### İNDEKS\nYoklama sorgusu \"bu müşteriye ait, teslim edilmemiş gönderim\" arayacak. `(license_id, customer_id, delivered_at)` üzerinde kısmi ya da tam indeks düşün — 179'un sorgu şeklini oku, gereksiz indeks açma.\n\n### DOĞRULAMA\n`pnpm -w db:check-drift` exit 0. Migration SQL üretimi shadow DB ister (WINDOW-BOOTSTRAP §3).",
-        "testStrategy": "Tam DoD kapısı; `db:check-drift` exit 0 zorunlu. `apps/api/test/integration/data-model.test.ts` (veya eşdeğeri) içinde kolonun varlığı, NULL varsayılanı ve — indeks eklendiyse — indeksin varlığı doğrulanır. Mevcut kampanya testleri kırılmadan geçer.",
+        "title": "M-RPT — Rapor metrik dogrulugu — deflection ajan-ajan devirlerini AI devri sayiyor",
+        "description": "`transferCount` (report-csv.ts:937) `chat_transferred` olaylarini `reason` ayrimi YAPMADAN sayiyor; ayni SQL :1044 te tekrarlaniyor. `skillRun.count` uc yerde filtresiz (report-csv.ts:1489, :1726, routes/reports.ts:719) → Copilot assistleri AI Agent yetenegi sayiliyor. Ve testi YESILDI ama hatayi yakalayamiyordu.",
+        "details": "PRD satır **579-593** (FR-MOD-07.4) ve **699-706** (FR-MOD-12) · denetim `prd-uyum-denetimi.md` §3 D7.\n\n**ŞEMA DEĞİŞİKLİĞİ GEREKMİYOR — iki hazır dayanak var:**\n- `reason` alanı olayın `properties`ine **zaten yazılıyor**: `chat-service.ts:980` (`reason: target.reason`) ve `ai-responder.ts:135` (`reason: 'ai_handoff'`).\n- `Skill.aiAgentId` **zaten var** (`schema.prisma:1384`); `SkillRun.skillId → Skill` üzerinden filtrelenebilir.",
+        "testStrategy": "Kalem bütününün kabul kriteri: ajan→ajan devri ile AI→insan devri ayrı sayılıyor, Copilot kullanımı AI Agent raporuna karışmıyor, VE bu iki düzeltme geri alındığında testler kırmızıya dönüyor (fixture artık kör değil).",
         "status": "pending",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
           {
             "id": 1,
-            "title": "Prisma şemasına deliveredAt ekle + migration üret",
-            "description": "Yeni migration; uygulanmış olanı düzenleme. Shadow DB gerekir.",
-            "details": "",
+            "title": "M-RPT-a [SONNET-XHIGH] transferCount reason filtresi + ikinci kopyanın tek yardımcıya indirilmesi",
+            "description": "SQL'e `AND e.properties @> '{\"reason\":\"ai_handoff\"}'::jsonb` ekle. **Containment (`@>`) kullan, `->>` değil** — jsonb GIN indeksinden faydalanmak için; dosyanın kendi yorumu bu gerekçeyi yazıyor. `:1044` civarındaki ikinci kopyayı da düzelt; iki kopya bu hatanın iki yerde yaşamasının sebebi. `TRANSFER_REASONS` sözlüğünü oku — `ai_handoff` dışında \"AI devri\" sayılan bir reason var mı, kararını yorumla.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "178",
@@ -8410,9 +8396,9 @@
           },
           {
             "id": 2,
-            "title": "Sorgu şekline göre indeks kararı",
-            "description": "179un yoklama sorgusunu oku; gerekiyorsa (license_id, customer_id, delivered_at) indeksi. Gereksizse ekleme ve nedenini yaz.",
-            "details": "",
+            "title": "M-RPT-b [SONNET-XHIGH] skill_runs sayımını AI Agent`a kilitle (üç çağrı yeri)",
+            "description": "`Skill.aiAgentId != null` olan skill'lerin run'ları sayılsın. **Önce varsayımı doğrula:** Copilot gerçekten `skill_runs` yazıyor mu? `skill_runs` yazan yolları grep'le ve `aiAgentId` null olan skill'lerin kim tarafından koşulduğunu tespit et — varsayım yanlışsa filtre de yanlış olur. Bulduğunu yorumla. Üç çağrı yerinin üçünü de düzelt.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "178",
@@ -8420,9 +8406,9 @@
           },
           {
             "id": 3,
-            "title": "Şema testi + db:check-drift + merge",
-            "description": "data-model testine kolon/indeks iddiası. WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
+            "title": "M-RPT-c [OPUS-XHIGH] Kör fixture`ı düzelt + körlüğü KANITLA + diğer rapor fixture`larını tara",
+            "description": "Denetimin ders niteliğindeki bulgusu: rapor fixture'ı `chat_transferred` olaylarını `reason`suz yazdığı için test yeşilken kriter yanlıştı — yani test ne düzeltmeyi ne bozulmayı görebiliyordu. Fixture iki devir türü ve iki run türü üretsin; iddialar yanlış sayımda KIRILSIN. **Atlanamaz adım:** `-a`/`-b` düzeltmesini geçici geri al, testin kırmızıya döndüğünü gör, geri getir, sonucu HANDOFF'a yaz. Ayrıca diğer rapor fixture'larını tara: ayrım yapılan bir alan fixture'da hep aynı değeri alıyorsa o test de kördür — bulguları listele.",
+            "details": "Bağımlılık: M-RPT-a, M-RPT-b. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "178",
@@ -8433,21 +8419,19 @@
       },
       {
         "id": "179",
-        "title": "G3.2 — Widget yoklama cevabina bekleyen kampanya mesajini ekle",
-        "description": "K2: kampanya eslesen ziyaretciye YALNIZ bir `campaign_sends` satiri yaziyor (campaign-service.ts:240); hicbir chat event, RTM push ya da widget mesaji uretilmiyor. `apps/widget` ve `apps/rtm` icinde \"campaign\" kelimesi bile gecmiyor. Bu gorev teslimatin sunucu yarisini yazar.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §5 K2 (kritik bulgu 2) · PRD satır **522-535** (FR-MOD-03.3.2)\n\n**Model:** opus — teslimat semantiği, tam-bir-kez garantisi ve yoklama sözleşmesinin şekli tasarım kararı içeriyor.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g3-campaign-delivery\n```\n\n### KARAR (verilmiş, tartışma değil)\nTeslimat **mevcut widget yoklaması** üzerinden. Widget zaten 4 saniyede bir sunucuyu yokluyor (`apps/widget/src/widget.ts:24` `POLL_INTERVAL_MS = 4_000`). **Yeni taşıma katmanı (soket) EKLENMEYECEK** — o ayrı ve büyük bir iş; bu turda kapsam dışı.\n\n### YAPILACAK\n`apps/api/src/routes/customer.ts` içindeki widget'ın yokladığı uçta: bu müşteriye ait `delivered_at IS NULL` olan `campaign_sends` varsa kampanyanın mesajını cevaba ekle ve **aynı işlemde** `delivered_at` damgala.\n\n### TASARIM SORULARI (cevabını koda ve commit'e yaz)\n1. Aynı anda birden çok bekleyen gönderim varsa? (öneri: en eskisi, tek seferde bir tane — ziyaretçiyi kart yağmuruna tutma)\n2. Damgalama ile cevabın istemciye ulaşması arasında kopan bağlantı: mesaj kaybolur mu? Tam-bir-kez mümkün değil; **en-fazla-bir-kez** mi **en-az-bir-kez** mi seçiyorsun, neden? Kampanya mesajı için hangisi daha az zararlı?\n3. Yoklama cevabının şekli — kontrat değişikliği gerektirir (`packages/contract/openapi/paths/customer-chat.yaml`), `contract:generate` ve senkron kontrolü zorunlu.\n\n### DİKKAT\n- Tenant izolasyonu: müşteri token'ı ile gelen bu uç, RLS altında çalışır; başka lisansın kampanyası asla dönmemeli.\n- Kampanya metni de müşteriye giden bir metindir — maskeleme/kaçış disiplinini widget tarafında koru.\n- 180 (widget kartı) bu görevin cevabını tüketir; sözleşmeyi orada da okunur kıl.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: (1) kampanya ateşlendikten sonra yoklama mesajı **bir kez** döndürür, ikinci yoklamada döndürmez (`delivered_at` damgası); (2) birden çok bekleyen gönderimde seçim kuralı deterministik; (3) **cross-tenant** — B lisansının kampanyası A müşterisinin yoklamasında asla görünmez; (4) bekleyen gönderim yokken cevap şekli değişmez (mevcut widget testleri kırılmaz); (5) kontrat senkron (`contract:generate` sonrası generated boş diff). Widget birim testleri 180de.",
+        "title": "M-COUNT — Sunucu tarafi sayac ve siralama — \"yuklenen pencere gercek toplam saniliyor\"",
+        "description": "Sayaclar ve siralamalar tarayiciya yuklenmis satirlardan turuyor; veri buyudukce SESSIZCE yanlisa doner ve testler kucuk fixture ile yesil kalir. AI resolution sayaci 50 satirdan sonra yanlis; Tickets siralamasi sunucuya gitmiyor; gorunum filtresi URL e yansimiyor; Traffic sekme sayaclari yalniz yuklenmis sayfalardan turuyor.",
+        "details": "PRD satır **496-521** (FR-MOD-02.1.2, 02.7) ve **522-535** (traffic) · denetim `prd-uyum-denetimi.md` §3 D3.\n\n**DB yarısı DOĞRU — dokunma:** `ai_solved` görünüm filtresi (`chat-service.ts` ~1727) ADR-09'un tam predicate'ini uyguluyor ve yorumu bu predicate'e ekstra koşul eklenmesini açıkça yasaklıyor (Solved listesi ile fatura sayacı asla ayrışmamalı). Hata yalnız web katmanında sayımda.\n\n**Çürütme turundan gelen düzeltme:** ilk denetçinin \"dar sekmede Traffic sayaçları tüm panoyu temsil etmiyor\" eleştirisi **haksızdı** — kod sayaçları yalnız aktif sekme ya da filtresiz pano için gösteriyor. Gerçek sınır sayacın yüklenmiş sayfalardan türemesi. Sekme mantığını değiştirme.",
+        "testStrategy": "Kalem bütününün kabul kriteri: sayfa boyutunu aşan veri setlerinde (60+ kayıt, sayfa 25) sayaçlar doğru ve sunucu toplamı fatura sayacıyla aynı; sayfa 2'deki bir bilet sayfa 1'dekinden önce sıralanabiliyor. NFR-P2 okuma bütçeleri aşılmıyor.",
         "status": "pending",
-        "dependencies": [
-          "178"
-        ],
+        "dependencies": [],
         "priority": "high",
         "subtasks": [
           {
             "id": 1,
-            "title": "Yoklama ucunda bekleyen gönderim sorgusu + delivered_at damgası (tek işlem)",
-            "description": "customer.ts yoklama ucu. delivered_at IS NULL seç, damgala, cevaba ekle — aynı transaction.",
-            "details": "",
+            "title": "M-COUNT-a [OPUS-XHIGH] AI resolution sayacını sunucudan besle — toplam nereden gelecek kararı",
+            "description": "**Tasarım sorusu:** liste ucuna toplam alanı mı, ayrı sayım ucu mu? Keyset sayfalama ile toplam sayım aynı sorguda pahalı olabilir; kararını ve maliyetini yorumla, NFR-P2 okuma bütçesini bozma. Fatura ile **aynı sayıyı** vermeli — ADR-09 ekseninde Overview = fatura = Copilot BI tutarlılığı korunuyor, yeni sayaç bu üçlüden ayrışırsa hata büyür. **60+ kayıtlı test zorunlu** (kusur tam orada).",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "179",
@@ -8455,9 +8439,9 @@
           },
           {
             "id": 2,
-            "title": "Teslimat semantiği kararı ve gerekçesi",
-            "description": "Çoklu bekleyen gönderimde seçim; en-fazla-bir-kez vs en-az-bir-kez. Kararı kod yorumuna ve commit mesajına yaz.",
-            "details": "",
+            "title": "M-COUNT-b [OPUS-XHIGH] Tickets sıralamasını sunucuya taşı — keyset imleciyle etkileşimi çöz",
+            "description": "`ticketListUrl` (`useTickets.ts:36`) yalnız view+limit+page_id kuruyor; `sortTickets` (`ticket-grid.ts:103`) belleğe yüklenmiş diziyi sıralıyor (`InboxPage.tsx:288`). `/tickets`'e `sort` parametresi (kontrat + uygulama); sıralanabilir alanları PRD'den doğrula. `sortTickets`'ı kaldır ya da görsel yardımcıya indir — çift sıralama sonucu bozar. **Keyset uyarısı:** sıralama alanı değişince imleç anlamını yitirir, sayfalama sıfırlanmalı — teste bağla. e2e: mevcut `paging.spec.ts:70` deseni (\"sunucudan farklı sıra iste\") biletler için tekrarlanır.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "179",
@@ -8465,9 +8449,9 @@
           },
           {
             "id": 3,
-            "title": "Kontrat: yoklama cevabına kampanya alanı",
-            "description": "customer-chat.yaml; contract:generate; generated senkron kontrolü.",
-            "details": "",
+            "title": "M-COUNT-c [SONNET-XHIGH] Tickets görünüm filtresi deep-link`lensin",
+            "description": "PRD 02.7 \"deep-link filtre\" istiyor; filtre URL'e hiç yansımıyor. `-b`nin `sort` parametresiyle aynı sözleşmede yaşamalı. Geçersiz/bilinmeyen değer geldiğinde sessizce varsayılana düş (URL elle düzenlenebilir) — kararı yorumla. Tarayıcı geri/ileri düğmesi filtre değişimlerini takip etmeli.",
+            "details": "Bağımlılık: M-COUNT-b. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "179",
@@ -8475,19 +8459,9 @@
           },
           {
             "id": 4,
-            "title": "Entegrasyon testleri (bir kez teslim + cross-tenant + şekil korunumu)",
-            "description": "testStrategy maddeleri 1-4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "179",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + PLAN.md/HANDOFF + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4. PLAN.md 03.3.2 satırı.",
-            "details": "",
+            "title": "M-COUNT-d [SONNET-XHIGH] Traffic sekme sayaçlarını sunucu toplamına bağla",
+            "description": "`TrafficPage.tsx:432` civarı. `-a`nın çözdüğü aynı tasarım sorusu geçerli — o iş kalemi bittiyse aynı deseni kullan, yeni yol icat etme. **Sekme davranışını (aktif sekme / filtresiz pano) DEĞİŞTİRME**, mevcut testler kırılmamalı. e2e içinde ölçülen \"NFR-P2 filtered GET /traffic\" bütçesi aşılmaz.",
+            "details": "Bağımlılık: M-COUNT-a. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "179",
@@ -8498,61 +8472,19 @@
       },
       {
         "id": "180",
-        "title": "G3.3 — Widget tarafinda kampanya kartini goster",
-        "description": "179 sunucu yarisini yaziyor; bu gorev ziyaretcinin gordugu yari. Widgetta zaten proaktif karsilama karti mekanizmasi var (`apps/widget/src/widget.ts` `GREETING` sabiti ve `GREETING_DISMISSED_KEY`); kampanya mesaji onu yeniden kullanmali, ikinci bir kart sistemi kurulmamali.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §5 K2 · `apps/widget/src/widget.ts` (özellikle `GREETING`, `GREETING_DISMISSED_KEY`, `POLL_INTERVAL_MS`) · 179 nolu görevin kontrat çıktısı\n\n**Model:** sonnet — mevcut kart mekanizmasını yeniden kullanan UI işi.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g3-widget-campaign-card\n```\n\n### YAPILACAK\n1. Yoklama cevabında kampanya mesajı geldiğinde mevcut proaktif kart görselini bas.\n2. Kapatma davranışı mevcut `GREETING_DISMISSED_KEY` desenine uysun (oturum boyu kapalı kalır).\n3. Karşılama kartı ile kampanya kartı **aynı anda** düşerse ne olacak? Bir tanesi kazanmalı — kararı ver ve yorumla (öneri: kampanya, çünkü hedeflenmiş).\n4. i18n: kampanya metni workspace'in yazdığı metindir, çevrilmez; çevresindeki düğmeler çevrilir.\n\n### DİKKAT\n- Widget çapraz-origin iframe içinde çalışır; metin **kaçışsız basılmaz** (NFR-S6).\n- Widget'ın 8 dili var (ar/de/en/es/fr/it/pt/tr).",
-        "testStrategy": "Tam DoD kapısı. Widget birim testleri (`apps/widget/src/*.test.ts`): kampanya mesajı gelince kart görünür; kapatınca oturum boyu geri gelmez; karşılama ile çakışmada karar deterministik; **HTML kaçışı** — metindeki `<script>` metin olarak basılır. e2e (`apps/e2e/tests/widget.spec.ts` yanına): kampanya oluştur → eşleşen ziyaretçi → kart görünür → tıklayınca sohbet açılır. `kanit/03.3.2-campaign-card.png`.",
+        "title": "M-READY — AI Agent readiness mantigi — operator ters, active bayragi hic okunmuyor",
+        "description": "PRD KK4: \"Knowledge bos VEYA hic aktif skill yokken uyari gosterilir\". Kod: `const ready = hasKnowledge || hasSkill` (readiness.ts:42) — uyari YALNIZ ikisi birden bosken cikiyor; bilgi tabani dolu ama hic skill yokken AI Agent \"hazir\" gorunuyor. Ayrica `hasSkill = skills.some(hasSteps)` (:41) \"aktif\" bayragini hic okumuyor.",
+        "details": "PRD satır **562-578** (FR-MOD-06.1, KK4) · denetim `prd-uyum-denetimi.md` §3 D8.\n\nİkinci kusur (`active` okunmuyor) denetim raporunda YOK — kodu okurken doğrulamada çıktı. İkisi birden düzeltilmezse madde yine yarım kalır.\n\n`apps/web/src/features/playbook/readiness.ts` — dosya küçük, kusur iki satır. Asıl iş testleri PRD kriterine göre yazmak.",
+        "testStrategy": "Beş senaryo: yalnız knowledge → hazır DEĞİL; yalnız skill → hazır DEĞİL; ikisi → hazır; **adımı olan ama pasif skill hazır saymaz**; ikisi de boş → hazır değil. `readiness.test.ts` şu an YANLIŞ davranışı kilitliyor olabilir — mevcut iddiaları körü körüne koruma, PRD kriterine göre yeniden yaz.",
         "status": "pending",
-        "dependencies": [
-          "179"
-        ],
+        "dependencies": [],
         "priority": "high",
         "subtasks": [
           {
             "id": 1,
-            "title": "Yoklama cevabındaki kampanya mesajını karta bas",
-            "description": "Mevcut proaktif kart görselini yeniden kullan; ikinci kart sistemi kurma.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "180",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Kapatma davranışı + karşılama kartıyla çakışma kararı",
-            "description": "GREETING_DISMISSED_KEY desenine uy; çakışmada kazananı belirle ve yorumla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "180",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "HTML kaçışı ve i18n",
-            "description": "Workspace metni kaçışsız basılmaz (NFR-S6). Düğme metinleri 8 dilde.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "180",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Widget birim testleri + e2e + kanıt görüntüsü",
-            "description": "testStrategy maddeleri. kanit/03.3.2-campaign-card.png.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "180",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
+            "title": "M-READY-a [SONNET-XHIGH] Operatörü çevir (|| → &&) + active bayrağını oku + testleri PRD kriterine göre yeniden yaz",
+            "description": "Uyarı koşulu `!hasKnowledge || !hasSkill`, yani `ready = hasKnowledge && hasSkill`. `hasSkill` = `hasSteps(s) && s.active`. AI Agent ekranında uyarının göründüğü bileşen testi. PLAN.md 06.1 satırı.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "180",
@@ -8563,21 +8495,19 @@
       },
       {
         "id": "181",
-        "title": "G3.4 — campaign_sends.engaged bayragini gercekten set et",
-        "description": "Denetim: `engaged` uretimde HIC true yapilmiyor. Kampanya raporlamasinin tek etkilesim sinyali bu; hep false kaldigi surece kampanya basarisi olculemiyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §5 K2 · `apps/api/src/services/campaigns/campaign-service.ts` · `CampaignSend` modeli\n\n**Model:** sonnet — tek bayrağın yazılma yolu.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g3-campaign-engaged\n```\n\n### YAPILACAK\nZiyaretçi kampanya kartıyla etkileşince (karttan sohbet açınca) o gönderimin `engaged` alanı `true` olur.\n\n### TANIMI NETLEŞTİR\n\"Etkileşim\" nedir — kartı görmek mi, tıklamak mı, sohbet açmak mı? Karar: **sohbet açmak** (görüntülenme zaten `delivered_at`). Kararı yorumla; rapor okuyan biri bu ayrımı bilmeden oranı yanlış yorumlar.\n\n### DİKKAT\nZiyaretçi kartı kapatıp sonra kendi başına sohbet açarsa bu kampanya etkileşimi sayılır mı? Bir zaman penceresi mi, yoksa yalnız karttan gelen tıklama mı? Seçimini yorumla ve teste bağla.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: karttan sohbet açılınca `engaged=true`; kart kapatılıp bağımsız açılan sohbette karar ne ise o (testle sabitlenir); cross-tenant izolasyon. Widget e2e akışında engaged yolunun tetiklendiği doğrulanır.",
+        "title": "M-UI — Eksik konsol yuzeyleri — \"API`de var, konsolda yok\" deseni (denetim D2)",
+        "description": "Bu maddelerin arka tarafi yazilmis, konsol yuzeyi yok: etiket grup kapsami API`de yaziliyor ama duzenlenemiyor, PAT icin `apps/web/src` icinde tek satir yok, yonlendirme kurali olusturma ucu ve ekrani yok, bildirimler yalniz InboxPage`de mount ediliyor, denetim kaydinin metadata`si hicbir yerde gorunmuyor, sablon rozetleri render edilmiyor, preview ozeti basilmiyor, ajan bazli performans lisans geneli gosteriliyor, formlarin yarisi ortak kutuphaneyi atliyor.",
+        "details": "Denetim `prd-uyum-denetimi.md` §3 D2 · ilgili PRD satırları her iş kaleminde.\n\n**Her iş kaleminde geçerli:** önce mevcut ucu bul ve sözleşmesini oku — yeni uç icat etmen gerekmiyor olabilir. Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır. i18n `apps/web/src/locales` (en+tr). `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni rota eklediysen rota listesine de ekle. Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli, sessizce yutulmamalı.",
+        "testStrategy": "Her iş kalemi kendi DoD kapısından geçer. `apps/web` test süiti (1541 test) sayıca düşmez; a11y taraması iki temada da yeşil kalır.",
         "status": "pending",
-        "dependencies": [
-          "180"
-        ],
-        "priority": "high",
+        "dependencies": [],
+        "priority": "medium",
         "subtasks": [
           {
             "id": 1,
-            "title": "Etkileşim tanımını netleştir ve yorumla",
-            "description": "Sohbet açmak = engaged. Kapatıp sonra açma durumunun kararı ve gerekçesi.",
-            "details": "",
+            "title": "M-UI-a [SONNET-XHIGH] Etiket grup kapsamı ekranı — ucun ölü kolon olmadığını da doğrula",
+            "description": "PRD **594-659** (08.7.1). API `group_ids`'i yazıyor (`settings.ts:2572` civarı) ama `Tags.tsx:139` yalnız sayı basıyor. Grup seçici ekle. **Ayrıca:** denetim canned responses için \"group_id kolonu var ama create/update kabul etmiyor → ölü kolon\" demişti; etiket ucunun gerçekten yazdığını doğrula, yazmıyorsa uç tarafı da bu iş kaleminin kapsamındadır.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "181",
@@ -8585,9 +8515,9 @@
           },
           {
             "id": 2,
-            "title": "engaged yazma yolu",
-            "description": "Karttan açılan sohbet o gönderimi engaged işaretler.",
-            "details": "",
+            "title": "M-UI-b [OPUS-XHIGH] Kişisel erişim jetonu (PAT) ekranı — kimlik bilgisi yüzeyi",
+            "description": "PRD **594-659**. `apps/web/src` içinde `personal-access-token` geçen TEK SATIR yok; API hazır (`routes/auth.ts` ~955 yükselme kapısı: oturumun sahip olmadığı scope verilemez). Oluştur/listele/iptal. **Jeton yalnız oluşturulduğu anda bir kez gösterilir**, ekran bunu açıkça söylemeli. Scope seçici yalnız oturumun sahip olduklarını göstermeli (`role-scopes.ts`) — kullanıcıya reddedilecek seçenek sunma. Jetonu log'lama, URL'e koyma, analitiğe gönderme. e2e: oluştur → jetonla API çağrısı çalışır → iptal → 401.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "181",
@@ -8595,9 +8525,79 @@
           },
           {
             "id": 3,
-            "title": "Entegrasyon testleri + DoD + merge",
-            "description": "engaged true/false senaryoları + cross-tenant.",
-            "details": "",
+            "title": "M-UI-c [OPUS-XHIGH] Bilet yönlendirme kuralı: POST/DELETE uçları + ekran",
+            "description": "PRD **594-659** (08.6.2). `/settings/routing-rules` yalnız GET (`settings.ts:2332`) + PATCH (`:2364`); oluşturma ve silme yok. `RoutingRule` kısıtları: `kind` (vars. chat), `conditions` (Json yüklemler), `targetGroupId`, `priority` (Int), `isFallback` **lisans+kind başına EN FAZLA BİR** — tekilliği uçta zorla, iki fallback yönlendirmeyi belirsizleştirir. **M-TEAM ile etkileşim:** M-TEAM-a takımı hedefleyen kural varken takım silmeyi 409 ile reddediyor; buradan kural silinince o refüz kalkmalı — teste bağla.",
+            "details": "Bağımlılık: M-TEAM-d. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "M-UI-d [OPUS-MAX] BÖLÜNMEZ: bildirimleri AppShell`e taşı — soket yaşam döngüsü sahipliği",
+            "description": "PRD **707-733** (13.8). `useNotifications` ve `useRealtime` reponun TAMAMINDA yalnız `InboxPage.tsx:209-210`'da mount ediliyor; ajan Reports'a geçince ses/masaüstü/rozet susuyor ve soket kapanıyor. **Asıl riskler:** (1) çift mount → aynı mesaj iki kez bildirilir; push verisi Inbox'a nasıl akacak (bağlam mı store mu)? (2) soket yaşam döngüsü tek yerden yönetilmeli — yeniden bağlanma, arka plan sekmesi, oturum kapanışı; sayfa geçişlerinde bağlantı fırtınası olmamalı (bağlantı sayısı ölçülür). (3) ajan zaten o sohbete bakıyorsa bildirim gösterilsin mi — mevcut davranışı koru, değiştiriyorsan yorumla. **e2e asıl kanıt:** Reports sayfasındayken gelen mesaj bildirim üretir — bugün üretmiyor, kırmızıdan yeşile dönen test kanıttır. Mobil push (`pushToAgentDevices`) kapsam dışı.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 5,
+            "title": "M-UI-e [OPUS-XHIGH] Denetim kaydı detayı: GET /audit-log/:id + genişletilebilir satır",
+            "description": "PRD **594-659** (08.9.7). Zincir (HMAC + gapless `chain_seq`), imzalı export ve SIEM çıkışı sağlam — **dokunma**. Eksik olan detay: kaydın `metadata`sı hiçbir yerde görünmüyor, tekil kayıt ucu yok. **Gizlilik tasarım sorusu:** metadata bazı kayıtlarda hassas (rol değişimi, IP, e-posta) ve tasarım bilinçli olarak bazı alanları yazmıyor (ban audit'inde IP'nin kasten yazılmaması gibi) — hangi alanların gösterileceğine karar ver ve gerekçeni yorumla; her şeyi ham JSON basmak kolay ama doğru olmayabilir. Scope: liste görebilen detayı da görebilir, fazlası değil.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 6,
+            "title": "M-UI-f [SONNET-XHIGH] Form kütüphanesi pilotu: Payment ve Add-website (PRD adıyla sayıyor)",
+            "description": "PRD **722-733** (FR-EK-A.1). `useForm(` kullanan 20 dosya var ama `<form` içeren 40 dosya var; atlananlar tam da PRD'nin adıyla saydığı bu ikisini içeriyor. KK: istemci tarafı anlık validasyon + **alan-altı** hata mesajı + geçerli girdi olmadan submit pasif. **Davranışı değiştirme, kuruluşu değiştir** — mevcut testler kırılıyorsa davranış değişmiş demektir, dur ve incele. Payment bir ödeme yüzeyi: kart verisi log/URL'e girmez.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 7,
+            "title": "M-UI-g [SONNET-MAX] Form kütüphanesi süpürmesi: kalan formların envanteri ve taşınması",
+            "description": "Geniş mekanik yüzey (~20 dosya). Önce envanter: `comm -23 <(grep -rln \"<form\" apps/web/src --include=*.tsx|sort) <(grep -rln \"useForm(\" apps/web/src --include=*.tsx|sort)`. Öncelik: kullanıcı verisi yazan ve hata gösterme ihtiyacı yüksek olanlar (ayarlar, davet, kural oluşturma); salt arama kutusu olanlar düşük — taşınmaya değmiyorsa nedenini yaz. Her taşımadan sonra o dosyanın testini koş, hepsini sona bırakma. **Taşınanları ve kalanları HANDOFF'a açıkça listele** — sessiz kısmi teslim denetimin en çok şikayet ettiği şey.",
+            "details": "Bağımlılık: M-UI-f. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 8,
+            "title": "M-UI-h [SONNET-XHIGH] AI Agent şablon rozetleri — tip ve veri var, render yok",
+            "description": "PRD **552-561** (05.2). `TemplateBadge` tipi tanımlı (`templates.ts:54`), `badge` alanı dört kayıtta dolu, hiçbir bileşen render etmiyor → Popular/Essential kartlarda görünmüyor. Rozet bir kategori değil vurgu — kategori ucu (prebuilt/ai/trending) zaten basılıyor, karıştırma. Yeni renk eklersen `tokens.test.ts` AA kontrast eşiğini de güncelle. i18n.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 9,
+            "title": "M-UI-i [SONNET-XHIGH] Skill preview özet narrasyonu + editörün ilk testleri",
+            "description": "PRD **562-578** (06.2.5). API `summary` DÖNÜYOR (`playbook.ts:441`) ve DTO'da alan var; editörün `PreviewResult`'ı render etmiyor (yalnız StatusDot/errors/reply/transfer). PRD dört eylemin anlatılmasını istiyor: toplama, etiket, **özet**, transfer + hata gösterimi. **Editör tarafında HİÇ test yok** — maddenin KISMİ çıkma sebebinin yarısı budur; yalnız render eklemek kapatmaz.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 10,
+            "title": "M-UI-j [SONNET-XHIGH] Ajan bazlı AI performansı (şu an lisans geneli)",
+            "description": "PRD **536-551** (04.2). Team sayfası `<AiPerformance agentActive={anyActive} />` ile hiçbir ajana özel olmayan veri gösteriyor. **`agentPerformance` sorgusu zaten ajan bazlı** (`report-csv.ts`, `AgentPerformanceRow`: agent_id, name, chats, closed, manual, assisted, automated) — yeni sorgu yazma, bağla. M-RPT bittiyse düzeltilmiş figür tanımlarını kullan. Yetki: scope kontrolünü uçta zorla, UI gizlemeye güvenme (PRD §7 RBAC).",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "181",
@@ -8608,21 +8608,19 @@
       },
       {
         "id": "182",
-        "title": "G3.5 — Yeni ziyaretci calisan kampanyalari tetiklesin",
-        "description": "Tetikleme su an YALNIZ kampanya create/update aninda, son LIVE_WINDOW_MINUTES icindeki ziyaretcilere karsi calisiyor (campaign-service.ts `#fireIfRunning`). Yani kampanya kaydedildikten SONRA gelen bir ziyaretci hicbir zaman eslestirilmiyor — kampanyanin normal calisma sekli budur ve yok.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §5 K2 · `apps/api/src/services/campaigns/campaign-service.ts` (`#fireIfRunning`, `LIVE_WINDOW_MINUTES`, `matchesConditions`, `visitorPageUrls`)\n\n**Model:** opus — eşleştirmenin sıcak yola girmesi; idempotanslık ve maliyet muhakemesi gerektiriyor.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g3-campaign-visitor-trigger\n```\n\n### YAPILACAK\nYeni bir ziyaret kaydı oluştuğunda (`visits` yazma yolu) çalışan kampanyalar değerlendirilsin.\n\n### YENİDEN KULLAN, YENİDEN YAZMA\n`matchesConditions` ve `visitorPageUrls` (`campaign-matching.ts`) mevcut ve testli. Yeni bir eşleştirme mantığı yazma — aynı yüklemi çağır, yoksa iki eşleştirici birbirinden sapar.\n\n### İDEMPOTANSLIK — BOZMA\n`campaign_sends` üzerinde `(campaign, customer)` unique kısıtı ve `skipDuplicates` var; aynı ziyaretçiye iki kez gönderimi bu engelliyor. Yeni tetikleyici bu garantiyi korumalı.\n\n### MALİYET (asıl tasarım sorusu)\nZiyaret yazma yolu **sıcak yol** — her sayfa görüntülenmesinde çalışır. Her ziyarette tüm çalışan kampanyaları değerlendirmek pahalı olabilir. Seçenekleri tart ve kararını yorumla: senkron mu, işlem sonrası mı, yoksa kısa bir önbellek arkasında mı? NFR-P bütçelerini (`apps/load/test/budgets.test.ts`) bozma.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: (1) kampanya çalışırken gelen YENİ ziyaretçi `campaign_sends` satırı üretir; (2) aynı ziyaretçi tekrar gelirse ikinci satır oluşmaz (idempotanslık korunur); (3) `scheduled`/`inactive` kampanya tetiklenmez; (4) koşulları tutmayan ziyaretçi eşleşmez; (5) cross-tenant — B lisansının kampanyası A ziyaretçisine ateşlenmez; (6) **performans** — ziyaret yazma yolunun NFR-P2 bütçesi aşılmaz (`apps/load` bütçe testi yeşil kalır).",
+        "title": "M-CO — Sirket bilgileri (FR-MOD-08.3) — semada, ucta ve konsolda hic yok",
+        "description": "Denetimde YOK cikti ve onceligi Onemli. `Organization` modelinde yalnizca `name` + `region` var (schema.prisma:29-43); sektor/adres/saat dilimi alani yok, `/settings/company` benzeri uc yok (settings.ts teki 46 route un hicbiri sirket bilgisi yazmiyor), web tarafinda boyle bir bolum yok.",
+        "details": "PRD satır **594-659** (FR-MOD-08.3) · denetim `prd-uyum-denetimi.md` §6 (YOK listesi).\n\n**Saat dilimi çakışması — asıl dikkat noktası:** çalışma saatleri özelliği (`WorkSchedule`, `work_schedule.updated` audit eylemi) zaten bir saat dilimi taşıyor. Şirket saat dilimi ile ajan/çalışma saati saat dilimi çakışmamalı — hangisi hangisini besliyor? İki ayrı doğruluk kaynağı olursa raporlar sessizce kayar.",
+        "testStrategy": "`db:check-drift` exit 0. Kaydet → geri oku; scope reddi; cross-tenant izolasyon; **çalışma saatleri bu saat dilimini kullanıyor** (iki kaynak kararının testi). e2e + `kanit/08.3-company.png`. PLAN.md 08.3 satırı ⬜ → ✅.",
         "status": "pending",
-        "dependencies": [
-          "179"
-        ],
-        "priority": "high",
+        "dependencies": [],
+        "priority": "medium",
         "subtasks": [
           {
             "id": 1,
-            "title": "Ziyaret yazma yolunda kampanya değerlendirmesi",
-            "description": "matchesConditions/visitorPageUrls yeniden kullanılır; yeni eşleştirici yazılmaz.",
-            "details": "",
+            "title": "M-CO-a [SONNET-XHIGH] Organization şema alanları + migration + GET/PATCH /settings/company",
+            "description": "Sektör / adres / saat dilimi. Sektör serbest metin mi kapalı liste mi — kapalı liste raporlanabilir ama esnek değil, kararını yorumla. Kontrat + `contract:generate` + generated senkron. Scope mevcut ayar uçlarıyla tutarlı.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "182",
@@ -8630,39 +8628,9 @@
           },
           {
             "id": 2,
-            "title": "Maliyet kararı: senkron / işlem sonrası / önbellek",
-            "description": "Sıcak yol. Kararı ve ölçümü yorumla; NFR-P bütçesini bozma.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "182",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "İdempotanslık korunumu",
-            "description": "(campaign, customer) unique + skipDuplicates garantisi yeni yolda da geçerli.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "182",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Entegrasyon + performans testleri",
-            "description": "testStrategy 1-6. apps/load bütçesi yeşil.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "182",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
+            "title": "M-CO-b [OPUS-XHIGH] Ayarlar ekranı bölümü + saat dilimi tek doğruluk kaynağı kararı",
+            "description": "Şirket saat dilimi ile çalışma saatleri saat dilimi arasındaki ilişkiyi karara bağla, yorumla ve **teste bağla**. `lib/form.tsx` (M-UI-f/g merge olduysa doğrudan ortak kütüphaneyle yaz); i18n en+tr; a11y rota listesi.",
+            "details": "Bağımlılık: M-CO-a. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "182",
@@ -8673,39 +8641,19 @@
       },
       {
         "id": "183",
-        "title": "G3.6 — Kampanya durumu okuma aninda yeniden degerlendirilsin",
-        "description": "Durum (`ongoing`/`scheduled`/`inactive`) YALNIZ yazma aninda hesaplanip kolona sabitleniyor — `computeCampaignStatus` sadece create (campaign-service.ts:108) ve update (:169) yolundan cagriliyor. Zamanin gecisiyle durumu yeniden degerlendiren hicbir zamanlayici yok, dolayisiyla `starts_at` gecmise kayan bir kampanya sonsuza dek `scheduled` gorunuyor ve sekme filtreleri yanlisa donusuyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D3 ve §5 K2 · `apps/api/src/services/campaigns/campaign-service.ts` · `apps/api/src/services/campaigns/campaign-matching.ts` (`computeCampaignStatus`)\n\n**Model:** sonnet — mevcut fonksiyonu okuma yoluna bağlamak.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g3-campaign-status-refresh\n```\n\n### TERCİH EDİLEN ÇÖZÜM\n**Okuma anında yeniden hesaplama** — zamanlayıcı altyapısı gerektirmez: liste/detay okumasında `computeCampaignStatus` `now` ile yeniden çalışır, kolon eskiyse güncellenir.\nAlternatif: mevcut sweep desenine bağlamak (`apps/api/src/services/.../retention.ts` sweep'ine bak). Zamanlayıcı zaten varsa o daha temiz olabilir — ikisini tart, kararını yorumla.\n\n### DİKKAT\n- Okuma sırasında yazmak: eşzamanlı iki okuma aynı satırı güncellemeye çalışabilir. Idempotent bir güncelleme yaz (aynı değere yazmak zararsız).\n- Sekme filtreleri (All/Ongoing/Scheduled/Inactive) bu değerden beslenmeli.\n- `#fireIfRunning` yalnız `ongoing` iken ateşliyor; durum düzeldiğinde 182'nin tetikleyicisi doğru davranacak.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: `starts_at` geçmişe alınmış bir `scheduled` kampanya okumada `ongoing` görünür ve kolon güncellenir; `ends_at` geçmiş olan `inactive` olur; eşzamanlı iki okuma çakışmaz; sekme filtreleri güncel değere göre süzer; okuma yolunun NFR-P bütçesi aşılmaz. Web tarafında sekme sayıları doğru.",
+        "title": "M-CHOBS — Kanal mesaj gozlemlenebilirligi — G1`in biraktigi borc",
+        "description": "Omnichannel cift yonlu oldu (tm G1, `channel_messages` a outbound yaziliyor) ama tabloyu okuyan bir uc yok. Bu yuzden e2e teslimati gozlemleyemiyor ve bir operator \"bu mesaj gercekten gitti mi\" sorusunu konsoldan cevaplayamiyor.",
+        "details": "Denetim `prd-uyum-denetimi.md` §3 D1 · `HANDOFF.md` G1 girişi (\"Kalan borç\") · `services/channels/channel-service.ts` (`record`) ve `ChannelMessage` modeli.\n\nG1 turunda `channels.spec.ts` ve `telegram.spec.ts`'ten elle atılan `POST /channels/:type/messages` adımı kaldırıldı (artık çift gönderim olurdu). Bu iş kalemi o adımın **dürüst yerine koymasıdır**: teslimatı gerçekten gözlemleyen bir okuma yolu.",
+        "testStrategy": "Yön/sohbet/zaman filtreleri; keyset sayfalama; cross-tenant izolasyon; scope reddi; sorgunun mevcut indekslere oturduğu EXPLAIN ile ölçülür (`reports-billing.test.ts` deseni). e2e: ajanın konsoldan yazdığı cevabın gerçekten gönderildiği bu uçla doğrulanır.",
         "status": "pending",
         "dependencies": [],
-        "priority": "high",
+        "priority": "low",
         "subtasks": [
           {
             "id": 1,
-            "title": "Okuma anında yeniden hesaplama (veya sweep) kararı ve uygulaması",
-            "description": "computeCampaignStatus now ile; kolon eskiyse idempotent güncelleme.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "183",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Sekme filtrelerini güncel değere bağla",
-            "description": "All/Ongoing/Scheduled/Inactive.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "183",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Entegrasyon testleri + DoD + merge",
-            "description": "Zaman geçişi senaryoları, eşzamanlılık, performans bütçesi.",
-            "details": "",
+            "title": "M-CHOBS-a [OPUS-XHIGH] GET /channels/:type/messages — yeni yetkili uç, müşteri içeriği taşır",
+            "description": "Yön (inbound/outbound), sohbet ve zaman aralığı filtreleri; keyset sayfalama (mevcut `page_id` deseni). Mesaj metni müşteri içeriği: scope'u dar tut (`channels--all:ro`), cross-tenant izolasyonu test et. `ChannelMessage` indeksleri `(license_id, channel_type, created_at)` ve `(license_id, chat_id)` var — sorguyu bunlara oturt, yeni indeks açmadan önce ölç.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "183",
@@ -8716,19 +8664,19 @@
       },
       {
         "id": "184",
-        "title": "G4.1 — S3 uyumlu ObjectStore implementasyonu (stateless ihlalini kapat)",
-        "description": "NFR-R1 \"stateless servisler\" diyor ama yuklemeler pod-yerel diske gidiyor (`LocalStore`, `STORAGE_LOCAL_DIR`), `attachment.ts:36` capraz-pod eki REDDEDIYOR ve Helm charti ayni poda `maxReplicas: 4` HPA takiyor. Yani yatay olcek altinda ek indirmeleri rastgele basarisiz olur — bugun uretimde kirilan bir kusur.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D6 · PRD satır **768-777** (NFR-R) · `apps/api/src/services/storage/object-store.ts` · `local-store.ts` · `attachment.ts`\n\n**Model:** opus — çok-pod semantiği, hata yolları ve mevcut güvenlik garantilerinin korunması muhakeme gerektiriyor.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g4-s3-object-store\n```\n\n### İYİ HABER: GENİŞLEME NOKTASI HAZIR\n`ObjectStore` arayüzü (`object-store.ts`) `put`/`get`/`exists` ile zaten var; `createObjectStore` fabrikası `STORAGE_PROVIDERS` enum'u üzerinden seçim yapıyor ve **kodun kendi yorumu bu genişlemeyi öngörüyor**: *\"the exhaustive form is what makes adding `s3` to the enum later a compile error here\"*.\n\n### YAPILACAK\n1. `apps/api/src/services/storage/s3-store.ts` — `ObjectStore`'u uygula.\n2. `STORAGE_PROVIDERS`'a `'s3'` ekle → `createObjectStore` switch'i **derleme hatası** verir; oradan doldur.\n3. Env: `apps/api/src/config/env.ts` (mevcut `STORAGE_PROVIDER`/`STORAGE_LOCAL_DIR` yanına) `STORAGE_S3_*` — endpoint, bucket, region, erişim anahtarları. **Gerçek secret YOK**; yerelde MinIO (185).\n\n### ÇAĞRI YERLERİNE DOKUNMA\n`routes/chats.ts`, `routes/customer.ts`, `routes/uploads.ts` zaten fabrikadan geçiyor. Üçünü de değiştirmen gerekiyorsa tasarımı yanlış kurmuşsundur.\n\n### KORUNACAK GARANTİLER\n- `attachment.ts` `exists` kontrolü bir **güvenlik sınırı**: verilmiş ama kullanılmamış bir anahtara işaret eden `attachment_url`'i reddediyor. S3 yolunda da aynı kesinlikte çalışmalı.\n- `local-store.ts` yol kaçışına karşı kök doğrulaması yapıyor; S3'te karşılığı anahtar doğrulamasıdır — `../` benzeri anahtarlar kabul edilmemeli.\n- Hata yolları: ağ hatası ile \"yok\" birbirine karışmamalı. `exists` ağ hatasında `false` dönerse güvenlik kontrolü sessizce açılır — bu bir güvenlik kusuru olur.",
-        "testStrategy": "Tam DoD kapısı. `object-store.test.ts` desenini S3 store için tekrarla: put/get/exists round-trip; olmayan anahtar; content-type korunumu; **ağ hatası `exists`'i false yapmaz** (hata propagate eder); kötü niyetli anahtar reddi. `apps/api/test/integration/` altında `STORAGE_PROVIDER=s3` ile mevcut yükleme testlerinin parametrik koşumu. Çok-pod doğrulaması 186da.",
+        "title": "M-TRACE — Kalite kapisi — \"kabul kriterinin KENDISI test ediliyor mu\" olculmuyor",
+        "description": "Mevcut DoD kapisi \"kod var + testler yesil\" i olcuyor. Denetimde ilk turun verdigi her bes TAM dan biri ikinci turda coktu, ve 07.4 metriginin testi yesilken kriter yanlisti. Bu kalem hangi testin hangi gereksinimi korudugunu makineyle okunabilir kilar ve kapiya baglar.",
+        "details": "Denetim `prd-uyum-denetimi.md` §2 (çürütme turu neden gerekliydi) ve §8 · `CONVENTIONS.md` §1.\n\n**Sıfırdan başlamıyorsun:** desen kısmen var — kodda ve testlerde `FR-MOD-11.5 · 11.5-d`, `08.9.5-a/b`, `ADR-09` gibi referanslar yorumlarda geçiyor. Kural bunu **düzenli** hale getirmeli, yeni bir şey icat etmemeli.\n\n`-d` (PLAN doğruluk taraması) **en sona bırakılmalı** — diğer düzeltme kalemleri kapanmadan koşarsa düzeltilmiş maddeleri de `◐`ye çeker.",
+        "testStrategy": "Kalem bütününün kabul kriteri: CI adımının **gerçekten kırmızı verdiği** gösterilir — etiketsiz bir gereksinim ID'si eklenince kapı düşer, etiket eklenince yeşile döner. \"Adım eklendi\" yetmez; bu tam da denetimin eleştirdiği şeydir.",
         "status": "pending",
         "dependencies": [],
-        "priority": "high",
+        "priority": "medium",
         "subtasks": [
           {
             "id": 1,
-            "title": "s3-store.ts: ObjectStore uygulaması (put/get/exists)",
-            "description": "İçerik tipi korunur; anahtar doğrulaması; hata yolları ayrık.",
-            "details": "",
+            "title": "M-TRACE-a [OPUS-MAX] BÖLÜNMEZ: test↔gereksinim izlenebilirlik konvansiyonu (b ve c bunun üstüne kuruluyor)",
+            "description": "Etiket nerede yaşar — test adında mı, yorumda mı, bir yardımcıda (`covers('FR-MOD-08.5.5')`) mı? Her birinin grep'lenebilirliği ve gürültüsü farklı. Bir test birden çok maddeyi korur, bir madde birden çok testle korunur — çoktan-çoğa ilişkiyi nasıl ifade ediyorsun? Kural **geriye dönük** olarak 2701 entegrasyon + 1174 birim testine uygulanamaz: kademeli benimseme nasıl işleyecek, yalnız yeni/değişen testler mi zorunlu? Çıktı: kural + `CONVENTIONS.md`'ye yazılmış hali + en az bir dosyada uygulanmış hali + etiketlerin makineyle çıkarılabildiğini gösteren örnek komut.",
+            "details": "Bağımlılık: yok. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "184",
@@ -8736,9 +8684,9 @@
           },
           {
             "id": 2,
-            "title": "STORAGE_PROVIDERS'a 's3' + fabrika switch'i",
-            "description": "Enum eklemesi derleme hatası üretir; oradan doldur. Çağrı yerlerine dokunma.",
-            "details": "",
+            "title": "M-TRACE-b [OPUS-XHIGH] Kapsama raporu script`i + sınırının açıkça belgelenmesi",
+            "description": "`scripts/` altında: PRD madde kataloğunu okur, `-a`nın kuralına göre testleri tarar, **testi olmayan maddeleri listeler**. Girdi kataloğu `prd-uyum-denetimi.md` Ek A'daki 247 madde olabilir — ama o bir markdown tablosu; ayrıştırılmalı mı yapılandırılmış kaynağa mı taşınmalı, kararını yorumla. **Sınırı belgele:** bir madde etiketli ama testi kriteri ölçmüyorsa script bunu göremez — yeşil rapor yanlış güven verir (07.4 dersinin tam tekrarı). Kapsam dışı listesi tut (KVKK, workflow builder, masaüstü uygulaması) yoksa bilinçli kararlar \"eksik\" diye raporlanır. Çıktı: insan özeti + CI'ın tüketeceği makine biçimi.",
+            "details": "Bağımlılık: M-TRACE-a. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "184",
@@ -8746,9 +8694,9 @@
           },
           {
             "id": 3,
-            "title": "env.ts: STORAGE_S3_* değişkenleri",
-            "description": "endpoint/bucket/region/anahtarlar. Gerçek secret yok.",
-            "details": "",
+            "title": "M-TRACE-c [SONNET-XHIGH] Kapsama kapısını CI`a bağla + CONVENTIONS §1`i güncelle",
+            "description": "Kademeli olmalı: bugün 141 KISMİ madde var, kapıyı \"hiçbir madde testsiz olamaz\" diye kurarsan CI kalıcı kırmızı olur ve kimse bakmaz — yeni/değişen maddeler zorunlu, mevcut borç ayrı raporlanır. `CONVENTIONS.md` §1 DoD listesine yeni kutu. **Kapının gerçekten kırmızı verdiğini kanıtla.** Bilinen CI boşluğu (unit-tests-before-build bundle bütçesini sessizce atlıyor) aynı turda ayrı commit ile kapatılabilir.",
+            "details": "Bağımlılık: M-TRACE-b. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "184",
@@ -8756,1584 +8704,12 @@
           },
           {
             "id": 4,
-            "title": "Güvenlik garantilerinin korunumu",
-            "description": "attachment.ts exists sınırı; ağ hatası ≠ yok; yol/anahtar kaçışı reddi.",
-            "details": "",
+            "title": "M-TRACE-d [SONNET-MAX] EN SONA BIRAK: PLAN.md yanlış kapanışlarının taranması (geniş mekanik süpürme)",
+            "description": "`prd-uyum-denetimi.md` Ek A'daki nihai verdict (TAM/KISMİ/YOK) ile PLAN.md durum damgalarını karşılaştır; `✅` damgalı ama denetimde KISMİ/YOK çıkan satırları düzelt. CONVENTIONS §1.2: *\"Kısmen karşılandıysa `◐` + eksik açıklaması doğru cevaptır; `✅` uydurmak bu kutuyu geçmez\"* — bu iş kalemi o kuralı geriye dönük uyguluyor. **SIRALAMA:** başlarken Task Master'da hangi kalemlerin `done` olduğunu kontrol et ve yalnız **gerçekten hâlâ eksik** olanları düşür. Kanıt disiplini: hücrede yalnız damga (`◐ → K<kod>`), açıklama `## K. Kanıt Geçmişi` bloğuna madde olarak; var olanları silme. Faz özet sayaçları da güncellenmeli (panel `statedCounts` olarak okuyor). `C-plan-row-length` eşiğini aşan satır üretme.",
+            "details": "Bağımlılık: M-TRACE-b. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
             "status": "pending",
             "dependencies": [],
             "parentId": "184",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "Birim + parametrik entegrasyon testleri",
-            "description": "object-store.test.ts deseni; STORAGE_PROVIDER=s3 ile mevcut yükleme testleri.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "184",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 6,
-            "title": "DoD + PLAN.md/HANDOFF + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4. PLAN.md NFR-R1 satırı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "184",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "185",
-        "title": "G4.2 — MinIO servisini docker-compose a ekle + bucket bootstrap",
-        "description": "184un yazdigi S3 store yerelde bir S3 uyumlu depo ister. CLAUDE.md dis servislerin mocklanmasini soyluyor; MinIO bu isin yerel karsiligi.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `docker-compose.yml` · `docker-compose.full.yml` · 184 nolu görevin `STORAGE_S3_*` env değişkenleri\n\n**Model:** sonnet — compose + bootstrap script.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g4-minio-compose\n```\n\n### YAPILACAK\n1. `docker-compose.yml` ve `docker-compose.full.yml`'a MinIO servisi. Mevcut `nexa-db`/`nexa-redis` adlandırma ve port seçimi desenini izle (host portları çakışmasın; db 5433, redis 6380 kullanılıyor).\n2. Bucket bootstrap — servis ayağa kalkınca bucket var olsun (init container ya da healthcheck sonrası tek seferlik komut).\n3. `.env.example` (varsa) ve README/geliştirici notlarına `STORAGE_PROVIDER=s3` ile çalıştırma talimatı.\n\n### KABUL\n`STORAGE_PROVIDER=s3` ile yerelde dosya yükleme ve indirme uçtan uca çalışır.\n\n### DİKKAT\nVarsayılan `STORAGE_PROVIDER` **`local` kalmalı** — mevcut geliştirici akışını ve CI'ı bozma. S3 opt-in olsun.",
-        "testStrategy": "Tam DoD kapısı. Elle doğrulama yeterli değil: `STORAGE_PROVIDER=s3` ile en az bir entegrasyon testi koşar ve yükle→indir turu geçer. Varsayılan `local` ile tüm mevcut testler değişmeden yeşil (regresyon yok). Compose dosyası `docker compose config` ile geçerli.",
-        "status": "pending",
-        "dependencies": [
-          "184"
-        ],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "MinIO servisi (iki compose dosyası)",
-            "description": "nexa-* adlandırma deseni; port çakışması yok.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "185",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Bucket bootstrap",
-            "description": "Servis hazır olunca bucket mevcut.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "185",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Geliştirici talimatı + varsayılanın local kalması",
-            "description": ".env.example / README. S3 opt-in.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "185",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "S3 ile yükle-indir turu testi + DoD + merge",
-            "description": "STORAGE_PROVIDER=s3 ile en az bir entegrasyon testi.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "185",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "186",
-        "title": "G4.3 — Cok-pod ek dogrulamasi: bir podun yukledigini digeri okuyor",
-        "description": "G4un asil iddiasi bu: yatay olcek altinda ek indirmeleri artik basarisiz olmuyor. `attachment.ts:36` capraz-pod eki reddediyordu; testsiz duzeltme, duzeltme sayilmaz.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D6 · `apps/rtm/test/integration/two-pod.test.ts` (örnek alınacak desen) · `apps/api/src/services/storage/attachment.ts`\n\n**Model:** sonnet — mevcut çok-pod test desenini uyarlamak.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g4-multipod-attachment\n```\n\n### DESEN\n`apps/rtm` tarafındaki `two-pod.test.ts` iki ayrı sunucu örneği kaldırıp aralarındaki davranışı doğruluyor. Aynı şekli ek yükleme için kur: bir örnekten yükle, **diğerinden** indir.\n\n### KABUL\n`attachment.ts` doğrulaması iki farklı store örneğinde de geçer; `STORAGE_PROVIDER=local` ile bu test **başarısız olmalı** (yani testin gerçekten bir şey ölçtüğünü kanıtlar) — bu durumu testin kendisinde belgelendir ya da local'de atlanacak şekilde işaretle ve nedenini yaz.\n\n### DİKKAT\nHelm chart'ındaki `maxReplicas: 4` HPA bu kusurun üretimde neden görünür olduğunun kanıtı; chart'a dokunman gerekmiyor ama HANDOFF'a durumu yaz.",
-        "testStrategy": "Tam DoD kapısı. Yeni çok-pod ek testi: pod A yükler → pod B indirir → içerik ve content-type aynı; `attachment.ts` doğrulaması B üzerinde de geçer. `local` sağlayıcı ile aynı senaryonun neden geçmediği belgelenir. Mevcut yükleme testleri kırılmaz.",
-        "status": "pending",
-        "dependencies": [
-          "185"
-        ],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "İki örnekli test kurulumu (two-pod.test.ts deseni)",
-            "description": "apps/rtm/test/integration/two-pod.test.ts şeklini uyarla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "186",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Yükle(A) → indir(B) + attachment doğrulaması",
-            "description": "İçerik ve content-type korunur; exists sınırı B üzerinde de çalışır.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "186",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "local sağlayıcıda neden geçmediğinin belgelenmesi",
-            "description": "Testin gerçekten bir şey ölçtüğünün kanıtı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "186",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "DoD + PLAN.md/HANDOFF + merge",
-            "description": "HANDOFF a HPA/çok-pod durumu notu.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "186",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "187",
-        "title": "G4.4 — Virus taramasi ve imzali URL yolunun S3 paritesi",
-        "description": "`virus-scanner.ts` fail-closed tarama ve `upload-url.ts` imzali PUT akisi local depoda kanitli. S3 yoluna gecince bu iki guvenlik garantisinin ayni kaldigi gosterilmezse, depolama degisikligi sessizce bir guvenlik gerilemesi olur.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D6 · `apps/api/src/services/storage/virus-scanner.ts` · `upload-url.ts` · PRD satır **751-767** (NFR-S)\n\n**Model:** sonnet — mevcut testleri parametrik hale getirmek.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g4-storage-security-parity\n```\n\n### YAPILACAK\nMevcut güvenlik testlerini iki sağlayıcı üzerinde de koşacak şekilde parametrikleştir: `local` ve `s3`.\n\n### KORUNACAK DAVRANIŞLAR\n- **fail-closed AV**: tarayıcı cevap veremiyorsa dosya kabul EDİLMEZ (açık kalmaz).\n- İmzalı PUT akışı: imza doğrulaması, süre sınırı, yeniden kullanım reddi.\n- `nosniff` ve izin verilen dosya türü/boyut sınırları.\n\n### DİKKAT\nParametrik koşum kapının süresini uzatır. Yalnız **güvenlik** testlerini iki sağlayıcıda koş; tüm yükleme süitini ikiye katlama.",
-        "testStrategy": "Tam DoD kapısı. Güvenlik testleri `local` ve `s3` için parametrik geçer: fail-closed AV (tarayıcı hatasında dosya reddedilir), imzalı PUT (geçersiz imza / süresi geçmiş / yeniden kullanım reddi), tür ve boyut sınırları, nosniff. İki sağlayıcıda da aynı sonuç — farklıysa parite yok demektir ve görev tamamlanmamıştır.",
-        "status": "pending",
-        "dependencies": [
-          "185"
-        ],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Güvenlik testlerini sağlayıcı üzerinden parametrikleştir",
-            "description": "local + s3. Tüm yükleme süiti değil, yalnız güvenlik testleri.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "187",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "fail-closed AV paritesi",
-            "description": "Tarayıcı cevap vermezse dosya reddedilir — her iki depoda da.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "187",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "İmzalı PUT paritesi",
-            "description": "İmza, süre, yeniden kullanım reddi.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "187",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "187",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "188",
-        "title": "G5.1 — transferCount a reason filtresi: ajan-ajan devirleri AI devri sayilmasin",
-        "description": "FR-MOD-07.4 raporunun \"deflection\" yarisi yanlis. `transferCount` (report-csv.ts:937) `chat_transferred` olaylarini `reason` ayrimi YAPMADAN sayiyor, yani insan-insan devirlerini AI devri gibi raporluyor — AI performansi oldugundan iyi gorunuyor. Ayni SQL ikinci kez :1044 te tekrarlaniyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D7 · PRD satır **579-593** (FR-MOD-07.4) · `apps/api/src/services/reports/report-csv.ts`\n\n**Model:** sonnet — düzeltme tek bir SQL yüklemi.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g5-deflection-reason\n```\n\n### İYİ HABER: ŞEMA DEĞİŞİKLİĞİ GEREKMİYOR\n`reason` alanı olayın `properties`ine **zaten yazılıyor**:\n- `apps/api/src/services/chat/chat-service.ts:980` → `reason: target.reason`\n- `apps/api/src/services/ai/ai-responder.ts:135` → `reason: 'ai_handoff'`\n\n### YAPILACAK\n1. `transferCount` SQL'ine `AND e.properties @> '{\"reason\":\"ai_handoff\"}'::jsonb` ekle. **Containment (`@>`) kullan**, `->>` değil — jsonb GIN indeksinden faydalanmak için; dosyanın kendi yorumu bu gerekçeyi yazıyor.\n2. `:1044` civarındaki **ikinci kopyayı** da düzelt. Mümkünse tek yardımcıya indir — iki kopya zaten bu hatanın iki yerde yaşamasının sebebi.\n\n### DİKKAT\n`reason` sözlüğü `TRANSFER_REASONS` (`@nexa/types`). `ai_handoff` dışındaki değerlerin hangileri olduğunu oku; \"AI devri\" tanımına başka bir reason giriyorsa onu da dahil et — ama kararını yorumla.",
-        "testStrategy": "Tam DoD kapısı. **190 nolu görev fixture düzeltmesini yapıyor; bu görev onsuz da kendi testini yazmalı:** ajan→ajan devri + AI→insan devri üretilen bir senaryoda deflection YALNIZ ikincisini sayar. CSV export ve rapor ucu aynı sayıyı verir (iki kopya artık ayrışamaz). Cross-tenant izolasyon. Mevcut rapor testleri kırılmadan geçer — kırılıyorsa beklenen sayı değişmiştir, düzelt ve nedenini yaz.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "transferCount SQL yüklemi + ikinci kopyanın birleştirilmesi",
-            "description": "Containment @> kullan. İki kopyayı tek yardımcıya indir.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "188",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "TRANSFER_REASONS sözlüğünü oku, kapsam kararını yorumla",
-            "description": "ai_handoff dışında AI devri sayılan bir reason var mı?",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "188",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Test: ajan-ajan devri deflection a girmez",
-            "description": "İki devir türü üretilir; yalnız AI olanı sayılır. Rapor ucu = CSV.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "188",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "DoD + PLAN.md/HANDOFF + merge",
-            "description": "PLAN.md 07.4 satırı — denetimde bu satır ✅ görünüyordu ama yanlış ölçüyordu.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "188",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "189",
-        "title": "G5.2 — skill_runs sayimini AI Agent a kilitle (Copilot kullanimi karismasin)",
-        "description": "`skillRun.count` uc yerde FILTRESIZ cagriliyor (report-csv.ts:1489, :1726, routes/reports.ts:719) — bu yuzden Copilot assistleri AI Agent yetenegi sayiliyor. Kod tabani ai_agent/copilot sinirini baska her yerde titizlikle uyguluyor; rapor katmaninda dusuyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D7 · PRD satır **579-593** ve **699-706** (FR-MOD-07.4, FR-MOD-12) · `apps/api/src/services/reports/report-csv.ts` · `apps/api/src/routes/reports.ts`\n\n**Model:** sonnet — üç çağrı yerine aynı filtre.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g5-skillruns-scope\n```\n\n### İYİ HABER: ŞEMA DEĞİŞİKLİĞİ GEREKMİYOR\n`Skill.aiAgentId` **zaten var** (`apps/api/prisma/schema.prisma:1384`, `ai_agent_id String? @db.Uuid`). `SkillRun.skillId → Skill` ilişkisi üzerinden filtrelenebilir.\n\n### YAPILACAK\nYalnız `aiAgentId != null` olan skill'lerin run'ları AI Agent raporunda sayılsın. Üç çağrı yerinin **üçünü de** düzelt.\n\n### ÖNCE DOĞRULA\nCopilot gerçekten `skill_runs` yazıyor mu, yoksa varsayım mı? `skill_runs` yazan yolları grep'le ve `aiAgentId` null olan skill'lerin kim tarafından koşulduğunu tespit et. Varsayımın yanlışsa filtre de yanlış olur — bulduğunu yorumla.\n\n### DİKKAT\n188 ile aynı raporu düzeltiyorsunuz ama farklı figürleri; iki görev bağımsız merge edilebilir olmalı.",
-        "testStrategy": "Tam DoD kapısı. Fixture hem AI Agent skill run'ı hem Copilot kaynaklı run üretir; rapor YALNIZ ilkini sayar. Üç çağrı yerinin üçü de aynı sayıyı verir. Cross-tenant izolasyon. Copilot'un skill_runs yazmadığı ortaya çıkarsa: bulguyu teste ve yoruma yaz, filtreyi buna göre kur.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "skill_runs yazan yolları tespit et, varsayımı doğrula",
-            "description": "aiAgentId null olan skill kim tarafından koşuluyor? Bulguyu yorumla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "189",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Üç çağrı yerine aiAgentId filtresi",
-            "description": "report-csv.ts:1489, :1726, routes/reports.ts:719.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "189",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Test: Copilot kullanımı AI Agent raporuna karışmaz",
-            "description": "İki tür run üretilir; yalnız AI Agent olanı sayılır.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "189",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "189",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "190",
-        "title": "G5.3 — Kor fixture i duzelt: test yesildi ama kriteri olcmuyordu",
-        "description": "Denetimin ders niteligindeki bulgusu: 07.4 deflection metriginin testi YESILDI ama hatayi yakalayamiyordu, cunku fixture `reason`suz olay yaziyordu. Bu gorev fixture i hatayi yakalayabilir hale getirir — aksi halde 188/189 duzeltmesi bir sonraki turda sessizce geri alinabilir.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D7 ve §8 (Task Master için ne anlama geliyor) · 188 ve 189 nolu görevlerin değişiklikleri\n\n**Model:** sonnet — fixture ve iddia düzeltmesi.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g5-blind-fixture\n```\n\n### SORUN\nRapor testlerinin fixture'ı `chat_transferred` olaylarını `reason` alanı olmadan yazıyordu. Filtre eklendiğinde test yine yeşil kalır — çünkü ayrım yapılacak veri yok. Yani test, düzeltmeyi de bozulmayı da göremiyor.\n\n### YAPILACAK\n1. Rapor fixture'ı hem `reason: 'ai_handoff'` hem ajan→ajan devri üretsin.\n2. Aynı şekilde AI Agent skill run'ı **ve** Copilot kaynaklı run üreten fixture.\n3. İddialar: yalnız doğru olanların sayıldığı; **yanlış olanın sayılması durumunda test KIRILIR**.\n\n### KENDİNİ DOĞRULA (bu adım atlanamaz)\n188/189'un düzeltmesini geçici olarak geri al, testin **kırmızıya döndüğünü gör**, sonra geri getir. Kırmızıya dönmüyorsa fixture hâlâ kör demektir. Bu doğrulamayı HANDOFF'a yaz.\n\n### GENELLEŞTİR\nAynı körlük başka rapor testlerinde de olabilir. Rapor fixture'larını tara: ayrım yapılan bir alan fixture'da hep aynı değeri alıyorsa o test de kördür. Bulduklarını listele — düzeltmesi ayrı görev olabilir.",
-        "testStrategy": "Tam DoD kapısı. Kanıt zorunlu: 188/189 düzeltmesi geri alındığında testin kırmızıya döndüğü **gösterilir ve HANDOFF a yazılır**. Fixture iki devir türü ve iki run türü üretir. Rapor testlerinin geri kalanında kör alan taraması yapılır ve bulgular listelenir.",
-        "status": "pending",
-        "dependencies": [
-          "188",
-          "189"
-        ],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Fixture: iki devir türü + iki run türü",
-            "description": "reason ai_handoff ve ajan-ajan; AI Agent skill ve Copilot run.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "190",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "İddiaları kriteri ölçecek şekilde yaz",
-            "description": "Yanlış sayım testi kırmalı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "190",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Körlük kanıtı: düzeltmeyi geri al, kırmızıyı gör",
-            "description": "Atlanamaz. Sonucu HANDOFF a yaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "190",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Diğer rapor fixture larında kör alan taraması",
-            "description": "Ayrım yapılan alan hep aynı değerdeyse o test de kör. Bulguları listele.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "190",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "190",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "191",
-        "title": "G6.1 — AI resolution sayacini sunucudan besle (50 satirdan sonra yanlis)",
-        "description": "Sayac tarayiciya yuklenmis satirlardan turuyor, bu yuzden sayfa boyutunu asan veri setlerinde SISTEMATIK olarak yanlis. Denetim: \"50 satirdan sonra yanlis\". Fatura ve rapor bu sayiya bakiyor. DB tarafindaki `ai_solved` gorunum filtresi DOGRU (chat-service.ts ~1727, ADR-09 predicate); hata yalniz web katmaninda sayimda.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D3 · PRD satır **496-521** (FR-MOD-02.1.2) · `apps/api/src/services/chat/chat-service.ts` (`ai_solved` görünüm filtresi, ADR-09)\n\n**Model:** opus — sunucu sözleşmesinin şekli (toplam nereden gelecek, sayfalama ile ilişkisi) tasarım kararı.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g6-ai-resolution-count\n```\n\n### ÖNEMLİ: DB YARISI DOĞRU\n`ai_solved` görünüm filtresi ADR-09'un tam predicate'ini uyguluyor ve yorumu **bu predicate'e ekstra koşul eklenmemesini** açıkça yasaklıyor (Solved listesi ile fatura sayacı asla ayrışmamalı). O filtreye dokunma.\n\n### YAPILACAK\nWeb tarafındaki \"yüklenmiş satırdan türeyen\" sayacı sunucudan gelen toplamla değiştir.\n\n### TASARIM SORUSU\nToplam nereden gelecek? Liste ucuna bir toplam alanı mı, ayrı bir sayım ucu mu? Keyset sayfalama ile toplam sayım aynı sorguda pahalı olabilir. Kararını ve maliyetini yorumla; NFR-P2 okuma bütçesini bozma.\n\n### DİKKAT\nFatura ile aynı sayıyı vermeli — ADR-09 ekseninde Overview = fatura = Copilot BI tutarlılığı korunuyor. Yeni sayaç bu üçlüden ayrışırsa hata büyür.",
-        "testStrategy": "Tam DoD kapısı. **Sayfa boyutundan fazla kayıtla** entegrasyon testi (en az 60 kayıt, sayfa 25) — sayaç doğru; bu test olmadan görev tamamlanmamıştır çünkü kusur tam da burada. Sunucu toplamı ile fatura sayacı aynı; cross-tenant izolasyon; NFR-P2 okuma bütçesi aşılmaz. Web bileşen testi sunucu değerini gösterdiğini doğrular.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Toplamın nereden geleceği kararı + maliyet ölçümü",
-            "description": "Liste ucunda alan mı, ayrı sayım ucu mu? Keyset ile maliyet. NFR-P2 bütçesi.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "191",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Sunucu tarafı toplam",
-            "description": "ai_solved predicate ine dokunmadan. Fatura sayacıyla aynı sonuç.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "191",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Web sayacını sunucu değerine bağla",
-            "description": "Yüklenmiş satırdan türetmeyi kaldır.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "191",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "60+ kayıtlı test (kusurun tam yeri)",
-            "description": "Sayfa boyutunu aşan veri; sayaç doğru. Atlanamaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "191",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + PLAN.md/HANDOFF + merge",
-            "description": "PLAN.md 02.1.2 satırı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "191",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "192",
-        "title": "G6.2 — Tickets siralamasini sunucuya tasi",
-        "description": "FR-MOD-02.7 \"siralanabilir tablo\" istiyor ama siralama sunucuya gitmiyor: `ticketListUrl` (useTickets.ts:36) yalniz view+limit+page_id kuruyor, `sortTickets` (ticket-grid.ts:103) bellege yuklenmis diziyi siraliyor (InboxPage.tsx:288). Yani sayfa 2 deki bir kayit sayfa 1 dekinden once siralanamiyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D3 · PRD satır **496-521** (FR-MOD-02.7) · `apps/web/src/features/inbox/useTickets.ts` · `ticket-grid.ts` · `InboxPage.tsx`\n\n**Model:** sonnet — API parametresi + istemci sadeleştirmesi.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g6-tickets-server-sort\n```\n\n### YAPILACAK\n1. `/tickets` ucuna `sort` parametresi ekle (kontrat + uygulama). Sohbet listesindeki mevcut `sort` deseni (`newest|oldest`) örnek alınabilir; bilet için hangi alanlar sıralanabilir olmalı, PRD'ye bak.\n2. `ticketListUrl` parametreyi taşısın.\n3. `sortTickets`'ı kaldır ya da yalnız görsel yardımcıya indir — sunucu sıralamasının üstüne ikinci bir sıralama uygulamak sonucu bozar.\n\n### KEYSET SAYFALAMA UYARISI\nSayfalama keyset (`page_id`) ile çalışıyor. Sıralama alanı değişince imleç anlamını yitirir — sıralama değiştiğinde sayfalama sıfırlanmalı. Bunu teste bağla.\n\n### 193 İLE İLİŞKİ\n193 görünüm filtresinin deep-link'lenmesini yapıyor; ikisi aynı URL sözleşmesine dokunuyor. Çakışmayı önlemek için biri diğerinden sonra merge edilsin, ya da tek dalda birleştirilsin — kararını HANDOFF'a yaz.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: `/tickets?sort=` her desteklenen değer için doğru sırayı döner; geçersiz değer 400. **e2e — mevcut `paging.spec.ts:70` deseni (\"sunucudan farklı sıra iste\") biletler için tekrarlanır**: sayfa 2 deki kayıt sayfa 1 dekinden önce sıralanabiliyor. Sıralama değişince imleç sıfırlanır. Web bileşen testi çift sıralama yapılmadığını doğrular.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Kontrat + API: /tickets sort parametresi",
-            "description": "Sıralanabilir alanları PRD den doğrula. contract:generate.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "192",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "ticketListUrl parametreyi taşır; sortTickets kaldırılır",
-            "description": "Çift sıralama yapılmaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "192",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Sıralama değişince keyset imleci sıfırlanır",
-            "description": "Teste bağla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "192",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "e2e: sayfa 2 kaydı sayfa 1 den önce sıralanabiliyor",
-            "description": "paging.spec.ts:70 deseni.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "192",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + merge (193 ile çakışma kararı HANDOFF a)",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "192",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "193",
-        "title": "G6.3 — Tickets gorunum filtresi deep-link lensin",
-        "description": "PRD 02.7 \"deep-link filtre\" istiyor; grid in gorunum filtresi URL e hic yansimiyor, yani bir gorunumu paylasmak ya da yer imlemek mumkun degil.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D3 · PRD satır **496-521** (FR-MOD-02.7) · 192 nolu görevin URL sözleşmesi\n\n**Model:** sonnet — URL durum senkronizasyonu.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g6-tickets-deeplink\n```\n\n### YAPILACAK\nGörünüm filtresi URL parametresine yansısın ve URL ile açılan sayfa filtreyi uygulasın. 192'nin `sort` parametresiyle aynı sözleşmede yaşamalı.\n\n### DİKKAT\n- Geçersiz/bilinmeyen filtre değeri geldiğinde ne olacak? Sessizce varsayılana düşmek mi, hata mı? Kararını yorumla (öneri: varsayılana düş, çünkü URL kullanıcı tarafından elle düzenlenebilir).\n- Tarayıcı geri/ileri düğmesi filtre değişimlerini takip etmeli.",
-        "testStrategy": "Tam DoD kapısı. Web bileşen testi: filtre değişince URL güncellenir; URL ile açılan sayfa filtreyi uygular; geçersiz değer varsayılana düşer; geri/ileri düğmesi çalışır. e2e: bir görünümün linki paylaşılıp açıldığında aynı içerik görünür.",
-        "status": "pending",
-        "dependencies": [
-          "192"
-        ],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Filtre → URL parametresi senkronizasyonu",
-            "description": "192 nin sort sözleşmesiyle aynı yerde.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "193",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "URL ile açılış + geçersiz değer davranışı",
-            "description": "Kararı yorumla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "193",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Geri/ileri düğmesi + testler + DoD + merge",
-            "description": "Bileşen + e2e.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "193",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "194",
-        "title": "G6.4 — Traffic sekme sayaclarini sunucu toplamina bagla",
-        "description": "Traffic panosundaki sekme sayaclari yalniz yuklenmis sayfalardan turuyor (TrafficPage.tsx:432 civari). Ayni \"yuklenen pencere gercek toplam saniliyor\" desenin ucuncu ornegi; veri buyudukce sessizce yanlisa doner.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D3 · PRD satır **522-535** (FR-MOD-03 traffic) · `apps/web/src/features/traffic/TrafficPage.tsx`\n\n**Model:** sonnet — 191 ile aynı desen, daha küçük yüzey.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g6-traffic-counts\n```\n\n### NOT — denetimden gelen düzeltme\nÇürütme turu, ilk denetçinin \"dar sekmede sayaçlar tüm panoyu temsil etmiyor\" eleştirisini **haksız** buldu: kod sayaçları yalnız aktif sekme ya da filtresiz pano için gösteriyor. **Gerçek sınır**, sayacın yalnız yüklenmiş sayfalardan türemesi. Düzeltilecek olan budur; sekme mantığını değiştirme.\n\n### YAPILACAK\nSayaçları sunucu toplamına bağla. 191'in çözdüğü aynı tasarım sorusu geçerli — o görev merge olduysa aynı deseni kullan, yeni bir yol icat etme.",
-        "testStrategy": "Tam DoD kapısı. Sayfa boyutunu aşan ziyaretçi verisiyle sayaçlar doğru; sekme davranışı (aktif sekme / filtresiz pano) **değişmeden** kalır — mevcut testler kırılmamalı; NFR-P2 traffic okuma bütçesi aşılmaz (e2e içinde ölçülüyor: \"NFR-P2 filtered GET /traffic\").",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Sunucu toplamı (191 deseniyle)",
-            "description": "191 merge olduysa aynı sözleşmeyi kullan.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "194",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Sekme mantığını koru",
-            "description": "Aktif sekme / filtresiz pano davranışı değişmez.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "194",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Sayfa boyutunu aşan veriyle test + bütçe + DoD + merge",
-            "description": "NFR-P2 traffic bütçesi.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "194",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "195",
-        "title": "G7 — AI Agent readiness mantigi: operator ters, active bayragi okunmuyor",
-        "description": "PRD KK4: \"Knowledge bos VEYA hic aktif skill yokken uyari gosterilir\". Kod: `const ready = hasKnowledge || hasSkill` (apps/web/src/features/playbook/readiness.ts:42) — uyari YALNIZ ikisi birden bosken cikiyor. Bilgi tabani dolu ama hic skill yokken AI Agent \"hazir\" gorunuyor. Ayrica `hasSkill = skills.some(hasSteps)` (:41) \"aktif\" bayragini HIC okumuyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D8 · PRD satır **562-578** (FR-MOD-06.1) ve KK4 · `apps/web/src/features/playbook/readiness.ts`\n\n**Model:** sonnet — iki satırlık mantık düzeltmesi, ama testleri kriteri ölçecek şekilde yazmak asıl iş.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g7-readiness-logic\n```\n\n### İKİ KUSUR\n1. **Operatör ters.** Uyarı koşulu `!hasKnowledge || !hasSkill` olmalı, yani `ready = hasKnowledge && hasSkill`.\n2. **`active` okunmuyor.** `hasSkill` yalnız \"adımı var mı\" bakıyor; PRD \"hiç **aktif** skill yok\" diyor. `hasSteps(s) && s.active` olmalı.\n\n### İKİNCİSİ DENETİMDE DEĞİL, DOĞRULAMADA ÇIKTI\nDenetim raporu yalnız operatörü yakalamıştı; `active` bayrağı kodu okurken ortaya çıktı. İkisi birden düzeltilmezse madde yine yarım kalır.\n\n### DİKKAT\n`readiness.test.ts` mevcut ve şu an YANLIŞ davranışı kilitliyor olabilir — testleri PRD kriterine göre yeniden yaz, mevcut iddiaları körü körüne koruma.",
-        "testStrategy": "Tam DoD kapısı. `readiness.test.ts`: (1) yalnız knowledge dolu → hazır DEĞİL, uyarı çıkar; (2) yalnız skill var → hazır DEĞİL; (3) ikisi de var → hazır; (4) **adımı olan ama pasif skill hazır saymaz**; (5) ikisi de boş → hazır değil. Mevcut yanlış iddialar düzeltilir. AI Agent ekranında uyarının göründüğü bileşen testi.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "high",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Operatörü düzelt: || → &&",
-            "description": "ready = hasKnowledge && hasSkill.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "195",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "active bayrağını oku",
-            "description": "hasSteps(s) && s.active.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "195",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "readiness.test.ts i PRD kriterine göre yeniden yaz",
-            "description": "Beş senaryo. Mevcut yanlış iddiaları koruma.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "195",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Bileşen testi + DoD + PLAN.md/HANDOFF + merge",
-            "description": "PLAN.md 06.1 satırı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "195",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "196",
-        "title": "G8 — Etiket grup kapsami ekrani (API de yaziliyor, konsoldan ulasilamiyor)",
-        "description": "Etiketin grup kapsami (`group_ids`) API tarafinda GERCEKTEN yaziliyor (settings.ts:2572 civari) ama konsoldan ulasilamiyor: Tags.tsx yalnizca sayiyi basiyor (:139), duzenleme kontrolu yok. Denetim ayni kusuru canned responses ta yakalamis ama tags te kacirmisti — cifti de ayni desendir.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 · PRD satır **594-659** (FR-MOD-08.7.1) · `apps/web/src/features/settings/Tags.tsx` · `apps/api/src/routes/settings.ts` (etiket yazma ucu)\n\n**Model:** sonnet\n### FAZ 3 ORTAK DESENİ — \"API'de var, konsolda yok\"\nDenetimin D2 bulgusu: bu maddelerin arka tarafı yazılmış, konsol yüzeyi yok. Yani yeni bir uç icat etmen **gerekmiyor olabilir** — önce mevcut ucu bul, sözleşmesini oku, ekranı ona bağla. Uç gerçekten yoksa görev metni bunu söyler.\n\n### HER FAZ 3 GÖREVİNDE GEÇERLİ\n- Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır — elle `useState` ile form kurma (202 tam da bu borcu temizliyor).\n- i18n: `apps/web/src/locales` altına en + tr anahtarları.\n- Erişilebilirlik: `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni ekran taramayı kırmamalı. Yeni rota eklediysen a11y rota listesine de ekle — `router-parse` pini taranmayan rotayı kırmızıya çeker.\n- Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli; sessizce yutma.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g8-tag-group-scope\n```\n\n### YAPILACAK\nEtiket düzenleme yüzeyine grup seçici ekle. Uç zaten `group_ids` kabul ediyor — önce sözleşmesini oku ve doğrula (dizi mi, tam değiştirme mi, kısmi mi).\n\n### AYRICA KONTROL ET\nDenetim canned responses için \"group_id kolonu var ama create/update kabul etmiyor → ölü kolon\" demişti. Etiket ucunun **gerçekten** yazıp yazmadığını doğrula; yazmıyorsa uç tarafını da düzeltmek bu görevin kapsamındadır (aynı maddedir).",
-        "testStrategy": "Tam DoD kapısı. Bileşen testi: grup ata → kaydet → geri oku; grubu kaldır; boş kapsam \"tüm gruplar\" anlamına geliyorsa bu görünür şekilde ifade edilir. Entegrasyon: ucun `group_ids`i gerçekten kalıcı yazdığı (ölü kolon olmadığı) doğrulanır. e2e: etikete grup atanınca yalnız o gruptaki ajana görünür (kapsamın bir etkisi varsa).",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Uç sözleşmesini doğrula (ölü kolon mu, gerçekten yazıyor mu)",
-            "description": "settings.ts etiket yazma ucu. Yazmıyorsa uç tarafı da bu görevin kapsamında.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "196",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Tags.tsx e grup seçici",
-            "description": "lib/form.tsx; sayı yerine düzenlenebilir kontrol.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "196",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "i18n + a11y + bileşen testleri",
-            "description": "en/tr anahtarları; axe kırılmaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "196",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Entegrasyon/e2e + DoD + merge",
-            "description": "group_ids kalıcı; kapsamın etkisi.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "196",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "197",
-        "title": "G9 — Kisisel erisim jetonu (PAT) ekrani — konsolda tek satir bile yok",
-        "description": "`apps/web/src` icinde 'personal-access-token' gecen TEK SATIR yok; API tarafi hazir (`/auth/personal-access-tokens`, oturumun sahip olmadigi scope u vermeyi reddeden yukselme kapisiyla). Yani ozellik var ama kullanicinin ulasamadigi bir yerde.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 · PRD satır **594-659** (FR-MOD-08 ayarlar) · `apps/api/src/routes/auth.ts` (`personal-access-tokens` uçları, ~955 civarı yükselme kapısı)\n\n**Model:** sonnet\n### FAZ 3 ORTAK DESENİ — \"API'de var, konsolda yok\"\nDenetimin D2 bulgusu: bu maddelerin arka tarafı yazılmış, konsol yüzeyi yok. Yani yeni bir uç icat etmen **gerekmiyor olabilir** — önce mevcut ucu bul, sözleşmesini oku, ekranı ona bağla. Uç gerçekten yoksa görev metni bunu söyler.\n\n### HER FAZ 3 GÖREVİNDE GEÇERLİ\n- Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır — elle `useState` ile form kurma (202 tam da bu borcu temizliyor).\n- i18n: `apps/web/src/locales` altına en + tr anahtarları.\n- Erişilebilirlik: `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni ekran taramayı kırmamalı. Yeni rota eklediysen a11y rota listesine de ekle — `router-parse` pini taranmayan rotayı kırmızıya çeker.\n- Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli; sessizce yutma.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g9-pat-console\n```\n\n### YAPILACAK\nOluştur / listele / iptal ekranı.\n\n### KRİTİK DAVRANIŞ\n**Jeton yalnız oluşturulduğu anda bir kez gösterilir** ve bir daha okunamaz. Ekran bunu açıkça söylemeli ve kopyalama kolaylığı sunmalı; kullanıcı sayfayı kapattıktan sonra jetonu geri isteyemez.\n\n### SCOPE SEÇİMİ\nAPI, oturumun sahip olmadığı scope'u vermeyi reddediyor (`auth.ts` yükselme kapısı). Ekran yalnız oturumun sahip olduğu scope'ları göstermeli — kullanıcıya reddedilecek bir seçenek sunma. Rolün scope kümesi `packages/types/src/role-scopes.ts`.\n\n### DİKKAT\nBu bir kimlik bilgisi yüzeyi. Jetonu log'lama, URL'e koyma, analitiğe gönderme.",
-        "testStrategy": "Tam DoD kapısı. Bileşen testi: oluştur → jeton **bir kez** görünür → yeniden okunamaz; listede jetonun kendisi değil meta verisi (ad, scope, son kullanım) görünür; iptal et → listeden düşer. Entegrasyon: iptal edilen jetonla istek 401. Scope seçici oturumun sahip olmadığı scope u sunmaz. e2e: oluştur → jetonla API çağrısı çalışır → iptal → çalışmaz. `kanit/08-pat.png`.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "PAT listesi + oluşturma akışı",
-            "description": "Jeton bir kez gösterilir; kopyalama kolaylığı; net uyarı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "197",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Scope seçici — yalnız oturumun sahip oldukları",
-            "description": "role-scopes.ts; API yükselme kapısıyla tutarlı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "197",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "İptal akışı",
-            "description": "Listeden düşer; jeton çalışmaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "197",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Bileşen + entegrasyon + e2e testleri",
-            "description": "Jeton bir kez; iptal sonrası 401. kanit/08-pat.png.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "197",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "i18n + a11y + DoD + merge",
-            "description": "en/tr; axe; WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "197",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "198",
-        "title": "G10 — Bilet yonlendirme kurali olusturma: POST/DELETE uclari + ekran",
-        "description": "`/settings/routing-rules` yalniz GET (settings.ts:2332) + PATCH (:2364). Kural OLUSTURMA ve SILME ucu yok, ekrani da yok — yani mevcut bir kurali duzenleyebiliyorsun ama yenisini yapamiyorsun.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 · PRD satır **594-659** (FR-MOD-08.6.2 ticket rules) · `apps/api/src/routes/settings.ts:2332-2470` · `apps/api/prisma/schema.prisma` `RoutingRule`\n\n**Model:** sonnet\n### FAZ 3 ORTAK DESENİ — \"API'de var, konsolda yok\"\nDenetimin D2 bulgusu: bu maddelerin arka tarafı yazılmış, konsol yüzeyi yok. Yani yeni bir uç icat etmen **gerekmiyor olabilir** — önce mevcut ucu bul, sözleşmesini oku, ekranı ona bağla. Uç gerçekten yoksa görev metni bunu söyler.\n\n### HER FAZ 3 GÖREVİNDE GEÇERLİ\n- Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır — elle `useState` ile form kurma (202 tam da bu borcu temizliyor).\n- i18n: `apps/web/src/locales` altına en + tr anahtarları.\n- Erişilebilirlik: `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni ekran taramayı kırmamalı. Yeni rota eklediysen a11y rota listesine de ekle — `router-parse` pini taranmayan rotayı kırmızıya çeker.\n- Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli; sessizce yutma.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g10-routing-rules\n```\n\n### BAĞIMLILIK\nKurallar bir takımı hedefliyor (`target_group_id`). 176 (Teams konsolu) olmadan kullanıcı hedef takımı yaratamaz, yani bu ekran boş bir açılır liste gösterir. 176'dan sonra yapılmalı.\n\n### YAPILACAK\n1. `POST /settings/routing-rules` ve `DELETE /settings/routing-rules/:ruleId` (kontrat + uygulama).\n2. Konsol ekranı: kural listesi + oluştur/düzenle/sil.\n\n### MODEL KISITLARI — OKU\n`RoutingRule`: `kind` (varsayılan `chat`), `conditions` (url/domain/geolocation/page yüklemleri, Json), `targetGroupId`, `priority` (Int), `isFallback` (**lisans+kind başına EN FAZLA BİR**), `enabled`. Fallback tekilliğini uçta zorla — iki fallback yönlendirmeyi belirsizleştirir.\n\n### 175 İLE İLİŞKİ\n175, takımı hedefleyen bir kural varken takım silmeyi 409 ile reddediyor. Buradan kural silinince o refüz kalkmalı — iki görevin birlikte doğru çalıştığını teste bağla.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: kural oluştur → bilet o gruba düşer → sil → düşmez; **fallback tekilliği** (ikinci fallback reddedilir); geçersiz `conditions` şekli 400; cross-tenant izolasyon; scope reddi. **175 ile birlikte:** kuralı silince hedef takım artık silinebilir hale gelir. Bileşen + e2e: kural oluştur → bilet yönlendiğini gör.",
-        "status": "pending",
-        "dependencies": [
-          "176"
-        ],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "POST + DELETE uçları (kontrat + uygulama)",
-            "description": "Mevcut GET/PATCH deseniyle tutarlı. contract:generate.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "198",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Fallback tekilliğini uçta zorla",
-            "description": "Lisans+kind başına en fazla bir. İkincisi reddedilir.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "198",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Konsol ekranı: liste + oluştur/düzenle/sil",
-            "description": "Hedef takım seçici GET /groups ten. lib/form.tsx.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "198",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Entegrasyon + 175 etkileşim testi",
-            "description": "Kural silinince takım silinebilir hale gelir.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "198",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "i18n + a11y + e2e + DoD + merge",
-            "description": "Bilet yönlendiğini gösteren uçtan uca akış.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "198",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "199",
-        "title": "G11 — Bildirimleri Inbox tan ayir: ajan baska ekrana gecince ses/masaustu/rozet susuyor",
-        "description": "`useNotifications` ve `useRealtime` reponun TAMAMINDA yalnizca InboxPage.tsx:209-210 da mount ediliyor. Ajan Reports a ya da Settings e gectiginde bildirim kanallarinin ucu birden tamamen susuyor ve soket kapaniyor — yani yeni sohbet geldiginden haberi olmuyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 (Notifications maddesi) · PRD satır **707-733** (FR-MOD-13.8) · `apps/web/src/features/inbox/InboxPage.tsx:209-210` · `apps/web/src/features/notifications/useNotifications.ts:26` · `apps/web/src/features/inbox/useInbox.ts:588` (`useRealtime`)\n\n**Model:** opus — soket yaşam döngüsünün sahipliği, çift mount ve çift bildirim riski; yanlış yapılırsa her mesaj iki kez bildirilir ya da soket sürekli açılıp kapanır.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g11-notifications-shell\n```\n\n### YAPILACAK\n`useNotifications` ve `useRealtime`'ı uygulama kabuğuna (`apps/web/src/components/AppShell.tsx`) taşı.\n\n### ASIL RİSKLER\n1. **Çift mount / çift bildirim** — InboxPage hâlâ push verisini tüketiyor. Kabuk mount ediyorsa Inbox etmemeli; veri Inbox'a nasıl akacak? (bağlam mı, store mu?)\n2. **Soket yaşam döngüsü tek yerden yönetilmeli.** Şu an unmount'ta soket kapanıyor; kabukta bu davranış oturum boyunca açık kalmaya dönüşür — yeniden bağlanma, arka plan sekmesi ve oturum kapanışında temiz kapanış düşünülmeli.\n3. **Bildirim gürültüsü** — ajan zaten Inbox'ta ve o sohbete bakıyorsa masaüstü bildirimi göstermek doğru mu? Mevcut davranışı koru, farklılaştırıyorsan yorumla.\n\n### KAPSAM DIŞI\nMobil push (`pushToAgentDevices`) bu görevde değil; o sunucu tarafı ve çalışıyor.",
-        "testStrategy": "Tam DoD kapısı. **e2e (asıl kanıt):** ajan Reports sayfasındayken gelen mesaj bildirim üretir — bugün üretmiyor, bu testin kırmızıdan yeşile dönmesi görevin kanıtıdır. Ayrıca: aynı mesaj **iki kez** bildirilmez (çift mount regresyonu); sayfa geçişlerinde soket yeniden bağlanma fırtınası olmaz (bağlantı sayısı ölçülür); oturum kapanışında soket kapanır. Web bileşen testleri: kabuk mount/unmount döngüsü.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "useNotifications + useRealtime i AppShell e taşı",
-            "description": "InboxPage tekiliği kalkar.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "199",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Push verisinin Inbox a akış yolu (çift mount olmadan)",
-            "description": "Bağlam/store kararı; aynı mesaj iki kez bildirilmez.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "199",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Soket yaşam döngüsü: yeniden bağlanma, arka plan, oturum kapanışı",
-            "description": "Tek sahip. Sayfa geçişinde fırtına yok.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "199",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "e2e: Reports sayfasındayken bildirim geliyor",
-            "description": "Kırmızıdan yeşile dönen test = görevin kanıtı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "199",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "Çift bildirim ve bağlantı sayısı testleri",
-            "description": "Regresyon kapıları.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "199",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 6,
-            "title": "DoD + PLAN.md/HANDOFF + merge",
-            "description": "PLAN.md 13.8 satırı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "199",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "200",
-        "title": "G12 — Denetim kaydi detayi: bir kaydin NE degistirdigi hicbir yerde gorunmuyor",
-        "description": "Denetim izinin zinciri (HMAC + gapless chain_seq), imzali export ve SIEM cikisi saglam ve testli — bunlara dokunma. Eksik olan \"detay\" ayagi: konsolda tablo bes kolon basiyor (time/action/actor/target/…), kaydin metadata si hicbir yerde gorunmuyor ve tekil kayit ucu yok.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 (audit log maddesi) · PRD satır **594-659** (FR-MOD-08.9.7) · `apps/api/src/services/audit/audit-log.ts` · konsoldaki audit log ekranı\n\n**Model:** sonnet\n### FAZ 3 ORTAK DESENİ — \"API'de var, konsolda yok\"\nDenetimin D2 bulgusu: bu maddelerin arka tarafı yazılmış, konsol yüzeyi yok. Yani yeni bir uç icat etmen **gerekmiyor olabilir** — önce mevcut ucu bul, sözleşmesini oku, ekranı ona bağla. Uç gerçekten yoksa görev metni bunu söyler.\n\n### HER FAZ 3 GÖREVİNDE GEÇERLİ\n- Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır — elle `useState` ile form kurma (202 tam da bu borcu temizliyor).\n- i18n: `apps/web/src/locales` altına en + tr anahtarları.\n- Erişilebilirlik: `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni ekran taramayı kırmamalı. Yeni rota eklediysen a11y rota listesine de ekle — `router-parse` pini taranmayan rotayı kırmızıya çeker.\n- Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli; sessizce yutma.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g12-audit-detail\n```\n\n### YAPILACAK\n1. `GET /audit-log/:id` tekil kayıt ucu (kontrat + uygulama).\n2. Konsolda genişletilebilir satır — kaydın `metadata`sı görünür.\n\n### ZİNCİRE DOKUNMA\n`audit-chain.ts` HMAC zinciri ve `chain_seq` boşluksuzluğu bu modülün en güçlü yanı. Okuma ucu eklemek zinciri değiştirmemeli.\n\n### GİZLİLİK — TASARIM SORUSU\nMetadata bazı kayıtlarda hassas olabilir (rol değişimi, IP, e-posta). Denetim tasarımı bilinçli olarak bazı alanları yazmıyor (ban audit'inde IP'nin kasten yazılmaması gibi). Görünür kılarken **hangi alanların gösterileceğine** karar ver ve gerekçeni yorumla; her şeyi ham JSON olarak basmak kolay ama doğru olmayabilir.\n\n### SCOPE\nDenetim kaydı okuma yetkisi neyse tekil uç da aynı scope'u istemeli — liste görebilen detayı da görebilir, fazlası değil.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: `GET /audit-log/:id` doğru kaydı döner; başka lisansın kaydı 404; scope reddi 403; **zincir doğrulaması etkilenmez** (mevcut zincir testleri yeşil). Bileşen testi: satır genişler, metadata görünür; gizlilik kararına göre gizlenen alanlar gösterilmez. e2e: bir rol değişimi yapılır, denetim kaydında ne değiştiği okunur.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "GET /audit-log/:id ucu (kontrat + uygulama)",
-            "description": "Liste ile aynı scope. Zincire dokunma.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "200",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Metadata görünürlük kararı",
-            "description": "Hangi alanlar gösterilir, hangileri değil? Gerekçeyi yorumla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "200",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Konsolda genişletilebilir satır",
-            "description": "Kaydın metadata sı okunur.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "200",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Entegrasyon + bileşen + e2e + DoD + merge",
-            "description": "Zincir testleri yeşil kalır.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "200",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "201",
-        "title": "G13.1 — Form kutuphanesi birligi: Payment ve Add-website formlari",
-        "description": "FR-EK-A.1 \"tek form/validasyon kutuphanesi; alan-alti hata mesaji\" istiyor. `apps/web/src` icinde `useForm(` kullanan 20 dosya var ama `<form` iceren 40 dosya var — formlarin yaklasik yarisi `lib/form.tsx` i atlayip elle useState ile kuruluyor. Atlananlar tam da PRD nin ADIYLA saydigi **Payment** ve **Add-website** formlarini iceriyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 (form maddesi) · PRD satır **722-733** (FR-EK-A.1) · `apps/web/src/lib/form.tsx`\n\n**Model:** sonnet — mevcut kütüphaneye taşıma.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g13-forms-payment-website\n```\n\n### NEDEN ÖNCE BU İKİSİ\nPRD kabul kriteri bu iki formu adıyla sayıyor. En yüksek değerli ikisi bunlar; kalan tarama 202'de.\n\n### KABUL KRİTERİ (PRD)\n- İstemci tarafı anlık validasyon\n- **Alan-altı** hata mesajı (formun tepesinde toplu liste değil)\n- Geçerli girdi olmadan submit **pasif**\n\n### DİKKAT\nPayment formu bir ödeme yüzeyi: kart verisi log'lanmaz, URL'e girmez. `lib/cc-mask.ts` sunucu tarafı maskelemeyi zaten yapıyor ama istemci tarafında da veri sızdırmamalısın.\n\n### YAKLAŞIM\nDavranışı değiştirme, kuruluşu değiştir. Formun ne yaptığı aynı kalmalı; nasıl kurulduğu ortaklaşmalı. Mevcut testler kırılıyorsa davranış değişmiş demektir — dur ve incele.",
-        "testStrategy": "Tam DoD kapısı. Her iki form için bileşen testi: geçersiz girdi → **alan-altı** hata + submit pasif; geçerli girdi → submit aktif; sunucu 400 ı alan-altı hataya dönüşür. Mevcut Payment/Add-website testleri davranış değişmeden geçer. e2e akışları (billing.spec.ts, websites) kırılmaz.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Payment formunu lib/form.tsx e taşı",
-            "description": "Davranış aynı; kuruluş ortak. Kart verisi log/URL e girmez.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "201",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Add-website formunu lib/form.tsx e taşı",
-            "description": "Aynı yaklaşım.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "201",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Alan-altı hata + pasif submit testleri",
-            "description": "PRD kabul kriterinin üçü de.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "201",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Mevcut e2e akışlarının korunumu + DoD + merge",
-            "description": "billing.spec.ts ve website akışları yeşil.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "201",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "202",
-        "title": "G13.2 — Form kutuphanesi: kalan formlarin taranmasi ve tasinmasi",
-        "description": "201 PRD nin adiyla saydigi iki formu tasidi. Bu gorev kalanini tarar: 40 `<form` iceren dosyanin 20 si ortak kutuphaneyi atliyor. Hepsini tasimak tek turda mumkun olmayabilir — once envanter cikar, sonra oncelige gore tasi.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 · PRD satır **722-733** (FR-EK-A.1) · 201 nolu görevin taşıma deseni\n\n**Model:** sonnet — tekrarlayan mekanik taşıma.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g13-forms-sweep\n```\n\n### ÖNCE ENVANTER\n```bash\ngrep -rln \"<form\" apps/web/src --include=*.tsx | sort > /tmp/forms-all.txt\ngrep -rln \"useForm(\" apps/web/src --include=*.tsx | sort > /tmp/forms-lib.txt\ncomm -23 /tmp/forms-all.txt /tmp/forms-lib.txt\n```\nÇıkan listeyi HANDOFF'a yaz. Hepsi bu turda taşınamıyorsa **taşınanları ve kalanları açıkça listele** — sessiz kısmi teslim, denetimin en çok şikayet ettiği şey.\n\n### ÖNCELİK SIRASI\nKullanıcı verisi yazan ve hata gösterme ihtiyacı yüksek olanlar önce (ayarlar, davet, kural oluşturma). Salt arama kutusu olan \"formlar\" düşük öncelikli — bazıları taşınmaya değmeyebilir; değmiyorsa nedenini yaz.\n\n### KAPI RİSKİ\nÇok dosyaya dokunan bir tur. Her taşımadan sonra o dosyanın testini koş; hepsini sona bırakma.",
-        "testStrategy": "Tam DoD kapısı. Taşınan her form için: alan-altı hata + pasif submit + sunucu 400 yansıması. **Envanter HANDOFF a yazılır**: taşınan dosyalar, taşınmayanlar ve nedeni. Mevcut web test süiti (1541 test) sayıca düşmez ve yeşil kalır.",
-        "status": "pending",
-        "dependencies": [
-          "201"
-        ],
-        "priority": "low",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Envanter: ortak kütüphaneyi atlayan formların listesi",
-            "description": "comm ile fark; HANDOFF a yaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "202",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Öncelik sırası belirle (veri yazan formlar önce)",
-            "description": "Taşınmaya değmeyenleri gerekçesiyle ayır.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "202",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Taşımaları yap, her birinin testini koş",
-            "description": "Hepsini sona bırakma.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "202",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Kalanları açıkça listele + DoD + merge",
-            "description": "Sessiz kısmi teslim yok.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "202",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "203",
-        "title": "G14 — AI Agent sablon rozetleri: tip ve veri var, hicbir bilesende render edilmiyor",
-        "description": "PRD 05.2 kart etiketlerini \"Prebuilt/AI Agent/Trending/Popular/Essential\" olarak sayiyor. Kategori ucu (prebuilt/ai/trending) basiliyor; **Popular ve Essential SADECE VERI**: `TemplateBadge` tipi tanimli (templates.ts:54) ve `badge` alani dort kayitta dolu ama hicbir bilesen bunu render etmiyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 · PRD satır **552-561** (FR-MOD-05.2) · `apps/web/src/features/playbook/templates.ts:54`\n\n**Model:** sonnet — küçük UI eklemesi.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g14-template-badges\n```\n\n### YAPILACAK\nŞablon kartlarında `badge` alanını bas. Tip ve veri hazır; eksik olan yalnız render.\n\n### DİKKAT\n- Rozet bir kategori değil, bir vurgu — kategori ucu (prebuilt/ai/trending) zaten basılıyor, ikisini karıştırma.\n- Renk/kontrast: `--text-secondary` gibi ikincil renkler AA kontrast testine tabi (`tokens.test.ts`). Yeni rozet rengi eklersen o testi de güncelle.\n- i18n: rozet metinleri çevrilmeli.",
-        "testStrategy": "Tam DoD kapısı. Bileşen testi: `badge` alanı dolu şablon kartında rozet görünür, boş olanda görünmez; her rozet değeri için doğru metin. Kontrast: yeni renk eklendiyse `tokens.test.ts` AA eşiğini ölçer. a11y taraması kırılmaz.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Şablon kartında badge render",
-            "description": "Kategori ucundan ayrı bir vurgu.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "203",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "i18n + kontrast",
-            "description": "Rozet metinleri çevrilir; yeni renk varsa tokens.test.ts.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "203",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Bileşen testi + DoD + merge",
-            "description": "Rozetli/rozetsiz kart.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "203",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "204",
-        "title": "G15 — Skill preview ozet narrasyonu: API donuyor, editor render etmiyor",
-        "description": "PRD 06.2.5 preview in dort eylemi anlatmasini istiyor: toplama, etiket, **ozet**, transfer. API `summary` yi DOGRU donuyor (playbook.ts:441) ve DTO da alan var (types.ts:51) — ama editorun `PreviewResult` i summary yi HIC render etmiyor: yalnizca StatusDot, errors, reply, transfer basiyor. Ayrica editor tarafinda HIC test yok.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 · PRD satır **562-578** (FR-MOD-06.2.5) · `apps/api/src/routes/playbook.ts:441` · playbook editörünün `PreviewResult` bileşeni\n\n**Model:** sonnet — eksik render + eksik test.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g15-preview-summary\n```\n\n### YAPILACAK\n1. `PreviewResult`'ta `summary` alanını bas.\n2. Hata gösterimi — PRD hata durumunun da anlatılmasını istiyor; mevcut `errors` render'ı yeterli mi, kontrol et.\n3. **Editör tarafında hiç test yok** — bu görevin ikinci yarısı budur. Preview bileşeni için testler yaz.\n\n### DİKKAT\nBu maddenin denetimde KISMİ çıkmasının sebebi kısmen testsizlik. Yalnız render eklemek maddeyi kapatmaz.",
-        "testStrategy": "Tam DoD kapısı. Bileşen testi (yeni): preview cevabındaki `summary` ekranda görünür; dört eylemin (toplama/etiket/özet/transfer) hepsi anlatılır; hata durumu görünür şekilde raporlanır; boş cevap çökmez. Entegrasyon tarafı zaten `summary` dönüyor — testle sabitlenir.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "PreviewResult ta summary render",
-            "description": "API zaten dönüyor; yalnız render eksik.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "204",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Hata gösterimini kontrol et ve tamamla",
-            "description": "PRD hata durumunun anlatılmasını istiyor.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "204",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Preview bileşeni için testler (şu an HİÇ yok)",
-            "description": "Maddenin KISMİ çıkma sebebinin yarısı testsizlik.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "204",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "204",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "205",
-        "title": "G16 — Ajan bazli AI performansi (su an lisans geneli gosteriliyor)",
-        "description": "PRD 04.2 \"per-agent performance\" istiyor. Team sayfasi `<AiPerformance agentActive={anyActive} .../>` ile hicbir ajana ozel olmayan, LISANS GENELI veri gosteriyor. Kabul kriterinin diger yarisi (Copilot knowledge yonetimi) gercekten tam.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D2 · PRD satır **536-551** (FR-MOD-04.2) · `apps/api/src/services/reports/report-csv.ts` (`AgentPerformanceRow`, `agentPerformance` sorgusu)\n\n**Model:** sonnet — mevcut ajan-bazlı sorguyu ekrana bağlamak.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g16-per-agent-ai-performance\n```\n\n### İYİ HABER\n`agentPerformance` sorgusu (`report-csv.ts`, `AgentPerformanceRow`: agent_id, name, chats, closed, manual, assisted, automated) **zaten ajan bazlı**. Eksik olan bu veriyi Team sayfasına bağlamak — yeni bir sorgu yazma.\n\n### DİKKAT\n- 188/189 rapor metriklerini düzeltiyor. Bu ekran aynı figürleri gösterecekse onlarla tutarlı olmalı; o görevler merge olduysa düzeltilmiş tanımları kullan.\n- Yetki: bir ajan başka bir ajanın performansını görebilir mi? Team sayfası yönetici yüzeyi; scope kontrolünü uçta zorla, UI gizlemeye güvenme (PRD §7 RBAC netleştirmesi: yetki hem UI hem route katmanında).",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: iki ajanlı fixture farklı rakamlar üretir (lisans geneli tek sayı değil); yetkisiz rol 403; cross-tenant izolasyon. Bileşen testi: Team sayfasında her ajanın kendi satırı ve rakamları. 188/189 merge olduysa figür tanımları onlarla aynı.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "agentPerformance sorgusunu Team yüzeyine bağla",
-            "description": "Yeni sorgu yazma; mevcut ajan-bazlı sorgu var.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "205",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Scope/yetki kontrolü uçta",
-            "description": "UI gizlemeye güvenme (PRD §7).",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "205",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "İki ajanlı fixture ile test",
-            "description": "Farklı rakamlar; lisans geneli tek sayı değil.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "205",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "DoD + PLAN.md/HANDOFF + merge",
-            "description": "PLAN.md 04.2 satırı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "205",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "206",
-        "title": "G17 — Sirket bilgileri (FR-MOD-08.3): semada, ucta ve konsolda hic yok",
-        "description": "Denetimde YOK cikti. `Organization` modelinde yalnizca `name` + `region` var (schema.prisma:29-43); sektor/adres/saat dilimi alani yok, `/settings/company` benzeri uc yok (settings.ts teki 46 route un hicbiri sirket bilgisi yazmiyor), web tarafinda boyle bir bolum yok. PRD onceligi **Onemli**.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §6 (YOK listesi, FR-MOD-08.3) · PRD satır **594-659** · `apps/api/prisma/schema.prisma:29-43` (`Organization`)\n\n**Model:** sonnet — migration + uç + ekran, hepsi mevcut desenleri izliyor.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g17-company-details\n```\n\n### YAPILACAK\n1. `Organization`'a sektör / adres / saat dilimi alanları + migration.\n2. `GET` ve `PATCH /settings/company` (kontrat + uygulama).\n3. Ayarlar ekranında şirket bilgileri bölümü.\n\n### SAAT DİLİMİ — DİKKAT\nÇalışma saatleri özelliği (`WorkSchedule`, `work_schedule.updated` audit eylemi) zaten bir saat dilimi taşıyor. Şirket saat dilimi ile ajan/çalışma saati saat dilimi **çakışmamalı**: hangisi hangisini besliyor? Kararını yorumla ve teste bağla — iki ayrı doğruluk kaynağı olursa raporlar sessizce kayar.\n\n### DİKKAT\n- Sektör serbest metin mi, kapalı liste mi? Kapalı liste raporlanabilir ama esnek değil; kararını yorumla.\n- Adres bir kişisel veri değil kurumsal veri; yine de denetim iziyle tutarlı davran.\n- 202 (form birliği) bundan önce merge olduysa bu formu doğrudan ortak kütüphaneyle yaz.",
-        "testStrategy": "Tam DoD kapısı; `db:check-drift` exit 0. Entegrasyon: kaydet → geri oku; scope reddi; cross-tenant izolasyon; **çalışma saatleri bu saat dilimini kullanıyor** (iki kaynak kararının testi). Bileşen + e2e: ayarlar ekranından şirket bilgisi girilir ve kalıcıdır. `kanit/08.3-company.png`.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Şema alanları + migration",
-            "description": "sektör/adres/saat dilimi. db:check-drift.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "206",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "GET + PATCH /settings/company (kontrat + uygulama)",
-            "description": "contract:generate; scope.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "206",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Saat dilimi tek doğruluk kaynağı kararı",
-            "description": "Çalışma saatleriyle çakışmamalı. Yorumla ve teste bağla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "206",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Ayarlar ekranı bölümü",
-            "description": "lib/form.tsx; i18n; a11y.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "206",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "Entegrasyon + e2e + DoD + PLAN.md/HANDOFF + merge",
-            "description": "PLAN.md 08.3 satırı ⬜ → ✅.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "206",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "207",
-        "title": "GD1 — GET /channels/:type/messages okuma ucu (G1 in biraktigi gozlemlenebilirlik borcu)",
-        "description": "G1 (omnichannel cift yonlu) merge edildi ama `channel_messages` icin okuma ucu yok. Bu yuzden e2e teslimati gozlemleyemiyor ve kanit yalnizca entegrasyon suitinde kalabiliyor; bir operator de \"bu mesaj gercekten gitti mi\" sorusunu konsoldan cevaplayamiyor.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §3 D1 · `HANDOFF.md` G1 girişi (\"Kalan borç\") · `apps/api/src/services/channels/channel-service.ts` (`record`, `ChannelMessage` modeli)\n\n**Model:** sonnet — okuma ucu + sayfalama.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/gd1-channel-messages-read\n```\n\n### YAPILACAK\n`GET /channels/:type/messages` — yön (inbound/outbound), sohbet ve zaman aralığı filtreleri; keyset sayfalama (repodaki mevcut `page_id` deseni).\n\n### NEDEN GEREKLİ\nG1 ajanın cevabını sağlayıcıya gönderiyor ama bunun kanıtı yalnız `channel_messages` tablosunda. Uç olmadan e2e bu adımı göremiyor — G1'de e2e'den kaldırılan elle POST'un yerine koyulacak dürüst gözlem budur.\n\n### DİKKAT\n- Mesaj metni müşteri içeriği: scope'u dar tut (`channels--all:ro`), cross-tenant izolasyonu test et.\n- `ChannelMessage` indeksleri: `(license_id, channel_type, created_at)` ve `(license_id, chat_id)` var — sorguyu bunlara oturt, yeni indeks açmadan önce ölç.",
-        "testStrategy": "Tam DoD kapısı. Entegrasyon: yön/sohbet/zaman filtreleri; keyset sayfalama; cross-tenant izolasyon; scope reddi; mevcut indekslerin kullanıldığı (EXPLAIN ile ölçüm, `reports-billing.test.ts` deseni). **e2e:** G1 in kaldırdığı elle POST un yerine, ajanın konsoldan yazdığı cevabın gerçekten gönderildiği bu uçla doğrulanır.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "low",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Uç + kontrat (filtreler, keyset sayfalama)",
-            "description": "Mevcut page_id desenini izle. contract:generate.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "207",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Scope + cross-tenant izolasyon",
-            "description": "channels--all:ro; dar tut.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "207",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Sorgu mevcut indekslere oturuyor mu (EXPLAIN)",
-            "description": "Yeni indeks açmadan önce ölç.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "207",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "e2e: konsol cevabının gerçekten gittiği doğrulanır",
-            "description": "G1 in kaldırdığı elle POST un dürüst yerine koyması.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "207",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "207",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "208",
-        "title": "G18.1 — Test<->gereksinim izlenebilirlik etiketi kurali",
-        "description": "Mevcut DoD kapisi \"kod var + testler yesil\" i olcuyor; PRD nin istedigi \"kabul kriterinin KENDISI test ediliyor mu\" yu olcmuyor. Denetimde ilk turun verdigi her bes TAM dan biri ikinci turda coktu, ve 07.4 metriginin testi yesilken kriter yanlisti. Bu gorev, hangi testin hangi gereksinimi korudugunu MAKINEYLE okunabilir kilar.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` §2 (çürütme turu neden gerekliydi) ve §8 (Task Master için ne anlama geliyor) · `CONVENTIONS.md` §1\n\n**Model:** opus — konvansiyon tasarımı; yanlış kurulursa 209 ve 210 üstüne inşa edilemez.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g18-traceability-convention\n```\n\n### YAPILACAK\nBir testin hangi PRD maddesini koruduğunu belirten, **makineyle okunabilir** bir etiket kuralı tanımla ve belgele.\n\n### MEVCUT DURUM — SIFIRDAN BAŞLAMIYORSUN\nDesen kısmen var: kodda ve testlerde `FR-MOD-11.5 · 11.5-d`, `08.9.5-a/b`, `ADR-09` gibi referanslar yorumlarda geçiyor. Kural bunu **düzenli** hale getirmeli, sıfırdan bir şey icat etmemeli.\n\n### TASARIM SORULARI\n1. Etiket nerede yaşar — test adında mı (`it('FR-MOD-08.5.5-a ...')`), bir yorum satırında mı, yoksa bir yardımcı (`covers('FR-MOD-08.5.5')`) ile mi? Her birinin grep'lenebilirliği ve gürültüsü farklı.\n2. Bir test birden çok maddeyi koruyabilir; bir madde birden çok testle korunur. Çoktan-çoğa ilişkiyi nasıl ifade ediyorsun?\n3. Kural **geriye dönük** olarak 2701 entegrasyon + 1174 birim testine uygulanamaz. Kademeli benimseme nasıl işleyecek — yeni/değişen testler mi zorunlu?\n\n### ÇIKTI\nKuralın kendisi + `CONVENTIONS.md`'ye yazılmış hali + en az bir örnek dosyada uygulanmış hali. 209 bu kuralı okuyacak.",
-        "testStrategy": "Tam DoD kapısı. Kuralın kendisi test edilemez ama **uygulanabilirliği** kanıtlanır: en az bir mevcut test dosyası kurala göre etiketlenir ve etiketlerin makineyle çıkarılabildiği bir örnek komutla gösterilir (209 un girdisi budur). CONVENTIONS.md güncellenir. Mevcut testler kırılmaz.",
-        "status": "pending",
-        "dependencies": [],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Mevcut yorum-içi referans desenlerini envanterle",
-            "description": "FR-MOD-…, ADR-…, 08.9.5-a/b gibi. Sıfırdan icat etme.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "208",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Etiketin yeri ve şekli kararı",
-            "description": "Test adı / yorum / yardımcı. Grep lenebilirlik ve gürültü dengesi.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "208",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Çoktan-çoğa ilişkinin ifadesi",
-            "description": "Bir test çok madde, bir madde çok test.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "208",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Kademeli benimseme kuralı",
-            "description": "2701+1174 teste geriye dönük uygulanamaz. Yeni/değişen testler zorunlu mu?",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "208",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "CONVENTIONS.md + örnek dosyada uygulama + DoD + merge",
-            "description": "209 un girdisi hazır olmalı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "208",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "209",
-        "title": "G18.2 — Kapsama raporu script i: hangi PRD maddesinin hic testi yok",
-        "description": "Denetimin bulgusu tek seferlik bir foto; bu script onu tekrarlanabilir kilar. Cikti: hicbir test tarafindan korunmayan PRD madde ID lerinin listesi.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` **Ek A** (247 maddelik tam tablo — bu script in girdi katalogu) · 208 nolu görevin etiket kuralı\n\n**Model:** opus — katalog ile kod arasındaki eşleştirme ve yanlış-pozitif/negatif dengesi muhakeme gerektiriyor.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g18-coverage-report\n```\n\n### YAPILACAK\n`scripts/` altında bir script: PRD madde kataloğunu okur, 208'in etiket kuralına göre testleri tarar, **testi olmayan maddeleri listeler**.\n\n### GİRDİ KATALOĞU\n`prd-uyum-denetimi.md` Ek A'daki 247 madde bu script'in girdi kataloğu olabilir — ama o bir markdown tablosu; makineyle okunacaksa ya ayrıştırılmalı ya da yapılandırılmış bir kaynağa (JSON/YAML) taşınmalı. Kararını yorumla.\n\n### YANLIŞ POZİTİF/NEGATİF\n- Bir madde etiketlenmiş ama testi aslında kriteri ölçmüyorsa script bunu **göremez**. Script'in sınırını açıkça belgele — aksi halde yeşil bir rapor yanlış güven verir. (Denetimin 07.4 dersinin tam olarak tekrarı.)\n- Kapsam dışı bırakılmış maddeler (KVKK, workflow builder, masaüstü uygulaması — `prd-uyum-denetimi.md` §6 ve kapsam kararları) rapora \"eksik\" diye düşmemeli; bilinçli kapsam dışı listesi tutulmalı.\n\n### ÇIKTI BİÇİMİ\nİnsan tarafından okunabilir özet + CI'ın tüketebileceği makine biçimi (exit code + liste).",
-        "testStrategy": "Tam DoD kapısı. Script in kendi testleri: bilinen etiketli bir testi tanır; etiketsiz bir maddeyi eksik olarak raporlar; kapsam dışı listesindeki maddeyi eksik saymaz; bozuk etiketle çökmez. **Script in sınırı belgelenir**: etiket varlığı ≠ kriterin ölçülmesi. Gerçek repoya karşı koşulur ve çıktısı HANDOFF a yazılır (bugünkü kapsama fotoğrafı).",
-        "status": "pending",
-        "dependencies": [
-          "208"
-        ],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "PRD madde kataloğunu makine-okunur kaynağa taşı",
-            "description": "Ek A markdown tablosu → JSON/YAML mı, ayrıştırma mı? Kararı yorumla.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "209",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Etiket tarayıcı (208 kuralına göre)",
-            "description": "Testlerden madde ID lerini çıkar.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "209",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Kapsam dışı listesi",
-            "description": "KVKK/workflow/masaüstü vb. eksik sayılmaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "209",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Script in sınırını belgele",
-            "description": "Etiket varlığı kriterin ölçüldüğü anlamına gelmez. Yeşil rapor yanlış güven vermemeli.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "209",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "Script testleri + gerçek repo çıktısı + DoD + merge",
-            "description": "Bugünkü kapsama fotoğrafı HANDOFF a.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "209",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "210",
-        "title": "G18.3 — Kapsama kapisini CI a bagla + CONVENTIONS §1 i guncelle",
-        "description": "209 un script i elle kosuldugu surece bir sonraki turda unutulur. Bu gorev onu kapiya baglar: yeni/degisen gereksinim ID si testsizse kapi kirmizi.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `CONVENTIONS.md` §1 (DoD kapısı listesi) ve §1.3 · 209 nolu görevin script i · mevcut CI tanımı (`.github/workflows/` altı)\n\n**Model:** sonnet — CI adımı + doküman güncellemesi.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g18-coverage-gate\n```\n\n### YAPILACAK\n1. 209'un script'ini CI'a ekle; yeni/değişen gereksinim ID'si testsizse kapı kırmızı.\n2. `CONVENTIONS.md` §1 DoD listesine yeni kutuyu ekle.\n\n### KADEMELİ OLMALI\nBugün 141 KISMİ madde var; kapıyı \"hiçbir madde testsiz olamaz\" diye kurarsan CI kalıcı kırmızı olur ve kimse ona bakmaz. 208'in kademeli benimseme kuralını uygula: **yeni ya da değişen** maddeler zorunlu, mevcut borç ayrı raporlanır.\n\n### AYRICA KAPATILABİLİR\nBilinen CI boşluğu: unit-tests-before-build adımı bundle bütçesini sessizce atlıyor. Aynı turda kapatılabilir — ama ayrı commit, ve HANDOFF'a yaz.",
-        "testStrategy": "Tam DoD kapısı. CI adımının **gerçekten kırmızı verdiği** gösterilir: etiketsiz bir gereksinim ID si eklenerek kapının düştüğü, sonra etiket eklenince yeşile döndüğü kanıtlanır (yalnız \"adım eklendi\" yetmez — bu tam da denetimin eleştirdiği şey). CONVENTIONS §1 güncel. Mevcut CI adımları bozulmaz.",
-        "status": "pending",
-        "dependencies": [
-          "209"
-        ],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "CI adımı (kademeli: yeni/değişen zorunlu)",
-            "description": "Mevcut borç ayrı raporlanır; CI kalıcı kırmızı olmaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "210",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Kapının gerçekten kırmızı verdiğini kanıtla",
-            "description": "Etiketsiz madde ekle → düşer → etiket ekle → yeşil. \"Adım eklendi\" yetmez.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "210",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "CONVENTIONS.md §1 e yeni kutu",
-            "description": "DoD listesi güncel.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "210",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Bundle bütçesi boşluğu (ayrı commit, opsiyonel)",
-            "description": "unit-tests-before-build sessiz atlama. HANDOFF a yaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "210",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + merge",
-            "description": "WINDOW-BOOTSTRAP §3-§4.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "210",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          }
-        ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
-      },
-      {
-        "id": "211",
-        "title": "G18.4 — PLAN.md yanlis kapanislarinin taranmasi",
-        "description": "PLAN.md:218 `FR-MOD-04.5` i \"✅ Dilim 8 · /groups\" diye kapatmisti; kodda yalnizca `GET` vardi ve sifirdan acilan workspace yonlendirme yapamiyordu. Benzer yanlis kapanislar baska satirlarda da olabilir; bu gorev PLAN.md yi denetim tablosuna karsi tarar.",
-        "details": "### AÇILIŞ — bu pencere hiçbir bağlam taşımıyor\n**1. Önce oku: `.taskmaster/WINDOW-BOOTSTRAP.md`** (zorunlu okumalar, ortam tuzakları, kapı komutları, kapanış adımları). Oradaki Docker / e2e `.env` / kapı parçalama notları bilinmezse tur boşa gider.\n**2. Sonra oku:** `prd-uyum-denetimi.md` **Ek A** (247 maddelik nihai verdict tablosu) ve §8 · `PLAN.md` gereksinim tabloları · `CONVENTIONS.md` §1.2 (kanıt disiplini)\n\n**Model:** sonnet — karşılaştırma ve düzeltme, ama dikkat isteyen bir muhasebe işi.\n\n### DAL\n```bash\ngit checkout main && git pull && git checkout -b feat/g18-plan-truth-sweep\n```\n\n### YAPILACAK\n`prd-uyum-denetimi.md` Ek A'daki nihai verdict (TAM/KISMİ/YOK) ile `PLAN.md`'nin durum damgalarını karşılaştır. `✅` damgalı ama denetimde `KISMİ`/`YOK` çıkan satırları **düzelt**.\n\n### DOĞRU CEVAP ✅ DEĞİL\nCONVENTIONS §1.2: *\"Kısmen karşılandıysa `◐` + eksik açıklaması doğru cevaptır; `✅` uydurmak bu kutuyu geçmez.\"* Bu görev tam da o kuralı geriye dönük uyguluyor.\n\n### DİKKAT — SIRALAMA\nBu görev diğer düzeltme görevlerinden **SONRA** koşulmalı, yoksa düzeltilmiş maddeleri de `◐`ye çeker. Bağımlılığı 209'a bağlı ama gerçekte Faz 1-3'ün kapanmasını bekler; başlarken Task Master'da hangi görevlerin `done` olduğunu kontrol et ve yalnız **gerçekten hâlâ eksik** olanları düşür.\n\n### KANIT DİSİPLİNİ\nDurum hücresi YALNIZ damga (`◐ → K<kod>`); açıklama `## K. Kanıt Geçmişi` bloğuna madde olarak eklenir, var olanlar silinmez. Faz özet tablosundaki sayaçlar (`54 ✅ · 0 ◐`) da güncellenmeli — panel onu `statedCounts` olarak okuyor.",
-        "testStrategy": "Tam DoD kapısı (kod değişmiyorsa da kapı koşulur — PLAN.md sağlık taraması `C-plan-row-length` eşiğini aşan satır üretmemelisin). Doğrulama: Ek A daki her `KISMİ`/`YOK` madde için PLAN.md de karşılık gelen satırın damgası `✅` DEĞİL. Halihazırda düzeltilmiş (Task Master `done`) maddeler yanlışlıkla düşürülmemiş. Faz özet sayaçları tutarlı.",
-        "status": "pending",
-        "dependencies": [
-          "209"
-        ],
-        "priority": "medium",
-        "subtasks": [
-          {
-            "id": 1,
-            "title": "Ek A verdictleri ile PLAN.md damgalarını karşılaştır",
-            "description": "Fark listesi çıkar.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "211",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 2,
-            "title": "Task Master da done olan görevleri düş",
-            "description": "Düzeltilmiş maddeleri yanlışlıkla ◐ ye çekme.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "211",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 3,
-            "title": "Damgaları düzelt + K bloklarına açıklama ekle",
-            "description": "CONVENTIONS §1.2: hücrede damga, dipnotta geçmiş. Var olan maddeleri silme.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "211",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 4,
-            "title": "Faz özet sayaçlarını güncelle",
-            "description": "statedCounts tutarlı olmalı.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "211",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
-          },
-          {
-            "id": 5,
-            "title": "DoD + HANDOFF + merge",
-            "description": "C-plan-row-length eşiği aşılmaz.",
-            "details": "",
-            "status": "pending",
-            "dependencies": [],
-            "parentId": "211",
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],

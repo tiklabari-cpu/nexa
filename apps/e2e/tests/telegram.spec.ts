@@ -27,7 +27,7 @@
  * wired to each other in this build — the composer does not call the adapter —
  * so asserting only the first would quietly over-claim.
  */
-import { API_BASE, channelWebhook, expect, ownerAccessToken, test } from './fixtures.js';
+import { channelWebhook, expect, test } from './fixtures.js';
 
 /**
  * A run-unique bot `@username`, so a run cannot collide with its own leftovers.
@@ -162,30 +162,22 @@ test.describe('Telegram (FR-MOD-08.5.8)', () => {
     await expect(agentPage.locator('main')).toContainText(question);
 
     // --- (iv) The agent answers ---------------------------------------------
-    // What the agent sees: the composer works on a Telegram-originated chat
-    // exactly as it does on a website one — same chat core underneath.
+    // The composer works on a Telegram-originated chat exactly as it does on a
+    // website one — same chat core underneath — and sending it is now the whole
+    // delivery: `sendEvent` hands an agent's reply to the channel dispatcher
+    // once the event is committed (FR-MOD-08.5.8).
+    //
+    // This leg used to POST `/channels/telegram/messages` by hand right here,
+    // because the composer and the provider were not wired to each other. That
+    // call is gone: repeating it now would send the customer the same answer
+    // twice, and its passing told us nothing about the path an agent takes.
+    // What it used to assert — a `tg.`-shaped provider id and the writer
+    // resolved back from the chat — is asserted against the real console reply
+    // in `channels-adapters.test.ts`, which can read `channel_messages`.
     const composer = agentPage.getByPlaceholder('Type your reply');
     await composer.fill(answer);
     await composer.press('Enter');
     await expect(agentPage.locator('main')).toContainText(answer);
-
-    // What the customer would receive: the same answer leaving through the bot,
-    // addressed by the chat rather than by a sender id the agent never sees.
-    // The browser session keeps its token in memory, so this leg mints its own.
-    const token = await ownerAccessToken(request);
-    const outbound = await request.post(`${API_BASE}/channels/telegram/messages`, {
-      headers: { authorization: `Bearer ${token}` },
-      data: { chat_id: chatId, text: answer },
-    });
-    expect(
-      outbound.ok(),
-      `telegram outbound failed: ${outbound.status()} ${await outbound.text()}`,
-    ).toBe(true);
-    const sent = (await outbound.json()) as { provider_message_id: string; external_id: string };
-    // A Telegram-shaped message id, and the writer resolved back from the chat —
-    // the reply went to the person who wrote in, not to whoever asked for it.
-    expect(sent.provider_message_id).toMatch(/^tg\./);
-    expect(sent.external_id).toBe(senderId);
 
     // --- (v) The Views group lists the channel, and drops the promo ----------
     const views = agentPage.getByRole('navigation', { name: 'Inbox views' });

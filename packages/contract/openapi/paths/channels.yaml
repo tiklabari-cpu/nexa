@@ -245,6 +245,12 @@ channelWebhook:
       is the connected bot's `bot_username`, `sender.id` is the Telegram user id
       of the writer, and `message.text` is the message body.
 
+      A card number in the message is masked before anything stores or reads it
+      (FR-MOD-08.9.5), and a first contact is screened by the workspace's spam
+      filter (FR-MOD-08.9.3) — the same two gates the widget and e-mail paths
+      apply. As on the e-mail path, a dropped message is still a 200, so the
+      provider does not retry something refused on purpose.
+
       Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
       §5); a real deployment verifies the provider signature at the edge.
     security: []
@@ -258,15 +264,23 @@ channelWebhook:
             additionalProperties: true
     responses:
       "200":
-        description: Accepted — the message became a chat event
+        description: |
+          The message was processed. `accepted` carries the chat it became;
+          `ignored` means the spam filter dropped it and nothing was persisted.
         content:
           application/json:
             schema:
-              type: object
-              required: [status, chat_id, customer_id]
-              properties:
-                status: { type: string, enum: [accepted] }
-                chat_id: { type: string }
-                customer_id: { type: string, format: uuid }
+              oneOf:
+                - type: object
+                  required: [status, chat_id, customer_id]
+                  properties:
+                    status: { type: string, enum: [accepted] }
+                    chat_id: { type: string }
+                    customer_id: { type: string, format: uuid }
+                - type: object
+                  required: [status, reason]
+                  properties:
+                    status: { type: string, enum: [ignored] }
+                    reason: { type: string, enum: [spam] }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }

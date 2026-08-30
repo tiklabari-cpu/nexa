@@ -22,9 +22,11 @@
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
+import { maskCardNumbers } from '../../lib/cc-mask.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { CustomerPrincipal } from '../auth/principal.js';
+import { evaluateSpam, isSpamFilterEnabled } from '../security/spam-filter.js';
 import { getAdapter } from './registry.js';
 import type { ChannelType } from './channel-adapter.js';
 
@@ -70,10 +72,16 @@ interface ChannelRow {
   createdAt: Date;
 }
 
-export interface InboundOutcome {
-  chat_id: string;
-  customer_id: string;
-}
+/**
+ * What an inbound webhook became.
+ *
+ * `ignored` mirrors the inbound-email result rather than an error status: the
+ * provider did nothing wrong and must not retry a message that was dropped on
+ * purpose, so the call still succeeds.
+ */
+export type InboundOutcome =
+  | { status: 'accepted'; chat_id: string; customer_id: string }
+  | { status: 'ignored'; reason: 'spam' };
 
 export interface OutboundOutcome {
   provider_message_id: string;
@@ -210,6 +218,13 @@ export class ChannelService {
    * Turn an inbound provider webhook into a chat message. Resolves the licence
    * from the channel address (pre-tenant, SECURITY DEFINER), then reuses the
    * chat core exactly as the widget does.
+   *
+   * The two visitor-safety gates the widget applies (FR-MOD-08.9.5 masking and
+   * FR-MOD-08.9.3 spam) run here rather than in the route, because this is the
+   * only entry the provider webhook takes: `routes/customer.ts` guards the
+   * widget and `email-inbound.ts` guards e-mail, and a connected channel used to
+   * pass neither — so a raw PAN arriving over WhatsApp reached the database
+   * while the same digits typed into the widget did not.
    */
   async ingestInbound(
     db: PrismaClient,
@@ -220,9 +235,45 @@ export class ChannelService {
     const normalized = getAdapter(type).parseInbound(payload);
     const tenant = await this.resolveLicense(db, type, normalized.address);
 
-    const customerId = await withTenant(db, tenant, (tx) =>
-      this.resolveCustomer(tx, tenant, type, normalized.externalId, normalized.senderName),
+    // Mask before anything reads the text, so the masked value is what the spam
+    // classifier sees, what the event stores, what realtime pushes and what the
+    // message log keeps — the order `routes/customer.ts` and `email-inbound.ts`
+    // both use, and the reason no raw PAN is ever handed to the classifier.
+    const maskedText = maskCardNumbers(normalized.text);
+
+    // Looked up, not created: the spam gate below must be able to refuse without
+    // leaving a trace, and `resolveCustomer` would already have written a
+    // customer and an identity row by the time the verdict is known.
+    const knownCustomerId = await withTenant(db, tenant, (tx) =>
+      this.findCustomerByIdentity(tx, tenant, type, normalized.externalId),
     );
+
+    const existing = knownCustomerId
+      ? await withTenant(db, tenant, (tx) =>
+          tx.chat.findFirst({
+            where: { customerId: knownCustomerId, active: true },
+            select: { id: true },
+          }),
+        )
+      : null;
+
+    // Spam filter (FR-MOD-08.9.3) — the same engine, and deliberately the same
+    // scope the widget uses: screen only the message that would OPEN a chat.
+    // Screening every message of an established conversation would put the
+    // false-positive cost on a legitimate customer mid-thread, who may well
+    // paste several links at their agent's request.
+    if (!existing && maskedText) {
+      const spamFilterOn = await withTenant(db, tenant, (tx) => isSpamFilterEnabled(tx));
+      if (evaluateSpam({ filterEnabled: spamFilterOn, text: maskedText }).spam) {
+        return { status: 'ignored', reason: 'spam' };
+      }
+    }
+
+    const customerId =
+      knownCustomerId ??
+      (await withTenant(db, tenant, (tx) =>
+        this.resolveCustomer(tx, tenant, type, normalized.externalId, normalized.senderName),
+      ));
 
     const principal: CustomerPrincipal = {
       kind: 'customer',
@@ -231,10 +282,6 @@ export class ChannelService {
       licenseId: tenant.licenseId,
     };
 
-    const existing = await withTenant(db, tenant, (tx) =>
-      tx.chat.findFirst({ where: { customerId, active: true }, select: { id: true } }),
-    );
-
     // Same two paths the widget's single send endpoint takes: continue the open
     // conversation, or open one. `start` reuses an existing active chat too, so
     // the check is an optimisation, not the safety net.
@@ -242,7 +289,7 @@ export class ChannelService {
     if (existing) {
       await chats.sendEvent(tenant, principal, existing.id, {
         type: 'message',
-        text: normalized.text,
+        text: maskedText,
         recipients: 'all',
       });
       chatId = existing.id;
@@ -250,7 +297,7 @@ export class ChannelService {
       const { chat } = await chats.start(tenant, principal, {
         customerId,
         assignToMe: false,
-        initialEvent: { type: 'message', text: normalized.text, recipients: 'all' },
+        initialEvent: { type: 'message', text: maskedText, recipients: 'all' },
       });
       chatId = chat.id;
     }
@@ -261,11 +308,37 @@ export class ChannelService {
         direction: 'inbound',
         externalId: normalized.externalId,
         chatId,
-        text: normalized.text,
+        text: maskedText,
       }),
     );
 
-    return { chat_id: chatId, customer_id: customerId };
+    return { status: 'accepted', chat_id: chatId, customer_id: customerId };
+  }
+
+  /**
+   * The customer this external sender already maps to, or null for a stranger.
+   *
+   * The read half of {@link resolveCustomer}: it answers "would this message
+   * open a chat?" without writing, which is what lets the spam gate refuse a
+   * first contact and leave nothing behind.
+   */
+  private async findCustomerByIdentity(
+    tx: TenantClient,
+    tenant: TenantContext,
+    type: ChannelType,
+    externalId: string,
+  ): Promise<string | null> {
+    const identity = await tx.channelIdentity.findUnique({
+      where: {
+        licenseId_channelType_externalId: {
+          licenseId: tenant.licenseId,
+          channelType: type,
+          externalId,
+        },
+      },
+      select: { customerId: true },
+    });
+    return identity?.customerId ?? null;
   }
 
   /**
@@ -359,6 +432,65 @@ export class ChannelService {
   // -------------------------------------------------------------------------
   // Outbound — chat reply → provider
   // -------------------------------------------------------------------------
+
+  /**
+   * Carry an agent's reply out through the channel the conversation arrived on
+   * — the `ChannelDispatcher` the chat core calls after it has committed the
+   * event (FR-MOD-08.5.4-.8).
+   *
+   * Until this existed `sendOutbound` had exactly one caller, the admin
+   * `POST /channels/:type/messages`, so an agent answering in the console wrote
+   * a message the customer never received: five connected channels were, in
+   * practice, a one-way inbox feed.
+   *
+   * Two rules make it safe to call on *every* agent message:
+   *  - a chat with no channel identity is a Website chat, and returns silently;
+   *  - a provider failure is logged and swallowed. The reply is already in the
+   *    database and on its way to the agent's own screen; throwing here would
+   *    turn someone else's outage into a failed request and, with it, a message
+   *    the agent believes was never sent.
+   */
+  async dispatchAgentReply(
+    db: PrismaClient,
+    tenant: TenantContext,
+    chatId: string,
+    text: string,
+    log?: { error: (obj: object, msg: string) => void },
+  ): Promise<void> {
+    try {
+      const identity = await withTenant(db, tenant, async (tx) => {
+        const chat = await tx.chat.findUnique({
+          where: { id: chatId },
+          select: { customerId: true },
+        });
+        if (!chat) return null;
+        // The channel this customer is reachable on. `findFirst` rather than a
+        // keyed read because the identity is keyed by channel, not by chat — a
+        // customer who has written from two channels resolves to the one that
+        // was created first, which is the conversation they are in.
+        return tx.channelIdentity.findFirst({
+          where: { customerId: chat.customerId },
+          select: { channelType: true },
+          orderBy: { createdAt: 'asc' },
+        });
+      });
+
+      if (!identity) return;
+
+      await withTenant(db, tenant, (tx) =>
+        this.sendOutbound(tx, tenant, identity.channelType as ChannelType, { chatId, text }),
+      );
+    } catch (error) {
+      // Includes the ordinary refusals `sendOutbound` raises — a channel the
+      // workspace has since disconnected, or a chat with no reply address on it.
+      // Those are not errors of the agent's making either, so they take the same
+      // path: recorded for an operator, invisible to the request.
+      log?.error(
+        { err: error, chat_id: chatId, license_id: String(tenant.licenseId) },
+        'channel reply delivery failed',
+      );
+    }
+  }
 
   /**
    * Send an outbound message through a connected channel and log it. Addressed

@@ -5,6 +5,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { maskCardNumbers } from '../lib/cc-mask.js';
 import { ChatService } from '../services/chat/chat-service.js';
+import { ChannelService } from '../services/channels/channel-service.js';
 import { hasChatScope } from '../services/chat/access.js';
 import { SupervisionService } from '../services/traffic/supervision-service.js';
 import { roleAtLeast } from '../services/auth/principal.js';
@@ -91,6 +92,7 @@ export default async function chatRoutes(
   { env, mailer, push }: { env: Env; mailer: Mailer; push: PushProvider },
 ): Promise<void> {
   const store = createObjectStore(env.STORAGE_PROVIDER, { localDir: env.STORAGE_LOCAL_DIR });
+  const channels = new ChannelService();
   const chats = new ChatService(
     app.db,
     app.redis,
@@ -99,6 +101,14 @@ export default async function chatRoutes(
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
     // The agent-archive path mails the transcript on close (FR-MOD-08.7.4).
     mailer,
+    // This is the route an agent answers on, so this is where a reply has to
+    // find its way back to Messenger/SMS/WhatsApp/Instagram/Telegram
+    // (FR-MOD-08.5.4-.8). The closure supplies the db handle the dispatcher
+    // needs; `ChannelService` stays stateless, like the rest of it.
+    {
+      dispatchAgentReply: (tenant, chatId, text) =>
+        channels.dispatchAgentReply(app.db, tenant, chatId, text, app.log),
+    },
   );
   const supervisions = new SupervisionService();
 

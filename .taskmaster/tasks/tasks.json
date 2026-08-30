@@ -8036,7 +8036,7 @@
         "status": "in-progress",
         "dependencies": [],
         "priority": "low",
-        "updatedAt": "2026-08-29T23:41:55.401Z",
+        "updatedAt": "2026-08-29T23:43:18.048Z",
         "subtasks": [
           {
             "id": 1,
@@ -8055,12 +8055,12 @@
             "description": "Olay anında bakılacak belgeler var.",
             "details": "NE YAPILACAK: docs/runbooks/ altında beş senaryo, her biri AYNI yapıda:\nBELİRTİ (ne görünür) → TEŞHİS (hangi komut/sorgu koşulur) → MÜDAHALE (ne yapılır) → SONRASI (ne kaydedilir).\n\n1. postgres-down.md: /health/ready 503, api 5xx. Teşhis: health çıktısı, bağlantı havuzu, pg logları.\n   Müdahale: readiness zaten rotasyondan çıkarır; veritabanı dönünce pod lar kendiliğinden hazır olur.\n2. redis-down.md: presence/rate-limit/fan-out etkilenir. ÖNEMLİ: bazı yollar FAIL-CLOSED tasarlandı\n   (SAML replay muhafızı Redis düşerse reddeder) — bunu yaz, çünkü \"her şey durdu\" paniğini önler.\n3. webhook-backlog.md: webhook_deliveries şişti. Teşhis: bekleyen satır sayısı, attempt dağılımı.\n   Müdahale: WEBHOOK_MAX_ATTEMPTS ve backoff penceresi; webhook.delivery_exhausted denetim kayıtları.\n   NOT: bu sweep in CLI karşılığı YOK (README bunu gerekçesiyle yazıyor) — elle koşmaya çalışma.\n4. rtm-connection-storm.md: bağlantı sayısı fırlıyor. Teşhis: tm 163.2 nin metrikleri, kopma nedenleri.\n   Müdahale: HPA, ADR-07 sınırları, sticky session durumu.\n5. tenant-isolation-suspicion.md: çapraz-kiracı veri şüphesi. Teşhis: RLS kapsamı sorgusu\n   (tm 150 nin partisyonları dahil), audit log, hangi rolle bağlanıldığı (nexa_app mi sahip mi).\n   Müdahale: erişimi kes, denetim zincirini doğrula, kanıtı sakla.\n\nDOSYALAR: docs/runbooks/*.md (beş dosya) · docs/production-checklist.md (referans) · README (link).\nKAYNAKLAR (oku, uydurma): README nin \"Background jobs\" bölümü (sweep davranışları, retention ın\nneden varsayılan kapalı olduğu, webhook backoff u) · apps/api/src/routes/health.ts (teşhis çıktısı) ·\nPLAN §D116 nın \"fail-closed\" notları · tm 163.2 nin metrik adları.\n\nTUZAK: runbook lar GERÇEK komutlar içermeli ve o komutlar bu depoda çalışmalı (make psql · curl\nhealth · docker compose logs). Çalışmayan bir komut runbook u olaydan daha zararlı yapar —\nyazdığın her komutu bir kez KOŞ.\n\nBAĞLAM (bu pencere sıfırdan açılır — hafızaya değil dosyalara güven):\n- Önce TASK-RUNNER-PROMPT.md §0 sırası: MASTER-PROMPT.md · CONVENTIONS.md · bu görev · PLAN.md (dar okuma) · git log.\n- Fazın gerekçesi + kırılımı: PLAN.md `## 6C.` (bul: `grep -n \"^## 6C\" PLAN.md`) ve §D124 (bul: `grep -n \"D124\" PLAN.md | head -3`).\n- Bu görevin PRD/kod kimliği: **M-RUNBOOK** (türetilmiş — NFR-M). Gereksinim satırı: `grep -n \"| M-RUNBOOK\" PLAN.md | cut -c1-200` (durum damgalı satır).\n- Kanıt bloğu: `grep -n \"^#### KM-RUNBOOK\" PLAN.md` → kapanışta maddeyi bu bloğun SONUNA ekle (CONVENTIONS §1.2 — hücreye kanıt YAZMA).\n- Faz düz tablosu (etiket · bağımlılık · dilim): PLAN.md `### Faz 6 (Hazırlık) — düz tablo`.\n\nKAPANIŞ (TASK-RUNNER-PROMPT §3, sıra önemli): PLAN.md damga + K bloğu maddesi → HANDOFF.md kısa not (en üst, `## Task log (newest-first)` altı) → `git add -A` + Conventional Commit + push → Task Master done → son çıktı JSON.\nDoD kapısı (CONVENTIONS §1, exit code'larla): `pnpm -w typecheck` · `pnpm -w lint` · `pnpm -w format:check` · `pnpm -w test` · `pnpm -w test:integration` · `pnpm -w build` · ilgili `pnpm -w test:e2e` · kontrat değiştiyse `pnpm -w contract:generate` sonrası `git status` temiz · migration varsa `pnpm -w db:check-drift`.\nKapı komutlarını ARKA PLANA ATMA (TASK-RUNNER-PROMPT §2) — ön planda, yeterli timeout ile koş.",
             "testStrategy": "- Ölçülebilir: her runbook taki her komut bir kez koşuldu ve çalıştı (HANDOFF a yaz).\n- format:check yeşil · README ve checklist ten linkler çalışıyor.\n- PLAN: §7.2 M-RUNBOOK → \"✅ → KM-RUNBOOK\" (ikinci alt-görev kalemi kapatır) + K bloğu maddeleri.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "166.1"
             ],
             "parentId": "166",
-            "updatedAt": "2026-08-24T13:04:25.275Z"
+            "updatedAt": "2026-08-29T23:43:18.048Z"
           }
         ]
       },
@@ -8188,7 +8188,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-29T23:41:55.401Z",
+      "lastModified": "2026-08-29T23:43:18.050Z",
       "taskCount": 174,
       "completedCount": 172,
       "tags": [

@@ -9,6 +9,10 @@ cluster (CLAUDE.md).
 This is not a substitute for reading [README.md](../README.md) — most items below link back
 to the section that explains the _why_. This document is the _what to check, in order_.
 
+This is a pre-deployment checklist, not an incident guide — for that, see
+[`docs/runbooks/`](runbooks/): Postgres down, Redis down, webhook delivery backlog, RTM
+connection storm, suspected cross-tenant data exposure.
+
 ## 1. Configuration
 
 - [ ] `NODE_ENV=production` is set on both `apps/api` and `apps/rtm`. Boot refuses to start

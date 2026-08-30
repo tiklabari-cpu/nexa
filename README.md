@@ -750,4 +750,7 @@ See [PLAN.md](PLAN.md) for what is done and what is next, and [HANDOFF.md](HANDO
 for the current state summary. Before taking any of this to production, work through
 [docs/production-checklist.md](docs/production-checklist.md) — every item there is a
 command to run or a piece of evidence already recorded in this repository, not a box to
-tick from memory.
+tick from memory. If something is already on fire, [docs/runbooks/](docs/runbooks/) covers
+five incident scenarios (Postgres down, Redis down, a webhook delivery backlog, an RTM
+connection storm, suspected cross-tenant data exposure), each as symptom → diagnosis
+command → response → what to record afterward.

@@ -2033,8 +2033,74 @@ export interface paths {
      */
     get: operations['listGroups'];
     put?: never;
-    post?: never;
+    /**
+     * Create a team
+     * @description Routing resolves an agent through team membership (ADR-08 step 2), so a
+     *     workspace with no team cannot route a conversation to anyone. Signup seeds
+     *     a `General` team with the owner in it; this is how the rest are made.
+     */
+    post: operations['createGroup'];
     delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/groups/{groupId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The team's numeric id, as `GET /groups` returns it. */
+        groupId: components['parameters']['GroupIdPath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a team
+     * @description Refused (409 `group_in_use`) while a routing rule targets the team, or
+     *     while any conversation reachable only through it is still open. Neither
+     *     reference carries a foreign key, so this refusal — not the database — is
+     *     what stops a delete from stranding them. Memberships are removed with the
+     *     team.
+     */
+    delete: operations['deleteGroup'];
+    options?: never;
+    head?: never;
+    /**
+     * Rename a team or change its language
+     * @description Send the field that changed; at least one is required. An empty body is a
+     *     400 rather than a no-op, so a client cannot believe it saved something.
+     */
+    patch: operations['updateGroup'];
+    trace?: never;
+  };
+  '/groups/{groupId}/agents/{agentId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The team's numeric id, as `GET /groups` returns it. */
+        groupId: components['parameters']['GroupIdPath'];
+        /** @description The agent account's uuid. */
+        agentId: components['parameters']['AgentIdPath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Add an agent to a team, or change their priority
+     * @description Idempotent: the same call adds the member and later moves their tier. The
+     *     priority is what routing picks between available agents with (ADR-08) —
+     *     `primary` is the PRD's "Primary agent" tier.
+     */
+    put: operations['setGroupMember'];
+    post?: never;
+    /** Remove an agent from a team */
+    delete: operations['removeGroupMember'];
     options?: never;
     head?: never;
     patch?: never;
@@ -8431,6 +8497,15 @@ export interface components {
       /** @description Derived from the name, unique within the licence. */
       slug: string;
     };
+    GroupWrite: {
+      /** @description What an agent picks from a transfer menu, so it is trimmed and bounded. */
+      name: string;
+      /**
+       * @description Drives language-based routing.
+       * @default en
+       */
+      language_code: string;
+    };
     Group: {
       /** Format: int64 */
       id: number;
@@ -10016,6 +10091,10 @@ export interface components {
     ChatId: string;
     /** @description The adapter channel. */
     ChannelTypePath: components['schemas']['ChannelType'];
+    /** @description The team's numeric id, as `GET /groups` returns it. */
+    GroupIdPath: number;
+    /** @description The agent account's uuid. */
+    AgentIdPath: string;
     /**
      * @description Scope the request to one brand of the caller's license (Multibrand,
      *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
@@ -13141,6 +13220,159 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GroupWrite'];
+      };
+    };
+    responses: {
+      /** @description The team, as created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Group'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The team's numeric id, as `GET /groups` returns it. */
+        groupId: components['parameters']['GroupIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      409: components['responses']['Conflict'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The team's numeric id, as `GET /groups` returns it. */
+        groupId: components['parameters']['GroupIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['GroupWrite'];
+      };
+    };
+    responses: {
+      /** @description The team, as updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Group'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setGroupMember: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The team's numeric id, as `GET /groups` returns it. */
+        groupId: components['parameters']['GroupIdPath'];
+        /** @description The agent account's uuid. */
+        agentId: components['parameters']['AgentIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * @default normal
+           * @enum {string}
+           */
+          priority?: 'primary' | 'first' | 'normal' | 'last';
+        };
+      };
+    };
+    responses: {
+      /** @description The team, with the membership applied */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Group'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  removeGroupMember: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The team's numeric id, as `GET /groups` returns it. */
+        groupId: components['parameters']['GroupIdPath'];
+        /** @description The agent account's uuid. */
+        agentId: components['parameters']['AgentIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Removed */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

@@ -26,6 +26,7 @@ import { z } from 'zod';
 import {
   AGENT_ROLES,
   DEFAULT_WORK_SCHEDULE,
+  GROUP_PRIORITIES,
   NOTIFICATION_CHANNELS,
   ROUTING_STATUSES,
   hasAnyScope,
@@ -47,6 +48,95 @@ import {
 } from '../services/notifications/preferences.js';
 
 const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) });
+
+// --- Teams (FR-MOD-04.5) ----------------------------------------------------
+
+/** A team name is what an agent picks from a transfer menu, so it is trimmed and
+ *  bounded rather than free text. `language_code` drives language-based routing
+ *  and defaults to the column's `en`. */
+const groupBody = z.object({
+  name: z.string().trim().min(1).max(120),
+  language_code: z.string().trim().min(2).max(10).optional(),
+});
+
+/** Both fields optional, at least one required — the edit page sends the field
+ *  that moved, not the pair it read a moment ago. */
+const groupPatchBody = groupBody.partial().refine((b) => Object.keys(b).length > 0, {
+  message: 'send at least one of name, language_code',
+});
+
+/** `priority` is the routing preference ADR-08 step 2 reads, and the PRD's
+ *  "Primary agent önceliği" is its `primary` tier. Enumerated here so a typo is
+ *  a 400 rather than a row the CHECK constraint rejects mid-transaction. */
+const membershipBody = z.object({ priority: z.enum(GROUP_PRIORITIES).default('normal') });
+
+function parseGroupBody(raw: unknown): z.infer<typeof groupBody> {
+  const parsed = groupBody.safeParse(raw);
+  if (!parsed.success) {
+    throw ApiError.validation('name is required (1–120 characters).');
+  }
+  return parsed.data;
+}
+
+function parseGroupPatchBody(raw: unknown): z.infer<typeof groupPatchBody> {
+  const parsed = groupPatchBody.safeParse(raw);
+  if (!parsed.success) {
+    throw ApiError.validation('Send at least one of name (1–120 chars), language_code.');
+  }
+  return parsed.data;
+}
+
+function parseMembershipBody(raw: unknown): z.infer<typeof membershipBody> {
+  const parsed = membershipBody.safeParse(raw ?? {});
+  if (!parsed.success) {
+    throw ApiError.validation(`priority must be one of: ${GROUP_PRIORITIES.join(', ')}.`);
+  }
+  return parsed.data;
+}
+
+/** The path id, as a bigint. A non-numeric segment is a 404 rather than a 400:
+ *  `/groups/banana` names no team, and saying so is the same answer as naming a
+ *  team this workspace does not have. */
+function groupIdParam(raw: string): bigint {
+  try {
+    const id = BigInt(raw);
+    if (id <= 0n) throw new RangeError('non-positive');
+    return id;
+  } catch {
+    throw new ApiError('group_not_found', 'Team not found.');
+  }
+}
+
+/**
+ * The team, or a 404. Read inside the caller's tenant, so RLS — not the
+ * `licenseId` in the where-clause — is what makes another workspace's team
+ * unreachable; the id is there because it is half of the primary key.
+ */
+async function loadGroup(
+  tx: Prisma.TransactionClient,
+  groupId: bigint,
+): Promise<{ id: bigint; name: string }> {
+  const group = await tx.group.findFirst({
+    where: { id: groupId },
+    select: { id: true, name: true },
+  });
+  if (!group) throw new ApiError('group_not_found', 'Team not found.');
+  return group;
+}
+
+function serialiseGroup(group: {
+  id: bigint;
+  name: string;
+  languageCode: string;
+  agents: Array<{ agentId: string; priority: string }>;
+}) {
+  return {
+    id: Number(group.id),
+    name: group.name,
+    language_code: group.languageCode,
+    agents: group.agents.map((a) => ({ agent_id: a.agentId, priority: a.priority })),
+  };
+}
 
 /**
  * A partial change to the caller's notification channels (FR-MOD-13.8).
@@ -677,14 +767,199 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         }),
       );
 
-      return reply.send({
-        items: groups.map((g) => ({
-          id: Number(g.id),
-          name: g.name,
-          language_code: g.languageCode,
-          agents: g.agents.map((a) => ({ agent_id: a.agentId, priority: a.priority })),
-        })),
+      return reply.send({ items: groups.map(serialiseGroup) });
+    },
+  );
+
+  // --- Teams: the write half (FR-MOD-04.5) ----------------------------------
+  //
+  // `GET /groups` shipped alone, so a workspace could read the teams it had and
+  // create none. That is not a missing convenience: routing resolves an agent
+  // through `group_agents` (ADR-08 step 2), so a workspace opened from scratch
+  // had no team, no membership and therefore nowhere to route a conversation —
+  // a Must/MVP requirement that read as delivered because the read endpoint
+  // existed.
+
+  app.post('/groups', { config: { scopes: ['groups--all:rw'] } }, async (request, reply) => {
+    const body = parseGroupBody(request.body);
+    const tenant = request.tenant();
+
+    const group = await request.withTenant(async (tx) => {
+      const created = await tx.group.create({
+        data: {
+          licenseId: tenant.licenseId,
+          name: body.name,
+          ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
+        },
+        include: { agents: { select: { agentId: true, priority: true } } },
       });
+      await writeAuditEntry(tx, request.auditContext(), {
+        action: 'group.created',
+        target: `group:${created.id}`,
+        metadata: { name: created.name, language_code: created.languageCode },
+      });
+      return created;
+    });
+
+    return reply.code(201).send(serialiseGroup(group));
+  });
+
+  app.patch<{ Params: { groupId: string } }>(
+    '/groups/:groupId',
+    { config: { scopes: ['groups--all:rw'] } },
+    async (request, reply) => {
+      const groupId = groupIdParam(request.params.groupId);
+      const body = parseGroupPatchBody(request.body);
+
+      const group = await request.withTenant(async (tx) => {
+        await loadGroup(tx, groupId);
+        const updated = await tx.group.update({
+          where: { licenseId_id: { licenseId: request.tenant().licenseId, id: groupId } },
+          data: {
+            ...(body.name !== undefined ? { name: body.name } : {}),
+            ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
+          },
+          include: { agents: { select: { agentId: true, priority: true } } },
+        });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'group.updated',
+          target: `group:${groupId}`,
+          metadata: { name: updated.name, language_code: updated.languageCode },
+        });
+        return updated;
+      });
+
+      return reply.send(serialiseGroup(group));
+    },
+  );
+
+  app.delete<{ Params: { groupId: string } }>(
+    '/groups/:groupId',
+    { config: { scopes: ['groups--all:rw'] } },
+    async (request, reply) => {
+      const groupId = groupIdParam(request.params.groupId);
+
+      await request.withTenant(async (tx) => {
+        await loadGroup(tx, groupId);
+
+        // Neither `routing_rules.target_group_id` nor `chat_access.group_id`
+        // carries a foreign key, so the database will not stop a delete that
+        // strands them — these two checks are the only thing that does.
+        //
+        // A rule pointing at a deleted team routes nothing and says nothing; a
+        // live chat reachable only through it becomes invisible to every agent
+        // at once. Both are refusals rather than cascades: which team should
+        // inherit the work is an operator's decision, not a default.
+        const rule = await tx.routingRule.findFirst({
+          where: { targetGroupId: groupId },
+          select: { id: true, kind: true, isFallback: true },
+        });
+        if (rule) {
+          throw new ApiError(
+            'group_in_use',
+            'A routing rule still sends conversations to this team. Point the rule elsewhere first.',
+            { details: { rule_id: rule.id, kind: rule.kind, is_fallback: rule.isFallback } },
+          );
+        }
+
+        const activeChats = await tx.chat.count({
+          where: { active: true, access: { some: { groupId } } },
+        });
+        if (activeChats > 0) {
+          throw new ApiError(
+            'group_in_use',
+            'Conversations are still open with this team. Transfer or close them first.',
+            { details: { active_chats: activeChats } },
+          );
+        }
+
+        // Memberships cascade with the group (`GroupAgent.group` onDelete
+        // Cascade). The `chat_access` rows of archived chats are left alone on
+        // purpose: they are the record of who could see a conversation while it
+        // was open, group ids are never reused (a per-table sequence), and so
+        // an orphan row grants nobody anything.
+        await tx.group.delete({
+          where: { licenseId_id: { licenseId: request.tenant().licenseId, id: groupId } },
+        });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'group.deleted',
+          target: `group:${groupId}`,
+          metadata: {},
+        });
+      });
+
+      return reply.code(204).send();
+    },
+  );
+
+  app.put<{ Params: { groupId: string; agentId: string } }>(
+    '/groups/:groupId/agents/:agentId',
+    { config: { scopes: ['groups--all:rw'] } },
+    async (request, reply) => {
+      const groupId = groupIdParam(request.params.groupId);
+      const agentId = request.params.agentId;
+      const { priority } = parseMembershipBody(request.body);
+
+      const group = await request.withTenant(async (tx) => {
+        await loadGroup(tx, groupId);
+
+        // A membership is what routing reads, so the agent must actually belong
+        // to this workspace. RLS scopes the lookup; without the check an unknown
+        // uuid would be accepted and then never match anyone.
+        const member = await tx.agentMembership.findFirst({
+          where: { agentId },
+          select: { agentId: true },
+        });
+        if (!member) throw ApiError.notFound('That agent is not a member of this workspace.');
+
+        await tx.groupAgent.upsert({
+          where: {
+            licenseId_groupId_agentId: {
+              licenseId: request.tenant().licenseId,
+              groupId,
+              agentId,
+            },
+          },
+          create: { licenseId: request.tenant().licenseId, groupId, agentId, priority },
+          update: { priority },
+        });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'group.member_set',
+          target: `group:${groupId}`,
+          metadata: { agent_id: agentId, priority },
+        });
+
+        return tx.group.findUniqueOrThrow({
+          where: { licenseId_id: { licenseId: request.tenant().licenseId, id: groupId } },
+          include: { agents: { select: { agentId: true, priority: true } } },
+        });
+      });
+
+      return reply.send(serialiseGroup(group));
+    },
+  );
+
+  app.delete<{ Params: { groupId: string; agentId: string } }>(
+    '/groups/:groupId/agents/:agentId',
+    { config: { scopes: ['groups--all:rw'] } },
+    async (request, reply) => {
+      const groupId = groupIdParam(request.params.groupId);
+      const agentId = request.params.agentId;
+
+      await request.withTenant(async (tx) => {
+        await loadGroup(tx, groupId);
+        const removed = await tx.groupAgent.deleteMany({ where: { groupId, agentId } });
+        if (removed.count === 0) {
+          throw ApiError.notFound('That agent is not in this team.');
+        }
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'group.member_removed',
+          target: `group:${groupId}`,
+          metadata: { agent_id: agentId },
+        });
+      });
+
+      return reply.code(204).send();
     },
   );
 }

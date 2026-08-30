@@ -127,10 +127,43 @@ export class LifecycleService {
     const row = created[0];
     if (!row) throw ApiError.internal('Signup produced no workspace.');
 
+    await this.#seedDefaultTeam(row.created_license, row.created_account);
+
     return {
       account: { id: row.created_account, email: input.email, name: input.name },
       memberships: await this.#membershipsOf(row.created_account),
     };
+  }
+
+  /**
+   * The team a new workspace routes its first conversation to (FR-MOD-04.5).
+   *
+   * Routing resolves an agent through `group_agents` (ADR-08 step 2), and
+   * `defaultGroupIds` falls back to "the first team" when no routing rule is
+   * configured — but *only* if a team exists. A workspace opened with none had
+   * no such fallback: its first chat was created with an empty `chat_access`,
+   * which no agent can see. So this is not a convenience seed like the demo
+   * data; it is what makes a brand-new workspace able to receive work at all.
+   *
+   * Deliberately no fallback `routing_rules` row: the owner-in-one-team shape
+   * is the minimum that works, and `defaultGroupIds` already reaches it. A rule
+   * is a configuration choice, and inventing one here would put a row in the
+   * routing screen that nobody asked for.
+   *
+   * Outside `auth_signup` rather than inside it: the function is an applied
+   * migration shared with the invitation path, and this is one insert pair that
+   * reads plainly next to the code that depends on it. A failure here surfaces
+   * — a workspace that cannot route is not a workspace that signed up
+   * successfully.
+   */
+  async #seedDefaultTeam(licenseId: bigint, ownerAccountId: string): Promise<void> {
+    const group = await this.#db.group.create({
+      data: { licenseId, name: 'General' },
+      select: { id: true },
+    });
+    await this.#db.groupAgent.create({
+      data: { licenseId, groupId: group.id, agentId: ownerAccountId, priority: 'primary' },
+    });
   }
 
   /**

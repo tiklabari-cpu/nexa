@@ -410,3 +410,119 @@ groups:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    tags: [Configuration]
+    operationId: createGroup
+    summary: Create a team
+    description: |
+      Routing resolves an agent through team membership (ADR-08 step 2), so a
+      workspace with no team cannot route a conversation to anyone. Signup seeds
+      a `General` team with the owner in it; this is how the rest are made.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/GroupWrite" }
+    responses:
+      "201":
+        description: The team, as created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Group" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+group:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/GroupIdPath"
+  patch:
+    tags: [Configuration]
+    operationId: updateGroup
+    summary: Rename a team or change its language
+    description: |
+      Send the field that changed; at least one is required. An empty body is a
+      400 rather than a no-op, so a client cannot believe it saved something.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "../openapi.yaml#/components/schemas/GroupWrite"
+            required: []
+            minProperties: 1
+    responses:
+      "200":
+        description: The team, as updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Group" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  delete:
+    tags: [Configuration]
+    operationId: deleteGroup
+    summary: Delete a team
+    description: |
+      Refused (409 `group_in_use`) while a routing rule targets the team, or
+      while any conversation reachable only through it is still open. Neither
+      reference carries a foreign key, so this refusal — not the database — is
+      what stops a delete from stranding them. Memberships are removed with the
+      team.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+groupMember:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/GroupIdPath"
+    - $ref: "../openapi.yaml#/components/parameters/AgentIdPath"
+  put:
+    tags: [Configuration]
+    operationId: setGroupMember
+    summary: Add an agent to a team, or change their priority
+    description: |
+      Idempotent: the same call adds the member and later moves their tier. The
+      priority is what routing picks between available agents with (ADR-08) —
+      `primary` is the PRD's "Primary agent" tier.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              priority:
+                type: string
+                enum: [primary, first, normal, last]
+                default: normal
+    responses:
+      "200":
+        description: The team, with the membership applied
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Group" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  delete:
+    tags: [Configuration]
+    operationId: removeGroupMember
+    summary: Remove an agent from a team
+    responses:
+      "204": { description: Removed }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

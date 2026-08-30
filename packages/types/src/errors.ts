@@ -26,6 +26,12 @@ export const ERROR_TYPES = [
   'chat_inactive',
   'customer_banned',
   'greeting_not_found',
+  // Nexa addition. A team still carries work: a routing rule targets it, or a
+  // live conversation is reachable only through it (FR-MOD-04.5). Neither
+  // reference is a foreign key, so this refusal is the only thing standing
+  // between a delete and silently unroutable chats. 409, like the other
+  // "the state says no" codes, rather than a generic 400.
+  'group_in_use',
   'group_not_found',
   'group_offline',
   'group_unavailable',
@@ -105,6 +111,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   chat_inactive: 409,
   customer_banned: 403,
   greeting_not_found: 404,
+  group_in_use: 409,
   group_not_found: 404,
   group_offline: 409,
   group_unavailable: 409,

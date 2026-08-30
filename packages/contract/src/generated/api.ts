@@ -4606,6 +4606,12 @@ export interface paths {
      *     is the connected bot's `bot_username`, `sender.id` is the Telegram user id
      *     of the writer, and `message.text` is the message body.
      *
+     *     A card number in the message is masked before anything stores or reads it
+     *     (FR-MOD-08.9.5), and a first contact is screened by the workspace's spam
+     *     filter (FR-MOD-08.9.3) — the same two gates the widget and e-mail paths
+     *     apply. As on the e-mail path, a dropped message is still a 200, so the
+     *     provider does not retry something refused on purpose.
+     *
      *     Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
      *     §5); a real deployment verifies the provider signature at the edge.
      */
@@ -17146,19 +17152,29 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Accepted — the message became a chat event */
+      /**
+       * @description The message was processed. `accepted` carries the chat it became;
+       *     `ignored` means the spam filter dropped it and nothing was persisted.
+       */
       200: {
         headers: {
           [name: string]: unknown;
         };
         content: {
-          'application/json': {
-            /** @enum {string} */
-            status: 'accepted';
-            chat_id: string;
-            /** Format: uuid */
-            customer_id: string;
-          };
+          'application/json':
+            | {
+                /** @enum {string} */
+                status: 'accepted';
+                chat_id: string;
+                /** Format: uuid */
+                customer_id: string;
+              }
+            | {
+                /** @enum {string} */
+                status: 'ignored';
+                /** @enum {string} */
+                reason: 'spam';
+              };
         };
       };
       400: components['responses']['BadRequest'];

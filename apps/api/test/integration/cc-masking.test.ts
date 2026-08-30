@@ -241,6 +241,14 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     expect(await owner.ticket.count({ where: { subject: { contains: PAN } } })).toBe(0);
   });
 
+  // The fifth inbound path — a provider webhook on a connected channel — is
+  // masked in `ChannelService.ingestInbound` and asserted in
+  // `channels-adapters.test.ts`, parametrically over all five adapters (the
+  // event *and* the `channel_messages` log, which persists the text a second
+  // time). It is named here because this file is the enumeration of write
+  // paths, and that path was missing from it for as long as it was missing from
+  // the code.
+
   // --- The side channels ----------------------------------------------------
 
   it('never writes a raw card to the transcript e-mail (agent-archive path)', async () => {

@@ -25,11 +25,12 @@
  *
  * Messages are delivered by POSTing the public webhook rather than by writing
  * to the database, because an anonymous POST carrying nothing but the connected
- * address is exactly what Meta/Twilio do and exactly what has to work. And the
- * reply is asserted twice for the reason `telegram.spec.ts` states: the
- * composer proves what the *agent* sees, `/channels/{type}/messages` proves
- * what would reach the *customer*, and the two are not wired to each other in
- * this build.
+ * address is exactly what Meta/Twilio do and exactly what has to work. The
+ * reply used to be asserted twice — the composer for what the *agent* sees, an
+ * admin `/channels/{type}/messages` POST for what would reach the *customer* —
+ * because the two were not wired to each other. They are now: an agent's reply
+ * is dispatched to the provider by the chat core itself, so this file asserts
+ * the composer alone and `channels-adapters.test.ts` asserts the delivery.
  */
 import { request as newApiContext, type APIRequestContext, type Locator } from '@playwright/test';
 import {
@@ -363,33 +364,23 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4-.6)', () => {
       await list.getByRole('button').filter({ hasText: text }).first().click();
       await expect(agentPage.locator('main')).toContainText(text);
 
-      // What the agent sees: the composer works on a channel-originated chat
-      // exactly as it does on a website one — same chat core underneath.
+      // The composer works on a channel-originated chat exactly as it does on a
+      // website one — same chat core underneath — and sending it is now the
+      // whole delivery: `sendEvent` hands an agent's reply to the channel
+      // dispatcher once the event is committed (FR-MOD-08.5.4-.8).
+      //
+      // This leg used to POST `/channels/{type}/messages` by hand right here,
+      // because the composer and the provider were not wired to each other.
+      // That call is gone: repeating it now would send the customer the same
+      // answer twice. What it used to assert — a provider-shaped message id and
+      // the writer resolved back from the chat — is asserted against the real
+      // console reply in `channels-adapters.test.ts`, which can read
+      // `channel_messages`; e2e keeps the half only it can see.
       const reply = answer(subject);
       const composer = agentPage.getByPlaceholder('Type your reply');
       await composer.fill(reply);
       await composer.press('Enter');
       await expect(agentPage.locator('main')).toContainText(reply);
-
-      // What the customer would receive: the same answer leaving through the
-      // provider, addressed by the chat rather than by a sender id the agent
-      // never sees.
-      const outbound = await apiCtx.post(`${API_BASE}/channels/${subject.type}/messages`, {
-        headers: await ownerAuth(),
-        data: { chat_id: chatId, text: reply },
-      });
-      expect(
-        outbound.ok(),
-        `${subject.label} outbound failed: ${outbound.status()} ${await outbound.text()}`,
-      ).toBe(true);
-      const sent = (await outbound.json()) as {
-        provider_message_id: string;
-        external_id: string;
-      };
-      // A provider-shaped message id, and the writer resolved back from the
-      // chat — the reply went to the person who wrote in, not to whoever asked.
-      expect(sent.provider_message_id).toMatch(subject.providerMessageId);
-      expect(sent.external_id).toBe(subject.sender);
     });
   }
 

@@ -120,6 +120,11 @@ const INSTAGRAM = CASES.find((c) => c.type === 'instagram')!;
 /** Likewise Telegram (08.5.8-c). */
 const TELEGRAM = CASES.find((c) => c.type === 'telegram')!;
 
+/** The Luhn-valid test PAN and its masked form, as `cc-masking.test.ts` uses
+ *  them — the inbound gates below assert against the same pair. */
+const PAN = '4111111111111111';
+const MASKED = '**** **** **** 1111';
+
 describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
   let owner: PrismaClient;
   let server: TestServer;
@@ -127,6 +132,7 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
   let adminA: string;
   let readA: string;
   let adminB: string;
+  let chatAgentA: string;
 
   const auth = (token: string) => ({ authorization: `Bearer ${token}` });
 
@@ -194,6 +200,15 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       organizationId: fx.b.organizationId,
       ownerId: fx.b.ownerAccountId,
       scopes: ['channels--all:rw'],
+    });
+    // An agent writing in the console, which is the path a customer's reply
+    // actually travels — distinct from `adminA`, whose channel scope drives the
+    // admin send API.
+    chatAgentA = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['chats--all:rw'],
     });
   });
 
@@ -357,6 +372,112 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
       expect(res.statusCode).toBe(404);
     });
 
+    // --- The two visitor-safety gates the widget applies (FR-MOD-08.9.3/.5) ---
+    //
+    // These ran on the widget and e-mail paths but not here, so a connected
+    // channel was the one way around both. Parametric over every adapter: the
+    // gates belong to the shared ingest, not to one provider.
+
+    it('masks a card number before it reaches the chat or the message log', async () => {
+      await connect(c.type, c.connect(c.addressA));
+
+      const res = await webhook(
+        c.type,
+        c.inbound(c.addressA, c.sender, `please refund ${PAN}`, 'Dana'),
+      );
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as { chat_id: string };
+
+      const message = (await eventsFor(body.chat_id)).find((e) => e.type === 'message');
+      expect(message?.text).toBe(`please refund ${MASKED}`);
+
+      // The log the provider webhook writes is its own persistence path — it
+      // stores the text a second time, so masking the event alone is not enough.
+      const inboundLog = (await messagesFor(fx.a.licenseId)).filter(
+        (m) => m.direction === 'inbound',
+      );
+      expect(inboundLog[0]?.text).toBe(`please refund ${MASKED}`);
+
+      // Nothing anywhere in the tenant kept the raw number.
+      expect(await owner.event.count({ where: { text: { contains: PAN } } })).toBe(0);
+      expect(await owner.channelMessage.count({ where: { text: { contains: PAN } } })).toBe(0);
+    });
+
+    it('drops a spam first contact and leaves no trace', async () => {
+      await connect(c.type, c.connect(c.addressA));
+      // The fixtures seed one customer per tenant, so "no trace" is measured as
+      // *no new* customer rather than none at all.
+      const customersBefore = await owner.customer.count({
+        where: { organizationId: fx.a.organizationId },
+      });
+
+      const res = await webhook(
+        c.type,
+        c.inbound(c.addressA, c.sender, 'CRYPTO GIVEAWAY — claim your free prize now', 'Spammer'),
+      );
+
+      // 200 like the e-mail path: the provider did nothing wrong and must not
+      // retry a message that was dropped on purpose.
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ status: 'ignored', reason: 'spam' });
+
+      // "No trace" is the whole point — a refused first contact must not leave a
+      // chat, an identity, a log row or a customer behind. The customer matters
+      // most: `resolveCustomer` writes one on first contact, so screening after
+      // it would have persisted the spammer no matter what the verdict was.
+      expect(await chatsFor(fx.a.licenseId)).toHaveLength(0);
+      expect(await identitiesFor(fx.a.licenseId)).toHaveLength(0);
+      expect(await messagesFor(fx.a.licenseId)).toHaveLength(0);
+      expect(await owner.customer.count({ where: { organizationId: fx.a.organizationId } })).toBe(
+        customersBefore,
+      );
+      expect(await owner.customer.count({ where: { name: 'Spammer' } })).toBe(0);
+    });
+
+    it('does not screen a message inside an established conversation', async () => {
+      await connect(c.type, c.connect(c.addressA));
+      const opened = (await webhook(c.type, c.inbound(c.addressA, c.sender, 'hello'))).json() as {
+        chat_id: string;
+      };
+
+      // The same text that would have been refused as a first contact. Screening
+      // mid-thread would put the false-positive cost on a real customer, so the
+      // gate deliberately covers only the message that would open a chat — the
+      // scope `routes/customer.ts` settled for the widget.
+      const res = await webhook(
+        c.type,
+        c.inbound(c.addressA, c.sender, 'CRYPTO GIVEAWAY — claim your free prize now'),
+      );
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as { status: string }).status).toBe('accepted');
+
+      const texts = (await eventsFor(opened.chat_id))
+        .filter((e) => e.type === 'message')
+        .map((e) => e.text);
+      expect(texts).toHaveLength(2);
+    });
+
+    it('honours the workspace switch — spam is accepted when the filter is off', async () => {
+      await connect(c.type, c.connect(c.addressA));
+      // `security_settings` is keyed by (license, brand) and an absent row means
+      // the schema default, which is *on* — so turning the filter off is a
+      // create, not an update. Same shape the e-mail suite uses.
+      const brand = await owner.brand.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId, isDefault: true },
+        select: { id: true },
+      });
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, brandId: brand.id, spamFilterEnabled: false },
+      });
+
+      const res = await webhook(
+        c.type,
+        c.inbound(c.addressA, c.sender, 'CRYPTO GIVEAWAY — claim your free prize now'),
+      );
+      expect((res.json() as { status: string }).status).toBe('accepted');
+      expect(await chatsFor(fx.a.licenseId)).toHaveLength(1);
+    });
+
     it('sends an outbound reply by chat and by external id, recording each', async () => {
       await connect(c.type, c.connect(c.addressA));
       const inbound = (await webhook(c.type, c.inbound(c.addressA, c.sender, 'hi'))).json() as {
@@ -395,6 +516,69 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
         chatId: null,
         text: 'direct reply',
       });
+    });
+
+    // --- The agent's own reply leaves the building (FR-MOD-08.5.4-.8) --------
+    //
+    // `sendOutbound` used to have exactly one caller — the admin
+    // `POST /channels/:type/messages` — so an agent answering in the console
+    // wrote a message the customer never received. These lock the console reply
+    // path itself, not the admin API the e2e suite used to drive by hand.
+
+    it('delivers an agent reply written in the console back out to the channel', async () => {
+      await connect(c.type, c.connect(c.addressA));
+      const inbound = (
+        await webhook(c.type, c.inbound(c.addressA, c.sender, 'my order is late'))
+      ).json() as { chat_id: string };
+
+      const posted = await server.post(
+        `/chats/${inbound.chat_id}/events`,
+        { type: 'message', text: 'checking that for you now', recipients: 'all' },
+        auth(chatAgentA),
+      );
+      expect(posted.statusCode).toBe(201);
+
+      const outbound = (await messagesFor(fx.a.licenseId)).filter(
+        (m) => m.direction === 'outbound',
+      );
+      expect(outbound).toHaveLength(1);
+      expect(outbound[0]).toMatchObject({
+        channelType: c.type,
+        externalId: c.sender,
+        chatId: inbound.chat_id,
+        text: 'checking that for you now',
+      });
+      // Set only by the adapter's `send` — proof the provider was reached, not
+      // merely that a row was written.
+      expect(outbound[0]!.providerMessageId).toBeTruthy();
+    });
+
+    it('does not deliver an internal note or a system event to the customer', async () => {
+      await connect(c.type, c.connect(c.addressA));
+      const inbound = (
+        await webhook(c.type, c.inbound(c.addressA, c.sender, 'my order is late'))
+      ).json() as { chat_id: string };
+
+      // Addressed to agents only — the customer must never see it, and a channel
+      // send is the one delivery that cannot be taken back.
+      const note = await server.post(
+        `/chats/${inbound.chat_id}/events`,
+        { type: 'message', text: 'heads up: this one is a repeat caller', recipients: 'agents' },
+        auth(chatAgentA),
+      );
+      expect(note.statusCode).toBe(201);
+
+      // A transfer writes a `system` event on the same chat; it is nobody's
+      // reply and must not travel either.
+      await server.post(
+        `/chats/${inbound.chat_id}/transfer`,
+        { agent_id: fx.a.agentAccountId, reason: 'manual' },
+        auth(chatAgentA),
+      );
+
+      expect(
+        (await messagesFor(fx.a.licenseId)).filter((m) => m.direction === 'outbound'),
+      ).toHaveLength(0);
     });
 
     it('refuses outbound without the write scope, to a disconnected channel, and with bad addressing', async () => {
@@ -511,6 +695,37 @@ describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
   });
 
   // --- Cross-tenant isolation (NFR-S5) ---------------------------------------
+
+  // --- The dispatcher must stay out of the way of a Website chat -------------
+
+  describe('website chats', () => {
+    it('sends nothing outbound when the conversation never came from a channel', async () => {
+      // A connected channel is present — so the silence below is the dispatcher
+      // finding no identity for this customer, not the absence of a channel to
+      // send through.
+      await connect('messenger', CASES[0]!.connect('100000000000001'));
+
+      const opened = await server.post(
+        '/chats',
+        { customer_id: fx.a.customerId },
+        auth(chatAgentA),
+      );
+      expect(opened.statusCode).toBe(201);
+      const chatId = (opened.json() as { id: string }).id;
+
+      const posted = await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', text: 'hello from the website', recipients: 'all' },
+        auth(chatAgentA),
+      );
+      expect(posted.statusCode).toBe(201);
+
+      // The fixture customer has no `channel_identities` row, so there is no
+      // reply address and nothing may be sent — a dispatcher that guessed one
+      // would deliver a stranger's conversation to whoever held that address.
+      expect(await messagesFor(fx.a.licenseId)).toHaveLength(0);
+    });
+  });
 
   describe('cross-tenant isolation', () => {
     const c = CASES[0]!; // messenger stands in; the path is identical per channel

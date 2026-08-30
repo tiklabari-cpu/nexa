@@ -97,6 +97,22 @@ interface CloseResult {
   drained: Array<{ chatId: string; threadId: string; assigneeId: string }>;
 }
 
+/**
+ * Delivers an agent's reply out through the channel a conversation arrived on.
+ *
+ * One verb, deliberately: `ChannelService` already calls into `ChatService` to
+ * turn an inbound webhook into a chat, so depending on the whole class in the
+ * other direction would make the two mutually recursive. A structural interface
+ * declared here — and implemented there — keeps the dependency one-way.
+ *
+ * Contract: **never throws, and never blocks the reply.** A chat that did not
+ * arrive over a channel is a no-op, and a provider that fails is logged, not
+ * propagated — the agent's message is already committed by the time this runs.
+ */
+export interface ChannelDispatcher {
+  dispatchAgentReply(tenant: TenantContext, chatId: string, text: string): Promise<void>;
+}
+
 export class ChatService {
   constructor(
     private readonly db: PrismaClient,
@@ -119,6 +135,14 @@ export class ChatService {
      * it just skips the courtesy e-mail — never a precondition for the close.
      */
     private readonly mailer?: Mailer,
+    /**
+     * Carries an agent's reply back out to the channel the conversation arrived
+     * on (FR-MOD-08.5.4-.8). Optional on the same terms as the two above: a
+     * service built without one still records the reply, it just does not leave
+     * the building — which is exactly what every caller did before this existed,
+     * so a Website chat is unaffected either way.
+     */
+    private readonly channels?: ChannelDispatcher,
   ) {}
 
   /**
@@ -444,6 +468,24 @@ export class ChatService {
         : result.audience,
       { chat_id: result.event.chat_id, thread_id: result.event.thread_id, event: result.event },
     );
+
+    // A conversation that arrived over a connected channel is answered there
+    // (FR-MOD-08.5.4-.8). Out here for the same reason the publish is: this is a
+    // call to someone else's server, and the agent's message is already written
+    // — a provider having a bad minute must not roll the reply back.
+    //
+    // Only what the customer is meant to receive: an internal note is addressed
+    // to `agents`, and a system event is not anybody's reply. Both are excluded
+    // here rather than inside the dispatcher, so the rule is visible next to the
+    // audience decision it mirrors.
+    if (
+      this.channels &&
+      result.event.author_type === 'agent' &&
+      result.recipients === 'all' &&
+      result.event.text
+    ) {
+      await this.channels.dispatchAgentReply(tenant, result.event.chat_id, result.event.text);
+    }
 
     return { event: result.event, replayed: false };
   }

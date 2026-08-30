@@ -180,8 +180,11 @@ export default async function channelRoutes(
     { config: { public: true } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
+      // The outcome carries its own status now: a message the spam filter drops
+      // is `ignored`, and — like the e-mail path — still a 200, so the provider
+      // does not retry something that was refused on purpose.
       const result = await channels.ingestInbound(app.db, chats, type, request.body);
-      return reply.send({ status: 'accepted', ...result });
+      return reply.send(result);
     },
   );
 

@@ -13,6 +13,120 @@
 
 ## Task log (newest-first)
 
+## 168 — GL-12 · F6-KAPAT: Faz-6 §F.00 kapanış turu + §F.1 tam sürüm + §F.2 PROJE GENELİ final rapor — done — 2026-08-30 UTC
+
+- **Yapıldı (ürün kodu SIFIR satır — `git status` yalnız `PLAN.md` · `HANDOFF.md` · `.taskmaster/tasks/tasks.json`):** Faz-6 §F.00 kapısı **9 ✅ · 0 ◐ · 0 ⬜** ile kapandı; §6C tablosunun dört bayat `⬜` damgası (`M-SCALE` · `M-OTEL` · `M-IAC` · `M-RUNBOOK`) çevrildi, GL-12 satırı `✅ → KGL-12` oldu, üst özet tablosunun Faz-6 satırı `⬜ AÇIK` → **`✅ KAPALI`**, §6C'ye kapanış paragrafı, §F.00'a Faz-6 kapısı, §F.3'e durum notu, `#### KGL-12` bloğu (3 madde) ve **§D147** yazıldı. **Bununla birlikte yedi fazın yedisi de kapandı ve bu turun planlı işi bitti.**
+- **Sayım nasıl yapıldı.** Tablo tur başında dört satırda bayat `⬜` taşıyordu — GL-11 aynı deseni §6B'de sekiz satırın sekizinde görmüş ve notunda bu dördünü **ismen** bırakmıştı, yani desen beklenerek karşılandı. Naif glif sayımı "faz kapanmaz" derdi ve **yanılırdı**; damgayı önce çevirip sonra saymak **döngüsel** olurdu. Her satır **dört bağımsız kaynağa** karşı okundu ve ancak dördü de yeşilken çevrildi: (1) Task Master `done` + **23 alt-görevin 23'ü** `done`; (2) §7.2'nin türetilmiş satırı `✅ → K<kod>` (altısı da yeşildi — yani §7.2 ile §6C çelişiyordu ve çelişkinin yönü §6C'nin bayat olduğuydu); (3) `## K` bloklarında **28 kanıt maddesi** (KM-PROD-CFG 3 · KM-OPS 3 · KM-LOAD 5 · KM-SCALE 3 · KM-OTEL 2 · KM-IAC 4 · KM-BACKUP 2 · KM-RUNBOOK 2 · KM-SEC-e 4); (4) kanıtın adlandırdığı **22 dosya yolunun diskte fiilen varlığı** (`ls`, hepsi OK). **Yeni ders — `## K` bloğundaki `◐` glifleri tarihçedir, durum değildir:** KM-LOAD üç, KM-OTEL bir `◐` madde taşıyor; her biri kendi anındaki eksiği doğru yazmış, sonraki madde kapatmış (KM-OTEL-a açıkça "M-OTEL-b bitmeden bu satır ✅ olmaz" demiş, M-OTEL-b bitirmiş). Kanıt bloğu ekleyerek büyüdüğü için (CONVENTIONS §1.2) bir maddenin glifi **yazıldığı anı** dondurur; satırın bugünkü durumu **tablodadır**. Bu ayrım §6C'ye kalıcı not olarak yazıldı — kaçıran bir pencere KM-LOAD'a bakıp "üç yarım kalem" diye yanlış bulgu açardı.
+- **Doğrulama (tam DoD kapısı, exit code'larla):** `typecheck` **13/13** · `lint` **10/10** · `format:check` temiz · `build` **8/8** — dördü de `FULL TURBO` cache-hit, ki bu **kusur değil kanıt**: turbo'nun girdi karması hiçbir kaynak dosyanın değişmediğini söylüyor ve görevin birinci kabul kriteri (ürün kodu sıfır) tam olarak odur. Test kapısı CONVENTIONS §1.3 gereği **parçalandı ve üç parçanın üçü de `--force`** koşuldu (önbellek atlatıldı): `turbo run test --force --filter=!@nexa/e2e --filter=!@nexa/api` → **229 dosya / 2.627 test** (web 133/1541 · mobil 45 süit/507 · rtm 14/168 · widget 15/115 · types 14/132 · ai-mock 7/136 · load 1/28 · contract 0) + `@nexa/api test:unit --force` → **70 / 1.174** + api integration `--shard=1/3,2/3,3/3` → **37+37+36 = 110 dosya**, **1069+922+679 = 2.670 test**. Birleşim **409 dosya / 6.471 test** — CONVENTIONS §1.3'ün "api 70 + 110 = 180" sayısıyla birebir. Integration kapısı ayrıca rtm `test:integration` **7 / 92** ile **117 dosya / 2.762 test** (`contract-parity` dahil). `db:check-drift` → "no drift (1 known-unmodellable statement allowed)". `contract:generate` sonrası `git status --short packages/contract/src/generated` **boş** (193 path). **`test:e2e` 210/210 · 12,5 dk.**
+- **Sonraki pencereye not:** **Kuyrukta iş YOK — run-loop bu noktada DURMALIDIR.** Task Master: 174 üst görev (173 `done` + bu görev), **457 alt-görevin 457'si `done`**; §F.3 kendiliğinden yeni faz açmaz, seçim kullanıcınındır. İki aday §F.3'e yazıldı: (a) **mock → gerçek sağlayıcı geçişi** (LLM · SMTP · S3 · Stripe · push · SIEM · AV · beş kanal — dikişleri hazır: `M-PROV-a` deseni + `M-OTEL-a` exporter seçimi); (b) **gerçek dağıtım** (deploy · DNS · TLS · gerçek secret) — CLAUDE.md sınırı gereği bu depodan üretilemez. **§D146'nın beklediği karar verildi:** `settings.spec.ts:323` bu turda **3,2 sn'de yeşil** geçti, flake tekrarlamadı, görevleşmedi. **Yeni tuzak kaydı:** e2e'nin ilk denemesi düştü ve sebebi ürün DEĞİL ORTAMDI — Playwright'ın `webServer`'ı `DATABASE_URL`/`REDIS_URL`/`JWT_SIGNING_KEY`/`CUSTOMER_TOKEN_SECRET` olmadan açıldı (kök `.env` kabuğa yüklenmemişti; DoD kapısının geri kalanı bunu istemiyor çünkü `with-test-datastores.ts` kendi ortamını kuruyor) → `set -a; . ./.env; set +a` ile 210/210. **80 `kanit` PNG'si `git checkout` ile geri alındı** (GL-11'in 77'si · tm 163.2'nin ~85'i aynı emsal).
+
+### §F.1 — Denetim: 10 maddenin her biri, kanıtıyla (Faz-6 kapanışı)
+
+1. **Kapsam süpürmesi.** `pnpm audit:sweep` → PRD §6'nın **137 `FR-MOD`** satırı: **OPEN 0 · PARTIAL 0 · LOCKED 0** · DONE 120 · **BLOCKED 2** (ikisi de gerekçeli: `13.4` görsel Workflow builder ADR-14 · `13.7` mağaza payı `⛔-süreç` §D110) · NOROW 15. NOROW listesi GL-11'inkiyle birebir aynı ve orada elle okunmuştu (11'i gruplu ama damgalı satırlarda karşılanıyor, 4'ü §D121'in tm 154'te kapanan kodları) — bu turda hiçbir kalem değişmediği için yeniden okunmadı, ölçüm sahibiyle alıntılandı.
+2. **Faz sızıntısı.** **Faz-6 son fazdır** — öne çekilecek bir sonraki faz yok, yani ileri yön tanım gereği temiz. Ters yön (Faz-6'nın Faz-5 kapanışından önce koşması) GL-11'in **§D144**'ünde zaten kayıtlı. Bu turda Faz-6'nın tüm commit'leri **2026-08-27 → 2026-08-30** aralığında ve hepsi kendi kalemine ait; §6C dışından öne çekilmiş iş yok.
+3. **NFR kapıları — ÖLÇÜLDÜ, tahmin edilmedi.** **P1/P2/P8 bu fazın KENDİ ölçümüdür** (§D127 · tm 161.4 · 2026-08-28) ve görevin dediği gibi gerçek sayılarla kullanıldı: okuma p99 **116,2 ms** (bütçe 150) · yazma p99 **87,9 ms** (bütçe 300) · fan-out p99 **6.000 alıcıya kadar** 500 ms bütçesi içinde · pod başına **≥ 8.000** eşzamanlı WS (üst sınır değil — tezgâhın 16.384'lük efemeral port havuzu daha yükseğini denemeye izin vermedi). **P5** `pnpm audit:unpaged-lists` → **UNPAGED 0** (6 sayfalı istek + 5 gerekçeli muaf). **P3** widget bundle nöbetçisi `@nexa/widget` süitinde yeşil (15/115). **S4** partisyon RLS · **S11** 2FA · **A11Y** axe taraması, api integration'ın 2.670 testi ve e2e'nin 210 testi içinde yeşil.
+4. **Şema artıkları.** `pnpm audit:schema-consumers` → **80 model**; 75'i Prisma çağrılarıyla, 1'i raw SQL ile (`AuditChainHead`). "Tüketici bulunamadı" diyen 4 kalemden üçü (`password_reset_tokens` · `account_two_factor` · `two_factor_recovery_codes`) **SECURITY DEFINER SQL fonksiyonlarıyla** okunuyor/yazılıyor — script yalnız `prisma.<model>` ve düz tablo adı arıyor (GL-11'in çözümü, aynen geçerli). Geriye **tek gerçek 0-tüketicili tablo** kalıyor: `workflows` (⛔ ADR-14, belgeli).
+5. **Kontrat bütünlüğü.** `contract-parity` api integration süiti içinde yeşil. `contract:generate` sonrası üretilen tipler **senkron** — `git status --short packages/contract/src/generated` boş, **193 path** bundle'landı.
+6. **Sessiz borç.** `pnpm audit:silent-debt` → izlenen **1.042** kaynak dosyası: `TODO` 0 · `FIXME` 0 · `XXX` 0 · `HACK` 0 · `@ts-expect-error` 0 · `@ts-ignore` 0 · atlanan test 0 · odaklı test 0. Kalan üç kayıt gerekçeli: 1 `eslint-disable` (`apps/e2e/tests/fixtures.ts:52`, `no-empty-pattern` — Playwright fixture imzası) + 2 `istanbul ignore` (`command-palette.ts:101` · `copilot-service.ts:481`, ikisinin de yanında neden'i yazılı).
+7. **Ölü kod & erişilemez ekran.** `pnpm audit:dead-code` → api route **0/40** · web feature **0/122** · api servis **5/108**, beşi de `package.json`'ın CLI girişi (`retention:run` · `chat-timeout:run` · `scheduled-reports:run` · `siem:run` · `sla:run`) — ölü değil, script'in görmediği giriş noktası. `pnpm audit:endpoint-ui` → **16/193** uç istemcisiz; 14'ü tasarımı gereği başsız (SCIM ×4 · SAML ACS · gelen e-posta webhook'u · MCP · public KB ×5 · `reports/access-review` + `audit-log/export`), ikisi **yönetim mutasyonu** ve §D145'te ismen kayıtlı.
+8. **Doküman tazeliği — bu turda bayat satır BULUNMADI.** §8'in "**80 model · 72 migration**" metni diske karşı yeniden sayıldı (`schema.prisma` 80 `model` · `prisma/migrations` 72 dizin) ve **birebir doğru** çıktı. Bu beklenen sonuç: Faz-6 bir ops/manifest fazıdır ve **hiç migration eklemedi** — sekiz yeni migration'ın sekizi de Faz-5'indi (GL-11 ölçtü). CONVENTIONS §1.3'ün parçalama örneği ("api 70 + 110 = 180") bu turun ölçümüyle **hâlâ birebir**; GL-11'in düzelttiği dört satır bayatlamamış.
+9. **Temiz kurulum provası.** `make dev` bacakları fiilen yürüdü: datastore'lar healthy · `migrate` (drift kapısı "no drift") · `seed` + 210 e2e testi seed'lenmiş veriye karşı. `make demo` bacağı **elle genişletilerek** koşuldu (`make` bu makinede kurulu değil): `docker compose -f docker-compose.full.yml up --build -d` → **exit 0**, init konteyneri migrate+seed'i tamamlayıp çıktı, api **healthy**; ardından `./scripts/smoke.sh` → **17 passed, 0 failed** (api/rtm `live`+`ready`+`health` · anonim `/health`'in scheduler/region bloklarını gizlemesi · web SPA fallback · widget `loader.js` + hosted chat · web'in `/api` proxy'si · seed'lenmiş owner girişi · widget origin'inden müşteri token'ı). Yığın sonra `down -v` ile kaldırıldı.
+10. **Kapsam dışı doğrulaması (§9'un 10 maddesi).** **10/10 temiz.** `stripe`/`@stripe/*`/`twilio`/`clickhouse`/`@google-cloud/bigquery` bağımlılığı **hiçbir `package.json`'da yok** (tarandı) · `apps/` altında izlenen görsel sayısı **5** ve beşi de kendimizin (`mobile/assets` ikonları ×4 + `e2e/fixtures/sample.png`) — kaynak markadan kopyalanmış varlık yok · ses/IVR, canlı çeviri, analitik ambar yok.
+
+---
+
+## §F.2 — PROJE GENELİ FİNAL RAPOR (üçüncü sürüm · GL-12 · 2026-08-30)
+
+> Bu, §F.2'nin **proje geneli** raporudur (birincisi GL-3/Faz-0, ikincisi GL-10/Faz-4 turundaydı).
+> **Yedi fazın yedisi de kapalı.** Aşağıdaki her sayı bu turda fiilen koşulmuş bir komuttan gelir.
+
+### ⚠️ Raporun iki sınırı — önce bunlar
+
+1. **MOCK SAĞLAYICILAR HÂLÂ MOCK.** LLM · SMTP · S3 · Stripe · push · SIEM · AV · beş mesajlaşma kanalı (WhatsApp/Messenger/Instagram/Telegram/e-posta) **gerçek servise bağlanmadı**. Bu bir eksiklik değil, **kullanıcının 2026-08-24 tarihli kapsam kararıdır** (§D124) — MASTER-PROMPT zaten "dış servisleri mock'la" diyor. Depo **seçim dikişlerini** hazır bırakır (`M-PROV-a` deseni · `M-OTEL-a`'nın `OTEL_EXPORTER=console|otlp|none` seçimi): sağlayıcıyı değiştirmek bir env anahtarı + bir factory dalıdır, mimari değişiklik değil.
+2. **GERÇEK BİR DAĞITIM YAPILMAMIŞTIR.** Helm chart'ı, Deployment/Service/ConfigMap/Secret/HPA/PDB/NetworkPolicy/CronJob/migration-Job manifestleri **yazıldı** ve `helm lint` · `helm template` · `kubectl --dry-run=client` · `kubeconform -strict` ile **doğrulandı** — ama `kubectl apply` **YOK**, küme yok, DNS yok, TLS sertifikası yok, gerçek secret yok. CLAUDE.md/MASTER-PROMPT sınırı gereği bunlar bu depodan üretilemez. Faz-6'nın `✅`'leri §F.00'da yazılı olduğu gibi **yalnız kod ve manifest payını** iddia eder.
+
+### 1) Tamamlanan kapsam — faz faz, PRD kimlikleriyle
+
+| Faz | Konu | Kapsam | Kapanış | Must sayacı |
+| --- | --- | --- | --- | --- |
+| **Faz 0 — MVP** | PRD §5.1 kritik yol | bootstrap · auth+RLS · veri modeli · chat→thread→event · RTM · widget · inbox · routing · reports · design system | ✅ GL-3 · tm 87 · 2026-07-31 | **51 ✅ · 0 ◐ · 0 ⬜** |
+| **Faz 1 — v1** | PRD §5.2 | AI Agent + Copilot · Tickets · KB · kanallar · faturalama | ✅ GL-4 · tm 88 · 2026-07-31 | **20 ✅ · 0 ◐ · 0 ⬜** |
+| **Faz 2 — v2** | PRD §5.3 | 30 kalem — skills routing · vardiya · hedefler · e-ticaret takibi · mobil | ✅ GL-8 · tm 114 · 2026-08-11 | `Must` yok (kalem kuralı) |
+| **Faz 3 — Enterprise** | PRD §5.4 | 15 satır — SAML SSO · SCIM · HIPAA/bölge (`C4`) · SOC2 kod payı (`C6`) · denetim zinciri | ✅ GL-9 · tm 126 · 2026-08-17 | `Must` yok (kalem kuralı) |
+| **Faz 4 — Bütünleme** | §F.3 turu | 16 satır — mobil giriş yolu (§D111) · konteyner + `make demo` · seed · 🔒 kalanları | ✅ GL-10 · tm 143 · 2026-08-23 | `Must` yok (kalem kuralı) |
+| **Faz 5 — Doğruluk** | §F.3 turu (§D124) | 9 satır — partisyon RLS · 2FA · sayfalama · SSO alan sahipliği · nöbetçiler | ✅ GL-11 · tm 158 · 2026-08-30 | `Must` yok · **8 ✅ · 0 ◐ · 0 ⬜** |
+| **Faz 6 — Hazırlık** | §F.3 turu (§D124) | 10 satır — production konfig · ops dikişleri · **kapasite ölçümü** · ölçek · telemetri · Helm · yedek+prova · runbook | ✅ **GL-12 · tm 168 · 2026-08-30** | `Must` yok · **9 ✅ · 0 ◐ · 0 ⬜** |
+
+**Kod tarafında bugünkü gerçek (bu turda ölçüldü):** **80 Prisma modeli · 72 migration** (hepsinde RLS) · **193 OpenAPI path** (contract-parity iki yönlü yeşil) · **409 test dosyası / 6.471 unit+integration testi** · **210 e2e testi** · **17/17 duman testi** konteynerleşmiş yığına karşı · **1.042 izlenen kaynak dosyasında sıfır sessiz borç işareti** · Task Master **174 üst görev · 457 alt-görev, hepsi `done`** · **1.109 commit**.
+
+**PRD §6 kapsam süpürmesi (`audit:sweep`, koda karşı):** 137 `FR-MOD` satırı → **OPEN 0 · PARTIAL 0 · LOCKED 0** · DONE 120 · BLOCKED 2 (gerekçeli) · NOROW 15 (gruplu satırlarda karşılanıyor).
+
+### 2) Yarım kalan işler
+
+**PRD kapsamında yarım kalan iş YOK** — `audit:sweep` **PARTIAL 0** diyor ve yedi fazın yedisinde de sayaçlar `0 ◐ · 0 ⬜`. Aşağıdakiler yarım iş değil, **bilinçli sınır** (§3) ya da **kayıtlı borç** (§4).
+
+Tek istisna, dürüstlük gereği ayrı yazılıyor:
+
+| Kalem | PRD kimliği | Neden "tam" değil | Kalan iş tahmini |
+| --- | --- | --- | --- |
+| NFR-P8 üst sınırı | NFR-P8 (§D127 · §D130) | Pod başına **≥ 8.000** WS **ölçüldü**, ama bu bir **alt sınırdır, tavan değil** — tezgâhın 16.384'lük efemeral port havuzu daha yükseğini denemeye izin vermedi. Hedef bu depo için revize edildi ve revizyon gerekçeli. | Gerçek tavanı bulmak için çok makineli yük tezgâhı: ~2-3 pencere + ikinci bir üretici makine (bu depodan üretilemez). |
+
+### 3) Bilinçli olarak yapılmayanlar (⛔ / 🔒 / ⛔-süreç)
+
+| Kalem | Damga | Gerekçe |
+| --- | --- | --- |
+| Görsel Workflow builder (nodes/edges) | ⛔ **ADR-14** | UI yapılmayacak; `workflows` tablosu şemada kalır (bu yüzden `audit:schema-consumers`'ın tek gerçek 0-tüketicili tablosu odur). Şablon **sayısı** hedefi ADR-14 uyumlu ikame ile onurlandırıldı. PRD `13.4`. |
+| Mobil mağaza yayını (`.ipa`/`.apk` + store) | ⛔-**süreç** (§D110) | Kod payı **tam teslim** (`13.7` ✅ — dört yüzey · push · parite · §D111'in giriş yolu tm 128'de kapandı, soğuk-açılış yolculuğu testiyle kilitli). Store yüklemesi CLAUDE.md sınırı; §D97'nin KOD/SÜREÇ ayrımı. |
+| SOC2 Type II · ISO belgesi · gerçek BAA imzası | ⛔-**süreç** (§D97) | `C6`/`C4`'ün **kod payı** teslim (audit kapsamı · SIEM export + bütünlük zinciri · erişim gözden geçirme raporu · bölge zorlaması · HIPAA kısıtları). Sertifikasyon takvimi **dışsaldır** (PRD §10.2: 6-12 ay) ve bu depodan üretilemez. |
+| SLA uptime taahhüdü + fatura kredisi | ⛔-**süreç** | NFR-U5'in tek somut tanımı; uptime taahhüdü bir **sözleşme**, gerçek dağıtım olmadan ölçülemez. |
+| Dedicated onboarding / account manager | ⛔-**süreç** | Kod payı **sıfır** — insan hizmeti taahhüdü. |
+| Sesli / telefon (voice + IVR routing) | ⛔ | PRD §11.1/3 — MVP-v2 kapsam dışı. |
+| Gerçek zamanlı canlı çeviri · sesli sentiment | ⛔ | PRD §11.1/4 — MVP-v2 kapsam dışı. |
+| Ayrı kolon-tabanlı analitik ambar (ClickHouse) | ⛔ | PRD §11.1/5 birebir bunu dışlar (P3 · soğuk arşiv). |
+| Veri ambarı export (Snowflake/BigQuery) | ⛔ | §5.5 matrisi `MOD-07 · Ent.` payına koyar; §11.1/5 **değil** (denetim düzeltmesi K1-1). |
+| Mock → gerçek sağlayıcı geçişi | ⛔ (kullanıcı kararı) | §D124 · 2026-08-24. Dikişler hazır; geçiş bir sonraki turun ilk adayı. |
+| Gerçek dağıtım · DNS · TLS · gerçek secret | ⛔ (CLAUDE.md) | Manifestler yazıldı ve dry-run doğrulandı, **uygulanmadı**. |
+| Radix/shadcn göçü | ⛔ (§D128) | Dört primitif elle yazıldı; **göç YAPILMAYACAK** (kullanıcı kararı §D124/d). Nöbetçisi tm 156.2'nin klavye/odak testleri. |
+| 45+ dil yerelleştirme | 🔒 borç (§D124) | Kullanıcı kararıyla borç olarak kaydedildi. |
+
+**§3'ün gruplu `🔒` satırları:** üçünün de (`@200` · `@210` · `@222`) açık kod payı Faz-5 tm 154'te kapandı; `🔒` artık yalnız **erteleme tarihçesidir**, gizlenmiş `⬜` değil (GL-11 · §F.1/8'de tazelendi).
+
+### 4) Sessiz borç
+
+`pnpm audit:silent-debt` → **1.042 izlenen kaynak dosyası**: `TODO` **0** · `FIXME` **0** · `XXX` **0** · `HACK` **0** · `@ts-expect-error` **0** · `@ts-ignore` **0** · atlanan test **0** · odaklı test **0**. Kalan üç kayıt gerekçeli ve yanlarında neden'leri yazılı: 1 `eslint-disable` (Playwright fixture imzası) + 2 `istanbul ignore`.
+
+**Kayıtlı (sessiz olmayan) borç — §D'de adıyla duruyor:** §D128/§D129/§D130 (Radix sapması · NFR-P8 üst sınırı · yük tezgâhının tek-makine sınırı) · §D131 (partisyon bakımı çalışma-zamanı rolüyle koşamıyor — ~2026-12 takvimli) · §D132 (ikinci faktörden kendi kendine kurtulma yolu yok) · §D133 + §D137-§D140 (denetimlerin görevleşmeyen Medium/Low bulguları: RTM sağlık uçlarında tavan yok · şablonlarda transit TLS anılmıyor · chart'ta `securityContext` yok · `/health/live` `uptime_s`'i anonim veriyor) · §D145 (iki istemcisiz yönetim ucu) · §D146 (e2e flake tarihçesi — **bu turda tekrarlamadı**).
+
+### 5) Sapmalar
+
+**§D1 – §D147, toplam 148 kayıt.** Bu turda eklenen: **§D147** (Faz-6 kapanışı; `## K` bloğundaki `◐` gliflerinin tarihçe olduğu dersi + e2e'nin ortam kaynaklı ilk düşüşü + §D146'nın flake kararı). Faz-5/Faz-6 turunun sapmaları §D124'ten §D147'ye kadar uzanır ve hepsi gerekçelidir.
+
+### 6) Karar bekleyen açık sorular — PRD §11.2 ile karşılaştırmalı
+
+| # | PRD §11.2 sorusu | Bu depodaki durum |
+| --- | --- | --- |
+| Q1 | Nihai fiyat kademeleri + AI aşım birim fiyatı | **AÇIK — ürün/finans kararı.** Kod payı hazır: metering + fatura + trial durumu (`services/billing/`), rakamlar yapılandırılabilir. |
+| Q2 | "AI resolution" kesin tanımı | **KAPANDI (ADR-09).** Thread kapanışında `author_type='agent'` event YOKSA +1 → `usage_records(metric='ai_resolutions')`; Reports "Automated" **aynı sorgudan** okur (billing↔reports hizası kod düzeyinde garanti). |
+| Q3 | Backend dili Node.js mi Go mu | **KAPANDI — Node/TS** (MASTER-PROMPT'un kilitli kararı ADR-01). Sonucu ölçüldü ve **kayda geçti**: NFR-P8'in "~20k/pod (uWebSockets.js)" hedefi bu yığına ait olmadığı için §D127'de revize edildi. |
+| Q4 | Trial bitince erişim politikası | **KISMEN.** Kod trial durumunu ayrı bir fatura durumu olarak taşıyor (`InvoiceStatus: 'trial'`); "salt-okuma mı tam kilit mi" **ürün kararı**, kodda tek bir dal değişikliği. |
+| Q5 | Veri bölgesi seçenekleri + KVKK için TR barındırma | **YARIM — kod payı KAPALI, süreç payı AÇIK.** ADR-12: `{eu, us}`, kayıt anında seçilir, **immutable**, zorlama DB trigger'ında. **TR barındırma** gerçek altyapı kararıdır (⛔ — dağıtım yok). |
+| Q6 | AI Agent ↔ Copilot bilgi tabanları ne kadar paylaşılacak | **AÇIK — ürün kararı.** Kaynakta ayrı; birleştirme opsiyonu değerlendirilmedi. |
+| Q7 | Görsel Workflow builder ↔ NL skill editörü nasıl birleşecek | **KAPANDI (ADR-14) — tek paradigma: NL skill editörü.** Görsel builder yapılmayacak. |
+| Q8 | Konumlandırmada ana çapa hangi rakip | **AÇIK — pazarlama kararı**, kod payı yok. |
+| Q9 | Regüle dikey (bahis) hukuki/marka riski | **AÇIK — hukuk kararı**, kod payı yok. Depo dikeyi *referans* olarak ele alır (yaş/sorumlu-oyun onayı forms builder'da). |
+| Q10 | Webhook/RTM olay kontratı + sürümleme | **KAPANDI.** `@nexa/types` + OpenAPI tek kaynak; **193 path**, `contract-parity` **iki yönlü** nöbetçi; webhook HMAC-SHA256 + SSRF koruması teslim. |
+| Q11 | Sayısal REST rate limit değerleri + `Retry-After` | **KAPANDI — env'e taşındı ve varsayılanları yazılı:** `RATE_LIMIT_{AGENT_PER_MIN, AGENT_BURST, ANON_PER_MIN, AUTH_FAILURES_PER_MIN, CUSTOMER_PER_MIN, HEALTH_PER_MIN, PUBKB_PER_MIN, RTM_PER_SEC, SCIM_PER_MIN, TWO_FACTOR_PER_HOUR}` — on ayrı kova. |
+| Q12 | Onboarding tohum verisi sektöre göre değişecek mi | **AÇIK — ürün kararı.** Tek genel seed var (`prisma/seed.ts`, `make demo` bunu kullanıyor); dikey şablon çeşitlendirmesi yapılmadı. |
+
+**Özet: 5 kapandı (Q2 · Q3 · Q7 · Q10 · Q11) · 2 yarım (Q4 · Q5 — kod payı hazır, ürün/altyapı payı açık) · 5 açık ve hepsi kod dışı karar (Q1 · Q6 · Q8 · Q9 · Q12).** Açık soruların hiçbiri bir kalemi bloklamadı.
+
+### 7) Sıradaki adım — §F.3
+
+**Kendiliğinden açılacak görev YOKTUR ve run-loop bu noktada durmalıdır.** Seçim kullanıcınındır. İki aday:
+
+1. **Mock → gerçek sağlayıcı geçişi** (LLM · SMTP · S3 · Stripe · push · SIEM · AV · beş kanal) — bu turda bilinçli kapsam dışıydı; dikişleri hazır bırakıldı.
+2. **Gerçek dağıtım** (küme · DNS · TLS · gerçek secret) — CLAUDE.md sınırı gereği bu depodan üretilemez; manifestler hazır ve dry-run doğrulanmış hâlde bekliyor.
+
 ## 166.2 — M-RUNBOOK-b: docs/runbooks/ — done — 2026-08-30 UTC
 
 - **Yapıldı:** Five new incident runbooks (`postgres-down.md` · `redis-down.md` · `webhook-backlog.md` · `rtm-connection-storm.md` · `tenant-isolation-suspicion.md`), same shape — Symptom → Diagnosis → Response → After. Reference links added both ways: README "## Status" → `docs/runbooks/`, `docs/production-checklist.md` intro → same. §7.2's `M-RUNBOOK` row `◐ → KM-RUNBOOK` → `✅ → KM-RUNBOOK` (both subtasks now closed); `#### KM-RUNBOOK` block got its tm 166.2 entry.

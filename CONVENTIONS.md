@@ -112,6 +112,24 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   Faz-5/Faz-6 arayı doldurdu). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
   eşleştirebilsin.
 
+### 1.4 Kapının önkoşulları: iki sessiz tuzak (2026-08-31)
+
+İkisi de kapıyı kırmızı yapmaz — **hiç cevap vermez**, o yüzden yavaş süit ya da gerçek regresyon
+sanılır. Ölçüldü, kaybedilen tur sayısıyla birlikte.
+
+- **Docker kapalıyken entegrasyon testleri ASILIR.** `with-test-datastores.ts` hızlı düşmez:
+  10+ dakika boyunca **0 bayt çıktı** verir. Kapıyı koşmadan önce `docker info` ile bak. Kapalıysa
+  exe **`%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`** — `C:\Program Files\...`
+  altında DEĞİL, kullanıcı kurulumu. Sonra `docker compose up -d`; `nexa-db` host portu **5433**,
+  `nexa-redis` **6380**. psql kullanıcısı **`nexa`** (`-U postgres` → "role does not exist"),
+  container'a komut geçerken `MSYS_NO_PATHCONV=1` gerekir. Volume'lar restart'ta korunur, yani
+  e2e'nin beklediği tohumlu `nexa` veritabanı yerinde kalır.
+
+- **`pnpm -w test:e2e` kök `.env`'i kendiliğinden ALMAZ.** Playwright'ın kaldırdığı RTM sunucusu
+  60 saniyede `DATABASE_URL: Required` ile düşer ve bütün süit "webServer timeout" verir. Doğrusu:
+  `set -a && . ./.env && set +a && pnpm -w test:e2e`. Aynı tuzak `pnpm db:migrate` için de geçerli.
+  Bir e2e turu ~84 `apps/e2e/kanit/*.png` yeniden yazar — beklenen churn, geri alma.
+
 ## 2) Git kuralları
 
 - Branch: her task `feat/<kısa-slug>` (ör. `feat/rtm-websocket`) veya `fix/<slug>`.

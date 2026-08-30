@@ -8184,6 +8184,536 @@
         "priority": "high",
         "subtasks": [],
         "updatedAt": "2026-08-29T21:44:18.825Z"
+      },
+      {
+        "id": "175",
+        "title": "M-TEAM — Teams yazma yollari — FR-MOD-04.5 (Must/MVP) yalniz OKUMA olarak vardi",
+        "description": "`GET /groups` tek uctu; repoda `group.create`/`groupAgent.*` icin tek bir yazma cagrisi yoktu. Yonlendirme tumuyle `group_agents`e bagli oldugundan (ADR-08 adim 2) sifirdan acilan workspace hicbir sohbeti yonlendiremiyordu. PLAN.md:218 bu maddeyi \"✅ Dilim 8 · /groups\" diye kapatmisti — denetimin K1 kritik bulgusu.",
+        "details": "PRD `urun-gereksinim-dokumani-PRD.md` satır **536-551** (FR-MOD-04.5) · denetim `prd-uyum-denetimi.md` §5 K1.\n\n**DAL — yeni dal AÇMA.** Uçlar `feat/g2-group-write-paths` dalında commit `6ebc898` ile YAZILI (typecheck yeşil, test YOK, konsol ekranı YOK). `git fetch origin && git checkout feat/g2-group-write-paths`.\n\n**Dalda hazır olan:** `routes/agents.ts` grup CRUD + üyelik uçları ve yardımcıları · `errors.ts` `group_in_use` (409) · `audit-log.ts` beş `group.*` eylemi · `lifecycle-service.ts` `#seedDefaultTeam` (signup → `General` takımı + owner `primary`) · OpenAPI `GroupWrite`/`GroupIdPath`/`AgentIdPath` + üretilmiş tipler. Doğrula, yeniden yazma.\n\n**Neden güvenlik işi:** takım üyeliği erişim kontrolüdür — hangi ajanın hangi sohbeti göreceğini belirler. `routing_rules.target_group_id` ve `chat_access.group_id` **FK taşımıyor**, yani yanlış bir silmeyi veritabanı durdurmaz; uçtaki iki refüz tek savunmadır.",
+        "testStrategy": "Her iş kalemi kendi DoD kapısından geçer (CONVENTIONS §1). Kalem bütününün kabul kriteri: sıfırdan açılan bir workspace gelen ilk sohbeti bir takıma yönlendirebiliyor (boş `chat_access` DEĞİL) ve konsoldan takım kurulabiliyor.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-TEAM-a [OPUS-MAX] BÖLÜNMEZ: grup CRUD uçlarını doğrula + tenant izolasyonu ve silme korumalarının testi",
+            "description": "WIP dalını kodu okuyarak doğrula. `groups.test.ts` aç: CRUD; B lisansının takımına A ile 404 (403 değil — enumeration koruması); `groups--all:ro` ile 403; **silme koruması A** takımı hedefleyen routing rule varken 409 `group_in_use` + `details.rule_id`; **silme koruması B** o takım üzerinden görünen AÇIK sohbet varken 409 + `details.active_chats`; arşivlenmiş sohbet silmeyi engellemez. Desen: `test/integration/channels-adapters.test.ts` (fixture + grantToken + tenant izolasyon kalıbı).",
+            "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "175",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-TEAM-b [OPUS-XHIGH] Üyelik uçları: routing gerçekten değişiyor mu + priority tiers",
+            "description": "PUT ile ekle → `RoutingService` o ajanı aday görüyor; DELETE ile çıkar → görmüyor; aynı PUT priority değiştiriyor (idempotent upsert); workspace üyesi olmayan uuid → 404. `GROUP_PRIORITIES = [primary, first, normal, last]` (`packages/types/src/domain.ts:14`) ve DB `group_agents_priority_check` kısıtı. Beş `group.*` audit kaydının yazıldığını doğrula.",
+            "details": "Bağımlılık: M-TEAM-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "175",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "M-TEAM-c [OPUS-XHIGH] KABUL: signup ile açılan taze workspace yönlendirebiliyor",
+            "description": "Kalemin varlık nedeni. Signup → `General` takımı + owner `primary` üyeliği → gelen ilk sohbet boş `chat_access` ile DEĞİL, o takıma açılıyor. `chat-service.ts` `defaultGroupIds` \"ilk takıma düş\" emniyetini yalnız bir takım varsa uygulayabiliyor; bu test o emniyetin artık devreye girdiğini kanıtlar. DoD yeşilse `main`e merge.",
+            "details": "Bağımlılık: M-TEAM-a, M-TEAM-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "175",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "M-TEAM-d [SONNET-XHIGH] Teams konsol ekranı: liste + CRUD + üye yönetimi + Priority dropdown",
+            "description": "PRD KK: \"Routing hedefi; edit sayfası; Priority dropdown\". `apps/web/src/features/team/` altı; mevcut Team sayfası desenleri ve `apps/web/src/lib/form.tsx` (elle useState ile form kurma). 409 `group_in_use` gövdesi **görünür alan-altı hataya** dönüşmeli, sessizce yutulmamalı. Ajan seçici `GET /agents`. i18n en+tr; yeni rotayı `apps/e2e/tests/a11y.spec.ts` rota listesine ekle yoksa router-parse pini kırmızıya çeker. e2e: takım oluştur → ajan ekle → sohbet o takıma düşüyor; `kanit/04.5-teams.png`.",
+            "details": "Bağımlılık: M-TEAM-c. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "175",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 5,
+            "title": "M-TEAM-e [OPUS-MAX] BÖLÜNMEZ: SCIM /Groups yazma — provizyon yolu konsoldan gevşek olamaz",
+            "description": "`routes/scim.ts` şu an /Groups için salt-okunur. POST/PUT/PATCH(add|remove members)/DELETE. `displayName`→`Group.name`, `members`→`group_agents`, priority varsayılan `normal`. **M-TEAM-a silme korumaları SCIM yolunda da uygulanmalı** — servis katmanını paylaş, mantığı kopyalama. Mevcut /Users yazma yollarının hata biçimi, filtre ve sayfalama desenini izle; testler /Users testleriyle aynı sertlikte.",
+            "details": "Bağımlılık: M-TEAM-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "175",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "176",
+        "title": "M-CAMP — Kampanya teslimati — modulun asil vaadi bosta",
+        "description": "Eslesen ziyaretciye YALNIZ bir `campaign_sends` satiri yaziliyor (campaign-service.ts:240); hicbir chat event, RTM push ya da widget mesaji uretilmiyor. `apps/widget` ve `apps/rtm` icinde \"campaign\" kelimesi bile gecmiyor, `engaged` uretimde hic true yapilmiyor, ve durum yalniz yazma aninda hesaplandigi icin sekme filtreleri zamanla yanlisa donuyor. Denetimin K2 kritik bulgusu.",
+        "details": "PRD satır **522-535** (FR-MOD-03.3.2) · denetim `prd-uyum-denetimi.md` §5 K2.\n\n**KARAR (verilmiş, tartışma değil):** teslimat **mevcut widget yoklaması** üzerinden — widget zaten 4 sn'de bir sunucuyu yokluyor (`apps/widget/src/widget.ts:24` `POLL_INTERVAL_MS = 4_000`) ve proaktif karşılama kartı mekanizması var (`GREETING`, `GREETING_DISMISSED_KEY`). **Yeni taşıma katmanı (soket) EKLENMEYECEK** — ayrı ve büyük bir iş, bu kalemde kapsam dışı.\n\n**Yeniden kullan:** `matchesConditions` ve `visitorPageUrls` (`campaign-matching.ts`) mevcut ve testli; yeni eşleştirici yazma. İdempotanslık `(campaign, customer)` unique + `skipDuplicates` ile korunuyor — bozma.",
+        "testStrategy": "Kalem bütününün kabul kriteri: kampanya oluştur → eşleşen ziyaretçi gelsin → widget yoklamasında kart **bir kez** görünsün → tıklayınca sohbet açılsın ve `engaged` true olsun. Cross-tenant: B lisansının kampanyası A ziyaretçisine asla ulaşmaz.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-CAMP-a [SONNET-XHIGH] campaign_sends.delivered_at migration + teslimat sorgusuna indeks kararı",
+            "description": "`deliveredAt DateTime? @map(\"delivered_at\") @db.Timestamptz(6)`. Yeni migration aç — uygulanmış olanı düzenleme. NULL = henüz teslim edilmedi (geriye dönük zaman uydurma). `-b`nin sorgu şekline göre `(license_id, customer_id, delivered_at)` indeksi gerekiyor mu ölç; gerekmiyorsa açma ve nedenini yaz. `db:check-drift` exit 0.",
+            "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "176",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-CAMP-b [OPUS-MAX] BÖLÜNMEZ: yoklama cevabına bekleyen kampanya + delivered_at damgası (teslimat garantisi)",
+            "description": "`routes/customer.ts` yoklama ucu: `delivered_at IS NULL` gönderim varsa mesajı cevaba ekle ve **aynı işlemde** damgala. Karar ver ve yorumla: (1) birden çok bekleyen gönderimde seçim kuralı (öneri: en eski, tek seferde bir tane); (2) damgalama ile cevabın ulaşması arasında kopan bağlantı — **en-fazla-bir-kez mi en-az-bir-kez mi**, kampanya mesajı için hangisi daha az zararlı? Kontrat: `customer-chat.yaml` + `contract:generate` + generated senkron. Cross-tenant izolasyon zorunlu.",
+            "details": "Bağımlılık: M-CAMP-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "176",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "M-CAMP-c [SONNET-XHIGH] Widget kampanya kartı — mevcut proaktif kart mekanizmasını yeniden kullan",
+            "description": "İkinci bir kart sistemi kurma. Kapatma davranışı `GREETING_DISMISSED_KEY` desenine uysun. Karşılama kartı ile çakışırsa biri kazanmalı — kararı yorumla (öneri: kampanya, çünkü hedeflenmiş). Widget çapraz-origin iframe içinde: workspace metni **kaçışsız basılmaz** (NFR-S6); `<script>` metin olarak görünmeli. 8 dil (ar/de/en/es/fr/it/pt/tr) — kampanya metni çevrilmez, düğmeler çevrilir. `kanit/03.3.2-campaign-card.png`.",
+            "details": "Bağımlılık: M-CAMP-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "176",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "M-CAMP-d [SONNET-XHIGH] engaged bayrağı gerçekten set edilsin + etkileşim tanımı",
+            "description": "Üretimde hiç true yapılmıyor; kampanya başarısının tek sinyali bu. Tanım: **sohbet açmak** = engaged (görüntülenme zaten `delivered_at`). Ziyaretçi kartı kapatıp sonra kendi başına sohbet açarsa bu sayılır mı — zaman penceresi mi, yalnız karttan gelen tıklama mı? Seçimini yorumla ve teste bağla; rapor okuyan biri bu ayrımı bilmeden oranı yanlış yorumlar.",
+            "details": "Bağımlılık: M-CAMP-c. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "176",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 5,
+            "title": "M-CAMP-e [OPUS-MAX] BÖLÜNMEZ: yeni ziyaretçi çalışan kampanyaları tetiklesin (sıcak yol + idempotanslık)",
+            "description": "Tetikleme şu an YALNIZ create/update anında, son `LIVE_WINDOW_MINUTES` içindeki ziyaretçilere karşı — yani kampanya kaydedildikten SONRA gelen ziyaretçi hiç eşleşmiyor. `visits` yazma yolunda değerlendir. **Asıl tasarım sorusu maliyet:** ziyaret yazma yolu her sayfa görüntülemesinde çalışan sıcak yoldur; her ziyarette tüm çalışan kampanyaları değerlendirmek pahalı olabilir — senkron mu, işlem sonrası mı, kısa önbellek arkasında mı? Kararı ve ölçümü yorumla; `apps/load/test/budgets.test.ts` NFR-P2 bütçesi yeşil kalmalı.",
+            "details": "Bağımlılık: M-CAMP-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "176",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 6,
+            "title": "M-CAMP-f [OPUS-XHIGH] Kampanya durumu okuma anında yeniden değerlendirilsin",
+            "description": "`computeCampaignStatus` yalnız create (`campaign-service.ts:108`) ve update (`:169`) yolundan çağrılıyor; zamanlayıcı yok, `starts_at` geçmişe kayan kampanya sonsuza dek `scheduled` görünüyor. Tercih: okuma anında yeniden hesaplama (zamanlayıcı altyapısı gerektirmez); alternatif mevcut sweep deseni (`retention.ts`). Eşzamanlı iki okuma aynı satırı güncelleyebilir — **idempotent güncelleme** yaz. Sekme filtreleri (All/Ongoing/Scheduled/Inactive) bu değerden beslenir.",
+            "details": "Bağımlılık: M-CAMP-e. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "176",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "177",
+        "title": "M-STORE — Paylasilan nesne deposu — NFR-R1 stateless ihlali bugun uretimde kiriliyor",
+        "description": "Yuklemeler pod-yerel diske gidiyor (`LocalStore`, `STORAGE_LOCAL_DIR`), `attachment.ts:36` capraz-pod eki REDDEDIYOR ve Helm charti ayni poda `maxReplicas: 4` HPA takiyor. Yani yatay olcek altinda ek indirmeleri rastgele basarisiz olur.",
+        "details": "PRD satır **768-777** (NFR-R1) · denetim `prd-uyum-denetimi.md` §3 D6.\n\n**Genişleme noktası HAZIR:** `ObjectStore` arayüzü (`services/storage/object-store.ts`) `put`/`get`/`exists` ile var; `createObjectStore` fabrikası `STORAGE_PROVIDERS` enum'u üzerinden seçiyor ve kodun kendi yorumu bunu öngörüyor: *\"the exhaustive form is what makes adding `s3` to the enum later a compile error here\"*.\n\n**Çağrı yerlerine dokunulmaz:** `routes/chats.ts:93`, `routes/customer.ts:203`, `routes/uploads.ts:63` zaten fabrikadan geçiyor. Üçünü de değiştirmen gerekiyorsa tasarımı yanlış kurmuşsundur.",
+        "testStrategy": "Kalem bütününün kabul kriteri: iki API örneği ayakta; birinden yüklenen ek diğerinden indirilebiliyor, ve `virus-scanner.ts` fail-closed davranışı ile `upload-url.ts` imzalı PUT akışı her iki sağlayıcıda da aynı.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-STORE-a [OPUS-MAX] BÖLÜNMEZ: S3 uyumlu ObjectStore — güvenlik sınırları ve hata yolları",
+            "description": "`services/storage/s3-store.ts`. `STORAGE_PROVIDERS`'a `s3` ekle → fabrika switch'i derleme hatası verir, oradan doldur. Env `STORAGE_S3_*` (`config/env.ts:426-428` yanına); gerçek secret YOK. **Korunacak garantiler:** `attachment.ts` `exists` kontrolü bir güvenlik sınırıdır (verilmiş ama kullanılmamış anahtara işaret eden `attachment_url`'i reddeder) — S3'te aynı kesinlikte çalışmalı; **ağ hatası ile \"yok\" karışmamalı**, `exists` ağ hatasında `false` dönerse güvenlik kontrolü sessizce açılır; `local-store.ts` yol kaçışı doğrulamasının S3 karşılığı anahtar doğrulamasıdır (`../` kabul edilmez).",
+            "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "177",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-STORE-b [SONNET-XHIGH] MinIO servisi (iki compose dosyası) + bucket bootstrap + geliştirici talimatı",
+            "description": "`docker-compose.yml` ve `docker-compose.full.yml`. `nexa-*` adlandırma deseni, port çakışması yok (db 5433, redis 6380 kullanılıyor). Bucket servis hazır olunca mevcut olsun. **Varsayılan `STORAGE_PROVIDER=local` KALMALI** — mevcut geliştirici akışını ve CI'ı bozma, S3 opt-in. `docker compose config` geçerli.",
+            "details": "Bağımlılık: M-STORE-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "177",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "M-STORE-c [OPUS-XHIGH] Çok-pod ek doğrulaması: pod A yükler, pod B indirir",
+            "description": "Kalemin asıl iddiası bu; testsiz düzeltme düzeltme sayılmaz. Desen: `apps/rtm/test/integration/two-pod.test.ts` iki örnek kaldırıp aralarındaki davranışı doğruluyor. İçerik ve content-type korunur; `attachment.ts` doğrulaması B üzerinde de geçer. `STORAGE_PROVIDER=local` ile aynı senaryonun **neden geçmediğini** belgelendir — testin gerçekten bir şey ölçtüğünün kanıtı. Helm `maxReplicas: 4` durumunu HANDOFF'a yaz.",
+            "details": "Bağımlılık: M-STORE-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "177",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "M-STORE-d [OPUS-MAX] BÖLÜNMEZ: virüs taraması + imzalı URL güvenlik paritesi (local ↔ s3)",
+            "description": "Depolama değişikliği sessiz bir güvenlik gerilemesi olmamalı. **Yalnız güvenlik testlerini** iki sağlayıcıda parametrik koş (tüm yükleme süitini ikiye katlama — kapı süresi). Korunacak: fail-closed AV (tarayıcı cevap veremiyorsa dosya kabul EDİLMEZ), imzalı PUT (geçersiz imza / süresi geçmiş / yeniden kullanım reddi), izin verilen tür ve boyut sınırları, `nosniff`. İki sağlayıcıda sonuç farklıysa parite yok demektir ve kalem tamamlanmamıştır.",
+            "details": "Bağımlılık: M-STORE-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "177",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "178",
+        "title": "M-RPT — Rapor metrik dogrulugu — deflection ajan-ajan devirlerini AI devri sayiyor",
+        "description": "`transferCount` (report-csv.ts:937) `chat_transferred` olaylarini `reason` ayrimi YAPMADAN sayiyor; ayni SQL :1044 te tekrarlaniyor. `skillRun.count` uc yerde filtresiz (report-csv.ts:1489, :1726, routes/reports.ts:719) → Copilot assistleri AI Agent yetenegi sayiliyor. Ve testi YESILDI ama hatayi yakalayamiyordu.",
+        "details": "PRD satır **579-593** (FR-MOD-07.4) ve **699-706** (FR-MOD-12) · denetim `prd-uyum-denetimi.md` §3 D7.\n\n**ŞEMA DEĞİŞİKLİĞİ GEREKMİYOR — iki hazır dayanak var:**\n- `reason` alanı olayın `properties`ine **zaten yazılıyor**: `chat-service.ts:980` (`reason: target.reason`) ve `ai-responder.ts:135` (`reason: 'ai_handoff'`).\n- `Skill.aiAgentId` **zaten var** (`schema.prisma:1384`); `SkillRun.skillId → Skill` üzerinden filtrelenebilir.",
+        "testStrategy": "Kalem bütününün kabul kriteri: ajan→ajan devri ile AI→insan devri ayrı sayılıyor, Copilot kullanımı AI Agent raporuna karışmıyor, VE bu iki düzeltme geri alındığında testler kırmızıya dönüyor (fixture artık kör değil).",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-RPT-a [SONNET-XHIGH] transferCount reason filtresi + ikinci kopyanın tek yardımcıya indirilmesi",
+            "description": "SQL'e `AND e.properties @> '{\"reason\":\"ai_handoff\"}'::jsonb` ekle. **Containment (`@>`) kullan, `->>` değil** — jsonb GIN indeksinden faydalanmak için; dosyanın kendi yorumu bu gerekçeyi yazıyor. `:1044` civarındaki ikinci kopyayı da düzelt; iki kopya bu hatanın iki yerde yaşamasının sebebi. `TRANSFER_REASONS` sözlüğünü oku — `ai_handoff` dışında \"AI devri\" sayılan bir reason var mı, kararını yorumla.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "178",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-RPT-b [SONNET-XHIGH] skill_runs sayımını AI Agent`a kilitle (üç çağrı yeri)",
+            "description": "`Skill.aiAgentId != null` olan skill'lerin run'ları sayılsın. **Önce varsayımı doğrula:** Copilot gerçekten `skill_runs` yazıyor mu? `skill_runs` yazan yolları grep'le ve `aiAgentId` null olan skill'lerin kim tarafından koşulduğunu tespit et — varsayım yanlışsa filtre de yanlış olur. Bulduğunu yorumla. Üç çağrı yerinin üçünü de düzelt.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "178",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "M-RPT-c [OPUS-XHIGH] Kör fixture`ı düzelt + körlüğü KANITLA + diğer rapor fixture`larını tara",
+            "description": "Denetimin ders niteliğindeki bulgusu: rapor fixture'ı `chat_transferred` olaylarını `reason`suz yazdığı için test yeşilken kriter yanlıştı — yani test ne düzeltmeyi ne bozulmayı görebiliyordu. Fixture iki devir türü ve iki run türü üretsin; iddialar yanlış sayımda KIRILSIN. **Atlanamaz adım:** `-a`/`-b` düzeltmesini geçici geri al, testin kırmızıya döndüğünü gör, geri getir, sonucu HANDOFF'a yaz. Ayrıca diğer rapor fixture'larını tara: ayrım yapılan bir alan fixture'da hep aynı değeri alıyorsa o test de kördür — bulguları listele.",
+            "details": "Bağımlılık: M-RPT-a, M-RPT-b. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "178",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "179",
+        "title": "M-COUNT — Sunucu tarafi sayac ve siralama — \"yuklenen pencere gercek toplam saniliyor\"",
+        "description": "Sayaclar ve siralamalar tarayiciya yuklenmis satirlardan turuyor; veri buyudukce SESSIZCE yanlisa doner ve testler kucuk fixture ile yesil kalir. AI resolution sayaci 50 satirdan sonra yanlis; Tickets siralamasi sunucuya gitmiyor; gorunum filtresi URL e yansimiyor; Traffic sekme sayaclari yalniz yuklenmis sayfalardan turuyor.",
+        "details": "PRD satır **496-521** (FR-MOD-02.1.2, 02.7) ve **522-535** (traffic) · denetim `prd-uyum-denetimi.md` §3 D3.\n\n**DB yarısı DOĞRU — dokunma:** `ai_solved` görünüm filtresi (`chat-service.ts` ~1727) ADR-09'un tam predicate'ini uyguluyor ve yorumu bu predicate'e ekstra koşul eklenmesini açıkça yasaklıyor (Solved listesi ile fatura sayacı asla ayrışmamalı). Hata yalnız web katmanında sayımda.\n\n**Çürütme turundan gelen düzeltme:** ilk denetçinin \"dar sekmede Traffic sayaçları tüm panoyu temsil etmiyor\" eleştirisi **haksızdı** — kod sayaçları yalnız aktif sekme ya da filtresiz pano için gösteriyor. Gerçek sınır sayacın yüklenmiş sayfalardan türemesi. Sekme mantığını değiştirme.",
+        "testStrategy": "Kalem bütününün kabul kriteri: sayfa boyutunu aşan veri setlerinde (60+ kayıt, sayfa 25) sayaçlar doğru ve sunucu toplamı fatura sayacıyla aynı; sayfa 2'deki bir bilet sayfa 1'dekinden önce sıralanabiliyor. NFR-P2 okuma bütçeleri aşılmıyor.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-COUNT-a [OPUS-XHIGH] AI resolution sayacını sunucudan besle — toplam nereden gelecek kararı",
+            "description": "**Tasarım sorusu:** liste ucuna toplam alanı mı, ayrı sayım ucu mu? Keyset sayfalama ile toplam sayım aynı sorguda pahalı olabilir; kararını ve maliyetini yorumla, NFR-P2 okuma bütçesini bozma. Fatura ile **aynı sayıyı** vermeli — ADR-09 ekseninde Overview = fatura = Copilot BI tutarlılığı korunuyor, yeni sayaç bu üçlüden ayrışırsa hata büyür. **60+ kayıtlı test zorunlu** (kusur tam orada).",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "179",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-COUNT-b [OPUS-XHIGH] Tickets sıralamasını sunucuya taşı — keyset imleciyle etkileşimi çöz",
+            "description": "`ticketListUrl` (`useTickets.ts:36`) yalnız view+limit+page_id kuruyor; `sortTickets` (`ticket-grid.ts:103`) belleğe yüklenmiş diziyi sıralıyor (`InboxPage.tsx:288`). `/tickets`'e `sort` parametresi (kontrat + uygulama); sıralanabilir alanları PRD'den doğrula. `sortTickets`'ı kaldır ya da görsel yardımcıya indir — çift sıralama sonucu bozar. **Keyset uyarısı:** sıralama alanı değişince imleç anlamını yitirir, sayfalama sıfırlanmalı — teste bağla. e2e: mevcut `paging.spec.ts:70` deseni (\"sunucudan farklı sıra iste\") biletler için tekrarlanır.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "179",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "M-COUNT-c [SONNET-XHIGH] Tickets görünüm filtresi deep-link`lensin",
+            "description": "PRD 02.7 \"deep-link filtre\" istiyor; filtre URL'e hiç yansımıyor. `-b`nin `sort` parametresiyle aynı sözleşmede yaşamalı. Geçersiz/bilinmeyen değer geldiğinde sessizce varsayılana düş (URL elle düzenlenebilir) — kararı yorumla. Tarayıcı geri/ileri düğmesi filtre değişimlerini takip etmeli.",
+            "details": "Bağımlılık: M-COUNT-b. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "179",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "M-COUNT-d [SONNET-XHIGH] Traffic sekme sayaçlarını sunucu toplamına bağla",
+            "description": "`TrafficPage.tsx:432` civarı. `-a`nın çözdüğü aynı tasarım sorusu geçerli — o iş kalemi bittiyse aynı deseni kullan, yeni yol icat etme. **Sekme davranışını (aktif sekme / filtresiz pano) DEĞİŞTİRME**, mevcut testler kırılmamalı. e2e içinde ölçülen \"NFR-P2 filtered GET /traffic\" bütçesi aşılmaz.",
+            "details": "Bağımlılık: M-COUNT-a. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "179",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "180",
+        "title": "M-READY — AI Agent readiness mantigi — operator ters, active bayragi hic okunmuyor",
+        "description": "PRD KK4: \"Knowledge bos VEYA hic aktif skill yokken uyari gosterilir\". Kod: `const ready = hasKnowledge || hasSkill` (readiness.ts:42) — uyari YALNIZ ikisi birden bosken cikiyor; bilgi tabani dolu ama hic skill yokken AI Agent \"hazir\" gorunuyor. Ayrica `hasSkill = skills.some(hasSteps)` (:41) \"aktif\" bayragini hic okumuyor.",
+        "details": "PRD satır **562-578** (FR-MOD-06.1, KK4) · denetim `prd-uyum-denetimi.md` §3 D8.\n\nİkinci kusur (`active` okunmuyor) denetim raporunda YOK — kodu okurken doğrulamada çıktı. İkisi birden düzeltilmezse madde yine yarım kalır.\n\n`apps/web/src/features/playbook/readiness.ts` — dosya küçük, kusur iki satır. Asıl iş testleri PRD kriterine göre yazmak.",
+        "testStrategy": "Beş senaryo: yalnız knowledge → hazır DEĞİL; yalnız skill → hazır DEĞİL; ikisi → hazır; **adımı olan ama pasif skill hazır saymaz**; ikisi de boş → hazır değil. `readiness.test.ts` şu an YANLIŞ davranışı kilitliyor olabilir — mevcut iddiaları körü körüne koruma, PRD kriterine göre yeniden yaz.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-READY-a [SONNET-XHIGH] Operatörü çevir (|| → &&) + active bayrağını oku + testleri PRD kriterine göre yeniden yaz",
+            "description": "Uyarı koşulu `!hasKnowledge || !hasSkill`, yani `ready = hasKnowledge && hasSkill`. `hasSkill` = `hasSteps(s) && s.active`. AI Agent ekranında uyarının göründüğü bileşen testi. PLAN.md 06.1 satırı.",
+            "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "180",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "181",
+        "title": "M-UI — Eksik konsol yuzeyleri — \"API`de var, konsolda yok\" deseni (denetim D2)",
+        "description": "Bu maddelerin arka tarafi yazilmis, konsol yuzeyi yok: etiket grup kapsami API`de yaziliyor ama duzenlenemiyor, PAT icin `apps/web/src` icinde tek satir yok, yonlendirme kurali olusturma ucu ve ekrani yok, bildirimler yalniz InboxPage`de mount ediliyor, denetim kaydinin metadata`si hicbir yerde gorunmuyor, sablon rozetleri render edilmiyor, preview ozeti basilmiyor, ajan bazli performans lisans geneli gosteriliyor, formlarin yarisi ortak kutuphaneyi atliyor.",
+        "details": "Denetim `prd-uyum-denetimi.md` §3 D2 · ilgili PRD satırları her iş kaleminde.\n\n**Her iş kaleminde geçerli:** önce mevcut ucu bul ve sözleşmesini oku — yeni uç icat etmen gerekmiyor olabilir. Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır. i18n `apps/web/src/locales` (en+tr). `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni rota eklediysen rota listesine de ekle. Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli, sessizce yutulmamalı.",
+        "testStrategy": "Her iş kalemi kendi DoD kapısından geçer. `apps/web` test süiti (1541 test) sayıca düşmez; a11y taraması iki temada da yeşil kalır.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-UI-a [SONNET-XHIGH] Etiket grup kapsamı ekranı — ucun ölü kolon olmadığını da doğrula",
+            "description": "PRD **594-659** (08.7.1). API `group_ids`'i yazıyor (`settings.ts:2572` civarı) ama `Tags.tsx:139` yalnız sayı basıyor. Grup seçici ekle. **Ayrıca:** denetim canned responses için \"group_id kolonu var ama create/update kabul etmiyor → ölü kolon\" demişti; etiket ucunun gerçekten yazdığını doğrula, yazmıyorsa uç tarafı da bu iş kaleminin kapsamındadır.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-UI-b [OPUS-XHIGH] Kişisel erişim jetonu (PAT) ekranı — kimlik bilgisi yüzeyi",
+            "description": "PRD **594-659**. `apps/web/src` içinde `personal-access-token` geçen TEK SATIR yok; API hazır (`routes/auth.ts` ~955 yükselme kapısı: oturumun sahip olmadığı scope verilemez). Oluştur/listele/iptal. **Jeton yalnız oluşturulduğu anda bir kez gösterilir**, ekran bunu açıkça söylemeli. Scope seçici yalnız oturumun sahip olduklarını göstermeli (`role-scopes.ts`) — kullanıcıya reddedilecek seçenek sunma. Jetonu log'lama, URL'e koyma, analitiğe gönderme. e2e: oluştur → jetonla API çağrısı çalışır → iptal → 401.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "M-UI-c [OPUS-XHIGH] Bilet yönlendirme kuralı: POST/DELETE uçları + ekran",
+            "description": "PRD **594-659** (08.6.2). `/settings/routing-rules` yalnız GET (`settings.ts:2332`) + PATCH (`:2364`); oluşturma ve silme yok. `RoutingRule` kısıtları: `kind` (vars. chat), `conditions` (Json yüklemler), `targetGroupId`, `priority` (Int), `isFallback` **lisans+kind başına EN FAZLA BİR** — tekilliği uçta zorla, iki fallback yönlendirmeyi belirsizleştirir. **M-TEAM ile etkileşim:** M-TEAM-a takımı hedefleyen kural varken takım silmeyi 409 ile reddediyor; buradan kural silinince o refüz kalkmalı — teste bağla.",
+            "details": "Bağımlılık: M-TEAM-d. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "M-UI-d [OPUS-MAX] BÖLÜNMEZ: bildirimleri AppShell`e taşı — soket yaşam döngüsü sahipliği",
+            "description": "PRD **707-733** (13.8). `useNotifications` ve `useRealtime` reponun TAMAMINDA yalnız `InboxPage.tsx:209-210`'da mount ediliyor; ajan Reports'a geçince ses/masaüstü/rozet susuyor ve soket kapanıyor. **Asıl riskler:** (1) çift mount → aynı mesaj iki kez bildirilir; push verisi Inbox'a nasıl akacak (bağlam mı store mu)? (2) soket yaşam döngüsü tek yerden yönetilmeli — yeniden bağlanma, arka plan sekmesi, oturum kapanışı; sayfa geçişlerinde bağlantı fırtınası olmamalı (bağlantı sayısı ölçülür). (3) ajan zaten o sohbete bakıyorsa bildirim gösterilsin mi — mevcut davranışı koru, değiştiriyorsan yorumla. **e2e asıl kanıt:** Reports sayfasındayken gelen mesaj bildirim üretir — bugün üretmiyor, kırmızıdan yeşile dönen test kanıttır. Mobil push (`pushToAgentDevices`) kapsam dışı.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 5,
+            "title": "M-UI-e [OPUS-XHIGH] Denetim kaydı detayı: GET /audit-log/:id + genişletilebilir satır",
+            "description": "PRD **594-659** (08.9.7). Zincir (HMAC + gapless `chain_seq`), imzalı export ve SIEM çıkışı sağlam — **dokunma**. Eksik olan detay: kaydın `metadata`sı hiçbir yerde görünmüyor, tekil kayıt ucu yok. **Gizlilik tasarım sorusu:** metadata bazı kayıtlarda hassas (rol değişimi, IP, e-posta) ve tasarım bilinçli olarak bazı alanları yazmıyor (ban audit'inde IP'nin kasten yazılmaması gibi) — hangi alanların gösterileceğine karar ver ve gerekçeni yorumla; her şeyi ham JSON basmak kolay ama doğru olmayabilir. Scope: liste görebilen detayı da görebilir, fazlası değil.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 6,
+            "title": "M-UI-f [SONNET-XHIGH] Form kütüphanesi pilotu: Payment ve Add-website (PRD adıyla sayıyor)",
+            "description": "PRD **722-733** (FR-EK-A.1). `useForm(` kullanan 20 dosya var ama `<form` içeren 40 dosya var; atlananlar tam da PRD'nin adıyla saydığı bu ikisini içeriyor. KK: istemci tarafı anlık validasyon + **alan-altı** hata mesajı + geçerli girdi olmadan submit pasif. **Davranışı değiştirme, kuruluşu değiştir** — mevcut testler kırılıyorsa davranış değişmiş demektir, dur ve incele. Payment bir ödeme yüzeyi: kart verisi log/URL'e girmez.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 7,
+            "title": "M-UI-g [SONNET-MAX] Form kütüphanesi süpürmesi: kalan formların envanteri ve taşınması",
+            "description": "Geniş mekanik yüzey (~20 dosya). Önce envanter: `comm -23 <(grep -rln \"<form\" apps/web/src --include=*.tsx|sort) <(grep -rln \"useForm(\" apps/web/src --include=*.tsx|sort)`. Öncelik: kullanıcı verisi yazan ve hata gösterme ihtiyacı yüksek olanlar (ayarlar, davet, kural oluşturma); salt arama kutusu olanlar düşük — taşınmaya değmiyorsa nedenini yaz. Her taşımadan sonra o dosyanın testini koş, hepsini sona bırakma. **Taşınanları ve kalanları HANDOFF'a açıkça listele** — sessiz kısmi teslim denetimin en çok şikayet ettiği şey.",
+            "details": "Bağımlılık: M-UI-f. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 8,
+            "title": "M-UI-h [SONNET-XHIGH] AI Agent şablon rozetleri — tip ve veri var, render yok",
+            "description": "PRD **552-561** (05.2). `TemplateBadge` tipi tanımlı (`templates.ts:54`), `badge` alanı dört kayıtta dolu, hiçbir bileşen render etmiyor → Popular/Essential kartlarda görünmüyor. Rozet bir kategori değil vurgu — kategori ucu (prebuilt/ai/trending) zaten basılıyor, karıştırma. Yeni renk eklersen `tokens.test.ts` AA kontrast eşiğini de güncelle. i18n.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 9,
+            "title": "M-UI-i [SONNET-XHIGH] Skill preview özet narrasyonu + editörün ilk testleri",
+            "description": "PRD **562-578** (06.2.5). API `summary` DÖNÜYOR (`playbook.ts:441`) ve DTO'da alan var; editörün `PreviewResult`'ı render etmiyor (yalnız StatusDot/errors/reply/transfer). PRD dört eylemin anlatılmasını istiyor: toplama, etiket, **özet**, transfer + hata gösterimi. **Editör tarafında HİÇ test yok** — maddenin KISMİ çıkma sebebinin yarısı budur; yalnız render eklemek kapatmaz.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 10,
+            "title": "M-UI-j [SONNET-XHIGH] Ajan bazlı AI performansı (şu an lisans geneli)",
+            "description": "PRD **536-551** (04.2). Team sayfası `<AiPerformance agentActive={anyActive} />` ile hiçbir ajana özel olmayan veri gösteriyor. **`agentPerformance` sorgusu zaten ajan bazlı** (`report-csv.ts`, `AgentPerformanceRow`: agent_id, name, chats, closed, manual, assisted, automated) — yeni sorgu yazma, bağla. M-RPT bittiyse düzeltilmiş figür tanımlarını kullan. Yetki: scope kontrolünü uçta zorla, UI gizlemeye güvenme (PRD §7 RBAC).",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "181",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "182",
+        "title": "M-CO — Sirket bilgileri (FR-MOD-08.3) — semada, ucta ve konsolda hic yok",
+        "description": "Denetimde YOK cikti ve onceligi Onemli. `Organization` modelinde yalnizca `name` + `region` var (schema.prisma:29-43); sektor/adres/saat dilimi alani yok, `/settings/company` benzeri uc yok (settings.ts teki 46 route un hicbiri sirket bilgisi yazmiyor), web tarafinda boyle bir bolum yok.",
+        "details": "PRD satır **594-659** (FR-MOD-08.3) · denetim `prd-uyum-denetimi.md` §6 (YOK listesi).\n\n**Saat dilimi çakışması — asıl dikkat noktası:** çalışma saatleri özelliği (`WorkSchedule`, `work_schedule.updated` audit eylemi) zaten bir saat dilimi taşıyor. Şirket saat dilimi ile ajan/çalışma saati saat dilimi çakışmamalı — hangisi hangisini besliyor? İki ayrı doğruluk kaynağı olursa raporlar sessizce kayar.",
+        "testStrategy": "`db:check-drift` exit 0. Kaydet → geri oku; scope reddi; cross-tenant izolasyon; **çalışma saatleri bu saat dilimini kullanıyor** (iki kaynak kararının testi). e2e + `kanit/08.3-company.png`. PLAN.md 08.3 satırı ⬜ → ✅.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-CO-a [SONNET-XHIGH] Organization şema alanları + migration + GET/PATCH /settings/company",
+            "description": "Sektör / adres / saat dilimi. Sektör serbest metin mi kapalı liste mi — kapalı liste raporlanabilir ama esnek değil, kararını yorumla. Kontrat + `contract:generate` + generated senkron. Scope mevcut ayar uçlarıyla tutarlı.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "182",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-CO-b [OPUS-XHIGH] Ayarlar ekranı bölümü + saat dilimi tek doğruluk kaynağı kararı",
+            "description": "Şirket saat dilimi ile çalışma saatleri saat dilimi arasındaki ilişkiyi karara bağla, yorumla ve **teste bağla**. `lib/form.tsx` (M-UI-f/g merge olduysa doğrudan ortak kütüphaneyle yaz); i18n en+tr; a11y rota listesi.",
+            "details": "Bağımlılık: M-CO-a. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "182",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "183",
+        "title": "M-CHOBS — Kanal mesaj gozlemlenebilirligi — G1`in biraktigi borc",
+        "description": "Omnichannel cift yonlu oldu (tm G1, `channel_messages` a outbound yaziliyor) ama tabloyu okuyan bir uc yok. Bu yuzden e2e teslimati gozlemleyemiyor ve bir operator \"bu mesaj gercekten gitti mi\" sorusunu konsoldan cevaplayamiyor.",
+        "details": "Denetim `prd-uyum-denetimi.md` §3 D1 · `HANDOFF.md` G1 girişi (\"Kalan borç\") · `services/channels/channel-service.ts` (`record`) ve `ChannelMessage` modeli.\n\nG1 turunda `channels.spec.ts` ve `telegram.spec.ts`'ten elle atılan `POST /channels/:type/messages` adımı kaldırıldı (artık çift gönderim olurdu). Bu iş kalemi o adımın **dürüst yerine koymasıdır**: teslimatı gerçekten gözlemleyen bir okuma yolu.",
+        "testStrategy": "Yön/sohbet/zaman filtreleri; keyset sayfalama; cross-tenant izolasyon; scope reddi; sorgunun mevcut indekslere oturduğu EXPLAIN ile ölçülür (`reports-billing.test.ts` deseni). e2e: ajanın konsoldan yazdığı cevabın gerçekten gönderildiği bu uçla doğrulanır.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "low",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-CHOBS-a [OPUS-XHIGH] GET /channels/:type/messages — yeni yetkili uç, müşteri içeriği taşır",
+            "description": "Yön (inbound/outbound), sohbet ve zaman aralığı filtreleri; keyset sayfalama (mevcut `page_id` deseni). Mesaj metni müşteri içeriği: scope'u dar tut (`channels--all:ro`), cross-tenant izolasyonu test et. `ChannelMessage` indeksleri `(license_id, channel_type, created_at)` ve `(license_id, chat_id)` var — sorguyu bunlara oturt, yeni indeks açmadan önce ölç.",
+            "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "183",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
+      },
+      {
+        "id": "184",
+        "title": "M-TRACE — Kalite kapisi — \"kabul kriterinin KENDISI test ediliyor mu\" olculmuyor",
+        "description": "Mevcut DoD kapisi \"kod var + testler yesil\" i olcuyor. Denetimde ilk turun verdigi her bes TAM dan biri ikinci turda coktu, ve 07.4 metriginin testi yesilken kriter yanlisti. Bu kalem hangi testin hangi gereksinimi korudugunu makineyle okunabilir kilar ve kapiya baglar.",
+        "details": "Denetim `prd-uyum-denetimi.md` §2 (çürütme turu neden gerekliydi) ve §8 · `CONVENTIONS.md` §1.\n\n**Sıfırdan başlamıyorsun:** desen kısmen var — kodda ve testlerde `FR-MOD-11.5 · 11.5-d`, `08.9.5-a/b`, `ADR-09` gibi referanslar yorumlarda geçiyor. Kural bunu **düzenli** hale getirmeli, yeni bir şey icat etmemeli.\n\n`-d` (PLAN doğruluk taraması) **en sona bırakılmalı** — diğer düzeltme kalemleri kapanmadan koşarsa düzeltilmiş maddeleri de `◐`ye çeker.",
+        "testStrategy": "Kalem bütününün kabul kriteri: CI adımının **gerçekten kırmızı verdiği** gösterilir — etiketsiz bir gereksinim ID'si eklenince kapı düşer, etiket eklenince yeşile döner. \"Adım eklendi\" yetmez; bu tam da denetimin eleştirdiği şeydir.",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "medium",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "M-TRACE-a [OPUS-MAX] BÖLÜNMEZ: test↔gereksinim izlenebilirlik konvansiyonu (b ve c bunun üstüne kuruluyor)",
+            "description": "Etiket nerede yaşar — test adında mı, yorumda mı, bir yardımcıda (`covers('FR-MOD-08.5.5')`) mı? Her birinin grep'lenebilirliği ve gürültüsü farklı. Bir test birden çok maddeyi korur, bir madde birden çok testle korunur — çoktan-çoğa ilişkiyi nasıl ifade ediyorsun? Kural **geriye dönük** olarak 2701 entegrasyon + 1174 birim testine uygulanamaz: kademeli benimseme nasıl işleyecek, yalnız yeni/değişen testler mi zorunlu? Çıktı: kural + `CONVENTIONS.md`'ye yazılmış hali + en az bir dosyada uygulanmış hali + etiketlerin makineyle çıkarılabildiğini gösteren örnek komut.",
+            "details": "Bağımlılık: yok. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "184",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 2,
+            "title": "M-TRACE-b [OPUS-XHIGH] Kapsama raporu script`i + sınırının açıkça belgelenmesi",
+            "description": "`scripts/` altında: PRD madde kataloğunu okur, `-a`nın kuralına göre testleri tarar, **testi olmayan maddeleri listeler**. Girdi kataloğu `prd-uyum-denetimi.md` Ek A'daki 247 madde olabilir — ama o bir markdown tablosu; ayrıştırılmalı mı yapılandırılmış kaynağa mı taşınmalı, kararını yorumla. **Sınırı belgele:** bir madde etiketli ama testi kriteri ölçmüyorsa script bunu göremez — yeşil rapor yanlış güven verir (07.4 dersinin tam tekrarı). Kapsam dışı listesi tut (KVKK, workflow builder, masaüstü uygulaması) yoksa bilinçli kararlar \"eksik\" diye raporlanır. Çıktı: insan özeti + CI'ın tüketeceği makine biçimi.",
+            "details": "Bağımlılık: M-TRACE-a. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "184",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 3,
+            "title": "M-TRACE-c [SONNET-XHIGH] Kapsama kapısını CI`a bağla + CONVENTIONS §1`i güncelle",
+            "description": "Kademeli olmalı: bugün 141 KISMİ madde var, kapıyı \"hiçbir madde testsiz olamaz\" diye kurarsan CI kalıcı kırmızı olur ve kimse bakmaz — yeni/değişen maddeler zorunlu, mevcut borç ayrı raporlanır. `CONVENTIONS.md` §1 DoD listesine yeni kutu. **Kapının gerçekten kırmızı verdiğini kanıtla.** Bilinen CI boşluğu (unit-tests-before-build bundle bütçesini sessizce atlıyor) aynı turda ayrı commit ile kapatılabilir.",
+            "details": "Bağımlılık: M-TRACE-b. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "184",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          },
+          {
+            "id": 4,
+            "title": "M-TRACE-d [SONNET-MAX] EN SONA BIRAK: PLAN.md yanlış kapanışlarının taranması (geniş mekanik süpürme)",
+            "description": "`prd-uyum-denetimi.md` Ek A'daki nihai verdict (TAM/KISMİ/YOK) ile PLAN.md durum damgalarını karşılaştır; `✅` damgalı ama denetimde KISMİ/YOK çıkan satırları düzelt. CONVENTIONS §1.2: *\"Kısmen karşılandıysa `◐` + eksik açıklaması doğru cevaptır; `✅` uydurmak bu kutuyu geçmez\"* — bu iş kalemi o kuralı geriye dönük uyguluyor. **SIRALAMA:** başlarken Task Master'da hangi kalemlerin `done` olduğunu kontrol et ve yalnız **gerçekten hâlâ eksik** olanları düşür. Kanıt disiplini: hücrede yalnız damga (`◐ → K<kod>`), açıklama `## K. Kanıt Geçmişi` bloğuna madde olarak; var olanları silme. Faz özet sayaçları da güncellenmeli (panel `statedCounts` olarak okuyor). `C-plan-row-length` eşiğini aşan satır üretme.",
+            "details": "Bağımlılık: M-TRACE-b. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
+            "status": "pending",
+            "dependencies": [],
+            "parentId": "184",
+            "updatedAt": "2026-08-31T00:00:00.000Z"
+          }
+        ],
+        "updatedAt": "2026-08-31T00:00:00.000Z"
       }
     ],
     "metadata": {

@@ -8356,10 +8356,10 @@
             "title": "M-STORE-c [OPUS-XHIGH] Çok-pod ek doğrulaması: pod A yükler, pod B indirir",
             "description": "Kalemin asıl iddiası bu; testsiz düzeltme düzeltme sayılmaz. Desen: `apps/rtm/test/integration/two-pod.test.ts` iki örnek kaldırıp aralarındaki davranışı doğruluyor. İçerik ve content-type korunur; `attachment.ts` doğrulaması B üzerinde de geçer. `STORAGE_PROVIDER=local` ile aynı senaryonun **neden geçmediğini** belgelendir — testin gerçekten bir şey ölçtüğünün kanıtı. Helm `maxReplicas: 4` durumunu HANDOFF'a yaz.",
             "details": "Bağımlılık: M-STORE-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "177",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T14:05:38.370Z"
           },
           {
             "id": 4,
@@ -8372,7 +8372,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T14:00:23.583Z"
+        "updatedAt": "2026-08-31T14:05:38.370Z"
       },
       {
         "id": "178",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T14:00:23.584Z",
+      "lastModified": "2026-08-31T14:05:38.371Z",
       "taskCount": 184,
       "completedCount": 176,
       "tags": [

@@ -160,6 +160,7 @@ export default async function chatRoutes(
 
       return reply.send({
         items: result.items,
+        total: result.total,
         ...(result.nextPageId ? { next_page_id: result.nextPageId } : {}),
       });
     },

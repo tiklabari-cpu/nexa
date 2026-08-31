@@ -8423,7 +8423,7 @@
         "description": "Sayaclar ve siralamalar tarayiciya yuklenmis satirlardan turuyor; veri buyudukce SESSIZCE yanlisa doner ve testler kucuk fixture ile yesil kalir. AI resolution sayaci 50 satirdan sonra yanlis; Tickets siralamasi sunucuya gitmiyor; gorunum filtresi URL e yansimiyor; Traffic sekme sayaclari yalniz yuklenmis sayfalardan turuyor.",
         "details": "PRD satır **496-521** (FR-MOD-02.1.2, 02.7) ve **522-535** (traffic) · denetim `prd-uyum-denetimi.md` §3 D3.\n\n**DB yarısı DOĞRU — dokunma:** `ai_solved` görünüm filtresi (`chat-service.ts` ~1727) ADR-09'un tam predicate'ini uyguluyor ve yorumu bu predicate'e ekstra koşul eklenmesini açıkça yasaklıyor (Solved listesi ile fatura sayacı asla ayrışmamalı). Hata yalnız web katmanında sayımda.\n\n**Çürütme turundan gelen düzeltme:** ilk denetçinin \"dar sekmede Traffic sayaçları tüm panoyu temsil etmiyor\" eleştirisi **haksızdı** — kod sayaçları yalnız aktif sekme ya da filtresiz pano için gösteriyor. Gerçek sınır sayacın yüklenmiş sayfalardan türemesi. Sekme mantığını değiştirme.",
         "testStrategy": "Kalem bütününün kabul kriteri: sayfa boyutunu aşan veri setlerinde (60+ kayıt, sayfa 25) sayaçlar doğru ve sunucu toplamı fatura sayacıyla aynı; sayfa 2'deki bir bilet sayfa 1'dekinden önce sıralanabiliyor. NFR-P2 okuma bütçeleri aşılmıyor.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8432,10 +8432,10 @@
             "title": "M-COUNT-a [OPUS-XHIGH] AI resolution sayacını sunucudan besle — toplam nereden gelecek kararı",
             "description": "**Tasarım sorusu:** liste ucuna toplam alanı mı, ayrı sayım ucu mu? Keyset sayfalama ile toplam sayım aynı sorguda pahalı olabilir; kararını ve maliyetini yorumla, NFR-P2 okuma bütçesini bozma. Fatura ile **aynı sayıyı** vermeli — ADR-09 ekseninde Overview = fatura = Copilot BI tutarlılığı korunuyor, yeni sayaç bu üçlüden ayrışırsa hata büyür. **60+ kayıtlı test zorunlu** (kusur tam orada).",
             "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "179",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T19:04:01.092Z"
           },
           {
             "id": 2,
@@ -8468,7 +8468,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
+        "updatedAt": "2026-08-31T19:04:01.092Z"
       },
       {
         "id": "180",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T18:56:32.973Z",
+      "lastModified": "2026-08-31T19:04:01.093Z",
       "taskCount": 184,
       "completedCount": 178,
       "tags": [

@@ -172,7 +172,7 @@ export class ChatService {
     tenant: TenantContext,
     principal: Principal,
     options: ChatListOptions,
-  ): Promise<{ items: ChatSummary[]; nextPageId?: string }> {
+  ): Promise<{ items: ChatSummary[]; total: number; nextPageId?: string }> {
     return withTenant(this.db, tenant, (tx) => listChatsInTenant(tx, principal, options));
   }
 
@@ -1561,52 +1561,79 @@ export async function listChatsInTenant(
   tx: TenantClient,
   principal: Principal,
   options: ChatListOptions,
-): Promise<{ items: ChatSummary[]; nextPageId?: string }> {
+): Promise<{ items: ChatSummary[]; total: number; nextPageId?: string }> {
   const visibility = await resolveVisibility(tx, principal, 'read');
   const cursor = decodeCursor(options.pageId);
 
-  // Visibility is an OR, and so is the keyset cursor. Merging them into one
-  // OR would widen the result rather than narrow it, so each goes into its
-  // own AND clause.
-  const conditions: Record<string, unknown>[] = [];
+  // Visibility is an OR. Folding it into the view's own filter would widen the
+  // result rather than narrow it, so it goes into its own AND clause.
+  const scope: Record<string, unknown>[] = [];
 
   const visibilityFilter = chatVisibilityFilter(visibility);
-  if (Object.keys(visibilityFilter).length > 0) conditions.push(visibilityFilter);
+  if (Object.keys(visibilityFilter).length > 0) scope.push(visibilityFilter);
 
-  if (cursor) {
-    const [before, after] =
-      options.sort === 'newest' ? (['lt', 'lt'] as const) : (['gt', 'gt'] as const);
-    conditions.push({
-      OR: [
-        { createdAt: { [before]: cursor.createdAt } },
-        { createdAt: cursor.createdAt, id: { [after]: cursor.id } },
-      ],
-    });
-  }
+  // Everything that describes *the view*, with the cursor deliberately left out
+  // — this is what `total` counts. A total narrowed by the cursor would shrink
+  // as the reader scrolled, which is the counter equivalent of the defect this
+  // field exists to end (the console used to count the rows it had loaded).
+  const where = {
+    ...(options.customerId ? { customerId: options.customerId } : {}),
+    ...(options.groupId !== undefined ? { access: { some: { groupId: options.groupId } } } : {}),
+    ...viewFilter(options.view, visibility.actorId),
+    ...(scope.length > 0 ? { AND: scope } : {}),
+  };
+
+  // The keyset cursor is an OR too, and it nests *outside* the view rather than
+  // joining `scope`: `{ AND: [where, cursor] }` is the spelling
+  // `TicketService.list` and `CustomerService.list` already use, and it leaves
+  // one object — `where` — as the single statement of what the view is. That
+  // is what makes "the total counts the list" true by construction rather than
+  // by two filters happening to agree.
+  const paged = cursor
+    ? {
+        AND: [
+          where,
+          {
+            OR: [
+              { createdAt: { [options.sort === 'newest' ? 'lt' : 'gt']: cursor.createdAt } },
+              {
+                createdAt: cursor.createdAt,
+                id: { [options.sort === 'newest' ? 'lt' : 'gt']: cursor.id },
+              },
+            ],
+          },
+        ],
+      }
+    : where;
 
   const direction = options.sort === 'newest' ? 'desc' : 'asc';
-  const rows = await tx.chat.findMany({
-    where: {
-      ...(options.customerId ? { customerId: options.customerId } : {}),
-      ...(options.groupId !== undefined ? { access: { some: { groupId: options.groupId } } } : {}),
-      ...viewFilter(options.view, visibility.actorId),
-      ...(conditions.length > 0 ? { AND: conditions } : {}),
-    },
-    // Tie-break on id: `created_at` alone is not unique, and a cursor built
-    // on a non-unique column silently skips or repeats rows.
-    orderBy: [{ createdAt: direction }, { id: direction }],
-    take: options.limit + 1,
-    include: {
-      customer: { select: { name: true, email: true } },
-      access: { select: { groupId: true } },
-      users: true,
-      threads: {
-        orderBy: { createdAt: 'desc' },
-        take: 1,
-        include: { tags: { include: { tag: { select: { name: true } } } } },
+  // Page and total together, the shape the two sibling lists already use. Not a
+  // claim of parallelism — Prisma runs an interactive transaction on one
+  // connection, so the count is a second round trip whose cost adds to the
+  // page's (measured: ~1 ms of a 24 ms request over sixty rows, `chats.test.ts`
+  // "NFR-P2 read budget"). What it buys is that both read this transaction's
+  // snapshot, so the number beside the list can never describe another instant
+  // than the rows in it.
+  const [rows, total] = await Promise.all([
+    tx.chat.findMany({
+      where: paged,
+      // Tie-break on id: `created_at` alone is not unique, and a cursor built
+      // on a non-unique column silently skips or repeats rows.
+      orderBy: [{ createdAt: direction }, { id: direction }],
+      take: options.limit + 1,
+      include: {
+        customer: { select: { name: true, email: true } },
+        access: { select: { groupId: true } },
+        users: true,
+        threads: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { tags: { include: { tag: { select: { name: true } } } } },
+        },
       },
-    },
-  });
+    }),
+    tx.chat.count({ where }),
+  ]);
 
   const hasMore = rows.length > options.limit;
   const page = hasMore ? rows.slice(0, options.limit) : rows;
@@ -1639,6 +1666,7 @@ export async function listChatsInTenant(
   const last = page.at(-1);
   return {
     items,
+    total,
     ...(hasMore && last
       ? { nextPageId: encodeCursor({ createdAt: last.createdAt, id: last.id }) }
       : {}),

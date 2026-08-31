@@ -6,6 +6,7 @@
  * customer, a retry posting a message twice, an agent reading a team's
  * conversations they were never given.
  */
+import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
@@ -19,6 +20,8 @@ import {
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
 const AGENT_SCOPES = ['chats--access:rw', 'tags--all:rw', 'customers:ro'];
+/** NFR-P2: reads are budgeted at p99 < 150 ms. */
+const READ_BUDGET_MS = 150;
 const ADMIN_SCOPES = ['chats--all:rw', 'tags--all:rw', 'customers:rw'];
 
 describe('agent chat api', () => {
@@ -1326,6 +1329,267 @@ describe('agent chat api', () => {
       });
       expect(Number(usage?.quantity ?? 0n)).toBe(2);
       expect(solvedIds).toHaveLength(Number(usage?.quantity ?? 0n));
+    });
+
+    // =======================================================================
+    // The counter past one page (audit D3 · M-COUNT-a)
+    //
+    // Every assertion above holds on a fixture of two or three rows, which is
+    // exactly why the defect survived: the console counted the rows it had
+    // loaded, and up to the page size that number is right. So this block is
+    // deliberately larger than a page — sixty AI resolutions read twenty-five
+    // at a time — because that is the only size at which "counted the page"
+    // and "counted the view" give different answers.
+    // =======================================================================
+
+    describe('the Solved counter past one page', () => {
+      /** Ten past the console's own 50-row chat page (`useInbox.ts`). */
+      const SOLVED = 60;
+      /** Closed by a human: in Archive, never in Solved, never on the invoice. */
+      const HUMAN_CLOSED = 3;
+      /** Still being handled by the AI: in the `ai` view, not yet in Solved. */
+      const STILL_RUNNING = 2;
+      /** The task's page size — small enough that Solved spans three pages. */
+      const PAGE = 25;
+
+      /**
+       * Sixty-five conversations in four `createMany` calls rather than
+       * sixty-five round trips through `aiChat`: the rows exist to be counted,
+       * not to exercise the write path, and the per-row helper above turns this
+       * fixture into some two hundred and sixty statements.
+       *
+       * They are created *active* and closed through the real endpoint below,
+       * because closing is where ADR-09 meters — a chat written straight to
+       * `active: false` would appear in Solved with nothing on the invoice, and
+       * the agreement between the two is half of what this block claims.
+       */
+      async function seedForCounting(): Promise<{ ai: string[]; human: string[] }> {
+        const specs = Array.from({ length: SOLVED + HUMAN_CLOSED + STILL_RUNNING }, (_, i) => ({
+          index: i,
+          customerId: randomUUID(),
+          chatId: generateShortId(),
+          threadId: generateShortId(),
+          // The first `HUMAN_CLOSED` get an agent-authored reply; everything
+          // else is customer + bot only.
+          human: i < HUMAN_CLOSED,
+        }));
+
+        await owner.customer.createMany({
+          data: specs.map((s) => ({
+            id: s.customerId,
+            organizationId: fx.a.organizationId,
+            name: `Counted Visitor ${String(s.index).padStart(2, '0')}`,
+          })),
+        });
+        await owner.chat.createMany({
+          data: specs.map((s) => ({
+            id: s.chatId,
+            licenseId: fx.a.licenseId,
+            customerId: s.customerId,
+            active: true,
+          })),
+        });
+        await owner.thread.createMany({
+          data: specs.map((s) => ({
+            id: s.threadId,
+            chatId: s.chatId,
+            licenseId: fx.a.licenseId,
+            active: true,
+          })),
+        });
+        await owner.event.createMany({
+          data: specs.flatMap((s) => [
+            {
+              id: `${s.threadId}_50`,
+              threadId: s.threadId,
+              chatId: s.chatId,
+              licenseId: fx.a.licenseId,
+              type: 'message',
+              text: 'Where is my order?',
+              authorType: 'customer',
+              recipients: 'all',
+            },
+            {
+              id: `${s.threadId}_99`,
+              threadId: s.threadId,
+              chatId: s.chatId,
+              licenseId: fx.a.licenseId,
+              type: 'message',
+              text: s.human ? 'A person here — looking now.' : 'It shipped this morning.',
+              // The one bit that decides the whole classification (ADR-09).
+              authorType: s.human ? 'agent' : 'bot',
+              authorId: s.human ? fx.a.ownerAccountId : null,
+              recipients: 'all',
+            },
+          ]),
+        });
+
+        const closing = specs.filter((s) => s.index < SOLVED + HUMAN_CLOSED);
+        for (const spec of closing) {
+          const closed = await server.post(
+            `/chats/${spec.chatId}/deactivate`,
+            undefined,
+            auth(acmeAdminToken),
+          );
+          expect(closed.statusCode).toBe(200);
+        }
+
+        return {
+          ai: specs.filter((s) => !s.human && s.index < SOLVED + HUMAN_CLOSED).map((s) => s.chatId),
+          human: specs.filter((s) => s.human).map((s) => s.chatId),
+        };
+      }
+
+      interface Page {
+        items: Array<{ id: string }>;
+        total: number;
+        next_page_id?: string;
+      }
+
+      const read = async (url: string): Promise<Page> => {
+        const response = await server.get(url, auth(acmeAdminToken));
+        expect(response.statusCode).toBe(200);
+        return response.json() as Page;
+      };
+
+      it('reports the whole view, not the page — and the same number the invoice meters', async () => {
+        const seeded = await seedForCounting();
+        expect(seeded.ai).toHaveLength(SOLVED);
+
+        const first = await read(`/chats?view=ai_solved&limit=${PAGE}`);
+
+        // The defect, stated as an inequality: what a reader can see is a page,
+        // what the view holds is sixty. Before this field the console had only
+        // the left-hand number and displayed it as the right-hand one.
+        expect(first.items).toHaveLength(PAGE);
+        expect(first.total).toBe(SOLVED);
+        expect(first.total).toBeGreaterThan(first.items.length);
+
+        // And it is the *invoice's* sixty. ADR-09 meters one resolution per
+        // thread closed with no agent-authored event; the Solved view selects
+        // on that same predicate, so a counter derived from it agrees with the
+        // bill by construction. The three human-closed chats are the control:
+        // they closed through the same endpoint in the same run and moved
+        // neither number.
+        const usage = await owner.usageRecord.findFirst({
+          where: { licenseId: fx.a.licenseId, metric: 'ai_resolutions' },
+        });
+        expect(Number(usage?.quantity ?? 0n)).toBe(SOLVED);
+        expect(first.total).toBe(Number(usage?.quantity ?? 0n));
+      });
+
+      it('holds the total steady across the page chain, and the chain adds up to it', async () => {
+        await seedForCounting();
+
+        const seen: string[] = [];
+        const totals: number[] = [];
+        let cursor: string | undefined;
+        for (let page = 0; page < 10; page += 1) {
+          const url = `/chats?view=ai_solved&limit=${PAGE}${
+            cursor ? `&page_id=${encodeURIComponent(cursor)}` : ''
+          }`;
+          const body = await read(url);
+          seen.push(...body.items.map((c) => c.id));
+          totals.push(body.total);
+          cursor = body.next_page_id;
+          if (!cursor) break;
+        }
+
+        // Every page says sixty. A total narrowed by the cursor would count
+        // down — 60, 35, 10 — which is the same class of wrong as counting the
+        // loaded rows, just in the other direction.
+        expect(totals).toEqual([SOLVED, SOLVED, SOLVED]);
+        // And sixty is what the chain actually yields, so the number beside the
+        // list is a promise the list keeps.
+        expect(new Set(seen).size).toBe(SOLVED);
+        expect(seen).toHaveLength(totals[0]!);
+      });
+
+      it('counts the view it was asked for, not every chat the caller can see', async () => {
+        await seedForCounting();
+
+        // Four views over one fixture. If `total` ignored `view` — counted the
+        // workspace instead of the filter — all four would read 65.
+        expect((await read('/chats?view=all&limit=5')).total).toBe(
+          SOLVED + HUMAN_CLOSED + STILL_RUNNING,
+        );
+        expect((await read('/chats?view=archived&limit=5')).total).toBe(SOLVED + HUMAN_CLOSED);
+        expect((await read('/chats?view=ai_solved&limit=5')).total).toBe(SOLVED);
+        expect((await read('/chats?view=ai&limit=5')).total).toBe(STILL_RUNNING);
+      });
+
+      it("counts only what the caller may see, not the workspace's rows", async () => {
+        // Two teams, and the regular agent is in Support only (`beforeEach`).
+        // A different customer per chat because a license may hold one active
+        // chat per person.
+        for (const [team, howMany] of [
+          [supportGroupId, 2],
+          [salesGroupId, 3],
+        ] as const) {
+          for (let i = 0; i < howMany; i += 1) {
+            const customer = await owner.customer.create({
+              data: { organizationId: fx.a.organizationId, name: `Scoped ${team}-${i}` },
+              select: { id: true },
+            });
+            await startChat(acmeAdminToken, {
+              customerId: customer.id,
+              groupIds: [Number(team)],
+            });
+          }
+        }
+
+        // The admin's token carries `chats--all:ro` and sees all five; the
+        // agent reaches only the two routed to their team. A count is exactly
+        // where a dropped visibility filter hides, because the *rows* stay
+        // right — the agent would still be shown two conversations, under a
+        // heading claiming five.
+        expect((await read('/chats?view=all&limit=50')).total).toBe(5);
+        const scoped = await server.get('/chats?view=all&limit=50', auth(acmeAgentToken));
+        expect(scoped.statusCode).toBe(200);
+        expect(scoped.json().total).toBe(2);
+        expect(scoped.json().items).toHaveLength(2);
+      });
+
+      it("never counts another tenant's resolutions into this one", async () => {
+        await seedForCounting();
+        await server.post('/chats', { customer_id: fx.b.customerId }, auth(northwindToken));
+
+        // The count runs under the same tenant transaction and the same RLS as
+        // the page, so this is really a statement about the seam: a `count`
+        // added beside a list is exactly where a forgotten license filter hides,
+        // because the rows still look right.
+        expect((await read('/chats?view=ai_solved&limit=5')).total).toBe(SOLVED);
+        const northwind = await server.get('/chats?view=all', auth(northwindToken));
+        expect(northwind.json().total).toBe(1);
+      });
+
+      it('stays inside the NFR-P2 read budget with the count on the page', async () => {
+        await seedForCounting();
+
+        const url = `/chats?view=ai_solved&limit=${PAGE}`;
+        await read(url); // warm-up: plan cache and connection, not measured
+        const samples: number[] = [];
+        for (let i = 0; i < 15; i += 1) {
+          const started = Date.now();
+          await read(url);
+          samples.push(Date.now() - started);
+        }
+        const sorted = [...samples].sort((a, b) => a - b);
+        const median = sorted[Math.floor(sorted.length / 2)]!;
+
+        // `ai_solved` is the expensive view — a NOT EXISTS over `events` per
+        // candidate thread — so it is the one worth measuring; the cheaper
+        // views cannot cost more. The median is asserted and the tail only
+        // recorded: this runs against a local Postgres in a container on a
+        // shared machine, so the tail describes the harness. NFR-P2's p99 is a
+        // production claim this supports rather than establishes.
+        console.log(
+          `NFR-P2 GET /chats?view=ai_solved (${SOLVED} rows, limit ${PAGE}, with total) — ` +
+            `median ${median} ms · max ${sorted.at(-1)} ms over ${samples.length} samples ` +
+            `(budget ${READ_BUDGET_MS} ms)`,
+        );
+        expect(median).toBeLessThan(READ_BUDGET_MS);
+      });
     });
   });
 

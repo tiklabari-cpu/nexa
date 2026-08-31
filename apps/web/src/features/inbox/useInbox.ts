@@ -823,25 +823,30 @@ export function useViewCounts(): Record<InboxView, number | undefined> {
   // Read straight through rather than memoised: the counts are consumed as
   // plain numbers by the rail buttons, so a stable object identity buys
   // nothing, and every paged result is a fresh object each render anyway.
+  //
+  // Each list's `total` — the server's count of the whole view — which is
+  // `undefined` until its first page lands, so an unloaded view does not read
+  // as an empty one.
+  //
+  // This used to be `items.length`: the rows this browser happened to have
+  // fetched, which is one page (`CHAT_PAGE_SIZE`, 50) until somebody scrolls.
+  // That reads as a total and is not one — the moment a workspace resolves its
+  // 51st conversation "Solved" says 50, keeps saying 50, and nothing on screen
+  // suggests it is wrong. The AI-resolution counter is the sharp end of it,
+  // being ADR-09's number and therefore the invoice's, but every view in the
+  // rail shared the ceiling, so they all read `total` now.
+  //
+  // It costs no extra request: `total` arrives on the same response as the
+  // rows, and `mergeChatHead` carries the freshest one through a live refresh.
   return {
-    all: loadedCount(all),
-    my: loadedCount(mine),
-    queued: loadedCount(queued),
-    unassigned: loadedCount(unassigned),
-    archived: loadedCount(archived),
-    ai: loadedCount(ai),
-    ai_solved: loadedCount(aiSolved),
+    all: all.total,
+    my: mine.total,
+    queued: queued.total,
+    unassigned: unassigned.total,
+    archived: archived.total,
+    ai: ai.total,
+    ai_solved: aiSolved.total,
   };
-}
-
-/**
- * What the sidebar can honestly say: the rows loaded so far, and `undefined`
- * until the first page lands (an unloaded view must not read as empty). These
- * are the counts of a list nobody has scrolled — one page — which is what they
- * were before paging too; `/chats` sends no `total` for the whole filter.
- */
-function loadedCount(list: PagedQueryResult<ChatSummary>): number | undefined {
-  return list.pages.length > 0 ? list.items.length : undefined;
 }
 
 /** One connected channel, as the `/channels` list reports it (FR-MOD-08.5.4-.6). */

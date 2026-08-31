@@ -8254,7 +8254,7 @@
         "description": "Eslesen ziyaretciye YALNIZ bir `campaign_sends` satiri yaziliyor (campaign-service.ts:240); hicbir chat event, RTM push ya da widget mesaji uretilmiyor. `apps/widget` ve `apps/rtm` icinde \"campaign\" kelimesi bile gecmiyor, `engaged` uretimde hic true yapilmiyor, ve durum yalniz yazma aninda hesaplandigi icin sekme filtreleri zamanla yanlisa donuyor. Denetimin K2 kritik bulgusu.",
         "details": "PRD satır **522-535** (FR-MOD-03.3.2) · denetim `prd-uyum-denetimi.md` §5 K2.\n\n**KARAR (verilmiş, tartışma değil):** teslimat **mevcut widget yoklaması** üzerinden — widget zaten 4 sn'de bir sunucuyu yokluyor (`apps/widget/src/widget.ts:24` `POLL_INTERVAL_MS = 4_000`) ve proaktif karşılama kartı mekanizması var (`GREETING`, `GREETING_DISMISSED_KEY`). **Yeni taşıma katmanı (soket) EKLENMEYECEK** — ayrı ve büyük bir iş, bu kalemde kapsam dışı.\n\n**Yeniden kullan:** `matchesConditions` ve `visitorPageUrls` (`campaign-matching.ts`) mevcut ve testli; yeni eşleştirici yazma. İdempotanslık `(campaign, customer)` unique + `skipDuplicates` ile korunuyor — bozma.",
         "testStrategy": "Kalem bütününün kabul kriteri: kampanya oluştur → eşleşen ziyaretçi gelsin → widget yoklamasında kart **bir kez** görünsün → tıklayınca sohbet açılsın ve `engaged` true olsun. Cross-tenant: B lisansının kampanyası A ziyaretçisine asla ulaşmaz.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8263,10 +8263,10 @@
             "title": "M-CAMP-a [SONNET-XHIGH] campaign_sends.delivered_at migration + teslimat sorgusuna indeks kararı",
             "description": "`deliveredAt DateTime? @map(\"delivered_at\") @db.Timestamptz(6)`. Yeni migration aç — uygulanmış olanı düzenleme. NULL = henüz teslim edilmedi (geriye dönük zaman uydurma). `-b`nin sorgu şekline göre `(license_id, customer_id, delivered_at)` indeksi gerekiyor mu ölç; gerekmiyorsa açma ve nedenini yaz. `db:check-drift` exit 0.",
             "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "176",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T07:26:33.558Z"
           },
           {
             "id": 2,
@@ -8319,7 +8319,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
+        "updatedAt": "2026-08-31T07:26:33.558Z"
       },
       {
         "id": "177",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T06:55:59.919Z",
+      "lastModified": "2026-08-31T07:26:33.559Z",
       "taskCount": 184,
       "completedCount": 175,
       "tags": [

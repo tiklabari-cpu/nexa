@@ -135,6 +135,11 @@ describe('error taxonomy', () => {
     // still owed, and the 409 for setting up a factor over a live one.
     'two_factor_required',
     'two_factor_already_enabled',
+    // Teams (FR-MOD-04.5): the 409 for deleting a team a routing rule still
+    // targets, or one an open conversation is reachable through. Neither
+    // reference is a foreign key, so this refusal is the only thing between a
+    // delete and silently unroutable chats.
+    'group_in_use',
   ];
 
   it('carries the 24 documented types, plus Nexa additions', () => {

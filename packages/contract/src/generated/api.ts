@@ -8501,7 +8501,9 @@ export interface components {
       /** @description What an agent picks from a transfer menu, so it is trimmed and bounded. */
       name: string;
       /**
-       * @description Drives language-based routing.
+       * @description Drives language-based routing. ISO 639-1, optionally with a region
+       *     (`en`, `en-GB`) — the shape the column's CHECK constraint enforces,
+       *     so anything else is a 400 rather than a failed write.
        * @default en
        */
       language_code: string;
@@ -13370,6 +13372,7 @@ export interface operations {
         };
         content?: never;
       };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];

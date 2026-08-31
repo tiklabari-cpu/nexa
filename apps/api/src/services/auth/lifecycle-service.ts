@@ -15,7 +15,7 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
-import type { TenantClient } from '../../lib/tenant.js';
+import { withTenant, type TenantClient } from '../../lib/tenant.js';
 import { hashPassword } from '../../lib/crypto.js';
 import { type AgentRole, type Region } from '@nexa/types';
 import { ROLE_RANK } from './principal.js';
@@ -127,11 +127,15 @@ export class LifecycleService {
     const row = created[0];
     if (!row) throw ApiError.internal('Signup produced no workspace.');
 
-    await this.#seedDefaultTeam(row.created_license, row.created_account);
+    // Read before seeding rather than on the way out: this is the only place
+    // the new workspace's organization id surfaces, and the seed needs it to
+    // open a tenant context.
+    const memberships = await this.#membershipsOf(row.created_account);
+    await this.#seedDefaultTeam(row.created_license, row.created_account, memberships);
 
     return {
       account: { id: row.created_account, email: input.email, name: input.name },
-      memberships: await this.#membershipsOf(row.created_account),
+      memberships,
     };
   }
 
@@ -155,15 +159,39 @@ export class LifecycleService {
    * reads plainly next to the code that depends on it. A failure here surfaces
    * — a workspace that cannot route is not a workspace that signed up
    * successfully.
+   *
+   * But *inside* `withTenant`, which is the whole reason this method takes the
+   * memberships. Everything else in this file reaches the database through the
+   * `auth_*` SECURITY DEFINER functions precisely because signup runs before a
+   * tenant context exists, and `#db` is the non-owner `nexa_app` role — writing
+   * `groups` straight through it hits `groups_tenant`'s `WITH CHECK
+   * (license_id = nexa_current_license())` against an unset setting and fails.
+   * The same trap `#membershipsOf` documents below, one step louder: a read
+   * comes back empty, a write raises and takes signup down with it. The tenant
+   * this opens is the one the transaction above just created, so the context is
+   * legitimate rather than a way around the policy.
    */
-  async #seedDefaultTeam(licenseId: bigint, ownerAccountId: string): Promise<void> {
-    const group = await this.#db.group.create({
-      data: { licenseId, name: 'General' },
-      select: { id: true },
-    });
-    await this.#db.groupAgent.create({
-      data: { licenseId, groupId: group.id, agentId: ownerAccountId, priority: 'primary' },
-    });
+  async #seedDefaultTeam(
+    licenseId: bigint,
+    ownerAccountId: string,
+    memberships: Membership[],
+  ): Promise<void> {
+    const membership = memberships.find((m) => m.license_id === licenseId.toString());
+    if (!membership) throw ApiError.internal('Signup produced no membership for its workspace.');
+
+    await withTenant(
+      this.#db,
+      { licenseId, organizationId: membership.organization_id },
+      async (tx) => {
+        const group = await tx.group.create({
+          data: { licenseId, name: 'General' },
+          select: { id: true },
+        });
+        await tx.groupAgent.create({
+          data: { licenseId, groupId: group.id, agentId: ownerAccountId, priority: 'primary' },
+        });
+      },
+    );
   }
 
   /**

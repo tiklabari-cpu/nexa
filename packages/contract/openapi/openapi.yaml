@@ -3503,10 +3503,12 @@ components:
           description: What an agent picks from a transfer menu, so it is trimmed and bounded.
         language_code:
           type: string
-          minLength: 2
-          maxLength: 10
+          pattern: "^[a-z]{2}(-[A-Z]{2})?$"
           default: en
-          description: Drives language-based routing.
+          description: |
+            Drives language-based routing. ISO 639-1, optionally with a region
+            (`en`, `en-GB`) — the shape the column's CHECK constraint enforces,
+            so anything else is a 400 rather than a failed write.
 
     Group:
       type: object

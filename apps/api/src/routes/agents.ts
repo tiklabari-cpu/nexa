@@ -51,12 +51,21 @@ const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) })
 
 // --- Teams (FR-MOD-04.5) ----------------------------------------------------
 
+/** Mirrors `groups_language_code_check`: ISO 639-1, optionally with a region.
+ *  Shaped here rather than left to a length bound, because the CHECK is what
+ *  the column actually enforces — `en_GB` past a `min(2).max(10)` reaches
+ *  Postgres, raises 23514 mid-transaction and surfaces as a 500. */
+const groupLanguageCode = z
+  .string()
+  .trim()
+  .regex(/^[a-z]{2}(-[A-Z]{2})?$/);
+
 /** A team name is what an agent picks from a transfer menu, so it is trimmed and
  *  bounded rather than free text. `language_code` drives language-based routing
  *  and defaults to the column's `en`. */
 const groupBody = z.object({
   name: z.string().trim().min(1).max(120),
-  language_code: z.string().trim().min(2).max(10).optional(),
+  language_code: groupLanguageCode.optional(),
 });
 
 /** Both fields optional, at least one required — the edit page sends the field
@@ -70,10 +79,13 @@ const groupPatchBody = groupBody.partial().refine((b) => Object.keys(b).length >
  *  a 400 rather than a row the CHECK constraint rejects mid-transaction. */
 const membershipBody = z.object({ priority: z.enum(GROUP_PRIORITIES).default('normal') });
 
+const GROUP_BODY_MESSAGE =
+  'name is required (1–120 characters); language_code is a two-letter code, optionally with a region (e.g. en, en-GB).';
+
 function parseGroupBody(raw: unknown): z.infer<typeof groupBody> {
   const parsed = groupBody.safeParse(raw);
   if (!parsed.success) {
-    throw ApiError.validation('name is required (1–120 characters).');
+    throw ApiError.validation(GROUP_BODY_MESSAGE);
   }
   return parsed.data;
 }
@@ -81,7 +93,7 @@ function parseGroupBody(raw: unknown): z.infer<typeof groupBody> {
 function parseGroupPatchBody(raw: unknown): z.infer<typeof groupPatchBody> {
   const parsed = groupPatchBody.safeParse(raw);
   if (!parsed.success) {
-    throw ApiError.validation('Send at least one of name (1–120 chars), language_code.');
+    throw ApiError.validation(`Send at least one of name, language_code. ${GROUP_BODY_MESSAGE}`);
   }
   return parsed.data;
 }
@@ -94,17 +106,29 @@ function parseMembershipBody(raw: unknown): z.infer<typeof membershipBody> {
   return parsed.data;
 }
 
-/** The path id, as a bigint. A non-numeric segment is a 404 rather than a 400:
- *  `/groups/banana` names no team, and saying so is the same answer as naming a
- *  team this workspace does not have. */
+/** The largest value `groups.id` (BIGSERIAL) can hold. Past it there is no row
+ *  to find, and the query would reach Postgres as a range error rather than a
+ *  lookup. */
+const MAX_BIGSERIAL = 9223372036854775807n;
+
+/** The path id, as a bigint. Anything that is not a plain in-range decimal is a
+ *  404 rather than a 400: `/groups/banana` names no team, and saying so is the
+ *  same answer as naming a team this workspace does not have. Decimal digits
+ *  only — `BigInt('0x10')` is 16, so a bare `BigInt()` would quietly resolve a
+ *  hex segment to a real row. */
 function groupIdParam(raw: string): bigint {
-  try {
-    const id = BigInt(raw);
-    if (id <= 0n) throw new RangeError('non-positive');
-    return id;
-  } catch {
-    throw new ApiError('group_not_found', 'Team not found.');
-  }
+  if (!/^\d{1,19}$/.test(raw)) throw new ApiError('group_not_found', 'Team not found.');
+  const id = BigInt(raw);
+  if (id <= 0n || id > MAX_BIGSERIAL) throw new ApiError('group_not_found', 'Team not found.');
+  return id;
+}
+
+/** The agent uuid from the path, as the rest of this file parses one: a
+ *  malformed segment is a 400, not a `22P02` from the `uuid` column. */
+function agentIdParam(raw: string): string {
+  const parsed = z.string().uuid().safeParse(raw);
+  if (!parsed.success) throw ApiError.validation('agentId must be a UUID.');
+  return parsed.data;
 }
 
 /**
@@ -897,7 +921,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
     { config: { scopes: ['groups--all:rw'] } },
     async (request, reply) => {
       const groupId = groupIdParam(request.params.groupId);
-      const agentId = request.params.agentId;
+      const agentId = agentIdParam(request.params.agentId);
       const { priority } = parseMembershipBody(request.body);
 
       const group = await request.withTenant(async (tx) => {
@@ -944,7 +968,7 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
     { config: { scopes: ['groups--all:rw'] } },
     async (request, reply) => {
       const groupId = groupIdParam(request.params.groupId);
-      const agentId = request.params.agentId;
+      const agentId = agentIdParam(request.params.agentId);
 
       await request.withTenant(async (tx) => {
         await loadGroup(tx, groupId);

@@ -218,7 +218,7 @@ gerekçe + `→ K…` referansı girer.
 | 04.3.3             | Teammates tablosu (Name/Role/Status/2FA)         | Must (MVP) |  ✅   | F2                  |
 | 04.3.4             | Profile paneli (concurrent chats limit dahil)    | Must (MVP) |  ✅   | F2 · Dilim 8        |
 | 04.4               | **Invite teammates modal** (çoklu email + rol)   | Must (MVP) |  ✅   | Dilim 12            |
-| 04.5               | Teams CRUD + Primary agent önceliği              | Must (MVP) |  ✅   | Dilim 8 · `/groups` |
+| 04.5               | Teams CRUD + Primary agent önceliği              | Must (MVP) |  ◐   | ◐ → K04.5           |
 | 04.2, 04.3.2, 04.6 | AI agent performance, filtre, Chatbots/Suspended | v1         |  🔒   | **Gerekçe tazelendi 2026-08-23 (GL-10 · §F.1/8 · §D121); eski hücre yalnız "v1" diyordu, v1 kapandı.** `04.2` + `04.6` ✅ (kendi satırları); açık kalan tek kod `04.3.2` Teammates arama + filtre (role/status/2FA) — tablo rol/durum/2FA sütunlarını gösteriyor, arama/filtre kontrolü yok. `Should`, sayaca girmez; Faz-4 kapsamına ALINMADI, §F.3 gereği kullanıcı seçimi. **[2026-08-30 · GL-11: açık pay KALMADI (tm 154.3) → KD121-3; `🔒` artık yalnız erteleme tarihçesi.]** |
 
 ### 3.5 FR-MOD-06 — AI Agent (yalnız MVP payı)
@@ -5890,6 +5890,13 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 #### K04.2 — 04.2 · AI Agents (team tarafı) — performance
 
 ✅ Team-tarafı AI Agents girişi (KK "Per-agent performance; Copilot knowledge yönetimi") — **performance**: 06.5 `AiPerformance` kartları reuse (reports=fatura ADR-09, düşük-baz + AI-off dürüstlüğü, `reports_read` kapısı) + AI-agent roster (name/status/skills; `kind:'ai_agent'` süzülür → Copilot roster'a girmez; her satır → Playbook) `TeamAiPerformance.tsx` · **Copilot knowledge yönetimi**: `/copilot/knowledge` (12.2-a) list/add/delete; müşteriye kapalı; bot `:ro` oku / `:rw` düzenle yetki kapısı `CopilotKnowledge.tsx` · `TeamPage.tsx`'e iki bölüm (AI kümesi) · test `TeamAiPerformance.test.tsx`(5)+`CopilotKnowledge.test.tsx`(5) · tm 58 · §D41
+
+#### K04.5 — 04.5 · Teams CRUD + Primary agent önceliği
+
+- ◐ Grup CRUD uçları doğrulandı ve iki silme koruması kanıtlandı (`POST/PATCH/DELETE /groups`) — `apps/api/src/routes/agents.ts` · test `apps/api/test/integration/groups.test.ts` (29) · tm 175.1. Satır denetimin K1 bulgusuyla `✅ Dilim 8 · /groups` diye kapalıydı; yalnız `GET` vardı. Bu tur **API'nin yazma yarısını** kapatıyor: üyelik uçları (tm 175.2), signup kabulü (175.3), konsol ekranı (175.4) ve SCIM `/Groups` yazma (175.5) hâlâ açık — bu yüzden `◐`.
+- ◐ WIP dalında (`6ebc898`) bulunan **dört kusur** düzeltildi, dördü de önce kırmızıyla kanıtlandı: (1) `#seedDefaultTeam` `app.db` (RLS'e tabi `nexa_app` rolü) üzerinden tenant bağlamı olmadan yazıyordu → **her signup 500**; `withTenant` içine alındı — `apps/api/src/services/auth/lifecycle-service.ts` · test `apps/api/test/integration/account-lifecycle.test.ts` (+1) · tm 175.1. (2) `language_code` yalnız uzunlukla doğrulanıyordu, `groups_language_code_check` ile hizalandı (500 → 400). (3) `groupIdParam` çıplak `BigInt()` idi: aralık dışı id 500, `0x10` ise **gerçek 16 numaralı takımı** adlandırıyordu (200 + yeniden adlandırma) → ondalık + `BIGSERIAL` sınırı. (4) üyelik yolundaki `agentId` uuid olarak ayrıştırılmıyordu (`22P02` → 500) → 400.
+- ⚠ **Damga `✅` → `◐` indirildi** (tm 175.1). Bu, üst özet tablosunun Faz-0 `Must` sayacını (`51 ✅ · 0 ◐ · 0 ⬜`, satır 20) bayatlatır — doğrusu artık `50 ✅ · 1 ◐ · 0 ⬜`. Sayaç bilerek ELLE DÜZELTİLMEDİ: CONVENTIONS §1.2 o tabloyu bu pencerenin dışında tutuyor ve kapanmış bir faz kapısını yeniden açmak bir alt-görevin vereceği karar değil. Tutarsızlık zaten vardı (satır denetimin K1 bulgusuna göre yanlış `✅` idi, yani sayaç da yanlıştı) — bu tur onu yalnız görünür kıldı. Karar mercii `M-TRACE-d` (tm 184.4): 175.2-175.5 bittiğinde satır `✅ → K04.5` olur ve sayaç kendiliğinden doğrulanır; **o zamana kadar sayacı bu satır yüzünden düşürme.**
+- ◐ Yeni `group_in_use` (409) hata tipinin bağlı yüzeyleri tamamlandı: `packages/types/src/scopes.test.ts` kayıt listesi, `apps/web/src/locales/{en,tr}/common.ts` hata kataloğu (i18n eşleme testi), `apps/mobile/src/__tests__/parity.test.ts` kontrat ucu sayacı 193 → 195. Kontrat: `GroupWrite.language_code` artık `pattern` taşıyor, `removeGroupMember` 400 yanıtı belgelendi.
 
 #### K04.6 — 04.6 · Chatbots / Suspended agents sekmeleri
 

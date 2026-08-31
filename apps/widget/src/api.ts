@@ -32,6 +32,12 @@ export interface WidgetState {
   /** Who the visitor is talking to — a person or the AI persona. */
   agent: { name: string; avatar_url: string | null } | null;
   chat: { id: string; thread_id: string | null; queue_position: number | null } | null;
+  /**
+   * A proactive campaign message owed to this visitor (FR-MOD-03.3.2), handed
+   * over on this poll and stamped delivered server-side in the same request —
+   * at-most-once, so the same `id` never arrives twice (`campaign-delivery.ts`).
+   */
+  campaign: { id: string; message: string } | null;
   events: WidgetEvent[];
 }
 

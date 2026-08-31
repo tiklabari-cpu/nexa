@@ -24,6 +24,13 @@ const GREETING = { width: 340, height: 250 } as const;
 const POLL_INTERVAL_MS = 4_000;
 /** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
 const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
+/**
+ * Same pattern, one key per campaign (FR-MOD-03.3.2): the campaign's `id` is
+ * stable per visitor, so dismissing *this* campaign must not swallow a
+ * different one delivered later in the session — unlike the greeting, which
+ * has only one message to ever dismiss.
+ */
+const CAMPAIGN_DISMISSED_KEY_PREFIX = 'nexa.campaign_dismissed.';
 
 /**
  * The widget's appearance (FR-MOD-11.7), in the widget's own camelCase. The
@@ -76,8 +83,15 @@ interface State {
   agent: { name: string; avatarUrl: string | null } | null;
   /** An agent is mid-reply — drives the "…is typing" line (FR-MOD-02.9). */
   agentTyping: boolean;
-  /** The proactive greeting card is on screen (panel still closed). */
+  /** The proactive card (greeting or campaign) is on screen (panel still closed). */
   greetingOpen: boolean;
+  /**
+   * A campaign message owed to this visitor (FR-MOD-03.3.2), from the widget's
+   * own poll — not a second card system, the same slot `greetingOpen` occupies.
+   * Cleared once shown and either dismissed or acted on; never overwritten by a
+   * later poll while one is already waiting to be seen (see `renderCard`).
+   */
+  campaign: { id: string; message: string } | null;
   /** The pre-chat form is showing instead of the composer. */
   prechat: boolean;
   /** Pre-chat details to attach to the first message the visitor sends. */
@@ -150,6 +164,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     agent: null,
     agentTyping: false,
     greetingOpen: false,
+    campaign: null,
     prechat: false,
     pendingDetails: null,
     preChatFields: [],
@@ -534,6 +549,11 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.greetingOpen = false;
       ui.greeting.hidden = true;
     }
+    // A campaign card the visitor opened into needs no dismissal record: the
+    // send is already stamped delivered server-side (at-most-once), so the
+    // same campaign can never be offered again regardless of what the widget
+    // remembers locally.
+    if (open) state.campaign = null;
 
     resize();
     postToHost(win, { type: open ? 'nexa:open' : 'nexa:close' });
@@ -545,20 +565,74 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
   }
 
-  // --- Greeting card + pre-chat --------------------------------------------
+  // --- Proactive card: greeting or campaign, one slot (FR-MOD-03.3.2) ------
 
-  /** Show the proactive card unless the visitor already waved it away. */
-  function showGreeting(): void {
-    if (state.open || greetingDismissed(win)) return;
-    state.greetingOpen = true;
-    ui.greeting.hidden = false;
-    resize();
+  /** Which content — if any — currently owns the one proactive-card slot. */
+  let shownCardKind: 'campaign' | 'greeting' | null = null;
+
+  /**
+   * Campaign vs greeting is a genuine "second card system" only if it grows a
+   * second slot, a second dismissal mechanism, a second resize rule. It does
+   * not: both live in `ui.greeting`/`GREETING`, both dismiss through the same
+   * per-session storage pattern (`campaignDismissed`/`greetingDismissed`) —
+   * only the message and the dismissal key differ.
+   *
+   * Decision (tm 176.3): a campaign wins when both are pending. It is
+   * addressed to *this* visitor by something they did; the greeting is the
+   * same line for everyone. Showing both, or the generic one first, would
+   * bury the targeted message behind a nudge it was built to be better than.
+   */
+  function activeCard(): { kind: 'campaign' | 'greeting'; message: string } | null {
+    if (state.campaign && !campaignDismissed(win, state.campaign.id)) {
+      return { kind: 'campaign', message: state.campaign.message };
+    }
+    if (!greetingDismissed(win)) {
+      return { kind: 'greeting', message: t('greeting.msg') };
+    }
+    return null;
   }
 
-  function dismissGreeting(): void {
+  /**
+   * Re-decide what the proactive-card slot shows, called after every poll and
+   * every dismissal. Campaign copy is the workspace's own text — `textContent`
+   * only, same rule the transcript follows, so a workspace that types
+   * `<script>` into a campaign message gets a literal, inert string on a
+   * visitor's page rather than a stored XSS payload (NFR-S6).
+   */
+  function renderCard(): void {
+    const card = activeCard();
+    if (state.open || !card) {
+      if (state.greetingOpen) {
+        state.greetingOpen = false;
+        ui.greeting.hidden = true;
+        resize();
+      }
+      shownCardKind = null;
+      return;
+    }
+    shownCardKind = card.kind;
+    ui.greeting.dataset['kind'] = card.kind;
+    ui.greetMsg.textContent = card.message;
+    if (!state.greetingOpen) {
+      state.greetingOpen = true;
+      ui.greeting.hidden = false;
+      resize();
+    }
+  }
+
+  function dismissCard(): void {
+    if (shownCardKind === 'campaign' && state.campaign) {
+      rememberCampaignDismissed(win, state.campaign.id);
+      state.campaign = null;
+    }
+    // A visitor who waves away a targeted campaign is not owed the generic
+    // nudge behind it either — that would read as a downgrade, not a second
+    // chance. Marking the greeting dismissed too keeps this a single "no
+    // thanks" for the rest of the session, whichever content they saw.
+    rememberGreetingDismissed(win);
+    shownCardKind = null;
     state.greetingOpen = false;
     ui.greeting.hidden = true;
-    rememberGreetingDismissed(win);
     if (!state.open) resize();
   }
 
@@ -646,6 +720,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.events = snapshot.events;
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
+      // Never overwrite a campaign already waiting to be seen — the server
+      // will not offer this one again either way (at-most-once), so there is
+      // nothing to gain by replacing it and a card mid-read with a new one.
+      if (snapshot.campaign && !state.campaign) {
+        state.campaign = { id: snapshot.campaign.id, message: snapshot.campaign.message };
+      }
       state.error = null;
       // A returning visitor already in a conversation skips the pre-chat form.
       if (snapshot.events.length > 0) {
@@ -659,6 +739,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderPostChat();
       renderRating();
       renderClosed();
+      renderCard();
       startPolling();
     } catch (error) {
       state.error = t('error.connect');
@@ -850,6 +931,11 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.events = snapshot.events;
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
+      // Same rule as `mint`: a campaign already waiting to be seen is not
+      // replaced by whatever the next poll offers.
+      if (snapshot.campaign && !state.campaign) {
+        state.campaign = { id: snapshot.campaign.id, message: snapshot.campaign.message };
+      }
       renderedCount = 0;
       ui.transcript.replaceChildren();
       renderEvents();
@@ -859,6 +945,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderPostChat();
       renderRating();
       renderClosed();
+      renderCard();
     } catch (error) {
       console.warn('nexa widget: refresh failed', error);
     }
@@ -871,13 +958,20 @@ export function mount(doc: Document = document, win: Window = window): void {
    * socket is one more thing to keep alive across sleeping laptops and flaky
    * mobile networks for a conversation that lasts minutes. Four-second polling
    * is indistinguishable to the visitor and cannot silently die.
+   *
+   * Kept running while the panel is closed, not just while it is open
+   * (FR-MOD-03.3.2): a campaign owed to this visitor is delivered on this same
+   * poll (`campaign-delivery.ts`), and the whole point of the proactive card
+   * is that it can appear without the visitor having opened anything. Still
+   * gated on tab visibility — a backgrounded tab gains nothing from polling
+   * and only adds load.
    */
   let pollTimer: ReturnType<typeof setInterval> | null = null;
 
   function startPolling(): void {
     if (pollTimer !== null) return;
     pollTimer = setInterval(() => {
-      if (state.open && !doc.hidden) void refresh();
+      if (!doc.hidden) void refresh();
     }, POLL_INTERVAL_MS);
   }
 
@@ -894,7 +988,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     setOpen(true);
   });
   // "Just browsing": tuck the card away for the rest of the session.
-  ui.greetBrowse.addEventListener('click', () => dismissGreeting());
+  ui.greetBrowse.addEventListener('click', () => dismissCard());
   ui.prechat.addEventListener('submit', (event) => {
     event.preventDefault();
     submitPrechat();
@@ -1018,8 +1112,10 @@ export function mount(doc: Document = document, win: Window = window): void {
     void connect();
   } else {
     postToHost(win, { type: 'nexa:ready' });
-    // The proactive nudge, once the host has wired up its message channel.
-    showGreeting();
+    // The proactive nudge, once the host has wired up its message channel. No
+    // campaign can be owed yet — that needs a poll, and nothing has connected
+    // — so this always resolves to the greeting or nothing.
+    renderCard();
   }
 }
 
@@ -1142,6 +1238,7 @@ interface Ui {
   ratingThanks: HTMLElement;
   ratingDismiss: HTMLButtonElement;
   greeting: HTMLElement;
+  greetMsg: HTMLElement;
   greetChat: HTMLButtonElement;
   greetBrowse: HTMLButtonElement;
   prechat: HTMLFormElement;
@@ -1505,6 +1602,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     ratingThanks,
     ratingDismiss,
     greeting,
+    greetMsg,
     greetChat,
     greetBrowse,
     prechat,
@@ -1668,6 +1766,23 @@ function greetingDismissed(win: Window): boolean {
 function rememberGreetingDismissed(win: Window): void {
   try {
     win.sessionStorage.setItem(GREETING_DISMISSED_KEY, '1');
+  } catch {
+    // Ignored — the card just shows again next time.
+  }
+}
+
+/** Same pattern as `greetingDismissed`, keyed per campaign id. */
+function campaignDismissed(win: Window, campaignId: string): boolean {
+  try {
+    return win.sessionStorage.getItem(CAMPAIGN_DISMISSED_KEY_PREFIX + campaignId) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function rememberCampaignDismissed(win: Window, campaignId: string): void {
+  try {
+    win.sessionStorage.setItem(CAMPAIGN_DISMISSED_KEY_PREFIX + campaignId, '1');
   } catch {
     // Ignored — the card just shows again next time.
   }
@@ -1970,7 +2085,16 @@ body {
   border: 1px solid var(--nx-border); border-radius: var(--nx-radius);
   box-shadow: 0 8px 24px rgb(16 24 40 / .18);
   padding: 14px; display: flex; flex-direction: column; gap: 10px;
+  /* The frame is sized to GREETING regardless of which content fills it
+     (03.3.2 reuses the one card slot for a campaign message, up to 2000
+     chars, not just the short fixed greeting) — scroll rather than overflow
+     the iframe's fixed bounds. */
+  max-height: 234px; overflow-y: auto;
 }
+/* A campaign is addressed to this visitor specifically; a thin brand-colour
+   edge is the one visual difference from the generic greeting it shares a
+   slot with. */
+.nx-greeting[data-kind="campaign"] { border-inline-start: 3px solid var(--nx-brand); }
 .nx-greet-msg { margin: 0; font-size: 14px; line-height: 1.4; }
 .nx-greet-actions { display: flex; gap: 8px; }
 .nx-greet-chat {

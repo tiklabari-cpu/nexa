@@ -264,6 +264,34 @@ pnpm db:migrate
 or use the `make` targets (`make migrate`, `make test-e2e`), which already export `.env`
 for you. It is gitignored; no secret is ever committed.
 
+### Object storage: trying `STORAGE_PROVIDER=s3` locally
+
+Uploads default to `STORAGE_PROVIDER=local` (a directory on disk, `STORAGE_LOCAL_DIR`) —
+that stays the default for `make dev` and CI, nothing below changes it. To exercise the
+`s3` provider ([`apps/api/src/services/storage/s3-store.ts`](apps/api/src/services/storage/s3-store.ts),
+M-STORE · NFR-R1) against a real bucket instead of AWS, `docker-compose.yml` has an
+opt-in [MinIO](https://min.io/) service behind the `storage` profile — not started by a
+plain `docker compose up` / `make dev`:
+
+```bash
+docker compose --profile storage up -d   # starts nexa-minio, then nexa-minio-init
+                                          # creates the `nexa-uploads` bucket and exits 0
+```
+
+Then uncomment the `STORAGE_S3_*` block in `.env` (copied from `.env.example` — the
+values already match this MinIO container: endpoint `http://localhost:9000`, bucket
+`nexa-uploads`, credentials `minioadmin`/`minioadmin`) and set `STORAGE_PROVIDER=s3`.
+Console at http://localhost:9001 (same credentials) to browse what got uploaded.
+
+`docker-compose.full.yml` has the same `minio`/`minio-init` pair under the same profile,
+for the same opt-in reason, but does not publish its ports to the host — like that
+file's `db`/`redis`, nothing outside its compose network needs them, and a developer
+running both stacks' `storage` profile at once would otherwise collide with the dev
+stack's `minio` on 9000/9001.
+
+`docker compose --profile storage down` stops just these two containers; `make down` /
+`make clean` are unaffected since they invoke plain `docker compose` with no profile.
+
 ---
 
 ## Background jobs
@@ -679,11 +707,11 @@ The Helm chart's analogue is
 [`infra/helm/nexa/templates/backup-cronjob.yaml`](infra/helm/nexa/templates/backup-cronjob.yaml)
 (schedule/image/retention in `values.yaml`'s `backup:` block) — a daily `pg_dump`
 into a PersistentVolumeClaim (`templates/backup-pvc.yaml`), pruned by the same
-whole-file retention window. **Database only**, stated rather than hidden: the chart
-mounts no shared volume for uploads (`STORAGE_PROVIDER` only has a `local` provider
-today, ephemeral to each pod — see
-[`apps/api/src/services/storage/object-store.ts`](apps/api/src/services/storage/object-store.ts)),
-so there is nothing durable yet for a CronJob to archive alongside the database.
+whole-file retention window. **Database only**, stated rather than hidden: the chart's
+own `values.yaml` still sets `STORAGE_PROVIDER: local` (ephemeral to each pod — see
+[`apps/api/src/services/storage/object-store.ts`](apps/api/src/services/storage/object-store.ts)
+for the `s3` provider this backup story does not yet cover), so there is nothing
+durable yet for a CronJob to archive alongside the database.
 
 **That volume holds every tenant's personal data in the clear**, which makes it the
 richest single target the chart creates and the one object whose contents outlive

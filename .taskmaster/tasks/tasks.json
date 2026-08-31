@@ -8327,7 +8327,7 @@
         "description": "Yuklemeler pod-yerel diske gidiyor (`LocalStore`, `STORAGE_LOCAL_DIR`), `attachment.ts:36` capraz-pod eki REDDEDIYOR ve Helm charti ayni poda `maxReplicas: 4` HPA takiyor. Yani yatay olcek altinda ek indirmeleri rastgele basarisiz olur.",
         "details": "PRD satır **768-777** (NFR-R1) · denetim `prd-uyum-denetimi.md` §3 D6.\n\n**Genişleme noktası HAZIR:** `ObjectStore` arayüzü (`services/storage/object-store.ts`) `put`/`get`/`exists` ile var; `createObjectStore` fabrikası `STORAGE_PROVIDERS` enum'u üzerinden seçiyor ve kodun kendi yorumu bunu öngörüyor: *\"the exhaustive form is what makes adding `s3` to the enum later a compile error here\"*.\n\n**Çağrı yerlerine dokunulmaz:** `routes/chats.ts:93`, `routes/customer.ts:203`, `routes/uploads.ts:63` zaten fabrikadan geçiyor. Üçünü de değiştirmen gerekiyorsa tasarımı yanlış kurmuşsundur.",
         "testStrategy": "Kalem bütününün kabul kriteri: iki API örneği ayakta; birinden yüklenen ek diğerinden indirilebiliyor, ve `virus-scanner.ts` fail-closed davranışı ile `upload-url.ts` imzalı PUT akışı her iki sağlayıcıda da aynı.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8366,13 +8366,13 @@
             "title": "M-STORE-d [OPUS-MAX] BÖLÜNMEZ: virüs taraması + imzalı URL güvenlik paritesi (local ↔ s3)",
             "description": "Depolama değişikliği sessiz bir güvenlik gerilemesi olmamalı. **Yalnız güvenlik testlerini** iki sağlayıcıda parametrik koş (tüm yükleme süitini ikiye katlama — kapı süresi). Korunacak: fail-closed AV (tarayıcı cevap veremiyorsa dosya kabul EDİLMEZ), imzalı PUT (geçersiz imza / süresi geçmiş / yeniden kullanım reddi), izin verilen tür ve boyut sınırları, `nosniff`. İki sağlayıcıda sonuç farklıysa parite yok demektir ve kalem tamamlanmamıştır.",
             "details": "Bağımlılık: M-STORE-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "177",
-            "updatedAt": "2026-08-31T14:59:34.887Z"
+            "updatedAt": "2026-08-31T15:52:29.842Z"
           }
         ],
-        "updatedAt": "2026-08-31T14:59:34.887Z"
+        "updatedAt": "2026-08-31T15:52:29.842Z"
       },
       {
         "id": "178",
@@ -8718,9 +8718,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T14:59:34.888Z",
+      "lastModified": "2026-08-31T15:52:29.845Z",
       "taskCount": 184,
-      "completedCount": 176,
+      "completedCount": 177,
       "tags": [
         "master"
       ]

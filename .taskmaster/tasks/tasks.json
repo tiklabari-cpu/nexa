@@ -8399,10 +8399,10 @@
             "title": "M-RPT-b [SONNET-XHIGH] skill_runs sayımını AI Agent`a kilitle (üç çağrı yeri)",
             "description": "`Skill.aiAgentId != null` olan skill'lerin run'ları sayılsın. **Önce varsayımı doğrula:** Copilot gerçekten `skill_runs` yazıyor mu? `skill_runs` yazan yolları grep'le ve `aiAgentId` null olan skill'lerin kim tarafından koşulduğunu tespit et — varsayım yanlışsa filtre de yanlış olur. Bulduğunu yorumla. Üç çağrı yerinin üçünü de düzelt.",
             "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "178",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T17:40:04.638Z"
           },
           {
             "id": 3,
@@ -8415,7 +8415,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T16:50:24.519Z"
+        "updatedAt": "2026-08-31T17:40:04.638Z"
       },
       {
         "id": "179",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T16:50:24.521Z",
+      "lastModified": "2026-08-31T17:40:04.639Z",
       "taskCount": 184,
       "completedCount": 177,
       "tags": [

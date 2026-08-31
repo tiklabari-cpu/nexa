@@ -8273,10 +8273,10 @@
             "title": "M-CAMP-b [OPUS-MAX] BÖLÜNMEZ: yoklama cevabına bekleyen kampanya + delivered_at damgası (teslimat garantisi)",
             "description": "`routes/customer.ts` yoklama ucu: `delivered_at IS NULL` gönderim varsa mesajı cevaba ekle ve **aynı işlemde** damgala. Karar ver ve yorumla: (1) birden çok bekleyen gönderimde seçim kuralı (öneri: en eski, tek seferde bir tane); (2) damgalama ile cevabın ulaşması arasında kopan bağlantı — **en-fazla-bir-kez mi en-az-bir-kez mi**, kampanya mesajı için hangisi daha az zararlı? Kontrat: `customer-chat.yaml` + `contract:generate` + generated senkron. Cross-tenant izolasyon zorunlu.",
             "details": "Bağımlılık: M-CAMP-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "176",
-            "updatedAt": "2026-08-31T07:27:58.122Z"
+            "updatedAt": "2026-08-31T08:21:16.912Z"
           },
           {
             "id": 3,
@@ -8319,7 +8319,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T07:27:58.122Z"
+        "updatedAt": "2026-08-31T08:21:16.912Z"
       },
       {
         "id": "177",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T07:27:58.123Z",
+      "lastModified": "2026-08-31T08:21:16.913Z",
       "taskCount": 184,
       "completedCount": 175,
       "tags": [

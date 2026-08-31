@@ -8240,13 +8240,13 @@
             "title": "M-TEAM-e [OPUS-MAX] BÖLÜNMEZ: SCIM /Groups yazma — provizyon yolu konsoldan gevşek olamaz",
             "description": "`routes/scim.ts` şu an /Groups için salt-okunur. POST/PUT/PATCH(add|remove members)/DELETE. `displayName`→`Group.name`, `members`→`group_agents`, priority varsayılan `normal`. **M-TEAM-a silme korumaları SCIM yolunda da uygulanmalı** — servis katmanını paylaş, mantığı kopyalama. Mevcut /Users yazma yollarının hata biçimi, filtre ve sayfalama desenini izle; testler /Users testleriyle aynı sertlikte.",
             "details": "Bağımlılık: M-TEAM-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "175",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T05:53:15.092Z"
           }
         ],
-        "updatedAt": "2026-08-31T05:51:03.584Z"
+        "updatedAt": "2026-08-31T05:53:15.092Z"
       },
       {
         "id": "176",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T05:51:03.585Z",
+      "lastModified": "2026-08-31T05:53:15.093Z",
       "taskCount": 184,
       "completedCount": 174,
       "tags": [

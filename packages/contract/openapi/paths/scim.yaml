@@ -268,15 +268,43 @@ user:
       "404": { $ref: "#/scimNotFound" }
       "429": { $ref: "#/scimTooManyRequests" }
 
+# ## Teams over SCIM
+#
+# A team here is what chat routing resolves an agent through (ADR-08 step 2) and
+# what makes a conversation visible to them (`chat_access.group_id`), so a
+# directory writing this surface is a real claim — which is why it shipped
+# read-only. It is writable now for the reason that made it read-only, read the
+# other way round: the workspaces that provision over SCIM are the ones whose
+# team structure lives in the directory, and a console-only write path leaves
+# their teams maintained by hand beside a user list that maintains itself. What
+# that produces is not a missing feature but an agent still on a team they left.
+#
+# The constraint moved rather than lifted: **the provisioning path is not looser
+# than the console.** Every write below runs the same service the console's
+# `/groups` endpoints run — the same two delete refusals, the same
+# workspace-membership check, the same five `group.*` audit actions.
+#
+# Two things a directory still cannot do:
+#
+#   - **Choose a routing priority.** RFC 7643's Group has no such attribute. A
+#     member added here lands on `normal`, and a member already on the team keeps
+#     the tier an admin gave them — a nightly re-assertion of the membership set
+#     must not quietly demote every `primary` agent in the workspace.
+#   - **Map a group to a role.** A connector that could grant `admin` by adding
+#     somebody to a directory group would hold a power the admin who minted its
+#     token does not, which is the same reason a provisioned user is always
+#     `agent`.
+
 groups:
   get:
     tags: [Settings]
     operationId: listScimGroups
     summary: List the workspace's teams (SCIM)
     description: |
-      Read-only. Teams drive chat routing here, so letting an external directory
-      rewrite the topology is a much larger claim than "keep the user list in
-      step" and needs its own decision.
+      The teams this workspace has, each with its members. Paged and filtered
+      like `/Users`; the member list of each team is ordered, so a connector
+      diffing what it pushed against what it reads back sees a difference only
+      when there is one.
     parameters:
       - name: filter
         in: query
@@ -298,6 +326,49 @@ groups:
       "401": { $ref: "#/scimUnauthorized" }
       "429": { $ref: "#/scimTooManyRequests" }
 
+  post:
+    tags: [Settings]
+    operationId: createScimGroup
+    summary: Create a team (SCIM)
+    description: |
+      `displayName` becomes the team's name; each `members[].value` must be the
+      id of somebody already provisioned in this workspace.
+
+      **An unknown member id refuses the whole request** with `400`
+      `invalidValue`, before anything is written. A `group_agents` row for a
+      non-member matches nobody in routing, so accepting one would create a grant
+      that shows on every screen and does nothing — and a partly-applied create
+      is a state neither side asked for.
+
+      Team names are **not unique** in this product (two shifts may both be
+      called "Weekend"), so a create is never answered with `uniqueness`. A
+      connector that reconciles by name looks first with
+      `?filter=displayName eq "…"`.
+
+      `externalId` is accepted and not stored: a team has no column for a
+      directory's own identifier, and adding one would be a schema change made by
+      a protocol. Re-match on the returned `id`.
+
+      Recorded as `group.created`, plus one `group.member_set` per member.
+    requestBody:
+      required: true
+      content:
+        application/scim+json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ScimGroup" }
+    responses:
+      "201":
+        description: The created team
+        headers:
+          Location:
+            schema: { type: string, format: uri }
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimGroup" }
+      "400": { $ref: "#/scimBadRequest" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "402": { $ref: "#/scimPaymentRequired" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
 group:
   get:
     tags: [Settings]
@@ -317,6 +388,162 @@ group:
             schema: { $ref: "../openapi.yaml#/components/schemas/ScimGroup" }
       "401": { $ref: "#/scimUnauthorized" }
       "404": { $ref: "#/scimNotFound" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+  put:
+    tags: [Settings]
+    operationId: replaceScimGroup
+    summary: Replace a team and its membership (SCIM)
+    description: |
+      A whole-resource write — the shape a "push groups" configuration sends.
+
+      **An absent `members` empties the team.** That is what replacing a resource
+      means, and the softer reading is the dangerous one: the connector would go
+      on believing the team it pushed is the team that exists, and the
+      disagreement would surface as conversations reaching people the directory
+      thinks were removed. Use `PATCH` to leave the membership alone.
+
+      A member already on the team keeps their routing priority; one being added
+      arrives at `normal`. Restating the name and membership already stored
+      writes nothing — no rows, no audit entries — so a nightly reconciliation
+      does not fill the trail with changes that did not happen.
+
+      Unlike `PUT /Users/{id}`, which is deliberately not implemented: a User's
+      writable surface is two fields, a team's writable surface *is* the
+      resource.
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/scim+json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/ScimGroup" }
+    responses:
+      "200":
+        description: The team as stored after the write
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimGroup" }
+      "400": { $ref: "#/scimBadRequest" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "402": { $ref: "#/scimPaymentRequired" }
+      "404": { $ref: "#/scimNotFound" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+  patch:
+    tags: [Settings]
+    operationId: patchScimGroup
+    summary: Add or remove members, or rename a team (SCIM PatchOp)
+    description: |
+      RFC 7644 §3.5.2, and **operations are applied in the order they were
+      sent** — replacing the membership and then adding one person means
+      something different from the same two operations reversed, so they are not
+      merged.
+
+      The shapes accepted, all of them because all of them are in the wild:
+
+      - `{op: "add"|"remove", path: "members", value: [{value: "<id>"}, …]}`
+      - `{op: "remove", path: "members[value eq \"<id>\"]"}` — a member named by
+        the path with no `value` at all. Reading this one matters more than the
+        others: a removal that parsed as "nothing to do" would leave a former
+        member holding sight of the team's conversations.
+      - `{op: "remove", path: "members"}` — clears the team.
+      - `{op: "replace", path: "members", value: […]}` — names the whole set.
+      - `{op: "replace", value: {displayName: "…"}}` — path omitted.
+      - Differently-cased `op` values (`"Replace"`, `"Add"`).
+
+      **Removing somebody who is not on the team succeeds**, writing nothing: a
+      connector retrying after a timeout must converge. **Adding somebody who is
+      not a member of this workspace is refused** with `400` `invalidValue` — see
+      the create.
+
+      Attributes this server does not own (`externalId`, `meta`, vendor
+      extensions) are accepted and not applied; the response shows what is
+      actually stored. `displayName` cannot be removed — a nameless team is not a
+      state the product has.
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/scim+json:
+          schema:
+            type: object
+            required: [Operations]
+            properties:
+              schemas:
+                type: array
+                items: { type: string }
+                example: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"]
+              Operations:
+                type: array
+                maxItems: 50
+                items:
+                  type: object
+                  required: [op]
+                  properties:
+                    op: { type: string, enum: [add, replace, remove] }
+                    path: { type: string }
+                    value: {}
+    responses:
+      "200":
+        description: The team as stored after the patch
+        content:
+          application/scim+json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ScimGroup" }
+      "400": { $ref: "#/scimBadRequest" }
+      "401": { $ref: "#/scimUnauthorized" }
+      "402": { $ref: "#/scimPaymentRequired" }
+      "404": { $ref: "#/scimNotFound" }
+      "429": { $ref: "#/scimTooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteScimGroup
+    summary: Delete a team (SCIM)
+    description: |
+      Unlike `DELETE /Users/{id}`, which suspends, this really deletes: a team is
+      workspace configuration rather than a person, nothing in it records what
+      somebody did, and memberships cascade with it.
+
+      **Refused with `409` while anything still depends on it** — the same two
+      checks the console's `DELETE /groups/{groupId}` makes, because it is the
+      same code:
+
+      - a routing rule still targets the team, or
+      - a conversation reachable through it is still open.
+
+      Neither `routing_rules.target_group_id` nor `chat_access.group_id` carries
+      a foreign key, so nothing else would stop the delete: a rule pointing at a
+      deleted team routes nothing and says nothing, and a live chat reachable
+      only through it becomes invisible to every agent at once. Which team should
+      inherit the work is an operator's decision, and least of all one taken
+      unattended by a sync at three in the morning. Point the rule elsewhere or
+      close the conversations, then retry.
+
+      The `409` carries no `scimType`: RFC 7644 §3.12 defines only `uniqueness`
+      for that status, and this is not a uniqueness failure. The `detail` names
+      which of the two conditions held.
+
+      Recorded as `group.deleted`. A repeat is `404` — the team is genuinely
+      gone.
+    parameters:
+      - name: groupId
+        in: path
+        required: true
+        schema: { type: string }
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "#/scimUnauthorized" }
+      "402": { $ref: "#/scimPaymentRequired" }
+      "404": { $ref: "#/scimNotFound" }
+      "409": { $ref: "#/scimGroupInUse" }
       "429": { $ref: "#/scimTooManyRequests" }
 
 # --- Responses -------------------------------------------------------------
@@ -359,6 +586,15 @@ scimConflict:
   description: |
     The userName or externalId is already taken in this workspace
     (`scimType: uniqueness`).
+  content:
+    application/scim+json:
+      schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }
+
+scimGroupInUse:
+  description: |
+    The team still has a routing rule pointing at it, or an open conversation
+    reachable through it. No `scimType`: RFC 7644 §3.12 defines only `uniqueness`
+    for a 409 and this is not one, so the `detail` carries which condition held.
   content:
     application/scim+json:
       schema: { $ref: "../openapi.yaml#/components/schemas/ScimError" }

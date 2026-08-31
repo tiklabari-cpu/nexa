@@ -3106,13 +3106,36 @@ export interface paths {
     };
     /**
      * List the workspace's teams (SCIM)
-     * @description Read-only. Teams drive chat routing here, so letting an external directory
-     *     rewrite the topology is a much larger claim than "keep the user list in
-     *     step" and needs its own decision.
+     * @description The teams this workspace has, each with its members. Paged and filtered
+     *     like `/Users`; the member list of each team is ordered, so a connector
+     *     diffing what it pushed against what it reads back sees a difference only
+     *     when there is one.
      */
     get: operations['listScimGroups'];
     put?: never;
-    post?: never;
+    /**
+     * Create a team (SCIM)
+     * @description `displayName` becomes the team's name; each `members[].value` must be the
+     *     id of somebody already provisioned in this workspace.
+     *
+     *     **An unknown member id refuses the whole request** with `400`
+     *     `invalidValue`, before anything is written. A `group_agents` row for a
+     *     non-member matches nobody in routing, so accepting one would create a grant
+     *     that shows on every screen and does nothing — and a partly-applied create
+     *     is a state neither side asked for.
+     *
+     *     Team names are **not unique** in this product (two shifts may both be
+     *     called "Weekend"), so a create is never answered with `uniqueness`. A
+     *     connector that reconciles by name looks first with
+     *     `?filter=displayName eq "…"`.
+     *
+     *     `externalId` is accepted and not stored: a team has no column for a
+     *     directory's own identifier, and adding one would be a schema change made by
+     *     a protocol. Re-match on the returned `id`.
+     *
+     *     Recorded as `group.created`, plus one `group.member_set` per member.
+     */
+    post: operations['createScimGroup'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3128,12 +3151,88 @@ export interface paths {
     };
     /** Read one team with its members (SCIM) */
     get: operations['getScimGroup'];
-    put?: never;
+    /**
+     * Replace a team and its membership (SCIM)
+     * @description A whole-resource write — the shape a "push groups" configuration sends.
+     *
+     *     **An absent `members` empties the team.** That is what replacing a resource
+     *     means, and the softer reading is the dangerous one: the connector would go
+     *     on believing the team it pushed is the team that exists, and the
+     *     disagreement would surface as conversations reaching people the directory
+     *     thinks were removed. Use `PATCH` to leave the membership alone.
+     *
+     *     A member already on the team keeps their routing priority; one being added
+     *     arrives at `normal`. Restating the name and membership already stored
+     *     writes nothing — no rows, no audit entries — so a nightly reconciliation
+     *     does not fill the trail with changes that did not happen.
+     *
+     *     Unlike `PUT /Users/{id}`, which is deliberately not implemented: a User's
+     *     writable surface is two fields, a team's writable surface *is* the
+     *     resource.
+     */
+    put: operations['replaceScimGroup'];
     post?: never;
-    delete?: never;
+    /**
+     * Delete a team (SCIM)
+     * @description Unlike `DELETE /Users/{id}`, which suspends, this really deletes: a team is
+     *     workspace configuration rather than a person, nothing in it records what
+     *     somebody did, and memberships cascade with it.
+     *
+     *     **Refused with `409` while anything still depends on it** — the same two
+     *     checks the console's `DELETE /groups/{groupId}` makes, because it is the
+     *     same code:
+     *
+     *     - a routing rule still targets the team, or
+     *     - a conversation reachable through it is still open.
+     *
+     *     Neither `routing_rules.target_group_id` nor `chat_access.group_id` carries
+     *     a foreign key, so nothing else would stop the delete: a rule pointing at a
+     *     deleted team routes nothing and says nothing, and a live chat reachable
+     *     only through it becomes invisible to every agent at once. Which team should
+     *     inherit the work is an operator's decision, and least of all one taken
+     *     unattended by a sync at three in the morning. Point the rule elsewhere or
+     *     close the conversations, then retry.
+     *
+     *     The `409` carries no `scimType`: RFC 7644 §3.12 defines only `uniqueness`
+     *     for that status, and this is not a uniqueness failure. The `detail` names
+     *     which of the two conditions held.
+     *
+     *     Recorded as `group.deleted`. A repeat is `404` — the team is genuinely
+     *     gone.
+     */
+    delete: operations['deleteScimGroup'];
     options?: never;
     head?: never;
-    patch?: never;
+    /**
+     * Add or remove members, or rename a team (SCIM PatchOp)
+     * @description RFC 7644 §3.5.2, and **operations are applied in the order they were
+     *     sent** — replacing the membership and then adding one person means
+     *     something different from the same two operations reversed, so they are not
+     *     merged.
+     *
+     *     The shapes accepted, all of them because all of them are in the wild:
+     *
+     *     - `{op: "add"|"remove", path: "members", value: [{value: "<id>"}, …]}`
+     *     - `{op: "remove", path: "members[value eq \"<id>\"]"}` — a member named by
+     *       the path with no `value` at all. Reading this one matters more than the
+     *       others: a removal that parsed as "nothing to do" would leave a former
+     *       member holding sight of the team's conversations.
+     *     - `{op: "remove", path: "members"}` — clears the team.
+     *     - `{op: "replace", path: "members", value: […]}` — names the whole set.
+     *     - `{op: "replace", value: {displayName: "…"}}` — path omitted.
+     *     - Differently-cased `op` values (`"Replace"`, `"Add"`).
+     *
+     *     **Removing somebody who is not on the team succeeds**, writing nothing: a
+     *     connector retrying after a timeout must converge. **Adding somebody who is
+     *     not a member of this workspace is refused** with `400` `invalidValue` — see
+     *     the create.
+     *
+     *     Attributes this server does not own (`externalId`, `meta`, vendor
+     *     extensions) are accepted and not applied; the response shows what is
+     *     actually stored. `displayName` cannot be removed — a nameless team is not a
+     *     state the product has.
+     */
+    patch: operations['patchScimGroup'];
     trace?: never;
   };
   '/settings/canned-responses': {
@@ -6933,12 +7032,20 @@ export interface components {
       };
     };
     /**
-     * @description A team of this workspace (RFC 7643 §4.2), read-only.
+     * @description A team of this workspace (RFC 7643 §4.2).
      *
-     *     A directory may see which teams exist and who is in them, but team
-     *     membership drives chat routing here, so letting an external system
-     *     rewrite the routing topology is a much larger claim than "keep the user
-     *     list in step". Group-to-role mapping is out of scope for the same reason.
+     *     Used in both directions, as SCIM's resource schemas are. On the way out
+     *     every property is present. On the way in only `displayName` is required —
+     *     `id`, `meta` and each member's `display`/`$ref` are server-owned and
+     *     ignored if sent, and `externalId` is accepted without being stored
+     *     (a team has no column for a directory's own identifier).
+     *
+     *     Team membership drives chat routing here (ADR-08 step 2) and decides
+     *     which conversations an agent can see, so the write paths are held to the
+     *     console's rules rather than to a looser set of their own — see
+     *     `paths/scim.yaml`. Group-to-role mapping stays out of scope: a connector
+     *     able to grant `admin` by adding somebody to a directory group would hold
+     *     a power the admin who minted its token does not.
      */
     ScimGroup: {
       /**
@@ -6946,18 +7053,28 @@ export interface components {
        *       "urn:ietf:params:scim:schemas:core:2.0:Group"
        *     ]
        */
-      schemas: string[];
-      /** @description The team's per-license integer id, as text (PRD §8.4). */
-      id: string;
+      schemas?: string[];
+      /**
+       * @description The team's per-license integer id, as text (PRD §8.4). Server-owned;
+       *     the path names the team on a write.
+       */
+      id?: string;
+      /** @description Accepted and not stored — re-match on `id`. */
+      externalId?: string;
       displayName: string;
-      members: {
+      /**
+       * @description On a write, only `value` is read: the id of somebody already
+       *     provisioned in this workspace. An unknown id refuses the whole
+       *     request rather than being skipped.
+       */
+      members?: {
         /** Format: uuid */
         value?: string;
         display?: string;
         /** Format: uri */
         $ref?: string;
       }[];
-      meta: {
+      meta?: {
         /** @example Group */
         resourceType: string;
         /** Format: date-time */
@@ -10078,6 +10195,19 @@ export interface components {
      *     can read.
      */
     scimForbidden: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/scim+json': components['schemas']['ScimError'];
+      };
+    };
+    /**
+     * @description The team still has a routing rule pointing at it, or an open conversation
+     *     reachable through it. No `scimType`: RFC 7644 §3.12 defines only `uniqueness`
+     *     for a 409 and this is not one, so the `detail` carries which condition held.
+     */
+    scimGroupInUse: {
       headers: {
         [name: string]: unknown;
       };
@@ -14862,6 +14992,35 @@ export interface operations {
       429: components['responses']['scimTooManyRequests'];
     };
   };
+  createScimGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/scim+json': components['schemas']['ScimGroup'];
+      };
+    };
+    responses: {
+      /** @description The created team */
+      201: {
+        headers: {
+          Location?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimGroup'];
+        };
+      };
+      400: components['responses']['scimBadRequest'];
+      401: components['responses']['scimUnauthorized'];
+      402: components['responses']['scimPaymentRequired'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
   getScimGroup: {
     parameters: {
       query?: never;
@@ -14884,6 +15043,106 @@ export interface operations {
         };
       };
       401: components['responses']['scimUnauthorized'];
+      404: components['responses']['scimNotFound'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  replaceScimGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        groupId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/scim+json': components['schemas']['ScimGroup'];
+      };
+    };
+    responses: {
+      /** @description The team as stored after the write */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimGroup'];
+        };
+      };
+      400: components['responses']['scimBadRequest'];
+      401: components['responses']['scimUnauthorized'];
+      402: components['responses']['scimPaymentRequired'];
+      404: components['responses']['scimNotFound'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  deleteScimGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        groupId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['scimUnauthorized'];
+      402: components['responses']['scimPaymentRequired'];
+      404: components['responses']['scimNotFound'];
+      409: components['responses']['scimGroupInUse'];
+      429: components['responses']['scimTooManyRequests'];
+    };
+  };
+  patchScimGroup: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        groupId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/scim+json': {
+          /**
+           * @example [
+           *       "urn:ietf:params:scim:api:messages:2.0:PatchOp"
+           *     ]
+           */
+          schemas?: string[];
+          Operations: {
+            /** @enum {string} */
+            op: 'add' | 'replace' | 'remove';
+            path?: string;
+            value?: unknown;
+          }[];
+        };
+      };
+    };
+    responses: {
+      /** @description The team as stored after the patch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/scim+json': components['schemas']['ScimGroup'];
+        };
+      };
+      400: components['responses']['scimBadRequest'];
+      401: components['responses']['scimUnauthorized'];
+      402: components['responses']['scimPaymentRequired'];
       404: components['responses']['scimNotFound'];
       429: components['responses']['scimTooManyRequests'];
     };

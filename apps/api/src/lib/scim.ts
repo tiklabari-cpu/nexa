@@ -554,6 +554,272 @@ function applyPatchAttribute(
   return undefined;
 }
 
+// ---------------------------------------------------------------------------
+// Groups (RFC 7643 §4.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * The longest team name this product stores.
+ *
+ * The console's bound (`groupBody` in `routes/agents.ts`), restated here rather
+ * than imported, because the two files must not depend on each other — but they
+ * must not disagree either, and `scim.test.ts` pins the pair. A name is what an
+ * agent picks out of a transfer menu; unbounded text there is a menu nobody can
+ * read.
+ */
+export const SCIM_GROUP_NAME_MAX = 120;
+
+/** Shape only. Whether the id names a member of *this* workspace is a question
+ *  for the database, and the route asks it before writing anything. */
+const MEMBER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export interface ScimGroupResource {
+  displayName: string;
+  /** Account ids, de-duplicated, in the order the request listed them. */
+  members: string[];
+}
+
+/**
+ * Read a `POST /Groups` or `PUT /Groups/{id}` body.
+ *
+ * One reader for both, because RFC 7644 gives them the same body: a whole Group
+ * resource. What differs is what the caller does with it, and only in one place
+ * — see the note on `members` below.
+ *
+ * `externalId` is accepted and not stored. A team here is a per-licence row with
+ * no column for a directory's own identifier, and adding one would be a schema
+ * change made by a protocol rather than by the product; the `id` in the response
+ * and `?filter=displayName eq` are what a connector re-matches on. Same rule,
+ * and same reason, as the display name of an account this endpoint adopts.
+ *
+ * **An absent `members` means an empty team, on both verbs.** That is what a
+ * whole-resource write says, and softening it would be worse than it sounds: the
+ * connector would go on believing the team it pushed is the team that exists,
+ * and the disagreement would surface as conversations reaching people the
+ * directory thinks were removed. A caller that wants to leave the membership
+ * alone has `PATCH`, which is the verb for that.
+ */
+export function readScimGroupResource(
+  body: unknown,
+): { ok: true; group: ScimGroupResource } | { ok: false; detail: string; scimType: ScimType } {
+  if (!isRecord(body)) {
+    return {
+      ok: false,
+      detail: 'The request body must be a SCIM Group object.',
+      scimType: 'invalidSyntax',
+    };
+  }
+
+  const displayName = readGroupDisplayName(body.displayName);
+  if (typeof displayName !== 'string') return displayName;
+
+  const members = readMemberValues(body.members === undefined ? [] : body.members);
+  if (!Array.isArray(members)) return members;
+
+  return { ok: true, group: { displayName, members } };
+}
+
+/**
+ * One step of a Group `PatchOp`, already reduced to what it asks for.
+ *
+ * A list rather than a merged set of changes, and applied in the order it was
+ * sent: RFC 7644 §3.5.2 says operations are sequential, and a request that
+ * replaces the membership and then adds one person means something different
+ * from the same two operations the other way round. Collapsing them into
+ * `{displayName?, add[], remove[]}` would have to pick an order silently, and
+ * the connector would not be able to tell which one it got.
+ */
+export type ScimGroupPatchStep =
+  | { kind: 'rename'; displayName: string }
+  | { kind: 'setMembers'; members: string[] }
+  | { kind: 'addMembers'; members: string[] }
+  | { kind: 'removeMembers'; members: string[] };
+
+/**
+ * Interpret a Group `PatchOp` body (RFC 7644 §3.5.2).
+ *
+ * The shapes in the wild, all accepted for the reason `readScimPatch` gives:
+ *
+ *   - `{op, path: 'members', value: [{value: id}, …]}` — the common add/remove;
+ *   - `{op: 'remove', path: 'members[value eq "id"]'}` — Entra's removal, with
+ *     the member named by a value filter and no `value` at all. Reading this one
+ *     matters more than the others: a removal that parsed as "nothing to do"
+ *     would leave an ex-member holding sight of the team's conversations, which
+ *     is the failure this endpoint exists to prevent;
+ *   - `{op: 'remove', path: 'members'}` — clear the team;
+ *   - `{op, value: {displayName: …}}` — path-less, the whole-attribute map;
+ *   - differently-cased `op` values.
+ *
+ * A bare id (`value: ['<uuid>']`) is taken as well as `{value: '<uuid>'}`. Both
+ * are unambiguous and some connectors send the short form.
+ *
+ * Attributes this server does not own (`externalId`, `meta`, anything vendor-
+ * specific) are accepted and not applied — the same treatment, and the same
+ * reasoning, as a User patch naming `title`.
+ */
+export function readScimGroupPatch(
+  body: unknown,
+): { ok: true; steps: ScimGroupPatchStep[] } | { ok: false; detail: string; scimType: ScimType } {
+  if (!isRecord(body) || !Array.isArray(body.Operations)) {
+    return {
+      ok: false,
+      detail: 'Operations must be an array of patch operations.',
+      scimType: 'invalidSyntax',
+    };
+  }
+  if (body.Operations.length === 0) {
+    return { ok: false, detail: 'Operations must not be empty.', scimType: 'invalidValue' };
+  }
+  if (body.Operations.length > 50) {
+    return { ok: false, detail: 'Too many operations in one request.', scimType: 'tooMany' };
+  }
+
+  const steps: ScimGroupPatchStep[] = [];
+
+  for (const raw of body.Operations) {
+    if (!isRecord(raw)) {
+      return { ok: false, detail: 'Each operation must be an object.', scimType: 'invalidSyntax' };
+    }
+    const op = typeof raw.op === 'string' ? raw.op.toLowerCase() : '';
+    if (op !== 'add' && op !== 'replace' && op !== 'remove') {
+      return {
+        ok: false,
+        detail: `Unsupported op "${String(raw.op)}".`,
+        scimType: 'invalidSyntax',
+      };
+    }
+
+    if (raw.path === undefined || raw.path === null || raw.path === '') {
+      if (op === 'remove') {
+        return { ok: false, detail: 'A remove operation requires a path.', scimType: 'noTarget' };
+      }
+      if (!isRecord(raw.value)) {
+        return {
+          ok: false,
+          detail: 'A patch operation without a path must carry an object value.',
+          scimType: 'invalidValue',
+        };
+      }
+      for (const [attribute, value] of Object.entries(raw.value)) {
+        const step = readGroupPatchStep(attribute, op, value);
+        if (step && 'ok' in step) return step;
+        if (step) steps.push(step);
+      }
+      continue;
+    }
+
+    if (typeof raw.path !== 'string') {
+      return { ok: false, detail: 'path must be a string.', scimType: 'invalidPath' };
+    }
+    const step = readGroupPatchStep(raw.path, op, raw.value);
+    if (step && 'ok' in step) return step;
+    if (step) steps.push(step);
+  }
+
+  return { ok: true, steps };
+}
+
+/** A rejection, a step, or undefined when the attribute is one we ignore. */
+function readGroupPatchStep(
+  path: string,
+  op: 'add' | 'replace' | 'remove',
+  value: unknown,
+): ScimGroupPatchStep | { ok: false; detail: string; scimType: ScimType } | undefined {
+  const unqualified = path.replace(new RegExp(`^${SCIM_GROUP_SCHEMA}:`, 'i'), '');
+  // `members[value eq "<id>"]` — the member is named by the path, not the value.
+  const valuePath = /^members\[\s*value\s+eq\s+"([^"]*)"\s*\]$/i.exec(unqualified.trim());
+  const attribute = valuePath ? 'members' : unqualified.trim().toLowerCase();
+
+  if (attribute === 'displayname') {
+    if (op === 'remove') {
+      return { ok: false, detail: 'displayName cannot be removed.', scimType: 'invalidPath' };
+    }
+    const name = readGroupDisplayName(value);
+    return typeof name === 'string' ? { kind: 'rename', displayName: name } : name;
+  }
+
+  if (attribute !== 'members') {
+    // externalId, meta, vendor extensions … — accepted and not applied.
+    return undefined;
+  }
+
+  if (valuePath) {
+    if (op !== 'remove') {
+      return {
+        ok: false,
+        detail: 'A value path on members is only supported for remove.',
+        scimType: 'invalidPath',
+      };
+    }
+    const id = valuePath[1] ?? '';
+    if (!MEMBER_UUID_RE.test(id)) {
+      return { ok: false, detail: `members value "${id}" is not an id.`, scimType: 'invalidValue' };
+    }
+    return { kind: 'removeMembers', members: [id] };
+  }
+
+  // `{op: 'remove', path: 'members'}` with no value clears the team. Spelled out
+  // rather than folded into the branch below, because "remove every member" and
+  // "remove these members" differ by one absent field and must not be confused.
+  if (op === 'remove' && (value === undefined || value === null)) {
+    return { kind: 'setMembers', members: [] };
+  }
+
+  const members = readMemberValues(value);
+  if (!Array.isArray(members)) return members;
+  if (op === 'remove') return { kind: 'removeMembers', members };
+  // `add` appends; `replace` on a multi-valued attribute names the whole set.
+  return op === 'add' ? { kind: 'addMembers', members } : { kind: 'setMembers', members };
+}
+
+function readGroupDisplayName(
+  value: unknown,
+): string | { ok: false; detail: string; scimType: ScimType } {
+  if (typeof value !== 'string' || value.trim() === '') {
+    return { ok: false, detail: 'displayName is required.', scimType: 'invalidValue' };
+  }
+  const trimmed = value.trim();
+  if (trimmed.length > SCIM_GROUP_NAME_MAX) {
+    return {
+      ok: false,
+      detail: `displayName must be at most ${SCIM_GROUP_NAME_MAX} characters.`,
+      scimType: 'invalidValue',
+    };
+  }
+  return trimmed;
+}
+
+/**
+ * `members` as a list of account ids, de-duplicated and order-preserving.
+ *
+ * Bounded at the same 200 a page is capped to: a single request that names an
+ * unbounded membership set is one transaction holding an unbounded number of
+ * row locks, and a connector with more people than that on one team pages.
+ */
+function readMemberValues(
+  value: unknown,
+): string[] | { ok: false; detail: string; scimType: ScimType } {
+  const entries = Array.isArray(value) ? value : [value];
+  if (entries.length > SCIM_MAX_PAGE_SIZE) {
+    return { ok: false, detail: 'Too many members in one request.', scimType: 'tooMany' };
+  }
+
+  const ids: string[] = [];
+  for (const entry of entries) {
+    const raw = typeof entry === 'string' ? entry : isRecord(entry) ? entry.value : undefined;
+    if (typeof raw !== 'string' || !MEMBER_UUID_RE.test(raw.trim())) {
+      return {
+        ok: false,
+        detail: 'Each members entry must carry the id of a member of this workspace.',
+        scimType: 'invalidValue',
+      };
+    }
+    const id = raw.trim().toLowerCase();
+    if (!ids.includes(id)) ids.push(id);
+  }
+  return ids;
+}
+
 /**
  * Entra sends `"True"`/`"False"` as strings for `active`. Accepting them is not
  * leniency for its own sake: a boolean that arrives quoted is unambiguous, and

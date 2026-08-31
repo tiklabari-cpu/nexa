@@ -32,6 +32,7 @@ import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { visitorPageUrls } from '../services/campaigns/campaign-matching.js';
 import { deliverPendingCampaign } from '../services/campaigns/campaign-delivery.js';
+import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.js';
 import { GoalService } from '../services/goals/goal-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
@@ -586,6 +587,21 @@ export default async function customerRoutes(
         },
         ...(body.url ? { routing: { url: body.url } } : {}),
       });
+
+      // Campaign engagement (FR-MOD-03.3.2/.3, tm 176.4): a fresh chat is the
+      // "Chats" half of a campaign card's numbers actually being earned.
+      // `ChatService.start` already committed the chat in its own
+      // transaction, so this can never be atomic with it anyway — its own
+      // transaction and best-effort, same reasoning as the page-view/goal
+      // write above. Losing it should cost a report number, not the message
+      // the visitor is trying to send.
+      try {
+        await request.withTenant((tx) =>
+          markCampaignEngaged(tx, tenant, { customerId: principal.customerId, chatId: chat.id }),
+        );
+      } catch (error) {
+        request.log.warn({ err: error }, 'could not record campaign engagement');
+      }
 
       if (maskedText?.trim()) await ai.handle(request, chat.id, maskedText);
 

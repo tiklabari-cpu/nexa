@@ -8389,10 +8389,10 @@
             "title": "M-RPT-a [SONNET-XHIGH] transferCount reason filtresi + ikinci kopyanın tek yardımcıya indirilmesi",
             "description": "SQL'e `AND e.properties @> '{\"reason\":\"ai_handoff\"}'::jsonb` ekle. **Containment (`@>`) kullan, `->>` değil** — jsonb GIN indeksinden faydalanmak için; dosyanın kendi yorumu bu gerekçeyi yazıyor. `:1044` civarındaki ikinci kopyayı da düzelt; iki kopya bu hatanın iki yerde yaşamasının sebebi. `TRANSFER_REASONS` sözlüğünü oku — `ai_handoff` dışında \"AI devri\" sayılan bir reason var mı, kararını yorumla.",
             "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "178",
-            "updatedAt": "2026-08-31T15:54:13.255Z"
+            "updatedAt": "2026-08-31T16:50:24.519Z"
           },
           {
             "id": 2,
@@ -8415,7 +8415,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T15:54:13.255Z"
+        "updatedAt": "2026-08-31T16:50:24.519Z"
       },
       {
         "id": "179",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T15:54:13.256Z",
+      "lastModified": "2026-08-31T16:50:24.521Z",
       "taskCount": 184,
       "completedCount": 177,
       "tags": [

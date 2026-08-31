@@ -8336,10 +8336,10 @@
             "title": "M-STORE-a [OPUS-MAX] BÖLÜNMEZ: S3 uyumlu ObjectStore — güvenlik sınırları ve hata yolları",
             "description": "`services/storage/s3-store.ts`. `STORAGE_PROVIDERS`'a `s3` ekle → fabrika switch'i derleme hatası verir, oradan doldur. Env `STORAGE_S3_*` (`config/env.ts:426-428` yanına); gerçek secret YOK. **Korunacak garantiler:** `attachment.ts` `exists` kontrolü bir güvenlik sınırıdır (verilmiş ama kullanılmamış anahtara işaret eden `attachment_url`'i reddeder) — S3'te aynı kesinlikte çalışmalı; **ağ hatası ile \"yok\" karışmamalı**, `exists` ağ hatasında `false` dönerse güvenlik kontrolü sessizce açılır; `local-store.ts` yol kaçışı doğrulamasının S3 karşılığı anahtar doğrulamasıdır (`../` kabul edilmez).",
             "details": "Bağımlılık: yok. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "177",
-            "updatedAt": "2026-08-31T11:58:38.360Z"
+            "updatedAt": "2026-08-31T13:00:55.185Z"
           },
           {
             "id": 2,
@@ -8372,7 +8372,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T11:58:38.360Z"
+        "updatedAt": "2026-08-31T13:00:55.185Z"
       },
       {
         "id": "178",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T11:58:38.362Z",
+      "lastModified": "2026-08-31T13:00:55.187Z",
       "taskCount": 184,
       "completedCount": 176,
       "tags": [

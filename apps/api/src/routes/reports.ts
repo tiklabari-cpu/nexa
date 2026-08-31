@@ -37,6 +37,7 @@ import {
 import {
   achievedGoalCount,
   aiAgentBenchmark,
+  aiAgentSkillRunCount,
   breakdownByChannel,
   breakdownByDay,
   breakdownByHour,
@@ -716,9 +717,7 @@ export async function buildAiAgentReport(
   // same helper the CSV export uses, so the two agree on the count.
   const transfers = await transferCount(tx, licenseId, from, to);
 
-  const skillRuns = await tx.skillRun.count({
-    where: { licenseId, ranAt: { gte: from, lte: to } },
-  });
+  const skillRuns = await aiAgentSkillRunCount(tx, licenseId, from, to);
 
   const automated = Number(totals.automated);
   const closed = Number(totals.closed_chats);

@@ -162,11 +162,15 @@ describe('reports and billing', () => {
    * Record that a skill ran on a chat — the fact that turns an agent-handled
    * case from "manual" into "assisted" (PRD 07.3.2). Timing is irrelevant: the
    * split keys on the run existing for the chat, so this may be called after the
-   * chat has already closed.
+   * chat has already closed. Defaults to `kind: 'workspace'` — the same kind
+   * Copilot's own anchor skill uses (`copilot-service.ts#ensureSkillId`) — since
+   * the assisted split does not care which kind ran. Pass `'ai_agent'` for a run
+   * that must also count toward the AI Agent report's `skill_runs`
+   * ({@link aiAgentSkillRunCount}, `report-csv.ts`).
    */
-  async function runSkillOn(chatId: string): Promise<void> {
+  async function runSkillOn(chatId: string, kind: string = 'workspace'): Promise<void> {
     const skill = await owner.skill.create({
-      data: { licenseId: fx.a.licenseId, name: 'Auto-tag', kind: 'workspace' },
+      data: { licenseId: fx.a.licenseId, name: 'Auto-tag', kind },
       select: { id: true },
     });
     await owner.skillRun.create({
@@ -1363,9 +1367,20 @@ describe('reports and billing', () => {
 
     it('counts the skills that ran', async () => {
       const chatId = await conversation({ agentReplies: true });
-      await runSkillOn(chatId);
+      await runSkillOn(chatId, 'ai_agent');
       const ai = (await server.get('/reports/ai-agent', auth)).json();
       expect(ai.skill_runs).toBe(1);
+    });
+
+    it('does not count a Copilot assist as an AI Agent skill run', async () => {
+      // Copilot's own anchor skill is `kind: 'workspace'`
+      // (`copilot-service.ts#ensureSkillId`), not `'ai_agent'` — it still carries
+      // a non-null `aiAgentId` (the Copilot AiAgent), so a filter on `aiAgentId`
+      // alone would have let this one through.
+      const chatId = await conversation({ agentReplies: true });
+      await runSkillOn(chatId);
+      const ai = (await server.get('/reports/ai-agent', auth)).json();
+      expect(ai.skill_runs).toBe(0);
     });
 
     it('never counts another tenant', async () => {

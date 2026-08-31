@@ -13,6 +13,14 @@
 
 ## Task log (newest-first)
 
+## 177.2 — M-STORE-b · MinIO servisi (iki compose dosyası) + bucket bootstrap + geliştirici talimatı — done — 2026-08-31 UTC
+
+- **Yapıldı:** `docker-compose.yml` + `docker-compose.full.yml`'e `minio` + tek atımlık `minio-init` (bucket bootstrap, `mc mb --ignore-existing`) eklendi, ikisi de `profiles: ['storage']` — düz `docker compose up` / `make dev` / `make demo` görmüyor, `.env.example`'ın 177.1'den beri var olan `STORAGE_S3_*` yorumlarıyla (endpoint/bucket/kimlik) birebir eşleşiyor. README'ye "Object storage" bölümü + `.env.example`'a tek satır profil ipucu eklendi.
+- **Doğrulama:** `docker compose config` iki dosyada da exit 0; gerçek MinIO'ya karşı `S3Store.put/get/exists` elle koşturuldu, roundtrip tuttu; `minio-init` iki kez çalıştırıldı, ikisinde de exit 0 (idempotent). `pnpm -w typecheck/lint/format:check/build/test` 13/13 paket yeşil (@nexa/api 192 dosya/4091 test — kod değişmedi, sadece kapının objektif olduğunu doğruladı).
+- **Yan olay (düzeltildi):** doğrulama sırasında `docker compose --profile storage down -v` servis adı vermeden çalıştırıldı, bu proje-geneli `nexa-db`/`nexa-redis` hacimlerini de sildi (yalnız `storage` profiline özgü değilmiş, ölçüldü). `docker compose up -d` + `db:migrate` + `db:seed` ile tohumlu duruma geri getirildi — veri kaybı yok, ama bir sonraki pencere temiz bir dev DB bulacak (üstünde biriktirdiğin manuel veri varsa artık yok). Ders: `down -v` scope'u profile değil PROJE'dir; yalnız kendi eklediğin servisi temizlemek için `stop <servis>` + `rm -f -v <servis>` kullan.
+- **Kapsam dışı bırakıldı:** `infra/helm/nexa/values.yaml`'daki aynı bayat "STORAGE_PROVIDERS yalnız local" yorumu — Helm/deploy ayrı dikiş.
+- **Sonraki pencereye not:** M-STORE-c (tm 177.3, çok-pod: pod A yükler B indirir) muhtemelen bu MinIO'yu değil, `with-test-datastores.ts` tarzı bir test-scoped S3 kurulumunu ister — bu compose servisleri geliştirici elle denesin diye var, otomatik test harness'ına henüz bağlı değil.
+
 ## 177.1 — M-STORE-a · S3 uyumlu ObjectStore — güvenlik sınırları ve hata yolları — done — 2026-08-31 UTC
 
 - **Yapıldı:** `apps/api/src/services/storage/s3-store.ts` (yeni) — `put`/`get`/`exists`, **SDK yok**: `@aws-sdk/client-s3` üç istek için ~90 paket, depo zaten iki yerde HMAC kanonik dizge imzalıyor, `fetch` `createHttpWebhookSender` gibi enjekte edilebilir. SigV4 **AWS'in kendi vektörlerine** karşı pinlendi (signing key `c4afb1cc…a4b9` + `aws-sig-v4-test-suite` `get-vanilla` `5fa00fa3…bf31`) — kendi çıktısına karşı doğrulanan imzalayıcı hiçbir şey kanıtlamaz. `STORAGE_PROVIDERS`'a `s3` eklemek fabrikada beklenen derleme hatasını verdi. Env: 7 × `STORAGE_S3_*` (`.env.example` · `.env.production.example` · `turbo.json` globalEnv — parite testi yeşil), gerçek secret yok; **varsayılan `local` DEĞİŞMEDİ**. Kontrat/migration değişmedi (195 yol sabit).

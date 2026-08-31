@@ -18,6 +18,7 @@ import type { Prisma } from '@prisma/client';
 import { sanitizeReferrer, type CustomFieldValue } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
+import { visitorPageUrls } from '../campaigns/campaign-matching.js';
 
 export type CustomerSegment = 'all' | 'leads' | 'recent' | 'banned';
 
@@ -193,6 +194,12 @@ export class CustomerService {
    * is a property of the arrival, and letting a later page overwrite it would
    * replace the search engine that brought them with whichever page of the site
    * they clicked next.
+   *
+   * Returns the URLs this visitor is now known to have been on, in order — the
+   * same list a campaign trigger or a goal would be evaluated against
+   * (`visitorPageUrls` of the visit this call just wrote). Handed back rather
+   * than left to be re-read, so the caller that has to evaluate against it does
+   * not pay a second query for a row this method already had in hand (tm 176.5).
    */
   async recordPageView(
     tx: TenantClient,
@@ -204,7 +211,7 @@ export class CustomerService {
       userAgent?: string | undefined;
       ip?: string | undefined;
     },
-  ): Promise<void> {
+  ): Promise<string[]> {
     const since = new Date(Date.now() - 30 * 60_000);
     const current = await tx.visit.findFirst({
       where: {
@@ -222,15 +229,19 @@ export class CustomerService {
       const pages = Array.isArray(current.pages) ? (current.pages as unknown[]) : [];
       // Consecutive duplicates are noise — a reload is not a new page.
       const lastUrl = (pages.at(-1) as { url?: string } | undefined)?.url;
-      if (lastUrl === entry.url) return;
+      // Nothing to write, but the visitor is still on these pages: the caller
+      // gets the unchanged list rather than an empty one, so a reload is a
+      // cheap re-evaluation instead of a blind spot.
+      if (lastUrl === entry.url) return visitorPageUrls(pages);
 
+      const updated = [...pages, entry].slice(-50);
       await tx.visit.update({
         where: { id: current.id },
         // Bounded: a visitor who leaves a tab open for hours must not grow one
         // JSON column without limit.
-        data: { pages: [...pages, entry].slice(-50) as Prisma.InputJsonValue },
+        data: { pages: updated as Prisma.InputJsonValue },
       });
-      return;
+      return visitorPageUrls(updated);
     }
 
     await tx.visit.create({
@@ -249,6 +260,7 @@ export class CustomerService {
         ip: input.ip ?? null,
       },
     });
+    return visitorPageUrls([entry]);
   }
 
   #where(tenant: TenantContext, options: ListOptions): Prisma.CustomerWhereInput {

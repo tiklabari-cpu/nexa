@@ -970,15 +970,24 @@ async function seedConversations(input: {
  * tabs (Ongoing / Inactive) have something to filter on the first time anyone
  * opens the tenant rather than only after an owner builds one by hand.
  *
- * `url_contains: '/'` matches any page — the "greeting" shape a real workspace
- * uses to say hello everywhere, not just on one path.
+ * The running one targets a **specific** path. It used to be `url_contains:
+ * '/'` — a catch-all, which was harmless only because campaigns were evaluated
+ * once at save time and never again: with no visitors on a freshly seeded site,
+ * it matched nobody and stayed inert forever. Since the visit write path
+ * evaluates campaigns too (tm 176.5), a catch-all is no longer inert — it
+ * nudges *every* visitor on *every* page, in a demo whose widget already greets
+ * them with a proactive card of its own (FR-MOD-11.2). Two mechanisms saying
+ * hello over each other is not what the demo is for, and it made the campaign
+ * card an unpredictable neighbour for anything else browsing the seeded site.
+ * A workspace is still free to write a `/` campaign and mean it; the demo just
+ * should not ship one.
  */
 async function seedCampaigns(tenant: { licenseId: bigint; organizationId: string }): Promise<void> {
   const campaigns = new CampaignService();
   await campaigns.create(prisma, tenant, {
-    name: 'Welcome greeting',
+    name: 'Bike range greeting',
     active: true,
-    conditions: { url_contains: '/' },
+    conditions: { url_contains: '/bikes/' },
     content: { message: 'Welcome to Acme Bikes! Ask us anything about our bikes.' },
   });
   await campaigns.create(prisma, tenant, {

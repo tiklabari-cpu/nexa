@@ -966,6 +966,28 @@ export async function transferCount(
   return Number(row?.transfers ?? 0n);
 }
 
+/**
+ * AI Agent `skill_runs` in a window — scoped to `skill.kind === 'ai_agent'`,
+ * the same field `GET /skills` filters on (`playbook.ts`) to keep Copilot out
+ * of the Playbook list. `Skill.aiAgentId != null` is NOT the right test:
+ * Copilot's own assist runs anchor to a `kind: 'workspace'` skill that still
+ * carries a non-null `aiAgentId` (`copilot-service.ts#ensureSkillId` — it
+ * hangs the skill off the Copilot `AiAgent` purely to satisfy the
+ * `skill_runs.skill_id` foreign key), so that filter would still count every
+ * summary/reply-draft/enhance from `POST /copilot/*` as an AI Agent run.
+ * Feeds both the AI Agent report and its CSV export.
+ */
+export async function aiAgentSkillRunCount(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<number> {
+  return tx.skillRun.count({
+    where: { licenseId, ranAt: { gte: from, lte: to }, skill: { kind: 'ai_agent' } },
+  });
+}
+
 interface AgentPerformanceRow {
   agent_id: string;
   name: string | null;
@@ -1502,9 +1524,7 @@ async function groupCsvTable(
     case 'ai-agent': {
       const totals = await windowTotals(tx, licenseId, from, to);
       const transfers = await transferCount(tx, licenseId, from, to);
-      const skillRuns = await tx.skillRun.count({
-        where: { licenseId, ranAt: { gte: from, lte: to } },
-      });
+      const skillRuns = await aiAgentSkillRunCount(tx, licenseId, from, to);
       const automated = Number(totals.automated);
       const closed = Number(totals.closed_chats);
       const finished = automated + transfers;
@@ -1739,9 +1759,7 @@ export async function aiAgentBenchmark(
   // transaction (see withTenant).
   const totals = await windowTotals(tx, licenseId, window.from, window.to);
   const transfers = await transferCount(tx, licenseId, window.from, window.to);
-  const skillRuns = await tx.skillRun.count({
-    where: { licenseId, ranAt: { gte: window.from, lte: window.to } },
-  });
+  const skillRuns = await aiAgentSkillRunCount(tx, licenseId, window.from, window.to);
   const automated = Number(totals.automated);
 
   return {

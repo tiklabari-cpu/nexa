@@ -8220,10 +8220,10 @@
             "title": "M-TEAM-c [OPUS-XHIGH] KABUL: signup ile açılan taze workspace yönlendirebiliyor",
             "description": "Kalemin varlık nedeni. Signup → `General` takımı + owner `primary` üyeliği → gelen ilk sohbet boş `chat_access` ile DEĞİL, o takıma açılıyor. `chat-service.ts` `defaultGroupIds` \"ilk takıma düş\" emniyetini yalnız bir takım varsa uygulayabiliyor; bu test o emniyetin artık devreye girdiğini kanıtlar. DoD yeşilse `main`e merge.",
             "details": "Bağımlılık: M-TEAM-a, M-TEAM-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "175",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T04:18:12.926Z"
           },
           {
             "id": 4,
@@ -8246,7 +8246,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T04:16:38.029Z"
+        "updatedAt": "2026-08-31T04:18:12.926Z"
       },
       {
         "id": "176",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T04:16:38.030Z",
+      "lastModified": "2026-08-31T04:18:12.927Z",
       "taskCount": 184,
       "completedCount": 174,
       "tags": [

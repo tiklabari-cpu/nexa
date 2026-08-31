@@ -8380,7 +8380,7 @@
         "description": "`transferCount` (report-csv.ts:937) `chat_transferred` olaylarini `reason` ayrimi YAPMADAN sayiyor; ayni SQL :1044 te tekrarlaniyor. `skillRun.count` uc yerde filtresiz (report-csv.ts:1489, :1726, routes/reports.ts:719) → Copilot assistleri AI Agent yetenegi sayiliyor. Ve testi YESILDI ama hatayi yakalayamiyordu.",
         "details": "PRD satır **579-593** (FR-MOD-07.4) ve **699-706** (FR-MOD-12) · denetim `prd-uyum-denetimi.md` §3 D7.\n\n**ŞEMA DEĞİŞİKLİĞİ GEREKMİYOR — iki hazır dayanak var:**\n- `reason` alanı olayın `properties`ine **zaten yazılıyor**: `chat-service.ts:980` (`reason: target.reason`) ve `ai-responder.ts:135` (`reason: 'ai_handoff'`).\n- `Skill.aiAgentId` **zaten var** (`schema.prisma:1384`); `SkillRun.skillId → Skill` üzerinden filtrelenebilir.",
         "testStrategy": "Kalem bütününün kabul kriteri: ajan→ajan devri ile AI→insan devri ayrı sayılıyor, Copilot kullanımı AI Agent raporuna karışmıyor, VE bu iki düzeltme geri alındığında testler kırmızıya dönüyor (fixture artık kör değil).",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8409,13 +8409,13 @@
             "title": "M-RPT-c [OPUS-XHIGH] Kör fixture`ı düzelt + körlüğü KANITLA + diğer rapor fixture`larını tara",
             "description": "Denetimin ders niteliğindeki bulgusu: rapor fixture'ı `chat_transferred` olaylarını `reason`suz yazdığı için test yeşilken kriter yanlıştı — yani test ne düzeltmeyi ne bozulmayı görebiliyordu. Fixture iki devir türü ve iki run türü üretsin; iddialar yanlış sayımda KIRILSIN. **Atlanamaz adım:** `-a`/`-b` düzeltmesini geçici geri al, testin kırmızıya döndüğünü gör, geri getir, sonucu HANDOFF'a yaz. Ayrıca diğer rapor fixture'larını tara: ayrım yapılan bir alan fixture'da hep aynı değeri alıyorsa o test de kördür — bulguları listele.",
             "details": "Bağımlılık: M-RPT-a, M-RPT-b. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "178",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T18:56:32.972Z"
           }
         ],
-        "updatedAt": "2026-08-31T17:40:04.638Z"
+        "updatedAt": "2026-08-31T18:56:32.972Z"
       },
       {
         "id": "179",
@@ -8718,9 +8718,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T17:40:04.639Z",
+      "lastModified": "2026-08-31T18:56:32.973Z",
       "taskCount": 184,
-      "completedCount": 177,
+      "completedCount": 178,
       "tags": [
         "master"
       ]

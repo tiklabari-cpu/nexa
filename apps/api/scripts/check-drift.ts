@@ -63,6 +63,13 @@ const KNOWN_UNMODELLABLE = [
     reason:
       'partial unique index (one queued redelivery per event) — Prisma cannot express a WHERE predicate',
   },
+  {
+    // Created as `ON campaign_sends(license_id, customer_id) WHERE delivered_at
+    // IS NULL` in 20260831100000_campaign_sends_delivered_at.
+    pattern: /CREATE INDEX "campaign_sends_pending_by_customer_idx" ON "public"\."campaign_sends"/,
+    reason:
+      "partial index (poll lookup of a visitor's still-pending campaign sends) — Prisma cannot express a WHERE predicate",
+  },
 ];
 
 async function main(): Promise<void> {

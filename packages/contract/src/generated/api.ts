@@ -11475,6 +11475,25 @@ export interface operations {
         content: {
           'application/json': {
             items: components['schemas']['ChatSummary'][];
+            /**
+             * @description Matching the current view, across all pages — the same
+             *     envelope `/tickets` and `/customers` return.
+             *
+             *     It is a field on the list rather than a separate count
+             *     endpoint because the number and the rows have to describe
+             *     the same instant: both are read inside one tenant
+             *     transaction, so a chat closing between them cannot make the
+             *     counter disagree with the list beside it. A second endpoint
+             *     would also double the console's rail from seven requests to
+             *     fourteen — the sidebar mounts one list per view.
+             *
+             *     For `ai_solved` this is the AI-resolution count (ADR-09), so
+             *     it is the same predicate the invoice meters. Counting the
+             *     rows the browser happened to load instead — the console did,
+             *     up to `limit` — is silently wrong from the 51st resolution
+             *     on, and gets quieter the larger the workspace.
+             */
+            total: number;
             next_page_id?: string;
           };
         };

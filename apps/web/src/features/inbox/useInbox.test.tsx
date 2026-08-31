@@ -22,6 +22,7 @@ import {
   mergeChatHead,
   useChatList,
   useTranscript,
+  useViewCounts,
 } from './useInbox.js';
 import { useConflictStore } from './conflict.js';
 import { ConflictBanner } from './ConflictBanner.js';
@@ -413,6 +414,106 @@ describe('mergeChatHead', () => {
 
   it('leaves an unloaded list alone — its own first fetch is the refresh', () => {
     expect(mergeChatHead(undefined, chatPage([chat('c1', 14)]))).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The rail counters (FR-MOD-02.1.2 · audit D3)
+// ---------------------------------------------------------------------------
+
+/** What the sidebar shows per view, and what the server says each view holds. */
+const VIEW_TOTALS: Record<InboxView, number> = {
+  all: 240,
+  my: 12,
+  queued: 3,
+  unassigned: 7,
+  archived: 180,
+  ai: 9,
+  // Ten more resolutions than a page can carry, so "counted the page" and
+  // "counted the view" cannot give the same answer.
+  ai_solved: 137,
+};
+
+/** The view a `/chats` request is for. */
+function viewOf(url: string): InboxView {
+  return (new URLSearchParams(url.slice(url.indexOf('?'))).get('view') ?? 'all') as InboxView;
+}
+
+/** One page of a view: capped at the client's own 50, with the real total beside it. */
+function viewPage(view: InboxView): PagedResponse<ChatSummary> {
+  const total = VIEW_TOTALS[view];
+  const rows = Math.min(total, 50);
+  return {
+    items: Array.from({ length: rows }, (_, i) => chat(`${view}-${i}`, i % 60)),
+    total,
+    ...(rows < total ? { next_page_id: `cursor-${view}` } : {}),
+  };
+}
+
+function renderViewCounts() {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const rendered = renderHook(() => useViewCounts(), {
+    wrapper: ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+  return { ...rendered, queryClient };
+}
+
+describe('useViewCounts — the count is the view, not the rows fetched', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+  });
+
+  it('reports the whole view from one page of it', async () => {
+    api.get.mockImplementation((url: string) => Promise.resolve(viewPage(viewOf(url))));
+
+    const { result } = renderViewCounts();
+    await waitFor(() => expect(result.current.ai_solved).toBeDefined());
+
+    // The defect, in one line: fifty rows arrived and a hundred and thirty-seven
+    // resolutions exist. Counting what was fetched — which is what this hook did
+    // — puts "50" beside Solved and keeps it there however far the number grows,
+    // and that number is ADR-09's, the one the invoice meters.
+    expect(result.current.ai_solved).toBe(137);
+    expect(result.current.ai_solved).not.toBe(50);
+
+    // Every view in the rail, not only the AI ones: they all had the same
+    // ceiling, so they all read the server's number now.
+    await waitFor(() => expect(result.current.all).toBeDefined());
+    expect(result.current).toEqual(VIEW_TOTALS);
+  });
+
+  it('says nothing at all until the first page lands', async () => {
+    // An unloaded view must not read as an empty one — "0 Solved" is a claim,
+    // and before the response there is nothing to claim.
+    api.get.mockImplementation(() => new Promise(() => {}));
+
+    const { result } = renderViewCounts();
+    expect(Object.values(result.current).every((count) => count === undefined)).toBe(true);
+  });
+
+  it('follows the server when a live refresh reports a different total', async () => {
+    api.get.mockImplementation((url: string) => Promise.resolve(viewPage(viewOf(url))));
+
+    const { result, queryClient } = renderViewCounts();
+    await waitFor(() => expect(result.current.ai_solved).toBe(137));
+
+    // A conversation resolves while the agent is looking at the list. The push
+    // re-reads page 1 of every mounted view; the counter has to move with it,
+    // not sit on the number the first read happened to carry.
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        viewOf(url) === 'ai_solved'
+          ? { ...viewPage('ai_solved'), total: 138 }
+          : viewPage(viewOf(url)),
+      ),
+    );
+    act(() => {
+      applyPush(queryClient, 'incoming_chat', { chat_id: 'ai_solved-0' });
+    });
+
+    await waitFor(() => expect(result.current.ai_solved).toBe(138));
   });
 });
 

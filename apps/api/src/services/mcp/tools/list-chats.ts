@@ -40,10 +40,14 @@ export const runListChats: McpToolExecutor = async (ctx, args) => {
   });
 
   // The same page shape `GET /chats` returns: `items` are already
-  // tenant-safe `ChatSummary`s, and `next_page_id` uses the REST spelling so
-  // an MCP client sees one dialect across the API.
+  // tenant-safe `ChatSummary`s, and `total`/`next_page_id` use the REST
+  // spelling so an MCP client sees one dialect across the API. `total` matters
+  // more here than anywhere: a model that can only see one page has no way to
+  // tell "these are all of them" from "these are the first twenty-five", and
+  // will state the page size as the answer.
   return {
     items: result.items,
+    total: result.total,
     ...(result.nextPageId ? { next_page_id: result.nextPageId } : {}),
   };
 };

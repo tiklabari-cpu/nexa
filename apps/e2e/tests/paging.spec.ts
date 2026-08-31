@@ -22,6 +22,12 @@ import { expect, PAGING_OWNER, signInAs, test } from './fixtures.js';
 const CHAT_PAGE_SIZE = 50;
 /** The paging workspace holds ten more than that (`seedPagingWorkspace`). */
 const SEEDED_CHATS = 60;
+/**
+ * All but one of them: the AI answered fifty-nine alone, and the long
+ * agent-worked conversation is the sixtieth (`seedPagingWorkspace`). That is
+ * ADR-09's AI-resolution set — the "Solved" view, and the number billing meters.
+ */
+const AI_SOLVED_CHATS = SEEDED_CHATS - 1;
 /** `useInbox.ts` — events per transcript request. */
 const TRANSCRIPT_PAGE_SIZE = 200;
 /** The long conversation holds fifty more than that (`seedPagingWorkspace`). */
@@ -65,6 +71,42 @@ test.describe('list paging', () => {
     await expect(conversations.getByRole('button', { name: 'Load more' })).toHaveCount(0);
 
     await page.screenshot({ path: 'kanit/P5-PAGE-inbox-second-page.png', fullPage: true });
+  });
+
+  test('the sidebar counts the view, not the page it managed to load (FR-MOD-02.1.2)', async ({
+    page,
+  }) => {
+    await openPagingInbox(page);
+
+    const conversations = page.getByRole('region', { name: 'Conversations' });
+    const rail = page.getByRole('navigation', { name: 'Inbox views' });
+
+    // The setup, and the whole reason this needs a workspace larger than a
+    // page: fifty rows have been fetched, and that is all that will be fetched
+    // until somebody scrolls.
+    await expect(conversations.getByRole('listitem')).toHaveCount(CHAT_PAGE_SIZE);
+
+    // The counter beside "Solved" is the audited one (D3): it is the count of
+    // AI resolutions, the same set ADR-09 bills for, and it used to be the
+    // length of the loaded page — so it read 50, and would have read 50 at any
+    // size above 50. The server sends the view's own total now.
+    await expect(rail.getByRole('button', { name: `Solved ${AI_SOLVED_CHATS}` })).toBeVisible();
+    await expect(rail.getByRole('button', { name: `Solved ${CHAT_PAGE_SIZE}` })).toHaveCount(0);
+
+    // Three different right answers over one fixture, so no single wrong number
+    // satisfies them: All and Archive hold all sixty, Solved holds the
+    // fifty-nine with no human turn in them.
+    await expect(rail.getByRole('button', { name: `All ${SEEDED_CHATS}` })).toBeVisible();
+    await expect(rail.getByRole('button', { name: `Archive ${SEEDED_CHATS}` })).toBeVisible();
+
+    await page.screenshot({ path: 'kanit/02.1.2-rail-counts-past-the-page.png', fullPage: true });
+
+    // And it is a count of the view rather than of the cache: loading the
+    // second page adds rows without moving the number, which is the other half
+    // of "the counter and the list agree".
+    await conversations.getByRole('button', { name: 'Load more' }).click();
+    await expect(conversations.getByRole('listitem')).toHaveCount(SEEDED_CHATS);
+    await expect(rail.getByRole('button', { name: `All ${SEEDED_CHATS}` })).toBeVisible();
   });
 
   test('the sort control asks the server for a different order, not a client-side reshuffle of the loaded page (FR-MOD-02.2.1)', async ({

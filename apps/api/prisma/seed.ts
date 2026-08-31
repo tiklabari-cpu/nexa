@@ -1566,6 +1566,15 @@ async function seedMisplacedUsWorkspace(passwordHash: string): Promise<void> {
  * conversations in a dozen places (the inbox tab counters, the Reports figures,
  * the chat-topics clusters); sixty more rows would have rewritten every one of
  * those numbers to prove something none of them is about.
+ *
+ * It proves the sidebar *counters* for the same reason (audit D3, M-COUNT-a).
+ * A count only differs from a page where the view is larger than the page, so
+ * these sixty are also the only fixture in the seed where "the whole view" and
+ * "the rows this browser fetched" are different numbers. The split is
+ * deliberate: fifty-nine conversations the AI answered alone (the Solved view,
+ * ADR-09's AI resolutions) plus the one long agent-worked conversation, so
+ * Solved reads 59 where All and Archive read 60 and no single wrong number
+ * could satisfy all three.
  */
 const PAGING = {
   organizationName: 'Paging Proving Ground',
@@ -1692,7 +1701,15 @@ async function seedPagingWorkspace(passwordHash: string): Promise<void> {
         ? longMessages
         : [
             { authorType: 'customer', text: `Question from ${customer.name}` },
-            { authorType: 'agent', text: 'Answered, and archived so the queue stays honest.' },
+            // Answered by the AI, not a person — which is what puts these
+            // fifty-nine in the "Solved" view as well as in Archive. That is
+            // the one view whose counter the audit named (D3, FR-MOD-02.1.2):
+            // it is ADR-09's AI-resolution set, and at fifty-nine it is past
+            // the console's own 50-row page, so a browser can tell a counter
+            // that reports the view from one that reports the rows it loaded.
+            // The long conversation above keeps its agent turns, so it stays
+            // out of Solved and the two numbers are not the same number.
+            { authorType: 'bot', text: 'Answered by the AI, and archived.' },
           ],
   }));
 

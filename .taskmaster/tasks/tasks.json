@@ -8283,10 +8283,10 @@
             "title": "M-CAMP-c [SONNET-XHIGH] Widget kampanya kartı — mevcut proaktif kart mekanizmasını yeniden kullan",
             "description": "İkinci bir kart sistemi kurma. Kapatma davranışı `GREETING_DISMISSED_KEY` desenine uysun. Karşılama kartı ile çakışırsa biri kazanmalı — kararı yorumla (öneri: kampanya, çünkü hedeflenmiş). Widget çapraz-origin iframe içinde: workspace metni **kaçışsız basılmaz** (NFR-S6); `<script>` metin olarak görünmeli. 8 dil (ar/de/en/es/fr/it/pt/tr) — kampanya metni çevrilmez, düğmeler çevrilir. `kanit/03.3.2-campaign-card.png`.",
             "details": "Bağımlılık: M-CAMP-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "176",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T08:57:47.149Z"
           },
           {
             "id": 4,
@@ -8319,7 +8319,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T08:21:16.912Z"
+        "updatedAt": "2026-08-31T08:57:47.149Z"
       },
       {
         "id": "177",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T08:21:16.913Z",
+      "lastModified": "2026-08-31T08:57:47.151Z",
       "taskCount": 184,
       "completedCount": 175,
       "tags": [

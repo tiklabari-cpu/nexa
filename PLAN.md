@@ -548,7 +548,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 03.3.1–.3 | Campaigns (alt sekmeler, builder, kart) | Should (v1) | ✅ → K03.3.1-.3 |
 | 04.2 | AI Agents (team tarafı) — performance | Must (v1) | ✅ → K04.2 |
 | 04.6 | Chatbots / Suspended agents sekmeleri | Should (v1) | ✅ → K04.6 |
-| 07.4       | AI Agent raporu (resolution/deflection)                                                                | Should (v1)    | ✅ resolution/deflection — resolutions=ADR-09 (fatura ile aynı sorgu) · tm 44 · §D29 |
+| 07.4       | AI Agent raporu (resolution/deflection)                                                                | Should (v1)    | ◐ → K07.4 |
 | 07.7 | Rapor grupları + Export (CSV) | Should (v1–v2) | ✅ → K07.7 |
 | 07.8       | Reviews / Ratings                                                                                      | Should (v1)    | ✅ CSAT donut + günlük bar raporu · API `/reports/reviews` · e-commerce iskeleti · tm 45 · §D34 |
 | 08.5.4 | Messenger (Facebook OAuth) | Must (v1) | ✅ → K08.5.4 |
@@ -5920,6 +5920,11 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 ✅ bot hesabı ücretsiz + suspend/unsuspend (KK birebir) — API `agents.ts` GET `/agents?status=active\|suspended\|all` (+`suspended` bayrağı, default `active`) + PUT `/agents/:id/suspension` (owner/admin çift kapı; owner askıya alınamaz; kendini/üst-rütbeyi askıya alma yok; cross-tenant 404; idempotent no-op; audit `member.suspended`/`unsuspended`) · askı membership'te → mevcut oturumlar sıradaki istekte ölür + routing o andan atamayı durdurur · web `TeamPage.tsx` **Chatbots** (`/ai-agents`, "Free — bots never use a seat") + **Suspended** (reinstate) + satır-içi Suspend · bot=ai_agent, koltuk tutmaz → askı koltuğu boşaltır/geri alır · OpenAPI `/agents/{agentId}/suspension` (contract-parity ✅) · test integration `agents-suspension.test.ts` (listing/sessions/routing/authz/billing) · tm 59 · §D37
 - ✅ Rol değiştirme kontrolü aynı Manage sütununda Suspend'in yanına eklendi (M-UI-GAP-b): suspend ile birebir aynı çift kapı + tavan kuralları, sunucudan kopyalanmadan aynalanır; ayrıntı ve kapı çıktıları → KM-UI-GAP. — `apps/web/src/features/team/RoleMenu.tsx` · test `RoleMenu.test.tsx` (11) · e2e `team.spec.ts` (+1) · tm 136.2
+
+#### K07.4 — 07.4 · AI Agent raporu (resolution/deflection)
+
+✅ resolution/deflection — resolutions=ADR-09 (fatura ile aynı sorgu) · tm 44 · §D29
+- ◐ `prd-uyum-denetimi.md` §3 D7: `transferCount` (report-csv.ts) `chat_transferred` olaylarını `reason` ayrımı yapmadan sayıyordu, yani ajan→ajan devirleri de AI devri (deflection) sayılıyordu — `transferCount` + `teamPerformanceByAgent`'ın ikinci kopyası artık `AND e.properties @> '{"reason":"ai_handoff"}'::jsonb` ile filtreleniyor (containment, `->>` değil — GIN index'i (`idx_events_properties`, jsonb_path_ops) kullanabilsin diye). İki kopya tek `AI_HANDOFF_TRANSFER` fragment'ine indirildi (`Prisma.sql`, `SPLIT_COUNTS`/`AGENT_EVENT` deseniyle aynı), bir daha ayrı ayrı sürüklenemez. `TRANSFER_REASONS` (`@nexa/types`: `manual`/`routing`/`agent_disconnected`/`ai_handoff`) okundu — yalnız `ai_handoff` AI devri sayılır, diğer üçü ajan-ajan. Regresyon: `recordTransfer` fixture'ı artık `reason: 'ai_handoff'` yazıyor (önceden yazmıyordu — kör nokta buydu) + iki yeni test agent-to-agent devrin sayılmadığını doğruluyor; düzeltme geçici geri alınıp iki testin kırmızıya döndüğü doğrulandı. — `apps/api/src/services/reports/report-csv.ts` · test `reports-billing.test.ts` (+2) · tm 178.1. **Eksik (◐ kalma sebebi):** `skill_runs` sayımı hâlâ üç yerde (`report-csv.ts:1489,:1726`, `routes/reports.ts:719`) `Skill.aiAgentId` filtresiz — Copilot assistleri AI Agent yeteneğine karışıyor (tm 178.2); ve bu kalemin fixture'ı hâlâ yalnız kendi eklediğim iki testle kanıtlanıyor, denetimin istediği "diğer rapor fixture'larını tara" adımı yapılmadı (tm 178.3).
 
 #### K07.7 — 07.7 · Rapor grupları + Export (CSV)
 

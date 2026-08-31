@@ -265,6 +265,72 @@ test.describe('greeting', () => {
   });
 });
 
+test.describe('campaign card', () => {
+  // FR-MOD-03.3.2 (tm 176.3): the whole chain — an owner's campaign, the
+  // trigger engine matching a visitor already on the site (tm 176.1/.2 built
+  // the migration and the delivery), and the widget's poll carrying it —
+  // proven end to end by watching it reach a real, cross-origin visitor.
+  //
+  // Isolation is by host, like the goals suite: every other spec's visitor is
+  // on `/demo.html`, so a trigger on a bare path would nudge them too.
+  test('a campaign created after a visitor arrives reaches them as a proactive card, and opens the chat', async ({
+    agentPage,
+    browser,
+    organizationId,
+  }) => {
+    test.slow();
+    const stamp = Date.now().toString().slice(-6);
+    const name = `Card nudge ${stamp}`;
+    const message = `Still deciding? Ask us anything — ${stamp}`;
+    const site = tenantSubdomain(`card-${stamp}`);
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    try {
+      // --- The visitor arrives, talks, and leaves the conversation ---------
+      await openWidget(visitor, organizationId, { host: site.origin });
+      await visitorSends(visitor, `Just browsing — ${stamp}`);
+
+      const frame = widgetFrame(visitor);
+      await frame.getByRole('button', { name: 'More options' }).click();
+      await frame.getByRole('menuitem', { name: 'End chat' }).click();
+      await frame
+        .getByRole('dialog', { name: 'End this chat?' })
+        .getByRole('button', { name: 'End chat' })
+        .click();
+      await expect(frame.getByText('Chat ended.')).toBeVisible();
+
+      // The card only ever occupies the closed, proactive slot — a chat left
+      // open on screen is not where it belongs.
+      await frame.getByRole('button', { name: 'Close chat' }).click();
+
+      // --- The owner creates a campaign matching this visitor's site -------
+      await agentPage.goto('/app/customers');
+      await agentPage.getByRole('link', { name: 'Campaigns' }).click();
+      await agentPage.getByRole('button', { name: 'New campaign' }).click();
+      const dialog = agentPage.getByRole('dialog', { name: 'New campaign' });
+      await dialog.getByLabel('Name').fill(name);
+      await dialog.getByLabel('Trigger — page URL contains').fill(site.hostname);
+      await dialog.getByLabel('Message').fill(message);
+      await dialog.getByRole('button', { name: 'Create campaign' }).click();
+      await expect(agentPage.getByRole('listitem').filter({ hasText: name })).toBeVisible();
+
+      // --- The widget's own poll picks it up, panel still closed the whole
+      // time — nothing the visitor clicked made this appear. The workspace's
+      // own text, shown as-is (only the CTAs below are translated).
+      await expect(frame.getByText(message)).toBeVisible({ timeout: 20_000 });
+      await expect(frame.getByRole('button', { name: "Let's chat" })).toBeVisible();
+      await visitor.screenshot({ path: 'kanit/03.3.2-campaign-card.png', fullPage: true });
+
+      // --- Clicking it opens the chat ---------------------------------------
+      await frame.getByRole('button', { name: "Let's chat" }).click();
+      await expect(frame.getByRole('textbox', { name: 'Your name' })).toBeVisible();
+    } finally {
+      await visitorContext.close();
+    }
+  });
+});
+
 test.describe('agent identity', () => {
   // FR-MOD-11.3: the visitor should see who they are talking to. Acme's AI
   // persona ("Ada") is active, so its name — not the agent's copilot, and not a

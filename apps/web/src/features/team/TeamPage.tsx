@@ -8,15 +8,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
-import {
-  Card,
-  CardSkeleton,
-  ErrorNotice,
-  Kpi,
-  KpiGrid,
-  Page,
-  Section,
-} from '../../components/Page.js';
+import { Card, ErrorNotice, Kpi, KpiGrid, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
@@ -29,6 +21,7 @@ import { TeamAiPerformance } from './TeamAiPerformance.js';
 import { CopilotKnowledge } from './CopilotKnowledge.js';
 import { AgentSkills, type Expertise } from './AgentSkills.js';
 import { RoleMenu, roleAtLeast, type Role } from './RoleMenu.js';
+import { Teams, type Group } from './Teams.js';
 import { WorkSchedule } from './WorkSchedule.js';
 
 interface Agent {
@@ -50,13 +43,6 @@ interface Chatbot {
   active: boolean;
   avatar_url: string | null;
   skills_count: number;
-}
-
-interface Group {
-  id: number;
-  name: string;
-  language_code: string;
-  agents: Array<{ agent_id: string; priority: 'primary' | 'first' | 'normal' | 'last' }>;
 }
 
 /**
@@ -91,9 +77,6 @@ const STATUS_TONE: Record<Agent['routing_status'], StatusTone> = {
   offline: 'neutral',
 };
 
-/** Assignment order within a team — ADR-08 step 2. */
-const PRIORITY_ORDER = ['primary', 'first', 'normal', 'last'] as const;
-
 /** Roster filter options — every rank the roster can hold, in the order RoleMenu ranks them. */
 const ROLE_OPTIONS: Role[] = ['owner', 'viceowner', 'admin', 'agent'];
 const STATUS_OPTIONS: Agent['routing_status'][] = [
@@ -108,6 +91,8 @@ export function TeamPage(): ReactElement {
   const api = useApiClient();
   const currentAgentId = useAuth((s) => s.agent?.account_id ?? null);
   const currentRole = useAuth((s) => s.agent?.role ?? null);
+  const scopes = useAuth((s) => s.agent?.scopes) ?? [];
+  const canManageTeams = scopes.includes('groups--all:rw');
   const suspension = useSuspension();
 
   const agents = useQuery({
@@ -137,8 +122,6 @@ export function TeamPage(): ReactElement {
   const capacity = items
     .filter((a) => a.routing_status === 'accepting_chats')
     .reduce((sum, a) => sum + a.concurrent_chats_limit, 0);
-
-  const byId = useMemo(() => new Map(items.map((a) => [a.id, a])), [items]);
 
   // Teammates search + filters (FR-MOD-04.3.2). The roster already arrives in
   // full on one request (no server paging on `/agents`), so filtering happens
@@ -517,61 +500,7 @@ export function TeamPage(): ReactElement {
             </Card>
           </Section>
 
-          <Section
-            title={t('team.page.teams.title')}
-            description={t('team.page.teams.description')}
-          >
-            {groups.isPending ? (
-              <CardSkeleton rows={3} />
-            ) : (groups.data?.items.length ?? 0) === 0 ? (
-              <Card>
-                <EmptyState
-                  title={t('team.page.empty.noTeamsTitle')}
-                  description={t('team.page.empty.noTeamsDescription')}
-                />
-              </Card>
-            ) : (
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(280px,1fr))] gap-3">
-                {groups.data!.items.map((group) => (
-                  <Card key={group.id}>
-                    <div className="border-b border-border px-4 py-2.5">
-                      <h3 className="text-sm font-medium">{group.name}</h3>
-                      <p className="text-2xs text-content-tertiary">
-                        {t('team.page.memberCount', { count: group.agents.length })} ·{' '}
-                        {group.language_code.toUpperCase()}
-                      </p>
-                    </div>
-
-                    {group.agents.length === 0 ? (
-                      <p className="px-4 py-3 text-xs text-warning">{t('team.page.noMembers')}</p>
-                    ) : (
-                      <ul className="divide-y divide-border">
-                        {[...group.agents]
-                          .sort(
-                            (a, b) =>
-                              PRIORITY_ORDER.indexOf(a.priority) -
-                              PRIORITY_ORDER.indexOf(b.priority),
-                          )
-                          .map((member) => (
-                            <li
-                              key={member.agent_id}
-                              className="flex items-center gap-2 px-4 py-2 text-sm"
-                            >
-                              <span className="min-w-0 flex-1 truncate">
-                                {byId.get(member.agent_id)?.name ?? t('team.page.formerTeammate')}
-                              </span>
-                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs text-content-secondary">
-                                {t(`team.priority.${member.priority}`)}
-                              </span>
-                            </li>
-                          ))}
-                      </ul>
-                    )}
-                  </Card>
-                ))}
-              </div>
-            )}
-          </Section>
+          <Teams agents={items} canManage={canManageTeams} />
         </>
       )}
     </Page>

@@ -8230,10 +8230,10 @@
             "title": "M-TEAM-d [SONNET-XHIGH] Teams konsol ekranı: liste + CRUD + üye yönetimi + Priority dropdown",
             "description": "PRD KK: \"Routing hedefi; edit sayfası; Priority dropdown\". `apps/web/src/features/team/` altı; mevcut Team sayfası desenleri ve `apps/web/src/lib/form.tsx` (elle useState ile form kurma). 409 `group_in_use` gövdesi **görünür alan-altı hataya** dönüşmeli, sessizce yutulmamalı. Ajan seçici `GET /agents`. i18n en+tr; yeni rotayı `apps/e2e/tests/a11y.spec.ts` rota listesine ekle yoksa router-parse pini kırmızıya çeker. e2e: takım oluştur → ajan ekle → sohbet o takıma düşüyor; `kanit/04.5-teams.png`.",
             "details": "Bağımlılık: M-TEAM-c. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "175",
-            "updatedAt": "2026-08-31T05:05:52.482Z"
+            "updatedAt": "2026-08-31T05:51:03.584Z"
           },
           {
             "id": 5,
@@ -8246,7 +8246,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T05:05:52.482Z"
+        "updatedAt": "2026-08-31T05:51:03.584Z"
       },
       {
         "id": "176",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T05:05:52.483Z",
+      "lastModified": "2026-08-31T05:51:03.585Z",
       "taskCount": 184,
       "completedCount": 174,
       "tags": [

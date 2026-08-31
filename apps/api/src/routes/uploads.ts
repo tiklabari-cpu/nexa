@@ -60,7 +60,7 @@ interface Options {
 
 export default async function uploadRoutes(app: FastifyInstance, { env }: Options): Promise<void> {
   const signer = new UploadSigner(env.UPLOAD_SIGNING_KEY);
-  const store = createObjectStore(env.STORAGE_PROVIDER, { localDir: env.STORAGE_LOCAL_DIR });
+  const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
   const scanner = createVirusScanner(env.VIRUS_SCANNER);
 
   /**

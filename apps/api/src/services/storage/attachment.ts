@@ -15,6 +15,15 @@
  *
  * The message is the same for all three. Which part refused is not something a
  * caller probing for another tenant's keys gets to learn.
+ *
+ * There is a fourth outcome and it is deliberately not one of the three: the
+ * store may be unable to answer at all. `exists` throws `StorageUnavailableError`
+ * for that (a 503, "try again shortly") rather than returning `false`, so an
+ * unreachable bucket cannot come out of here as "you never uploaded that file".
+ * It carries no per-key information — the bucket is down for every caller and
+ * every key alike — so it is not an oracle, and no `try/catch` is needed here:
+ * the error is already the right answer, and catching it could only make it a
+ * worse one.
  */
 import { ApiError } from '../../lib/api-error.js';
 import type { ObjectStore } from './object-store.js';

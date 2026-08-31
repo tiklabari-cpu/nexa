@@ -188,6 +188,16 @@ export const AUDIT_ACTIONS = [
   // and the shape of the week (timezone, how many days are on), never the
   // individual start/end times.
   'work_schedule.updated',
+  // Teams (FR-MOD-04.5). Membership is what routing resolves an agent
+  // through (ADR-08 step 2), so adding or removing one silently changes who
+  // is offered which conversations -- and deleting a team changes who can
+  // see the ones it held. Recorded for the same reason `member.role_changed`
+  // is: it is an authority change wearing the clothes of a settings edit.
+  'group.created',
+  'group.updated',
+  'group.deleted',
+  'group.member_set',
+  'group.member_removed',
   // Workspace configuration
   'settings.security_updated',
   'settings.routing_rule_updated',

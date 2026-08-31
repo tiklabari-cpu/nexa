@@ -278,6 +278,10 @@ paths:
     $ref: "./paths/notifications.yaml#/device"
   /groups:
     $ref: "./paths/agents.yaml#/groups"
+  /groups/{groupId}:
+    $ref: "./paths/agents.yaml#/group"
+  /groups/{groupId}/agents/{agentId}:
+    $ref: "./paths/agents.yaml#/groupMember"
 
   /ai-agents:
     $ref: "./paths/playbook.yaml#/aiAgents"
@@ -3488,6 +3492,24 @@ components:
           type: string
           description: Derived from the name, unique within the licence.
 
+    GroupWrite:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+          description: What an agent picks from a transfer menu, so it is trimmed and bounded.
+        language_code:
+          type: string
+          pattern: "^[a-z]{2}(-[A-Z]{2})?$"
+          default: en
+          description: |
+            Drives language-based routing. ISO 639-1, optionally with a region
+            (`en`, `en-GB`) — the shape the column's CHECK constraint enforces,
+            so anything else is a 400 rather than a failed write.
+
     Group:
       type: object
       required: [id, name, language_code, agents]
@@ -5335,6 +5357,18 @@ components:
       required: true
       description: The adapter channel.
       schema: { $ref: "#/components/schemas/ChannelType" }
+    GroupIdPath:
+      name: groupId
+      in: path
+      required: true
+      description: The team's numeric id, as `GET /groups` returns it.
+      schema: { type: integer, format: int64, minimum: 1 }
+    AgentIdPath:
+      name: agentId
+      in: path
+      required: true
+      description: The agent account's uuid.
+      schema: { type: string, format: uuid }
     BrandHeader:
       name: X-Nexa-Brand
       in: header

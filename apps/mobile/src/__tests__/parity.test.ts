@@ -780,7 +780,12 @@ describe('module parity matrix — what is still owed', () => {
       // `.../verify`. Owner-only workspace configuration on the console, in the
       // same block as the connection write surface this app has never had —
       // nothing here to re-scope.
-      contractEndpoints: 193,
+      // 193 → 195 with the two team-write routes (M-TEAM-a, tm 175.1):
+      // `/groups/{groupId}` and `/groups/{groupId}/agents/{agentId}`. Routing
+      // configuration — who is on which team — is console administration, and
+      // the phone reads teams only to name the one a chat sits in. The read
+      // route it already had is unchanged.
+      contractEndpoints: 195,
       scopeBoundaries: 1,
     });
   });

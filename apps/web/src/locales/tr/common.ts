@@ -11,6 +11,8 @@ export const common: Messages = {
   'common.errors.chat_inactive': 'Bu sohbet artık etkin değil.',
   'common.errors.customer_banned': 'Bu ziyaretçi engellenmiş.',
   'common.errors.greeting_not_found': 'Bu karşılamayı bulamadık.',
+  'common.errors.group_in_use':
+    'Bu ekip hâlâ kullanımda — bir yönlendirme kuralı onu hedefliyor ya da açık sohbetleri var.',
   'common.errors.group_not_found': 'Bu ekibi bulamadık.',
   'common.errors.group_offline': 'Bu ekip şu anda çevrimdışı.',
   'common.errors.group_unavailable': 'Bu ekip şu anda bu sohbeti alamıyor.',

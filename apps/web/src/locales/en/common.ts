@@ -25,6 +25,8 @@ export const common: Messages = {
   'common.errors.chat_inactive': 'This conversation is no longer active.',
   'common.errors.customer_banned': 'This visitor is banned.',
   'common.errors.greeting_not_found': 'We could not find that greeting.',
+  'common.errors.group_in_use':
+    'This team is still in use — a routing rule points at it, or conversations are open with it.',
   'common.errors.group_not_found': 'We could not find that team.',
   'common.errors.group_offline': 'That team is offline right now.',
   'common.errors.group_unavailable': 'That team cannot take this conversation right now.',

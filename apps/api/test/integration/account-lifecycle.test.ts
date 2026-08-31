@@ -395,6 +395,46 @@ describe('account lifecycle', () => {
       expect(days).toBeLessThan(14.1);
     });
 
+    it('opens the workspace with a team the owner is in (FR-MOD-04.5)', async () => {
+      // Routing resolves an agent through `group_agents` (ADR-08 step 2), so a
+      // workspace with no team can receive a conversation and show it to
+      // nobody. The rows are asserted here, at the moment they are written;
+      // that the *first chat* then lands on this team is M-TEAM-c's acceptance.
+      //
+      // Also a guard on how the seed reaches the database: signup runs before a
+      // tenant context exists and `app.db` is the non-owner role, so an insert
+      // outside `withTenant` fails the RLS check and takes the whole signup
+      // down with it — a 500 the response assertion below would catch, but
+      // silently un-seeded rows would not.
+      const response = await server.post('/auth/signup', {
+        email: 'founder@teamco.test',
+        password: STRONG_PASSWORD,
+        name: 'Founder',
+        organization_name: 'TeamCo',
+      });
+      expect(response.statusCode).toBe(201);
+
+      const { account } = response.json() as { account: { id: string } };
+      const license = await owner.license.findFirstOrThrow({
+        where: { organization: { name: 'TeamCo' } },
+        select: { id: true },
+      });
+
+      const groups = await owner.group.findMany({
+        where: { licenseId: license.id },
+        include: { agents: true },
+      });
+      expect(groups).toHaveLength(1);
+      expect(groups[0]!.name).toBe('General');
+      // `primary` rather than `normal`: the owner is the only agent there is,
+      // so they are the workspace's first-choice assignee by construction.
+      expect(groups[0]!.agents).toHaveLength(1);
+      expect(groups[0]!.agents[0]).toMatchObject({
+        agentId: account.id,
+        priority: 'primary',
+      });
+    });
+
     it('leaves nothing behind when the email is taken (I1)', async () => {
       const before = await owner.organization.count();
 

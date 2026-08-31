@@ -26,6 +26,8 @@ import {
   parseScimFilter,
   parseScimPage,
   readScimCreateUser,
+  readScimGroupPatch,
+  readScimGroupResource,
   readScimPatch,
   scimErrorBody,
   scimListResponse,
@@ -422,6 +424,191 @@ describe('reading a patch', () => {
 
   it('bounds how much one request may ask for', () => {
     const many = Array.from({ length: 51 }, () => ({ op: 'replace', path: 'active', value: true }));
+    expect(patch(many)).toMatchObject({ ok: false, scimType: 'tooMany' });
+  });
+});
+
+describe('reading a Group resource', () => {
+  const ADA = '11111111-1111-4111-8111-111111111111';
+  const GRACE = '22222222-2222-4222-8222-222222222222';
+
+  it('reads a name and its members', () => {
+    expect(
+      readScimGroupResource({
+        schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+        displayName: '  Support  ',
+        members: [{ value: ADA, display: 'Ada' }, { value: GRACE }],
+      }),
+    ).toEqual({ ok: true, group: { displayName: 'Support', members: [ADA, GRACE] } });
+  });
+
+  it('takes a bare id as well as a member object', () => {
+    // Both are unambiguous and some connectors send the short form; refusing it
+    // would break provisioning over a spelling.
+    expect(readScimGroupResource({ displayName: 'Support', members: [ADA] })).toMatchObject({
+      group: { members: [ADA] },
+    });
+  });
+
+  it('reads an absent members as an empty team, not as "leave it alone"', () => {
+    // The one place `PUT` and `PATCH` differ, and the reason `PUT` says so in
+    // the contract: a whole-resource write that quietly kept a membership it was
+    // not sent leaves the directory and the product disagreeing about who is on
+    // the team.
+    expect(readScimGroupResource({ displayName: 'Support' })).toMatchObject({
+      group: { members: [] },
+    });
+  });
+
+  it('de-duplicates and normalises ids, keeping the order sent', () => {
+    expect(
+      readScimGroupResource({
+        displayName: 'Support',
+        members: [{ value: GRACE }, { value: ADA.toUpperCase() }, { value: GRACE }],
+      }),
+    ).toMatchObject({ group: { members: [GRACE, ADA] } });
+  });
+
+  it('refuses a body that names no team', () => {
+    for (const body of [{}, { displayName: '' }, { displayName: '  ' }, { displayName: 7 }, null]) {
+      expect(readScimGroupResource(body), JSON.stringify(body)).toMatchObject({ ok: false });
+    }
+  });
+
+  it("holds displayName to the console's bound", () => {
+    expect(readScimGroupResource({ displayName: 'x'.repeat(120) })).toMatchObject({ ok: true });
+    expect(readScimGroupResource({ displayName: 'x'.repeat(121) })).toMatchObject({
+      ok: false,
+      scimType: 'invalidValue',
+    });
+  });
+
+  it('refuses a members entry that cannot be an id', () => {
+    for (const members of [[{ value: 'nope' }], [{ display: 'Ada' }], [42], [null]]) {
+      expect(
+        readScimGroupResource({ displayName: 'Support', members }),
+        JSON.stringify(members),
+      ).toMatchObject({ ok: false, scimType: 'invalidValue' });
+    }
+  });
+
+  it('bounds how many members one request may name', () => {
+    const many = Array.from({ length: 201 }, () => ({ value: ADA }));
+    expect(readScimGroupResource({ displayName: 'Support', members: many })).toMatchObject({
+      ok: false,
+      scimType: 'tooMany',
+    });
+  });
+});
+
+describe('reading a Group patch', () => {
+  const ADA = '11111111-1111-4111-8111-111111111111';
+  const GRACE = '22222222-2222-4222-8222-222222222222';
+  const patch = (operations: unknown[]) => readScimGroupPatch({ Operations: operations });
+
+  it('reads the add and remove a connector sends most', () => {
+    expect(patch([{ op: 'add', path: 'members', value: [{ value: ADA }] }])).toEqual({
+      ok: true,
+      steps: [{ kind: 'addMembers', members: [ADA] }],
+    });
+    expect(patch([{ op: 'remove', path: 'members', value: [{ value: ADA }] }])).toEqual({
+      ok: true,
+      steps: [{ kind: 'removeMembers', members: [ADA] }],
+    });
+  });
+
+  it("reads Entra's value path, where the member is named by the path alone", () => {
+    // The parse that matters most: read as "nothing to do", this removal would
+    // leave a former member holding sight of the team's conversations while the
+    // directory recorded a success.
+    expect(patch([{ op: 'remove', path: `members[value eq "${ADA}"]` }])).toEqual({
+      ok: true,
+      steps: [{ kind: 'removeMembers', members: [ADA] }],
+    });
+    // Whitespace and casing vary between connectors.
+    expect(patch([{ op: 'Remove', path: `members[ value EQ "${ADA}" ]` }])).toMatchObject({
+      steps: [{ kind: 'removeMembers', members: [ADA] }],
+    });
+  });
+
+  it('separates "remove these members" from "remove every member"', () => {
+    // One absent field apart, and confusing them empties a team.
+    expect(patch([{ op: 'remove', path: 'members' }])).toEqual({
+      ok: true,
+      steps: [{ kind: 'setMembers', members: [] }],
+    });
+  });
+
+  it('reads replace on a multi-valued attribute as the whole set', () => {
+    expect(patch([{ op: 'replace', path: 'members', value: [{ value: GRACE }] }])).toEqual({
+      ok: true,
+      steps: [{ kind: 'setMembers', members: [GRACE] }],
+    });
+  });
+
+  it('reads the path-less attribute map, and a differently-cased op', () => {
+    expect(patch([{ op: 'Replace', value: { displayName: 'Support EU' } }])).toEqual({
+      ok: true,
+      steps: [{ kind: 'rename', displayName: 'Support EU' }],
+    });
+  });
+
+  it('keeps the operations in order rather than merging them', () => {
+    expect(
+      patch([
+        { op: 'replace', path: 'members', value: [{ value: ADA }] },
+        { op: 'add', path: 'members', value: [{ value: GRACE }] },
+      ]),
+    ).toEqual({
+      ok: true,
+      steps: [
+        { kind: 'setMembers', members: [ADA] },
+        { kind: 'addMembers', members: [GRACE] },
+      ],
+    });
+  });
+
+  it('accepts attributes it does not own and applies none of them', () => {
+    expect(
+      patch([
+        { op: 'replace', path: 'externalId', value: 'idp-1' },
+        {
+          op: 'replace',
+          path: 'urn:ietf:params:scim:schemas:core:2.0:Group:displayName',
+          value: 'A',
+        },
+      ]),
+    ).toEqual({ ok: true, steps: [{ kind: 'rename', displayName: 'A' }] });
+  });
+
+  it('refuses what would leave a team nameless or a path meaningless', () => {
+    expect(patch([{ op: 'remove', path: 'displayName' }])).toMatchObject({
+      ok: false,
+      scimType: 'invalidPath',
+    });
+    expect(patch([{ op: 'replace', path: 'displayName', value: '' }])).toMatchObject({
+      ok: false,
+      scimType: 'invalidValue',
+    });
+    expect(patch([{ op: 'add', path: `members[value eq "${ADA}"]` }])).toMatchObject({
+      ok: false,
+      scimType: 'invalidPath',
+    });
+    expect(patch([{ op: 'remove', path: 'members[value eq "nope"]' }])).toMatchObject({
+      ok: false,
+      scimType: 'invalidValue',
+    });
+    expect(patch([{ op: 'remove' }])).toMatchObject({ ok: false, scimType: 'noTarget' });
+    expect(patch([{ op: 'destroy', path: 'members' }])).toMatchObject({
+      ok: false,
+      scimType: 'invalidSyntax',
+    });
+    expect(patch([])).toMatchObject({ ok: false, scimType: 'invalidValue' });
+    expect(readScimGroupPatch({})).toMatchObject({ ok: false, scimType: 'invalidSyntax' });
+  });
+
+  it('bounds how much one request may ask for', () => {
+    const many = Array.from({ length: 51 }, () => ({ op: 'remove', path: 'members' }));
     expect(patch(many)).toMatchObject({ ok: false, scimType: 'tooMany' });
   });
 });

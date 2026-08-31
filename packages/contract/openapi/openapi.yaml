@@ -1498,13 +1498,21 @@ components:
     ScimGroup:
       type: object
       description: |
-        A team of this workspace (RFC 7643 §4.2), read-only.
+        A team of this workspace (RFC 7643 §4.2).
 
-        A directory may see which teams exist and who is in them, but team
-        membership drives chat routing here, so letting an external system
-        rewrite the routing topology is a much larger claim than "keep the user
-        list in step". Group-to-role mapping is out of scope for the same reason.
-      required: [schemas, id, displayName, members, meta]
+        Used in both directions, as SCIM's resource schemas are. On the way out
+        every property is present. On the way in only `displayName` is required —
+        `id`, `meta` and each member's `display`/`$ref` are server-owned and
+        ignored if sent, and `externalId` is accepted without being stored
+        (a team has no column for a directory's own identifier).
+
+        Team membership drives chat routing here (ADR-08 step 2) and decides
+        which conversations an agent can see, so the write paths are held to the
+        console's rules rather than to a looser set of their own — see
+        `paths/scim.yaml`. Group-to-role mapping stays out of scope: a connector
+        able to grant `admin` by adding somebody to a directory group would hold
+        a power the admin who minted its token does not.
+      required: [displayName]
       properties:
         schemas:
           type: array
@@ -1512,10 +1520,20 @@ components:
           example: ["urn:ietf:params:scim:schemas:core:2.0:Group"]
         id:
           type: string
-          description: The team's per-license integer id, as text (PRD §8.4).
-        displayName: { type: string }
+          description: |
+            The team's per-license integer id, as text (PRD §8.4). Server-owned;
+            the path names the team on a write.
+        externalId:
+          type: string
+          description: Accepted and not stored — re-match on `id`.
+        displayName: { type: string, minLength: 1, maxLength: 120 }
         members:
           type: array
+          maxItems: 200
+          description: |
+            On a write, only `value` is read: the id of somebody already
+            provisioned in this workspace. An unknown id refuses the whole
+            request rather than being skipped.
           items:
             type: object
             properties:

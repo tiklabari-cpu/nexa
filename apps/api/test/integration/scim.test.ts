@@ -36,8 +36,10 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hashToken } from '../../src/lib/crypto.js';
 import { SCIM_SEAT_CEILING } from '../../src/lib/entitlements.js';
+import { withTenant } from '../../src/lib/tenant.js';
 import { MAX_ACTIVE_SCIM_TOKENS } from '../../src/routes/settings.js';
 import { AUDIT_ACTIONS } from '../../src/services/audit/audit-log.js';
+import { RoutingService } from '../../src/services/routing/routing-service.js';
 import {
   grantToken,
   ownerClient,
@@ -73,6 +75,17 @@ interface ScimErrorBody {
   scimType?: string;
   detail: string;
 }
+
+interface ScimGroupBody {
+  schemas: string[];
+  id: string;
+  displayName: string;
+  members: Array<{ value: string; display: string; $ref: string }>;
+  meta: { resourceType: string; created: string; location: string };
+}
+
+/** A syntactically valid uuid that belongs to no account anywhere. */
+const NOBODY = '00000000-0000-4000-8000-0000000000ff';
 
 describe('scim server core', () => {
   let owner: PrismaClient;
@@ -1237,6 +1250,824 @@ describe('scim server core', () => {
         )
       ).json() as { totalResults: number };
       expect(list.totalResults).toBe(1);
+    });
+  });
+
+  // --- Groups: the write half (M-TEAM-e) -------------------------------------
+  //
+  // The claim: **a directory writing teams cannot do anything the console
+  // cannot.** Team membership is access control here — `chat_access.group_id`
+  // decides which conversations an agent sees, `routing_rules.target_group_id`
+  // decides where a new one goes, and neither column carries a foreign key — so
+  // "the provisioning path is a bit more permissive" is not a rough edge, it is
+  // the whole finding. Each block below picks one guard the console has and
+  // tries to get past it with a SCIM token.
+  //
+  // Two things are asserted by *effect* rather than by response body, because
+  // only the effect can fail quietly: a member added here is fed to a real
+  // `RoutingService.route()`, and a member removed here is looked for in the
+  // conversation list of a token that could see them a moment ago.
+
+  describe('Groups: writes', () => {
+    let routing: RoutingService;
+
+    beforeAll(() => {
+      routing = new RoutingService();
+    });
+
+    const asGroup = (res: { json: () => unknown }) => res.json() as ScimGroupBody;
+    const memberIds = (group: ScimGroupBody) => group.members.map((m) => m.value).sort();
+
+    /** A team through the endpoint under test, which is also the arrange step. */
+    async function createTeam(
+      displayName: string,
+      members: string[] = [],
+      token = scimA,
+    ): Promise<ScimGroupBody> {
+      const res = await server.post(
+        '/scim/v2/Groups',
+        { displayName, members: members.map((value) => ({ value })) },
+        scimBody(token),
+      );
+      expect(res.statusCode).toBe(201);
+      return asGroup(res);
+    }
+
+    const teamRow = (id: string) =>
+      owner.group.findFirst({ where: { id: BigInt(id) }, select: { name: true, licenseId: true } });
+
+    const memberRows = (id: string) =>
+      owner.groupAgent.findMany({
+        where: { groupId: BigInt(id) },
+        select: { agentId: true, priority: true },
+        orderBy: { agentId: 'asc' },
+      });
+
+    /** Every `group.*` entry on tenant A, in the order the chain recorded it. */
+    const groupEntries = () =>
+      owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: { startsWith: 'group.' } },
+        orderBy: { chainSeq: 'asc' },
+        select: { action: true, target: true, metadata: true, actorId: true, actorType: true },
+      });
+
+    /** What routing would do with a new conversation in workspace A right now. */
+    const route = () =>
+      withTenant(owner, { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId }, (tx) =>
+        routing.route(tx, fx.a.licenseId),
+      );
+
+    // ------------------------------------------------------------------------
+
+    describe('the boundary still holds on the write paths', () => {
+      it('refuses an owner PAT at every Group write — 404, not 403', async () => {
+        // The same matrix the Users writes are held to. A console credential is
+        // not a provisioning credential in either direction, and answering 403
+        // would confirm the surface exists to something with no business there.
+        const headers = { ...auth(ownerPatA), 'content-type': SCIM_JSON };
+        const team = await createTeam('Support');
+
+        expect(
+          (await server.post('/scim/v2/Groups', { displayName: 'X' }, headers)).statusCode,
+        ).toBe(404);
+        expect(
+          (await server.put(`/scim/v2/Groups/${team.id}`, { displayName: 'X' }, headers))
+            .statusCode,
+        ).toBe(404);
+        expect(
+          (
+            await server.patch(
+              `/scim/v2/Groups/${team.id}`,
+              { Operations: [{ op: 'replace', path: 'displayName', value: 'X' }] },
+              headers,
+            )
+          ).statusCode,
+        ).toBe(404);
+        expect((await server.del(`/scim/v2/Groups/${team.id}`, auth(ownerPatA))).statusCode).toBe(
+          404,
+        );
+
+        expect((await teamRow(team.id))!.name).toBe('Support');
+      });
+
+      it('refuses an anonymous write', async () => {
+        const res = await server.post(
+          '/scim/v2/Groups',
+          { displayName: 'X' },
+          {
+            'content-type': SCIM_JSON,
+          },
+        );
+        expect(res.statusCode).toBe(401);
+      });
+
+      it("cannot reach another workspace's team by any verb", async () => {
+        const bTeam = await owner.group.create({
+          data: { licenseId: fx.b.licenseId, name: 'B Team' },
+          select: { id: true },
+        });
+        const id = bTeam.id.toString();
+
+        expect(
+          (await server.put(`/scim/v2/Groups/${id}`, { displayName: 'Taken' }, scimBody(scimA)))
+            .statusCode,
+        ).toBe(404);
+        expect(
+          (
+            await server.patch(
+              `/scim/v2/Groups/${id}`,
+              { Operations: [{ op: 'replace', path: 'displayName', value: 'Taken' }] },
+              scimBody(scimA),
+            )
+          ).statusCode,
+        ).toBe(404);
+        expect((await server.del(`/scim/v2/Groups/${id}`, auth(scimA))).statusCode).toBe(404);
+
+        // Untouched, and still B's.
+        expect(await teamRow(id)).toMatchObject({ name: 'B Team', licenseId: fx.b.licenseId });
+      });
+
+      it('parses an id exactly as the console does, rather than a second way', async () => {
+        // Both of these were real defects on the console path (tm 175.1) and the
+        // parser is now shared: `0x10` must not resolve team 16, and a 19-digit
+        // id past `BIGSERIAL` must be a 404 rather than a range error surfacing
+        // as a 500.
+        for (const id of ['0x10', 'banana', '9999999999999999999', '-1']) {
+          expect(
+            (await server.put(`/scim/v2/Groups/${id}`, { displayName: 'X' }, scimBody(scimA)))
+              .statusCode,
+            id,
+          ).toBe(404);
+          expect((await server.del(`/scim/v2/Groups/${id}`, auth(scimA))).statusCode, id).toBe(404);
+        }
+      });
+    });
+
+    // ------------------------------------------------------------------------
+
+    describe('POST /scim/v2/Groups', () => {
+      it("creates a team in the token's workspace, with its members", async () => {
+        const res = await server.post(
+          '/scim/v2/Groups',
+          {
+            schemas: ['urn:ietf:params:scim:schemas:core:2.0:Group'],
+            displayName: 'Support',
+            members: [{ value: fx.a.agentAccountId, display: 'ignored' }],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(201);
+        const group = asGroup(res);
+        expect(group.schemas).toEqual(['urn:ietf:params:scim:schemas:core:2.0:Group']);
+        expect(group.displayName).toBe('Support');
+        expect(group.members.map((m) => m.value)).toEqual([fx.a.agentAccountId]);
+        expect(res.headers['location']).toContain(`/scim/v2/Groups/${group.id}`);
+
+        expect(await teamRow(group.id)).toMatchObject({
+          name: 'Support',
+          licenseId: fx.a.licenseId,
+        });
+        // A directory has no notion of a routing preference, so it provisions
+        // into the column default rather than picking one.
+        expect(await memberRows(group.id)).toEqual([
+          { agentId: fx.a.agentAccountId, priority: 'normal' },
+        ]);
+      });
+
+      it('accepts application/json as well, because several connectors send it', async () => {
+        const res = await server.post('/scim/v2/Groups', { displayName: 'Sales' }, auth(scimA));
+        expect(res.statusCode).toBe(201);
+      });
+
+      it('creates no team at all when one member id is unknown', async () => {
+        // Refused before anything is written. A `group_agents` row for somebody
+        // who is not a member matches nobody in routing, so a half-applied
+        // create would show a team on screen that routes to nobody.
+        const res = await server.post(
+          '/scim/v2/Groups',
+          { displayName: 'Support', members: [{ value: fx.a.agentAccountId }, { value: NOBODY }] },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(400);
+        expect(asError(res).scimType).toBe('invalidValue');
+        expect(asError(res).detail).toContain(NOBODY);
+        expect(await owner.group.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+      });
+
+      it("will not staff a team with another workspace's agent", async () => {
+        // The cross-tenant claim, on the shape that would actually be dangerous:
+        // not reading B's data, but writing B's person into A's access-control
+        // table. Under A's tenant context that membership is not there to find,
+        // so it is the ordinary unknown-id refusal rather than a special case.
+        const res = await server.post(
+          '/scim/v2/Groups',
+          { displayName: 'Support', members: [{ value: fx.b.agentAccountId }] },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(400);
+        expect(await owner.group.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+        expect(await owner.groupAgent.count({ where: { agentId: fx.b.agentAccountId } })).toBe(0);
+      });
+
+      it('refuses a body that names no team', async () => {
+        for (const body of [{}, { displayName: '' }, { displayName: '   ' }, { displayName: 7 }]) {
+          const res = await server.post('/scim/v2/Groups', body, scimBody(scimA));
+          expect(res.statusCode, JSON.stringify(body)).toBe(400);
+          expect(asError(res).scimType).toBe('invalidValue');
+        }
+      });
+
+      it('holds displayName to the same bound the console does', async () => {
+        // 120 characters, the `groupBody` schema's limit. The two paths writing
+        // one column must not disagree about what fits in it.
+        expect(
+          (await server.post('/scim/v2/Groups', { displayName: 'x'.repeat(120) }, scimBody(scimA)))
+            .statusCode,
+        ).toBe(201);
+        const res = await server.post(
+          '/scim/v2/Groups',
+          { displayName: 'x'.repeat(121) },
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(400);
+        expect(asError(res).scimType).toBe('invalidValue');
+      });
+
+      it('refuses a members entry that is not an id', async () => {
+        const res = await server.post(
+          '/scim/v2/Groups',
+          { displayName: 'Support', members: [{ value: 'not-a-uuid' }] },
+          scimBody(scimA),
+        );
+        expect(res.statusCode).toBe(400);
+        expect(asError(res).scimType).toBe('invalidValue');
+      });
+
+      it('does not invent a uniqueness constraint the product does not have', async () => {
+        // Two shifts may both be called "Weekend", and the console allows it.
+        // Answering 409 here would tell a connector to adopt a team that is not
+        // the one it meant.
+        await createTeam('Weekend');
+        expect(
+          (await server.post('/scim/v2/Groups', { displayName: 'Weekend' }, scimBody(scimA)))
+            .statusCode,
+        ).toBe(201);
+        expect(await owner.group.count({ where: { licenseId: fx.a.licenseId } })).toBe(2);
+      });
+
+      it("writes into the token's licence, never one named in the request", async () => {
+        const inB = await createTeam('Shared', [], scimB);
+        expect(await teamRow(inB.id)).toMatchObject({ licenseId: fx.b.licenseId });
+        expect(await owner.group.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+      });
+    });
+
+    // ------------------------------------------------------------------------
+
+    describe('PUT /scim/v2/Groups/{id}', () => {
+      it('replaces the name and the membership', async () => {
+        const team = await createTeam('Support', [fx.a.ownerAccountId]);
+
+        const res = await server.put(
+          `/scim/v2/Groups/${team.id}`,
+          { displayName: 'Support EU', members: [{ value: fx.a.agentAccountId }] },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(asGroup(res).displayName).toBe('Support EU');
+        expect(memberIds(asGroup(res))).toEqual([fx.a.agentAccountId]);
+        expect(await memberRows(team.id)).toEqual([
+          { agentId: fx.a.agentAccountId, priority: 'normal' },
+        ]);
+      });
+
+      it('empties the team when members is absent — a replace replaces', async () => {
+        // Deliberate, and documented on both sides of the contract: softening it
+        // would leave the connector believing the team it pushed is the team
+        // that exists. `PATCH` is the verb for leaving membership alone.
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+
+        const res = await server.put(
+          `/scim/v2/Groups/${team.id}`,
+          { displayName: 'Support' },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(asGroup(res).members).toEqual([]);
+        expect(await memberRows(team.id)).toEqual([]);
+      });
+
+      it('does not demote an agent an admin made primary', async () => {
+        // The quiet failure this whole design guards against. SCIM has no
+        // attribute for a routing tier, so a nightly re-assertion of the
+        // membership set must leave the one the console chose alone — otherwise
+        // every `primary` agent in the workspace becomes `normal` overnight and
+        // the only symptom is customers reaching the wrong person first.
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+        await owner.groupAgent.update({
+          where: {
+            licenseId_groupId_agentId: {
+              licenseId: fx.a.licenseId,
+              groupId: BigInt(team.id),
+              agentId: fx.a.agentAccountId,
+            },
+          },
+          data: { priority: 'primary' },
+        });
+
+        const res = await server.put(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            displayName: 'Support',
+            members: [{ value: fx.a.agentAccountId }, { value: fx.a.ownerAccountId }],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(await memberRows(team.id)).toEqual(
+          [
+            { agentId: fx.a.agentAccountId, priority: 'primary' },
+            { agentId: fx.a.ownerAccountId, priority: 'normal' },
+          ].sort((x, y) => x.agentId.localeCompare(y.agentId)),
+        );
+      });
+
+      it('writes nothing when it restates what is already stored', async () => {
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+        const before = (await groupEntries()).length;
+
+        for (let i = 0; i < 3; i += 1) {
+          const res = await server.put(
+            `/scim/v2/Groups/${team.id}`,
+            { displayName: 'Support', members: [{ value: fx.a.agentAccountId }] },
+            scimBody(scimA),
+          );
+          expect(res.statusCode).toBe(200);
+        }
+
+        // Three nights of a reconciliation that changed nothing leave the trail
+        // exactly as they found it; an entry per member per night would bury the
+        // changes that did happen.
+        expect((await groupEntries()).length).toBe(before);
+      });
+
+      it('leaves the team untouched when one member id is unknown', async () => {
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+
+        const res = await server.put(
+          `/scim/v2/Groups/${team.id}`,
+          { displayName: 'Renamed', members: [{ value: NOBODY }] },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(400);
+        expect((await teamRow(team.id))!.name).toBe('Support');
+        expect(await memberRows(team.id)).toEqual([
+          { agentId: fx.a.agentAccountId, priority: 'normal' },
+        ]);
+      });
+    });
+
+    // ------------------------------------------------------------------------
+
+    describe('PATCH /scim/v2/Groups/{id}', () => {
+      it('adds members in the shape a connector sends', async () => {
+        const team = await createTeam('Support');
+
+        const res = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
+            Operations: [
+              {
+                op: 'add',
+                path: 'members',
+                value: [{ value: fx.a.agentAccountId, display: 'ignored' }],
+              },
+            ],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(memberIds(asGroup(res))).toEqual([fx.a.agentAccountId]);
+      });
+
+      it("removes a member named by Entra's value path", async () => {
+        // `members[value eq "<id>"]`, with no `value` on the operation at all.
+        // Failing to read this one is the failure that matters most here: it
+        // would parse as "nothing to do" and leave a former member holding sight
+        // of the team's conversations, while the directory recorded a success.
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+
+        const res = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            Operations: [{ op: 'remove', path: `members[value eq "${fx.a.agentAccountId}"]` }],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(asGroup(res).members).toEqual([]);
+        expect(await memberRows(team.id)).toEqual([]);
+      });
+
+      it('removes members named by value, and clears the team when none are', async () => {
+        const team = await createTeam('Support', [fx.a.agentAccountId, fx.a.ownerAccountId]);
+
+        const byValue = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            Operations: [
+              { op: 'remove', path: 'members', value: [{ value: fx.a.ownerAccountId }] },
+            ],
+          },
+          scimBody(scimA),
+        );
+        expect(memberIds(asGroup(byValue))).toEqual([fx.a.agentAccountId]);
+
+        const cleared = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          { Operations: [{ op: 'remove', path: 'members' }] },
+          scimBody(scimA),
+        );
+        expect(asGroup(cleared).members).toEqual([]);
+      });
+
+      it('replaces the whole set on replace, and renames path-lessly', async () => {
+        const team = await createTeam('Support', [fx.a.ownerAccountId]);
+
+        const res = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            Operations: [
+              // Entra's casing, and its path-less attribute map.
+              { op: 'Replace', value: { displayName: 'Support EU' } },
+              { op: 'replace', path: 'members', value: [{ value: fx.a.agentAccountId }] },
+            ],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        expect(asGroup(res).displayName).toBe('Support EU');
+        expect(memberIds(asGroup(res))).toEqual([fx.a.agentAccountId]);
+      });
+
+      it('applies operations in the order they were sent', async () => {
+        // Replace-then-add and add-then-replace are different requests. Merging
+        // the two into one set of changes would have to pick an order silently,
+        // and the connector could not tell which one it got.
+        const team = await createTeam('Support');
+
+        const res = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            Operations: [
+              { op: 'replace', path: 'members', value: [{ value: fx.a.ownerAccountId }] },
+              { op: 'add', path: 'members', value: [{ value: fx.a.agentAccountId }] },
+            ],
+          },
+          scimBody(scimA),
+        );
+        expect(memberIds(asGroup(res))).toEqual([fx.a.ownerAccountId, fx.a.agentAccountId].sort());
+
+        const reversed = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            Operations: [
+              { op: 'add', path: 'members', value: [{ value: fx.a.agentAccountId }] },
+              { op: 'replace', path: 'members', value: [{ value: fx.a.ownerAccountId }] },
+            ],
+          },
+          scimBody(scimA),
+        );
+        expect(memberIds(asGroup(reversed))).toEqual([fx.a.ownerAccountId]);
+      });
+
+      it('converges on a repeated removal instead of alarming', async () => {
+        // The retry-after-timeout case. Removing somebody who is not on the team
+        // is the state the caller asked for, so it succeeds and writes nothing —
+        // the opposite of the console, where the same call is a 404 because an
+        // admin pressing Remove on an empty row has a stale screen.
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+        const remove = () =>
+          server.patch(
+            `/scim/v2/Groups/${team.id}`,
+            { Operations: [{ op: 'remove', path: `members[value eq "${fx.a.agentAccountId}"]` }] },
+            scimBody(scimA),
+          );
+
+        expect((await remove()).statusCode).toBe(200);
+        const after = (await groupEntries()).length;
+        expect((await remove()).statusCode).toBe(200);
+        expect((await remove()).statusCode).toBe(200);
+        expect((await groupEntries()).length).toBe(after);
+      });
+
+      it('rolls the whole patch back when a later operation names a stranger', async () => {
+        // One transaction for the whole `Operations` list. Half a membership
+        // change is a state neither side asked for, and nothing would reconcile
+        // it back.
+        const team = await createTeam('Support');
+
+        const res = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            Operations: [
+              { op: 'replace', path: 'displayName', value: 'Support EU' },
+              { op: 'add', path: 'members', value: [{ value: fx.a.agentAccountId }] },
+              { op: 'add', path: 'members', value: [{ value: fx.b.agentAccountId }] },
+            ],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(400);
+        expect((await teamRow(team.id))!.name).toBe('Support');
+        expect(await memberRows(team.id)).toEqual([]);
+      });
+
+      it('accepts attributes it does not own without applying them', async () => {
+        const team = await createTeam('Support');
+        const res = await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          {
+            Operations: [
+              { op: 'replace', path: 'externalId', value: 'idp-group-1' },
+              { op: 'replace', path: 'displayName', value: 'Support EU' },
+            ],
+          },
+          scimBody(scimA),
+        );
+
+        expect(res.statusCode).toBe(200);
+        // The response shows what is actually stored, so a client that compares
+        // sees the truth rather than its own assertion echoed back.
+        expect(asGroup(res)).not.toHaveProperty('externalId');
+        expect(asGroup(res).displayName).toBe('Support EU');
+      });
+
+      it('refuses the operations a nameless team would need', async () => {
+        const team = await createTeam('Support');
+        for (const Operations of [
+          [{ op: 'remove', path: 'displayName' }],
+          [{ op: 'replace', path: 'displayName', value: '' }],
+          [{ op: 'add', path: `members[value eq "${fx.a.agentAccountId}"]` }],
+          [{ op: 'remove' }],
+          [],
+        ]) {
+          const res = await server.patch(
+            `/scim/v2/Groups/${team.id}`,
+            { Operations },
+            scimBody(scimA),
+          );
+          expect(res.statusCode, JSON.stringify(Operations)).toBe(400);
+        }
+      });
+    });
+
+    // ------------------------------------------------------------------------
+
+    describe('DELETE /scim/v2/Groups/{id} — the console refusals, not a copy of them', () => {
+      it('deletes the team and its memberships', async () => {
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+
+        expect((await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA))).statusCode).toBe(204);
+
+        expect(await teamRow(team.id)).toBeNull();
+        expect(await memberRows(team.id)).toEqual([]);
+        // The person still works here — a team is not a person.
+        expect(
+          await owner.agentMembership.count({
+            where: { licenseId: fx.a.licenseId, agentId: fx.a.agentAccountId },
+          }),
+        ).toBe(1);
+      });
+
+      it('409s while a routing rule still points at the team', async () => {
+        const team = await createTeam('Support');
+        const rule = await owner.routingRule.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            kind: 'chat',
+            isFallback: true,
+            targetGroupId: BigInt(team.id),
+          },
+          select: { id: true },
+        });
+
+        const res = await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA));
+
+        expect(res.statusCode).toBe(409);
+        // No `scimType`: RFC 7644 §3.12 defines only `uniqueness` for a 409, and
+        // this is not one. The detail is what the operator acts on.
+        expect(asError(res).scimType).toBeUndefined();
+        expect(asError(res).detail).toContain('routing rule');
+        expect(await teamRow(team.id)).not.toBeNull();
+
+        // And through once the rule points elsewhere — the refusal is a
+        // condition, not a ban on the endpoint.
+        await owner.routingRule.delete({ where: { id: rule.id } });
+        expect((await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA))).statusCode).toBe(204);
+      });
+
+      it('409s while a conversation reachable through the team is open', async () => {
+        const team = await createTeam('Support');
+        await owner.chat.create({
+          data: {
+            id: 'SCIMGRP001',
+            licenseId: fx.a.licenseId,
+            customerId: fx.a.customerId,
+            active: true,
+          },
+        });
+        await owner.chatAccess.create({
+          data: { chatId: 'SCIMGRP001', groupId: BigInt(team.id) },
+        });
+
+        const res = await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA));
+
+        expect(res.statusCode).toBe(409);
+        expect(asError(res).detail).toContain('still open');
+        expect(await teamRow(team.id)).not.toBeNull();
+      });
+
+      it('is not blocked by an archived conversation', async () => {
+        const team = await createTeam('Support');
+        await owner.chat.create({
+          data: {
+            id: 'SCIMGRP002',
+            licenseId: fx.a.licenseId,
+            customerId: fx.a.customerId,
+            active: false,
+          },
+        });
+        await owner.chatAccess.create({
+          data: { chatId: 'SCIMGRP002', groupId: BigInt(team.id) },
+        });
+
+        expect((await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA))).statusCode).toBe(204);
+      });
+
+      it('answers 404 on a repeat — the team is genuinely gone', async () => {
+        const team = await createTeam('Support');
+        expect((await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA))).statusCode).toBe(204);
+        expect((await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA))).statusCode).toBe(404);
+      });
+    });
+
+    // ------------------------------------------------------------------------
+
+    describe('the effect, not the echo', () => {
+      it('makes a provisioned member a routing candidate, and stops when it removes them', async () => {
+        // A 200 that left the routing decision unchanged is the failure worth
+        // catching, and only routing can say. Same technique as
+        // `group-members.test.ts`, applied to the provisioning path.
+        const team = await createTeam('Support');
+        expect(await route()).toMatchObject({ assigneeId: null, reason: 'queued' });
+
+        await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          { Operations: [{ op: 'add', path: 'members', value: [{ value: fx.a.agentAccountId }] }] },
+          scimBody(scimA),
+        );
+        expect(await route()).toMatchObject({
+          assigneeId: fx.a.agentAccountId,
+          reason: 'assigned',
+          groupIds: [BigInt(team.id)],
+        });
+
+        await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          { Operations: [{ op: 'remove', path: 'members' }] },
+          scimBody(scimA),
+        );
+        expect(await route()).toMatchObject({ assigneeId: null, reason: 'queued' });
+      });
+
+      it('takes away sight of the team’s conversations the moment it removes a member', async () => {
+        // Membership *is* the grant: a conversation reachable only through the
+        // team is visible to a member and invisible a request later, with the
+        // same token. This is what makes a missed removal a security bug rather
+        // than a stale list.
+        const team = await createTeam('Support', [fx.a.agentAccountId]);
+        await owner.chat.create({
+          data: {
+            id: 'SCIMGRP003',
+            licenseId: fx.a.licenseId,
+            customerId: fx.a.customerId,
+            active: true,
+          },
+        });
+        await owner.chatAccess.create({
+          data: { chatId: 'SCIMGRP003', groupId: BigInt(team.id) },
+        });
+
+        const agentToken = await grantToken(owner, {
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          ownerId: fx.a.agentAccountId,
+          scopes: ['chats--access:ro'],
+        });
+        const visible = async () =>
+          (
+            (await server.get('/chats', auth(agentToken))).json() as {
+              items: Array<{ id: string }>;
+            }
+          ).items.map((c) => c.id);
+
+        expect(await visible()).toContain('SCIMGRP003');
+
+        expect(
+          (
+            await server.patch(
+              `/scim/v2/Groups/${team.id}`,
+              {
+                Operations: [{ op: 'remove', path: `members[value eq "${fx.a.agentAccountId}"]` }],
+              },
+              scimBody(scimA),
+            )
+          ).statusCode,
+        ).toBe(200);
+
+        expect(await visible()).not.toContain('SCIMGRP003');
+      });
+    });
+
+    // ------------------------------------------------------------------------
+
+    describe('the trail names the connector that did it', () => {
+      it('records all five actions, each attributed to the credential', async () => {
+        const team = await createTeam('Support');
+        await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          { Operations: [{ op: 'add', path: 'members', value: [{ value: fx.a.agentAccountId }] }] },
+          scimBody(scimA),
+        );
+        await server.put(
+          `/scim/v2/Groups/${team.id}`,
+          { displayName: 'Support EU', members: [{ value: fx.a.agentAccountId }] },
+          scimBody(scimA),
+        );
+        await server.patch(
+          `/scim/v2/Groups/${team.id}`,
+          { Operations: [{ op: 'remove', path: 'members' }] },
+          scimBody(scimA),
+        );
+        expect((await server.del(`/scim/v2/Groups/${team.id}`, auth(scimA))).statusCode).toBe(204);
+
+        const entries = await groupEntries();
+        expect(entries.map((e) => e.action)).toEqual([
+          'group.created',
+          'group.member_set',
+          'group.updated',
+          'group.member_removed',
+          'group.deleted',
+        ]);
+        expect(new Set(entries.map((e) => e.target))).toEqual(new Set([`group:${team.id}`]));
+
+        // A connector is not a person, so `actor_id` is null and the credential's
+        // id is the only thing that can name the actor at all — without it the
+        // trail says "the system did it" to a workspace that may hold several
+        // live SCIM tokens.
+        expect(new Set(entries.map((e) => e.actorId))).toEqual(new Set([null]));
+        expect(new Set(entries.map((e) => e.actorType))).toEqual(new Set(['system']));
+        for (const entry of entries) {
+          expect(entry.metadata).toMatchObject({ via: 'scim' });
+          expect(entry.metadata).toHaveProperty('scim_token_id');
+        }
+      });
+
+      it('records nothing when the write is refused', async () => {
+        const team = await createTeam('Support');
+        const after = (await groupEntries()).length;
+
+        expect(
+          (
+            await server.patch(
+              `/scim/v2/Groups/${team.id}`,
+              { Operations: [{ op: 'add', path: 'members', value: [{ value: NOBODY }] }] },
+              scimBody(scimA),
+            )
+          ).statusCode,
+        ).toBe(400);
+        expect(
+          (await server.put(`/scim/v2/Groups/${team.id}`, { displayName: '' }, scimBody(scimA)))
+            .statusCode,
+        ).toBe(400);
+
+        // A refusal that still wrote `member_set` would put a grant in the record
+        // that the database never made.
+        expect((await groupEntries()).length).toBe(after);
+      });
     });
   });
 

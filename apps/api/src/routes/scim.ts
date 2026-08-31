@@ -3,7 +3,9 @@
  *
  * The surface an identity provider's provisioning connector calls to keep this
  * workspace's member list in step with its directory: `/scim/v2/Users` for the
- * people, `/scim/v2/Groups` (read-only) for the teams they belong to.
+ * people, `/scim/v2/Groups` for the teams they belong to. Both are writable; the
+ * reasoning for the Groups half, which shipped read-only first, is above those
+ * routes.
  *
  * ## Why authentication and tenant scope are one piece of work
  *
@@ -96,18 +98,31 @@ import {
   parseScimFilter,
   parseScimPage,
   readScimCreateUser,
+  readScimGroupPatch,
+  readScimGroupResource,
   readScimPatch,
   scimErrorBody,
   scimListResponse,
   scimProblem,
   serialiseScimGroup,
   serialiseScimUser,
+  type ScimGroupPatchStep,
   type ScimGroupSource,
   type ScimPage,
   type ScimUserSource,
 } from '../lib/scim.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
+import {
+  createGroup,
+  deleteGroup,
+  parseGroupId,
+  removeGroupMember,
+  replaceGroupMembers,
+  setGroupMember,
+  updateGroup,
+  workspaceMemberIds,
+} from '../services/team/group-service.js';
 import { ensureSeatsCoverHeadcount } from '../services/billing/subscription-service.js';
 import type { ScimPrincipal } from '../services/auth/principal.js';
 
@@ -158,7 +173,9 @@ const GROUP_SELECT = {
   id: true,
   name: true,
   createdAt: true,
-  agents: { select: { agent: { select: { id: true, name: true } } } },
+  // Ordered, so a connector diffing the member list it pushed against the one it
+  // reads back sees a difference only when there is one.
+  agents: { select: { agent: { select: { id: true, name: true } } }, orderBy: { agentId: 'asc' } },
 } satisfies Prisma.GroupSelect;
 
 interface MembershipRow {
@@ -217,15 +234,15 @@ function isUniqueViolation(error: unknown): boolean {
   return meta?.code === '23505' || error.message.includes('23505');
 }
 
-/** Group ids are per-license integers (PRD §8.4), so a SCIM id is their text. */
-function readBigIntId(raw: string): bigint | null {
-  if (!/^\d{1,19}$/.test(raw)) return null;
-  try {
-    return BigInt(raw);
-  } catch {
-    return null;
-  }
-}
+/**
+ * Group ids are per-license integers (PRD §8.4), so a SCIM id is their text.
+ *
+ * The parser is the console's, not a second one: a hex segment resolving to a
+ * real team and a nineteen-digit id overflowing the column into a 500 are both
+ * things `parseGroupId` already knows about, and a provisioning path that had to
+ * re-learn them is exactly the divergence this item exists to close.
+ */
+const readBigIntId = parseGroupId;
 
 export default async function scimRoutes(
   app: FastifyInstance,
@@ -811,13 +828,105 @@ export default async function scimRoutes(
     },
   );
 
-  // --- GET /scim/v2/Groups ---------------------------------------------------
+  // --- Groups ----------------------------------------------------------------
   //
-  // Read-only, by decision (PLAN §6.1 assumptions): a directory may see which
-  // teams exist and who is in them, but team membership drives chat routing in
-  // this product, so letting an external system rewrite the routing topology is a
-  // much larger claim than "keep the user list in step". Group-to-role mapping is
-  // out of scope for the same reason and needs its own record.
+  // Writable since M-TEAM-e, and the reason is the one that made it read-only
+  // before, read the other way round. Team membership drives chat routing here
+  // (ADR-08 step 2) and decides which conversations an agent can see
+  // (`chat_access.group_id`), so a directory rewriting it is a real claim — but
+  // the workspaces that provision over SCIM are exactly the ones whose team
+  // structure lives in the directory, and a console-only write path means their
+  // teams are maintained by hand next to a user list that maintains itself. The
+  // divergence that produces is not a missing feature; it is an agent still on a
+  // team they left, seeing conversations they should not.
+  //
+  // So the surface is writable, and the constraint moves to where it belongs:
+  // **the provisioning path may not be looser than the console.** Everything a
+  // write here does, it does through `services/team/group-service.ts` — the same
+  // two delete refusals, the same workspace-membership check, the same audit
+  // vocabulary — and this file contributes only the protocol.
+  //
+  // Two things a directory still cannot do. It cannot choose a routing
+  // *priority*: RFC 7643's Group has no such attribute, so a member added here
+  // lands on `normal` and one already on the team keeps the tier an admin gave
+  // them (see `setGroupMember`). And group-to-role mapping remains out of scope —
+  // a connector that could grant `admin` by adding somebody to a directory group
+  // would hold a power the admin who minted its token does not, which is the same
+  // reason `SCIM_ROLE` is a constant.
+
+  /** The team a SCIM id names, or a 404 — one reader for all five Group routes. */
+  async function findGroup(request: FastifyRequest, rawId: string): Promise<GroupRow> {
+    const id = readBigIntId(rawId);
+    const row =
+      id === null
+        ? null
+        : await request.withTenant((tx) =>
+            tx.group.findFirst({ where: { id }, select: GROUP_SELECT }),
+          );
+    if (!row) throw scimProblem('not_found', 'Group not found.');
+    return row;
+  }
+
+  /**
+   * Refuse a membership write that names somebody this workspace does not employ.
+   *
+   * Checked for the whole request before any of it is applied, so a `PUT` listing
+   * nine colleagues and one stranger leaves the team as it was rather than
+   * two-thirds rewritten. The console answers 404 for the same condition, because
+   * there the id is the resource being addressed; here the resource is the team,
+   * which exists, and the fault is a value in the body — so it is a 400 naming
+   * the id, which is what tells an operator to provision that person first.
+   */
+  async function assertProvisionable(tx: TenantClient, agentIds: string[]): Promise<void> {
+    if (agentIds.length === 0) return;
+    const known = await workspaceMemberIds(tx, agentIds);
+    const unknown = agentIds.filter((id) => !known.has(id));
+    if (unknown.length === 0) return;
+    throw scimProblem(
+      'validation',
+      `Not a member of this workspace: ${unknown.join(', ')}. Provision the user before adding them to a team.`,
+      'invalidValue',
+    );
+  }
+
+  /** Apply one already-parsed patch step. Steps run in the order they were sent
+   *  (RFC 7644 §3.5.2), so this is called in a loop rather than merged. */
+  async function applyGroupPatchStep(
+    tx: TenantClient,
+    request: FastifyRequest,
+    principal: ScimPrincipal,
+    groupId: bigint,
+    step: ScimGroupPatchStep,
+  ): Promise<void> {
+    const audit = request.auditContext();
+    const licenseId = principal.licenseId;
+    const options = { metadata: scimActor(principal) };
+
+    switch (step.kind) {
+      case 'rename':
+        await updateGroup(tx, audit, licenseId, groupId, { name: step.displayName }, options);
+        return;
+      case 'setMembers':
+        await assertProvisionable(tx, step.members);
+        await replaceGroupMembers(tx, audit, licenseId, groupId, step.members, options);
+        return;
+      case 'addMembers':
+        await assertProvisionable(tx, step.members);
+        for (const agentId of step.members) {
+          await setGroupMember(tx, audit, licenseId, { groupId, agentId }, options);
+        }
+        return;
+      case 'removeMembers':
+        // Not checked against the workspace roster: removing somebody who is not
+        // on the team is already a no-op, and a connector retrying a removal
+        // after a timeout must converge rather than be told the person it is
+        // trying to remove is unknown.
+        for (const agentId of step.members) {
+          await removeGroupMember(tx, audit, licenseId, { groupId, agentId }, options);
+        }
+        return;
+    }
+  }
 
   app.get('/scim/v2/Groups', scimRoute, async (request, reply) => {
     principalOf(request);
@@ -854,15 +963,160 @@ export default async function scimRoutes(
     scimRoute,
     async (request, reply) => {
       principalOf(request);
-      const id = readBigIntId(request.params.groupId);
-      const row =
-        id === null
-          ? null
-          : await request.withTenant((tx) =>
-              tx.group.findFirst({ where: { id }, select: GROUP_SELECT }),
-            );
-      if (!row) throw scimProblem('not_found', 'Group not found.');
+      const row = await findGroup(request, request.params.groupId);
       return scimReply(reply, 200, serialiseScimGroup(toGroupSource(row), baseUrl));
+    },
+  );
+
+  // --- POST /scim/v2/Groups --------------------------------------------------
+
+  app.post('/scim/v2/Groups', scimRoute, async (request, reply) => {
+    const principal = principalOf(request);
+    const parsed = readScimGroupResource(request.body);
+    if (!parsed.ok) throw scimProblem('validation', parsed.detail, parsed.scimType);
+    const { displayName, members } = parsed.group;
+
+    // A team name is not unique in this product — two shifts may both be called
+    // "Weekend" and the console lets them be — so a create is never answered with
+    // `uniqueness`. A connector that reconciles by name has `?filter=displayName
+    // eq` to look first; inventing a constraint the product does not have would
+    // be a schema decision taken by a protocol.
+    const row = await request.withTenant(async (tx) => {
+      await assertProvisionable(tx, members);
+      const created = await createGroup(
+        tx,
+        request.auditContext(),
+        principal.licenseId,
+        { name: displayName },
+        { metadata: scimActor(principal) },
+      );
+      for (const agentId of members) {
+        await setGroupMember(
+          tx,
+          request.auditContext(),
+          principal.licenseId,
+          { groupId: created.id, agentId },
+          { metadata: scimActor(principal) },
+        );
+      }
+      return tx.group.findUniqueOrThrow({
+        where: { licenseId_id: { licenseId: principal.licenseId, id: created.id } },
+        select: GROUP_SELECT,
+      });
+    });
+
+    reply.header('Location', `${baseUrl}/Groups/${row.id}`);
+    return scimReply(reply, 201, serialiseScimGroup(toGroupSource(row), baseUrl));
+  });
+
+  // --- PUT /scim/v2/Groups/:groupId ------------------------------------------
+  //
+  // Implemented here although `PUT /Users/{id}` deliberately is not, and the
+  // difference is what the verb would actually replace. A User's writable
+  // surface is `active` and `externalId`, so a whole-resource replace would be a
+  // misleading way to spell a two-field patch. A Group's writable surface *is*
+  // the resource: its name and its membership, both of which a connector holds
+  // in full and pushes in full. This is the shape "push groups" sends.
+
+  app.put<{ Params: { groupId: string } }>(
+    '/scim/v2/Groups/:groupId',
+    scimRoute,
+    async (request, reply) => {
+      const principal = principalOf(request);
+      const existing = await findGroup(request, request.params.groupId);
+
+      const parsed = readScimGroupResource(request.body);
+      if (!parsed.ok) throw scimProblem('validation', parsed.detail, parsed.scimType);
+      const { displayName, members } = parsed.group;
+
+      const row = await request.withTenant(async (tx) => {
+        await assertProvisionable(tx, members);
+        await updateGroup(
+          tx,
+          request.auditContext(),
+          principal.licenseId,
+          existing.id,
+          { name: displayName },
+          { metadata: scimActor(principal) },
+        );
+        // A replace, not a merge — an absent `members` empties the team. See
+        // `readScimGroupResource` for why the softer reading is the dangerous one.
+        await replaceGroupMembers(
+          tx,
+          request.auditContext(),
+          principal.licenseId,
+          existing.id,
+          members,
+          { metadata: scimActor(principal) },
+        );
+        return tx.group.findUniqueOrThrow({
+          where: { licenseId_id: { licenseId: principal.licenseId, id: existing.id } },
+          select: GROUP_SELECT,
+        });
+      });
+
+      return scimReply(reply, 200, serialiseScimGroup(toGroupSource(row), baseUrl));
+    },
+  );
+
+  // --- PATCH /scim/v2/Groups/:groupId ----------------------------------------
+
+  app.patch<{ Params: { groupId: string } }>(
+    '/scim/v2/Groups/:groupId',
+    scimRoute,
+    async (request, reply) => {
+      const principal = principalOf(request);
+      const existing = await findGroup(request, request.params.groupId);
+
+      const parsed = readScimGroupPatch(request.body);
+      if (!parsed.ok) throw scimProblem('validation', parsed.detail, parsed.scimType);
+
+      const row = await request.withTenant(async (tx) => {
+        // One transaction for the whole `Operations` list. A patch that adds
+        // three people and then trips over the fourth must leave the team as it
+        // was: half a membership change is a state neither the directory nor the
+        // workspace asked for, and nothing would ever reconcile it back.
+        for (const step of parsed.steps) {
+          await applyGroupPatchStep(tx, request, principal, existing.id, step);
+        }
+        return tx.group.findUniqueOrThrow({
+          where: { licenseId_id: { licenseId: principal.licenseId, id: existing.id } },
+          select: GROUP_SELECT,
+        });
+      });
+
+      return scimReply(reply, 200, serialiseScimGroup(toGroupSource(row), baseUrl));
+    },
+  );
+
+  // --- DELETE /scim/v2/Groups/:groupId ---------------------------------------
+
+  app.delete<{ Params: { groupId: string } }>(
+    '/scim/v2/Groups/:groupId',
+    scimRoute,
+    async (request, reply) => {
+      const principal = principalOf(request);
+      const existing = await findGroup(request, request.params.groupId);
+
+      // Unlike `DELETE /Users/{id}`, this really deletes. A team is workspace
+      // configuration rather than a person: nothing in it is a record of what
+      // somebody did, `group_agents` cascades, and there is no "suspended" state
+      // for a team to sit in instead.
+      //
+      // What it will not do is strand the two columns that reference a group
+      // without a foreign key. `deleteGroup` refuses with 409 while a routing
+      // rule still points here or a conversation is still open — and it is the
+      // console's refusal, not a copy of it, which is the whole point of the
+      // shared service.
+      await request.withTenant((tx) =>
+        deleteGroup(tx, request.auditContext(), principal.licenseId, existing.id, {
+          metadata: scimActor(principal),
+        }),
+      );
+
+      // 204, and a repeat is a 404 rather than a second success: the resource is
+      // genuinely gone, which is what RFC 7644 §3.6 says to answer.
+      return reply.status(204).send();
     },
   );
 }

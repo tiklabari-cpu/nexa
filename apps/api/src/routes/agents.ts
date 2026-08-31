@@ -41,6 +41,16 @@ import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { RoutingService } from '../services/routing/routing-service.js';
 import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principal.js';
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
+import {
+  createGroup,
+  deleteGroup,
+  loadGroup,
+  parseGroupId,
+  readGroup,
+  removeGroupMember,
+  setGroupMember,
+  updateGroup,
+} from '../services/team/group-service.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
   readNotificationPreferences,
@@ -106,20 +116,12 @@ function parseMembershipBody(raw: unknown): z.infer<typeof membershipBody> {
   return parsed.data;
 }
 
-/** The largest value `groups.id` (BIGSERIAL) can hold. Past it there is no row
- *  to find, and the query would reach Postgres as a range error rather than a
- *  lookup. */
-const MAX_BIGSERIAL = 9223372036854775807n;
-
-/** The path id, as a bigint. Anything that is not a plain in-range decimal is a
- *  404 rather than a 400: `/groups/banana` names no team, and saying so is the
- *  same answer as naming a team this workspace does not have. Decimal digits
- *  only — `BigInt('0x10')` is 16, so a bare `BigInt()` would quietly resolve a
- *  hex segment to a real row. */
+/** The path id, as a bigint. Anything `parseGroupId` will not take is a 404
+ *  rather than a 400: `/groups/banana` names no team, and saying so is the same
+ *  answer as naming a team this workspace does not have. */
 function groupIdParam(raw: string): bigint {
-  if (!/^\d{1,19}$/.test(raw)) throw new ApiError('group_not_found', 'Team not found.');
-  const id = BigInt(raw);
-  if (id <= 0n || id > MAX_BIGSERIAL) throw new ApiError('group_not_found', 'Team not found.');
+  const id = parseGroupId(raw);
+  if (id === null) throw new ApiError('group_not_found', 'Team not found.');
   return id;
 }
 
@@ -129,23 +131,6 @@ function agentIdParam(raw: string): string {
   const parsed = z.string().uuid().safeParse(raw);
   if (!parsed.success) throw ApiError.validation('agentId must be a UUID.');
   return parsed.data;
-}
-
-/**
- * The team, or a 404. Read inside the caller's tenant, so RLS — not the
- * `licenseId` in the where-clause — is what makes another workspace's team
- * unreachable; the id is there because it is half of the primary key.
- */
-async function loadGroup(
-  tx: Prisma.TransactionClient,
-  groupId: bigint,
-): Promise<{ id: bigint; name: string }> {
-  const group = await tx.group.findFirst({
-    where: { id: groupId },
-    select: { id: true, name: true },
-  });
-  if (!group) throw new ApiError('group_not_found', 'Team not found.');
-  return group;
 }
 
 function serialiseGroup(group: {
@@ -803,27 +788,23 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
   // had no team, no membership and therefore nowhere to route a conversation —
   // a Must/MVP requirement that read as delivered because the read endpoint
   // existed.
+  //
+  // What each of these five endpoints *does* lives in
+  // `services/team/group-service.ts`, because `/scim/v2/Groups` performs the
+  // same five acts on behalf of a directory connector. What stays here is the
+  // half that is about this caller: the `groups--all:rw` scope, the request
+  // shapes, and the ADR-06 refusals.
 
   app.post('/groups', { config: { scopes: ['groups--all:rw'] } }, async (request, reply) => {
     const body = parseGroupBody(request.body);
     const tenant = request.tenant();
 
-    const group = await request.withTenant(async (tx) => {
-      const created = await tx.group.create({
-        data: {
-          licenseId: tenant.licenseId,
-          name: body.name,
-          ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
-        },
-        include: { agents: { select: { agentId: true, priority: true } } },
-      });
-      await writeAuditEntry(tx, request.auditContext(), {
-        action: 'group.created',
-        target: `group:${created.id}`,
-        metadata: { name: created.name, language_code: created.languageCode },
-      });
-      return created;
-    });
+    const group = await request.withTenant((tx) =>
+      createGroup(tx, request.auditContext(), tenant.licenseId, {
+        name: body.name,
+        ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
+      }),
+    );
 
     return reply.code(201).send(serialiseGroup(group));
   });
@@ -837,20 +818,10 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
 
       const group = await request.withTenant(async (tx) => {
         await loadGroup(tx, groupId);
-        const updated = await tx.group.update({
-          where: { licenseId_id: { licenseId: request.tenant().licenseId, id: groupId } },
-          data: {
-            ...(body.name !== undefined ? { name: body.name } : {}),
-            ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
-          },
-          include: { agents: { select: { agentId: true, priority: true } } },
+        return updateGroup(tx, request.auditContext(), request.tenant().licenseId, groupId, {
+          ...(body.name !== undefined ? { name: body.name } : {}),
+          ...(body.language_code !== undefined ? { languageCode: body.language_code } : {}),
         });
-        await writeAuditEntry(tx, request.auditContext(), {
-          action: 'group.updated',
-          target: `group:${groupId}`,
-          metadata: { name: updated.name, language_code: updated.languageCode },
-        });
-        return updated;
       });
 
       return reply.send(serialiseGroup(group));
@@ -865,51 +836,11 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
 
       await request.withTenant(async (tx) => {
         await loadGroup(tx, groupId);
-
-        // Neither `routing_rules.target_group_id` nor `chat_access.group_id`
-        // carries a foreign key, so the database will not stop a delete that
-        // strands them — these two checks are the only thing that does.
-        //
-        // A rule pointing at a deleted team routes nothing and says nothing; a
-        // live chat reachable only through it becomes invisible to every agent
-        // at once. Both are refusals rather than cascades: which team should
-        // inherit the work is an operator's decision, not a default.
-        const rule = await tx.routingRule.findFirst({
-          where: { targetGroupId: groupId },
-          select: { id: true, kind: true, isFallback: true },
-        });
-        if (rule) {
-          throw new ApiError(
-            'group_in_use',
-            'A routing rule still sends conversations to this team. Point the rule elsewhere first.',
-            { details: { rule_id: rule.id, kind: rule.kind, is_fallback: rule.isFallback } },
-          );
-        }
-
-        const activeChats = await tx.chat.count({
-          where: { active: true, access: { some: { groupId } } },
-        });
-        if (activeChats > 0) {
-          throw new ApiError(
-            'group_in_use',
-            'Conversations are still open with this team. Transfer or close them first.',
-            { details: { active_chats: activeChats } },
-          );
-        }
-
-        // Memberships cascade with the group (`GroupAgent.group` onDelete
-        // Cascade). The `chat_access` rows of archived chats are left alone on
-        // purpose: they are the record of who could see a conversation while it
-        // was open, group ids are never reused (a per-table sequence), and so
-        // an orphan row grants nobody anything.
-        await tx.group.delete({
-          where: { licenseId_id: { licenseId: request.tenant().licenseId, id: groupId } },
-        });
-        await writeAuditEntry(tx, request.auditContext(), {
-          action: 'group.deleted',
-          target: `group:${groupId}`,
-          metadata: {},
-        });
+        // The two refusals this can raise — a routing rule still pointing here,
+        // a conversation still open — are the only thing standing between a
+        // delete and a stranded `chat_access` row. They live in the service so
+        // the provisioning path cannot be the one that forgets them.
+        await deleteGroup(tx, request.auditContext(), request.tenant().licenseId, groupId);
       });
 
       return reply.code(204).send();
@@ -922,41 +853,16 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const groupId = groupIdParam(request.params.groupId);
       const agentId = agentIdParam(request.params.agentId);
+      // Always an explicit tier — the dropdown on screen always has one
+      // selected, and the schema's default fills it in for a body that omits it.
+      // (SCIM has no such field and deliberately passes none; see the service.)
       const { priority } = parseMembershipBody(request.body);
 
       const group = await request.withTenant(async (tx) => {
+        const licenseId = request.tenant().licenseId;
         await loadGroup(tx, groupId);
-
-        // A membership is what routing reads, so the agent must actually belong
-        // to this workspace. RLS scopes the lookup; without the check an unknown
-        // uuid would be accepted and then never match anyone.
-        const member = await tx.agentMembership.findFirst({
-          where: { agentId },
-          select: { agentId: true },
-        });
-        if (!member) throw ApiError.notFound('That agent is not a member of this workspace.');
-
-        await tx.groupAgent.upsert({
-          where: {
-            licenseId_groupId_agentId: {
-              licenseId: request.tenant().licenseId,
-              groupId,
-              agentId,
-            },
-          },
-          create: { licenseId: request.tenant().licenseId, groupId, agentId, priority },
-          update: { priority },
-        });
-        await writeAuditEntry(tx, request.auditContext(), {
-          action: 'group.member_set',
-          target: `group:${groupId}`,
-          metadata: { agent_id: agentId, priority },
-        });
-
-        return tx.group.findUniqueOrThrow({
-          where: { licenseId_id: { licenseId: request.tenant().licenseId, id: groupId } },
-          include: { agents: { select: { agentId: true, priority: true } } },
-        });
+        await setGroupMember(tx, request.auditContext(), licenseId, { groupId, agentId, priority });
+        return readGroup(tx, licenseId, groupId);
       });
 
       return reply.send(serialiseGroup(group));
@@ -972,15 +878,17 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
 
       await request.withTenant(async (tx) => {
         await loadGroup(tx, groupId);
-        const removed = await tx.groupAgent.deleteMany({ where: { groupId, agentId } });
-        if (removed.count === 0) {
-          throw ApiError.notFound('That agent is not in this team.');
-        }
-        await writeAuditEntry(tx, request.auditContext(), {
-          action: 'group.member_removed',
-          target: `group:${groupId}`,
-          metadata: { agent_id: agentId },
-        });
+        const removed = await removeGroupMember(
+          tx,
+          request.auditContext(),
+          request.tenant().licenseId,
+          { groupId, agentId },
+        );
+        // An admin who pressed Remove on somebody who is not on the team is
+        // looking at a stale screen and should be told so. A directory connector
+        // retrying the same call needs the opposite answer, which is why the
+        // service reports the fact and each caller decides (see its header).
+        if (!removed) throw ApiError.notFound('That agent is not in this team.');
       });
 
       return reply.code(204).send();

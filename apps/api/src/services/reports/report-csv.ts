@@ -930,9 +930,25 @@ export async function breakdownByTeam(
 }
 
 /**
- * AI→human hand-offs in a window — the `chat_transferred` system event. Feeds
- * both the AI Agent report and its CSV export. Containment (`@>`) rather than
- * `->>` so the jsonb GIN index can serve it.
+ * An AI→human hand-off — the `chat_transferred` system event stamped with
+ * `reason: 'ai_handoff'` (`ai-responder.ts`, `chat-service.ts#transfer`). Of
+ * `TRANSFER_REASONS` (`@nexa/types`: `manual` / `routing` /
+ * `agent_disconnected` / `ai_handoff`), only `ai_handoff` is AI-attributed —
+ * the other three are agent-to-agent transfers and must not inflate the AI
+ * Agent report. Two containment (`@>`) checks, not `->>` and not one merged
+ * object, so the `properties` GIN index (`idx_events_properties`,
+ * `jsonb_path_ops`) can serve each independently. Defined once and shared by
+ * {@link transferCount} and {@link teamPerformanceByAgent} so the filter
+ * cannot drift between the two — it already had, once.
+ */
+const AI_HANDOFF_TRANSFER = Prisma.sql`
+  e.properties @> '{"system_event": "chat_transferred"}'::jsonb
+  AND e.properties @> '{"reason": "ai_handoff"}'::jsonb
+`;
+
+/**
+ * AI→human hand-offs in a window. Feeds both the AI Agent report and its CSV
+ * export.
  */
 export async function transferCount(
   tx: TenantClient,
@@ -944,7 +960,7 @@ export async function transferCount(
     SELECT count(*) AS transfers
     FROM events e
     WHERE e.license_id = ${licenseId}
-      AND e.properties @> '{"system_event": "chat_transferred"}'::jsonb
+      AND ${AI_HANDOFF_TRANSFER}
       AND e.created_at >= ${from} AND e.created_at <= ${to}
   `;
   return Number(row?.transfers ?? 0n);
@@ -1035,13 +1051,13 @@ export async function teamPerformanceByAgent(
   const ratingsByAgent = new Map(ratingRows.map((row) => [row.agent_id, row]));
 
   // Hand-offs per agent, windowed by the transfer event's own `created_at` —
-  // same convention as `transferCount`.
+  // {@link AI_HANDOFF_TRANSFER}, the same fragment `transferCount` uses.
   const transferRows = await tx.$queryRaw<Array<{ agent_id: string; transfers: bigint }>>`
     SELECT t.assignee_id::text AS agent_id, count(*) AS transfers
     FROM events e
     JOIN threads t ON t.id = e.thread_id
     WHERE e.license_id = ${licenseId}
-      AND e.properties @> '{"system_event": "chat_transferred"}'::jsonb
+      AND ${AI_HANDOFF_TRANSFER}
       AND e.created_at >= ${from} AND e.created_at <= ${to}
       AND t.assignee_id IS NOT NULL
     GROUP BY t.assignee_id

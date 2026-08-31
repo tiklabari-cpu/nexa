@@ -8,7 +8,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { API_PACKAGE_CATALOG, generateShortId } from '@nexa/types';
+import { API_PACKAGE_CATALOG, generateShortId, type TransferReason } from '@nexa/types';
 import {
   grantToken,
   ownerClient,
@@ -175,15 +175,21 @@ describe('reports and billing', () => {
   }
 
   /**
-   * Record an AI→human hand-off on a chat — the transfer system event the AI
-   * Agent report counts. Written directly (like {@link runSkillOn}) so the test
-   * exercises the aggregation without dragging in the whole transfer flow; the
-   * shape matches what `chat-service` emits: `system_event: chat_transferred`.
+   * Record a `chat_transferred` system event on a chat — written directly
+   * (like {@link runSkillOn}) so the test exercises the aggregation without
+   * dragging in the whole transfer flow; the shape matches what
+   * `chat-service`/`ai-responder` emit. Defaults to `ai_handoff`, the only
+   * `TransferReason` (`@nexa/types`) the AI Agent report's hand-off counters
+   * count — pass `'manual'`/`'routing'`/`'agent_disconnected'` to record an
+   * agent-to-agent transfer that must NOT show up in them.
    *
    * Both hand-off counters window on the event's own `created_at`, so the row is
    * stamped {@link justNow} rather than left to the column default.
    */
-  async function recordTransfer(chatId: string): Promise<void> {
+  async function recordTransfer(
+    chatId: string,
+    reason: TransferReason = 'ai_handoff',
+  ): Promise<void> {
     const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
     await owner.event.create({
       data: {
@@ -194,7 +200,7 @@ describe('reports and billing', () => {
         type: 'system_message',
         authorType: 'system',
         recipients: 'all',
-        properties: { system_event: 'chat_transferred' },
+        properties: { system_event: 'chat_transferred', reason },
         createdAt: justNow(),
       },
     });
@@ -1345,6 +1351,16 @@ describe('reports and billing', () => {
       expect(ai.transfer_rate).toBe(0.5);
     });
 
+    it('does not count an agent-to-agent transfer as an AI hand-off', async () => {
+      const handedOff = await conversation({ agentReplies: true });
+      await recordTransfer(handedOff, 'ai_handoff');
+      const reassigned = await conversation({ agentReplies: true });
+      await recordTransfer(reassigned, 'manual');
+
+      const ai = (await server.get('/reports/ai-agent', auth)).json();
+      expect(ai.transfers).toBe(1);
+    });
+
     it('counts the skills that ran', async () => {
       const chatId = await conversation({ agentReplies: true });
       await runSkillOn(chatId);
@@ -1975,6 +1991,13 @@ describe('reports and billing', () => {
       await recordTransfer(chatId);
       const report = (await server.get('/reports/team-performance', auth)).json();
       expect(report.agents[0].transfers).toBe(1);
+    });
+
+    it('does not credit an agent with an agent-to-agent transfer', async () => {
+      const chatId = await conversation({ agentReplies: true });
+      await recordTransfer(chatId, 'manual');
+      const report = (await server.get('/reports/team-performance', auth)).json();
+      expect(report.agents[0].transfers).toBe(0);
     });
 
     it('never writes an unassigned chat to any agent row', async () => {
@@ -3190,6 +3213,7 @@ describe('reports and billing', () => {
           FROM events e JOIN threads t ON t.id = e.thread_id
           WHERE e.license_id = $1
             AND e.properties @> '{"system_event": "chat_transferred"}'::jsonb
+            AND e.properties @> '{"reason": "ai_handoff"}'::jsonb
             AND e.created_at >= ${SINCE} AND e.created_at <= now()
             AND t.assignee_id IS NOT NULL
           GROUP BY t.assignee_id`,

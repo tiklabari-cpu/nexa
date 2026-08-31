@@ -8380,7 +8380,7 @@
         "description": "`transferCount` (report-csv.ts:937) `chat_transferred` olaylarini `reason` ayrimi YAPMADAN sayiyor; ayni SQL :1044 te tekrarlaniyor. `skillRun.count` uc yerde filtresiz (report-csv.ts:1489, :1726, routes/reports.ts:719) → Copilot assistleri AI Agent yetenegi sayiliyor. Ve testi YESILDI ama hatayi yakalayamiyordu.",
         "details": "PRD satır **579-593** (FR-MOD-07.4) ve **699-706** (FR-MOD-12) · denetim `prd-uyum-denetimi.md` §3 D7.\n\n**ŞEMA DEĞİŞİKLİĞİ GEREKMİYOR — iki hazır dayanak var:**\n- `reason` alanı olayın `properties`ine **zaten yazılıyor**: `chat-service.ts:980` (`reason: target.reason`) ve `ai-responder.ts:135` (`reason: 'ai_handoff'`).\n- `Skill.aiAgentId` **zaten var** (`schema.prisma:1384`); `SkillRun.skillId → Skill` üzerinden filtrelenebilir.",
         "testStrategy": "Kalem bütününün kabul kriteri: ajan→ajan devri ile AI→insan devri ayrı sayılıyor, Copilot kullanımı AI Agent raporuna karışmıyor, VE bu iki düzeltme geri alındığında testler kırmızıya dönüyor (fixture artık kör değil).",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8389,10 +8389,10 @@
             "title": "M-RPT-a [SONNET-XHIGH] transferCount reason filtresi + ikinci kopyanın tek yardımcıya indirilmesi",
             "description": "SQL'e `AND e.properties @> '{\"reason\":\"ai_handoff\"}'::jsonb` ekle. **Containment (`@>`) kullan, `->>` değil** — jsonb GIN indeksinden faydalanmak için; dosyanın kendi yorumu bu gerekçeyi yazıyor. `:1044` civarındaki ikinci kopyayı da düzelt; iki kopya bu hatanın iki yerde yaşamasının sebebi. `TRANSFER_REASONS` sözlüğünü oku — `ai_handoff` dışında \"AI devri\" sayılan bir reason var mı, kararını yorumla.",
             "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "178",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T15:54:13.255Z"
           },
           {
             "id": 2,
@@ -8415,7 +8415,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
+        "updatedAt": "2026-08-31T15:54:13.255Z"
       },
       {
         "id": "179",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T15:52:29.845Z",
+      "lastModified": "2026-08-31T15:54:13.256Z",
       "taskCount": 184,
       "completedCount": 177,
       "tags": [

@@ -205,6 +205,154 @@ describe('campaigns', () => {
     expect((await list(writeToken, '?status=scheduled')).map((c) => c.name)).toEqual(['Later']);
   });
 
+  // --- Status re-evaluated on read (tm 176.6) --------------------------------
+  //
+  // Nothing in the deployment fires when a start or end time arrives, so the
+  // stored word is only ever as fresh as the last save. Reading is what asks
+  // the question again — and it heals the column so every other reader of
+  // `campaigns.status` gets the answer too.
+
+  /** Rewrite a campaign's schedule behind the API, leaving `status` stale. */
+  const setSchedule = (id: string, schedule: { startsAt?: Date; endsAt?: Date }) =>
+    owner.campaign.update({
+      where: { id },
+      data: { startsAt: schedule.startsAt, endsAt: schedule.endsAt },
+      select: { status: true },
+    });
+  const storedStatus = async (id: string): Promise<string> =>
+    (await owner.campaign.findUniqueOrThrow({ where: { id }, select: { status: true } })).status;
+
+  it('reports a scheduled campaign as ongoing once its start time has passed', async () => {
+    const campaign = (
+      await create(writeToken, {
+        name: 'Later',
+        conditions: { url_contains: '/x' },
+        content: { message: 'hi' },
+        starts_at: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+    ).json() as Campaign;
+    expect(campaign.status).toBe('scheduled');
+
+    // Time passes: the start arrives, and nobody touches the campaign.
+    await setSchedule(campaign.id, { startsAt: minutesAgo(1) });
+    expect(await storedStatus(campaign.id)).toBe('scheduled');
+
+    const listed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
+    expect(listed?.status).toBe('ongoing');
+    // …and the stale column is healed, not merely papered over in the response.
+    expect(await storedStatus(campaign.id)).toBe('ongoing');
+  });
+
+  it('reports a running campaign as inactive once its end date has passed', async () => {
+    const campaign = (
+      await create(writeToken, {
+        name: 'Winter sale',
+        conditions: { url_contains: '/x' },
+        content: { message: 'hi' },
+        ends_at: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+    ).json() as Campaign;
+    expect(campaign.status).toBe('ongoing');
+
+    await setSchedule(campaign.id, { endsAt: minutesAgo(1) });
+
+    const listed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
+    expect(listed?.status).toBe('inactive');
+    expect(await storedStatus(campaign.id)).toBe('inactive');
+  });
+
+  it('files a started campaign under the tab it now belongs to', async () => {
+    // The half a re-resolved badge alone would miss: the tabs filter on the
+    // resolved value, so a campaign that has begun leaves Scheduled for Ongoing.
+    const campaign = (
+      await create(writeToken, {
+        name: 'Begun',
+        conditions: { url_contains: '/x' },
+        content: { message: 'hi' },
+        starts_at: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+    ).json() as Campaign;
+    await setSchedule(campaign.id, { startsAt: minutesAgo(1) });
+
+    expect((await list(writeToken, '?status=ongoing')).map((c) => c.name)).toEqual(['Begun']);
+    expect(await list(writeToken, '?status=scheduled')).toEqual([]);
+  });
+
+  it('heals the same row the same way however many readers ask', async () => {
+    // The idempotence the compare-and-set buys: a second read finds the column
+    // already right and changes nothing, rather than writing over it again.
+    const campaign = (
+      await create(writeToken, {
+        name: 'Begun',
+        conditions: { url_contains: '/x' },
+        content: { message: 'hi' },
+        starts_at: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+    ).json() as Campaign;
+    await setSchedule(campaign.id, { startsAt: minutesAgo(1) });
+
+    for (let read = 0; read < 3; read += 1) {
+      const listed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
+      expect(listed?.status).toBe('ongoing');
+    }
+    expect(await storedStatus(campaign.id)).toBe('ongoing');
+  });
+
+  it('heals the column for a read-only agent too', async () => {
+    // Deliberate: recording that a start date has passed is not the reader's
+    // change, so it is not gated on their write scope.
+    const campaign = (
+      await create(writeToken, {
+        name: 'Begun',
+        conditions: { url_contains: '/x' },
+        content: { message: 'hi' },
+        starts_at: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+    ).json() as Campaign;
+    await setSchedule(campaign.id, { startsAt: minutesAgo(1) });
+
+    const readToken = await grantToken(owner, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['customers:ro'],
+    });
+    expect((await list(readToken, '?status=all')).map((c) => c.status)).toContain('ongoing');
+    expect(await storedStatus(campaign.id)).toBe('ongoing');
+  });
+
+  it('restarts a finished campaign when its end date is extended', async () => {
+    // The regression the heal would otherwise introduce: once a finished
+    // campaign is stored `inactive`, an edit that only moves `ends_at` must
+    // still turn it back on — that edit is the only control the builder offers.
+    const campaign = (
+      await create(writeToken, {
+        name: 'Winter sale',
+        conditions: { url_contains: '/pricing' },
+        content: { message: 'hi' },
+        ends_at: new Date(Date.now() + 3_600_000).toISOString(),
+      })
+    ).json() as Campaign;
+    expect(await sendsFor(campaign.id)).toHaveLength(0);
+    // The visitor arrives after the campaign finished, so only a genuine
+    // restart can reach them.
+    const shopper = await seedVisitor(fx.a, 'On Pricing', 'https://shop.example/pricing');
+
+    await setSchedule(campaign.id, { endsAt: minutesAgo(1) });
+    await list(writeToken, '?status=all');
+    expect(await storedStatus(campaign.id)).toBe('inactive');
+
+    const extended = await server.patch(
+      `/campaigns/${campaign.id}`,
+      { ends_at: new Date(Date.now() + 3_600_000).toISOString() },
+      auth(writeToken),
+    );
+    expect(extended.statusCode).toBe(200);
+    expect((extended.json() as Campaign).status).toBe('ongoing');
+    // Running again means running: it reaches the live visitor it matches.
+    expect((await sendsFor(campaign.id)).map((s) => s.customerId)).toEqual([shopper]);
+  });
+
   // --- Edit + active toggle (FR-MOD-03.3.3) ----------------------------------
 
   it('activating an inactive campaign fires it, idempotently', async () => {

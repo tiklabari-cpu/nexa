@@ -8313,13 +8313,13 @@
             "title": "M-CAMP-f [OPUS-XHIGH] Kampanya durumu okuma anında yeniden değerlendirilsin",
             "description": "`computeCampaignStatus` yalnız create (`campaign-service.ts:108`) ve update (`:169`) yolundan çağrılıyor; zamanlayıcı yok, `starts_at` geçmişe kayan kampanya sonsuza dek `scheduled` görünüyor. Tercih: okuma anında yeniden hesaplama (zamanlayıcı altyapısı gerektirmez); alternatif mevcut sweep deseni (`retention.ts`). Eşzamanlı iki okuma aynı satırı güncelleyebilir — **idempotent güncelleme** yaz. Sekme filtreleri (All/Ongoing/Scheduled/Inactive) bu değerden beslenir.",
             "details": "Bağımlılık: M-CAMP-e. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "176",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T10:51:51.157Z"
           }
         ],
-        "updatedAt": "2026-08-31T10:49:55.765Z"
+        "updatedAt": "2026-08-31T10:51:51.157Z"
       },
       {
         "id": "177",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T10:49:55.767Z",
+      "lastModified": "2026-08-31T10:51:51.158Z",
       "taskCount": 184,
       "completedCount": 175,
       "tags": [

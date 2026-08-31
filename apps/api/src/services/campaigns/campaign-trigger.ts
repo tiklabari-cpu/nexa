@@ -65,7 +65,7 @@
 import type { Prisma } from '@prisma/client';
 import type { CampaignConditions } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import { computeCampaignStatus, matchesConditions } from './campaign-matching.js';
+import { matchesConditions, resolveCampaignStatus } from './campaign-matching.js';
 
 /**
  * How many of a workspace's campaigns one page view will evaluate.
@@ -102,12 +102,14 @@ export interface TriggerableCampaign {
  * is the decision — who gets an unsolicited message — and it should be pinnable
  * without a database.
  *
- * "Running" is recomputed from `starts_at`/`ends_at` rather than trusted from
- * the stored `status`, which is only written when the owner saves and therefore
- * goes stale (its own known defect, tm 176.6; this path does not wait for it).
- * That cuts both ways on purpose: a campaign whose end date passed while nobody
- * touched it must not fire at a new arrival, and a scheduled one whose start
- * time has come must — nothing else in the product will notice that it began.
+ * "Running" is recomputed from `starts_at`/`ends_at` (`resolveCampaignStatus`)
+ * rather than trusted from the stored `status`. The column is healed by the
+ * campaigns list (tm 176.6), but a visitor arriving before anyone has opened
+ * that page would still meet the value the owner's last save wrote — and this
+ * decision, whether a stranger gets an unsolicited message, is not one to hang
+ * on somebody having looked at a screen. That cuts both ways on purpose: a
+ * campaign whose end date passed must not fire at a new arrival, and a
+ * scheduled one whose start time has come must.
  */
 export function selectTriggeredCampaigns(
   campaigns: readonly TriggerableCampaign[],
@@ -116,18 +118,7 @@ export function selectTriggeredCampaigns(
 ): string[] {
   const fired: string[] = [];
   for (const campaign of campaigns) {
-    const status = computeCampaignStatus(
-      {
-        // The same reading `CampaignService.update` and `pickDeliverableSend`
-        // use: anything not stored `inactive` is the owner saying "on", and the
-        // window below decides whether "on" means "now".
-        active: campaign.status !== 'inactive',
-        startsAt: campaign.startsAt,
-        endsAt: campaign.endsAt,
-      },
-      now,
-    );
-    if (status !== 'ongoing') continue;
+    if (resolveCampaignStatus(campaign, now) !== 'ongoing') continue;
 
     // `matchesConditions` already refuses a predicate with nothing set, so a
     // campaign that somehow lost its trigger matches nobody rather than
@@ -175,8 +166,9 @@ export async function fireCampaignsAtVisitor(
       licenseId: tenant.licenseId,
       // Index-served (`campaigns_license_id_status_idx`). `inactive` is excluded
       // in SQL rather than in memory because it is the one status the recompute
-      // below can never turn back on — the owner switched it off — so reading
-      // those rows would be work with no possible outcome.
+      // below can never turn back on — a documented invariant of
+      // `resolveCampaignStatus`, and pinned by its unit test — so reading those
+      // rows would be work with no possible outcome.
       status: { in: ['ongoing', 'scheduled'] },
     },
     orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],

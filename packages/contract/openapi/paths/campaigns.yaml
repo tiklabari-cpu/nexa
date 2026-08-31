@@ -19,6 +19,10 @@ campaigns:
       Newest first. `status` filters by the derived lifecycle bucket
       (FR-MOD-03.3.1): `ongoing`, `scheduled` (active but not started yet),
       `inactive` (off, or past its end), or `all`.
+
+      The bucket is re-derived from each campaign's schedule as the list is
+      read, so one whose start time has passed appears under `ongoing` rather
+      than staying where its last save left it.
     parameters:
       - name: status
         in: query

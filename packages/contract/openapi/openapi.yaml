@@ -2791,9 +2791,13 @@ components:
           enum: [ongoing, scheduled, inactive]
           description: |
             Lifecycle state the status tabs filter by (FR-MOD-03.3.1), resolved
-            from the on/off intent and the schedule at save time: `ongoing`
-            (running now), `scheduled` (active, not started yet), or `inactive`
-            (off, or past its end).
+            from the on/off intent and the schedule: `ongoing` (running now),
+            `scheduled` (active, not started yet), or `inactive` (off, or past
+            its end).
+
+            Re-evaluated against the clock on every read, so a campaign whose
+            `starts_at` has arrived is reported — and filtered — as `ongoing`
+            without anybody having saved it again.
         conditions: { $ref: "#/components/schemas/CampaignConditions" }
         content: { $ref: "#/components/schemas/CampaignContent" }
         starts_at: { type: string, format: date-time, nullable: true }

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   campaignPerformance,
   computeCampaignStatus,
+  deriveActiveIntent,
   hasTrigger,
   matchesConditions,
+  resolveCampaignStatus,
   visitorPageUrls,
 } from './campaign-matching.js';
 
@@ -89,6 +91,73 @@ describe('computeCampaignStatus', () => {
     expect(
       computeCampaignStatus({ active: true, startsAt: hourBefore, endsAt: hourBefore }, now),
     ).toBe('inactive');
+  });
+});
+
+describe('deriveActiveIntent', () => {
+  const now = new Date('2026-07-26T12:00:00.000Z');
+  const hourBefore = new Date('2026-07-26T11:00:00.000Z');
+  const hourAfter = new Date('2026-07-26T13:00:00.000Z');
+
+  it('reads a stored ongoing or scheduled campaign as switched on', () => {
+    expect(deriveActiveIntent({ status: 'ongoing', endsAt: null }, now)).toBe(true);
+    expect(deriveActiveIntent({ status: 'scheduled', endsAt: hourAfter }, now)).toBe(true);
+  });
+
+  it('reads a stored inactive campaign as switched off', () => {
+    expect(deriveActiveIntent({ status: 'inactive', endsAt: null }, now)).toBe(false);
+    expect(deriveActiveIntent({ status: 'inactive', endsAt: hourAfter }, now)).toBe(false);
+  });
+
+  it('reads an inactive campaign whose end date has passed as still switched on', () => {
+    // The tie-break that keeps "extend a finished campaign's schedule" working:
+    // the end date explains the `inactive`, so it is not evidence of an owner
+    // reaching for the toggle.
+    expect(deriveActiveIntent({ status: 'inactive', endsAt: hourBefore }, now)).toBe(true);
+  });
+});
+
+describe('resolveCampaignStatus', () => {
+  const now = new Date('2026-07-26T12:00:00.000Z');
+  const hourBefore = new Date('2026-07-26T11:00:00.000Z');
+  const hourAfter = new Date('2026-07-26T13:00:00.000Z');
+
+  it('promotes a scheduled campaign whose start time has arrived', () => {
+    // The defect this whole path exists for: nothing fires at `starts_at`, so
+    // the stored word stays `scheduled` for ever.
+    expect(
+      resolveCampaignStatus({ status: 'scheduled', startsAt: hourBefore, endsAt: null }, now),
+    ).toBe('ongoing');
+  });
+
+  it('retires an ongoing campaign whose end date has passed', () => {
+    expect(
+      resolveCampaignStatus({ status: 'ongoing', startsAt: hourBefore, endsAt: hourBefore }, now),
+    ).toBe('inactive');
+  });
+
+  it('leaves a campaign alone while the stored word is still true', () => {
+    expect(
+      resolveCampaignStatus({ status: 'scheduled', startsAt: hourAfter, endsAt: null }, now),
+    ).toBe('scheduled');
+    expect(
+      resolveCampaignStatus({ status: 'ongoing', startsAt: null, endsAt: hourAfter }, now),
+    ).toBe('ongoing');
+  });
+
+  it('never turns a stored inactive campaign back on', () => {
+    // The invariant `fireCampaignsAtVisitor` leans on when it excludes
+    // `inactive` in SQL: neither an off campaign nor a finished one can be
+    // resurrected by a recompute, whatever its schedule says.
+    for (const schedule of [
+      { startsAt: null, endsAt: null },
+      { startsAt: hourBefore, endsAt: null },
+      { startsAt: hourBefore, endsAt: hourBefore },
+      { startsAt: hourAfter, endsAt: null },
+      { startsAt: null, endsAt: hourAfter },
+    ]) {
+      expect(resolveCampaignStatus({ status: 'inactive', ...schedule }, now)).toBe('inactive');
+    }
   });
 });
 

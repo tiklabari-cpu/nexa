@@ -8191,7 +8191,7 @@
         "description": "`GET /groups` tek uctu; repoda `group.create`/`groupAgent.*` icin tek bir yazma cagrisi yoktu. Yonlendirme tumuyle `group_agents`e bagli oldugundan (ADR-08 adim 2) sifirdan acilan workspace hicbir sohbeti yonlendiremiyordu. PLAN.md:218 bu maddeyi \"✅ Dilim 8 · /groups\" diye kapatmisti — denetimin K1 kritik bulgusu.",
         "details": "PRD `urun-gereksinim-dokumani-PRD.md` satır **536-551** (FR-MOD-04.5) · denetim `prd-uyum-denetimi.md` §5 K1.\n\n**DAL — yeni dal AÇMA.** Uçlar `feat/g2-group-write-paths` dalında commit `6ebc898` ile YAZILI (typecheck yeşil, test YOK, konsol ekranı YOK). `git fetch origin && git checkout feat/g2-group-write-paths`.\n\n**Dalda hazır olan:** `routes/agents.ts` grup CRUD + üyelik uçları ve yardımcıları · `errors.ts` `group_in_use` (409) · `audit-log.ts` beş `group.*` eylemi · `lifecycle-service.ts` `#seedDefaultTeam` (signup → `General` takımı + owner `primary`) · OpenAPI `GroupWrite`/`GroupIdPath`/`AgentIdPath` + üretilmiş tipler. Doğrula, yeniden yazma.\n\n**Neden güvenlik işi:** takım üyeliği erişim kontrolüdür — hangi ajanın hangi sohbeti göreceğini belirler. `routing_rules.target_group_id` ve `chat_access.group_id` **FK taşımıyor**, yani yanlış bir silmeyi veritabanı durdurmaz; uçtaki iki refüz tek savunmadır.",
         "testStrategy": "Her iş kalemi kendi DoD kapısından geçer (CONVENTIONS §1). Kalem bütününün kabul kriteri: sıfırdan açılan bir workspace gelen ilk sohbeti bir takıma yönlendirebiliyor (boş `chat_access` DEĞİL) ve konsoldan takım kurulabiliyor.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8240,13 +8240,13 @@
             "title": "M-TEAM-e [OPUS-MAX] BÖLÜNMEZ: SCIM /Groups yazma — provizyon yolu konsoldan gevşek olamaz",
             "description": "`routes/scim.ts` şu an /Groups için salt-okunur. POST/PUT/PATCH(add|remove members)/DELETE. `displayName`→`Group.name`, `members`→`group_agents`, priority varsayılan `normal`. **M-TEAM-a silme korumaları SCIM yolunda da uygulanmalı** — servis katmanını paylaş, mantığı kopyalama. Mevcut /Users yazma yollarının hata biçimi, filtre ve sayfalama desenini izle; testler /Users testleriyle aynı sertlikte.",
             "details": "Bağımlılık: M-TEAM-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "175",
-            "updatedAt": "2026-08-31T05:53:15.092Z"
+            "updatedAt": "2026-08-31T06:55:59.915Z"
           }
         ],
-        "updatedAt": "2026-08-31T05:53:15.092Z"
+        "updatedAt": "2026-08-31T06:55:59.915Z"
       },
       {
         "id": "176",
@@ -8718,9 +8718,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T05:53:15.093Z",
+      "lastModified": "2026-08-31T06:55:59.919Z",
       "taskCount": 184,
-      "completedCount": 174,
+      "completedCount": 175,
       "tags": [
         "master"
       ]

@@ -17,7 +17,7 @@
  * (`test/helpers/pods.ts` for how, and for why the children share this run's
  * isolated datastores instead of getting their own).
  *
- * Three questions, and each one has a decision hanging off it:
+ * Four questions, and each one has a decision hanging off it:
  *
  *   1. **Fan-out.** Does an agent holding a socket on rtm-A receive an event
  *      that was posted through api-B? This is the whole promise of the pub/sub
@@ -32,6 +32,14 @@
  *      calls go to api-B, does anything break? A "yes" here is not a defect —
  *      it is a *requirement*, and it would have to be written into the
  *      deployment manifests M-IAC (tm 164) produces as session affinity.
+ *   4. **Uploaded bytes.** An attachment PUT to api-A — can api-B serve it, and
+ *      does api-B accept an event that points at it? This one is not a question
+ *      about a mechanism that was written and never run; it is a defect that
+ *      was found (audit D6) and fixed with the `s3` provider (M-STORE-a), and
+ *      §3 below is where the fix stops being an argument and becomes a
+ *      measurement — with the broken arrangement kept alongside it as the
+ *      control, because a passing test whose failing case was never run is not
+ *      evidence of anything.
  *
  * The answers are recorded in PLAN §D136 either way.
  *
@@ -39,6 +47,9 @@
  * Four processes on one loopback interface is the smallest arrangement in which
  * "more than one of us" is a true statement, and truth is the whole point.
  */
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
@@ -59,6 +70,7 @@ import {
   stopPods,
   type Pod,
 } from '../helpers/pods.js';
+import { startFakeBucket, type FakeBucket } from '../helpers/s3-bucket.js';
 
 /** Booting four child processes from cold is the slow part, not the tests. */
 const BOOT_TIMEOUT_MS = 180_000;
@@ -573,5 +585,285 @@ describe('two API processes sharing one Redis leader lock', () => {
         expect(job?.last_error_class, name).toBeUndefined();
       }
     }
+  });
+});
+
+// ===========================================================================
+// 3 · Two API processes, one bucket — and two API processes, two disks
+// ===========================================================================
+
+/**
+ * The upload defect, and its fix, both run as a fleet (M-STORE-c · NFR-R1).
+ *
+ * `LocalStore` writes under `STORAGE_LOCAL_DIR`, a directory inside one
+ * container. The chart scales the API to four replicas
+ * (`infra/helm/nexa/values.yaml`, `api.hpa.maxReplicas: 4`) and mounts no shared
+ * volume, so an attachment that landed on pod A is, to pod B, a file nobody
+ * uploaded — a broken image on a good day, and on a bad one a *refused message*,
+ * because `attachment.ts` reads `store.exists` before it will let an
+ * `attachment_url` ride on an event. That is audit finding D6, and M-STORE-a
+ * answered it with the `s3` provider. Until now the answer had never been run
+ * as more than one process: `s3-store.test.ts` drives a stubbed `fetch` inside
+ * one heap, which is the right shape for "what does the store do with a 403"
+ * and structurally cannot show "does another *process* see the object".
+ *
+ * So four API pods, in two pairs, doing the same three steps:
+ *
+ *   * `s3-a` / `s3-b` share one bucket (`helpers/s3-bucket.ts`). The property
+ *     claimed: grant on one, PUT on one, GET and send from the other.
+ *   * `local-a` / `local-b` are the control, and they are the reason the pair
+ *     above means anything. They run the shipped default, `STORAGE_PROVIDER=local`,
+ *     with **a different `STORAGE_LOCAL_DIR` each** — which is not a contrivance
+ *     but the only faithful model of the deployment, where each replica's
+ *     filesystem is its own. Leaving the default in place would have both
+ *     children resolve `.data/uploads` against the same `apps/api` working
+ *     directory, and the "broken" arrangement would pass every assertion here
+ *     while remaining broken in Kubernetes. A control that cannot fail is
+ *     decoration; this one is asserted to fail, in the two specific ways the
+ *     bug shows up in production.
+ */
+describe('an attachment uploaded through one API pod and read from another', () => {
+  let db: PrismaClient;
+  let bucket: FakeBucket;
+  /** Two pods, one shared bucket — the arrangement M-STORE-a exists to allow. */
+  let s3A: Pod;
+  let s3B: Pod;
+  /** Two pods, a private disk each — the arrangement the chart deploys today. */
+  let localA: Pod;
+  let localB: Pod;
+  /** A private storage root per pod — see the note in `beforeAll`. */
+  let podDirs: string[] = [];
+  let pods: Pod[] = [];
+
+  let fx: Fixtures;
+  let conversation: Conversation;
+  let token: string;
+
+  /**
+   * A real magic number and a body no default could produce by accident.
+   *
+   * `application/pdf` rather than the `image/png` the other upload suites use:
+   * the type has to survive the round trip through storage, and `LocalStore`
+   * keeps it in a `.type` sidecar while S3 keeps it as object metadata. A type
+   * that could be guessed back from the `.pdf` extension would let a provider
+   * that dropped it look correct.
+   */
+  const FILE = Buffer.from('%PDF-1.7\n% two-pod attachment, tm 177.3\n%%EOF\n', 'utf8');
+  const CONTENT_TYPE = 'application/pdf';
+
+  /** `POST /uploads` — permission, before a byte moves. */
+  async function grantUpload(pod: Pod): Promise<{ uploadUrl: string; fileUrl: string }> {
+    const granted = await podRequest(pod, 'POST', '/uploads', {
+      token,
+      body: { content_type: CONTENT_TYPE, size_bytes: FILE.byteLength },
+    });
+    expect(granted.status, `${pod.name}: ${JSON.stringify(granted.body)}`).toBe(201);
+    const body = granted.body as { upload_url: string; file_url: string };
+    return { uploadUrl: body.upload_url, fileUrl: body.file_url };
+  }
+
+  /**
+   * `PUT /uploads/:key` — the bytes, authorised by the grant's signature.
+   *
+   * Raw `fetch` rather than `podRequest`: the body is binary and the route is
+   * public, so neither the JSON encoding nor the bearer token belongs here.
+   */
+  async function putBytes(pod: Pod, uploadUrl: string): Promise<number> {
+    const response = await fetch(`${pod.origin}${uploadUrl}`, {
+      method: 'PUT',
+      headers: { 'content-type': CONTENT_TYPE },
+      body: FILE,
+      signal: AbortSignal.timeout(15_000),
+    });
+    await response.arrayBuffer();
+    return response.status;
+  }
+
+  interface Download {
+    status: number;
+    contentType: string | null;
+    disposition: string | null;
+    bytes: Buffer;
+  }
+
+  /** `GET /uploads/:key` — a session, and a licence prefix that has to match. */
+  async function download(pod: Pod, fileUrl: string): Promise<Download> {
+    const response = await fetch(`${pod.origin}${fileUrl}`, {
+      headers: { authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+    return {
+      status: response.status,
+      contentType: response.headers.get('content-type'),
+      disposition: response.headers.get('content-disposition'),
+      bytes: Buffer.from(await response.arrayBuffer()),
+    };
+  }
+
+  /** Sending the attachment on an event — where `assertUploadedAttachment` runs. */
+  async function sendAttachment(
+    pod: Pod,
+    fileUrl: string,
+  ): Promise<{ status: number; body: unknown }> {
+    return podRequest(pod, 'POST', `/chats/${conversation.chatId}/events`, {
+      token,
+      body: { type: 'message', text: 'see attached', attachment_url: fileUrl },
+    });
+  }
+
+  const keyOf = (fileUrl: string): string => fileUrl.slice('/api/v1/uploads/'.length);
+
+  beforeAll(async () => {
+    db = ownerClient();
+    fx = await seedFixtures(db);
+    const groupId = await createGroup(db, fx.a, [fx.a.ownerAccountId]);
+    conversation = await createConversation(db, fx.a, {
+      groupId,
+      agentIds: [fx.a.ownerAccountId],
+    });
+    token = await grantToken(db, {
+      licenseId: fx.a.licenseId,
+      organizationId: fx.a.organizationId,
+      ownerId: fx.a.ownerAccountId,
+      scopes: ['chats--all:rw'],
+    });
+
+    bucket = await startFakeBucket();
+    // One private directory per pod, the `s3` pair included.
+    //
+    // Giving the `s3` pods a directory looks pointless — they are not supposed
+    // to touch one — and it is the single most important line in this setup. It
+    // was added because a mutation exposed the alternative: with the factory's
+    // `s3` branch changed to return a `LocalStore`, only *one* of these tests
+    // went red. The other two passed, because both children run with `cwd`
+    // `apps/api`, so the default `STORAGE_LOCAL_DIR` (`.data/uploads`) resolves
+    // to the same folder for both of them and a fallback to pod-local disk is
+    // invisible on one machine. Four separate roots make every pod's disk
+    // private, which is what a container's filesystem is, so any accidental
+    // fall-through to local storage now fails the shared-bucket block outright.
+    podDirs = await Promise.all(
+      ['s3-a', 's3-b', 'local-a', 'local-b'].map((name) =>
+        mkdtemp(join(tmpdir(), `nexa-pod-${name}-`)),
+      ),
+    );
+
+    const [portS3A, portS3B, portLocalA, portLocalB] = (await reserveFreePorts(4)) as [
+      number,
+      number,
+      number,
+      number,
+    ];
+    [s3A, s3B, localA, localB] = await Promise.all([
+      startApiPod('s3-a', portS3A, { ...bucket.env(), STORAGE_LOCAL_DIR: podDirs[0]! }),
+      startApiPod('s3-b', portS3B, { ...bucket.env(), STORAGE_LOCAL_DIR: podDirs[1]! }),
+      // Explicit rather than inherited: the repo's own `.env` sets both of
+      // these, and a control that silently picked up a shared directory from it
+      // would pass for the wrong reason.
+      startApiPod('local-a', portLocalA, {
+        STORAGE_PROVIDER: 'local',
+        STORAGE_LOCAL_DIR: podDirs[2]!,
+      }),
+      startApiPod('local-b', portLocalB, {
+        STORAGE_PROVIDER: 'local',
+        STORAGE_LOCAL_DIR: podDirs[3]!,
+      }),
+    ]);
+    pods = [s3A, s3B, localA, localB];
+  }, BOOT_TIMEOUT_MS);
+
+  afterAll(async () => {
+    await stopPods(pods);
+    await bucket.close();
+    await Promise.all(podDirs.map((dir) => rm(dir, { recursive: true, force: true })));
+    await db.$disconnect();
+  }, BOOT_TIMEOUT_MS);
+
+  // -------------------------------------------------------------------------
+  // The shared bucket — the property M-STORE-a claims
+  // -------------------------------------------------------------------------
+
+  describe('with a shared bucket', () => {
+    it('serves the bytes and the content type from the pod that never saw the upload', async () => {
+      const { uploadUrl, fileUrl } = await grantUpload(s3A);
+      expect(await putBytes(s3A, uploadUrl), bucket.log().join('\n')).toBe(201);
+
+      // The bucket is holding it, laid out per licence — so the bytes really
+      // did leave the pod rather than merely being readable from it.
+      expect(bucket.keys()).toContain(`${fx.a.licenseId}/${keyOf(fileUrl)}`);
+
+      const served = await download(s3B, fileUrl);
+      expect(served.status, bucket.log().join('\n')).toBe(200);
+      expect(served.bytes.equals(FILE)).toBe(true);
+      expect(served.contentType).toBe(CONTENT_TYPE);
+      // The GET is the real route, not a proxy to the bucket: it is the one
+      // that refuses to serve a file inline.
+      expect(served.disposition).toBe('attachment');
+    });
+
+    it('accepts an event on one pod that points at bytes uploaded to the other', async () => {
+      const { uploadUrl, fileUrl } = await grantUpload(s3A);
+      expect(await putBytes(s3A, uploadUrl)).toBe(201);
+
+      // `assertUploadedAttachment` running on a pod that has never held these
+      // bytes — the check that turns a storage split into a refused message.
+      const sent = await sendAttachment(s3B, fileUrl);
+      expect(sent.status, JSON.stringify(sent.body)).toBe(201);
+      expect((sent.body as { attachment_url?: string }).attachment_url).toBe(fileUrl);
+    });
+
+    it('takes the bytes on whichever pod the grant did not come from', async () => {
+      // The grant is a signature over `UPLOAD_SIGNING_KEY`, which is deployment
+      // configuration rather than per-process state. If a pod ever minted its
+      // own, every upload behind a load balancer would fail at the PUT — and it
+      // would fail one time in N, which is the hardest kind of bug to be told
+      // about.
+      const { uploadUrl, fileUrl } = await grantUpload(s3A);
+      expect(await putBytes(s3B, uploadUrl), bucket.log().join('\n')).toBe(201);
+
+      const served = await download(s3A, fileUrl);
+      expect(served.status).toBe(200);
+      expect(served.bytes.equals(FILE)).toBe(true);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // The control — the same three steps on pod-local disk
+  // -------------------------------------------------------------------------
+
+  describe('with pod-local disk, the arrangement the chart deploys today', () => {
+    it('serves the file from the pod that received it and 404s on the other', async () => {
+      const { uploadUrl, fileUrl } = await grantUpload(localA);
+      expect(await putBytes(localA, uploadUrl)).toBe(201);
+
+      // Half of the control is that the upload genuinely worked: without this
+      // the 404 below would be satisfied by any broken upload path at all.
+      const here = await download(localA, fileUrl);
+      expect(here.status).toBe(200);
+      expect(here.bytes.equals(FILE)).toBe(true);
+      expect(here.contentType).toBe(CONTENT_TYPE);
+
+      // The other half. A user whose next request is balanced onto the second
+      // replica is told their own attachment does not exist.
+      const there = await download(localB, fileUrl);
+      expect(there.status).toBe(404);
+    });
+
+    it('refuses an event on the other pod as a file the workspace never uploaded', async () => {
+      const { uploadUrl, fileUrl } = await grantUpload(localA);
+      expect(await putBytes(localA, uploadUrl)).toBe(201);
+
+      const sentHere = await sendAttachment(localA, fileUrl);
+      expect(sentHere.status, JSON.stringify(sentHere.body)).toBe(201);
+
+      // The expensive half of D6, and the reason this item was not filed as a
+      // cosmetic bug: the message is rejected outright, with a 400 that says
+      // the caller uploaded nothing — a validation error nobody retries and no
+      // alert fires on.
+      const sentThere = await sendAttachment(localB, fileUrl);
+      expect(sentThere.status, JSON.stringify(sentThere.body)).toBe(400);
+      const error = (sentThere.body as { error: { type: string; message: string } }).error;
+      expect(error.type).toBe('validation');
+      expect(error.message).toContain('a file this workspace uploaded');
+    });
   });
 });

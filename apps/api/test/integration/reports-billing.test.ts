@@ -167,14 +167,29 @@ describe('reports and billing', () => {
    * the assisted split does not care which kind ran. Pass `'ai_agent'` for a run
    * that must also count toward the AI Agent report's `skill_runs`
    * ({@link aiAgentSkillRunCount}, `report-csv.ts`).
+   *
+   * `ran_at` *is* windowed by that counter, so it is stamped {@link justNow}
+   * rather than left to the column default — the same clock-skew immunity the
+   * other windowed fixtures here take. `ranAt` is a parameter so a test can put
+   * a run in an earlier window (the benchmark baseline).
    */
-  async function runSkillOn(chatId: string, kind: string = 'workspace'): Promise<void> {
+  async function runSkillOn(
+    chatId: string,
+    kind: string = 'workspace',
+    options: { ranAt?: Date } = {},
+  ): Promise<void> {
     const skill = await owner.skill.create({
       data: { licenseId: fx.a.licenseId, name: 'Auto-tag', kind },
       select: { id: true },
     });
     await owner.skillRun.create({
-      data: { skillId: skill.id, chatId, licenseId: fx.a.licenseId, status: 'succeeded' },
+      data: {
+        skillId: skill.id,
+        chatId,
+        licenseId: fx.a.licenseId,
+        status: 'succeeded',
+        ranAt: options.ranAt ?? justNow(),
+      },
     });
   }
 
@@ -188,24 +203,53 @@ describe('reports and billing', () => {
    * agent-to-agent transfer that must NOT show up in them.
    *
    * Both hand-off counters window on the event's own `created_at`, so the row is
-   * stamped {@link justNow} rather than left to the column default.
+   * stamped {@link justNow} rather than left to the column default; `createdAt`
+   * is a parameter so a test can put a hand-off in an earlier window.
+   *
+   * Delegates to {@link recordSystemEvent}, which the other half of the same
+   * filter is written against.
    */
   async function recordTransfer(
     chatId: string,
     reason: TransferReason = 'ai_handoff',
+    options: { createdAt?: Date } = {},
+  ): Promise<void> {
+    await recordSystemEvent(chatId, 'chat_transferred', reason, options);
+  }
+
+  /**
+   * Record any `<system_event>` + `reason` pair on a chat — the general form
+   * {@link recordTransfer} is one case of.
+   *
+   * It exists because the hand-off counters match on the *pair*, and `reason`
+   * is not exclusive to transfers: `chat_deactivated` carries
+   * `reason: 'timeout'` (`chat-service.ts:616`) and `chat_taken_over` carries
+   * whatever free text the supervisor typed (`takeoverSchema`, `chats.ts:63` —
+   * `z.string().trim().max(500)`, deliberately not the `TransferReason` enum,
+   * which is why `reason` here is `string`). A counter keyed on `reason` alone
+   * would read a supervisor who typed "ai_handoff" as an AI hand-off — so the
+   * `system_event` half needs a fixture that can disagree with it.
+   */
+  let systemEventSeq = 0;
+  async function recordSystemEvent(
+    chatId: string,
+    systemEvent: string,
+    reason: string,
+    options: { createdAt?: Date } = {},
   ): Promise<void> {
     const thread = await owner.thread.findFirstOrThrow({ where: { chatId } });
+    systemEventSeq += 1;
     await owner.event.create({
       data: {
-        id: `${thread.id}_transfer`,
+        id: `${thread.id}_sys${systemEventSeq}`,
         threadId: thread.id,
         chatId,
         licenseId: fx.a.licenseId,
         type: 'system_message',
         authorType: 'system',
         recipients: 'all',
-        properties: { system_event: 'chat_transferred', reason },
-        createdAt: justNow(),
+        properties: { system_event: systemEvent, reason },
+        createdAt: options.createdAt ?? justNow(),
       },
     });
   }
@@ -217,18 +261,27 @@ describe('reports and billing', () => {
    * so the test exercises the aggregation without standing up a provider webhook.
    * `licenseId` is a parameter so a test can plant *another* tenant's row — same
    * chat id, different license — and prove the join lock keeps it out.
+   *
+   * `direction` is a parameter for the same reason `reason` is one on
+   * {@link recordTransfer}: the lateral join filters `cm.direction = 'inbound'`
+   * and a fixture that only ever writes inbound cannot tell that filter from a
+   * missing one. Outbound rows are real (`channel-message` is written for both
+   * legs) and can be *older* than the inbound reply they provoked, which is
+   * exactly when the predicate decides the answer.
    */
+  let inboundSeq = 0;
   async function recordInbound(
     chatId: string | null,
     channelType: string,
-    options: { licenseId?: bigint; createdAt?: Date } = {},
+    options: { licenseId?: bigint; createdAt?: Date; direction?: 'inbound' | 'outbound' } = {},
   ): Promise<void> {
+    inboundSeq += 1;
     await owner.channelMessage.create({
       data: {
         licenseId: options.licenseId ?? fx.a.licenseId,
         channelType,
-        direction: 'inbound',
-        externalId: `ext-${chatId ?? 'orphan'}-${channelType}-${Date.now()}`,
+        direction: options.direction ?? 'inbound',
+        externalId: `ext-${chatId ?? 'orphan'}-${channelType}-${inboundSeq}-${Date.now()}`,
         chatId,
         ...(options.createdAt ? { createdAt: options.createdAt } : {}),
       },
@@ -957,6 +1010,31 @@ describe('reports and billing', () => {
       expect(byChannel).toEqual({ messenger: 1, whatsapp: 1, twilio: 1, website: 1 });
     });
 
+    it('picks the oldest *inbound* row — an earlier outbound reach-out does not set the channel', async () => {
+      // `channel_messages` holds both legs: `channel-service.ts:528` records
+      // every outbound send against the chat too. So the oldest row on a chat is
+      // routinely an outbound one, and "which channel did this conversation come
+      // in on" is only answered by the inbound leg.
+      const reachedOut = await conversation({ agentReplies: true, customerName: 'Reached out' });
+      await recordInbound(reachedOut, 'whatsapp', {
+        direction: 'outbound',
+        createdAt: new Date(Date.now() - 120_000),
+      });
+      await recordInbound(reachedOut, 'messenger', { createdAt: new Date(Date.now() - 60_000) });
+
+      // Outbound only: the workspace messaged out and nothing came back on a
+      // channel. There is no inbound leg, so this is a website chat, not a
+      // whatsapp one.
+      const noReply = await conversation({ agentReplies: true, customerName: 'No reply' });
+      await recordInbound(noReply, 'whatsapp', { direction: 'outbound' });
+
+      const breakdown = (await server.get('/reports/breakdown', auth)).json();
+      const byChannel = Object.fromEntries(
+        (breakdown.by_channel as ChannelRow[]).map((row) => [row.channel, row.chats]),
+      );
+      expect(byChannel).toEqual({ messenger: 1, website: 1 });
+    });
+
     it('partitions the window: channel chats sum to the day total, split holds per row', async () => {
       const automated = await conversation({ agentReplies: false }); // automated
       await recordInbound(automated, 'messenger');
@@ -1324,6 +1402,126 @@ describe('reports and billing', () => {
   // =========================================================================
 
   describe('AI Agent report (07.4)', () => {
+    /**
+     * One window carrying **both** values of every field this report
+     * discriminates on: three transfer reasons (one AI, two agent-to-agent) and
+     * two skill kinds (AI Agent, Copilot-shaped). Returns the figures every
+     * counter must read from it.
+     *
+     * Why a mixed fixture rather than a positive test plus a separate
+     * zero-assertion: a counter fed only rows it is supposed to count cannot
+     * distinguish a filter that works from a filter that is not there. That is
+     * the shape the audit found here (`prd-uyum-denetimi.md` §3 D7) — the
+     * fixture wrote `chat_transferred` with no `reason` at all, so the suite was
+     * green over a metric that counted agent-to-agent transfers as AI hand-offs.
+     * With both values present in the same window, dropping either filter moves
+     * a *count* these tests already assert, in the direction that fails them.
+     *
+     * `at` puts the whole mixture in an earlier window, for the benchmark.
+     */
+    async function mixedWindow(at?: Date): Promise<{
+      resolutions: number;
+      resolution_rate: number;
+      transfers: number;
+      transfer_rate: number;
+      skill_runs: number;
+    }> {
+      const stamp = at ?? justNow();
+
+      // Two the AI finished alone, three a human took over.
+      const autoA = await conversation({ agentReplies: false, customerName: 'Mixed auto A' });
+      const autoB = await conversation({ agentReplies: false, customerName: 'Mixed auto B' });
+      const handedOff = await conversation({ agentReplies: true, customerName: 'Mixed handoff' });
+      const reassigned = await conversation({ agentReplies: true, customerName: 'Mixed manual' });
+      const rerouted = await conversation({ agentReplies: true, customerName: 'Mixed routing' });
+
+      // One AI hand-off. Two agent-to-agent transfers, with two *different*
+      // non-AI reasons so the filter is pinned to `ai_handoff` rather than to
+      // "anything but manual".
+      await recordTransfer(handedOff, 'ai_handoff', { createdAt: stamp });
+      await recordTransfer(reassigned, 'manual', { createdAt: stamp });
+      await recordTransfer(rerouted, 'routing', { createdAt: stamp });
+      // A supervisor whose free-text takeover reason happens to read
+      // "ai_handoff" — the case that needs the `system_event` half of the pair.
+      await recordSystemEvent(autoB, 'chat_taken_over', 'ai_handoff', { createdAt: stamp });
+
+      // One AI Agent run. Two Copilot-shaped ones, on two different chats, so a
+      // dropped `kind` filter cannot be mistaken for a per-chat de-duplication.
+      await runSkillOn(handedOff, 'ai_agent', { ranAt: stamp });
+      await runSkillOn(handedOff, 'workspace', { ranAt: stamp });
+      await runSkillOn(reassigned, 'workspace', { ranAt: stamp });
+
+      if (at) {
+        for (const id of [autoA, autoB, handedOff, reassigned, rerouted]) {
+          await backdateChat(id, at);
+        }
+      }
+
+      return {
+        // 5 closed, 2 with no agent message.
+        resolutions: 2,
+        resolution_rate: 0.4,
+        // Of the four `reason`-bearing system events, exactly one is an AI
+        // hand-off on a `chat_transferred`.
+        transfers: 1,
+        // 2 resolved + 1 handed off = 3 the AI finished.
+        transfer_rate: 0.333,
+        // Of the three runs, exactly one is `kind: 'ai_agent'`.
+        skill_runs: 1,
+      };
+    }
+
+    it('counts only AI hand-offs and AI Agent runs out of a window holding both kinds', async () => {
+      const expected = await mixedWindow();
+
+      const ai = (await server.get('/reports/ai-agent', auth)).json();
+      expect({
+        resolutions: ai.resolutions,
+        resolution_rate: ai.resolution_rate,
+        transfers: ai.transfers,
+        transfer_rate: ai.transfer_rate,
+        skill_runs: ai.skill_runs,
+      }).toEqual(expected);
+    });
+
+    it('exports the same figures from the same mixed window', async () => {
+      // A second call site (`report-csv.ts` `case 'ai-agent'`) reading the same
+      // helpers. It had no assertion on `transfers` or `skill_runs` at all, so
+      // it could have regressed on its own.
+      const expected = await mixedWindow();
+
+      const response = await server.get('/reports/export?group=ai-agent', auth);
+      expect(response.statusCode).toBe(200);
+      const rows = response.body.split('\r\n').filter((line) => line !== '');
+      expect(rows).toContain(`resolutions,${expected.resolutions}`);
+      expect(rows).toContain(`transfers,${expected.transfers}`);
+      expect(rows).toContain(`skill_runs,${expected.skill_runs}`);
+      expect(rows).toContain(`transfer_rate,${expected.transfer_rate}`);
+    });
+
+    it('benchmarks against the same figures, counted the same way', async () => {
+      // The third call site (`aiAgentBenchmark`). The mixture goes in the
+      // *baseline* window, so the block is reading rows the current window
+      // cannot supply.
+      const to = new Date();
+      const from = new Date(to.getTime() - 10 * 86_400_000);
+      const expected = await mixedWindow(new Date(from.getTime() - 86_400_000));
+
+      const body = (
+        await server.get(
+          `/reports/ai-agent?from=${from.toISOString()}&to=${to.toISOString()}&baseline=previous_period`,
+          auth,
+        )
+      ).json();
+
+      // Nothing in the requested window; everything in the baseline.
+      expect(body.transfers).toBe(0);
+      expect(body.skill_runs).toBe(0);
+      expect(body.previous_period.resolutions).toBe(expected.resolutions);
+      expect(body.previous_period.transfers).toBe(expected.transfers);
+      expect(body.previous_period.skill_runs).toBe(expected.skill_runs);
+    });
+
     it('agrees with the overview and the invoice on resolutions', async () => {
       await conversation({ agentReplies: false, customerName: 'A' }); // automated
       await conversation({ agentReplies: false, customerName: 'B' }); // automated
@@ -1360,6 +1558,21 @@ describe('reports and billing', () => {
       await recordTransfer(handedOff, 'ai_handoff');
       const reassigned = await conversation({ agentReplies: true });
       await recordTransfer(reassigned, 'manual');
+
+      const ai = (await server.get('/reports/ai-agent', auth)).json();
+      expect(ai.transfers).toBe(1);
+    });
+
+    it('does not count a takeover whose free-text reason reads like a hand-off', async () => {
+      // `chat_taken_over` carries whatever the supervisor typed — the takeover
+      // body takes `z.string().trim().max(500)` (`chats.ts:63`), deliberately
+      // not the `TransferReason` enum a transfer takes. So "ai_handoff" is a
+      // reachable value on an event that is not a transfer at all, and matching
+      // on `reason` alone would credit the AI with a human's intervention.
+      const handedOff = await conversation({ agentReplies: true });
+      await recordTransfer(handedOff, 'ai_handoff');
+      const seized = await conversation({ agentReplies: true });
+      await recordSystemEvent(seized, 'chat_taken_over', 'ai_handoff');
 
       const ai = (await server.get('/reports/ai-agent', auth)).json();
       expect(ai.transfers).toBe(1);

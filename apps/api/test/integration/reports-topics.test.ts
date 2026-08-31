@@ -107,13 +107,24 @@ describe('chat topics report (07.6)', () => {
   }
 
   /**
-   * A closed chat with **no** summary but a customer message — clusterable via
-   * the message, proving the count's second branch.
+   * A closed chat with **no** summary but one text-bearing event — a customer
+   * message by default, which is clusterable and proves the count's second
+   * branch. Pass `author` for an event the report must *not* cluster.
    */
   async function seedCustomerMessageThread(
     t: TenantFixture,
     text: string,
     at = new Date(),
+    /**
+     * Who wrote the text and as what kind of event. Parameters, not constants,
+     * because `clusterableDocs` (`report-csv.ts`) selects on both
+     * (`e.type = 'message' AND e.author_type = 'customer'`) and a fixture that
+     * only ever writes a customer `message` cannot tell either filter from a
+     * missing one. Both other values are ordinary: an agent writes into every
+     * handled thread, and `chat-service.ts` stamps a `system_message` with text
+     * on takeover and on deactivation — so every closed chat carries one.
+     */
+    author: { authorType: string; type: string } = { authorType: 'customer', type: 'message' },
   ): Promise<void> {
     const chatId = generateShortId();
     await owner.chat.create({
@@ -143,9 +154,9 @@ describe('chat topics report (07.6)', () => {
         threadId,
         chatId,
         licenseId: t.licenseId,
-        type: 'message',
+        type: author.type,
         text,
-        authorType: 'customer',
+        authorType: author.authorType,
         recipients: 'all',
         createdAt: at,
       },
@@ -327,6 +338,43 @@ describe('chat topics report (07.6)', () => {
     const body = (await server.get('/reports/topics', auth)).json();
     // Two threads exist; only the one with clustering text is analyzed.
     expect(body.analyzed).toBe(1);
+  });
+
+  it('does not count text the visitor did not write — an agent reply or a system event', async () => {
+    // The report clusters *customer-authored* text, and 07.6-b's leak argument
+    // rests on that: only derived labels leave the transaction, and they are
+    // derived from what the visitor said. An agent's reply can quote an internal
+    // note, and `chat-service.ts` writes a `system_message` carrying text into
+    // every takeover and deactivation — so if either half of
+    // `e.type = 'message' AND e.author_type = 'customer'` stopped applying,
+    // effectively every closed thread would become clusterable off text nobody
+    // meant to cluster.
+    await seedCustomerMessageThread(fx.a, 'Where is my order?');
+    await seedCustomerMessageThread(fx.a, 'Let me check that shipment for you', new Date(), {
+      authorType: 'agent',
+      type: 'message',
+    });
+    await seedCustomerMessageThread(fx.a, 'Chat taken over', new Date(), {
+      authorType: 'system',
+      type: 'system_message',
+    });
+
+    const body = (await server.get('/reports/topics', auth)).json();
+    // Three threads, one visitor message between them.
+    expect(body.analyzed).toBe(1);
+
+    // Measured, and left as it is: of the two halves, only `author_type` is
+    // load-bearing today. Replacing `e.type = 'message'` with TRUE fails
+    // nothing, here or anywhere — because no path writes a customer-authored
+    // event of any other type. `EVENT_TYPES` has five, but the widget stamps
+    // `'message'` unconditionally (`customer.ts:579,603` — an attachment-only
+    // visitor message included), and `file`/`filled_form`/`rich_message` are
+    // reachable only through the agent event schema (`chats.ts:31`), where
+    // `author_type` already excludes them. The predicate is defence in depth
+    // for the day the widget gains one; a fixture proving it would have to
+    // write a row the product cannot currently produce, which pins an
+    // intention rather than a behaviour. Recorded so the next reader does not
+    // mistake the survivor for an untested case.
   });
 
   // --- shape ----------------------------------------------------------------

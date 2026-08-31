@@ -8210,10 +8210,10 @@
             "title": "M-TEAM-b [OPUS-XHIGH] Üyelik uçları: routing gerçekten değişiyor mu + priority tiers",
             "description": "PUT ile ekle → `RoutingService` o ajanı aday görüyor; DELETE ile çıkar → görmüyor; aynı PUT priority değiştiriyor (idempotent upsert); workspace üyesi olmayan uuid → 404. `GROUP_PRIORITIES = [primary, first, normal, last]` (`packages/types/src/domain.ts:14`) ve DB `group_agents_priority_check` kısıtı. Beş `group.*` audit kaydının yazıldığını doğrula.",
             "details": "Bağımlılık: M-TEAM-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "175",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T03:31:57.570Z"
           },
           {
             "id": 3,
@@ -8246,7 +8246,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T01:09:41.345Z"
+        "updatedAt": "2026-08-31T03:31:57.570Z"
       },
       {
         "id": "176",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T01:09:41.346Z",
+      "lastModified": "2026-08-31T03:31:57.571Z",
       "taskCount": 184,
       "completedCount": 174,
       "tags": [

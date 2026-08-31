@@ -1615,6 +1615,10 @@ export interface paths {
      * @description Newest first. `status` filters by the derived lifecycle bucket
      *     (FR-MOD-03.3.1): `ongoing`, `scheduled` (active but not started yet),
      *     `inactive` (off, or past its end), or `all`.
+     *
+     *     The bucket is re-derived from each campaign's schedule as the list is
+     *     read, so one whose start time has passed appears under `ongoing` rather
+     *     than staying where its last save left it.
      */
     get: operations['listCampaigns'];
     put?: never;
@@ -8016,9 +8020,13 @@ export interface components {
       name: string;
       /**
        * @description Lifecycle state the status tabs filter by (FR-MOD-03.3.1), resolved
-       *     from the on/off intent and the schedule at save time: `ongoing`
-       *     (running now), `scheduled` (active, not started yet), or `inactive`
-       *     (off, or past its end).
+       *     from the on/off intent and the schedule: `ongoing` (running now),
+       *     `scheduled` (active, not started yet), or `inactive` (off, or past
+       *     its end).
+       *
+       *     Re-evaluated against the clock on every read, so a campaign whose
+       *     `starts_at` has arrived is reported — and filtered — as `ongoing`
+       *     without anybody having saved it again.
        * @enum {string}
        */
       status: 'ongoing' | 'scheduled' | 'inactive';

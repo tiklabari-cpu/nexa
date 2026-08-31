@@ -51,7 +51,7 @@
 import type { CampaignContent } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { trialState } from '../billing/metering.js';
-import { computeCampaignStatus } from './campaign-matching.js';
+import { resolveCampaignStatus } from './campaign-matching.js';
 
 /**
  * How many still-owed sends to look at before giving up for this poll.
@@ -97,12 +97,11 @@ export interface DeliverableCampaign {
  * A campaign is only delivered while it is *running at this moment*, not merely
  * because it was running when the trigger matched. An owner who switches a
  * campaign off, or whose end date has passed, has said stop — and a send that
- * was queued before that must not sneak out afterwards. The window is
- * re-evaluated here from `starts_at`/`ends_at` rather than trusted from the
- * stored `status`, which is only recomputed on write and therefore goes stale
- * (that staleness is its own known defect, tm 176.6; this path does not depend
- * on it being fixed). `status !== 'inactive'` is the stored on/off intent —
- * the same reading `CampaignService.update` uses.
+ * was queued before that must not sneak out afterwards. The window is therefore
+ * re-evaluated here (`resolveCampaignStatus`) rather than trusted from the
+ * stored `status`, which a read heals but no clock does: a poll arriving before
+ * anyone has opened the campaigns list would otherwise see the value the last
+ * save wrote.
  *
  * An undeliverable candidate is skipped, never stamped: it stays owed, so a
  * campaign paused for a week and switched back on still reaches the visitors it
@@ -119,15 +118,7 @@ export function pickDeliverableSend(
     // rather than deliver an empty card.
     if (!message) continue;
 
-    const status = computeCampaignStatus(
-      {
-        active: send.campaign.status !== 'inactive',
-        startsAt: send.campaign.startsAt,
-        endsAt: send.campaign.endsAt,
-      },
-      now,
-    );
-    if (status !== 'ongoing') continue;
+    if (resolveCampaignStatus(send.campaign, now) !== 'ongoing') continue;
 
     return { sendId: send.id, campaignId: send.campaign.id, message };
   }

@@ -57,11 +57,15 @@ export function matchesConditions(conditions: CampaignConditions, pageUrls: stri
 }
 
 /**
- * The lifecycle status to store for a campaign (PRD §8.4 `campaigns.status`),
- * resolved from the owner's on/off intent and the schedule window at write time:
- * off is `inactive`, on-but-not-started-yet is `scheduled`, on-and-past-its-end
- * is `inactive`, otherwise `ongoing`. Computed on save rather than derived on
- * read so it filters directly and matches the table's status check constraint.
+ * The lifecycle status of a campaign (PRD §8.4 `campaigns.status`), resolved
+ * from the owner's on/off intent and the schedule window: off is `inactive`,
+ * on-but-not-started-yet is `scheduled`, on-and-past-its-end is `inactive`,
+ * otherwise `ongoing`.
+ *
+ * A function of `now`, which is exactly why the stored column cannot be left to
+ * the write path alone: nothing happens at the instant a start time arrives, so
+ * a campaign saved as `scheduled` stays `scheduled` for ever unless something
+ * asks the question again. `resolveCampaignStatus` below is that question.
  */
 export function computeCampaignStatus(
   input: { active: boolean; startsAt: Date | null; endsAt: Date | null },
@@ -71,6 +75,69 @@ export function computeCampaignStatus(
   if (input.startsAt && input.startsAt.getTime() > now.getTime()) return 'scheduled';
   if (input.endsAt && input.endsAt.getTime() < now.getTime()) return 'inactive';
   return 'ongoing';
+}
+
+/**
+ * The owner's on/off intent behind a stored status.
+ *
+ * There is no `active` column: intent and schedule are folded into the one
+ * `status` value, so reading the intent back out is an inference rather than a
+ * lookup. `ongoing` and `scheduled` are unambiguous — the owner has it on.
+ * `inactive` is not: it means *either* "switched off" *or* "was on and its end
+ * date has passed", because `computeCampaignStatus` collapses both into the
+ * same word.
+ *
+ * The tie is broken towards "on" when the window explains the `inactive` — an
+ * end date already in the past. That reading matters in exactly one place, and
+ * it is the one that would otherwise regress: extending the schedule of a
+ * finished campaign. Read the other way, `update` would derive "off", recompute
+ * `inactive`, and the owner's edit would be a silent no-op — a campaign that
+ * cannot be restarted by the only control the builder offers.
+ *
+ * The price, said plainly: a campaign that was switched off *and* has an end
+ * date in the past is indistinguishable from one that simply finished, so
+ * extending its window turns it back on. Both look identical in the store and
+ * both read `Inactive` in the list; the difference only surfaces when someone
+ * deliberately moves the end date into the future, where "run it again" is the
+ * likelier request. Storing the intent in its own column is the fix that would
+ * remove the guess, and it is a schema change this task does not need.
+ */
+export function deriveActiveIntent(
+  campaign: { status: string; endsAt: Date | null },
+  now: Date,
+): boolean {
+  if (campaign.status !== 'inactive') return true;
+  return Boolean(campaign.endsAt && campaign.endsAt.getTime() < now.getTime());
+}
+
+/**
+ * What a stored campaign's status *is* right now, whatever the column says.
+ *
+ * The one reading of a stored row, shared by every path that has to decide
+ * whether a campaign is running: the list (which also heals the column with the
+ * answer), delivery, and the visit-time trigger. Before this existed each of
+ * those spelled the same two lines out for itself, which is how three copies of
+ * one rule start to drift apart.
+ *
+ * Invariant worth naming because another path leans on it: a stored `inactive`
+ * always resolves to `inactive`. Off stays off, and a finished campaign stays
+ * finished (the end date that made the intent read "on" also closes the
+ * window). That is what lets `fireCampaignsAtVisitor` exclude `inactive` in SQL
+ * — an index-served filter it could not use if this function could turn one of
+ * those rows back on.
+ */
+export function resolveCampaignStatus(
+  campaign: { status: string; startsAt: Date | null; endsAt: Date | null },
+  now: Date,
+): CampaignStatus {
+  return computeCampaignStatus(
+    {
+      active: deriveActiveIntent(campaign, now),
+      startsAt: campaign.startsAt,
+      endsAt: campaign.endsAt,
+    },
+    now,
+  );
 }
 
 /**

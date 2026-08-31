@@ -329,6 +329,60 @@ test.describe('campaign card', () => {
       await visitorContext.close();
     }
   });
+
+  // The other order of events, and the ordinary one (FR-MOD-03.3.2, tm 176.5):
+  // the campaign has been running since before this visitor existed. Until the
+  // visit write path evaluated campaigns, everybody who arrived after the save
+  // matched nothing at all — the test above would pass and the feature would
+  // still only ever reach whoever happened to be on the site that minute.
+  test('a visitor who arrives after the campaign was saved is nudged too', async ({
+    agentPage,
+    browser,
+    organizationId,
+  }) => {
+    test.slow();
+    const stamp = Date.now().toString().slice(-6);
+    const name = `Arrival nudge ${stamp}`;
+    const message = `Welcome — need a hand? ${stamp}`;
+    const site = tenantSubdomain(`arrive-${stamp}`);
+
+    // --- The campaign goes up first, with nobody on that site yet -----------
+    await agentPage.goto('/app/customers');
+    await agentPage.getByRole('link', { name: 'Campaigns' }).click();
+    await agentPage.getByRole('button', { name: 'New campaign' }).click();
+    const dialog = agentPage.getByRole('dialog', { name: 'New campaign' });
+    await dialog.getByLabel('Name').fill(name);
+    await dialog.getByLabel('Trigger — page URL contains').fill(site.hostname);
+    await dialog.getByLabel('Message').fill(message);
+    await dialog.getByRole('button', { name: 'Create campaign' }).click();
+    await expect(agentPage.getByRole('listitem').filter({ hasText: name })).toBeVisible();
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    try {
+      // --- Only now does the visitor turn up ------------------------------
+      await openWidget(visitor, organizationId, { host: site.origin });
+      await visitorSends(visitor, `Just looking around — ${stamp}`);
+
+      // Writing in is what tells the server which page they are on, so the
+      // nudge is earned on the way into a conversation and waits for it to
+      // finish rather than covering a live transcript (`campaign-delivery.ts`).
+      const frame = widgetFrame(visitor);
+      await frame.getByRole('button', { name: 'More options' }).click();
+      await frame.getByRole('menuitem', { name: 'End chat' }).click();
+      await frame
+        .getByRole('dialog', { name: 'End this chat?' })
+        .getByRole('button', { name: 'End chat' })
+        .click();
+      await expect(frame.getByText('Chat ended.')).toBeVisible();
+      await frame.getByRole('button', { name: 'Close chat' }).click();
+
+      await expect(frame.getByText(message)).toBeVisible({ timeout: 20_000 });
+      await visitor.screenshot({ path: 'kanit/03.3.2-campaign-arrival.png', fullPage: true });
+    } finally {
+      await visitorContext.close();
+    }
+  });
 });
 
 test.describe('agent identity', () => {

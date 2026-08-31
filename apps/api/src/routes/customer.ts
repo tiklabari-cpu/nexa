@@ -33,6 +33,7 @@ import { CustomFieldService } from '../services/custom-fields/custom-field-servi
 import { visitorPageUrls } from '../services/campaigns/campaign-matching.js';
 import { deliverPendingCampaign } from '../services/campaigns/campaign-delivery.js';
 import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.js';
+import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { GoalService } from '../services/goals/goal-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
@@ -514,15 +515,32 @@ export default async function customerRoutes(
       // context is not worth failing the message the visitor is trying to send.
       if (body.url) {
         try {
-          await request.withTenant((tx) =>
-            customerDirectory.recordPageView(tx, tenant, {
+          await request.withTenant(async (tx) => {
+            const pageUrls = await customerDirectory.recordPageView(tx, tenant, {
               customerId: principal.customerId,
               url: body.url!,
               referrer: body.referrer,
               userAgent: request.headers['user-agent'],
               ip: request.ip,
-            }),
-          );
+            });
+
+            // Does this visitor now match a campaign that is already running
+            // (FR-MOD-03.3.2, tm 176.5)? The owner's own save only ever fired at
+            // the people who were on the site at that moment, so without this a
+            // campaign never reaches anybody who arrives afterwards — the
+            // ordinary case for a campaign left running.
+            //
+            // In the page view's own transaction on purpose: "seen on this page"
+            // and "fired at for it" are one fact, and the read costs ~0.07 ms —
+            // 0.02% of NFR-P2's write budget, measured rather than assumed
+            // (`campaign-trigger.ts` shows the numbers and why no cache).
+            return fireCampaignsAtVisitor(
+              tx,
+              tenant,
+              { customerId: principal.customerId, pageUrls },
+              new Date(),
+            );
+          });
 
           // Did that page take the visitor to a goal (FR-MOD-13.3)? Evaluated
           // over the whole visit rather than this one page, matching how the
@@ -549,7 +567,10 @@ export default async function customerRoutes(
             );
           });
         } catch (error) {
-          request.log.warn({ err: error }, 'could not record page view or evaluate goals');
+          request.log.warn(
+            { err: error },
+            'could not record page view, fire campaigns or evaluate goals',
+          );
         }
       }
 

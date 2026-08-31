@@ -8293,10 +8293,10 @@
             "title": "M-CAMP-d [SONNET-XHIGH] engaged bayrağı gerçekten set edilsin + etkileşim tanımı",
             "description": "Üretimde hiç true yapılmıyor; kampanya başarısının tek sinyali bu. Tanım: **sohbet açmak** = engaged (görüntülenme zaten `delivered_at`). Ziyaretçi kartı kapatıp sonra kendi başına sohbet açarsa bu sayılır mı — zaman penceresi mi, yalnız karttan gelen tıklama mı? Seçimini yorumla ve teste bağla; rapor okuyan biri bu ayrımı bilmeden oranı yanlış yorumlar.",
             "details": "Bağımlılık: M-CAMP-c. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "176",
-            "updatedAt": "2026-08-31T09:04:14.460Z"
+            "updatedAt": "2026-08-31T09:30:17.239Z"
           },
           {
             "id": 5,
@@ -8319,7 +8319,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T09:04:14.460Z"
+        "updatedAt": "2026-08-31T09:30:17.239Z"
       },
       {
         "id": "177",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T09:04:14.462Z",
+      "lastModified": "2026-08-31T09:30:17.240Z",
       "taskCount": 184,
       "completedCount": 175,
       "tags": [

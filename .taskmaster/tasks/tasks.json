@@ -8303,10 +8303,10 @@
             "title": "M-CAMP-e [OPUS-MAX] BÖLÜNMEZ: yeni ziyaretçi çalışan kampanyaları tetiklesin (sıcak yol + idempotanslık)",
             "description": "Tetikleme şu an YALNIZ create/update anında, son `LIVE_WINDOW_MINUTES` içindeki ziyaretçilere karşı — yani kampanya kaydedildikten SONRA gelen ziyaretçi hiç eşleşmiyor. `visits` yazma yolunda değerlendir. **Asıl tasarım sorusu maliyet:** ziyaret yazma yolu her sayfa görüntülemesinde çalışan sıcak yoldur; her ziyarette tüm çalışan kampanyaları değerlendirmek pahalı olabilir — senkron mu, işlem sonrası mı, kısa önbellek arkasında mı? Kararı ve ölçümü yorumla; `apps/load/test/budgets.test.ts` NFR-P2 bütçesi yeşil kalmalı.",
             "details": "Bağımlılık: M-CAMP-a. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "176",
-            "updatedAt": "2026-08-31T09:31:51.663Z"
+            "updatedAt": "2026-08-31T10:49:55.765Z"
           },
           {
             "id": 6,
@@ -8319,7 +8319,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T09:31:51.663Z"
+        "updatedAt": "2026-08-31T10:49:55.765Z"
       },
       {
         "id": "177",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T09:31:51.664Z",
+      "lastModified": "2026-08-31T10:49:55.767Z",
       "taskCount": 184,
       "completedCount": 175,
       "tags": [

@@ -8432,10 +8432,10 @@
             "title": "M-COUNT-a [OPUS-XHIGH] AI resolution sayacını sunucudan besle — toplam nereden gelecek kararı",
             "description": "**Tasarım sorusu:** liste ucuna toplam alanı mı, ayrı sayım ucu mu? Keyset sayfalama ile toplam sayım aynı sorguda pahalı olabilir; kararını ve maliyetini yorumla, NFR-P2 okuma bütçesini bozma. Fatura ile **aynı sayıyı** vermeli — ADR-09 ekseninde Overview = fatura = Copilot BI tutarlılığı korunuyor, yeni sayaç bu üçlüden ayrışırsa hata büyür. **60+ kayıtlı test zorunlu** (kusur tam orada).",
             "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "179",
-            "updatedAt": "2026-08-31T19:04:01.092Z"
+            "updatedAt": "2026-08-31T19:58:28.941Z"
           },
           {
             "id": 2,
@@ -8468,7 +8468,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T19:04:01.092Z"
+        "updatedAt": "2026-08-31T19:58:28.941Z"
       },
       {
         "id": "180",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T19:04:01.093Z",
+      "lastModified": "2026-08-31T19:58:28.941Z",
       "taskCount": 184,
       "completedCount": 178,
       "tags": [

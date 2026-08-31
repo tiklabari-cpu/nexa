@@ -8366,13 +8366,13 @@
             "title": "M-STORE-d [OPUS-MAX] BÖLÜNMEZ: virüs taraması + imzalı URL güvenlik paritesi (local ↔ s3)",
             "description": "Depolama değişikliği sessiz bir güvenlik gerilemesi olmamalı. **Yalnız güvenlik testlerini** iki sağlayıcıda parametrik koş (tüm yükleme süitini ikiye katlama — kapı süresi). Korunacak: fail-closed AV (tarayıcı cevap veremiyorsa dosya kabul EDİLMEZ), imzalı PUT (geçersiz imza / süresi geçmiş / yeniden kullanım reddi), izin verilen tür ve boyut sınırları, `nosniff`. İki sağlayıcıda sonuç farklıysa parite yok demektir ve kalem tamamlanmamıştır.",
             "details": "Bağımlılık: M-STORE-b. Dilim V7-1. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "177",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T14:59:34.887Z"
           }
         ],
-        "updatedAt": "2026-08-31T14:58:08.478Z"
+        "updatedAt": "2026-08-31T14:59:34.887Z"
       },
       {
         "id": "178",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T14:58:08.481Z",
+      "lastModified": "2026-08-31T14:59:34.888Z",
       "taskCount": 184,
       "completedCount": 176,
       "tags": [

@@ -91,7 +91,7 @@ export default async function chatRoutes(
   app: FastifyInstance,
   { env, mailer, push }: { env: Env; mailer: Mailer; push: PushProvider },
 ): Promise<void> {
-  const store = createObjectStore(env.STORAGE_PROVIDER, { localDir: env.STORAGE_LOCAL_DIR });
+  const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
   const channels = new ChannelService();
   const chats = new ChatService(
     app.db,

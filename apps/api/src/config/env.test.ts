@@ -75,6 +75,24 @@ describe('provider selection', () => {
     { key: 'OTEL_EXPORTER', vocabulary: OTEL_EXPORTERS, fallback: 'console' },
   ] as const;
 
+  /**
+   * Settings a provider cannot boot without (M-STORE-a).
+   *
+   * `s3` is the first provider whose selection is not self-sufficient: it needs
+   * a bucket to talk to, and `parseEnv` refuses to start without one rather
+   * than falling back to pod-local disk. So the vocabulary sweep below supplies
+   * them — the sweep is about the vocabulary, and the conditional requirement
+   * has its own tests further down.
+   */
+  const COMPANIONS: Record<string, NodeJS.ProcessEnv> = {
+    s3: {
+      STORAGE_S3_ENDPOINT: 'http://localhost:9000',
+      STORAGE_S3_BUCKET: 'nexa-uploads',
+      STORAGE_S3_ACCESS_KEY_ID: 'minioadmin',
+      STORAGE_S3_SECRET_ACCESS_KEY: 'minioadmin',
+    },
+  };
+
   for (const { key, vocabulary, fallback } of PROVIDERS) {
     describe(key, () => {
       it('accepts every value its factory implements', () => {
@@ -82,7 +100,7 @@ describe('provider selection', () => {
         // reason NEXA_REGION is: widening one side alone is precisely the drift
         // this pair of readers exists to prevent.
         for (const value of vocabulary) {
-          expect(parseEnv({ ...BASE, [key]: value })[key]).toBe(value);
+          expect(parseEnv({ ...BASE, ...COMPANIONS[value], [key]: value })[key]).toBe(value);
         }
       });
 
@@ -100,6 +118,103 @@ describe('provider selection', () => {
       });
     });
   }
+
+  /**
+   * `STORAGE_PROVIDER=s3` (M-STORE-a · NFR-R1).
+   *
+   * The one provider whose selection is not self-sufficient, and the one whose
+   * silent fallback would be expensive: pod-local uploads under an HPA that
+   * scales to four replicas means an attachment that lands on pod A is, to pod
+   * B, a file nobody uploaded. So an incomplete `s3` configuration stops the
+   * boot instead of quietly becoming `local`.
+   */
+  describe('STORAGE_S3_*', () => {
+    const S3: NodeJS.ProcessEnv = {
+      STORAGE_PROVIDER: 's3',
+      STORAGE_S3_ENDPOINT: 'http://minio:9000',
+      STORAGE_S3_BUCKET: 'nexa-uploads',
+      STORAGE_S3_ACCESS_KEY_ID: 'minioadmin',
+      STORAGE_S3_SECRET_ACCESS_KEY: 'minioadmin',
+    };
+
+    it('assembles the store options once, so no route has to', () => {
+      const env = parseEnv({ ...BASE, ...S3, STORAGE_S3_REGION: 'eu-central-1' });
+
+      expect(env.storage).toEqual({
+        localDir: '.data/uploads',
+        s3: {
+          endpoint: 'http://minio:9000',
+          bucket: 'nexa-uploads',
+          region: 'eu-central-1',
+          accessKeyId: 'minioadmin',
+          secretAccessKey: 'minioadmin',
+          forcePathStyle: true,
+          timeoutMs: 10_000,
+        },
+      });
+    });
+
+    it('leaves s3 null on a local deployment, even one carrying stray S3 keys', () => {
+      // Half a bucket's worth of settings on a `local` deployment must not look
+      // to anything downstream like a configured bucket.
+      const env = parseEnv({ ...BASE, ...S3, STORAGE_PROVIDER: 'local' });
+
+      expect(env.storage).toEqual({ localDir: '.data/uploads', s3: null });
+    });
+
+    it.each([
+      'STORAGE_S3_ENDPOINT',
+      'STORAGE_S3_BUCKET',
+      'STORAGE_S3_ACCESS_KEY_ID',
+      'STORAGE_S3_SECRET_ACCESS_KEY',
+    ])('refuses to boot when %s is missing', (missing) => {
+      const { [missing]: _omitted, ...incomplete } = S3;
+
+      expect(() => parseEnv({ ...BASE, ...incomplete })).toThrow(new RegExp(missing));
+    });
+
+    it('reports every missing key at once rather than one per attempt', () => {
+      // Same reasoning as `productionProblems`: whoever is deploying should
+      // learn everything that is wrong before any traffic arrives.
+      expect(() => parseEnv({ ...BASE, STORAGE_PROVIDER: 's3' })).toThrow(
+        /STORAGE_S3_ENDPOINT[\s\S]*STORAGE_S3_SECRET_ACCESS_KEY/,
+      );
+    });
+
+    it('refuses an endpoint that is not an origin', () => {
+      // A path would silently prefix every object key and the signature would
+      // commit to a path the request never used; userinfo would put a
+      // credential somewhere SigV4 does not cover.
+      for (const endpoint of [
+        'http://minio:9000/uploads',
+        'https://user:pw@minio:9000',
+        'minio:9000',
+        'ftp://minio:9000',
+      ]) {
+        expect(() => parseEnv({ ...BASE, ...S3, STORAGE_S3_ENDPOINT: endpoint })).toThrow(
+          /STORAGE_S3_ENDPOINT/,
+        );
+      }
+    });
+
+    it('refuses a bucket name that is not one', () => {
+      // The name is concatenated into a URL path (or a hostname); `..` and `/`
+      // must not survive that.
+      for (const name of ['../other', 'a/b', 'UPPER', 'x', 'has space']) {
+        expect(() => parseEnv({ ...BASE, ...S3, STORAGE_S3_BUCKET: name })).toThrow(
+          /STORAGE_S3_BUCKET/,
+        );
+      }
+    });
+
+    it('keeps the S3 secret out of SECRET_KEYS on purpose', () => {
+      // MinIO ships with `minioadmin`; a 32-character floor would refuse the
+      // deployment this provider is first used against. It is a credential the
+      // bucket issues, not key material this process mints.
+      expect(SECRET_KEYS).not.toContain('STORAGE_S3_SECRET_ACCESS_KEY');
+      expect(parseEnv({ ...BASE, ...S3 }).storage.s3?.secretAccessKey).toBe('minioadmin');
+    });
+  });
 
   it('does not accept the pre-seam spelling of MAIL_PROVIDER', () => {
     // `mock` used to be the only value, and named the environment rather than

@@ -203,7 +203,7 @@ export default async function customerRoutes(
   const customFields = new CustomFieldService();
   const goals = new GoalService();
   const ai = new AiResponder(chats, publisher);
-  const store = createObjectStore(env.STORAGE_PROVIDER, { localDir: env.STORAGE_LOCAL_DIR });
+  const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
 
   /**
    * Tell the human assigned to a chat that their visitor wrote in

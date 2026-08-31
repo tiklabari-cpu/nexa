@@ -14,7 +14,7 @@ import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
 import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
 import { MAIL_PROVIDERS } from '../services/mail/mailer.js';
 import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
-import { STORAGE_PROVIDERS } from '../services/storage/object-store.js';
+import { type ObjectStoreOptions, STORAGE_PROVIDERS } from '../services/storage/object-store.js';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 
 const secret = (minLength: number) =>
@@ -62,6 +62,18 @@ function parseOriginList(value: string): string[] | null {
     origins.push(url.origin);
   }
   return [...new Set(origins)];
+}
+
+/**
+ * A single `scheme://host[:port]` and nothing else — the same shape
+ * `parseOriginList` accepts, reused for `STORAGE_S3_ENDPOINT`.
+ *
+ * Reusing it is the point rather than a saving: an endpoint carrying a path
+ * would silently prefix every object key, and one carrying userinfo would put a
+ * credential somewhere the SigV4 signature does not cover.
+ */
+function isOrigin(value: string): boolean {
+  return parseOriginList(value)?.length === 1;
 }
 
 /** Exported so `env.parity.test.ts` can enumerate keys off `.shape` rather than re-parsing this file as text. */
@@ -426,6 +438,48 @@ export const envSchema = z.object({
   STORAGE_PROVIDER: z.enum(STORAGE_PROVIDERS).default('local'),
   /** Where the `local` provider keeps uploads. Inside `.data/`, which is ignored. */
   STORAGE_LOCAL_DIR: z.string().default('.data/uploads'),
+  /**
+   * The S3-compatible bucket the `s3` provider uses (M-STORE-a · NFR-R1).
+   *
+   * All optional here and none optional in practice: `STORAGE_PROVIDER=s3`
+   * without them is refused at boot by `storageProblems` below. Declaring them
+   * required outright would make every `local` deployment — which is the
+   * default, CI included — carry five settings for a provider it never builds.
+   *
+   * The endpoint is an origin, checked the way `WEB_ORIGIN` is: a pasted path
+   * or query would otherwise end up prefixing every object key, and the
+   * signature would commit to a path the request never used.
+   */
+  STORAGE_S3_ENDPOINT: z
+    .string()
+    .refine((value) => isOrigin(value), 'must be a scheme://host[:port] origin')
+    .optional(),
+  /**
+   * Bucket names are DNS labels, and this one is concatenated into a URL path
+   * (or a hostname). The pattern is what keeps a stray `..` or `/` out of both.
+   */
+  STORAGE_S3_BUCKET: z
+    .string()
+    .regex(/^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$/, 'must be a valid S3 bucket name')
+    .optional(),
+  /** Signed into every request; S3 rejects a signature scoped elsewhere. */
+  STORAGE_S3_REGION: z.string().min(1).default('us-east-1'),
+  STORAGE_S3_ACCESS_KEY_ID: z.string().min(1).optional(),
+  /**
+   * Not declared with `secret()`: MinIO ships with `minioadmin`, a 32-character
+   * floor would refuse the very deployment this is first used against, and this
+   * is a credential the bucket issues rather than key material this process
+   * mints. It is never logged — `s3-store.ts` keeps it out of every error it
+   * raises.
+   */
+  STORAGE_S3_SECRET_ACCESS_KEY: z.string().min(1).optional(),
+  /** `<endpoint>/<bucket>/<key>`. On by default: MinIO cannot do bucket subdomains. */
+  STORAGE_S3_FORCE_PATH_STYLE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+  /** Ceiling on one bucket request. Sized for the 25 MiB the PUT route buffers. */
+  STORAGE_S3_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(10_000),
   /** How long a signed upload URL stays usable. One shot, so this is short. */
   UPLOAD_URL_TTL: z.coerce.number().int().positive().max(3600).default(300),
   /**
@@ -547,6 +601,17 @@ export type Env = z.infer<typeof envSchema> & {
   replicaDatabaseUrl: string | undefined;
   /** `WEB_ORIGIN` parsed and normalised — the CORS allowlist production uses. */
   webOrigins: string[];
+  /**
+   * Everything `createObjectStore` needs, gathered in one place (M-STORE-a).
+   *
+   * The three routes that build a store used to write `{ localDir:
+   * env.STORAGE_LOCAL_DIR }` by hand, which was fine while `local` was the only
+   * provider and became a trap the moment it was not: `STORAGE_PROVIDER` is
+   * read at runtime, so a call site cannot know which provider's settings it is
+   * expected to carry, and each new one would have had to be threaded through
+   * all three. Derived here instead, so that was the last time they change.
+   */
+  storage: ObjectStoreOptions;
   isProduction: boolean;
   isTest: boolean;
   /** Whether OpenTelemetry instrumentation is active for this process. */
@@ -646,6 +711,56 @@ function withPoolSize(url: string, poolSize: number | undefined): string {
  * the owner, RLS is already off, and a replica on the same credentials takes
  * nothing away that was there to lose.
  */
+/**
+ * `STORAGE_S3_*` keys that `STORAGE_PROVIDER=s3` cannot do without.
+ *
+ * Checked in every environment rather than only in production, for the reason
+ * `replicaEscalatesPrivilege` is: the failure is silent where it lands. Zod
+ * cannot express it — the schema has to keep these optional so the `local`
+ * default does not demand five settings for a provider it never builds — so
+ * the conditional half lives here, and reports the same way, by key.
+ */
+function storageProblems(env: z.infer<typeof envSchema>): string[] {
+  if (env.STORAGE_PROVIDER !== 's3') return [];
+  return (
+    [
+      'STORAGE_S3_ENDPOINT',
+      'STORAGE_S3_BUCKET',
+      'STORAGE_S3_ACCESS_KEY_ID',
+      'STORAGE_S3_SECRET_ACCESS_KEY',
+    ] as const
+  )
+    .filter((key) => !env[key])
+    .map((key) => `${key} is required when STORAGE_PROVIDER=s3.`);
+}
+
+/**
+ * `env.storage` — the single assembly of `ObjectStoreOptions` (M-STORE-a).
+ *
+ * `s3` is `null` unless the provider is actually `s3`, so a half-filled set of
+ * `STORAGE_S3_*` on a `local` deployment cannot be mistaken for a configured
+ * bucket by anything downstream. When it is not null, `storageProblems` has
+ * already established every field is there — which is what lets this assert
+ * rather than guess.
+ */
+function storageOptions(env: z.infer<typeof envSchema>): ObjectStoreOptions {
+  if (env.STORAGE_PROVIDER !== 's3') {
+    return { localDir: env.STORAGE_LOCAL_DIR, s3: null };
+  }
+  return {
+    localDir: env.STORAGE_LOCAL_DIR,
+    s3: {
+      endpoint: env.STORAGE_S3_ENDPOINT!,
+      bucket: env.STORAGE_S3_BUCKET!,
+      region: env.STORAGE_S3_REGION,
+      accessKeyId: env.STORAGE_S3_ACCESS_KEY_ID!,
+      secretAccessKey: env.STORAGE_S3_SECRET_ACCESS_KEY!,
+      forcePathStyle: env.STORAGE_S3_FORCE_PATH_STYLE,
+      timeoutMs: env.STORAGE_S3_TIMEOUT_MS,
+    },
+  };
+}
+
 function replicaEscalatesPrivilege(env: z.infer<typeof envSchema>): boolean {
   if (!env.DATABASE_REPLICA_URL || !env.DATABASE_APP_URL) return false;
   const owner = new URL(env.DATABASE_URL).username;
@@ -666,6 +781,15 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   // is a configuration that turns tenant isolation off on the report path. A
   // developer who wires it up that way should learn at boot, not from a support
   // ticket.
+  // Same reasoning, same place in the boot: a deployment that asked for the
+  // shared bucket and did not say which one must not start. Falling back to
+  // pod-local disk is precisely the NFR-R1 breakage the `s3` provider exists to
+  // fix, and it would fail one attachment download in four rather than loudly.
+  const storage = storageProblems(env);
+  if (storage.length > 0) {
+    throw new Error(`Invalid environment:\n${storage.map((p) => `  ${p}`).join('\n')}`);
+  }
+
   if (replicaEscalatesPrivilege(env)) {
     throw new Error(
       "Invalid environment:\n  DATABASE_REPLICA_URL connects as the table owner while DATABASE_APP_URL does not: Postgres exempts owners from row level security, so report queries on the replica would return every tenant's rows.",
@@ -698,6 +822,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     // Non-null by construction: the schema's `refine` above already refused
     // every value this returns `null` for, so the boot is over before here.
     webOrigins: parseOriginList(env.WEB_ORIGIN) ?? [],
+    storage: storageOptions(env),
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',

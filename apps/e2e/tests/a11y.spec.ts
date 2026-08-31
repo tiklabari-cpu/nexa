@@ -518,6 +518,37 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // Not reachable from the scan above — the editor only renders once
+      // opened, the same reason the campaign/goal builders each needed their
+      // own scan. Nothing is persisted: the form is never submitted.
+      test('the new team dialog has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/team');
+        await scanPanel(agentPage, 'New team dialog', theme, testInfo, async () => {
+          await agentPage.getByRole('button', { name: 'New team' }).click();
+          await expect(agentPage.getByRole('dialog', { name: 'New team' })).toBeVisible();
+        });
+      });
+
+      // The seeded tenant carries at least one team (seed.ts), so its "Manage
+      // members" dialog is reachable without minting one first — unlike the
+      // create dialog above, which needs no existing row at all.
+      test('the team members dialog has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/team');
+        await scanPanel(agentPage, 'Team members dialog', theme, testInfo, async () => {
+          await agentPage
+            .getByRole('button', { name: /^Manage members/ })
+            .first()
+            .click();
+          await expect(agentPage.getByRole('dialog', { name: /^Members/ })).toBeVisible();
+        });
+      });
+
       test('settings has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/settings');

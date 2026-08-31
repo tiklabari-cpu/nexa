@@ -70,6 +70,45 @@ export const team: Messages = {
   'team.page.noMembers': 'Üye yok — buraya yönlendirilen sohbetler yedek ekibe düşer.',
   'team.page.formerTeammate': 'Eski ekip arkadaşı',
 
+  // Ekipler — oluştur/düzenle/sil + üyelik. Teams.tsx, TeamEditor.tsx, TeamMembers.tsx
+  'team.teams.newButton': 'Yeni ekip',
+  'team.teams.card.edit': 'Düzenle',
+  'team.teams.card.editAriaLabel': 'Ekibi düzenle — {name}',
+  'team.teams.card.manageMembers': 'Üyeleri yönet',
+  'team.teams.card.manageMembersAriaLabel': 'Üyeleri yönet — {name}',
+  'team.teams.editor.createTitle': 'Yeni ekip',
+  'team.teams.editor.editTitle': 'Ekibi düzenle — {name}',
+  'team.teams.editor.description':
+    'Ekipler, bir temsilcinin hangi sohbetleri görebileceğini ve önce kime gideceğini belirler.',
+  'team.teams.editor.nameLabel': 'Ad',
+  'team.teams.editor.nameError': 'Bir ekip adı girin.',
+  'team.teams.editor.languageLabel': 'Dil',
+  'team.teams.editor.languageHint':
+    'İki harfli kod, isteğe bağlı bölgeyle — örn. en veya en-GB. İngilizce için boş bırakın.',
+  'team.teams.editor.languageError':
+    'en veya en-GB gibi, isteğe bağlı bölgeli iki harfli bir dil kodu girin.',
+  'team.teams.editor.cancel': 'İptal',
+  'team.teams.editor.create': 'Ekip oluştur',
+  'team.teams.editor.saveChanges': 'Değişiklikleri kaydet',
+  'team.teams.editor.saving': 'Kaydediliyor…',
+  'team.teams.editor.discardConfirm': 'Kaydedilmemiş değişiklikleriniz atılsın mı?',
+  'team.teams.editor.deleteButton': 'Ekibi sil',
+  'team.teams.editor.deleting': 'Siliniyor…',
+  'team.teams.members.title': 'Üyeler — {name}',
+  'team.teams.members.description':
+    'Birden fazla üye müsaitken bir sohbetin önce kime gideceğini öncelik belirler (ADR-08).',
+  'team.teams.members.priorityAriaLabel': 'Öncelik — {name}',
+  'team.teams.members.removeButton': 'Çıkar',
+  'team.teams.members.removeAriaLabel': '{name} adlı kişiyi bu ekipten çıkar',
+  'team.teams.members.addLabel': 'Bir ekip arkadaşı ekle',
+  'team.teams.members.addAgentAriaLabel': 'Eklenecek ekip arkadaşı',
+  'team.teams.members.addPriorityAriaLabel': 'Yeni üye için öncelik',
+  'team.teams.members.addButton': 'Ekle',
+  'team.teams.members.adding': 'Ekleniyor…',
+  'team.teams.members.empty': 'Henüz üye yok.',
+  'team.teams.members.noneToAdd': 'Bu lisanstaki her ekip arkadaşı zaten üye.',
+  'team.teams.members.close': 'Kapat',
+
   // Routing status / on-off, shared across TeamPage and NotificationSettings
   'team.status.acceptingChats': 'Sohbet kabul ediyor',
   'team.status.notAccepting': 'Kabul etmiyor',

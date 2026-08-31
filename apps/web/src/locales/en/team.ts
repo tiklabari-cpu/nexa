@@ -78,6 +78,45 @@ export const team: Messages = {
     'No members — conversations routed here fall through to the fallback team.',
   'team.page.formerTeammate': 'Former teammate',
 
+  // Teams — create/edit/delete + membership. Teams.tsx, TeamEditor.tsx, TeamMembers.tsx
+  'team.teams.newButton': 'New team',
+  'team.teams.card.edit': 'Edit',
+  'team.teams.card.editAriaLabel': 'Edit team — {name}',
+  'team.teams.card.manageMembers': 'Manage members',
+  'team.teams.card.manageMembersAriaLabel': 'Manage members — {name}',
+  'team.teams.editor.createTitle': 'New team',
+  'team.teams.editor.editTitle': 'Edit team — {name}',
+  'team.teams.editor.description':
+    'Teams decide which conversations an agent can see and who gets them first.',
+  'team.teams.editor.nameLabel': 'Name',
+  'team.teams.editor.nameError': 'Enter a team name.',
+  'team.teams.editor.languageLabel': 'Language',
+  'team.teams.editor.languageHint':
+    'Two-letter code, optionally with a region — e.g. en or en-GB. Leave blank to use English.',
+  'team.teams.editor.languageError':
+    'Enter a two-letter language code, optionally with a region, like en or en-GB.',
+  'team.teams.editor.cancel': 'Cancel',
+  'team.teams.editor.create': 'Create team',
+  'team.teams.editor.saveChanges': 'Save changes',
+  'team.teams.editor.saving': 'Saving…',
+  'team.teams.editor.discardConfirm': 'Discard your unsaved changes?',
+  'team.teams.editor.deleteButton': 'Delete team',
+  'team.teams.editor.deleting': 'Deleting…',
+  'team.teams.members.title': 'Members — {name}',
+  'team.teams.members.description':
+    'Priority decides who gets a conversation first when more than one member is free (ADR-08).',
+  'team.teams.members.priorityAriaLabel': 'Priority — {name}',
+  'team.teams.members.removeButton': 'Remove',
+  'team.teams.members.removeAriaLabel': 'Remove {name} from this team',
+  'team.teams.members.addLabel': 'Add a teammate',
+  'team.teams.members.addAgentAriaLabel': 'Teammate to add',
+  'team.teams.members.addPriorityAriaLabel': 'Priority for the new member',
+  'team.teams.members.addButton': 'Add',
+  'team.teams.members.adding': 'Adding…',
+  'team.teams.members.empty': 'No members yet.',
+  'team.teams.members.noneToAdd': 'Every teammate on this licence is already a member.',
+  'team.teams.members.close': 'Close',
+
   // Routing status / on-off, shared across TeamPage and NotificationSettings
   'team.status.acceptingChats': 'Accepting chats',
   'team.status.notAccepting': 'Not accepting',

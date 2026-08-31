@@ -22,6 +22,13 @@ state:
       widget can say nobody is available instead of implying an instant reply.
       Internal notes are excluded in SQL, not filtered afterwards — a short page
       that dropped them later would still leak that something was hidden.
+
+      This is also how a campaign reaches a visitor (FR-MOD-03.3.2): the widget
+      polls this, and a poll that finds a proactive message owed carries it in
+      `campaign` and records the delivery in the same transaction. That makes
+      this GET non-idempotent, which is only acceptable because it needs a
+      customer token — no crawler or speculative fetch can consume a campaign.
+      See the `campaign` field for the delivery guarantee.
     responses:
       "200":
         description: Current state for this visitor

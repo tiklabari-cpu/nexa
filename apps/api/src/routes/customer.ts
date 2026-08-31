@@ -31,6 +31,7 @@ import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { visitorPageUrls } from '../services/campaigns/campaign-matching.js';
+import { deliverPendingCampaign } from '../services/campaigns/campaign-delivery.js';
 import { GoalService } from '../services/goals/goal-service.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
@@ -291,10 +292,25 @@ export default async function customerRoutes(
    *
    * One round-trip on load rather than three: on a slow connection the
    * difference is whether the panel opens with the conversation already in it.
+   *
+   * Also the delivery path for campaigns (FR-MOD-03.3.2): a still-owed
+   * `campaign_sends` row is answered with its message and stamped delivered in
+   * this handler's own transaction. That makes a GET non-idempotent, which is
+   * worth naming rather than leaving for someone to discover. It is safe here
+   * for a specific reason — the route needs a customer bearer token, so no
+   * crawler, link preview or browser speculative fetch can reach it; only the
+   * widget's own poll loop can. The alternative, a separate claim endpoint,
+   * would double the widget's request rate to buy a guarantee
+   * (`campaign-delivery.ts` explains why at-least-once is the wrong one here)
+   * that this surface does not want.
    */
   app.get('/customer/chat', { config: { principals: ['customer'] } }, async (request, reply) => {
     const principal = request.requirePrincipal();
     if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+
+    // One clock for the whole poll: the campaign window is judged and the
+    // delivery stamped against the same instant.
+    const now = new Date();
 
     const state = await request.withTenant(async (tx) => {
       const chat = await tx.chat.findFirst({
@@ -310,7 +326,9 @@ export default async function customerRoutes(
         }),
         tx.customer.findUnique({
           where: { id: principal.customerId },
-          select: { name: true, email: true },
+          // `bannedAt` is not for the widget — it feeds the campaign delivery
+          // decision below, which gets it free by riding on this read.
+          select: { name: true, email: true, bannedAt: true },
         }),
       ]);
 
@@ -332,7 +350,20 @@ export default async function customerRoutes(
             select: { name: true, avatarUrl: true },
           });
 
-      return { chat, agentsOnline, customer, responder };
+      // Inside this transaction on purpose: the read that finds the owed send
+      // and the write that marks it delivered commit together or not at all.
+      const campaign = await deliverPendingCampaign(
+        tx,
+        request.tenant(),
+        {
+          customerId: principal.customerId,
+          hasOpenChat: chat !== null,
+          bannedAt: customer?.bannedAt ?? null,
+        },
+        now,
+      );
+
+      return { chat, agentsOnline, customer, responder, campaign };
     });
 
     const events = state.chat
@@ -368,6 +399,11 @@ export default async function customerRoutes(
       agent: state.responder
         ? { name: state.responder.name, avatar_url: state.responder.avatarUrl }
         : null,
+      // The proactive message this poll is carrying, if one was owed
+      // (FR-MOD-03.3.2). Null on every other poll, which is nearly all of them.
+      // The campaign's internal name is deliberately not here: the owner named
+      // it for their own list ("Q4 winback"), not for the visitor to read.
+      campaign: state.campaign,
       events: events.items,
     });
   });

@@ -1061,6 +1061,13 @@ export interface paths {
      *     widget can say nobody is available instead of implying an instant reply.
      *     Internal notes are excluded in SQL, not filtered afterwards — a short page
      *     that dropped them later would still leak that something was hidden.
+     *
+     *     This is also how a campaign reaches a visitor (FR-MOD-03.3.2): the widget
+     *     polls this, and a poll that finds a proactive message owed carries it in
+     *     `campaign` and records the delivery in the same transaction. That makes
+     *     this GET non-idempotent, which is only acceptable because it needs a
+     *     customer token — no crawler or speculative fetch can consume a campaign.
+     *     See the `campaign` field for the delivery guarantee.
      */
     get: operations['getCustomerChatState'];
     put?: never;
@@ -9884,6 +9891,44 @@ export interface components {
         id: string;
         thread_id?: string | null;
         queue_position?: number | null;
+      } | null;
+      /**
+       * @description A proactive campaign message owed to this visitor (FR-MOD-03.3.2),
+       *     handed over on the poll that carries it. Null on every poll with
+       *     nothing owed, which is nearly all of them.
+       *
+       *     At most one per poll, oldest first. A visitor matching three
+       *     campaigns is nudged across three polls rather than shown three cards
+       *     at once — the widget has one proactive slot, and a stack of
+       *     unsolicited messages is what makes people install blockers.
+       *
+       *     **Delivery is at-most-once.** The send is stamped `delivered_at` in
+       *     the same transaction that reads it, so a response lost in transit
+       *     takes the message with it and the visitor never sees that campaign.
+       *     Chosen over an acknowledged, at-least-once delivery because "at
+       *     least once" against a 4-second poll means a card that reappears
+       *     every 4 seconds until the ack lands, and for a message nobody asked
+       *     for a duplicate is worse than a miss.
+       *
+       *     The consequence lands on the reporting rather than the visitor:
+       *     delivery means "handed to the widget", the strongest claim available
+       *     without an ack, so it can over-count by the occasional dropped
+       *     response. Nothing here should be read as "a human saw it".
+       *
+       *     Only delivered while the campaign is running at this moment and the
+       *     visitor has no conversation open. A campaign switched off, or past
+       *     its end date, stops reaching people even if the send was queued
+       *     while it was still live; a visitor already talking to somebody has
+       *     already done what the campaign was for.
+       */
+      campaign?: {
+        /**
+         * Format: uuid
+         * @description The campaign. Stable per visitor, so the widget can key a dismissal on it. Its internal name is not included — the owner named it for their own list, not for the visitor.
+         */
+        id: string;
+        /** @description The message the campaign's author wrote. */
+        message: string;
       } | null;
       /** @description Customer-visible events only. Internal notes never appear. */
       events: components['schemas']['Event'][];

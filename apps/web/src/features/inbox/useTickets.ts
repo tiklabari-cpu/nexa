@@ -21,21 +21,24 @@ import type { Agent, Ticket, TicketDetail, TicketStatus, TicketView } from './ty
 const TICKET_PAGE_SIZE = 50;
 
 /**
- * Cache key for a ticket list. `sort` belongs in it: the grid sorts the rows
- * already loaded rather than asking the server to (the server has no `sort`
- * param — `ticket-grid.ts`'s `sortTickets` is a pure client-side function), so
- * applying a new sort to an old, larger loaded window can read differently
- * than the same sort over a fresh page one. Folding `sort` into the key makes
- * a header click start a new chain instead — the "filter change ⇒ new query
- * key" shape `AuditLogPage` uses for its own filters.
+ * Cache key for a ticket list. `sort` belongs in it, and it is load-bearing
+ * rather than tidy: the server pages this list with a keyset cursor, and a
+ * cursor is a position *in one ordering* — `GET /tickets` refuses a `page_id`
+ * minted under a different `sort`/`order` (400) rather than quietly restarting.
+ * Folding the sort into the key is what makes a header click start a fresh
+ * chain from page one instead of appending to the old one — the same "filter
+ * change ⇒ new query key" shape `AuditLogPage` uses for its own filters.
  */
 export function ticketsKey(view: TicketView, sort: TicketSort): unknown[] {
   return ['tickets', view, sort.key, sort.order];
 }
 
-function ticketListUrl(view: TicketView, pageId: string | undefined): string {
+function ticketListUrl(view: TicketView, sort: TicketSort, pageId: string | undefined): string {
   const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
-  return `/tickets?view=${view}&limit=${TICKET_PAGE_SIZE}${cursor}`;
+  return (
+    `/tickets?view=${view}&sort=${sort.key}&order=${sort.order}` +
+    `&limit=${TICKET_PAGE_SIZE}${cursor}`
+  );
 }
 
 export function useTicketList(
@@ -45,7 +48,7 @@ export function useTicketList(
 ): PagedQueryResult<Ticket> {
   return usePagedQuery<Ticket>({
     queryKey: ticketsKey(view, sort),
-    buildUrl: (pageId) => ticketListUrl(view, pageId),
+    buildUrl: (pageId) => ticketListUrl(view, sort, pageId),
     enabled,
   });
 }

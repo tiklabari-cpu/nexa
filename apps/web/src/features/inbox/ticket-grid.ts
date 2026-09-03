@@ -1,23 +1,29 @@
 /**
  * The Tickets grid — sorting model and URL-param deep-link (PRD FR-MOD-02.7).
  *
- * The grid is sortable by any column, and the sort is carried in the URL
- * (`ticket_sort` + `ticket_order`) so a sorted view is shareable and survives a
- * reload — the "URL param sıralama" the PRD asks for. The sort is applied to the
- * rows the list has already loaded rather than refetched: the collection is
- * keyset-paginated newest-first on the server, and re-ordering the loaded window
- * client-side is honest for a grid and keeps this a pure, testable function.
+ * The grid is sortable, and the sort is carried in the URL (`ticket_sort` +
+ * `ticket_order`) so a sorted view is shareable and survives a reload — the
+ * "URL param sıralama" the PRD asks for.
  *
- * Pure on purpose. The bucketing that has the subtle bugs — nulls-last
- * regardless of direction, a stable tiebreak so equal rows never jitter — lives
- * here and is tested in isolation, not through the rendered table.
+ * **The server does the sorting** (`GET /tickets?sort=…&order=…`). This module
+ * used to re-order the rows the list had already loaded, which reads fine on a
+ * fixture and is wrong on a real workspace: the collection is keyset-paginated,
+ * the console holds fifty rows of it, and the row that belongs at the top of a
+ * newly sorted list is usually one that was never fetched. A header that
+ * answers "the first of what I happen to have" while looking like it answers
+ * "the first of these tickets" is the defect the D3 audit named, and the reason
+ * `sortTickets` is gone rather than kept as a fallback — two sorts over one
+ * list is a way to get a third order that is neither.
+ *
+ * What is left here is pure and testable: which columns can be sorted at all,
+ * what a header click means, and the URL round-trip.
  */
-import type { Ticket, TicketStatus } from './types.js';
+import { TICKET_SORT_KEYS, type SortOrder, type TicketSortKey } from '@nexa/types';
 
-export type TicketSortKey =
-  'subject' | 'customer' | 'status' | 'priority' | 'assignee' | 'last_message';
+export type { SortOrder, TicketSortKey };
 
-export type SortOrder = 'asc' | 'desc';
+/** Every column the grid renders — a superset of the sortable ones. */
+export type TicketColumnKey = TicketSortKey | 'status' | 'assignee';
 
 export interface TicketSort {
   key: TicketSortKey;
@@ -25,11 +31,16 @@ export interface TicketSort {
 }
 
 export interface TicketColumn {
-  key: TicketSortKey;
+  key: TicketColumnKey;
   label: string;
   align?: 'left' | 'right';
-  /** The order a fresh click on this column starts from. */
-  defaultOrder: SortOrder;
+  /**
+   * The order a fresh click on this column starts from, or `null` when the
+   * column cannot be sorted at all — see `TICKET_SORT_KEYS` (`@nexa/types`) for
+   * why `status` and `assignee` are the two: the database cannot order the
+   * collection by either, and the ticket *views* already slice by both.
+   */
+  defaultOrder: SortOrder | null;
 }
 
 /**
@@ -40,9 +51,9 @@ export interface TicketColumn {
 export const TICKET_COLUMNS: readonly TicketColumn[] = [
   { key: 'subject', label: 'Subject', defaultOrder: 'asc' },
   { key: 'customer', label: 'Customer', defaultOrder: 'asc' },
-  { key: 'status', label: 'Status', defaultOrder: 'asc' },
+  { key: 'status', label: 'Status', defaultOrder: null },
   { key: 'priority', label: 'Priority', defaultOrder: 'desc' },
-  { key: 'assignee', label: 'Assignee', defaultOrder: 'asc' },
+  { key: 'assignee', label: 'Assignee', defaultOrder: null },
   { key: 'last_message', label: 'Last message', align: 'right', defaultOrder: 'desc' },
 ];
 
@@ -52,73 +63,15 @@ export const DEFAULT_TICKET_SORT: TicketSort = { key: 'last_message', order: 'de
 export const TICKET_SORT_PARAM = 'ticket_sort';
 export const TICKET_ORDER_PARAM = 'ticket_order';
 
-const KEYS = new Set<string>(TICKET_COLUMNS.map((column) => column.key));
+const KEYS = new Set<string>(TICKET_SORT_KEYS);
 
-/** Status ordered by where it sits in a ticket's life, not alphabetically. */
-const STATUS_ORDER: Record<TicketStatus, number> = {
-  open: 0,
-  pending: 1,
-  solved: 2,
-  closed: 3,
-  spam: 4,
-};
+/** Whether a column can be sorted — the type guard the header rendering needs. */
+export function isSortableColumn(key: TicketColumnKey): key is TicketSortKey {
+  return KEYS.has(key);
+}
 
 function columnDefaultOrder(key: TicketSortKey): SortOrder {
   return TICKET_COLUMNS.find((column) => column.key === key)?.defaultOrder ?? 'asc';
-}
-
-/**
- * The comparable value for a column, or `null` when the ticket has none. `null`
- * is returned rather than a sentinel so the sort can float empty cells to the
- * bottom in *both* directions — an unassigned or activity-less ticket should
- * never outrank a real one just because the order flipped.
- */
-function cellValue(ticket: Ticket, key: TicketSortKey): string | number | null {
-  switch (key) {
-    case 'subject':
-      return ticket.subject;
-    case 'customer':
-      return ticket.customer_name;
-    case 'assignee':
-      return ticket.assignee_name;
-    case 'status':
-      return STATUS_ORDER[ticket.status];
-    case 'priority':
-      return ticket.priority;
-    case 'last_message':
-      return ticket.last_message_at ? Date.parse(ticket.last_message_at) : null;
-  }
-}
-
-/** Stable tiebreak: id descending, matching the server's secondary order. */
-function tiebreak(a: Ticket, b: Ticket): number {
-  return b.id.localeCompare(a.id);
-}
-
-/**
- * Sort a loaded page of tickets by one column. Non-mutating (returns a copy),
- * nulls always last, and equal rows fall back to a deterministic id order so the
- * table never reshuffles rows that compare the same.
- */
-export function sortTickets(tickets: readonly Ticket[], sort: TicketSort): Ticket[] {
-  const direction = sort.order === 'asc' ? 1 : -1;
-  return [...tickets].sort((a, b) => {
-    const va = cellValue(a, sort.key);
-    const vb = cellValue(b, sort.key);
-
-    const aNull = va === null;
-    const bNull = vb === null;
-    if (aNull && bNull) return tiebreak(a, b);
-    if (aNull) return 1;
-    if (bNull) return -1;
-
-    const cmp =
-      typeof va === 'number' && typeof vb === 'number'
-        ? va - vb
-        : String(va).localeCompare(String(vb), undefined, { sensitivity: 'base' });
-
-    return cmp !== 0 ? cmp * direction : tiebreak(a, b);
-  });
 }
 
 /** Whether the sort is pinned in the URL — the signal a link opens the grid. */
@@ -129,7 +82,10 @@ export function hasTicketSortParams(params: URLSearchParams): boolean {
 /**
  * Read the sort out of the URL, tolerating partial or stale links. A valid key
  * with a missing/garbled order falls back to that column's default order rather
- * than discarding the whole thing, so `?ticket_sort=subject` still sorts.
+ * than discarding the whole thing, so `?ticket_sort=subject` still sorts. A key
+ * the server cannot sort by — including `?ticket_sort=status`, which older
+ * links do carry — falls back to the default rather than being sent on to be
+ * refused: the address bar is editable, and a shared link should open the grid.
  */
 export function parseTicketSort(params: URLSearchParams): TicketSort {
   const key = params.get(TICKET_SORT_PARAM);
@@ -173,7 +129,7 @@ export function toggleTicketSort(current: TicketSort, key: TicketSortKey): Ticke
 /** The `aria-sort` value for a header, so assistive tech announces the order. */
 export function ariaSortFor(
   sort: TicketSort,
-  key: TicketSortKey,
+  key: TicketColumnKey,
 ): 'ascending' | 'descending' | 'none' {
   if (sort.key !== key) return 'none';
   return sort.order === 'asc' ? 'ascending' : 'descending';

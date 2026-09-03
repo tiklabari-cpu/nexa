@@ -69,6 +69,35 @@ export const TICKET_PRIORITY_MIN = -100;
 export const TICKET_PRIORITY_MAX = 100;
 export const TICKET_PRIORITY_DEFAULT = 0;
 
+/**
+ * The columns `GET /tickets` can order the *whole* collection by.
+ *
+ * Deliberately a subset of the grid's six columns. A sort is a promise about
+ * every row that matches the view, not about the page a browser happens to hold,
+ * so a column only belongs here when the database can order by it — which rules
+ * two of them out:
+ *
+ *   - **status** is stored as text, so `ORDER BY status` reads closed, open,
+ *     pending, solved, spam. The order the product means is the lifecycle one
+ *     (open first, because that is the work), and expressing it needs a rank the
+ *     schema does not have.
+ *   - **assignee** is displayed as the account's *name*, and a ticket stores only
+ *     `assignee_id` with no relation to `accounts` — the name is resolved in a
+ *     second query, after the page has already been chosen.
+ *
+ * Neither loss costs much: the ticket *views* (`unassigned`, `my_open`,
+ * `solved`) already slice by exactly those two fields, and they do it across the
+ * whole collection.
+ */
+export const TICKET_SORT_KEYS = ['last_message', 'subject', 'customer', 'priority'] as const;
+export type TicketSortKey = (typeof TICKET_SORT_KEYS)[number];
+
+/** Matches the server's default (`GET /tickets` — newest activity first). */
+export const DEFAULT_TICKET_SORT_KEY: TicketSortKey = 'last_message';
+
+export const SORT_ORDERS = ['asc', 'desc'] as const;
+export type SortOrder = (typeof SORT_ORDERS)[number];
+
 // --- AI ---------------------------------------------------------------------
 
 export const AI_AGENT_KINDS = ['ai_agent', 'copilot'] as const;

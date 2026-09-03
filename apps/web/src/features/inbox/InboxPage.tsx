@@ -48,7 +48,6 @@ import {
   clearTicketSort,
   hasTicketSortParams,
   parseTicketSort,
-  sortTickets,
   toggleTicketSort,
   writeTicketSort,
   type TicketSortKey,
@@ -168,8 +167,10 @@ export function InboxPage(): ReactElement {
   const ticketView: TicketView = selection.kind === 'ticket' ? selection.view : 'all';
 
   // The Tickets grid sort is the URL's job (FR-MOD-02.7), so a sorted view is
-  // shareable and survives a reload. The rows are re-ordered client-side on the
-  // loaded page rather than refetched — see `ticket-grid.ts`.
+  // shareable and survives a reload. Like the chat list below it asks the server
+  // for a different page chain rather than re-ordering the loaded rows — see
+  // `ticket-grid.ts`; passing `ticketSort` into `useTicketList`'s query key is
+  // what restarts the chain, and nothing here resets it by hand.
   const ticketSort = useMemo(() => parseTicketSort(searchParams), [searchParams]);
 
   // Switching to a chat view drops the grid's sort params so a stale
@@ -193,12 +194,9 @@ export function InboxPage(): ReactElement {
     });
   };
 
-  // The chat list sort (FR-MOD-02.2.1) is the URL's job too, same reasoning as
-  // the Tickets grid above: shareable, survives a reload. Unlike the grid this
-  // asks the server for a different page chain rather than re-ordering a loaded
-  // page — see `chat-sort.ts` — so changing it has to start `list` a fresh
-  // query, which passing `chatSort` into `useChatList`'s query key (below)
-  // already does; nothing here resets the page chain by hand.
+  // The chat list sort (FR-MOD-02.2.1) is the URL's job too, same reasoning and
+  // now the same mechanism as the Tickets grid above: shareable, survives a
+  // reload, and the server is the one that sorts — see `chat-sort.ts`.
   const chatSort = useMemo(() => parseChatSort(searchParams), [searchParams]);
   const changeChatSort = (sort: ChatSort): void => {
     setSearchParams(writeChatSort(searchParams, sort), { replace: true });
@@ -284,10 +282,6 @@ export function InboxPage(): ReactElement {
 
   const ticketItems = tickets.items;
   const ticketsLoaded = tickets.pages.length > 0;
-  const sortedTickets = useMemo(
-    () => sortTickets(ticketItems, ticketSort),
-    [ticketItems, ticketSort],
-  );
 
   // Grid-first: nothing is auto-selected, so opening the Tickets group lands on
   // the grid rather than jumping into a record. A selection that drops out of
@@ -419,13 +413,17 @@ export function InboxPage(): ReactElement {
             <main className="flex min-w-0 flex-1 flex-col bg-canvas">
               <header className="flex h-topbar shrink-0 items-center justify-between border-b border-border bg-surface px-4">
                 <h2 className="text-sm font-semibold">{t(TICKET_VIEW_LABEL_KEY[ticketView])}</h2>
+                {/* The view's size, from the server's `total` — not the number of
+                    rows this browser has chained so far (D3 · FR-MOD-02.1.2).
+                    Falls back to the loaded count only before the first page
+                    lands, when there is no server number to show yet. */}
                 <span className="tabular text-2xs text-content-tertiary">
-                  {sortedTickets.length}
+                  {tickets.total ?? ticketItems.length}
                 </span>
               </header>
               <div className="min-h-0 flex-1 overflow-hidden p-4">
                 <TicketGrid
-                  tickets={sortedTickets}
+                  tickets={ticketItems}
                   loading={tickets.isPending}
                   sort={ticketSort}
                   onSort={changeTicketSort}

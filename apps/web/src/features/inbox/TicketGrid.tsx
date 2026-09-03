@@ -4,7 +4,9 @@
  *
  * A grid rather than the narrow inbox list because tickets are compared across
  * columns (who owns it, how urgent, when it last moved) the way a chat list is
- * not. Every header sorts; the sort lives in the URL so a link reopens the same
+ * not. Four of the six headers sort — the server does the sorting, over the
+ * whole collection, and the two it cannot order by say so by not being buttons
+ * (`ColumnHeader` below). The sort lives in the URL so a link reopens the same
  * order (see `ticket-grid.ts`). A row opens the ticket conversation — the whole
  * reason the grid exists is to get from a queue to the follow-up work behind a
  * row, so the row, not a hidden action, is the link.
@@ -24,7 +26,9 @@ import { hasElevatedPriority, nearestPriority } from './ticket-priority.js';
 import {
   TICKET_COLUMNS,
   ariaSortFor,
+  isSortableColumn,
   type TicketColumn,
+  type TicketColumnKey,
   type TicketSort,
   type TicketSortKey,
 } from './ticket-grid.js';
@@ -56,7 +60,7 @@ const PRIORITY_LABEL_KEY: Record<string, string> = {
 };
 
 /** Display word for a grid column — `TICKET_COLUMNS[].label` is English-only. */
-const COLUMN_LABEL_KEY: Record<TicketSortKey, string> = {
+const COLUMN_LABEL_KEY: Record<TicketColumnKey, string> = {
   subject: 'inbox.ticketGrid.column.subject',
   customer: 'inbox.ticketGrid.column.customer',
   status: 'inbox.ticketGrid.column.status',
@@ -76,8 +80,18 @@ function PriorityCell({ value, t }: { value: number; t: TFunction }): ReactEleme
   return <span className={tone}>{label}</span>;
 }
 
-/** A sortable column header: a button that toggles the sort, with `aria-sort`. */
-function SortHeader({
+/**
+ * A column header. Sortable ones are a button carrying `aria-sort`; the rest are
+ * plain text, deliberately not a control that does nothing.
+ *
+ * Status and Assignee are the plain two, and they are not an oversight — the
+ * server cannot order the whole collection by either (`TICKET_SORT_KEYS`,
+ * `@nexa/types`), and a header that only re-orders the fifty rows this browser
+ * happens to hold looks exactly like one that sorts the queue. Offering the
+ * gesture and answering a different question is worse than not offering it; the
+ * ticket views already slice by status and by "assigned to me".
+ */
+function ColumnHeader({
   column,
   sort,
   onSort,
@@ -88,24 +102,32 @@ function SortHeader({
   onSort: (key: TicketSortKey) => void;
   t: TFunction;
 }): ReactElement {
-  const active = sort.key === column.key;
+  const className = `px-4 py-2 text-xs font-medium text-content-secondary ${
+    column.align === 'right' ? 'text-right' : 'text-left'
+  }`;
+  const label = t(COLUMN_LABEL_KEY[column.key]);
+
+  if (!isSortableColumn(column.key)) {
+    return (
+      <th scope="col" className={className}>
+        {label}
+      </th>
+    );
+  }
+
+  const key = column.key;
+  const active = sort.key === key;
   const glyph = active ? (sort.order === 'asc' ? '▲' : '▼') : '↕';
   return (
-    <th
-      scope="col"
-      aria-sort={ariaSortFor(sort, column.key)}
-      className={`px-4 py-2 text-xs font-medium text-content-secondary ${
-        column.align === 'right' ? 'text-right' : 'text-left'
-      }`}
-    >
+    <th scope="col" aria-sort={ariaSortFor(sort, key)} className={className}>
       <button
         type="button"
-        onClick={() => onSort(column.key)}
+        onClick={() => onSort(key)}
         className={`inline-flex items-center gap-1 hover:text-content ${
           active ? 'text-content' : ''
         }`}
       >
-        <span>{t(COLUMN_LABEL_KEY[column.key])}</span>
+        <span>{label}</span>
         <span aria-hidden="true" className={active ? '' : 'text-content-tertiary'}>
           {glyph}
         </span>
@@ -159,7 +181,7 @@ export function TicketGrid({
         <thead>
           <tr className="border-b border-border">
             {TICKET_COLUMNS.map((column) => (
-              <SortHeader key={column.key} column={column} sort={sort} onSort={onSort} t={t} />
+              <ColumnHeader key={column.key} column={column} sort={sort} onSort={onSort} t={t} />
             ))}
           </tr>
         </thead>

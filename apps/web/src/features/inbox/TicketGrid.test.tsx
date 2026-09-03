@@ -73,6 +73,20 @@ describe('TicketGrid', () => {
     expect(onSort).toHaveBeenCalledWith('subject');
   });
 
+  it('offers no control on the two columns the server cannot order by', () => {
+    // Status and assignee are rendered but not sortable (`TICKET_SORT_KEYS`).
+    // The header has to be plain text rather than a disabled-looking button:
+    // the sorting is the server's, over the whole collection, and a control
+    // that could only re-order the rows this browser holds would look exactly
+    // like one that sorts the queue.
+    renderGrid();
+    for (const label of ['Status', 'Assignee']) {
+      const header = screen.getByRole('columnheader', { name: label });
+      expect(within(header).queryByRole('button')).toBeNull();
+      expect(header).not.toHaveAttribute('aria-sort');
+    }
+  });
+
   it('opens the ticket conversation when a row is clicked', async () => {
     const { onOpen } = renderGrid();
     // The subject is the row's keyboard-reachable link into the conversation.

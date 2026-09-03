@@ -8423,7 +8423,7 @@
         "description": "Sayaclar ve siralamalar tarayiciya yuklenmis satirlardan turuyor; veri buyudukce SESSIZCE yanlisa doner ve testler kucuk fixture ile yesil kalir. AI resolution sayaci 50 satirdan sonra yanlis; Tickets siralamasi sunucuya gitmiyor; gorunum filtresi URL e yansimiyor; Traffic sekme sayaclari yalniz yuklenmis sayfalardan turuyor.",
         "details": "PRD satır **496-521** (FR-MOD-02.1.2, 02.7) ve **522-535** (traffic) · denetim `prd-uyum-denetimi.md` §3 D3.\n\n**DB yarısı DOĞRU — dokunma:** `ai_solved` görünüm filtresi (`chat-service.ts` ~1727) ADR-09'un tam predicate'ini uyguluyor ve yorumu bu predicate'e ekstra koşul eklenmesini açıkça yasaklıyor (Solved listesi ile fatura sayacı asla ayrışmamalı). Hata yalnız web katmanında sayımda.\n\n**Çürütme turundan gelen düzeltme:** ilk denetçinin \"dar sekmede Traffic sayaçları tüm panoyu temsil etmiyor\" eleştirisi **haksızdı** — kod sayaçları yalnız aktif sekme ya da filtresiz pano için gösteriyor. Gerçek sınır sayacın yüklenmiş sayfalardan türemesi. Sekme mantığını değiştirme.",
         "testStrategy": "Kalem bütününün kabul kriteri: sayfa boyutunu aşan veri setlerinde (60+ kayıt, sayfa 25) sayaçlar doğru ve sunucu toplamı fatura sayacıyla aynı; sayfa 2'deki bir bilet sayfa 1'dekinden önce sıralanabiliyor. NFR-P2 okuma bütçeleri aşılmıyor.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8462,13 +8462,13 @@
             "title": "M-COUNT-d [SONNET-XHIGH] Traffic sekme sayaçlarını sunucu toplamına bağla",
             "description": "`TrafficPage.tsx:432` civarı. `-a`nın çözdüğü aynı tasarım sorusu geçerli — o iş kalemi bittiyse aynı deseni kullan, yeni yol icat etme. **Sekme davranışını (aktif sekme / filtresiz pano) DEĞİŞTİRME**, mevcut testler kırılmamalı. e2e içinde ölçülen \"NFR-P2 filtered GET /traffic\" bütçesi aşılmaz.",
             "details": "Bağımlılık: M-COUNT-a. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "179",
-            "updatedAt": "2026-09-03T22:59:14.621Z"
+            "updatedAt": "2026-09-03T23:45:13.721Z"
           }
         ],
-        "updatedAt": "2026-09-03T22:59:14.621Z"
+        "updatedAt": "2026-09-03T23:45:13.721Z"
       },
       {
         "id": "180",
@@ -8718,9 +8718,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-03T22:59:14.622Z",
+      "lastModified": "2026-09-03T23:45:13.722Z",
       "taskCount": 184,
-      "completedCount": 178,
+      "completedCount": 179,
       "tags": [
         "master"
       ]

@@ -122,6 +122,44 @@ describe('TrafficPage status tabs', () => {
     expect(await within(queuedTab).findByText('1')).toBeInTheDocument();
   });
 
+  it("reports the active tab's badge and the page count from the server total, past the loaded page (M-COUNT-d)", async () => {
+    // 150 chatting visitors on the board; the board only ever loads a page
+    // (100 rows) at a time — the bug this pins is a badge that used to read
+    // `items.length` and so could never say more than what had loaded.
+    const loaded = Array.from({ length: 100 }, (_, i) =>
+      visitor({ customer_id: `c${i}`, activity: 'chatting' }),
+    );
+    api.get.mockResolvedValue({ items: loaded, total: 150 });
+    renderPage(['/?tab=chatting']);
+
+    const tablist = await screen.findByRole('tablist', { name: 'Traffic status' });
+    const chattingTab = within(tablist).getByRole('tab', { name: /Chatting/ });
+    expect(await within(chattingTab).findByText('150')).toBeInTheDocument();
+    expect(await screen.findByText('150 visitors on your site now')).toBeInTheDocument();
+  });
+
+  it('falls back to the loaded count while a page is still in flight, rather than a blank badge', async () => {
+    let resolveGet!: (value: { items: TrafficVisitor[]; total: number }) => void;
+    api.get.mockReturnValue(
+      new Promise((resolve) => {
+        resolveGet = resolve;
+      }),
+    );
+    renderPage();
+
+    // No response yet: nothing loaded, nothing to fall back to but zero — the
+    // badge must not throw or hang on an `undefined` total.
+    const tablist = await screen.findByRole('tablist', { name: 'Traffic status' });
+    const allTab = within(tablist).getByRole('tab', { name: /^All/ });
+    expect(within(allTab).getByText('0')).toBeInTheDocument();
+
+    resolveGet({
+      items: [visitor({ customer_id: 'a', activity: 'chatting' })],
+      total: 1,
+    });
+    expect(await within(allTab).findByText('1')).toBeInTheDocument();
+  });
+
   it('selecting a tab requests only that state from the server (no client-side re-filtering)', async () => {
     const user = userEvent.setup();
     api.get.mockResolvedValue({ items: [], total: 0 });

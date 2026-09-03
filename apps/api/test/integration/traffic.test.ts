@@ -203,13 +203,13 @@ describe('traffic', () => {
     return (response.json() as { items: TrafficVisitor[] }).items;
   };
 
-  /** The full envelope, `next_page_id` included, for the pagination tests. */
+  /** The full envelope, `total`/`next_page_id` included, for pagination/total tests. */
   const listTrafficPage = async (
     query = '',
-  ): Promise<{ items: TrafficVisitor[]; next_page_id?: string }> => {
+  ): Promise<{ items: TrafficVisitor[]; total: number; next_page_id?: string }> => {
     const response = await server.get(`/traffic${query}`, auth(readToken));
     expect(response.statusCode).toBe(200);
-    return response.json() as { items: TrafficVisitor[]; next_page_id?: string };
+    return response.json() as { items: TrafficVisitor[]; total: number; next_page_id?: string };
   };
 
   /** A real visitor token, for the tests that drive the widget's own write path. */
@@ -1071,6 +1071,52 @@ describe('traffic', () => {
       // newcomer, and not duplicated with anything page 1 already returned.
       expect(secondIds).toEqual(older.slice(2, 4));
       expect(secondIds).not.toContain(newcomer);
+    });
+  });
+
+  // --- `total` — the whole board this query matches, not the page (M-COUNT-d)
+
+  describe('total', () => {
+    it('reports the whole board past the loaded page, not just what this page returned', async () => {
+      for (let i = 0; i < 7; i += 1) {
+        const id = await seedCustomer(fx.a, `Browsing ${i}`);
+        await seedVisit(fx.a, id, minutesAgo(i + 1));
+      }
+
+      const page = await listTrafficPage('?limit=3');
+      expect(page.items).toHaveLength(3);
+      expect(page.total).toBe(7);
+      expect(page.next_page_id).toBeDefined();
+    });
+
+    it('scopes the count to the activity filter it was asked for, not the whole board', async () => {
+      for (let i = 0; i < 3; i += 1) {
+        const id = await seedCustomer(fx.a, `Browsing ${i}`);
+        await seedVisit(fx.a, id, minutesAgo(i + 1));
+      }
+      for (let i = 0; i < 2; i += 1) {
+        const id = await seedCustomer(fx.a, `Chatting ${i}`);
+        await seedActiveChat(fx.a, id);
+      }
+
+      const browsingOnly = await listTrafficPage('?activity=browsing&limit=1');
+      expect(browsingOnly.items).toHaveLength(1);
+      expect(browsingOnly.total).toBe(3);
+
+      const unfiltered = await listTrafficPage('?limit=100');
+      expect(unfiltered.total).toBe(5);
+    });
+
+    it("honours a 'Match all filters' condition, not just the activity tab", async () => {
+      const onPricing1 = await seedCustomer(fx.a, 'On Pricing 1');
+      await seedVisit(fx.a, onPricing1, minutesAgo(1), { urls: ['https://shop.example/pricing'] });
+      const onPricing2 = await seedCustomer(fx.a, 'On Pricing 2');
+      await seedVisit(fx.a, onPricing2, minutesAgo(2), { urls: ['https://shop.example/pricing'] });
+      const onBlog = await seedCustomer(fx.a, 'On Blog');
+      await seedVisit(fx.a, onBlog, minutesAgo(3), { urls: ['https://shop.example/blog'] });
+
+      const page = await listTrafficPage('?page_url_contains=/pricing&limit=100');
+      expect(page.total).toBe(2);
     });
   });
 

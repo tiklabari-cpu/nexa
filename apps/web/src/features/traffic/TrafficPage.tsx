@@ -348,7 +348,15 @@ export function TrafficPage(): ReactElement {
   // Trustworthy only for the tabs the currently loaded rows actually cover:
   // the active tab itself (every loaded row is exactly what came back for
   // it) and, when that response is the unfiltered board, every tab at once.
+  // Used as a fallback below, and for every badge but the active tab's own —
+  // those still only ever report what has been scrolled into view, the
+  // "loaded window mistaken for the real total" bug this slice does not
+  // reach for the other six.
   const counts = useMemo(() => countByTab(items), [items]);
+  // The server's count for exactly this query (`tab` + `conditions`), past
+  // whatever page is currently loaded — `list.total` (`usePagedQuery`), the
+  // same envelope field 179.1-179.3 already read for their own counters.
+  const total = list.total ?? counts[tab];
 
   const invalidate = (): void => {
     void queryClient.invalidateQueries({ queryKey: ['traffic'] });
@@ -409,10 +417,7 @@ export function TrafficPage(): ReactElement {
       title={t('customers.page.title')}
       description={
         list.pages.length > 0
-          ? t('traffic.page.count', {
-              count: items.length,
-              formatted: formatCount(items.length) ?? '0',
-            })
+          ? t('traffic.page.count', { count: total, formatted: formatCount(total) ?? '0' })
           : t('traffic.page.subtitle')
       }
       actions={<CustomersTabs />}
@@ -428,8 +433,14 @@ export function TrafficPage(): ReactElement {
           // Only ever shown for a bucket the current response actually
           // covers — the active tab, or every tab while viewing the
           // unfiltered board — so a badge never states a count the client
-          // does not truly know.
-          const count = active || tab === 'all' ? counts[tabDef.id] : undefined;
+          // does not truly know. The active tab's own badge is the server's
+          // count for this exact query (`total`, past whatever page has
+          // loaded so far); the other badges shown alongside it on the
+          // unfiltered board are still the loaded rows bucketed client-side
+          // (`counts`) — a true per-bucket total for all six at once would
+          // need the envelope to carry more than the one `total` every other
+          // list endpoint sends for its query, which is out of scope here.
+          const count = active ? total : tab === 'all' ? counts[tabDef.id] : undefined;
           return (
             <button
               key={tabDef.id}

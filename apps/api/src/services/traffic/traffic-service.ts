@@ -205,19 +205,21 @@ export class TrafficService {
     const { limit } = options;
     const cursor = decodeCursor(options.pageId);
     // How deep the merged, sorted board has to be materialised to answer this
-    // page. Page 1 reads one row past `limit` — the `customer-service.ts`
-    // trick of fetching one extra to learn whether another page exists,
-    // without a second count query that could disagree with the page under
-    // concurrent writes. A later page reads each source up to its own hard
-    // ceiling instead (`sourceTake` already clamps at `MAX_SOURCE_ROWS`)
-    // rather than a window sized off how many rows earlier pages consumed: a
-    // read sized for "one page past the cursor" would come up short the
-    // moment enough new rows land above the boundary between one request and
-    // the next, silently truncating a page that still has rows to give. The
-    // board is small and live (a 30-minute window, already capped at
-    // `MAX_SOURCE_ROWS` per source) — re-reading it in full on every later
-    // page costs nothing a first-page filter could not already cost.
-    const fetchWindow = cursor ? MAX_SOURCE_ROWS : limit + 1;
+    // page. Every page — not just a later one — reads each source up to its
+    // own hard ceiling (`sourceTake` already clamps at `MAX_SOURCE_ROWS`)
+    // rather than a window sized off `limit`: `total` (below) is a count over
+    // this same materialised window, so a page-1-only shortcut would make the
+    // first page of every tab under-report until the caller had paged deep
+    // enough to outgrow it — exactly the "loaded window mistaken for the real
+    // total" bug `total` exists to not have (13.2 M-COUNT-d). A window sized
+    // for "one page past the cursor" would also come up short the moment
+    // enough new rows land above the boundary between one request and the
+    // next, silently truncating a page that still has rows to give. The board
+    // is small and live (a 30-minute window, already capped at
+    // `MAX_SOURCE_ROWS` per source) — reading it in full on every page costs
+    // nothing a first-page filter could not already cost (NFR-P2 measured:
+    // `apps/e2e/tests/traffic.spec.ts`'s filtered-board budget).
+    const fetchWindow = MAX_SOURCE_ROWS;
     const liveSince = new Date(Date.now() - LIVE_WINDOW_MINUTES * 60_000);
 
     // A team id reaches the query only once it is known to be one of the
@@ -582,7 +584,13 @@ export class TrafficService {
 
     return {
       items,
-      total: items.length,
+      // The whole board matching this query (activity + every other filter),
+      // not just the page handed back — `pageRows`, before the `limit` slice.
+      // Bounded by `fetchWindow`/`MAX_SOURCE_ROWS`, the same cap the board's
+      // three sources have always been read under; a board deeper than that
+      // reports the cap rather than an exact count past it, same trade-off
+      // the cap itself already makes for the rows a caller can page through.
+      total: pageRows.length,
       ...(pageRows.length > limit && last
         ? {
             nextPageId: encodeCursor({

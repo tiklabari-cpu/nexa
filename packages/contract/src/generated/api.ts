@@ -1598,9 +1598,11 @@ export interface paths {
      *
      *     Paginated by opaque keyset cursor, the same shape every other list
      *     endpoint uses: `next_page_id` is absent once the board has no more rows
-     *     to offer. `total` describes this page only — the union of three sources
-     *     makes a true board-wide count expensive, so it is not the whole board's
-     *     size the way `GET /customers`'s is.
+     *     to offer. `total` is the whole board matching this query (every filter,
+     *     including `activity`) — not just this page, the same as `GET
+     *     /customers`'s — bounded at 500 visitors: a board deeper than that
+     *     reports the cap rather than an exact count past it, the same bound the
+     *     board's three sources have always been read under.
      */
     get: operations['listTraffic'];
     put?: never;
@@ -12811,7 +12813,10 @@ export interface operations {
         content: {
           'application/json': {
             items: components['schemas']['TrafficVisitor'][];
-            /** @description Visitors on this page — not the whole board. */
+            /**
+             * @description Visitors matching this query across the whole board, not just
+             *     this page — capped at 500 (see above).
+             */
             total: number;
             next_page_id?: string;
           };

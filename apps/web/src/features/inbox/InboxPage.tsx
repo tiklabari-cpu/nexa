@@ -46,10 +46,14 @@ import { CreateTicketButton } from './CreateTicketButton.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import {
   clearTicketSort,
+  clearTicketView,
   hasTicketSortParams,
+  hasTicketViewParam,
   parseTicketSort,
+  parseTicketView,
   toggleTicketSort,
   writeTicketSort,
+  writeTicketView,
   type TicketSortKey,
 } from './ticket-grid.js';
 import { parseChatSort, writeChatSort, type ChatSort } from './chat-sort.js';
@@ -89,9 +93,11 @@ const VIEW_LABEL_KEY: Record<InboxView, string> = {
  * The PRD keeps chats and tickets in one inbox under two groups, so the
  * selection is one value with two shapes rather than two independent states —
  * two states drift, and the pane ends up rendering a chat under a ticket
- * heading.
+ * heading. The ticket view filter itself is not carried here — it is the
+ * URL's job (`ticket-grid.ts`), same as the sort, so a filtered link is
+ * shareable and the browser's back/forward buttons walk through it.
  */
-type Selection = { kind: 'chat'; view: InboxView } | { kind: 'ticket'; view: TicketView };
+type Selection = { kind: 'chat'; view: InboxView } | { kind: 'ticket' };
 
 const TICKET_VIEWS: Array<{ id: TicketView; icon: string }> = [
   { id: 'all', icon: '▦' },
@@ -135,9 +141,10 @@ export function InboxPage(): ReactElement {
   // list view is showing, so all this has to do is point the selection at it
   // under the "All" view and then consume the parameter.
   //
-  // A "sorted grid" link (`?ticket_sort=…`, FR-MOD-02.7) is different: the sort
-  // params are the grid's state, not a one-shot target, so they open the tickets
-  // grid but stay in the URL rather than being stripped like `?chat`/`?ticket`.
+  // A "sorted/filtered grid" link (`?ticket_sort=…`, `?ticket_view=…`,
+  // FR-MOD-02.7) is different: those params are the grid's state, not a
+  // one-shot target, so they open the tickets grid but stay in the URL rather
+  // than being stripped like `?chat`/`?ticket`.
   useEffect(() => {
     const chatId = searchParams.get('chat');
     const ticketId = searchParams.get('ticket');
@@ -146,7 +153,7 @@ export function InboxPage(): ReactElement {
         setSelection({ kind: 'chat', view: 'all' });
         setSelectedId(chatId);
       } else if (ticketId) {
-        setSelection({ kind: 'ticket', view: 'all' });
+        setSelection({ kind: 'ticket' });
         setSelectedTicketId(ticketId);
       }
       const next = new URLSearchParams(searchParams);
@@ -155,16 +162,13 @@ export function InboxPage(): ReactElement {
       setSearchParams(next, { replace: true });
       return;
     }
-    if (hasTicketSortParams(searchParams)) {
-      setSelection((current) =>
-        current.kind === 'ticket' ? current : { kind: 'ticket', view: 'all' },
-      );
+    if (hasTicketSortParams(searchParams) || hasTicketViewParam(searchParams)) {
+      setSelection((current) => (current.kind === 'ticket' ? current : { kind: 'ticket' }));
     }
   }, [searchParams, setSearchParams]);
 
   const onTickets = selection.kind === 'ticket';
   const view = selection.kind === 'chat' ? selection.view : 'all';
-  const ticketView: TicketView = selection.kind === 'ticket' ? selection.view : 'all';
 
   // The Tickets grid sort is the URL's job (FR-MOD-02.7), so a sorted view is
   // shareable and survives a reload. Like the chat list below it asks the server
@@ -173,19 +177,29 @@ export function InboxPage(): ReactElement {
   // what restarts the chain, and nothing here resets it by hand.
   const ticketSort = useMemo(() => parseTicketSort(searchParams), [searchParams]);
 
-  // Switching to a chat view drops the grid's sort params so a stale
-  // `?ticket_sort` does not linger in the URL (and re-open the grid on reload).
+  // The view filter is the URL's job too, same contract as the sort above —
+  // shareable, survives a reload, and folded into `ticketsKey` (`useTickets.js`)
+  // so switching it starts a fresh page chain.
+  const ticketView = useMemo(() => parseTicketView(searchParams), [searchParams]);
+
+  // Switching to a chat view drops the grid's sort + view params so a stale
+  // `?ticket_sort`/`?ticket_view` does not linger in the URL (and re-open the
+  // grid on reload).
   const selectChatView = (next: InboxView): void => {
     setSelection({ kind: 'chat', view: next });
-    if (hasTicketSortParams(searchParams)) {
-      setSearchParams(clearTicketSort(searchParams), { replace: true });
+    if (hasTicketSortParams(searchParams) || hasTicketViewParam(searchParams)) {
+      setSearchParams(clearTicketView(clearTicketSort(searchParams)), { replace: true });
     }
   };
 
-  // A ticket view always lands on the grid, not a stale open ticket.
+  // A ticket view always lands on the grid, not a stale open ticket. Unlike
+  // the sort's header clicks (`replace: true`, below), this pushes a new
+  // history entry — the PRD asks the browser's back/forward buttons to walk
+  // through a filter switch rather than skip over it.
   const selectTicketView = (next: TicketView): void => {
-    setSelection({ kind: 'ticket', view: next });
+    setSelection({ kind: 'ticket' });
     setSelectedTicketId(null);
+    setSearchParams(writeTicketView(searchParams, next));
   };
 
   const changeTicketSort = (key: TicketSortKey): void => {
@@ -356,7 +370,7 @@ export function InboxPage(): ReactElement {
                 <ViewButton
                   label={t(TICKET_VIEW_LABEL_KEY[item.id])}
                   icon={item.icon}
-                  active={selection.kind === 'ticket' && selection.view === item.id}
+                  active={selection.kind === 'ticket' && ticketView === item.id}
                   onClick={() => selectTicketView(item.id)}
                 />
               </li>
@@ -628,8 +642,13 @@ export function InboxPage(): ReactElement {
                       chatId={selectedId}
                       customerName={chats.find((c) => c.id === selectedId)?.customer_name ?? null}
                       onOpenTicket={(ticketId) => {
-                        setSelection({ kind: 'ticket', view: 'all' });
+                        setSelection({ kind: 'ticket' });
                         setSelectedTicketId(ticketId);
+                        // A stale filter (e.g. `solved`) could hide the ticket
+                        // just created once the agent backs out of its pane.
+                        if (hasTicketViewParam(searchParams)) {
+                          setSearchParams(clearTicketView(searchParams), { replace: true });
+                        }
                       }}
                     />
                     {/* Copilot (FR-MOD-12.1): opens the assist panel for this chat,

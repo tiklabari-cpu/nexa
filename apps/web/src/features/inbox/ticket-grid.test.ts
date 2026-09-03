@@ -13,14 +13,19 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TICKET_SORT,
+  DEFAULT_TICKET_VIEW,
   TICKET_COLUMNS,
   ariaSortFor,
   clearTicketSort,
+  clearTicketView,
   hasTicketSortParams,
+  hasTicketViewParam,
   isSortableColumn,
   parseTicketSort,
+  parseTicketView,
   toggleTicketSort,
   writeTicketSort,
+  writeTicketView,
 } from './ticket-grid.js';
 
 describe('the sortable columns', () => {
@@ -117,5 +122,45 @@ describe('ariaSortFor', () => {
     expect(ariaSortFor(sort, 'subject')).toBe('none');
     // A column that can never be the active one still has to answer.
     expect(ariaSortFor(sort, 'status')).toBe('none');
+  });
+});
+
+describe('parseTicketView', () => {
+  it('reads a recognised view from the URL', () => {
+    for (const view of ['all', 'unassigned', 'my_open', 'solved'] as const) {
+      expect(parseTicketView(new URLSearchParams({ ticket_view: view }))).toBe(view);
+    }
+  });
+
+  it('falls back to the default for an unknown value or missing params', () => {
+    // The address bar is editable, and `GET /tickets` 400s an unrecognised
+    // `view` rather than defaulting it server-side — the client has to be the
+    // one that tolerates a stale or hand-edited link.
+    expect(parseTicketView(new URLSearchParams({ ticket_view: 'nonsense' }))).toBe(
+      DEFAULT_TICKET_VIEW,
+    );
+    expect(parseTicketView(new URLSearchParams())).toBe(DEFAULT_TICKET_VIEW);
+  });
+});
+
+describe('URL round-trip for the view filter', () => {
+  it('writes then clears the view param without disturbing other params', () => {
+    const base = new URLSearchParams({ ticket_sort: 'subject' });
+    const written = writeTicketView(base, 'solved');
+    expect(written.get('ticket_view')).toBe('solved');
+    expect(written.get('ticket_sort')).toBe('subject');
+    expect(hasTicketViewParam(written)).toBe(true);
+
+    const cleared = clearTicketView(written);
+    expect(hasTicketViewParam(cleared)).toBe(false);
+    expect(cleared.get('ticket_sort')).toBe('subject');
+  });
+
+  it('writes the default view explicitly rather than omitting the param', () => {
+    // Same contract as `writeTicketSort`: the value a click produces is always
+    // written, even when it equals the default, so the URL always says which
+    // filter is showing.
+    const written = writeTicketView(new URLSearchParams(), 'all');
+    expect(written.get('ticket_view')).toBe('all');
   });
 });

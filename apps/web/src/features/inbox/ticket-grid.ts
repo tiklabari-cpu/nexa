@@ -3,7 +3,8 @@
  *
  * The grid is sortable, and the sort is carried in the URL (`ticket_sort` +
  * `ticket_order`) so a sorted view is shareable and survives a reload — the
- * "URL param sıralama" the PRD asks for.
+ * "URL param sıralama" the PRD asks for. The view filter (`ticket_view`) lives
+ * in the same contract, further down this file.
  *
  * **The server does the sorting** (`GET /tickets?sort=…&order=…`). This module
  * used to re-order the rows the list had already loaded, which reads fine on a
@@ -19,6 +20,7 @@
  * what a header click means, and the URL round-trip.
  */
 import { TICKET_SORT_KEYS, type SortOrder, type TicketSortKey } from '@nexa/types';
+import type { TicketView } from './types.js';
 
 export type { SortOrder, TicketSortKey };
 
@@ -133,4 +135,45 @@ export function ariaSortFor(
 ): 'ascending' | 'descending' | 'none' {
   if (sort.key !== key) return 'none';
   return sort.order === 'asc' ? 'ascending' : 'descending';
+}
+
+/**
+ * The Tickets view filter — URL-param deep-link, same contract as the sort
+ * above (PRD FR-MOD-02.7 / 02.1.2). `GET /tickets?view=…` already takes this;
+ * what was missing was carrying the agent's choice in the address bar.
+ */
+export const TICKET_VIEW_PARAM = 'ticket_view';
+
+export const DEFAULT_TICKET_VIEW: TicketView = 'all';
+
+const TICKET_VIEW_KEYS = new Set<string>(['all', 'unassigned', 'my_open', 'solved']);
+
+/** Whether the view filter is pinned in the URL — the signal a link opens the grid. */
+export function hasTicketViewParam(params: URLSearchParams): boolean {
+  return params.has(TICKET_VIEW_PARAM);
+}
+
+/**
+ * Read the view filter out of the URL. An unrecognised value — a stale link,
+ * or the address bar edited by hand — falls back to the default rather than
+ * being sent on to the server, which refuses an unknown `view` with a `400`
+ * (`routes/tickets.ts`); a shared link should open the grid, not an error.
+ */
+export function parseTicketView(params: URLSearchParams): TicketView {
+  const raw = params.get(TICKET_VIEW_PARAM);
+  return raw !== null && TICKET_VIEW_KEYS.has(raw) ? (raw as TicketView) : DEFAULT_TICKET_VIEW;
+}
+
+/** A copy of `params` with the view filter written in, for `setSearchParams`. */
+export function writeTicketView(params: URLSearchParams, view: TicketView): URLSearchParams {
+  const next = new URLSearchParams(params);
+  next.set(TICKET_VIEW_PARAM, view);
+  return next;
+}
+
+/** A copy of `params` with the view filter stripped — used when leaving the grid. */
+export function clearTicketView(params: URLSearchParams): URLSearchParams {
+  const next = new URLSearchParams(params);
+  next.delete(TICKET_VIEW_PARAM);
+  return next;
 }

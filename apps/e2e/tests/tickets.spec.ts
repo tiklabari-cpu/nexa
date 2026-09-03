@@ -116,4 +116,66 @@ test.describe('ticket HelpDesk surface', () => {
     await sortedGrid.getByRole('row').nth(1).getByRole('button').first().click();
     await expect(agentPage.getByRole('button', { name: 'Tickets', exact: true })).toBeVisible();
   });
+
+  /**
+   * The Tickets view filter (FR-MOD-02.7 / 02.1.2), the other half of the
+   * grid's URL contract alongside sort. `ticket-grid.test.ts` proves the parse
+   * fallback in isolation; what only the live stack proves is that a filter
+   * click actually lands in the address bar, a pasted link with an
+   * unrecognised value still opens the grid instead of erroring, and the
+   * browser's back button undoes a filter switch rather than skipping it.
+   */
+  test('deep-links the tickets view filter and follows the browser back button', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/inbox');
+
+    // Ensure at least one ticket exists, same setup as the other tests.
+    await agentPage
+      .getByRole('region', { name: 'Conversations' })
+      .getByRole('button')
+      .first()
+      .click();
+    await agentPage.getByRole('button', { name: 'Create ticket', exact: true }).click();
+    await agentPage.getByRole('button', { name: 'Create', exact: true }).click();
+    await agentPage
+      .getByRole('button', { name: 'Tickets', exact: true })
+      .or(agentPage.getByRole('button', { name: 'Open it' }))
+      .first()
+      .waitFor();
+
+    // Open the grid from the nav; a click writes the filter into the URL.
+    await agentPage.getByRole('button', { name: 'All tickets' }).click();
+    await expect(agentPage).toHaveURL(/ticket_view=all/);
+    await expect(agentPage.getByRole('button', { name: 'All tickets' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    // Switching the filter writes the new value and pushes a history entry
+    // (unlike the sort's header clicks, which replace).
+    await agentPage.getByRole('button', { name: 'My open' }).click();
+    await expect(agentPage).toHaveURL(/ticket_view=my_open/);
+    await expect(agentPage.getByRole('button', { name: 'My open' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    // The back button undoes the filter switch rather than skipping over it.
+    await agentPage.goBack();
+    await expect(agentPage).toHaveURL(/ticket_view=all/);
+    await expect(agentPage.getByRole('button', { name: 'All tickets' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+
+    // A pasted link with an unrecognised value falls back to the default
+    // rather than being refused — the server 400s an unknown `view`.
+    await agentPage.goto('/app/inbox?ticket_view=nonsense');
+    await expect(agentPage.getByRole('table', { name: 'Tickets' })).toBeVisible();
+    await expect(agentPage.getByRole('button', { name: 'All tickets' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+  });
 });

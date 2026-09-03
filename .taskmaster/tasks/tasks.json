@@ -8442,10 +8442,10 @@
             "title": "M-COUNT-b [OPUS-XHIGH] Tickets sıralamasını sunucuya taşı — keyset imleciyle etkileşimi çöz",
             "description": "`ticketListUrl` (`useTickets.ts:36`) yalnız view+limit+page_id kuruyor; `sortTickets` (`ticket-grid.ts:103`) belleğe yüklenmiş diziyi sıralıyor (`InboxPage.tsx:288`). `/tickets`'e `sort` parametresi (kontrat + uygulama); sıralanabilir alanları PRD'den doğrula. `sortTickets`'ı kaldır ya da görsel yardımcıya indir — çift sıralama sonucu bozar. **Keyset uyarısı:** sıralama alanı değişince imleç anlamını yitirir, sayfalama sıfırlanmalı — teste bağla. e2e: mevcut `paging.spec.ts:70` deseni (\"sunucudan farklı sıra iste\") biletler için tekrarlanır.",
             "details": "Bağımlılık: yok. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "179",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-08-31T20:00:03.673Z"
           },
           {
             "id": 3,
@@ -8468,7 +8468,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T19:58:28.941Z"
+        "updatedAt": "2026-08-31T20:00:03.673Z"
       },
       {
         "id": "180",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-08-31T19:58:28.941Z",
+      "lastModified": "2026-08-31T20:00:03.674Z",
       "taskCount": 184,
       "completedCount": 178,
       "tags": [

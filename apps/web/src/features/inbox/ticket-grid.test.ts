@@ -1,119 +1,53 @@
 /**
- * The Tickets grid sorting + URL model (FR-MOD-02.7). The bucketing with the
- * subtle bugs — nulls-last in both directions, a stable tiebreak, a URL that
- * tolerates a half-written link — is proven here, away from the rendered table.
+ * The Tickets grid sorting + URL model (FR-MOD-02.7).
+ *
+ * There used to be a `sortTickets` suite here, proving nulls-last bucketing and
+ * a stable tiebreak over an array. Those tests were green and the feature was
+ * wrong: the array was the page the browser had loaded, not the collection, so
+ * every one of them agreed with a header that reorders fifty rows out of six
+ * hundred. The sorting is the server's now (`GET /tickets?sort=…&order=…`,
+ * proven in `tickets.test.ts` against a fixture larger than a page), and what
+ * belongs here is what stayed client-side: which columns may be sorted at all,
+ * what a header click means, and a URL that tolerates a half-written link.
  */
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TICKET_SORT,
+  TICKET_COLUMNS,
   ariaSortFor,
   clearTicketSort,
   hasTicketSortParams,
+  isSortableColumn,
   parseTicketSort,
-  sortTickets,
   toggleTicketSort,
   writeTicketSort,
 } from './ticket-grid.js';
-import type { Ticket } from './types.js';
 
-function makeTicket(overrides: Partial<Ticket> = {}): Ticket {
-  return {
-    id: 'TCK1',
-    subject: 'Broken checkout',
-    status: 'open',
-    priority: 0,
-    assignee_id: null,
-    assignee_name: null,
-    group_id: null,
-    customer_id: 'cust-1',
-    customer_name: 'Mira Haddad',
-    customer_email: null,
-    source_chat_id: null,
-    merged_into_id: null,
-    last_message_at: null,
-    created_at: '2026-01-01T00:00:00.000Z',
-    ...overrides,
-  };
-}
+describe('the sortable columns', () => {
+  it('marks exactly the columns the server can order the collection by', () => {
+    const sortable = TICKET_COLUMNS.filter((column) => isSortableColumn(column.key));
+    expect(sortable.map((column) => column.key)).toEqual([
+      'subject',
+      'customer',
+      'priority',
+      'last_message',
+    ]);
 
-const ids = (tickets: Ticket[]): string[] => tickets.map((t) => t.id);
-
-describe('sortTickets', () => {
-  it('sorts by subject ascending and descending, case-insensitively', () => {
-    const list = [
-      makeTicket({ id: 'a', subject: 'banana' }),
-      makeTicket({ id: 'b', subject: 'Apple' }),
-      makeTicket({ id: 'c', subject: 'cherry' }),
-    ];
-    expect(ids(sortTickets(list, { key: 'subject', order: 'asc' }))).toEqual(['b', 'a', 'c']);
-    expect(ids(sortTickets(list, { key: 'subject', order: 'desc' }))).toEqual(['c', 'a', 'b']);
+    // Status and assignee are rendered but not sortable: the database cannot
+    // order by either (status is text, so its lifecycle order is not its
+    // alphabetical one; a ticket stores `assignee_id` while the grid shows the
+    // account's name). The views already slice by both.
+    expect(
+      TICKET_COLUMNS.filter((column) => !isSortableColumn(column.key)).map((c) => c.key),
+    ).toEqual(['status', 'assignee']);
   });
 
-  it('orders last_message newest-first by default and floats null activity last in both directions', () => {
-    const list = [
-      makeTicket({ id: 'old', last_message_at: '2026-01-01T00:00:00.000Z' }),
-      makeTicket({ id: 'new', last_message_at: '2026-06-01T00:00:00.000Z' }),
-      makeTicket({ id: 'none', last_message_at: null }),
-    ];
-    // desc: newest → oldest, then the activity-less row.
-    expect(ids(sortTickets(list, { key: 'last_message', order: 'desc' }))).toEqual([
-      'new',
-      'old',
-      'none',
-    ]);
-    // asc: oldest → newest, but the null still sinks to the bottom, not the top.
-    expect(ids(sortTickets(list, { key: 'last_message', order: 'asc' }))).toEqual([
-      'old',
-      'new',
-      'none',
-    ]);
-  });
-
-  it('sorts priority numerically, urgent first when descending', () => {
-    const list = [
-      makeTicket({ id: 'low', priority: -50 }),
-      makeTicket({ id: 'urgent', priority: 100 }),
-      makeTicket({ id: 'normal', priority: 0 }),
-    ];
-    expect(ids(sortTickets(list, { key: 'priority', order: 'desc' }))).toEqual([
-      'urgent',
-      'normal',
-      'low',
-    ]);
-  });
-
-  it('sorts status by its lifecycle order, not alphabetically', () => {
-    const list = [
-      makeTicket({ id: 'spam', status: 'spam' }),
-      makeTicket({ id: 'open', status: 'open' }),
-      makeTicket({ id: 'solved', status: 'solved' }),
-    ];
-    expect(ids(sortTickets(list, { key: 'status', order: 'asc' }))).toEqual([
-      'open',
-      'solved',
-      'spam',
-    ]);
-  });
-
-  it('breaks ties by id descending so equal rows never reshuffle', () => {
-    const list = [
-      makeTicket({ id: 'TCK1', assignee_name: null }),
-      makeTicket({ id: 'TCK3', assignee_name: null }),
-      makeTicket({ id: 'TCK2', assignee_name: null }),
-    ];
-    // All assignee values null → all tie → deterministic id-desc fallback.
-    expect(ids(sortTickets(list, { key: 'assignee', order: 'asc' }))).toEqual([
-      'TCK3',
-      'TCK2',
-      'TCK1',
-    ]);
-  });
-
-  it('does not mutate the input array', () => {
-    const list = [makeTicket({ id: 'a' }), makeTicket({ id: 'b' })];
-    const before = ids(list);
-    sortTickets(list, { key: 'subject', order: 'desc' });
-    expect(ids(list)).toEqual(before);
+  it('gives every sortable column a starting direction and no other one', () => {
+    // A column with a `defaultOrder` but no server support would be a header
+    // that looks live and is refused; the reverse would toggle into `undefined`.
+    for (const column of TICKET_COLUMNS) {
+      expect(column.defaultOrder === null).toBe(!isSortableColumn(column.key));
+    }
   });
 });
 
@@ -139,6 +73,17 @@ describe('parseTicketSort', () => {
       DEFAULT_TICKET_SORT,
     );
     expect(parseTicketSort(new URLSearchParams())).toEqual(DEFAULT_TICKET_SORT);
+  });
+
+  it('falls back for a column the server will not sort by, rather than sending it', () => {
+    // `?ticket_sort=status` is a link this product used to hand out, and the
+    // API answers an unsupported `sort` with a 400. A shared link has to open
+    // the grid, so a key that is no longer sortable reads as no key at all.
+    for (const key of ['status', 'assignee']) {
+      expect(
+        parseTicketSort(new URLSearchParams({ ticket_sort: key, ticket_order: 'asc' })),
+      ).toEqual(DEFAULT_TICKET_SORT);
+    }
   });
 });
 
@@ -170,5 +115,7 @@ describe('ariaSortFor', () => {
     expect(ariaSortFor(sort, 'priority')).toBe('descending');
     expect(ariaSortFor({ key: 'subject', order: 'asc' }, 'subject')).toBe('ascending');
     expect(ariaSortFor(sort, 'subject')).toBe('none');
+    // A column that can never be the active one still has to answer.
+    expect(ariaSortFor(sort, 'status')).toBe('none');
   });
 });

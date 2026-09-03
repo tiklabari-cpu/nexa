@@ -1326,8 +1326,9 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * List tickets, newest activity first
-     * @description Ordered by `last_message_at` descending, which is the order the PRD
+     * List tickets, newest activity first by default
+     * @description Ordered by `sort` + `order` over the **whole** collection, not over the
+     *     page. The default is `last_message` descending, which is the order the PRD
      *     specifies and the order a queue is actually worked. Keyset pagination
      *     rather than offset: tickets change status while someone is reading, and an
      *     offset page shifts under them and skips rows.
@@ -1338,6 +1339,13 @@ export interface paths {
      *     - `unassigned` — no assignee; the pile nobody has picked up
      *     - `my_open` — assigned to the caller and not yet solved or closed
      *     - `solved` — solved or closed, the read-back pile
+     *
+     *     **`page_id` belongs to one sort.** The cursor is a position in a specific
+     *     ordering — it carries the value of the sorted column of the last row on the
+     *     previous page — so it means nothing under a different `sort` or `order`.
+     *     Presenting one that was issued under another ordering is a `400` rather
+     *     than a silent restart from page one, which would hand the caller rows they
+     *     already have and read as a second page.
      */
     get: operations['listTickets'];
     put?: never;
@@ -12351,6 +12359,20 @@ export interface operations {
         view?: 'all' | 'unassigned' | 'my_open' | 'solved';
         /** @description Case-insensitive match against subject and customer name/email. */
         query?: string;
+        /**
+         * @description The column the whole collection is ordered by. `customer` sorts on the
+         *     customer's name and `last_message` on the last activity; a ticket with
+         *     neither sorts last in *both* directions, because an empty cell should
+         *     never outrank a real one just because the order flipped.
+         *
+         *     The grid's `status` and `assignee` columns are absent on purpose:
+         *     `status` is stored as text (its lifecycle order — open before closed —
+         *     is not its alphabetical one) and a ticket holds only `assignee_id`,
+         *     while what is displayed and would be sorted on is the account's name.
+         *     The `view` parameter already slices the collection by both.
+         */
+        sort?: 'last_message' | 'subject' | 'customer' | 'priority';
+        order?: 'asc' | 'desc';
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
         limit?: components['parameters']['Limit'];

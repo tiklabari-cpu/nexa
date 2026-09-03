@@ -10,7 +10,13 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { TICKET_PRIORITY_MAX, TICKET_PRIORITY_MIN } from '@nexa/types';
+import {
+  DEFAULT_TICKET_SORT_KEY,
+  SORT_ORDERS,
+  TICKET_PRIORITY_MAX,
+  TICKET_PRIORITY_MIN,
+  TICKET_SORT_KEYS,
+} from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
@@ -21,6 +27,11 @@ const WRITE_SCOPES = ['tickets--all:rw', 'tickets--access:rw'];
 const listQuery = z.object({
   view: z.enum(['all', 'unassigned', 'my_open', 'solved']).default('all'),
   query: z.string().trim().max(320).optional(),
+  // The enum is the contract's, shared rather than restated: the grid, this
+  // route and the keyset predicate all have to agree on which columns the
+  // database can order the whole collection by (`@nexa/types`).
+  sort: z.enum(TICKET_SORT_KEYS).default(DEFAULT_TICKET_SORT_KEY),
+  order: z.enum(SORT_ORDERS).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   page_id: z.string().max(512).optional(),
 });
@@ -91,6 +102,8 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
       tickets.list(tx, tenant, principal, {
         view: query.view,
         limit: query.limit,
+        sort: query.sort,
+        order: query.order,
         ...(query.query ? { query: query.query } : {}),
         ...(query.page_id ? { pageId: query.page_id } : {}),
       }),

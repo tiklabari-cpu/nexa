@@ -108,6 +108,14 @@ describe('useTicketList — paging', () => {
     await waitFor(() => expect(result.current.items).toHaveLength(2));
     expect(result.current.hasNext).toBe(true);
     expect(api.get).toHaveBeenCalledTimes(1);
-    expect(String(api.get.mock.calls[0]?.[0])).not.toContain('page_id=');
+
+    // Page one under the *new* order, asked of the server. Carrying the old
+    // cursor would be refused (`GET /tickets` 400s a `page_id` minted under
+    // another ordering), and dropping the sort from the request would leave the
+    // grid re-ordering fifty rows out of however many the view holds.
+    const url = String(api.get.mock.calls[0]?.[0]);
+    expect(url).not.toContain('page_id=');
+    expect(url).toContain('sort=subject');
+    expect(url).toContain('order=asc');
   });
 });

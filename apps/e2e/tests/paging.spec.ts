@@ -28,6 +28,10 @@ const SEEDED_CHATS = 60;
  * ADR-09's AI-resolution set — the "Solved" view, and the number billing meters.
  */
 const AI_SOLVED_CHATS = SEEDED_CHATS - 1;
+/** `useTickets.ts` — the Tickets grid asks for this many rows per request. */
+const TICKET_PAGE_SIZE = 50;
+/** The paging workspace holds ten more than that too (`seedPagingWorkspace`). */
+const SEEDED_TICKETS = 60;
 /** `useInbox.ts` — events per transcript request. */
 const TRANSCRIPT_PAGE_SIZE = 200;
 /** The long conversation holds fifty more than that (`seedPagingWorkspace`). */
@@ -36,6 +40,15 @@ const LONG_CONVERSATION_EVENTS = 250;
 /** The marker the seed writes into message `n` — unique across the fixture. */
 function marker(n: number): string {
   return `paging-msg-${String(n).padStart(3, '0')}`;
+}
+
+/**
+ * The subject of the `n`th ticket, counting from one. The seed numbers these
+ * *against* their activity, so `Paging Ticket 01` is the least recently active
+ * of the sixty — the last row of the list, not the first.
+ */
+function ticketSubject(n: number): string {
+  return `Paging Ticket ${String(n).padStart(2, '0')}`;
 }
 
 async function openPagingInbox(page: Page): Promise<void> {
@@ -131,6 +144,56 @@ test.describe('list paging', () => {
     await expect(page).toHaveURL(/chat_sort=oldest/);
 
     await page.screenshot({ path: 'kanit/02.2.1-inbox-sorted-oldest.png', fullPage: true });
+  });
+
+  test('the tickets grid sorts on the server, reaching a ticket the loaded page never held (FR-MOD-02.7)', async ({
+    page,
+  }) => {
+    await openPagingInbox(page);
+    await page.getByRole('button', { name: 'All tickets' }).click();
+
+    const grid = page.getByRole('table', { name: 'Tickets' });
+    await expect(grid).toBeVisible();
+    const firstRow = grid.getByRole('row').nth(1);
+
+    // The header counts the view rather than the rows this browser has chained:
+    // sixty, while fifty are loaded (D3 · FR-MOD-02.1.2, the same reading as the
+    // rail counters above).
+    const gridHeader = page
+      .locator('header')
+      .filter({ has: page.getByRole('heading', { name: 'All tickets' }) });
+    await expect(gridHeader).toContainText(String(SEEDED_TICKETS));
+
+    // Newest activity first is the default, and the seed numbers the tickets
+    // against it — so the top row is the sixtieth and `Paging Ticket 01` is the
+    // last of the sixty, ten rows past the only page anyone has asked for.
+    await expect(firstRow).toContainText(ticketSubject(SEEDED_TICKETS));
+    await expect(grid.getByText(ticketSubject(1), { exact: true })).toHaveCount(0);
+
+    // A header click changes the *request*, and starts the page chain over: a
+    // cursor is a position in one ordering, and `GET /tickets` refuses one
+    // minted under another rather than replying with a page one dressed as a
+    // page two.
+    const sorted = page.waitForResponse(
+      (response) => response.url().includes('/tickets?') && response.url().includes('sort=subject'),
+    );
+    await grid.getByRole('button', { name: 'Subject' }).click();
+    const sortedUrl = new URL((await sorted).url());
+    expect(sortedUrl.searchParams.get('order')).toBe('asc');
+    expect(sortedUrl.searchParams.get('page_id')).toBeNull();
+    // Fifty of sixty, which is what makes the row below unreachable any other
+    // way: the request that answers a header click is still one page wide.
+    expect(sortedUrl.searchParams.get('limit')).toBe(String(TICKET_PAGE_SIZE));
+
+    // And the row that arrives at the top is the one a client-side reshuffle
+    // could not have produced: a moment ago it was on the second page, which
+    // this browser has still never fetched.
+    await expect(firstRow).toContainText(ticketSubject(1));
+    await expect(page).toHaveURL(/ticket_sort=subject/);
+    // The count is the view's, so a new ordering does not move it.
+    await expect(gridHeader).toContainText(String(SEEDED_TICKETS));
+
+    await page.screenshot({ path: 'kanit/02.7-tickets-sorted-on-the-server.png', fullPage: true });
   });
 
   test('the transcript walks back to the first message of a 250-event conversation', async ({

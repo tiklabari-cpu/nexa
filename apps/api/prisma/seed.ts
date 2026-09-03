@@ -1582,6 +1582,8 @@ const PAGING = {
   ownerName: 'Pat Ordonez',
   /** Conversations here — ten past the console's 50-row chat page. */
   chatCount: 60,
+  /** Tickets here — ten past the Tickets grid's own 50-row page. */
+  ticketCount: 60,
   /** Events in the newest conversation — fifty past the 200-event transcript page. */
   longTranscriptEvents: 250,
   /** Spacing between consecutive events, and between one conversation and the next. */
@@ -1771,8 +1773,41 @@ async function seedPagingWorkspace(passwordHash: string): Promise<void> {
     ),
   });
 
+  /**
+   * Sixty tickets, ten past the Tickets grid's own 50-row page — and numbered
+   * *against* the activity order rather than with it.
+   *
+   * That reversal is the whole fixture. `Paging Ticket 01` is the least
+   * recently active one, so under the grid's default order (`last_message`
+   * descending) it is the sixtieth row: on the second page, and not among the
+   * fifty a browser holds when the grid opens. Bringing it to the top by
+   * subject is therefore only possible if the *server* ordered the whole
+   * collection — a re-sort of the loaded rows can reach the first of fifty and
+   * calls it the first of sixty (D3 · FR-MOD-02.7).
+   *
+   * Bulk-written like the conversations above, and for the same reason: sixty
+   * rows through `TicketService` would be sixty round trips in every e2e run,
+   * paid for rows whose only job is to exist in quantity. The invariants that
+   * helper protects are proved where tickets are actually created (Acme's
+   * `seedTickets`, and the ticket integration suite).
+   */
+  await prisma.ticket.createMany({
+    data: Array.from({ length: PAGING.ticketCount }, (_, index) => {
+      // Reversed against the numbering: index 0 is the oldest activity.
+      const activeAt = startedAt(PAGING.ticketCount - 1 - index);
+      return {
+        id: generateShortId(),
+        licenseId,
+        customerId: customers[index % customers.length]!.id,
+        subject: `Paging Ticket ${pagingLabel(index)}`,
+        lastMessageAt: activeAt,
+        createdAt: activeAt,
+      };
+    }),
+  });
+
   console.log(
-    `  ${PAGING.organizationName}  (paging fixture — ${PAGING.chatCount} conversations, one of ${PAGING.longTranscriptEvents} events)`,
+    `  ${PAGING.organizationName}  (paging fixture — ${PAGING.chatCount} conversations, one of ${PAGING.longTranscriptEvents} events, ${PAGING.ticketCount} tickets)`,
   );
   console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
 }

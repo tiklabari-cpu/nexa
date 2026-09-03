@@ -8462,13 +8462,13 @@
             "title": "M-COUNT-d [SONNET-XHIGH] Traffic sekme sayaçlarını sunucu toplamına bağla",
             "description": "`TrafficPage.tsx:432` civarı. `-a`nın çözdüğü aynı tasarım sorusu geçerli — o iş kalemi bittiyse aynı deseni kullan, yeni yol icat etme. **Sekme davranışını (aktif sekme / filtresiz pano) DEĞİŞTİRME**, mevcut testler kırılmamalı. e2e içinde ölçülen \"NFR-P2 filtered GET /traffic\" bütçesi aşılmaz.",
             "details": "Bağımlılık: M-COUNT-a. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "179",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-03T22:59:14.621Z"
           }
         ],
-        "updatedAt": "2026-09-03T21:41:10.702Z"
+        "updatedAt": "2026-09-03T22:59:14.621Z"
       },
       {
         "id": "180",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-03T21:41:10.704Z",
+      "lastModified": "2026-09-03T22:59:14.622Z",
       "taskCount": 184,
       "completedCount": 178,
       "tags": [

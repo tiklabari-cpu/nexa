@@ -8452,10 +8452,10 @@
             "title": "M-COUNT-c [SONNET-XHIGH] Tickets görünüm filtresi deep-link`lensin",
             "description": "PRD 02.7 \"deep-link filtre\" istiyor; filtre URL'e hiç yansımıyor. `-b`nin `sort` parametresiyle aynı sözleşmede yaşamalı. Geçersiz/bilinmeyen değer geldiğinde sessizce varsayılana düş (URL elle düzenlenebilir) — kararı yorumla. Tarayıcı geri/ileri düğmesi filtre değişimlerini takip etmeli.",
             "details": "Bağımlılık: M-COUNT-b. Dilim V7-2. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "179",
-            "updatedAt": "2026-09-03T21:07:19.582Z"
+            "updatedAt": "2026-09-03T21:41:10.702Z"
           },
           {
             "id": 4,
@@ -8468,7 +8468,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-03T21:07:19.582Z"
+        "updatedAt": "2026-09-03T21:41:10.702Z"
       },
       {
         "id": "180",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-03T21:07:19.584Z",
+      "lastModified": "2026-09-03T21:41:10.704Z",
       "taskCount": 184,
       "completedCount": 178,
       "tags": [

@@ -8548,10 +8548,10 @@
             "title": "M-UI-e [OPUS-XHIGH] Denetim kaydı detayı: GET /audit-log/:id + genişletilebilir satır",
             "description": "PRD **594-659** (08.9.7). Zincir (HMAC + gapless `chain_seq`), imzalı export ve SIEM çıkışı sağlam — **dokunma**. Eksik olan detay: kaydın `metadata`sı hiçbir yerde görünmüyor, tekil kayıt ucu yok. **Gizlilik tasarım sorusu:** metadata bazı kayıtlarda hassas (rol değişimi, IP, e-posta) ve tasarım bilinçli olarak bazı alanları yazmıyor (ban audit'inde IP'nin kasten yazılmaması gibi) — hangi alanların gösterileceğine karar ver ve gerekçeni yorumla; her şeyi ham JSON basmak kolay ama doğru olmayabilir. Scope: liste görebilen detayı da görebilir, fazlası değil.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-09-04T04:24:23.746Z"
+            "updatedAt": "2026-09-04T05:21:28.563Z"
           },
           {
             "id": 6,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T04:24:23.746Z"
+        "updatedAt": "2026-09-04T05:21:28.563Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T04:24:23.746Z",
+      "lastModified": "2026-09-04T05:21:28.564Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

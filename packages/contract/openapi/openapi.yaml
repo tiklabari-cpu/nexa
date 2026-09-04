@@ -528,6 +528,8 @@ paths:
     $ref: "./paths/audit-log.yaml#/auditLog"
   /audit-log/export:
     $ref: "./paths/audit-log.yaml#/auditLogExport"
+  /audit-log/{entryId}:
+    $ref: "./paths/audit-log.yaml#/auditLogEntry"
 
   /kb-articles:
     $ref: "./paths/kb.yaml#/kbArticles"
@@ -2487,6 +2489,37 @@ components:
           nullable: true
           description: Source address when recorded; null when deliberately omitted.
         created_at: { type: string, format: date-time }
+
+    AuditLogEntryDetail:
+      description: |
+        One entry read by id (`GET /audit-log/{entryId}`) — every field the list
+        already returns, plus the entry's position in the workspace's
+        tamper-evident chain.
+
+        Nothing is redacted relative to the list. The read surfaces would only
+        disagree with each other about what happened, and the field-level
+        decision about what an event may keep was already made at write time,
+        per action, with its reasoning recorded there.
+      allOf:
+        - $ref: "#/components/schemas/AuditLogEntry"
+        - type: object
+          properties:
+            chain_seq:
+              type: integer
+              nullable: true
+              description: |
+                This entry's position in the workspace's audit chain (NFR-C6 ·
+                C6-c). Positions are handed out gaplessly, so a missing number
+                between two entries means one was deleted — which is the whole
+                of what a reader can do with it, and why it is here while
+                `prev_hash`/`hash` are not: those are the evidentiary half,
+                gated on `audit_log--export:ro` + the `siem_export`
+                entitlement, and unusable anyway without the workspace's
+                derived key.
+
+                `null` on entries written before the chain existed. Those
+                cannot be back-computed, and saying so is the honest answer —
+                claiming they are chained would forge the assurance.
 
     AuditLogExportRecord:
       type: object

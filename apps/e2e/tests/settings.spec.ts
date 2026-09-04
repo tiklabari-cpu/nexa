@@ -915,6 +915,67 @@ test.describe('audit log', () => {
     await expect(table.getByText('webhook.created').first()).toBeVisible();
     await agentPage.screenshot({ path: 'kanit/92.11-audit-webhook.png', fullPage: true });
   });
+
+  /**
+   * 08.9.7 · M-UI-e — the entry's `metadata`, which the API has returned since
+   * 08.9.7-a and no screen has ever shown.
+   *
+   * The webhook registration is the clearest case to prove it on, because the
+   * writer's field-level decision is visible from the outside: `webhooks.ts`
+   * records `url_host` and deliberately keeps the full URL and the plaintext
+   * secret out of the append-only log. So the expanded row must show the host
+   * (the detail an incident reviewer needs) and must *not* show the path (which
+   * was never written) — which is also the assertion that the screen is
+   * displaying the stored record rather than reconstructing anything.
+   */
+  test('expands a row to reveal what the entry recorded, and what it deliberately did not', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const auth = { authorization: `Bearer ${token}` };
+    const host = `detail-${Date.now().toString().slice(-8)}.example`;
+
+    const created = await request.post(`${API_BASE}/webhooks`, {
+      headers: auth,
+      data: { url: `https://${host}/secret-receiver-path`, action: 'chat_started' },
+    });
+    expect(created.ok(), `webhook create failed: ${created.status()} ${await created.text()}`).toBe(
+      true,
+    );
+    const { id } = (await created.json()) as { id: string };
+
+    await agentPage.goto('/app/settings/audit-log');
+    await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
+    // Server-side filter, so the row is the newest `webhook.created` however
+    // much else this shared tenant has logged today.
+    await agentPage.getByLabel('Filter by action').selectOption('webhook.created');
+
+    const table = agentPage.getByRole('table', { name: 'Audit log' });
+    await expect(table.getByText('webhook.created').first()).toBeVisible();
+
+    const toggle = agentPage
+      .getByRole('button', { name: /^Detail for webhook\.created at / })
+      .first();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    // Recorded, and now legible: the metadata keys as labelled pairs.
+    await expect(agentPage.getByText('url_host', { exact: true })).toBeVisible();
+    await expect(agentPage.getByText(host, { exact: true })).toBeVisible();
+    await expect(agentPage.getByText('chat_started', { exact: true }).first()).toBeVisible();
+    // Never recorded, so never shown — the write-time decision, proved from the
+    // outside rather than asserted on the writer.
+    await expect(agentPage.getByText('secret-receiver-path')).toHaveCount(0);
+
+    // The expansion is a link: the id is in the URL, so an admin can paste it
+    // into an incident ticket and it reopens on exactly this entry.
+    await expect(agentPage).toHaveURL(/[?&]entry=[0-9a-f-]{36}/);
+    await agentPage.screenshot({ path: 'kanit/92.12-audit-entry-detail.png', fullPage: true });
+
+    await request.delete(`${API_BASE}/webhooks/${id}`, { headers: auth });
+  });
 });
 
 test.describe('composer shortcuts', () => {

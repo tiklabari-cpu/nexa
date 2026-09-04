@@ -71,6 +71,77 @@ auditLog:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# One entry, by id (08.9.7 · M-UI-e).
+#
+# **Same door, no second one.** Identical gates to the list above —
+# `audit_log--all:ro` + Owner/Admin + RLS. Whoever can page the trail can open
+# one row of it, and nobody else: a detail surface with its own, looser check
+# would be a way round the list's, and one with a *tighter* check would hide
+# evidence from the person the trail was written for.
+#
+# **Why it exists at all, given the list already carries every field.** Three
+# things only an addressable entry can do: it survives a filter change (the row
+# you were reading is not thrown away when the list is re-queried), it survives a
+# reload (a link into an incident ticket still resolves months later), and it is
+# **not bounded by the list's 30-day default window** — an entry named by id is
+# returned whatever its age, up to the workspace's retention horizon. Reading
+# one row out of a list you happen to be holding is not the case this is for.
+
+auditLogEntry:
+  parameters:
+    - name: entryId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  get:
+    tags: [Audit]
+    operationId: getAuditLogEntry
+    summary: Read one audit log entry
+    description: |
+      One entry of the workspace's security trail, by id. Owner/Admin with
+      `audit_log--all:ro` — exactly the gates `GET /audit-log` applies, no more
+      and no less. An id belonging to another workspace is a 404, never a 403:
+      a 403 would confirm the id is real and turn the endpoint into an
+      enumeration oracle (NFR-S5).
+
+      Unlike the list, there is no date window. An entry named by id is returned
+      whatever its age; the workspace's retention horizon is the only bound.
+
+      **`metadata` is returned exactly as stored, unfiltered.** The decision
+      about what a security event may keep was made at *write* time, per action,
+      and the reasoning is recorded beside each `writeAuditEntry` call — the
+      verification mailbox is kept because an incident reviewer needs to know
+      who was asked to vouch for a domain; the card's last four are kept and the
+      expiry and holder are not; `auth.ip_denied` deliberately stores no address
+      at all. `sanitizeAuditMetadata` then strips anything credential-shaped on
+      the way in. Re-filtering here could only subtract evidence somebody
+      deliberately kept, in a second place that would drift out of step with the
+      first — and it would make this response disagree with the SIEM export and
+      with the list, which return the same field unfiltered for the same reason.
+
+      **`chain_seq` is here; `prev_hash` and `hash` are not.** The position is
+      what a reader can *use*: positions are handed out gaplessly, so a hole in
+      the numbering is a deleted entry, and `null` says honestly that this row
+      predates the workspace's chain and cannot be vouched for. The hashes are
+      the evidentiary half of NFR-C6, and they are sold behind a different door
+      — `audit_log--export:ro` plus the `siem_export` entitlement. Returning
+      them on the ungated read scope would let an integration holding only
+      `audit_log--all:ro` reassemble, record by record, the tamper-evidence the
+      Enterprise feed *is*. They are also of no use without the workspace's
+      derived key, which no read surface carries.
+    responses:
+      "200":
+        description: The entry.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AuditLogEntryDetail" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 # The SIEM feed (NFR-C6 · C6-b).
 #
 # The same trail as the list above, read the other way round and for a different

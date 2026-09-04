@@ -21,6 +21,12 @@
  *     table's second index (`license_id, action, created_at DESC`) instead;
  *     `actorId` and an explicit date range narrow further, additively, with no
  *     index of their own.
+ *
+ * {@link getAuditLogEntry} reads the same rows one at a time, under the same
+ * policy, and deliberately without the window: an entry named by id is a
+ * reference somebody kept — a link in an incident ticket, a row quoted in a
+ * report — and answering "not found" because it happens to be 31 days old
+ * would make every such reference expire long before the data does.
  */
 import type { Prisma } from '@prisma/client';
 import type { TenantClient } from '../../lib/tenant.js';
@@ -95,6 +101,56 @@ export async function listAuditLog(
       ? { nextPageId: encodeCursor({ createdAt: last.createdAt.toISOString(), id: last.id }) }
       : {}),
   };
+}
+
+/**
+ * One entry, plus its position in the workspace's tamper-evident chain.
+ *
+ * `chain_seq` is the only field the list does not carry, and the only one from
+ * the chain that a read-scope caller gets. It is a counter: because positions
+ * are handed out gaplessly, a hole between two entries is a deleted row, and
+ * that detection is part of the audit log NFR-S12 gives *every* plan. The
+ * hashes beside it in the table (`prev_hash`, `hash`) are the evidentiary half
+ * of NFR-C6 and stay behind `audit_log--export:ro` + the `siem_export`
+ * entitlement — handing them out here would let an integration holding only
+ * `audit_log--all:ro` reassemble the tamper-evidence the Enterprise feed is,
+ * one record at a time.
+ *
+ * `null` on rows written before the chain existed; see the schema comment on
+ * `AuditLogEntry.chainSeq` for why those cannot be back-computed.
+ */
+export interface AuditLogDetail extends AuditLogItem {
+  chain_seq: number | null;
+}
+
+/**
+ * One entry of the caller's own trail, or `null` when this workspace has no
+ * such entry.
+ *
+ * Two absences on purpose:
+ *
+ *   - **No date window.** Unlike {@link listAuditLog} this does not default to
+ *     30 days. A caller naming an id is following a reference, not browsing;
+ *     the retention sweep is the only thing that should ever make one stop
+ *     resolving.
+ *   - **No `license_id` clause.** Same reason as the list: RLS is the tenant
+ *     boundary, so another workspace's id simply matches nothing here. The
+ *     caller is told 404 — never 403 — because a 403 would confirm the id
+ *     exists somewhere and turn this into an enumeration oracle (NFR-S5).
+ *
+ * `metadata` is returned exactly as stored. The judgement about what a
+ * security event may keep was made at write time, one action at a time, with
+ * the reasoning recorded beside each `writeAuditEntry` call; a second filter
+ * here could only subtract evidence somebody deliberately kept, and would
+ * drift out of step with the first.
+ */
+export async function getAuditLogEntry(
+  tx: TenantClient,
+  id: string,
+): Promise<AuditLogDetail | null> {
+  const row = await tx.auditLogEntry.findFirst({ where: { id } });
+  if (!row) return null;
+  return { ...toItem(row), chain_seq: row.chainSeq === null ? null : Number(row.chainSeq) };
 }
 
 /**

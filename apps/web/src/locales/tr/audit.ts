@@ -28,6 +28,19 @@ export const audit: Messages = {
   'audit.column.actor': 'Aktör',
   'audit.column.target': 'Hedef',
   'audit.column.ip': 'IP',
+  'audit.column.detail': 'Ayrıntı',
+  'audit.detail.toggleAriaLabel': '{time} tarihindeki {action} kaydının ayrıntısı',
+  'audit.detail.entryId': 'Kayıt kimliği',
+  'audit.detail.chainPosition': 'Zincir konumu',
+  'audit.detail.chainUnavailable':
+    'Zincirlenmemiş — bu çalışma alanının denetim zinciri oluşmadan önce yazılmış',
+  'audit.detail.recordedDetail': 'Kaydedilen ayrıntı',
+  'audit.detail.noMetadata': 'Bu eylem başka ayrıntı kaydetmiyor.',
+  'audit.detail.minimalNote':
+    'Denetim kayıtları bilerek yalnız alan adlarını, sayıları ve rolleri tutar — değerleri, sırları veya mesaj içeriğini asla. Bazı eylemler kaynak adresi de bilerek yazmaz.',
+  'audit.detail.linkedEntry': 'Bağlantı verilen kayıt — geçerli filtrenin veya sayfanın dışında',
+  'audit.detail.loadError':
+    'Bu kayıt yüklenemedi. Çalışma alanının saklama penceresini geçmiş olabilir.',
   'audit.group.authentication': 'Kimlik doğrulama',
   'audit.group.team': 'Ekip',
   'audit.group.settings': 'Ayarlar',

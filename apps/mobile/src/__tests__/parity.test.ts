@@ -785,7 +785,11 @@ describe('module parity matrix — what is still owed', () => {
       // configuration — who is on which team — is console administration, and
       // the phone reads teams only to name the one a chat sits in. The read
       // route it already had is unchanged.
-      contractEndpoints: 195,
+      // 195 → 196 with `/audit-log/{entryId}` (M-UI-e, tm 181.5). One entry of
+      // the security trail, by id — an Owner/Admin console read behind
+      // `audit_log--all:ro`, the same door the list it hangs off already sits
+      // behind and one this app has never had. Nothing to re-scope.
+      contractEndpoints: 196,
       scopeBoundaries: 1,
     });
   });

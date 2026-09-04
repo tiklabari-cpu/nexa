@@ -743,6 +743,14 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           // sign-in, moments before this test runs, is already in the trail
           // (settings.spec.ts precedent).
           await expect(agentPage.getByRole('table', { name: 'Audit log' })).toBeVisible();
+          // Scan the expanded row too (M-UI-e): the toggle carries
+          // `aria-expanded`/`aria-controls` and the detail is a `<dl>` living
+          // inside a `<td>` — neither state is reachable from the other, so a
+          // scan of the collapsed table alone would miss half the screen.
+          const detailToggle = agentPage.getByRole('button', { name: /^Detail for / }).first();
+          await detailToggle.click();
+          await expect(detailToggle).toHaveAttribute('aria-expanded', 'true');
+          await expect(agentPage.getByText('Recorded detail').first()).toBeVisible();
         });
       });
 

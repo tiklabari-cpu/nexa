@@ -17,7 +17,7 @@
 
 | Faz                | PRD  | Genel durum                          | **Must sayacı (§F.00 kapısı)** | Kapanış |
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
-| **Faz 0 — MVP**    | §5.1 | 58 ✅ · 0 ◐ · 3 gruplu-🔒 (§3, **sayılarak** 2026-08-23 — §D123). **[GÜNCELLEME 2026-09-04 · tm 184.4, denetim-türevi — bkz. not altta]:** bu "58 ✅" bu turda yeniden sayılmadı; yalnız kapının kendisi olan Must sütunu sayıldı | **23 ✅ · 28 ◐ · 0 ⬜**          | ❌ AÇIK (yeniden) — tm 184.4, bkz. not altta |
+| **Faz 0 — MVP**    | §5.1 | 58 ✅ · 0 ◐ · 3 gruplu-🔒 (§3, **sayılarak** 2026-08-23 — §D123). **[GÜNCELLEME 2026-09-04 · tm 184.4, denetim-türevi — bkz. not altta]:** bu "58 ✅" bu turda yeniden sayılmadı; yalnız kapının kendisi olan Must sütunu sayıldı | **26 ✅ · 25 ◐ · 0 ⬜** (tm 185 triyajı)          | ❌ AÇIK (yeniden) — tm 184.4; triyaj + backlog tm 185, bkz. not altta |
 | Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2. **[GÜNCELLEME 2026-09-04 · tm 184.4 — bkz. not altta]** | **9 ✅ · 11 ◐ · 0 ⬜**          | ❌ AÇIK (yeniden) — tm 184.4, bkz. not altta |
 | **Faz 2 — v2**     | §5.3 | **✅ TESLİM + KAPANDI** (plan 2026-08-01; kapanış turu 2026-08-11, GL-8 · tm 114 · §D89). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: ~~0 ⬜ açık · 0 ◐ kısmi · 27 ✅ teslim~~ **[GÜNCELLEME 2026-09-04 · tm 184.4]: 0 ⬜ açık · 8 ◐ kısmi · 19 ✅ teslim** · 3 ⛔ kapsam dışı (7 faz çelişkisi PRD'den çözüldü). Kapanış ölçütü (**23 açık kalemin hepsi ✅**) o gün sayı olarak KARŞILANMIŞTI, `prd-uyum-denetimi.md`'ye (2026-08-30) karşı yeniden okununca **artık karşılanmıyor** (15 ✅ + 8 ◐ — kanıt §5.0 + `## K.`, ürün kodu değişmedi); §F.1'in 10 maddesi o gün **tam sürüm** koşulmuştu (kanıt HANDOFF §F.2). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: ~~23 açık kalemin hepsi ✅~~ **artık değil — 8 kalem ◐ (tm 184.4)** | ❌ AÇIK (yeniden) — tm 184.4, bkz. §5.0 |
 | **Faz 3 — Enterprise** | §5.4 | **✅ TESLİM + KAPANDI** (kırılım 2026-08-11 · §D95 + §D99; kapanış turu 2026-08-17, GL-9 · tm 126 · §D105). Kapsam PRD §5.4'e karşı süpürüldü → **15 satır**, **sayılarak**: **6 ✅ + 0 ◐** açık kalemde (53 alt-görev · ~72 pencere; `13.7` ✅ — §D111 kapandı, Faz-4 tm 128.1–128.8) · **2 ✅ v2'de karşılandı** · **4 ⛔** · **2 ⛔-süreç** · **1 faz değişikliği** (08.9.6 → Faz 2 ✅). Kırılım §6.1 · dilimler §6.2 · düz tablo §G. **13.7 mobil** buraya taşındı (§D60 · barındırma §D96) · **08.9.6** v2'ye çıktı (§D61) | Faz-3'te `Must` yok — §F.00'ın sayaç kuralı yerine **kalem** kuralı: **6 ✅ + 0 ◐** (`13.7` ✅ · §D111 kapandı — giriş yolunu Faz-4 tm 128.1–128.8 ödedi; mağaza payı `⛔-süreç` §D110). Kapanış anında (GL-9) 5 ✅ + 1 ◐ ile kapanmıştı, §D110 6 ✅ yaptı, §D111 geri aldı, tm 128 yeniden 6 ✅ yaptı — Should kalem, kapanış kararı hiç değişmedi | ✅ KAPALI |
@@ -49,6 +49,37 @@ DEĞİLDİR** — §F.00'ın 10 maddelik kapanış prosedürünü (§F.1) yenide
 damgalarını denetimin bulgusuna hizaladı (CONVENTIONS §1.2). 28 kalemin "tamamla mı, kapsamı daralt +
 yeni kaleme mi ayır" kararı (§F.00'ın iki yolu) bilerek bu turda verilMEDİ — bir sonraki tur, ya
 tek tek kapatarak (M-TEAM/M-CAMP/M-UI ailelerinin izlediği desen) ya da formel bir GL turu açarak.]**
+
+**[TRİYAJ 2026-09-04 · tm 185, F0-REOPEN — 28 kalemin kararı verildi (§F.00’ın iki yolu):** 184.4’ün
+bilerek bir sonraki tura bıraktığı karar bu turda verildi. Kod YAZILMADI; çıktı bir karar + backlog.
+
+- **3 kalem `◐` → `✅` geri alındı (SIRALAMA düzeltmesi, 184.4’ün kaçırdığı tuzak):** `08.6.1`
+  (tm 181.3 · M-UI-c), `08.8.2` (tm 181.2 · M-UI-b), `11.2` (tm 176.3+176.5 · M-CAMP). Üçünün de
+  denetimdeki boşluğu **denetim tarihinden (2026-08-30) SONRA** kapatılmıştı; 184.4 bu üçünü hariç
+  tutmadan düşürdü. Her birinin PRD kabul kriteri bu turda madde madde koda karşı okundu ve gerekçe
+  ilgili `#### K<kod>` bloğuna yazıldı. Ürün kodu bu turda da DEĞİŞMEDİ.
+- **25 kalem "tamamla" yoluna gitti** → Task Master’a **8 üst görev + 23 alt görev** olarak açıldı,
+  hepsi `pending` · `priority: high` (K7 · CONVENTIONS §4.1 — `critical` planlamaya kapalı) ·
+  `dependencies: []`: **tm 188** F0-SHELL (01.2 · 01.3) · **tm 189** F0-INBOX (02.1.1 · 02.1.3 ·
+  02.2.2 · 02.3.3+02.3.6 · 02.3.5 · 02.4.1–.6 · 02.6 · 02.8) · **tm 190** F0-CRM (03.2.1 · 03.2.3) ·
+  **tm 191** F0-TEAMUI (04.1 · 04.3.1 · 04.3.4 · 04.4) · **tm 192** F0-RPTLOW (07.3.2, düz görev) ·
+  **tm 193** F0-SETGAP (08.5.3 · 08.7.2) · **tm 194** F0-BILLUI (10.1.1 · 10.2) · **tm 195**
+  F0-WIDGETGAP (11.1 · 11.4 · 11.6). Kapsanmayan satır **0** (sayılarak).
+- **Hiçbir kalem `⛔`ye ya da `Should`a indirilmedi.** Ölçüt olarak PRD’nin **Kabul Kriteri** sütunu
+  alındı (tuzak 3) ve 25 kalemin hiçbiri "MVP dışı" çıkmadı: hepsi mevcut bir ürün yüzeyindeki gerçek
+  boşluk. İki kalemin (`02.3.5` rich text/emoji, `04.1` modül-içi gezinme) eksiği KK sütunundan değil
+  **Açıklama** sütunundan geliyor; yine de iş olarak açıldı, gerekçesi ilgili görevin `details`inde.
+- **Kapsam dışı, ama kaybolmasın diye ismen:** §3’te `Must` OLMAYAN 6 `◐` satırı kapıyı bloklamaz —
+  `00.4` (:195) · `01.1.1/.4/.5, 01.4, 01.5` (:205) · `03.1.1` (:230) · `07.1` (:257) · `07.3.1` (:258) ·
+  `07.3.3` (:260). §7.2’nin **11** NFR `◐` satırı (`P1` · `P2` · `P3` · `P4/P6` · `P8` · `S6` ·
+  `I18N1/2` · `C1/C2/C8` · `M4` · `M5` · `M-STORE`) faz kapısı değil **NFR kapısı**; ayrı bir tur ister.
+  v1’in 11 ve v2’nin 8 kalemi **tm 186 / tm 187**’dedir, bu turda dokunulmadı.
+- **Bilinen tablo kusuru (düzeltilmedi, kapsam dışı):** `02.4.1–.6` satırının (:220) **Nerede** hücresi
+  de bir damga taşıyor (`✅ → K02.4.1-.6`); bu 184.4’ten ÖNCE de böyleydi (bkz. `cf9ad43^`). Durum
+  hücresi doğru, ama naif bir sayaç yanlış sütunu okuyabilir — bir sonraki §3 turu düzeltsin.
+
+**Bu tur da resmi bir §F.00 kapanış turu (GL-tarzı, §F.1’in 10 maddesi) DEĞİLDİR.** Kapanış turu, 25
+kalem `◐`’den çıktıktan sonra ayrıca açılır.]**
 
 **v1 (Faz 1) kapandı (2026-07-31 · GL-4 · tm 88).** v1 `Must` kapısı **sayılarak** `20 ✅ · 0 ◐ · 0 ⬜`
 (§4.1/4.2/4.3'te `Must (v1)` = **20 satır**, hepsi ✅: 05.1/05.3/05.5 · 06.1–06.4 [10] · 08.5.4–.6 ·
@@ -269,10 +300,10 @@ gerekçe + `→ K…` referansı girer.
 | 08.5.2 | **Website widgets** (+Add website / Install code)  | Must (MVP) |  ✅   | **Dilim 13** — `Website` modeli var                        |
 | 08.5.3 | **Email (forwarding → ticket)**                    | Must (MVP) | ◐ → K08.5.3 | **Dilim 13** (kanal yüzeyiyle)                             |
 | 08.5.9 | **Chat page** (hosted link)                        | Must (MVP) |  ✅   | **Dilim 13**                                               |
-| 08.6.1 | Chat routing kural motoru + fallback               | Must (MVP) | ◐ → K08.6.1 | Dilim 8 · ADR-08                                    |
+| 08.6.1 | Chat routing kural motoru + fallback               | Must (MVP) | ✅ → K08.6.1 | Dilim 8 · ADR-08                                    |
 | 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) | ✅ → K08.7.1 |                                              |
 | 08.7.2 | Canned responses (`#` shortcut, grup kapsamı)      | Must (MVP) | ◐ → K08.7.2 | F5                                                         |
-| 08.8.2 | API access — APIs & SDKs + PAT                     | Must (MVP) | ◐ → K08.8.2 | Dilim 2 · F5                                               |
+| 08.8.2 | API access — APIs & SDKs + PAT                     | Must (MVP) | ✅ → K08.8.2 | Dilim 2 · F5                                               |
 | 08.9.1 | Trusted domains (widget allowlist)                 | Must (MVP) |  ✅   | Dilim 2 · F5                                               |
 | 08.9.4 | **File sharing** (izinli tür/boyut + virüs tarama) | Must (MVP) |  ✅   | **Dilim 13** — NFR-S10                                     |
 
@@ -291,7 +322,7 @@ gerekçe + `→ K…` referansı girer.
 | PRD  | Gereksinim                                   | Öncelik    | Durum | Nerede                                         |
 | ---- | -------------------------------------------- | ---------- | :---: | ---------------------------------------------- |
 | 11.1 | Launcher bubble + unread rozeti              | Must (MVP) | ◐ → K11.1 | Dilim 6                                        |
-| 11.2 | **Greeting card + quick replies**            | Must (MVP) | ◐ → K11.2 | **Dilim 13**                                   |
+| 11.2 | **Greeting card + quick replies**            | Must (MVP) | ✅ → K11.2 | **Dilim 13**                                   |
 | 11.3 | Agent identity (AI persona / insan adı)      | Must (MVP) |  ✅   | Dilim 6 (bot kimliği ✅) · persona ✅ Dilim 13 |
 | 11.4 | Composer (mesaj + **attach** + emoji + send) | Must (MVP) | ◐ → K11.4 | attach ✅ Dilim 13                             |
 | 11.6 | Embed snippet (async JS + `window.__lc`)     | Must (MVP) | ◐ → K11.6 | Dilim 6                                        |
@@ -6008,6 +6039,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-08.6.1` [KISMİ]: Motor tam: koşullar (url_contains/url_equals/country_codes/expertise_ids) AND'lenerek eşleşiyor, sıralama `is_fallback ASC, priority ASC`, fallback devre dışı bırakılamıyor (settings.ts:2372-2379), concurrent limit `HAVING COUNT(t.id) < m.concurrent_chats_lim…
 
+- ✅ **Damga geri alındı `◐` → `✅` (tm 185 triyajı, §F.00 · SIRALAMA düzeltmesi):** 184.4 bu satırı denetimin (2026-08-30) bulgusuna göre düşürdü, ama denetimin işaret ettiği boşluğu — kural motoru uçtan GET+PATCH ile sınırlıydı, yeni kural eklemek/silmek ürünün içinden imkânsızdı — **tm 181.3 (M-UI-c) denetimden SONRA kapatmıştı** (yukarıdaki ikinci madde). PRD KK’sının dört maddesi bu turda tek tek koda karşı okundu ve dördü de karşılanıyor: koşul (url_contains/url_equals/country_codes/expertise_ids) → takım ✅ · fallback zorunlu ve devre dışı bırakılamıyor (`routes/settings.ts` 403) ✅ · sıralı/öncelikli (`is_fallback ASC, priority ASC`) ✅ · concurrent limit (`HAVING COUNT(t.id) < m.concurrent_chats_limit`) ✅. Konsol yüzeyi `RoutingRules.tsx` + uçlar `POST`/`DELETE /settings/routing-rules` yerinde. Bu, tm 185’in yakaladığı üç "sıralama tuzağı" (görev tanımı, tuzak 4) örneğinden biri. · tm 185
+
 #### K08.6.2 — 08.6.2 · Ticket rules (atama/etiket/öncelik)
 
 ✅ koşul+eylem motoru — `ticket_rules`+`ticket_tags` (RLS, migration `20260726180000`) · saf eşleşme `ticket-rule-matching.ts` (hasCondition/hasAction/matchesTicketRule) · uygulama `apply-ticket-rules.ts` (ticket create + createFromEmail kancası; atama/öncelik/etiket, position sırası, geçersiz hedefi atlar) · CRUD `ticket-rule-service.ts` + rota `/settings/ticket-rules` (`tickets--all:rw`/`:ro`) · web Settings "Ticket rules" formu (form-primitif, öncelik/etiket) · OpenAPI `TicketRule*`+ 4 yol (contract-parity ✅) · unit `ticket-rule-matching.test.ts`(7) + integration `ticket-rules.test.ts`(12: kural→otomatik atama · koşul/eylem zorunlu · cross-tenant) · tm 47 · §D43
@@ -6050,6 +6083,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 - ℹ Bu kalemin kabul satırının kalan payları başka yüzeylerde duruyor ve bu turda dokunulmadı (CONVENTIONS §5): API çağrısı fatura sayacı `BillingPage.tsx`'te (`usage.api_calls`), entegrasyon/SDK referansı geliştirici portalının manifest sekmesinde (`WebhookSubscriptions.tsx` `IntegrationManifestReference`).
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-08.8.2` [KISMİ]: Sunucu tarafı sağlam: PAT bir kez döndürülüyor (auth.ts:988-999, Cache-Control:no-store), scope'lar oluşturmada sabitleniyor ve yetki yükseltmeye karşı korunuyor (auth.ts:953-965), api_calls sayacı usage_records'a işleniyor ve faturaya giriyor. EKSİK OLAN KON…
+
+- ✅ **Damga geri alındı `◐` → `✅` (tm 185 triyajı, §F.00 · SIRALAMA düzeltmesi):** denetimin bulgusu "EKSİK OLAN KON…" (konsol) diye başlıyor ve **tm 181.2 (M-UI-b) tam olarak o konsolu denetimden SONRA ekledi** (yukarıdaki ilk madde: `PersonalAccessTokens.tsx`). 184.4 satırı yine de düşürdü. PRD KK’sının dört maddesi bu turda doğrulandı: PAT bir kez gösterilir ✅ (`routes/auth.ts`, `Cache-Control: no-store` + konsolda tek kopya bileşende) · scope oluşturmada sabitlenir ✅ · API call billing sayacı ✅ (`BillingPage.tsx` `usage.api_calls`) · get-started / SDK referansı ✅ (`features/developers/DeveloperPortal.tsx` + `WebhookSubscriptions.tsx` `IntegrationManifestReference`). · tm 185
 
 #### K09.1 — 09.1 · Entegrasyon kartları gridi
 
@@ -7790,6 +7825,8 @@ _(Faz-7 · tm 184 — açıldı 2026-09-04. Alt-görevler kapandıkça bu bloğu
 #### K11.2 — 11.2 · Greeting card + quick replies
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-11.2` [KISMİ]: Kart, iki hızlı yanıt ve davranışları gerçek: 'Let's chat' pre-chat formunu açıyor, 'Just browsing' kartı sessionStorage ile oturum boyu erteliyor (widget.ts:558-563) — ikisi de e2e ile korunuyor. Ancak KK'nın 'proaktif karşılama (campaigns'ten)' yarısı bağla…
+
+- ✅ **Damga geri alındı `◐` → `✅` (tm 185 triyajı, §F.00 · SIRALAMA düzeltmesi):** denetimin tek eksiği KK’nın "proaktif karşılama (campaigns’ten)" yarısıydı; **tm 176 (M-CAMP) ailesi bunu denetimden SONRA bağladı** — 176.3 widget kampanya kartını mevcut proaktif kart yuvasına yerleştirdi, 176.5 yeni ziyaretçinin çalışan kampanyaları tetiklemesini kurdu. Kod bu turda okundu: `apps/widget/src/widget.ts` `state.campaign` (:94), `activeCard()` (:585-590 — kampanya greeting’i yener, karar tm 176.3), kampanya başına erteleme anahtarı (`CAMPAIGN_DISMISSED_KEY_PREFIX`, :33) ve enjekte edilen içeriğin inert string olarak basılması (:599). KK’nın diğer iki maddesi (Let’s chat → pre-chat form; Just browsing → erteler) denetimde zaten TAM idi ve e2e ile korunuyor. · tm 185
 
 #### K11.4 — 11.4 · Composer (mesaj + attach + emoji + send)
 

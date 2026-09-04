@@ -8538,10 +8538,10 @@
             "title": "M-UI-d [OPUS-MAX] BÖLÜNMEZ: bildirimleri AppShell`e taşı — soket yaşam döngüsü sahipliği",
             "description": "PRD **707-733** (13.8). `useNotifications` ve `useRealtime` reponun TAMAMINDA yalnız `InboxPage.tsx:209-210`'da mount ediliyor; ajan Reports'a geçince ses/masaüstü/rozet susuyor ve soket kapanıyor. **Asıl riskler:** (1) çift mount → aynı mesaj iki kez bildirilir; push verisi Inbox'a nasıl akacak (bağlam mı store mu)? (2) soket yaşam döngüsü tek yerden yönetilmeli — yeniden bağlanma, arka plan sekmesi, oturum kapanışı; sayfa geçişlerinde bağlantı fırtınası olmamalı (bağlantı sayısı ölçülür). (3) ajan zaten o sohbete bakıyorsa bildirim gösterilsin mi — mevcut davranışı koru, değiştiriyorsan yorumla. **e2e asıl kanıt:** Reports sayfasındayken gelen mesaj bildirim üretir — bugün üretmiyor, kırmızıdan yeşile dönen test kanıttır. Mobil push (`pushToAgentDevices`) kapsam dışı.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T03:03:43.305Z"
           },
           {
             "id": 5,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T03:02:24.011Z"
+        "updatedAt": "2026-09-04T03:03:43.305Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T03:02:24.013Z",
+      "lastModified": "2026-09-04T03:03:43.305Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

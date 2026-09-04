@@ -24,6 +24,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from './AppShell.js';
 import { readBrandId, useAuth, useBrandStore } from '../lib/auth-store.js';
 import { useNavStore } from '../lib/nav-store.js';
+import { installFakeWebSocket } from '../test/fake-socket.js';
 
 const BRAND_KEY = 'nexa.brand_id';
 
@@ -82,6 +83,11 @@ function stubBrands(items: Array<{ id: string; name: string; is_default: boolean
 }
 
 beforeEach(() => {
+  // The shell opens the app's realtime connection now (`RealtimeOwner`), and
+  // these tests hand it a token, so without a stand-in every case here would
+  // dial localhost:4001 and leave a reconnect timer behind it.
+  installFakeWebSocket();
+
   useAuth.setState({
     status: 'signed-in',
     accessToken: 'test-token',
@@ -96,6 +102,10 @@ beforeEach(() => {
       routing_status: 'accepting_chats',
     },
   });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('module navigation', () => {

@@ -11,12 +11,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { useAuth } from './lib/auth-store.js';
 import { useLocaleStore } from './lib/i18n.js';
 import { DEFAULT_THEME, THEME_STORAGE_KEY, useThemeStore } from './lib/theme.js';
+import { installFakeWebSocket } from './test/fake-socket.js';
 
 function renderShell() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -34,6 +35,9 @@ function renderShell() {
 }
 
 beforeEach(() => {
+  // The real shell opens the app's realtime connection; a stand-in keeps this
+  // theme test from dialling the gateway (`test/fake-socket.ts`).
+  installFakeWebSocket();
   act(() => useLocaleStore.getState().setLocale('en'));
   act(() => useThemeStore.getState().setTheme(DEFAULT_THEME));
   useAuth.setState({
@@ -53,6 +57,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   act(() => useLocaleStore.getState().setLocale('en'));
   act(() => useThemeStore.getState().setTheme(DEFAULT_THEME));
   globalThis.localStorage.removeItem(THEME_STORAGE_KEY);

@@ -19,6 +19,8 @@ import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
 import { InviteTeammates } from '../features/team/InviteTeammates.js';
 import { roleAtLeast } from '../features/team/RoleMenu.js';
+import { useRealtime } from '../features/inbox/useInbox.js';
+import { useNotifications } from '../features/notifications/useNotifications.js';
 import { CommandPalette } from './CommandPalette.js';
 import { PresenceAvatars } from './PresenceAvatars.js';
 import { FOOTER, MODULES, isNavVisible, type NavDestination } from './navigation.js';
@@ -39,8 +41,42 @@ export function AppShell(): ReactElement {
       {/* Reachable from every module: ⌘K opens it, and it lives outside the
           scrolling area so it overlays whatever is on screen. */}
       <CommandPalette />
+      <RealtimeOwner />
     </div>
   );
+}
+
+/**
+ * The session's one realtime connection, and the notifications it drives
+ * (FR-MOD-13.8 · FR-EK-C.1).
+ *
+ * **Why the shell.** Both hooks used to be mounted by `InboxPage`, so the
+ * socket's lifetime was one route's lifetime: opening Reports closed the
+ * connection, and with it went the sound, the desktop notification and the
+ * unread badge — an agent looking at a report was simply not told that a
+ * customer had written. The shell is mounted once for everything under `/app`
+ * and survives every navigation inside it, so the connection is opened once
+ * per session and no amount of moving between modules reconnects it.
+ *
+ * **Why a component that renders nothing** rather than two calls in `AppShell`
+ * itself. Both hooks hold state that a push moves — the unread count, and
+ * (before this) the connection status. Held in `AppShell`, every arriving
+ * message would re-render the rail, the banners and the active module along
+ * with it. Held here, a push re-renders a component with no output. The status
+ * goes out through `lib/realtime-status.ts` for the same reason, so the inbox's
+ * connection dot updates without anything above it re-rendering.
+ *
+ * **What did not change.** Pushes still reach the inbox through the app-wide
+ * React Query cache and the typing/conflict stores (`applyPush`), which sit
+ * above the router and never cared which component opened the socket. And a
+ * notification is still suppressed while the tab is focused
+ * (`decideNotification`): "the agent is here, do not interrupt them" is
+ * deliberately unchanged by this move — see `notifications.ts`.
+ */
+function RealtimeOwner(): null {
+  const notifier = useNotifications();
+  useRealtime(notifier.handlePush);
+  return null;
 }
 
 interface SandboxInfo {

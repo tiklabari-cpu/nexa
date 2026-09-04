@@ -14,9 +14,10 @@ import {
   type InfiniteData,
   type QueryClient,
 } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ROUTING_STATUSES } from '@nexa/types';
-import { RtmClient, type PushHandler, type RtmStatus } from '../../lib/realtime.js';
+import { RtmClient, type PushHandler } from '../../lib/realtime.js';
+import { setRealtimeStatus } from '../../lib/realtime-status.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
@@ -580,16 +581,44 @@ export function useChatAction(chatId: string | null) {
 }
 
 /**
+ * How many components are currently holding the socket open.
+ *
+ * There must be exactly one. Two connections mean the gateway delivers every
+ * push twice, which `applyPush` absorbs (it de-duplicates events by id) but
+ * `useNotifications` does not — the agent hears two chimes and counts two
+ * unread for one message. The counter exists so that regression announces
+ * itself instead of being noticed as "the sound is weird sometimes".
+ *
+ * A module-level number rather than a ref: the point is to see *across*
+ * components, which is exactly what a ref cannot do. React's StrictMode
+ * double-invoke runs setup → cleanup → setup for one component, so it moves
+ * this 1 → 0 → 1 and never trips the check.
+ */
+let realtimeOwners = 0;
+
+/**
  * Opens the realtime connection and folds pushes into the query cache.
  *
  * Kept in one place so there is a single definition of "a new event arrived",
  * whether it came from a push, a reconnect replay, or a refetch.
+ *
+ * **Mounted exactly once, by the shell** (`components/AppShell.tsx` ·
+ * `RealtimeOwner`). It used to be mounted by `InboxPage`, which tied the
+ * socket's lifetime to one route: an agent who opened Reports closed their
+ * connection and stopped being notified of anything until they navigated back
+ * (FR-MOD-13.8 · FR-EK-C.1). The shell outlives every route change under
+ * `/app`, so the connection is opened once per session instead of once per
+ * visit to the inbox — no reconnect storm as somebody moves around the app.
+ *
+ * Nothing had to change about how pushes reach the inbox: they land in the
+ * app-wide React Query cache (`applyPush`) and in the typing/conflict stores,
+ * all of which sit above the router already. Only the connection *status*
+ * needed a new channel, and that is `lib/realtime-status.ts`.
  */
-export function useRealtime(onPush?: PushHandler): RtmStatus {
+export function useRealtime(onPush?: PushHandler): void {
   const queryClient = useQueryClient();
   const accessToken = useAuth((s) => s.accessToken);
   const organizationId = useAuth((s) => s.agent?.organization_id);
-  const [status, setStatus] = useState<RtmStatus>('offline');
   const clientRef = useRef<RtmClient | null>(null);
 
   // Held in a ref so a new callback identity each render does not tear down and
@@ -599,6 +628,14 @@ export function useRealtime(onPush?: PushHandler): RtmStatus {
 
   useEffect(() => {
     if (!accessToken || !organizationId) return;
+
+    realtimeOwners += 1;
+    if (realtimeOwners > 1) {
+      console.error(
+        `useRealtime is mounted ${realtimeOwners} times. The shell (AppShell → RealtimeOwner) ` +
+          'owns the socket; a second mount opens a second connection and notifies twice.',
+      );
+    }
 
     const client = new RtmClient({
       url: RTM_URL,
@@ -614,7 +651,7 @@ export function useRealtime(onPush?: PushHandler): RtmStatus {
         'incoming_sneak_peek',
         'agent_conflict_warning',
       ],
-      onStatusChange: setStatus,
+      onStatusChange: setRealtimeStatus,
       onPush: (action, payload) => {
         applyPush(queryClient, action, payload);
         onPushRef.current?.(action, payload);
@@ -627,12 +664,11 @@ export function useRealtime(onPush?: PushHandler): RtmStatus {
     useTypingStore.getState().setEmitter((chatId, isTyping) => client.sendTyping(chatId, isTyping));
     client.connect();
     return () => {
+      realtimeOwners -= 1;
       useTypingStore.getState().setEmitter(() => {});
       client.disconnect();
     };
   }, [accessToken, organizationId, queryClient]);
-
-  return status;
 }
 
 /** Exported for `useInbox.test.ts` — a push handler has no other way in. */

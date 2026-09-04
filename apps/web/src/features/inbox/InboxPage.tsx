@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
+import { useRealtimeStatus } from '../../lib/realtime-status.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -24,7 +25,6 @@ import {
   useChatList,
   useConnectedChannels,
   useMarkSeen,
-  useRealtime,
   useTranscript,
   useViewCounts,
 } from './useInbox.js';
@@ -38,7 +38,6 @@ import {
   type ConnectedChannelLike,
   type SavedView,
 } from './views.js';
-import { useNotifications } from '../notifications/useNotifications.js';
 import { TicketDetailPane } from './TicketPane.js';
 import { TicketGrid } from './TicketGrid.js';
 import { useTicketList } from './useTickets.js';
@@ -216,10 +215,10 @@ export function InboxPage(): ReactElement {
     setSearchParams(writeChatSort(searchParams, sort), { replace: true });
   };
 
-  // Turn incoming messages into sound / desktop / tab-title alerts. The socket
-  // is shared: the same push updates the cache and drives the notification.
-  const notifier = useNotifications();
-  const rtmStatus = useRealtime(notifier.handlePush);
+  // The connection dot below reports the shell's socket (`AppShell` ·
+  // `RealtimeOwner`), which this screen no longer opens: it outlives the route,
+  // so the alerts it drives keep working after an agent navigates away.
+  const rtmStatus = useRealtimeStatus();
   const counts = useViewCounts();
   const list = useChatList(view, chatSort);
   const chat = useChat(selectedId);

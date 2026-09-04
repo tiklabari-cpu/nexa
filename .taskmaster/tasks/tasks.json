@@ -8499,7 +8499,7 @@
         "description": "Bu maddelerin arka tarafi yazilmis, konsol yuzeyi yok: etiket grup kapsami API`de yaziliyor ama duzenlenemiyor, PAT icin `apps/web/src` icinde tek satir yok, yonlendirme kurali olusturma ucu ve ekrani yok, bildirimler yalniz InboxPage`de mount ediliyor, denetim kaydinin metadata`si hicbir yerde gorunmuyor, sablon rozetleri render edilmiyor, preview ozeti basilmiyor, ajan bazli performans lisans geneli gosteriliyor, formlarin yarisi ortak kutuphaneyi atliyor.",
         "details": "Denetim `prd-uyum-denetimi.md` §3 D2 · ilgili PRD satırları her iş kaleminde.\n\n**Her iş kaleminde geçerli:** önce mevcut ucu bul ve sözleşmesini oku — yeni uç icat etmen gerekmiyor olabilir. Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır. i18n `apps/web/src/locales` (en+tr). `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni rota eklediysen rota listesine de ekle. Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli, sessizce yutulmamalı.",
         "testStrategy": "Her iş kalemi kendi DoD kapısından geçer. `apps/web` test süiti (1541 test) sayıca düşmez; a11y taraması iki temada da yeşil kalır.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -8508,10 +8508,10 @@
             "title": "M-UI-a [SONNET-XHIGH] Etiket grup kapsamı ekranı — ucun ölü kolon olmadığını da doğrula",
             "description": "PRD **594-659** (08.7.1). API `group_ids`'i yazıyor (`settings.ts:2572` civarı) ama `Tags.tsx:139` yalnız sayı basıyor. Grup seçici ekle. **Ayrıca:** denetim canned responses için \"group_id kolonu var ama create/update kabul etmiyor → ölü kolon\" demişti; etiket ucunun gerçekten yazdığını doğrula, yazmıyorsa uç tarafı da bu iş kaleminin kapsamındadır.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T01:10:03.477Z"
           },
           {
             "id": 2,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
+        "updatedAt": "2026-09-04T01:10:03.477Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T00:13:36.195Z",
+      "lastModified": "2026-09-04T01:10:03.479Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

@@ -8697,10 +8697,10 @@
             "title": "M-TRACE-c [SONNET-XHIGH] Kapsama kapısını CI`a bağla + CONVENTIONS §1`i güncelle",
             "description": "Kademeli olmalı: bugün 141 KISMİ madde var, kapıyı \"hiçbir madde testsiz olamaz\" diye kurarsan CI kalıcı kırmızı olur ve kimse bakmaz — yeni/değişen maddeler zorunlu, mevcut borç ayrı raporlanır. `CONVENTIONS.md` §1 DoD listesine yeni kutu. **Kapının gerçekten kırmızı verdiğini kanıtla.** Bilinen CI boşluğu (unit-tests-before-build bundle bütçesini sessizce atlıyor) aynı turda ayrı commit ile kapatılabilir.",
             "details": "Bağımlılık: M-TRACE-b. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "184",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T14:55:31.130Z"
           },
           {
             "id": 4,
@@ -8713,12 +8713,12 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T14:51:24.182Z"
+        "updatedAt": "2026-09-04T14:55:31.130Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T14:51:24.182Z",
+      "lastModified": "2026-09-04T14:55:31.131Z",
       "taskCount": 184,
       "completedCount": 182,
       "tags": [

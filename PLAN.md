@@ -18,7 +18,7 @@
 | Faz                | PRD  | Genel durum                          | **Must sayacı (§F.00 kapısı)** | Kapanış |
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
 | **Faz 0 — MVP**    | §5.1 | 58 ✅ · 0 ◐ · 3 gruplu-🔒 (§3, **sayılarak** 2026-08-23 — §D123). **[GÜNCELLEME 2026-09-04 · tm 184.4, denetim-türevi — bkz. not altta]:** bu "58 ✅" bu turda yeniden sayılmadı; yalnız kapının kendisi olan Must sütunu sayıldı | **26 ✅ · 25 ◐ · 0 ⬜** (tm 185 triyajı)          | ❌ AÇIK (yeniden) — tm 184.4; triyaj + backlog tm 185, bkz. not altta |
-| Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2. **[GÜNCELLEME 2026-09-04 · tm 184.4 — bkz. not altta]** | **9 ✅ · 11 ◐ · 0 ⬜**          | ❌ AÇIK (yeniden) — tm 184.4, bkz. not altta |
+| Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2. **[GÜNCELLEME 2026-09-04 · tm 184.4 — bkz. not altta]** | **12 ✅ · 8 ◐ · 0 ⬜** (tm 186 triyajı) | ❌ AÇIK (yeniden) — tm 184.4; triyaj + backlog tm 186, bkz. not altta |
 | **Faz 2 — v2**     | §5.3 | **✅ TESLİM + KAPANDI** (plan 2026-08-01; kapanış turu 2026-08-11, GL-8 · tm 114 · §D89). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: ~~0 ⬜ açık · 0 ◐ kısmi · 27 ✅ teslim~~ **[GÜNCELLEME 2026-09-04 · tm 184.4]: 0 ⬜ açık · 8 ◐ kısmi · 19 ✅ teslim** · 3 ⛔ kapsam dışı (7 faz çelişkisi PRD'den çözüldü). Kapanış ölçütü (**23 açık kalemin hepsi ✅**) o gün sayı olarak KARŞILANMIŞTI, `prd-uyum-denetimi.md`'ye (2026-08-30) karşı yeniden okununca **artık karşılanmıyor** (15 ✅ + 8 ◐ — kanıt §5.0 + `## K.`, ürün kodu değişmedi); §F.1'in 10 maddesi o gün **tam sürüm** koşulmuştu (kanıt HANDOFF §F.2). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: ~~23 açık kalemin hepsi ✅~~ **artık değil — 8 kalem ◐ (tm 184.4)** | ❌ AÇIK (yeniden) — tm 184.4, bkz. §5.0 |
 | **Faz 3 — Enterprise** | §5.4 | **✅ TESLİM + KAPANDI** (kırılım 2026-08-11 · §D95 + §D99; kapanış turu 2026-08-17, GL-9 · tm 126 · §D105). Kapsam PRD §5.4'e karşı süpürüldü → **15 satır**, **sayılarak**: **6 ✅ + 0 ◐** açık kalemde (53 alt-görev · ~72 pencere; `13.7` ✅ — §D111 kapandı, Faz-4 tm 128.1–128.8) · **2 ✅ v2'de karşılandı** · **4 ⛔** · **2 ⛔-süreç** · **1 faz değişikliği** (08.9.6 → Faz 2 ✅). Kırılım §6.1 · dilimler §6.2 · düz tablo §G. **13.7 mobil** buraya taşındı (§D60 · barındırma §D96) · **08.9.6** v2'ye çıktı (§D61) | Faz-3'te `Must` yok — §F.00'ın sayaç kuralı yerine **kalem** kuralı: **6 ✅ + 0 ◐** (`13.7` ✅ · §D111 kapandı — giriş yolunu Faz-4 tm 128.1–128.8 ödedi; mağaza payı `⛔-süreç` §D110). Kapanış anında (GL-9) 5 ✅ + 1 ◐ ile kapanmıştı, §D110 6 ✅ yaptı, §D111 geri aldı, tm 128 yeniden 6 ✅ yaptı — Should kalem, kapanış kararı hiç değişmedi | ✅ KAPALI |
 | **Faz 4 — Bütünleme** | §F.3 (PRD dışı faz; kalemler PRD kimlikli ya da türetilmiş NFR — §6A · §D113) | **✅ TESLİM + KAPANDI** (açılış 2026-08-17; kapanış turu 2026-08-23, GL-10 · tm 143 · §D120). Kod denetimi 17 bulgu; §6A tablosu **16 satır** (14 iş kalemi + M-SEC denetimi + GL-10 kapanış) · **62 alt-görev + 3 tek görev · ~82 pencere** · tm 128–143, hepsi `done`. Damga (**sayılarak**, öncü damga — naif glif sayımı değil; §6A tablosu, GL-10 hariç): **15 ✅ · 0 ◐ · 0 ⬜**. Konu kalem değil **dikiş** (§6A) | Faz-4'te `Must` yok — **kalem kuralı**: §6A tablosunun GL-10 dışındaki **15 satırının tamamı ✅** → **15/15 sayılarak karşılandı** | ✅ KAPALI |
@@ -98,6 +98,50 @@ satırı (`05.1`/`05.3`/`05.5` · `06.2.1`/`06.2.2`/`06.2.4`/`06.3.2`/`06.3.3`/`
 `10.1.4`) denetime karşı KISMİ çıktı ve `◐`'ye indirildi; kanıt ilgili `## K.` bloklarında. Ürün kodu
 DEĞİŞMEDİ. Resmi yeniden-kapanış turu koşulmadı — 11 kalemin kapanış kararı (tamamla / kapsam daralt)
 bu turun kapsamı dışı, bir sonraki tura bırakıldı.]**
+
+**[TRİYAJ 2026-09-04 · tm 186, V1-REOPEN — 11 kalemin kararı verildi (§F.00'ın iki yolu):** 184.4'ün
+bilerek bir sonraki tura bıraktığı karar bu turda verildi. Kod YAZILMADI; çıktı bir karar + backlog.
+Ölçüt PRD'nin **Kabul Kriteri** sütunu (tuzak 3); denetim metni kaynağında `…` ile kesildiği için
+(`FR-MOD-06.2.4` "Eksikler…", `FR-MOD-06.3.2` "Eksik: 'file' t…") her iddia koda karşı `grep`/`sed`
+ile FİİLEN doğrulandı, denetimin nesirinden alınmadı.
+
+- **`08.5.5` `◐` → `✅` (SIRALAMA düzeltmesi — 184.4'ün kaçırdığı tuzak, tm 185'te üç kez çıkan aynı
+  hata):** denetimin bulgusu birebir "`sendOutbound` repoda TEK bir yerden çağrılıyor:
+  `POST /channels/:type/messages`" idi — ve **G1 (`3127638`, 2026-08-30) tam olarak denetimin D1
+  bulgusunun düzeltmesidir**, HANDOFF §G1 bunu açıkça yazıyor. Kod bu turda okundu:
+  `ChatService.sendEvent` işlem commit olduktan sonra `ChannelDispatcher.dispatchAgentReply` çağırıyor
+  (`chat-service.ts:487`) ve ajan yüzeyi olan `routes/chats.ts:109-110` dispatcher'ı fiilen bağlıyor.
+  KK'nın iki yarısı da karşılanıyor: kimlik/numara (`POST /channels/twilio/connect`) · SMS gönder-al
+  (webhook + dispatcher), uçtan uca `apps/e2e/tests/channels.spec.ts` ile kanıtlı. Aynı G1 turunun
+  düzelttiği `08.5.4` ve `08.5.6` zaten `✅` bırakılmıştı; `08.5.5`'in düşürülmesi o üçlüde tutarsızdı.
+- **`05.1` + `05.3` `◐` → `✅` (KAPSAM DARALTMA — ADR-14):** ikisinin de tek açık yarısı **Workspace
+  workflow** ve ADR-14 (§0, satır 121) kilitli: _"Tek paradigma = Skill (adım listesi). `workflows`
+  tablosu şemada kalır, **UI YOK**"_. Bu daraltma yeni bir karar DEĞİL — v1 kırılımının kendi
+  `05.1-a` maddesi denetimden ÖNCE zaten _"**Kapsam dışı:** Workspace workflow türü (⛔ ADR-14)"_
+  yazıyordu; denetim (dış, PRD'ye karşı adversaryal) ADR-14'ü bilmiyordu, 184.4 de PLAN'ın kendi
+  kapsam kaydına bakmadan bulguyu geçirdi. Emsal aynı dosyada: `13.4` görsel workflow builder
+  `⛔ ADR-14` ile kapatılmış, hedefi ADR-uyumlu bir ikameyle (`05.6-tmpl31`) onurlandırılmıştı.
+  Daraltılmış kapsam koda karşı okundu ve karşılanıyor: 05.1 → şablon galerisi + seçim → ön-dolu
+  editör (`TemplateGallery.tsx`, header'da "Browse templates" + "New skill", `PlaybookPage.tsx:266-286`);
+  05.3 → dört sekme + ✦/⚡ ayrımı + tam bölümleme, birim testli (`skill-tabs.ts`). ADR-14 altında
+  Workspace kovası kalıcı olarak boştur — bu bir kusur değil, kilitli kararın sonucudur.
+- **8 kalem "tamamla" yoluna gitti** → Task Master'a **5 üst görev + 9 alt görev** olarak açıldı,
+  hepsi `pending` · `priority: high` (K7 · CONVENTIONS §4.1 — `critical` planlamaya kapalı) ·
+  `dependencies: []`: **tm 196** V1-SKILLROW (05.5, düz görev) · **tm 197** V1-SKILLEDIT (06.2.2 ·
+  06.2.1 · 06.2.4) · **tm 198** V1-KNOWLEDGE (06.3.2-file · 06.3.3) · **tm 199** V1-PERSONA (06.4) ·
+  **tm 200** V1-AIMETER (10.1.4, düz görev). Kapsanmayan satır **0** (sayılarak).
+- **En ağır boşluk `06.2.4`:** editör adım YAZAMIYOR (ekle/sil/tür değiştir yok, `transfer_to_team`
+  dışındaki beş tipin parametreleri salt-okunur) ve `POST /skills` her yeni skill'i `steps: []` ile
+  doğuruyor — yani "New skill" ile açılan bir skill UI'dan ASLA adım kazanamıyor. Reorder + klavye
+  alternatifi + zorunlu-parametre kapısı ise var ve testli.
+- **Kapsam dışı, ama kaybolmasın diye ismen:** §4'te `Must` OLMAYAN 14 `◐ → K` satırı kapıyı
+  bloklamaz — `05.4` · `06.5` · `02.1.4` · `02.3.2` · `07.7` · `07.8` · `08.7.5` · `08.7.7` · `09.1` ·
+  `09.2` · `10.3` · `11.7` · `13.1` · `13.7`. `13.7`/`13.8-push` (mobil) `Should` ve Faz 3'e atanmış
+  (§D60). `06.3.2-bulk` (bulk/CSV) bilinçli v2 payıdır ve tm 97.x'te zaten teslim edildi — tm 198
+  yalnız `06.3.2`'nin v1 payını (`file` türü) kapsıyor, bulk'a dokunmuyor.
+
+**Bu tur da resmi bir §F.00 kapanış turu (GL-tarzı, §F.1'in 10 maddesi) DEĞİLDİR.** Kapanış turu, 8
+kalem `◐`'den çıktıktan sonra ayrıca açılır. v2'nin 8 kalemi **tm 187**'dedir, bu turda dokunulmadı.]**
 
 ---
 
@@ -566,9 +610,9 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 
 | PRD  | Gereksinim                                        | Öncelik     |              Durum              |
 | ---- | ------------------------------------------------- | ----------- | :-----------------------------: |
-| 05.1 | Header — Browse templates + Create skill ▾        | Must (v1)   | ◐ → K05.1 |
+| 05.1 | Header — Browse templates + Create skill ▾        | Must (v1)   | ✅ → K05.1 |
 | 05.2 | Recommended skills (şablon kartları)              | Should (v1) |            ✅ → K05.2            |
-| 05.3 | Skill listesi sekmeleri (All/AI/Workspace/Drafts) | Must (v1)   | ◐ → K05.3 |
+| 05.3 | Skill listesi sekmeleri (All/AI/Workspace/Drafts) | Must (v1)   | ✅ → K05.3 |
 | 05.4 | Liste kontrolleri (Search/Sort/Filter)            | Should      | ◐ → K05.4 |
 | 05.5 | Skill satırı ("N runs" + sahip + toggle)          | Must (v1)   | ◐ → K05.5 |
 
@@ -607,7 +651,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 07.7 | Rapor grupları + Export (CSV) | Should (v1–v2) | ◐ → K07.7 |
 | 07.8       | Reviews / Ratings                                                                                      | Should (v1)    | ◐ → K07.8 |
 | 08.5.4 | Messenger (Facebook OAuth) | Must (v1) | ✅ → K08.5.4 |
-| 08.5.5     | Twilio SMS                                                                                             | Must (v1)      | ◐ → K08.5.5 |
+| 08.5.5     | Twilio SMS                                                                                             | Must (v1)      | ✅ → K08.5.5 |
 | 08.5.6     | WhatsApp (Business)                                                                                    | Must (v1)      | ✅ → K08.5.6 |
 | 08.6.2 | Ticket rules (atama/etiket/öncelik) | Should (v1) | ✅ → K08.6.2 |
 | 08.7.3 | Chat timeout | Should (v1) | ✅ → K08.7.3 |
@@ -7226,6 +7270,8 @@ yükleyici kusuru hâlâ ayrı bir düzeltme görevi). tm 72.7.
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-08.5.5` [KISMİ ↓]: PRD'nin kabul kriteri acikca 'SMS gonder-al' diyor; 'al' tarafi calisiyor ama 'gonder' tarafi ajan yuzeyine hic baglanmamis. `sendOutbound` repoda TEK bir yerden cagriliyor: `POST /channels/:type/messages` (routes/channels.ts:161). Ajanin inbox composer'indan…
 
+- ✅ **Damga geri alındı `◐` → `✅` (tm 186 triyajı, §F.00 · SIRALAMA düzeltmesi):** denetimin bulgusu birebir _"`sendOutbound` repoda TEK bir yerden çağrılıyor: `POST /channels/:type/messages`; ajanın inbox composer'ından…"_ idi — ve **G1 (`3127638`, 2026-08-30) tam olarak denetimin D1 bulgusunun düzeltmesidir** (HANDOFF §G1: _"Denetimin D1 bulgusu bu görevin konusu"_). 184.4 bu satırı yine de düşürdü, üstelik aynı G1 turunun düzelttiği `08.5.4` ve `08.5.6`'yı `✅` bırakarak — üçlü kendi içinde tutarsızdı. Kod bu turda okundu: `chat-service.ts:487` işlem commit olduktan sonra `this.channels.dispatchAgentReply(...)` çağırıyor ve ajan yüzeyi `routes/chats.ts:109-110` dispatcher'ı fiilen bağlıyor (`channels.dispatchAgentReply(app.db, tenant, chatId, text, app.log)`). PRD KK'sının iki yarısı da karşılanıyor: Twilio kimlik/numara (`POST /channels/twilio/connect`, `auth_token` geri gösterilmez) ✅ · SMS gönder-al (anonim webhook + composer→sağlayıcı) ✅, uçtan uca `apps/e2e/tests/channels.spec.ts` ile kanıtlı. Ürün kodu bu turda DEĞİŞMEDİ. — tm 186
+
 #### K08.5.6 — 08.5.6 · WhatsApp kanalı (canlı kart) — üç kanal alt-görevinin sonuncusu
 
 - ✅ **08.5.6-b — WhatsApp kartı canlı: waba_id + phone_number → `POST /channels/whatsapp/connect` → Connected/Disconnect (2026-08-22):** Settings → Channels'ta WhatsApp kartı sabit "Coming soon"dan çıktı — Messenger/SMS/Instagram/Telegram'ın kurduğu desenin aynısı: yeni `whatsappChannel(connectedChannels)` durum/adresi `/channels` listesinden türetir (`channelsFor`'daki `comingSoon('whatsapp', …)` çağrısı kaldırıldı). SMS'in aksine sır alan yok — Telegram'ın bot jetonu/kullanıcı adı gibi, admin WhatsApp Business Account kimliğini ve işletme telefon numarasını (kanalın adresi) kendisi yazıyor; `phone_number` `SmsChannelAction`'ın kullandığı aynı `phoneNumber` doğrulayıcıyla (API'nin `WhatsAppAdapter`'ının şemasını aynalar) kontrol ediliyor. Bağlıyken adres (telefon numarası) + Disconnect (`window.confirm` sonrası, diğer kanallarla aynı). Sunucu/sözleşme DEĞİŞMEDİ — adaptör + connect gövde şekli (`waba_id`+`phone_number`) tm 35'te MOCK teslim edilmişti. **Üçü de kalktı:** `comingSoon()` yardımcı fonksiyonu artık hiçbir çağrı sitesi kalmadığı için (lint `no-unused-vars`) bu turda silindi; `coming_soon` durumu/`ChannelStatus` tipi, `persistNotified`/`readNotified`/`channelNotifiedKey` ve "Get notified" render dalı ise KALDIRILMADI (tm 135.4'ün işi — bağımlılığı 135.1/135.2/135.3, testStrategy'si `comingSoon()` zaten silindiğini varsaymıyor, kalan makineyi kendi K08.5.1 notuyla o söküyor). Bu yüzden `channels.test.ts`'in "her unbuilt kanal Coming soon" testi ve `Channels.test.tsx`'in "Get notified — persistence" süiti (4 test) artık ulaşılamaz UI'ı sınıyordu — biri boş-küme iddiasına çevrildi, öbürü kaldırıldı (135.4 kendi silme turunda yeniden ele alacak). — `apps/web/src/features/settings/Channels.tsx` (`whatsappChannel`/`WhatsappChannelAction`, `comingSoon()` silindi, `showStatus`/render dalı whatsapp'a genişletildi) · `apps/web/src/locales/{en,tr}/settings.ts` (`settings.channels.whatsapp.{connectTitle,connectDescription,wabaIdLabel,wabaIdError,phoneNumberLabel,phoneNumberError,disconnectConfirm}`) · test `apps/web/src/features/settings/channels.test.ts` (yeni `describe('channelsFor — whatsapp')`, +4; "unbuilt kanal" testi boş-küme iddiasına, "dört durum" testi üç duruma çevrildi) · test `apps/web/src/features/settings/Channels.test.tsx` (+5 yeni `WhatsApp card` süiti, "Get notified — persistence" 4 testi kaldırıldı; net +1) · e2e `apps/e2e/tests/settings.spec.ts` (whatsapp'ın "Coming soon" iddiası "Not connected"/Connect'e güncellendi — kart artık veri-güdümlü, Website'inki gibi) · tm 135.3.
@@ -7840,9 +7886,13 @@ _(Faz-7 · tm 184 — açıldı 2026-09-04. Alt-görevler kapandıkça bu bloğu
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-05.1` [KISMİ]: "Browse templates" butonu ve sablon galerisi tam calisiyor. Ancak "Create skill" bir dropdown degil, tek bir "New skill" butonu (PlaybookPage.tsx:275-284) — PRD'nin istedigi tur secimi (AI agent skill / Workspace workflow) yok. POST /skills govdesinde kind sa…
 
+- ✅ **Damga geri alındı `◐` → `✅` (tm 186 triyajı, §F.00 · KAPSAM DARALTMA · ADR-14):** denetimin tek bulgusu "Create skill bir dropdown değil" + "POST /skills gövdesinde `kind` yok" idi; yani eksik olan **Workspace workflow** kolu. ADR-14 (PLAN §0:121) bunu kilitli biçimde dışarıda bırakıyor (_"Tek paradigma = Skill. `workflows` tablosu şemada kalır, UI YOK"_) ve v1 kırılımının `05.1-a` maddesi denetimden ÖNCE zaten _"Kapsam dışı: Workspace workflow türü (⛔ ADR-14)"_ yazıyordu — denetim dış bir okumaydı ve ADR-14'ü bilmiyordu. Daraltılmış KK (_"Şablon galerisi; tür seçimi → editör"_) koda karşı okundu ve karşılanıyor: header'da `Browse templates` galeriyi açıyor ve `New skill` boş editör veriyor (`PlaybookPage.tsx:266-286`), galeri seçimi editörü ön-dolduruyor (`TemplateGallery.tsx` · `templates.ts`). Kalan ⛔ pay: tür seçimi dropdown'ının Workspace kolu — emsali `13.4` (⛔ ADR-14). Ürün kodu bu turda DEĞİŞMEDİ. — tm 186
+
 #### K05.3 — 05.3 · Skill listesi sekmeleri (All/AI/Workspace/Drafts)
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-05.3` [KISMİ]: Dort sekme, ✦/⚡ glyph'leri, sayaclar ve tam partition (All = AI ∪ Workspace ∪ Drafts) var ve birim testiyle kanitli. Fakat GET /skills sadece kind='ai_agent' donuyor (playbook.ts:290-293) ve POST /skills baska bir kind uretemiyor — dolayisiyla Workspace (⚡) s…
+
+- ✅ **Damga geri alındı `◐` → `✅` (tm 186 triyajı, §F.00 · KAPSAM DARALTMA · ADR-14):** denetimin bulgusu "`GET /skills` sadece `kind='ai_agent'` dönüyor (playbook.ts:290-293), dolayısıyla Workspace (⚡) sekmesi hep boş" idi. Doğru — ama ADR-14 altında Workspace-türü bir skill'i **yazacak** bir UI hiç olmayacağı için kova kalıcı olarak boştur; bu kilitli kararın sonucu, kapatılmamış bir iş değil. `05.3-a` kırılım maddesinin kapsamı zaten _"`role=tablist` sekmeler; AI (✦) vs Workspace (⚡) vs Drafts ayrımı"_ ile sınırlıydı ve KK doğrulaması _"unit (her sekme doğru alt küme)"_ idi. Kod bu turda okundu: `skill-tabs.ts` `classifySkill`/`filterSkillsByTab`/`countSkillsByTab` tam bölümleme veriyor (`All = AI ∪ Workspace ∪ Drafts`, pasif olan Draft'tır) ve `skill-tabs.test.ts` bunu koruyor. Ürün kodu bu turda DEĞİŞMEDİ. — tm 186
 
 #### K05.4 — 05.4 · Liste kontrolleri (Search/Sort/Filter)
 

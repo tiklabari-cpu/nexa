@@ -223,11 +223,31 @@ function requireWorkScheduleAccess(
  * week and can write over it. An agent with no row yet gets that same default,
  * which is what `normalizeWorkSchedule` returns for empty input — "not set" and
  * "set to the default" are deliberately the same answer here.
+ *
+ * `fallbackTimezone` is the *company* timezone (`organizations.timezone`,
+ * FR-MOD-08.3 · M-CO-b), and it is what makes that default a workspace answer
+ * rather than a constant. Two columns carry a zone in this schema and only one
+ * of them is authoritative: the company sets what time it is here, and
+ * `work_schedules.timezone` is a per-agent *override* that exists because a
+ * support roster can span countries. Seeding the unset case from the company
+ * rather than from `DEFAULT_WORK_SCHEDULE`'s hard-coded `UTC` is what keeps
+ * them from being two sources of truth — an admin who moves the workspace to
+ * `Europe/Istanbul` and then rosters a new hire would otherwise be handed a
+ * `UTC` week to save, and the three-hour shift would be invisible in the
+ * staffing forecast and the business-hours SLA clock alike.
+ *
+ * An unreadable stored row falls back the same way, and for the same reason:
+ * there is no trustworthy per-agent choice left in it, so the workspace's zone
+ * is a better answer than a constant nobody chose.
  */
-function serialiseWorkSchedule(row: { timezone: string; schedule: unknown } | null): WorkSchedule {
-  if (!row) return DEFAULT_WORK_SCHEDULE;
+function serialiseWorkSchedule(
+  row: { timezone: string; schedule: unknown } | null,
+  fallbackTimezone: string,
+): WorkSchedule {
+  const fallback: WorkSchedule = { ...DEFAULT_WORK_SCHEDULE, timezone: fallbackTimezone };
+  if (!row) return fallback;
   const normalised = normalizeWorkSchedule({ timezone: row.timezone, schedule: row.schedule });
-  return isWorkScheduleProblem(normalised) ? DEFAULT_WORK_SCHEDULE : normalised;
+  return isWorkScheduleProblem(normalised) ? fallback : normalised;
 }
 
 /**
@@ -674,7 +694,9 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
 
       requireWorkScheduleAccess(request.requirePrincipal(), agentId, 'agents--all:ro');
 
-      const row = await request.withTenant(async (tx) => {
+      const organizationId = request.tenant().organizationId;
+
+      const schedule = await request.withTenant(async (tx) => {
         // The membership is checked first because without it "this agent has no
         // schedule yet" and "there is no such agent" would both answer 200 with
         // the default week — and the second one would quietly confirm an id.
@@ -686,13 +708,22 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         });
         if (!member) throw ApiError.notFound('Agent not found.');
 
-        return tx.workSchedule.findFirst({
+        // Sequential, not Promise.all: `tx` is one connection inside a Prisma
+        // interactive transaction (see withTenant), which does not support
+        // concurrent queries on the same client.
+        const row = await tx.workSchedule.findFirst({
           where: { agentId },
           select: { timezone: true, schedule: true },
         });
+        const org = await tx.organization.findUniqueOrThrow({
+          where: { id: organizationId },
+          select: { timezone: true },
+        });
+
+        return serialiseWorkSchedule(row, org.timezone);
       });
 
-      return reply.send(serialiseWorkSchedule(row));
+      return reply.send(schedule);
     },
   );
 

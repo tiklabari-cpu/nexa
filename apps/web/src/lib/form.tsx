@@ -45,6 +45,20 @@ export function minLength(length: number, message?: string): Validator {
     value.trim().length >= length ? null : (message ?? `Enter at least ${length} characters.`);
 }
 
+/**
+ * A ceiling, for a field whose column has one. Blank passes — "too long" and
+ * "required" are different complaints, and a field can want the second without
+ * wanting the first (compose them when it wants both).
+ *
+ * Measured on the trimmed value, because that is what the server stores: every
+ * bounded string in the API's zod schemas is `.trim().max(n)`, so counting the
+ * spaces a person happened to paste would refuse a value the endpoint accepts.
+ */
+export function maxLength(length: number, message?: string): Validator {
+  return (value) =>
+    value.trim().length <= length ? null : (message ?? `Enter at most ${length} characters.`);
+}
+
 // One address shape, shared by `email` and `emailList`: a local part, an @, and a
 // dotted domain — enough to reject typos without pretending to be RFC 5322.
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

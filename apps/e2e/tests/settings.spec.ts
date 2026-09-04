@@ -719,6 +719,76 @@ test.describe('settings', () => {
   });
 });
 
+/**
+ * Company details (FR-MOD-08.3 · M-CO-b).
+ *
+ * The round trip an admin actually performs: change the sector, the address and
+ * the workspace clock, and read all three back after a full reload rather than
+ * trusting the redraw.
+ *
+ * The *timezone decision* this section carries — that the company zone seeds an
+ * agent's work schedule instead of a hard-coded `UTC` — is proven in
+ * `apps/api/test/integration/work-schedule.test.ts` rather than here, and
+ * deliberately: it is only observable on an agent who has never saved a week,
+ * and this suite shares one seeded tenant with `staffing.spec.ts`, which saves
+ * one. An assertion whose truth depends on which spec ran first is not a test.
+ *
+ * The clock is put back at the end because the tenant is shared — the same
+ * courtesy the chat-timeout test above pays.
+ */
+test.describe('company details', () => {
+  test('saves the sector, address and workspace clock, and reads them back', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/settings');
+
+    const section = (): ReturnType<typeof agentPage.getByRole> =>
+      agentPage.getByRole('region', { name: 'Company details' });
+    await expect(
+      section().getByRole('heading', { name: 'Company details', level: 2 }),
+    ).toBeVisible();
+
+    // The name is left alone on purpose: it is the seeded workspace's own, and
+    // other specs read it off the widget and the public knowledge base.
+    await expect(section().getByLabel('Company name')).toHaveValue('Acme Bikes');
+
+    const address = `1 Market Street, Istanbul · ${Date.now()}`;
+    await section().getByLabel('Sector').selectOption('ecommerce_retail');
+    await section().getByLabel('Address').fill(address);
+    await section().getByLabel('Time zone').selectOption('Europe/Istanbul');
+
+    try {
+      // Wait for the PATCH, not the repaint — a reload racing the request would
+      // read the previous values back.
+      const saved = agentPage.waitForResponse(
+        (response) =>
+          response.url().endsWith('/settings/company') && response.request().method() === 'PATCH',
+      );
+      await section().getByRole('button', { name: 'Save' }).click();
+      expect((await saved).status()).toBe(200);
+
+      // Saving a zone states what it did *not* do — the schedules already saved
+      // keep theirs (see the module doc on `CompanyDetails.tsx`).
+      await expect(section().getByText(/keep the zone they were saved with/)).toBeVisible();
+
+      await agentPage.reload();
+      await expect(section().getByLabel('Sector')).toHaveValue('ecommerce_retail');
+      await expect(section().getByLabel('Address')).toHaveValue(address);
+      await expect(section().getByLabel('Time zone')).toHaveValue('Europe/Istanbul');
+      await section().screenshot({ path: 'kanit/08.3-company.png' });
+    } finally {
+      const token = await ownerAccessToken(agentPage.request);
+      const restored = await agentPage.request.patch(`${API_BASE}/settings/company`, {
+        headers: { authorization: `Bearer ${token}` },
+        data: { timezone: 'UTC' },
+      });
+      expect(restored.ok(), `could not restore the company timezone: ${restored.status()}`).toBe(
+        true,
+      );
+    }
+  });
+});
+
 test.describe('personal access tokens', () => {
   /**
    * FR-MOD-08.8.2 · M-UI-b — the loop the audit measured as broken at the

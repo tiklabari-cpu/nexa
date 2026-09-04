@@ -25,6 +25,43 @@ export const settings: Messages = {
   'settings.pageTitle': 'Ayarlar',
   'settings.pageDescription': 'Widget kurulumu, kayıtlı yanıtlar ve yönlendirme.',
 
+  // Şirket bilgileri — CompanyDetails.tsx (FR-MOD-08.3)
+  'settings.company.title': 'Şirket bilgileri',
+  'settings.company.description':
+    'Bu çalışma alanının kim olduğu: faturalardaki ve widget üzerindeki ad, raporların altında grupladığı sektör, posta adresi ve ekibin çalıştığı saat.',
+  'settings.company.loadError': 'Şirket bilgileri yüklenemedi.',
+  'settings.company.nameLabel': 'Şirket adı',
+  'settings.company.nameRequiredError': 'Şirket adını girin.',
+  'settings.company.nameTooLongError': 'En fazla 200 karakter kullanın.',
+  'settings.company.sectorLabel': 'Sektör',
+  'settings.company.sectorUnset': 'Belirlenmedi',
+  'settings.company.sectorHint':
+    'Sabit bir liste, böylece raporlar çalışma alanlarını buna göre gruplayabilir. Hiçbiri uymuyorsa Diğer’i seçin.',
+  'settings.company.sector.ecommerce_retail': 'E-ticaret ve perakende',
+  'settings.company.sector.saas_technology': 'SaaS ve teknoloji',
+  'settings.company.sector.financial_services': 'Finansal hizmetler',
+  'settings.company.sector.healthcare': 'Sağlık',
+  'settings.company.sector.travel_hospitality': 'Seyahat ve konaklama',
+  'settings.company.sector.education': 'Eğitim',
+  'settings.company.sector.real_estate': 'Gayrimenkul',
+  'settings.company.sector.telecommunications': 'Telekomünikasyon',
+  'settings.company.sector.media_entertainment': 'Medya ve eğlence',
+  'settings.company.sector.gaming_gambling': 'Oyun ve bahis',
+  'settings.company.sector.nonprofit_government': 'Kâr amacı gütmeyen ve kamu',
+  'settings.company.sector.professional_services': 'Profesyonel hizmetler',
+  'settings.company.sector.manufacturing_logistics': 'Üretim ve lojistik',
+  'settings.company.sector.other': 'Diğer',
+  'settings.company.addressLabel': 'Adres',
+  'settings.company.addressPlaceholder': 'Sokak, şehir, posta kodu, ülke',
+  'settings.company.addressTooLongError': 'En fazla {max} karakter kullanın.',
+  'settings.company.timezoneLabel': 'Saat dilimi',
+  'settings.company.timezoneHintPrefix':
+    'Çalışma alanının saati. Yeni bir çalışma programı bu saat diliminde başlar; başka bir saat diliminde çalışan bir temsilci bunu Ekip →',
+  'settings.company.timezoneHintLink': 'Çalışma programı',
+  'settings.company.timezoneHintSuffix': ' bölümünden değiştirebilir.',
+  'settings.company.timezoneSavedNote':
+    'Kaydedildi. Halihazırda kayıtlı çalışma programları kaydedildikleri saat dilimini korur — bunu değiştirmek bir temsilcinin mevcut saatlerini asla kaydırmaz.',
+
   // Entegrasyonlar — Integrations.tsx
   'settings.integrations.title': 'Entegrasyonlar',
   'settings.integrations.description':

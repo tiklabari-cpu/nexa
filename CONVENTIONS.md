@@ -20,6 +20,10 @@ doğrulanır; "gözle baktım oldu" geçersizdir.
 - [ ] Migration eklendiyse şema sürüklenmesi yok — `pnpm -w db:check-drift` (exit 0)
 - [ ] Task'ın kendi kabul kriteri (Task Master'daki test stratejisi / PRD FR KK) karşılandı
 - [ ] Yeni kod için test yazıldı (kapsam anlamlı; çıplak endpoint/servis testsiz kalmaz)
+- [ ] **Gereksinim kapsama denetimi temiz** — `pnpm audit:req-coverage` (exit 0; CI'da "Requirement
+      coverage" adımı, §1.5). Yeni yazılan/değişen bir test bir PRD kabul kriterini koruyorsa
+      CONVENTIONS §7'nin biçimiyle etiketlenir. Kapı **kapsama borcunu kırmızı yapmaz** (§7.5
+      kademeli benimseme) — yalnız raporun kendi hakkında yalan söylemesinde kırmızı verir.
 - [ ] **PLAN.md gereksinim satırı güncellendi** — task'ın PRD kodundaki satır(lar) `⬜`/`◐` → `✅`.
       Doğrulama: `grep -n '| <PRD kodu>' PLAN.md` çıktısındaki **durum damgalı** satırlarda `⬜`
       kalmamalı. Bir task birden çok satır kapatıyorsa hepsi. Kısmen karşılandıysa `◐` + eksik
@@ -129,6 +133,38 @@ sanılır. Ölçüldü, kaybedilen tur sayısıyla birlikte.
   60 saniyede `DATABASE_URL: Required` ile düşer ve bütün süit "webServer timeout" verir. Doğrusu:
   `set -a && . ./.env && set +a && pnpm -w test:e2e`. Aynı tuzak `pnpm db:migrate` için de geçerli.
   Bir e2e turu ~84 `apps/e2e/kanit/*.png` yeniden yazar — beklenen churn, geri alma.
+
+### 1.5 Gereksinim kapsama kapısı CI'a bağlı — kademeli tasarım, borç değil tutarsızlık kırmızı yapar (tm 184.3)
+
+`.github/workflows/ci.yml`'in `verify` işi artık "Requirement coverage" adımında
+`pnpm audit:req-coverage` koşuyor (Format check'ten sonra, Build'den önce — build çıktısına
+ihtiyacı yok, statik kontroller grubunda duruyor). §7.5'in "kademeli olmalı" şartı **ayrı bir
+mekanizma istemedi**: `req-coverage.cjs` (tm 184.2) zaten bu sözleşmeyle yazılmıştı — kapsama
+borcu (`untagged`) hiçbir zaman `errors`'a girmez, exit code yalnız raporun **kendi hakkında**
+yalan söylediği dört durumda 1 döner (katalogda olmayan ID'yi anan etiket, artık var olmayan bir
+maddeye muafiyet, gerekçesiz muafiyet, `EXPECTED_ROWS`'tan sapan ayrıştırma). Bunun pratik
+sonucu tam olarak görevin istediği şey: **bugünkü 163 etiketsiz madde CI'ı hiç kırmızı yapmaz**
+(mevcut borç ayrı raporlanır, `pnpm audit:req-coverage`'ın metin çıktısında), ama **yeni/değişen
+bir teste yazılan yanlış etiket** (katalogda olmayan bir ID, ya da §7.3'ün yasakladığı bir kalıp
+`errors`'a düşecek şekilde) kapıyı aynı turda kırar — çünkü önceki turda 0 hata vardı ve bir
+hata yalnız o turun değişikliğinden gelebilir.
+
+**Kapının gerçekten kırmızı verdiği kanıtlandı** (elle, bu turda): `WAIVERS` listesine
+`source` alanı boş bırakılmış bir kayıt eklenip `pnpm audit:req-coverage` koşuldu →
+`ERRORS = 1`, `waiver: ... has no reason or no source` mesajıyla **exit 1**; kayıt geri alınınca
+aynı komut **exit 0**'a döndü. İkinci kanıt zaten depoda çalışıyor:
+`apps/api/src/config/req-coverage-audit.test.ts`'in "reports no integrity error against the repo
+as it stands" testi aynı `errors === []` iddiasını `pnpm -w test`'in `test:unit` shard'ında da
+tutuyor — CI'daki yeni adım script'i **doğrudan** (CLI/exit-code yoluyla) koşan tek yer, testteki
+`analyse()` çağrısının bir yedeği değil ikinci, bağımsız bir kanıt hattı.
+
+**Görev tanımının işaret ettiği bilinen CI boşluğu** ("unit-tests-before-build bundle bütçesini
+sessizce atlıyor") bu turda **zaten kapalı bulundu** — `git log -- .github/workflows/ci.yml`
+`6404a2e` (tm 156.1, M-GUARD-a) "Build runs before Unit tests, widget bundle guard stops skipping
+silently" diyor ve `ci.yml`'de "Build" adımı fiilen "Unit tests"ten önce duruyor;
+`apps/widget/test/bundle-size.test.ts` artık `describe.skipIf` değil, `existsSync` üzerinden
+**assert** ediyor (dist yoksa "run \`pnpm --filter @nexa/widget build\` first" mesajıyla kırmızı
+verir, sessizce atlamaz). Ayrı bir düzeltme commit'i bu yüzden gerekmedi.
 
 ## 2) Git kuralları
 

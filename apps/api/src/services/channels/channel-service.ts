@@ -89,6 +89,39 @@ export interface OutboundOutcome {
   chat_id: string | null;
 }
 
+/** One row of the message log, as the read surface returns it. */
+export interface ChannelMessageItem {
+  id: string;
+  direction: string;
+  external_id: string;
+  chat_id: string | null;
+  text: string | null;
+  provider_message_id: string | null;
+  created_at: string;
+}
+
+export interface ChannelMessageListOptions {
+  /** Clamped to [1, 100]; defaults to 25. Over the max is clamped, not rejected. */
+  limit?: number;
+  /** Opaque keyset cursor from a previous page. */
+  pageId?: string;
+  /** `inbound` or `outbound`; both when omitted. */
+  direction?: 'inbound' | 'outbound';
+  chatId?: string;
+  /** Open-ended when omitted — unlike the audit trail there is no default window. */
+  dateFrom?: Date;
+  dateTo?: Date;
+}
+
+/** Ordering is (created_at DESC, id DESC), so the cursor carries both. */
+interface MessageCursor {
+  createdAt: string;
+  id: string;
+}
+
+const MESSAGES_DEFAULT_LIMIT = 25;
+const MESSAGES_MAX_LIMIT = 100;
+
 export class ChannelService {
   // -------------------------------------------------------------------------
   // Connect / list / disconnect — the `channels` table consumer
@@ -563,6 +596,93 @@ export class ChannelService {
   // Message log
   // -------------------------------------------------------------------------
 
+  /**
+   * A page of what actually crossed this channel, newest first (M-CHOBS-a).
+   *
+   * The log has had a writer since the adapters landed and no reader at all,
+   * which is what made delivery unobservable: `dispatchAgentReply` swallows a
+   * provider failure on purpose (a customer's outage must not fail the agent's
+   * request), so the row written here was the only evidence a reply had left —
+   * and nothing could read it. e2e asserted the console half and stopped.
+   *
+   * Three things this deliberately does not do:
+   *
+   *   - **No `license_id` clause.** `tx` comes from `withTenant`, and the
+   *     `channel_messages_tenant` policy is the boundary. A copy of it here
+   *     would suggest the filter is what protects the tenant, and would be the
+   *     more dangerous state once the two drifted apart (NFR-S5). The same
+   *     reasoning `audit-log-reader.ts` records.
+   *   - **No brand narrowing.** `channel_messages` carries no `brand_id`; the
+   *     row is keyed by licence and channel. A brand-scoped caller sees the
+   *     licence's whole log for that channel, which is honest — pretending
+   *     otherwise would need a join the table cannot serve.
+   *   - **No default window.** The audit trail defaults to 30 days because the
+   *     PRD bounds it; this log is bounded by the channel instead, and an
+   *     operator checking "did last month's reply go out" should not have to
+   *     know a hidden cut-off exists.
+   *
+   * Keyset, not offset: messages arrive continuously, so an offset page shifts
+   * under the reader and skips rows. The `(license_id, channel_type,
+   * created_at)` index serves the base query directly and
+   * `(license_id, chat_id)` serves the `chatId` filter — measured before any
+   * new index was considered (`channel-messages.test.ts`).
+   */
+  async listMessages(
+    tx: TenantClient,
+    type: ChannelType,
+    options: ChannelMessageListOptions = {},
+  ): Promise<{ items: ChannelMessageItem[]; nextPageId?: string }> {
+    const limit = clampMessageLimit(options.limit);
+    const cursor = decodeMessageCursor(options.pageId);
+
+    const filters: Prisma.ChannelMessageWhereInput[] = [{ channelType: type }];
+    if (options.direction) filters.push({ direction: options.direction });
+    if (options.chatId) filters.push({ chatId: options.chatId });
+    if (options.dateFrom || options.dateTo) {
+      const createdAt: Prisma.DateTimeFilter = {};
+      if (options.dateFrom) createdAt.gte = options.dateFrom;
+      if (options.dateTo) createdAt.lte = options.dateTo;
+      filters.push({ createdAt });
+    }
+    if (cursor) {
+      const at = new Date(cursor.createdAt);
+      filters.push({
+        OR: [{ createdAt: { lt: at } }, { createdAt: at, id: { lt: cursor.id } }],
+      });
+    }
+
+    // One extra row tells us whether another page exists without a second count.
+    const rows = await tx.channelMessage.findMany({
+      where: { AND: filters },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      take: limit + 1,
+    });
+
+    const hasMore = rows.length > limit;
+    const page = hasMore ? rows.slice(0, limit) : rows;
+    const last = page.at(-1);
+
+    return {
+      items: page.map((row) => ({
+        id: row.id,
+        direction: row.direction,
+        external_id: row.externalId,
+        chat_id: row.chatId,
+        text: row.text,
+        provider_message_id: row.providerMessageId,
+        created_at: row.createdAt.toISOString(),
+      })),
+      ...(hasMore && last
+        ? {
+            nextPageId: encodeMessageCursor({
+              createdAt: last.createdAt.toISOString(),
+              id: last.id,
+            }),
+          }
+        : {}),
+    };
+  }
+
   private async record(
     tx: TenantClient,
     tenant: TenantContext,
@@ -601,5 +721,28 @@ export class ChannelService {
       connected: row.status === CONNECTED,
       created_at: row.createdAt.toISOString(),
     };
+  }
+}
+
+/** Clamp rather than reject: a caller asking for too many gets the maximum. */
+function clampMessageLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return MESSAGES_DEFAULT_LIMIT;
+  return Math.min(Math.max(1, Math.floor(limit)), MESSAGES_MAX_LIMIT);
+}
+
+function encodeMessageCursor(cursor: MessageCursor): string {
+  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+}
+
+function decodeMessageCursor(pageId: string | undefined): MessageCursor | null {
+  if (!pageId) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(pageId, 'base64url').toString('utf8')) as MessageCursor;
+    // A malformed cursor is a stale bookmark, not an error: start from the top
+    // rather than failing the whole request. Same call `audit-log-reader.ts`
+    // makes, and the reason the route does not validate it either.
+    return typeof parsed?.id === 'string' && typeof parsed?.createdAt === 'string' ? parsed : null;
+  } catch {
+    return null;
   }
 }

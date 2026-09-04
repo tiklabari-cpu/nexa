@@ -183,6 +183,69 @@ channelMessages:
   parameters:
     - $ref: "../openapi.yaml#/components/parameters/ChannelTypePath"
     - $ref: "../openapi.yaml#/components/parameters/BrandHeader"
+  get:
+    tags: [Configuration]
+    operationId: listChannelMessages
+    summary: The channel's message log
+    description: |
+      What actually crossed this channel, newest first — the read side of the
+      log the adapter has been writing since the channels landed. Until it
+      existed nothing could answer "did that reply really go out": an agent's
+      console message is dispatched to the provider after the event is
+      committed, and the only record of the send was a row no endpoint read.
+
+      `direction`, `chat_id`, `date_from` and `date_to` narrow the same list,
+      additively. Paginated by opaque keyset cursor rather than offset —
+      messages arrive continuously, so an offset page would shift under the
+      reader and silently skip rows. `limit` above the maximum is clamped, not
+      rejected.
+
+      Gated on `channels--all:ro` because, unlike the channel list, these rows
+      carry the customer's own words. Scoped to the caller's workspace by RLS:
+      another workspace's messages are never returned, and an `external_id` or
+      `chat_id` from one is simply an empty page (NFR-S5). `X-Nexa-Brand` does
+      not narrow it — the log is keyed by licence and channel, not by brand.
+    parameters:
+      - name: direction
+        in: query
+        description: Restrict to one direction. Both when omitted.
+        schema: { $ref: "../openapi.yaml#/components/schemas/ChannelMessageDirection" }
+      - name: chat_id
+        in: query
+        description: |
+          Only messages belonging to this chat. Uses the
+          `(license_id, chat_id)` index.
+        schema: { type: string }
+      - name: date_from
+        in: query
+        description: Lower bound on `created_at`. Open-ended when omitted.
+        schema: { type: string, format: date-time }
+      - name: date_to
+        in: query
+        description: Upper bound on `created_at`. Open-ended (now) when omitted.
+        schema: { type: string, format: date-time }
+      - $ref: "../openapi.yaml#/components/parameters/PageId"
+      - $ref: "../openapi.yaml#/components/parameters/Limit"
+    responses:
+      "200":
+        description: A page of channel messages, newest first.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ChannelMessage" }
+                next_page_id:
+                  type: string
+                  description: Opaque cursor for the next page; absent on the last.
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
   post:
     tags: [Configuration]
     operationId: sendChannelMessage

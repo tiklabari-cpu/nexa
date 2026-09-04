@@ -1697,6 +1697,52 @@ components:
           nullable: true
           description: The chat the reply belonged to, when addressed by chat.
 
+    ChannelMessageDirection:
+      type: string
+      description: |
+        Which way the message crossed the adapter. `inbound` is what the
+        customer sent in through the provider; `outbound` is what left for
+        them — an agent's console reply, or an admin send.
+      enum: [inbound, outbound]
+
+    ChannelMessage:
+      type: object
+      description: |
+        One row of a channel's message log (FR-MOD-08.5.4-.8) — the record the
+        adapter writes whenever something crosses it in either direction.
+
+        `text` carries customer content, which is why the read surface is gated
+        on `channels--all:ro` rather than being folded into the channel list.
+        It is stored already masked (FR-MOD-08.9.5): a card number a customer
+        typed never reached the column, so nothing is unmasked here either.
+      required: [id, direction, external_id, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        direction: { $ref: "#/components/schemas/ChannelMessageDirection" }
+        external_id:
+          type: string
+          description: |
+            The customer's identity on this channel — the sender for an inbound
+            message, the recipient for an outbound one.
+        chat_id:
+          type: string
+          nullable: true
+          description: |
+            The chat the message belongs to. Null only for an outbound message
+            addressed straight to an `external_id`, which belongs to no chat.
+        text:
+          type: string
+          nullable: true
+          description: The message body, as stored (already card-masked).
+        provider_message_id:
+          type: string
+          nullable: true
+          description: |
+            The provider's own id for the message. Present on outbound (the
+            mock provider mints it) and the proof a send actually left; null
+            on inbound.
+        created_at: { type: string, format: date-time }
+
     WebhookAction:
       type: string
       description: |

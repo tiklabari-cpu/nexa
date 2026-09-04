@@ -29,8 +29,11 @@
  * reply used to be asserted twice — the composer for what the *agent* sees, an
  * admin `/channels/{type}/messages` POST for what would reach the *customer* —
  * because the two were not wired to each other. They are now: an agent's reply
- * is dispatched to the provider by the chat core itself, so this file asserts
- * the composer alone and `channels-adapters.test.ts` asserts the delivery.
+ * is dispatched to the provider by the chat core itself, so the composer is the
+ * whole send. What this file could not do until M-CHOBS-a was *observe* that
+ * send — the log row it writes had no reader, so a channel that had silently
+ * stopped delivering left every assertion here green. It now reads that log
+ * back through `GET /channels/{type}/messages`.
  */
 import { request as newApiContext, type APIRequestContext, type Locator } from '@playwright/test';
 import {
@@ -381,6 +384,32 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4-.6)', () => {
       await composer.fill(reply);
       await composer.press('Enter');
       await expect(agentPage.locator('main')).toContainText(reply);
+
+      // …and the half e2e could not see until M-CHOBS-a existed. The composer
+      // assertion above proves the agent's screen; it says nothing about the
+      // provider, and `dispatchAgentReply` swallows a delivery failure on
+      // purpose (a customer's outage must not fail the agent's request). So a
+      // channel that stopped delivering entirely would have left every
+      // assertion in this file green. `GET /channels/:type/messages` is the
+      // record of what actually crossed, and `provider_message_id` is set only
+      // by the adapter's own `send`.
+      await expect
+        .poll(
+          async () => {
+            const log = await apiCtx.get(
+              `${API_BASE}/channels/${subject.type}/messages?direction=outbound&chat_id=${chatId}`,
+              { headers: await ownerAuth() },
+            );
+            if (!log.ok()) return `HTTP ${log.status()}`;
+            const { items } = (await log.json()) as {
+              items: { text: string | null; provider_message_id: string | null }[];
+            };
+            const sent = items.find((item) => item.text === reply);
+            return sent ? Boolean(sent.provider_message_id) : 'not delivered';
+          },
+          { timeout: 20_000 },
+        )
+        .toBe(true);
     });
   }
 

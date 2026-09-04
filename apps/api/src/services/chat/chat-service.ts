@@ -54,7 +54,7 @@ const IDEMPOTENCY_TTL_SECONDS = 24 * 60 * 60;
 const ID_GENERATION_ATTEMPTS = 5;
 
 export interface ChatListOptions {
-  view: 'all' | 'my' | 'queued' | 'unassigned' | 'archived' | 'ai' | 'ai_solved';
+  view: 'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
   customerId?: string;
   groupId?: bigint;
   sort: 'newest' | 'oldest';
@@ -1769,6 +1769,39 @@ function viewFilter(view: ChatListOptions['view'], actorId: string): Record<stri
         active: true,
         threads: { some: { active: true, assigneeId: null, queuePosition: null } },
       };
+    // The Chats group's sixth bucket (PRD 02.1.1). `rapor-1-fonksiyonel.md:339`
+    // defines it in one clause — «"Supervised" ajanin izledigi (supervise)
+    // sohbetler» — so it is keyed by *who is watching*, exactly the way `my` is
+    // keyed by who is assigned, and it reads the rows `SupervisionService`
+    // already writes rather than inventing a second notion of watching.
+    //
+    // The word also names a state on the Traffic board, and the two are the
+    // same meaning of a row (an agent is watching a conversation without owning
+    // it) asked two different questions:
+    //
+    //   Traffic (03.1.1) asks "is *anybody* watching this visitor right now",
+    //     a liveness question about somebody else's browser tab. That is why it
+    //     bounds the read by `SUPERVISION_LIVE_WINDOW_SECONDS` — a stale row
+    //     there means an abandoned tab, not a watcher.
+    //   This view asks "which conversations am *I* watching", a worklist. It is
+    //     bounded by agent, not by heartbeat, and deliberately so: nothing in
+    //     the product sends the heartbeat that window presumes (the only caller
+    //     of `POST /chats/{id}/supervise` is the Traffic board's one-shot row
+    //     action), so borrowing the 90-second bound here would empty the rail
+    //     item 90 seconds after the click that filled it. A counter that is
+    //     always 0 is not a stricter view, it is a broken one.
+    //
+    // `active: true` is what drains the list instead, and it is the honest
+    // bound: a supervision only means anything while the conversation is live,
+    // and closing one is the event that ends the watching. Archived stays the
+    // home of closed conversations for this agent as for every other view.
+    //
+    // No `licenseId` clause: the tenant boundary is RLS's, on `chats` and on
+    // `chat_supervisions` alike (`chat_supervisions_tenant`). A duplicate
+    // filter here would read as the thing keeping tenants apart and quietly
+    // take the pressure off the policy that actually does (the M-CHOBS rule).
+    case 'supervised':
+      return { active: true, supervisions: { some: { agentId: actorId } } };
     case 'archived':
       return { active: false };
     // The AI Agents group (PRD 02.1.2): the two views that keep AI-handled

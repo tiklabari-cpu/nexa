@@ -17,6 +17,7 @@ export const inbox: Messages = {
   'inbox.rail.view.my': 'My chats',
   'inbox.rail.view.queued': 'Queued',
   'inbox.rail.view.unassigned': 'Unassigned',
+  'inbox.rail.view.supervised': 'Supervised',
   'inbox.rail.view.archived': 'Archive',
   'inbox.rail.aiHeading': 'AI Agents',
   'inbox.rail.view.ai': 'AI agent',
@@ -72,6 +73,8 @@ export const inbox: Messages = {
   'inbox.list.empty.tabDescription': 'No conversations match this tab right now.',
   'inbox.list.empty.title': 'Nothing here yet',
   'inbox.list.empty.archived': 'Closed conversations will appear here.',
+  'inbox.list.empty.supervised':
+    'Supervising nothing right now. Watch a conversation from Traffic and it lands here.',
   'inbox.list.empty.ai': 'Conversations the AI agent is handling appear here.',
   'inbox.list.empty.aiSolved': 'Conversations the AI resolved on its own appear here.',
   'inbox.list.empty.description': 'New conversations land here as they arrive.',

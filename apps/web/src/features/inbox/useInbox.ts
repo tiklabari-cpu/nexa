@@ -174,8 +174,8 @@ function headKey(view: InboxView, sort: ChatSort): string {
 
 /**
  * Re-reads every mounted chat list, once per (view, sort) pair — the sidebar
- * counts mount a list for all seven views (always the default sort) and the
- * open one mounts an eighth for whichever it is showing, at whichever sort the
+ * counts mount a list for all eight views (always the default sort) and the
+ * open one mounts a ninth for whichever it is showing, at whichever sort the
  * agent picked, so the same view can be registered twice at once.
  */
 export function refreshChatHeads(): void {
@@ -850,6 +850,11 @@ export function useViewCounts(): Record<InboxView, number | undefined> {
   const mine = useChatList('my');
   const queued = useChatList('queued');
   const unassigned = useChatList('unassigned');
+  // The conversations this agent is watching without owning (PRD 02.1.1). Its
+  // count comes from the same place as every other view's — the server `total`
+  // on the same list request — because the PRD asks for one live counter per
+  // rail item, not for a second mechanism beside it.
+  const supervised = useChatList('supervised');
   const archived = useChatList('archived');
   // The AI Agents group (PRD 02.1.2): AI-handled conversations, kept out of the
   // human queue, and the AI resolutions ("Solved") counter.
@@ -879,6 +884,7 @@ export function useViewCounts(): Record<InboxView, number | undefined> {
     my: mine.total,
     queued: queued.total,
     unassigned: unassigned.total,
+    supervised: supervised.total,
     archived: archived.total,
     ai: ai.total,
     ai_solved: aiSolved.total,

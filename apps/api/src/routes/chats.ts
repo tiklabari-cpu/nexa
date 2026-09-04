@@ -19,7 +19,9 @@ import { assertUploadedAttachment } from '../services/storage/attachment.js';
 const chatIdSchema = z.string().refine(isShortId, 'not a valid chat id');
 
 const listQuery = z.object({
-  view: z.enum(['all', 'my', 'queued', 'unassigned', 'archived', 'ai', 'ai_solved']).default('all'),
+  view: z
+    .enum(['all', 'my', 'queued', 'unassigned', 'supervised', 'archived', 'ai', 'ai_solved'])
+    .default('all'),
   customer_id: z.string().uuid().optional(),
   group_id: z.coerce.bigint().optional(),
   sort: z.enum(['newest', 'oldest']).default('newest'),

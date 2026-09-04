@@ -427,6 +427,7 @@ const VIEW_TOTALS: Record<InboxView, number> = {
   my: 12,
   queued: 3,
   unassigned: 7,
+  supervised: 4,
   archived: 180,
   ai: 9,
   // Ten more resolutions than a page can carry, so "counted the page" and

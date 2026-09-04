@@ -1167,6 +1167,110 @@ describe('agent chat api', () => {
   });
 
   // =========================================================================
+  // The Chats group's Supervised bucket: conversations the *caller* is watching
+  // without owning. `rapor-1-fonksiyonel.md:339` defines it in one clause —
+  // «"Supervised" ajanin izledigi (supervise) sohbetler» — so the thing under
+  // test is that the list is keyed by the watcher, not by "somebody is
+  // watching", which is the different question the Traffic board asks.
+  // =========================================================================
+
+  describe('Supervised view (FR-MOD-02.1.1)', () => {
+    /** A chat of its own customer, so `seen` de-duplication cannot merge two. */
+    async function chatFor(name: string) {
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name },
+        select: { id: true },
+      });
+      return startChat(acmeAdminToken, { customerId: customer.id, text: `hi ${name}` });
+    }
+
+    const ids = (response: { json: () => { items: Array<{ id: string }> } }) =>
+      response.json().items.map((c) => c.id);
+
+    async function supervised(token: string) {
+      const response = await server.get('/chats?view=supervised', auth(token));
+      expect(response.statusCode).toBe(200);
+      return response;
+    }
+
+    it('lists only the conversations the caller is watching', async () => {
+      const watched = await chatFor('Watched');
+      const ignored = await chatFor('Ignored');
+
+      expect(ids(await supervised(acmeAdminToken))).toHaveLength(0);
+
+      const registered = await server.post(
+        `/chats/${watched.id}/supervise`,
+        undefined,
+        auth(acmeAdminToken),
+      );
+      expect(registered.statusCode).toBe(200);
+
+      const listed = await supervised(acmeAdminToken);
+      expect(ids(listed)).toEqual([watched.id]);
+      expect(ids(listed)).not.toContain(ignored.id);
+      // The rail counter reads `total`, so it has to describe the same set as
+      // the rows beside it rather than the page it happened to fetch.
+      expect(listed.json().total).toBe(1);
+    });
+
+    it('does not show a chat because somebody else is watching it', async () => {
+      // Started by the admin and routed to Support by the fallback rule, so the
+      // ordinary agent may see it — which is exactly why "visible" must not be
+      // enough to put it in their Supervised list.
+      const chat = await chatFor('Watched by the agent');
+      await server.post(`/chats/${chat.id}/supervise`, undefined, auth(acmeAgentToken));
+
+      expect(ids(await supervised(acmeAgentToken))).toEqual([chat.id]);
+      // The admin can see this conversation and is not watching it.
+      expect(ids(await server.get('/chats?view=all', auth(acmeAdminToken)))).toContain(chat.id);
+      expect(ids(await supervised(acmeAdminToken))).toHaveLength(0);
+    });
+
+    it("never returns a chat another tenant's agent is watching", async () => {
+      const acme = await chatFor('Acme');
+      await server.post(`/chats/${acme.id}/supervise`, undefined, auth(acmeAdminToken));
+
+      const northwind = await server.post(
+        '/chats',
+        { customer_id: fx.b.customerId },
+        auth(northwindToken),
+      );
+      expect([200, 201]).toContain(northwind.statusCode);
+      const northwindChatId = (northwind.json() as { id: string }).id;
+      await server.post(`/chats/${northwindChatId}/supervise`, undefined, auth(northwindToken));
+
+      // Each side sees its own row and nothing of the other's — the rows exist
+      // in one table, so a missing tenant predicate would show up right here.
+      expect(ids(await supervised(acmeAdminToken))).toEqual([acme.id]);
+      expect(ids(await supervised(northwindToken))).toEqual([northwindChatId]);
+    });
+
+    it('drops a watched conversation once it is archived', async () => {
+      const chat = await chatFor('Closing');
+      await server.post(`/chats/${chat.id}/supervise`, undefined, auth(acmeAdminToken));
+      expect(ids(await supervised(acmeAdminToken))).toEqual([chat.id]);
+
+      await server.post(`/chats/${chat.id}/deactivate`, undefined, auth(acmeAdminToken));
+
+      // Closing the conversation is what ends the watching: the list is bounded
+      // by `active`, not by a heartbeat, and Archive stays the home of closed
+      // conversations for this view as for every other.
+      expect(ids(await supervised(acmeAdminToken))).toHaveLength(0);
+      expect(ids(await server.get('/chats?view=archived', auth(acmeAdminToken)))).toEqual([
+        chat.id,
+      ]);
+    });
+
+    it('still refuses a view it does not know', async () => {
+      // The enum grew by one value; it did not become a free-text field.
+      const response = await server.get('/chats?view=supervisor', auth(acmeAdminToken));
+      expect(response.statusCode).toBe(400);
+      expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+    });
+  });
+
+  // =========================================================================
   // AI Agents group (PRD 02.1.2): AI-handled chats get their own home, kept
   // out of the human queue, and "Solved" is the AI-resolution set ADR-09 bills
   // for — the same predicate Reports reads as "Automated".

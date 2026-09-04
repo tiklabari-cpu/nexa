@@ -43,6 +43,24 @@ test.describe('inbox right panel', () => {
       agentPage.getByRole('complementary', { name: 'Conversation details' }),
     ).toBeVisible();
   });
+
+  test('remembers the Copilot tab across a reload', async ({ agentPage }) => {
+    await agentPage.goto('/app/inbox');
+    await openFirstConversation(agentPage);
+
+    // Switch the right panel from Details to Copilot (FR-MOD-12.1's entry point).
+    await agentPage.getByRole('button', { name: 'Copilot' }).click();
+    await expect(agentPage.getByRole('complementary', { name: 'Copilot' })).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/01.3-panel-copilot-persist.png', fullPage: true });
+
+    // A fresh page reads the remembered tab: Copilot is showing again without
+    // the switcher being touched — the only way `localStorage` proves the
+    // preference actually persisted rather than just living in React state.
+    await agentPage.reload();
+    await openFirstConversation(agentPage);
+    await expect(agentPage.getByRole('complementary', { name: 'Copilot' })).toBeVisible();
+  });
 });
 
 /**

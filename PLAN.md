@@ -246,7 +246,7 @@ gerekçe + `→ K…` referansı girer.
 | 08.5.3 | **Email (forwarding → ticket)**                    | Must (MVP) |  ✅   | **Dilim 13** (kanal yüzeyiyle)                             |
 | 08.5.9 | **Chat page** (hosted link)                        | Must (MVP) |  ✅   | **Dilim 13**                                               |
 | 08.6.1 | Chat routing kural motoru + fallback               | Must (MVP) |  ✅   | Dilim 8 · ADR-08                                           |
-| 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) |  ✅   | Chat başına etiket ✅ · kütüphane CRUD ✅ Dilim 14 (tm 17) |
+| 08.7.1 | **Tags kütüphanesi CRUD** (grup kapsamı)           | Must (MVP) | ✅ → K08.7.1 |                                              |
 | 08.7.2 | Canned responses (`#` shortcut, grup kapsamı)      | Must (MVP) |  ✅   | F5                                                         |
 | 08.8.2 | API access — APIs & SDKs + PAT                     | Must (MVP) |  ✅   | Dilim 2 · F5                                               |
 | 08.9.1 | Trusted domains (widget allowlist)                 | Must (MVP) |  ✅   | Dilim 2 · F5                                               |
@@ -5946,6 +5946,10 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 #### K08.6.2 — 08.6.2 · Ticket rules (atama/etiket/öncelik)
 
 ✅ koşul+eylem motoru — `ticket_rules`+`ticket_tags` (RLS, migration `20260726180000`) · saf eşleşme `ticket-rule-matching.ts` (hasCondition/hasAction/matchesTicketRule) · uygulama `apply-ticket-rules.ts` (ticket create + createFromEmail kancası; atama/öncelik/etiket, position sırası, geçersiz hedefi atlar) · CRUD `ticket-rule-service.ts` + rota `/settings/ticket-rules` (`tickets--all:rw`/`:ro`) · web Settings "Ticket rules" formu (form-primitif, öncelik/etiket) · OpenAPI `TicketRule*`+ 4 yol (contract-parity ✅) · unit `ticket-rule-matching.test.ts`(7) + integration `ticket-rules.test.ts`(12: kural→otomatik atama · koşul/eylem zorunlu · cross-tenant) · tm 47 · §D43
+
+#### K08.7.1 — 08.7.1 · Tags kütüphanesi CRUD (grup kapsamı)
+
+✅ konsol yüzeyi tamamlandı — denetim D2'nin "ölü kolon" şüphesi (canned responses emsaliyle) doğrulandı ve ELENDİ: backend `group_ids`'i create'te de update'te de tm 17'den beri kabul ediyordu (`routes/settings.ts` `createTagBody`/`updateTagBody` + `assertGroupsExist`), eksik olan yalnızca `Tags.tsx`'in `group_ids.length`'i basıp seçici sunmamasıydı. Eklendi: oluşturma formunda takım onay kutuları (`GET /groups`, `['team','groups']` cache'i `Teams.tsx`/`TeamMembers.tsx` ile paylaşır) + var olan bir etiketin kapsamını sonradan değiştiren satır-içi "Edit teams" düzenleyici (`PATCH /settings/tags/:id`). Çalışma alanında takım yoksa seçici hiç render edilmez (scope edilecek bir şey yok). `Tags.tsx`(i18n en+tr) + `Tags.test.tsx`(6: seçili takım POST gövdesine gider · hiçbiri seçilmezse `group_ids: []` gider · düzenleyici etiketin mevcut seçimiyle açılır ve PATCH eder · Cancel PATCH atmaz · salt-okunur görüntüleyici hiçbir yazma kontrolü görmez · takım yoksa seçici hiç yok) · e2e `settings.spec.ts` "scopes a tag to a team, on create and on a later edit" (gerçek API'ye karşı create+edit round-trip — dead-column kanıtı) · tm 181.1
 
 #### K08.7.4 — 08.7.4 · Chat transcripts (e-posta)
 

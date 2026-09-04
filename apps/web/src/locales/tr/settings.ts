@@ -74,6 +74,11 @@ export const settings: Messages = {
   'settings.tags.teamCount.other': '{count} ekip',
   'settings.tags.inUse': '{count} kullanımda',
   'settings.tags.deleteAriaLabel': '{name} etiketini sil',
+  'settings.tags.teamsLabel': 'Ekipler',
+  'settings.tags.teamsHint':
+    'Bu etiketin tüm ekiplere uygulanması için hiçbir kutuyu işaretlemeyin.',
+  'settings.tags.editTeamsButton': 'Ekipleri düzenle',
+  'settings.tags.editTeamsAriaLabel': '{name} etiketinin ekiplerini düzenle',
 
   // Sohbet zaman aşımı — ChatTimeout.tsx
   'settings.chatTimeout.title': 'Sohbet zaman aşımı',

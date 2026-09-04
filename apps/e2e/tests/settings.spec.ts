@@ -234,6 +234,78 @@ test.describe('settings', () => {
     await expect(section().getByText(name)).toHaveCount(0);
   });
 
+  // FR-MOD-08.7.1, group scope: `routes/settings.ts` has accepted and
+  // validated `group_ids` on both create and update from the start, but the
+  // library screen only ever printed a count — there was no selector to write
+  // it with. This proves the column is not dead on either verb: the create
+  // payload carries the checked team, and editing an existing tag's scope
+  // round-trips through a real PATCH, not just local state.
+  test('scopes a tag to a team, on create and on a later edit', async ({ agentPage, request }) => {
+    const token = await ownerAccessToken(request);
+    const auth = { authorization: `Bearer ${token}` };
+    const teamName = `E2E Tag Scope ${Date.now().toString().slice(-6)}`;
+    let groupId: number | undefined;
+    let tagId: string | undefined;
+
+    try {
+      const createdGroup = await request.post(`${API_BASE}/groups`, {
+        headers: auth,
+        data: { name: teamName },
+      });
+      expect(createdGroup.ok()).toBe(true);
+      groupId = ((await createdGroup.json()) as { id: number }).id;
+
+      await agentPage.goto('/app/settings');
+      const section = (): ReturnType<typeof agentPage.getByRole> =>
+        agentPage.getByRole('region', { name: 'Tags' });
+      await expect(section().getByRole('heading', { name: 'Tags', level: 2 })).toBeVisible();
+
+      const name = `vip-${Date.now().toString().slice(-6)}`;
+      await section().getByLabel('Tag', { exact: true }).fill(name);
+      const createTeams = section().getByRole('group', { name: 'Teams' });
+      await createTeams.getByLabel(teamName, { exact: true }).check();
+
+      const createResponse = agentPage.waitForResponse(
+        (r) => r.url().endsWith('/settings/tags') && r.request().method() === 'POST',
+      );
+      await section().getByRole('button', { name: 'Add tag' }).click();
+      const createBody = (await (await createResponse).json()) as {
+        id: string;
+        group_ids: number[];
+      };
+      expect(createBody.group_ids).toEqual([groupId]);
+      tagId = createBody.id;
+
+      const row = section().locator('li').filter({ hasText: name });
+      await expect(row.getByText('1 team · 0 in use')).toBeVisible();
+
+      // Editing an existing tag's team scope exercises the PATCH half.
+      await row.getByRole('button', { name: `Edit teams for tag ${name}` }).click();
+      const editTeams = row.getByRole('group', { name: `Edit teams for tag ${name}` });
+      await editTeams.getByLabel(teamName, { exact: true }).uncheck();
+      const patchResponse = agentPage.waitForResponse(
+        (r) => r.url().endsWith(`/settings/tags/${tagId}`) && r.request().method() === 'PATCH',
+      );
+      await editTeams.getByRole('button', { name: 'Save' }).click();
+      const patchBody = (await (await patchResponse).json()) as { group_ids: number[] };
+      expect(patchBody.group_ids).toEqual([]);
+      await expect(row.getByText('All teams · 0 in use')).toBeVisible();
+
+      await row.getByRole('button', { name: `Delete tag ${name}` }).click();
+      await expect(section().getByText(name)).toHaveCount(0);
+      tagId = undefined;
+    } finally {
+      if (tagId) {
+        await request
+          .delete(`${API_BASE}/settings/tags/${tagId}`, { headers: auth })
+          .catch(() => {});
+      }
+      if (groupId) {
+        await request.delete(`${API_BASE}/groups/${groupId}`, { headers: auth }).catch(() => {});
+      }
+    }
+  });
+
   test('refuses to disable the fallback routing rule', async ({ agentPage }) => {
     // Disabling it would leave conversations matching nothing with nowhere to
     // go, while the configuration still looked healthy.

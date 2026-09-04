@@ -8668,7 +8668,7 @@
         "description": "Mevcut DoD kapisi \"kod var + testler yesil\" i olcuyor. Denetimde ilk turun verdigi her bes TAM dan biri ikinci turda coktu, ve 07.4 metriginin testi yesilken kriter yanlisti. Bu kalem hangi testin hangi gereksinimi korudugunu makineyle okunabilir kilar ve kapiya baglar.",
         "details": "Denetim `prd-uyum-denetimi.md` §2 (çürütme turu neden gerekliydi) ve §8 · `CONVENTIONS.md` §1.\n\n**Sıfırdan başlamıyorsun:** desen kısmen var — kodda ve testlerde `FR-MOD-11.5 · 11.5-d`, `08.9.5-a/b`, `ADR-09` gibi referanslar yorumlarda geçiyor. Kural bunu **düzenli** hale getirmeli, yeni bir şey icat etmemeli.\n\n`-d` (PLAN doğruluk taraması) **en sona bırakılmalı** — diğer düzeltme kalemleri kapanmadan koşarsa düzeltilmiş maddeleri de `◐`ye çeker.",
         "testStrategy": "Kalem bütününün kabul kriteri: CI adımının **gerçekten kırmızı verdiği** gösterilir — etiketsiz bir gereksinim ID'si eklenince kapı düşer, etiket eklenince yeşile döner. \"Adım eklendi\" yetmez; bu tam da denetimin eleştirdiği şeydir.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -8707,20 +8707,20 @@
             "title": "M-TRACE-d [SONNET-MAX] EN SONA BIRAK: PLAN.md yanlış kapanışlarının taranması (geniş mekanik süpürme)",
             "description": "`prd-uyum-denetimi.md` Ek A'daki nihai verdict (TAM/KISMİ/YOK) ile PLAN.md durum damgalarını karşılaştır; `✅` damgalı ama denetimde KISMİ/YOK çıkan satırları düzelt. CONVENTIONS §1.2: *\"Kısmen karşılandıysa `◐` + eksik açıklaması doğru cevaptır; `✅` uydurmak bu kutuyu geçmez\"* — bu iş kalemi o kuralı geriye dönük uyguluyor. **SIRALAMA:** başlarken Task Master'da hangi kalemlerin `done` olduğunu kontrol et ve yalnız **gerçekten hâlâ eksik** olanları düşür. Kanıt disiplini: hücrede yalnız damga (`◐ → K<kod>`), açıklama `## K. Kanıt Geçmişi` bloğuna madde olarak; var olanları silme. Faz özet sayaçları da güncellenmeli (panel `statedCounts` olarak okuyor). `C-plan-row-length` eşiğini aşan satır üretme.",
             "details": "Bağımlılık: M-TRACE-b. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "184",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T16:01:03.638Z"
           }
         ],
-        "updatedAt": "2026-09-04T15:30:01.773Z"
+        "updatedAt": "2026-09-04T16:01:03.638Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T15:30:01.774Z",
+      "lastModified": "2026-09-04T16:01:03.639Z",
       "taskCount": 184,
-      "completedCount": 182,
+      "completedCount": 183,
       "tags": [
         "master"
       ]

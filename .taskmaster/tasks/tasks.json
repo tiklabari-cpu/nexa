@@ -8499,7 +8499,7 @@
         "description": "Bu maddelerin arka tarafi yazilmis, konsol yuzeyi yok: etiket grup kapsami API`de yaziliyor ama duzenlenemiyor, PAT icin `apps/web/src` icinde tek satir yok, yonlendirme kurali olusturma ucu ve ekrani yok, bildirimler yalniz InboxPage`de mount ediliyor, denetim kaydinin metadata`si hicbir yerde gorunmuyor, sablon rozetleri render edilmiyor, preview ozeti basilmiyor, ajan bazli performans lisans geneli gosteriliyor, formlarin yarisi ortak kutuphaneyi atliyor.",
         "details": "Denetim `prd-uyum-denetimi.md` §3 D2 · ilgili PRD satırları her iş kaleminde.\n\n**Her iş kaleminde geçerli:** önce mevcut ucu bul ve sözleşmesini oku — yeni uç icat etmen gerekmiyor olabilir. Ortak form kütüphanesi `apps/web/src/lib/form.tsx` kullanılır. i18n `apps/web/src/locales` (en+tr). `apps/e2e/tests/a11y.spec.ts` iki temada axe tarıyor ve istisna listesi BOŞ; yeni rota eklediysen rota listesine de ekle. Sunucu 4xx gövdesi **görünür alan-altı hataya** dönüşmeli, sessizce yutulmamalı.",
         "testStrategy": "Her iş kalemi kendi DoD kapısından geçer. `apps/web` test süiti (1541 test) sayıca düşmez; a11y taraması iki temada da yeşil kalır.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -8598,13 +8598,13 @@
             "title": "M-UI-j [SONNET-XHIGH] Ajan bazlı AI performansı (şu an lisans geneli)",
             "description": "PRD **536-551** (04.2). Team sayfası `<AiPerformance agentActive={anyActive} />` ile hiçbir ajana özel olmayan veri gösteriyor. **`agentPerformance` sorgusu zaten ajan bazlı** (`report-csv.ts`, `AgentPerformanceRow`: agent_id, name, chats, closed, manual, assisted, automated) — yeni sorgu yazma, bağla. M-RPT bittiyse düzeltilmiş figür tanımlarını kullan. Yetki: scope kontrolünü uçta zorla, UI gizlemeye güvenme (PRD §7 RBAC).",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T09:53:56.361Z"
           }
         ],
-        "updatedAt": "2026-09-04T09:15:45.541Z"
+        "updatedAt": "2026-09-04T09:53:56.361Z"
       },
       {
         "id": "182",
@@ -8718,9 +8718,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T09:15:45.542Z",
+      "lastModified": "2026-09-04T09:53:56.364Z",
       "taskCount": 184,
-      "completedCount": 180,
+      "completedCount": 181,
       "tags": [
         "master"
       ]

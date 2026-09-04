@@ -5,7 +5,7 @@
  * list, and a transcript that takes the remaining width. Every colour and size
  * comes from a token; no component hard-codes a hex value.
  */
-import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
 import { useRealtimeStatus } from '../../lib/realtime-status.js';
@@ -29,6 +29,7 @@ import {
   useViewCounts,
 } from './useInbox.js';
 import { useRightPanel } from './rightPanel.js';
+import { usePanelTab } from './panelTab.js';
 import {
   canReadChannels,
   connectedChannelViews,
@@ -256,12 +257,23 @@ export function InboxPage(): ReactElement {
     setTrafficTab(saved.traffic);
   };
 
-  // Which pane fills the right panel: the persisted Details context, or Copilot
-  // (FR-MOD-12.1). Copilot is per-conversation, not a remembered layout
-  // preference, so it resets to Details whenever the open chat changes.
-  const [panelTab, setPanelTab] = useState<'details' | 'copilot'>('details');
+  // Which pane fills the right panel: the persisted Details context, or
+  // Copilot (FR-MOD-12.1). The choice persists like Expand does (`panelTab.ts`
+  // mirrors `rightPanel.ts`), so the PRD's "geçiş persist" holds across a
+  // reload *and* across switching between open chats. The one case that still
+  // forces Details is losing the open chat entirely (closed/deselected, not
+  // "hasn't loaded yet") — Copilot has nothing to assist with no conversation,
+  // and without this a stale "copilot" would otherwise sit unreachable behind
+  // the next chat that gets auto-selected.
+  const panelTab = usePanelTab();
+  const hadOpenChatRef = useRef(false);
   useEffect(() => {
-    setPanelTab('details');
+    if (selectedId) {
+      hadOpenChatRef.current = true;
+    } else if (hadOpenChatRef.current) {
+      hadOpenChatRef.current = false;
+      panelTab.showDetails();
+    }
   }, [selectedId]);
 
   const chats = list.items;
@@ -654,7 +666,7 @@ export function InboxPage(): ReactElement {
                       bringing the right panel back if it was collapsed. */}
                     <CopilotButton
                       onOpen={() => {
-                        setPanelTab('copilot');
+                        panelTab.showCopilot();
                         rightPanel.setExpanded(false);
                       }}
                     />
@@ -697,11 +709,11 @@ export function InboxPage(): ReactElement {
             {selectedId &&
               chat.data &&
               !rightPanel.expanded &&
-              (panelTab === 'copilot' ? (
+              (panelTab.tab === 'copilot' ? (
                 <CopilotPanel
                   chatId={selectedId}
                   chatActive={chat.data.active}
-                  onShowDetails={() => setPanelTab('details')}
+                  onShowDetails={panelTab.showDetails}
                   onCollapse={() => rightPanel.setExpanded(true)}
                 />
               ) : (

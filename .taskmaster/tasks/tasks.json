@@ -8528,10 +8528,10 @@
             "title": "M-UI-c [OPUS-XHIGH] Bilet yönlendirme kuralı: POST/DELETE uçları + ekran",
             "description": "PRD **594-659** (08.6.2). `/settings/routing-rules` yalnız GET (`settings.ts:2332`) + PATCH (`:2364`); oluşturma ve silme yok. `RoutingRule` kısıtları: `kind` (vars. chat), `conditions` (Json yüklemler), `targetGroupId`, `priority` (Int), `isFallback` **lisans+kind başına EN FAZLA BİR** — tekilliği uçta zorla, iki fallback yönlendirmeyi belirsizleştirir. **M-TEAM ile etkileşim:** M-TEAM-a takımı hedefleyen kural varken takım silmeyi 409 ile reddediyor; buradan kural silinince o refüz kalkmalı — teste bağla.",
             "details": "Bağımlılık: M-TEAM-d. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T02:05:06.613Z"
           },
           {
             "id": 4,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T02:03:54.736Z"
+        "updatedAt": "2026-09-04T02:05:06.613Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T02:03:54.736Z",
+      "lastModified": "2026-09-04T02:05:06.614Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

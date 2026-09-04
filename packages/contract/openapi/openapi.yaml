@@ -2391,6 +2391,46 @@ components:
         is_fallback: { type: boolean }
         enabled: { type: boolean }
 
+    RoutingRuleInput:
+      type: object
+      description: |
+        A new routing rule. `target_group_id` is required unless `is_fallback`
+        is true: a conditional rule that targets nothing can never route
+        anything, and the database refuses it too
+        (`routing_rules_target_check`).
+      properties:
+        name:
+          type: string
+          maxLength: 120
+          description: Shown in the rules list. Optional — an unnamed rule is described by its conditions.
+        kind:
+          type: string
+          enum: [chat, ticket]
+          default: chat
+        conditions:
+          type: object
+          description: |
+            All match predicates must hold for the rule to win. Omit them
+            entirely on the fallback, which is what makes it catch everything.
+            `expertise_ids` is not a match predicate — see
+            `RoutingRule.conditions`.
+          additionalProperties: false
+          properties:
+            url_contains: { type: array, items: { type: string } }
+            url_equals: { type: array, items: { type: string } }
+            country_codes: { type: array, items: { type: string } }
+            expertise_ids:
+              type: array
+              maxItems: 200
+              items: { type: integer, format: int64 }
+        target_group_id: { type: integer, format: int64, nullable: true }
+        priority: { type: integer, minimum: 0, maximum: 1000, default: 0 }
+        is_fallback:
+          type: boolean
+          default: false
+          description: At most one per `kind`; a second is a 409.
+        enabled: { type: boolean, default: true }
+
     CustomerSummary:
       type: object
       required: [id, name, email, is_lead, banned, chats_count, tickets_count]

@@ -25,6 +25,14 @@ export const ERROR_TYPES = [
   'chat_anonymized',
   'chat_inactive',
   'customer_banned',
+  // Nexa addition — routing rules (FR-MOD-08.6.1). A licence holds at most one
+  // fallback rule per kind, and asking for a second is a conflict rather than a
+  // malformed request: the body was fine, the workspace's state is what refused
+  // it. It also needs its own answer on the screen — "you already have one, edit
+  // that instead" — which a generic `not_allowed` cannot give. Kept narrow like
+  // `sandbox_exists`/`ticket_exists`, which is how the rest of this list is
+  // written.
+  'fallback_rule_exists',
   'greeting_not_found',
   // Nexa addition. A team still carries work: a routing rule targets it, or a
   // live conversation is reachable only through it (FR-MOD-04.5). Neither
@@ -110,6 +118,7 @@ export const ERROR_STATUS: Record<ErrorType, number> = {
   chat_anonymized: 410,
   chat_inactive: 409,
   customer_banned: 403,
+  fallback_rule_exists: 409,
   greeting_not_found: 404,
   group_in_use: 409,
   group_not_found: 404,

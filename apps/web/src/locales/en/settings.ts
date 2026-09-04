@@ -696,8 +696,25 @@ export const settings: Messages = {
   'settings.routing.ruleLabel': 'Rule',
   'settings.routing.noTeam': 'no team',
   'settings.routing.fallbackDisabledTitle': 'The fallback rule cannot be disabled',
+  'settings.routing.fallbackDeleteTitle':
+    'The fallback rule cannot be deleted — point it at another team instead',
+  'settings.routing.deleteAriaLabel': 'Delete rule {name}',
   'settings.routing.anything': 'Anything',
   'settings.routing.conditionSkill': 'skill {names}',
+  'settings.routing.form.nameLabel': 'Rule name',
+  'settings.routing.form.nameError': 'Name the rule.',
+  'settings.routing.form.urlLabel': 'When the page URL contains',
+  'settings.routing.form.urlError': 'Enter the text the URL must contain.',
+  'settings.routing.form.teamLabel': 'Send to team',
+  'settings.routing.form.teamPlaceholder': 'Choose a team',
+  'settings.routing.form.teamError': 'Choose the team this rule sends to.',
+  'settings.routing.form.priorityLabel': 'Priority',
+  'settings.routing.form.priorityError': 'Enter a whole number between 0 and 1000.',
+  'settings.routing.form.asFallbackLabel':
+    'Make this the fallback — it takes everything no other rule matched',
+  'settings.routing.form.addButton': 'Add rule',
+  'settings.routing.form.noTeams':
+    'Create a team first — a rule has to send conversations somewhere.',
 
   // Ticket rules — TicketRules.tsx
   'settings.ticketRules.title': 'Ticket rules',

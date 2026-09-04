@@ -3314,7 +3314,30 @@ export interface paths {
      */
     get: operations['listRoutingRules'];
     put?: never;
-    post?: never;
+    /**
+     * Add a routing rule
+     * @description Admin or owner only.
+     *
+     *     Two shapes, and the difference is `is_fallback`:
+     *
+     *     * A **conditional** rule must name a `target_group_id` — one that routes
+     *       nowhere can never send a conversation anywhere, and would sit in the
+     *       list looking configured.
+     *     * The **fallback** catches everything the conditional rules missed. At
+     *       most one exists per `kind`, so asking for a second is a 409
+     *       (`fallback_rule_exists`): with two of them, which team receives an
+     *       unmatched conversation would depend on row order, and nothing on the
+     *       screen would say so.
+     *
+     *     `conditions` are the match predicates (`url_contains`, `url_equals`,
+     *     `country_codes`), plus `expertise_ids`, which is not a match predicate —
+     *     it narrows the eligible agent pool (FR-MOD-08.6.3). An id naming no
+     *     expertise area on this workspace is a 404, and a `target_group_id` naming
+     *     no team here is a 400.
+     *
+     *     Records `settings.routing_rule_created`.
+     */
+    post: operations['createRoutingRule'];
     delete?: never;
     options?: never;
     head?: never;
@@ -3333,7 +3356,22 @@ export interface paths {
     get?: never;
     put?: never;
     post?: never;
-    delete?: never;
+    /**
+     * Remove a routing rule
+     * @description Admin or owner only.
+     *
+     *     The fallback rule cannot be deleted, for the reason it cannot be disabled:
+     *     conversations matching nothing would have nowhere to go, and the
+     *     configuration would still look healthy. A delete that was allowed would
+     *     also be a way around the disable refusal. Retarget it instead
+     *     (`PATCH … { target_group_id }`).
+     *
+     *     A team the deleted rule was the last one pointing at becomes deletable
+     *     again — `DELETE /groups/{groupId}` refuses while any rule targets it.
+     *
+     *     Records `settings.routing_rule_deleted`.
+     */
+    delete: operations['deleteRoutingRule'];
     options?: never;
     head?: never;
     /**
@@ -7782,6 +7820,44 @@ export interface components {
       target_group_name?: string | null;
       priority: number;
       is_fallback: boolean;
+      enabled: boolean;
+    };
+    /**
+     * @description A new routing rule. `target_group_id` is required unless `is_fallback`
+     *     is true: a conditional rule that targets nothing can never route
+     *     anything, and the database refuses it too
+     *     (`routing_rules_target_check`).
+     */
+    RoutingRuleInput: {
+      /** @description Shown in the rules list. Optional — an unnamed rule is described by its conditions. */
+      name?: string;
+      /**
+       * @default chat
+       * @enum {string}
+       */
+      kind: 'chat' | 'ticket';
+      /**
+       * @description All match predicates must hold for the rule to win. Omit them
+       *     entirely on the fallback, which is what makes it catch everything.
+       *     `expertise_ids` is not a match predicate — see
+       *     `RoutingRule.conditions`.
+       */
+      conditions?: {
+        url_contains?: string[];
+        url_equals?: string[];
+        country_codes?: string[];
+        expertise_ids?: number[];
+      };
+      /** Format: int64 */
+      target_group_id?: number | null;
+      /** @default 0 */
+      priority: number;
+      /**
+       * @description At most one per `kind`; a second is a 409.
+       * @default false
+       */
+      is_fallback: boolean;
+      /** @default true */
       enabled: boolean;
     };
     CustomerSummary: {
@@ -15408,6 +15484,68 @@ export interface operations {
       };
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createRoutingRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RoutingRuleInput'];
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RoutingRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      /** @description This workspace already has a fallback rule for that kind (`fallback_rule_exists`) */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteRoutingRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

@@ -789,6 +789,83 @@ test.describe('personal access tokens', () => {
   });
 });
 
+test.describe('routing rules', () => {
+  /**
+   * FR-MOD-08.6.1 · M-UI-c — the "New rule" half. `/settings/routing-rules`
+   * served GET and PATCH only, so a workspace could turn its seeded rules on
+   * and off and never add or remove one: routing was configurable exactly as
+   * far as the seed had already configured it.
+   *
+   * The claim is the interaction with team deletion, not that a row appears.
+   * `DELETE /groups/{id}` refuses (409 `group_in_use`) while any rule targets
+   * the team — that refusal is the only thing standing between a delete and
+   * silently unroutable chats, and until now the console had no way to lift it.
+   * So: create the rule *through the console*, watch the team delete refuse,
+   * delete the rule *through the console*, watch the same delete go through.
+   */
+  test('adds a rule from the console, and deleting it frees the team it pinned', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const auth = { authorization: `Bearer ${token}` };
+    const teamName = `Routing e2e ${Date.now().toString().slice(-6)}`;
+    const ruleName = `Pricing ${Date.now().toString().slice(-6)}`;
+    let groupId: number | undefined;
+
+    const created = await request.post(`${API_BASE}/groups`, {
+      headers: auth,
+      data: { name: teamName },
+    });
+    expect(created.ok(), `team create failed: ${created.status()} ${await created.text()}`).toBe(
+      true,
+    );
+    groupId = ((await created.json()) as { id: number }).id;
+
+    try {
+      await agentPage.goto('/app/settings');
+      const section = agentPage.getByRole('region', { name: 'Routing' });
+      await expect(section.getByRole('heading', { name: 'Routing', level: 2 })).toBeVisible();
+
+      await section.getByLabel('Rule name').fill(ruleName);
+      await section.getByLabel('When the page URL contains').fill('/pricing');
+      await section.getByLabel('Send to team').selectOption({ label: teamName });
+      await section.getByLabel('Priority').fill('7');
+      await section.getByRole('button', { name: 'Add rule' }).click();
+
+      const row = section.locator('li').filter({ hasText: ruleName });
+      await expect(row).toBeVisible();
+      await expect(row).toContainText(`url contains /pricing → ${teamName}`);
+      await agentPage.screenshot({ path: 'kanit/08.6.1-routing-rule-added.png', fullPage: true });
+
+      // The team is now pinned by the rule the console just wrote.
+      const refused = await request.delete(`${API_BASE}/groups/${groupId}`, { headers: auth });
+      expect(refused.status()).toBe(409);
+      expect(((await refused.json()) as { error: { type: string } }).error.type).toBe(
+        'group_in_use',
+      );
+
+      // The fallback is not deletable from here — deleting it would simply be
+      // the way around the refusal to disable it.
+      await expect(
+        section.getByRole('button', { name: 'Delete rule Everything else' }),
+      ).toBeDisabled();
+
+      await row.getByRole('button', { name: `Delete rule ${ruleName}` }).click();
+      await expect(section.locator('li').filter({ hasText: ruleName })).toHaveCount(0);
+
+      // Same request, same team, after the console removed the rule.
+      const allowed = await request.delete(`${API_BASE}/groups/${groupId}`, { headers: auth });
+      expect(allowed.status()).toBe(204);
+      groupId = undefined;
+    } finally {
+      if (groupId) {
+        await request.delete(`${API_BASE}/groups/${groupId}`, { headers: auth }).catch(() => {});
+      }
+    }
+  });
+});
+
 test.describe('audit log', () => {
   // NFR-S12 / 08.9.7-j: the trail's own most basic entry — signing in — is
   // what proves it is actually being written, end to end. The `agentPage`

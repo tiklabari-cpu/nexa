@@ -90,7 +90,9 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     labelKey: 'audit.group.settings',
     actions: [
       'settings.security_updated',
+      'settings.routing_rule_created',
       'settings.routing_rule_updated',
+      'settings.routing_rule_deleted',
       'settings.chat_timeout_updated',
       'settings.widget_updated',
       'settings.sales_tracker_updated',

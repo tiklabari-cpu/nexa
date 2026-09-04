@@ -200,7 +200,14 @@ export const AUDIT_ACTIONS = [
   'group.member_removed',
   // Workspace configuration
   'settings.security_updated',
+  // Routing decides who is offered which conversations, so the whole life of a
+  // rule is an authority change, not just an edit to it: adding one diverts
+  // work to a team, and deleting one sends it somewhere else again — with the
+  // fallback that means "wherever the next matching rule says", which nobody
+  // chose deliberately.
+  'settings.routing_rule_created',
   'settings.routing_rule_updated',
+  'settings.routing_rule_deleted',
   'settings.chat_timeout_updated',
   'settings.widget_updated',
   // Sales tracking (FR-MOD-13.5). Recorded because this configuration decides

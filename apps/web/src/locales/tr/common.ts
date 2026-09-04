@@ -10,6 +10,8 @@ export const common: Messages = {
   'common.errors.chat_anonymized': 'Bu sohbet anonimleştirildi ve artık açılamıyor.',
   'common.errors.chat_inactive': 'Bu sohbet artık etkin değil.',
   'common.errors.customer_banned': 'Bu ziyaretçi engellenmiş.',
+  'common.errors.fallback_rule_exists':
+    'Bu çalışma alanının zaten bir yedek yönlendirme kuralı var — onu düzenleyin.',
   'common.errors.greeting_not_found': 'Bu karşılamayı bulamadık.',
   'common.errors.group_in_use':
     'Bu ekip hâlâ kullanımda — bir yönlendirme kuralı onu hedefliyor ya da açık sohbetleri var.',

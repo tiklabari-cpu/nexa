@@ -406,6 +406,41 @@ describe('teams — /groups write paths (FR-MOD-04.5)', () => {
       expect(await groupRow(group.id)).toBeNull();
     });
 
+    it('lets the delete through once the rule is deleted from Settings', async () => {
+      // The other half of the same interaction: repointing the rule is one way
+      // out of the refusal, deleting it is the other — and the delete has to be
+      // reachable through the endpoint an admin actually has, not only through
+      // the database. Without this, a team whose only rule is obsolete is
+      // undeletable from the product.
+      const rulesToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['access_rules:rw'],
+      });
+      const group = await createGroup('Sales');
+
+      const created = await server.post(
+        '/settings/routing-rules',
+        {
+          name: 'Pricing page',
+          conditions: { url_contains: ['/pricing'] },
+          target_group_id: group.id,
+        },
+        auth(rulesToken),
+      );
+      expect(created.statusCode).toBe(201);
+      const ruleId = (created.json() as { id: string }).id;
+
+      expect((await remove(group.id)).statusCode).toBe(409);
+
+      const deleted = await server.del(`/settings/routing-rules/${ruleId}`, auth(rulesToken));
+      expect(deleted.statusCode).toBe(204);
+
+      expect((await remove(group.id)).statusCode).toBe(204);
+      expect(await groupRow(group.id)).toBeNull();
+    });
+
     it('ignores a rule that targets no team at all', async () => {
       const group = await createGroup('Sales');
       await owner.routingRule.create({

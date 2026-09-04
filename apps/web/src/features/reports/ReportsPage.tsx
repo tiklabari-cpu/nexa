@@ -214,7 +214,7 @@ interface ReportsSales {
   conversions: number | null;
 }
 
-interface AgentPerformanceRow {
+export interface AgentPerformanceRow {
   agent_id: string;
   name: string | null;
   chats: number;
@@ -2004,8 +2004,11 @@ function TeamPerformanceTab(props: TabProps): ReactElement {
  * The Team performance table: one row per agent, CSAT rendered as `—` (not
  * `0%`) when nobody rated that agent in the window — {@link CsatSummary}'s
  * `score` is already `null` for that case, so this only has to defer to it.
+ * Exported: the Team screen's AI performance section (`TeamAiPerformance.tsx`,
+ * FR-MOD-04.2) reuses it for the same per-agent split, rather than carrying a
+ * second table that could drift from this one.
  */
-function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }): ReactElement {
+export function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }): ReactElement {
   const t = useTranslate();
   const numeric = 'w-24 px-4 py-2 text-right text-xs font-medium text-content-secondary';
   return (

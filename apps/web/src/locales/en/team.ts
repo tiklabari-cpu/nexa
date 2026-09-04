@@ -249,6 +249,9 @@ export const team: Messages = {
     'Create an AI agent in the Playbook to answer common questions automatically.',
   'team.ai.table.caption': 'AI agents on this licence',
   'team.ai.openPerformance': 'Open performance',
+  'team.ai.byAgent.title': 'AI performance by agent',
+  'team.ai.byAgent.description':
+    'How much each teammate leans on AI — chats, resolution split and how many needed no human touch, for the same window as the cards above.',
 
   // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
   'team.copilot.title': 'Copilot knowledge',

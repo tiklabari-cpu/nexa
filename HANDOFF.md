@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 181.10 — M-UI-j · Ajan bazlı AI performansı (Team page, önceden lisans geneli) — done — 2026-09-04 UTC
+
+- **Yapıldı:** `TeamAiPerformance.tsx`'in 06.5 `AiPerformance` kartları lisans geneli (kim yürüttüğüne bakmadan) figürler gösteriyordu; görev metninin işaret ettiği gibi **yeni sorgu yazılmadı** — `teamPerformanceByAgent` (`report-csv.ts`) zaten insan-ajan bazında `chats/closed/manual/assisted/automated` veriyor ve Reports'un Team performance sekmesi (`GET /reports/team-performance`) onu zaten sunuyordu. `ReportsPage.tsx`'ten `TeamPerformanceTable` + `AgentPerformanceRow` `export` edilip Team sayfasına aynı `reports_read` kapısıyla bağlandı — ikinci bir tanım/markup yok. Yeni bölüm `canViewReports` yokken **hiç render edilmiyor** (ikinci "no access" kartı değil); asıl zorlama zaten uçtaki `reports_read` scope kontrolü.
+- **Yeni i18n:** `team.ai.byAgent.title`/`.description` (en+tr) — TR başlık görevin kendi adıyla ("Ajan bazlı AI performansı") birebir. Boş pencere/hata metinleri `reports.teamPerformance.*`'tan reuse edildi, yeni anahtar açılmadı.
+- **Doğrulama (tam DoD kapısı, hepsi exit 0):** `typecheck` 13/13 · `lint` 10/10 · `format:check` · `build` 8/8. Test §1.3 gereği parçalandı: turbo `test` (api+e2e hariç) 11/11 → web **137/1608** (1606 → +2, yeni per-agent tablo + boş-pencere testi) · rtm 14/168 (değişmedi) · api `test:unit` 76/1259 (değişmedi, backend dokunulmadı) · api integration `--shard=1/3,2/3,3/3` → 117 dosya/2911 test (değişmedi) · **tam e2e 225/225 (15,8 dk)**, taban değişmedi (bu turda yeni e2e eklenmedi — kapsam zaten unit testle ölçülüyor). Kontrat/migration değişmedi → `contract:generate`/`db:check-drift` kapsam dışı. `kanit` PNG churn `git checkout -- apps/e2e/kanit` ile geri alındı.
+- **Sonraki pencereye not:** M-UI ailesinin 10 alt-görevinin (181.1–181.10) hepsi bitti — 181 üst task'ı da done işaretlenebilir.
+
 ## 181.9 — M-UI-i · Skill preview özet narrasyonu + editörün ilk Preview testleri — done — 2026-09-04 UTC
 
 - **Yapıldı:** API `summary` (`skill-engine.ts` → `playbook.ts:441`) döndüğü halde `SkillEditor.tsx`'in `PreviewResult`'ı hiç render etmiyordu; `reply`/`transfer_to` ile aynı desende `result.summary && <p>` bloğu eklendi (`playbook.editor.summaryLabel`, en+tr). Var olan `SkillEditor.test.tsx` yalnız reorder + zorunlu-parametre + i18n'i kapsıyordu, **Preview akışının kendi testi hiç yoktu** — üç yeni test: dört PRD eylemi (tag/özet/transfer + outcome + log narrasyonu) tek senaryoda, istek başarısız olunca hata banner'ı, motorun `errors`'ının geri kalan sonucu gizlemeden görünmesi.

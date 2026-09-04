@@ -5,7 +5,7 @@
  * — gated on the reports permission and honest about too-few-chats / AI-off.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
@@ -79,11 +79,32 @@ const REPORT = {
 
 const OVERVIEW = { satisfaction: { score: 0.9, responses: 60 } };
 
-function mockApi(over: { agents?: typeof AGENTS } = {}): void {
+interface AgentPerformanceRowFixture {
+  agent_id: string;
+  name: string | null;
+  chats: number;
+  closed: number;
+  manual: number;
+  assisted: number;
+  automated: number;
+  avg_first_response_seconds: number | null;
+  avg_duration_seconds: number | null;
+  csat: { good: number; bad: number; responses: number; score: number | null };
+  transfers: number;
+}
+
+const TEAM_PERFORMANCE_EMPTY = { agents: [] as AgentPerformanceRowFixture[] };
+
+function mockApi(
+  over: { agents?: typeof AGENTS; teamPerformance?: { agents: AgentPerformanceRowFixture[] } } = {},
+): void {
   api.get.mockImplementation((path: string) => {
     if (path === '/ai-agents') return Promise.resolve(over.agents ?? AGENTS);
     if (path === '/reports/ai-agent') return Promise.resolve(REPORT);
     if (path === '/reports/overview') return Promise.resolve(OVERVIEW);
+    if (path === '/reports/team-performance') {
+      return Promise.resolve(over.teamPerformance ?? TEAM_PERFORMANCE_EMPTY);
+    }
     return Promise.reject(new Error(`unexpected ${path}`));
   });
 }
@@ -125,6 +146,44 @@ describe('TeamAiPerformance', () => {
     expect(screen.getByText('80%')).toBeInTheDocument();
   });
 
+  it('shows a per-agent AI split, sourced from the same query Reports uses', async () => {
+    auth.scopes = ['reports_read'];
+    mockApi({
+      teamPerformance: {
+        agents: [
+          {
+            agent_id: 'agent-1',
+            name: 'Ada Lovelace',
+            chats: 10,
+            closed: 8,
+            manual: 1,
+            assisted: 2,
+            automated: 5,
+            avg_first_response_seconds: 125,
+            avg_duration_seconds: 400,
+            csat: { good: 4, bad: 1, responses: 5, score: 0.8 },
+            transfers: 1,
+          },
+        ],
+      },
+    });
+    renderTeamPerf(<TeamAiPerformance />);
+
+    expect(await screen.findByText('AI performance by agent')).toBeInTheDocument();
+    const row = (await screen.findByText('Ada Lovelace')).closest('tr');
+    if (!row) throw new Error('agent row not found');
+    expect(within(row).getByText('10')).toBeInTheDocument();
+    expect(within(row).getByText('5')).toBeInTheDocument();
+  });
+
+  it('shows an empty state when no agent has activity in the window', async () => {
+    auth.scopes = ['reports_read'];
+    mockApi();
+    renderTeamPerf(<TeamAiPerformance />);
+
+    expect(await screen.findByText('No agent activity in this window')).toBeInTheDocument();
+  });
+
   it('links each agent to the Playbook, where it is managed per agent', async () => {
     auth.scopes = ['reports_read'];
     mockApi();
@@ -143,8 +202,12 @@ describe('TeamAiPerformance', () => {
 
     expect(await screen.findByText('Nova')).toBeInTheDocument();
     expect(screen.getByText('No access to performance')).toBeInTheDocument();
+    // The per-agent section is left out entirely rather than showing a second
+    // "no access" card.
+    expect(screen.queryByText('AI performance by agent')).not.toBeInTheDocument();
     // With no reports permission the report endpoints must not be hit.
     expect(api.get).not.toHaveBeenCalledWith('/reports/ai-agent');
+    expect(api.get).not.toHaveBeenCalledWith('/reports/team-performance');
   });
 
   it('labels the figures as historical when no agent is on', async () => {

@@ -242,6 +242,9 @@ export const team: Messages = {
     'Sık sorulan soruları otomatik yanıtlaması için Playbook’ta bir AI temsilci oluşturun.',
   'team.ai.table.caption': 'Bu lisanstaki AI temsilciler',
   'team.ai.openPerformance': 'Performansı aç',
+  'team.ai.byAgent.title': 'Ajan bazlı AI performansı',
+  'team.ai.byAgent.description':
+    'Her takım üyesinin AI’a ne kadar dayandığı — yukarıdaki kartlarla aynı aralık için sohbetler, çözüm dağılımı ve insana hiç ihtiyaç duymayanların sayısı.',
 
   // Copilot knowledge — CopilotKnowledge.tsx (FR-MOD-12.2)
   'team.copilot.title': 'Copilot bilgisi',

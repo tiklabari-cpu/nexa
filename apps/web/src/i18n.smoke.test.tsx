@@ -13,12 +13,13 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { screen } from '@testing-library/react';
-import { afterEach, beforeEach, expect, it } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { AppShell } from './components/AppShell.js';
 import { useAuth } from './lib/auth-store.js';
 import type { Locale } from './lib/i18n.js';
+import { installFakeWebSocket } from './test/fake-socket.js';
 import { renderWithLocale, resetLocale, setLocale } from './test/i18n.js';
 
 function shell(): ReactElement {
@@ -41,6 +42,9 @@ function renderShell(locale: Locale = 'en') {
 }
 
 beforeEach(() => {
+  // The real shell opens the app's realtime connection; a stand-in keeps this
+  // language test from dialling the gateway (`test/fake-socket.ts`).
+  installFakeWebSocket();
   resetLocale();
   useAuth.setState({
     status: 'signed-in',
@@ -59,6 +63,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.unstubAllGlobals();
   resetLocale();
 });
 

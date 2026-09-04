@@ -402,6 +402,24 @@ köken yorumu yerinde bırakıldı, iddialar dört iç `describe`e dar biçimde 
 (`FR-MOD-11.5` · `NFR-S11` · `NFR-C4` · `NFR-S12`), üst `describe` yalnız hepsinde doğru olan
 maddeyi (`FR-MOD-10.1.1`, plan geçişi / downgrade kısıtları) taşıyor.
 
+**Bu iki komut artık betik: `pnpm audit:req-coverage`** (`scripts/audit/req-coverage.cjs`,
+tm 184.2 · `--json` ile makine biçimi). Betiği yazarken yukarıdaki komutun **iki kusuru**
+ölçümle çıktı; ikisi de betikte düzeltildi, ama komutu elle koşan biri bilmeli:
+
+- **Çıkarma adımı, katalog ID'sinin parantezin BAŞINDA olmasını şart koşuyor.** Kalıp
+  `\(<ID>[^)]*\)` olduğu için `(400, NFR-S8)`, `(un-enumerable, NFR-S5)` ve
+  `(M-LOAD-CAP · NFR-R2)` komuta hiç görünmüyor — oysa §7.4 böyle bir sıra dayatmıyor,
+  aksine iş kalemi kimliğinin ayrıntı olarak yanına yazılabileceğini söylüyor. Ölçüldü:
+  **8 iddia satırı ve bir bütün madde (`NFR-R2`)** bu yüzden sayılmıyor. Betik 75 madde /
+  146 dosya diyor; §7.1'in tablosundaki 74 / 141 bu kusurun sonucudur.
+- **JS alternasyonu leftmost-_first_, POSIX ERE leftmost-_longest_.** Regex birebir
+  JavaScript'e taşınırsa `FR-MOD-04.RBAC` → `FR-MOD-04.` olur (ilk dal önek eşliyor ve JS
+  orada duruyor). Betik `FR-MOD-` dalını `[0-9]+(?:\.[0-9A-Za-z]+)*` yaparak kapattı.
+
+Üçüncü kusur düzeltilebilir değil, **raporlanıyor**: §7.3'ün yasakladığı eğik çizgi kısaltması
+(bugün iki başlıkta `NFR-S4/S5`) hiçbir çıkarıcı tarafından genişletilemez, ikinci ID her
+hâlükârda kayboluyor — betik bu başlıkları ayrı bir kovada listeliyor.
+
 ### 7.7 Bu kuralın SATIN ALMADIĞI şey
 
 Etiket, testin o kriteri **doğru** ölçtüğünü kanıtlamaz — yalnız birinin öyle iddia ettiğini

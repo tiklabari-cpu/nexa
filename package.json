@@ -29,7 +29,8 @@
     "audit:dead-code": "node scripts/audit/dead-code.cjs",
     "audit:schema-consumers": "node scripts/audit/schema-consumers.cjs",
     "audit:endpoint-ui": "node scripts/audit/endpoint-ui.cjs",
-    "audit:unpaged-lists": "node scripts/audit/unpaged-lists.cjs"
+    "audit:unpaged-lists": "node scripts/audit/unpaged-lists.cjs",
+    "audit:req-coverage": "node scripts/audit/req-coverage.cjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",

@@ -247,6 +247,7 @@ export const playbook: Messages = {
   'playbook.editor.running': 'Çalıştırılıyor…',
   'playbook.editor.previewError': 'Önizleme çalıştırılamadı.',
   'playbook.editor.replyLabel': 'Müşteriye yanıt',
+  'playbook.editor.summaryLabel': 'Sonraki temsilci için özet',
   'playbook.editor.handsOverTo': '{name} ekibine devrediliyor',
   'playbook.editor.tagsLabel': 'Etiketler: {tags}',
   'playbook.editor.outcomeAnswered': 'Yanıtlardı',

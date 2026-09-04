@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 181.9 — M-UI-i · Skill preview özet narrasyonu + editörün ilk Preview testleri — done — 2026-09-04 UTC
+
+- **Yapıldı:** API `summary` (`skill-engine.ts` → `playbook.ts:441`) döndüğü halde `SkillEditor.tsx`'in `PreviewResult`'ı hiç render etmiyordu; `reply`/`transfer_to` ile aynı desende `result.summary && <p>` bloğu eklendi (`playbook.editor.summaryLabel`, en+tr). Var olan `SkillEditor.test.tsx` yalnız reorder + zorunlu-parametre + i18n'i kapsıyordu, **Preview akışının kendi testi hiç yoktu** — üç yeni test: dört PRD eylemi (tag/özet/transfer + outcome + log narrasyonu) tek senaryoda, istek başarısız olunca hata banner'ı, motorun `errors`'ının geri kalan sonucu gizlemeden görünmesi.
+- **Doğrulama (tam DoD kapısı, hepsi exit 0):** `typecheck` 13/13 · `lint` 10/10 · `format:check` · `build` 8/8. Test §1.3 gereği parçalandı: turbo `test` (api+e2e hariç) 11/11 → web **137/1606** (1603 → +3) · rtm 14/168 (değişmedi) · api `test:unit` 76/1259 (değişmedi) · api integration `--shard=1/3,2/3,3/3` → 117 dosya/2911 test (değişmedi, backend'e dokunulmadı) · **tam e2e 225/225 (15,7 dk)**, taban değişmedi. Kontrat/migration değişmedi → `contract:generate`/`db:check-drift` kapsam dışı. `kanit` PNG churn `git checkout -- apps/e2e/kanit` ile geri alındı, yeni ekran görüntüsü yok.
+- **PLAN.md:** 06.2.5 satırı eski çıplak `✅` hücreden `✅ → K06.2.5`'e taşındı, yeni `#### K06.2.5` bloğu açıldı (K06.2.4'ün hemen altına).
+- **Sonraki pencereye not:** M-UI ailesinden geriye yalnız 181.10 (ajan bazlı AI performansı) kaldı — 181 ailesi bittiğinde tamamlanmış olur.
+
 ## 181.8 — M-UI-h · AI Agent şablon rozetleri — render eklendi (Popular/Essential) — done — 2026-09-04 UTC
 
 - **Yapıldı:** `TemplateBadge` (`popular`/`essential`) tm 98.1'den beri veriydi (4 katalog kaydı), hiçbir bileşen render etmiyordu. `TemplateGallery.tsx` satırına (isim yanında, sabit 88px `ROW_HEIGHT` bozulmadan) ve `RecommendedSkills.tsx` kartına (kategori etiketiyle aynı satırda) küçük bir pill eklendi — kategoriden ayrı, mevcut AA-doğrulanmış `--info`/`--ai` tokenlarıyla (yeni renk eklenmedi, `tokens.test.ts`'e dokunmaya gerek kalmadı). i18n `playbook.badge.popular`/`.essential` (en+tr).

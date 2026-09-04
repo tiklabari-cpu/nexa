@@ -526,7 +526,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 06.2.2 | Skill name                                                | Must (v1)   |               ✅               |
 | 06.2.3 | Doğal dil talimat textarea (~10.000 karakter)             | Must (v1)   |               ✅               |
 | 06.2.4 | Ordered steps (6 adım tipi; reorder + klavye alternatifi) | Must (v1) | ✅ → K06.2.4 |
-| 06.2.5 | Preview (canlı simülasyon)                                | Must (v1)   |               ✅               |
+| 06.2.5 | Preview (canlı simülasyon)                                | Must (v1) | ✅ → K06.2.5 |
 | 06.3.1 | Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ) | Must (v1) | ✅ → K06.3.1 |
 | 06.3.2 | + New source (chunk+embedding) | Must (v1) | ✅ → K06.3.2 |
 | 06.3.3 | Kaynak tablosu (düzenle/sil/yeniden indeksle)             | Must (v1)   |               ✅               |
@@ -5852,7 +5852,10 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 
 ✅ drag + klavye (↑↓) reorder — ikisi de tek `moveStep` yolundan + aria-live duyuru; zorunlu-parametre kapısı (transfer hedefi boşsa Save engeli + `role="alert"` satır hatası) — `SkillEditor.tsx` (draggable liste + ↑↓ + `canSave = issues.length===0`) · saf `step-reorder.ts` (`moveStep`/`describeMove`/`stepIssues`) · test `step-reorder.test.ts` (10) + `SkillEditor.test.tsx` (5) · tm 33.2 · §D53
 
-#### K06.3.1 — 06.3.1 · Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ)
+#### K06.2.5 — 06.2.5 · Preview (canlı simülasyon)
+
+- ✅ Örnek girdi → AI eylem narrasyonu — `SkillEditor.tsx` `PreviewResult` (StatusDot outcome + `log` per-step narration: detect_intent/tag/**request_info (toplama)**/summarize/send_message/transfer_to_team, her biri `ok`/detail) · `POST /skills/preview` gerçek `SkillEngine.preview` (yazma yok) · tm 33 · §D53
+- ✅ tm 181.9: `summary` alanı motordan (`skill-engine.ts:249`) uçtan (`playbook.ts:441`) dönüyordu ama `PreviewResult` hiç render etmiyordu — bir sonraki temsilci için yazılan özet UI'da hiç görünmüyordu. `result.summary && <p>` bloğu `reply`/`transfer_to` ile aynı biçimde eklendi (`playbook.editor.summaryLabel`, en+tr). **Editör tarafında Preview akışının kendi testi hiç yoktu** (var olan `SkillEditor.test.tsx` yalnız reorder + zorunlu-parametre + i18n'i kapsıyordu) — üç yeni test eklendi: dört PRD eylemi bir arada (tag/özet/transfer + outcome + log narrasyonu), önizleme isteği başarısız olunca hata banner'ı, motorun döndürdüğü `errors`in geri kalan sonucu gizlemeden gösterilmesi · test `SkillEditor.test.tsx` (+3, 6→9) · tm 181.9
 
 ✅ 5 alt sekme (All/Websites/Files/Articles/FAQ) `role="tablist"` — `PlaybookPage.tsx` `KnowledgePanel` (`['all', ...KNOWLEDGE_TYPES]` + sekme sayaçları + tür bazlı süzme + sekme başına boş durum) · saf partition `knowledge-tabs.ts` `filterSourcesByTab`/`countSourcesByTab` (All = Websites ∪ Files ∪ Articles ∪ FAQ) · şema `@nexa/types` `KNOWLEDGE_SOURCE_TYPES` (§8 knowledge_sources) · test `knowledge-tabs.test.ts` (4) · tm 33.3 · §D28
 

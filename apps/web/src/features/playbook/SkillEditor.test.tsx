@@ -126,6 +126,85 @@ describe('SkillEditor — keyboard reorder', () => {
   });
 });
 
+describe('SkillEditor — preview (FR-MOD-06.2.5)', () => {
+  const steps: SkillStep[] = [
+    { type: 'tag', tag: 'shipping' },
+    { type: 'summarize' },
+    { type: 'transfer_to_team', group: 'Support' },
+  ];
+
+  it('narrates the outcome, summary, transfer target, tags and step log', async () => {
+    const user = userEvent.setup();
+    api.post.mockImplementation((path: string) => {
+      if (path === '/skills/preview') {
+        return Promise.resolve({
+          outcome: 'handed_off',
+          reply: null,
+          tags: ['shipping'],
+          transfer_to: 'Support',
+          summary: 'Customer asked: Where is my order?',
+          log: [
+            { step: 'tag', detail: 'tagged "shipping"', ok: true },
+            { step: 'summarize', detail: 'summary written', ok: true },
+            { step: 'transfer_to_team', detail: 'handing over to Support', ok: true },
+          ],
+          errors: [],
+        });
+      }
+      return Promise.reject(new Error(`unexpected post ${path}`));
+    });
+
+    renderEditor(makeSkill(steps));
+    await user.click(screen.getByRole('button', { name: 'Run preview' }));
+
+    // The four PRD-named actions: tag, summary, transfer — plus the outcome
+    // and the per-step log that narrates how the engine got there.
+    expect(await screen.findByText('Would hand over')).toBeInTheDocument();
+    expect(screen.getByText('Customer asked: Where is my order?')).toBeInTheDocument();
+    expect(screen.getByText('Hands over to Support')).toBeInTheDocument();
+    expect(screen.getByText('Tags: shipping')).toBeInTheDocument();
+    expect(screen.getByText(/tagged "shipping"/)).toBeInTheDocument();
+    expect(screen.getByText(/handing over to Support/)).toBeInTheDocument();
+  });
+
+  it('shows an error banner when the preview request fails', async () => {
+    const user = userEvent.setup();
+    api.post.mockImplementation((path: string) => {
+      if (path === '/skills/preview') return Promise.reject(new Error('boom'));
+      return Promise.reject(new Error(`unexpected post ${path}`));
+    });
+
+    renderEditor(makeSkill(steps));
+    await user.click(screen.getByRole('button', { name: 'Run preview' }));
+
+    expect(await screen.findByText('Could not run the preview.')).toBeInTheDocument();
+  });
+
+  it('surfaces engine-reported errors without hiding the rest of the result', async () => {
+    const user = userEvent.setup();
+    api.post.mockImplementation((path: string) => {
+      if (path === '/skills/preview') {
+        return Promise.resolve({
+          outcome: 'skipped',
+          reply: null,
+          tags: [],
+          transfer_to: null,
+          summary: null,
+          log: [],
+          errors: ['Step 1: transfer_to_team requires a group'],
+        });
+      }
+      return Promise.reject(new Error(`unexpected post ${path}`));
+    });
+
+    renderEditor(makeSkill(steps));
+    await user.click(screen.getByRole('button', { name: 'Run preview' }));
+
+    expect(await screen.findByText('Would do nothing')).toBeInTheDocument();
+    expect(screen.getByText('Step 1: transfer_to_team requires a group')).toBeInTheDocument();
+  });
+});
+
 describe('SkillEditor localisation (NFR-I18N2)', () => {
   afterEach(() => {
     resetLocale();

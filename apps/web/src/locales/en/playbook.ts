@@ -250,6 +250,7 @@ export const playbook: Messages = {
   'playbook.editor.running': 'Running…',
   'playbook.editor.previewError': 'Could not run the preview.',
   'playbook.editor.replyLabel': 'Reply to the customer',
+  'playbook.editor.summaryLabel': 'Summary for the next agent',
   'playbook.editor.handsOverTo': 'Hands over to {name}',
   'playbook.editor.tagsLabel': 'Tags: {tags}',
   'playbook.editor.outcomeAnswered': 'Would answer',

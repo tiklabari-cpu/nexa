@@ -458,6 +458,15 @@ function PreviewResult({ result }: { result: SkillPreview }): ReactElement {
         </p>
       )}
 
+      {result.summary && (
+        <p className="rounded-md bg-surface p-2 text-sm">
+          <span className="mb-1 block text-2xs text-content-tertiary">
+            {t('playbook.editor.summaryLabel')}
+          </span>
+          {result.summary}
+        </p>
+      )}
+
       {result.transfer_to && (
         <p className="text-sm text-content-secondary">
           {t('playbook.editor.handsOverTo', { name: result.transfer_to })}

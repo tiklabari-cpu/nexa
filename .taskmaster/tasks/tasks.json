@@ -8612,7 +8612,7 @@
         "description": "Denetimde YOK cikti ve onceligi Onemli. `Organization` modelinde yalnizca `name` + `region` var (schema.prisma:29-43); sektor/adres/saat dilimi alani yok, `/settings/company` benzeri uc yok (settings.ts teki 46 route un hicbiri sirket bilgisi yazmiyor), web tarafinda boyle bir bolum yok.",
         "details": "PRD satır **594-659** (FR-MOD-08.3) · denetim `prd-uyum-denetimi.md` §6 (YOK listesi).\n\n**Saat dilimi çakışması — asıl dikkat noktası:** çalışma saatleri özelliği (`WorkSchedule`, `work_schedule.updated` audit eylemi) zaten bir saat dilimi taşıyor. Şirket saat dilimi ile ajan/çalışma saati saat dilimi çakışmamalı — hangisi hangisini besliyor? İki ayrı doğruluk kaynağı olursa raporlar sessizce kayar.",
         "testStrategy": "`db:check-drift` exit 0. Kaydet → geri oku; scope reddi; cross-tenant izolasyon; **çalışma saatleri bu saat dilimini kullanıyor** (iki kaynak kararının testi). e2e + `kanit/08.3-company.png`. PLAN.md 08.3 satırı ⬜ → ✅.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -8631,13 +8631,13 @@
             "title": "M-CO-b [OPUS-XHIGH] Ayarlar ekranı bölümü + saat dilimi tek doğruluk kaynağı kararı",
             "description": "Şirket saat dilimi ile çalışma saatleri saat dilimi arasındaki ilişkiyi karara bağla, yorumla ve **teste bağla**. `lib/form.tsx` (M-UI-f/g merge olduysa doğrudan ortak kütüphaneyle yaz); i18n en+tr; a11y rota listesi.",
             "details": "Bağımlılık: M-CO-a. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "182",
-            "updatedAt": "2026-09-04T11:05:53.008Z"
+            "updatedAt": "2026-09-04T12:46:14.482Z"
           }
         ],
-        "updatedAt": "2026-09-04T11:05:53.008Z"
+        "updatedAt": "2026-09-04T12:46:14.482Z"
       },
       {
         "id": "183",
@@ -8718,9 +8718,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T11:05:53.009Z",
+      "lastModified": "2026-09-04T12:46:14.483Z",
       "taskCount": 184,
-      "completedCount": 181,
+      "completedCount": 182,
       "tags": [
         "master"
       ]

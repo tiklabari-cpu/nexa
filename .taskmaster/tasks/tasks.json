@@ -8677,10 +8677,10 @@
             "title": "M-TRACE-a [OPUS-MAX] BÖLÜNMEZ: test↔gereksinim izlenebilirlik konvansiyonu (b ve c bunun üstüne kuruluyor)",
             "description": "Etiket nerede yaşar — test adında mı, yorumda mı, bir yardımcıda (`covers('FR-MOD-08.5.5')`) mı? Her birinin grep'lenebilirliği ve gürültüsü farklı. Bir test birden çok maddeyi korur, bir madde birden çok testle korunur — çoktan-çoğa ilişkiyi nasıl ifade ediyorsun? Kural **geriye dönük** olarak 2701 entegrasyon + 1174 birim testine uygulanamaz: kademeli benimseme nasıl işleyecek, yalnız yeni/değişen testler mi zorunlu? Çıktı: kural + `CONVENTIONS.md`'ye yazılmış hali + en az bir dosyada uygulanmış hali + etiketlerin makineyle çıkarılabildiğini gösteren örnek komut.",
             "details": "Bağımlılık: yok. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "184",
-            "updatedAt": "2026-09-04T12:48:30.097Z"
+            "updatedAt": "2026-09-04T13:44:57.742Z"
           },
           {
             "id": 2,
@@ -8713,12 +8713,12 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T12:48:30.097Z"
+        "updatedAt": "2026-09-04T13:44:57.742Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T12:48:30.098Z",
+      "lastModified": "2026-09-04T13:44:57.743Z",
       "taskCount": 184,
       "completedCount": 182,
       "tags": [

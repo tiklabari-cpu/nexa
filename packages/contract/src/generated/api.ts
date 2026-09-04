@@ -4819,7 +4819,27 @@ export interface paths {
       };
       cookie?: never;
     };
-    get?: never;
+    /**
+     * The channel's message log
+     * @description What actually crossed this channel, newest first — the read side of the
+     *     log the adapter has been writing since the channels landed. Until it
+     *     existed nothing could answer "did that reply really go out": an agent's
+     *     console message is dispatched to the provider after the event is
+     *     committed, and the only record of the send was a row no endpoint read.
+     *
+     *     `direction`, `chat_id`, `date_from` and `date_to` narrow the same list,
+     *     additively. Paginated by opaque keyset cursor rather than offset —
+     *     messages arrive continuously, so an offset page would shift under the
+     *     reader and silently skip rows. `limit` above the maximum is clamped, not
+     *     rejected.
+     *
+     *     Gated on `channels--all:ro` because, unlike the channel list, these rows
+     *     carry the customer's own words. Scoped to the caller's workspace by RLS:
+     *     another workspace's messages are never returned, and an `external_id` or
+     *     `chat_id` from one is simply an empty page (NFR-S5). `X-Nexa-Brand` does
+     *     not narrow it — the log is keyed by licence and channel, not by brand.
+     */
+    get: operations['listChannelMessages'];
     put?: never;
     /**
      * Send an outbound message through a channel (mock)
@@ -7354,6 +7374,47 @@ export interface components {
       external_id: string;
       /** @description The chat the reply belonged to, when addressed by chat. */
       chat_id?: string | null;
+    };
+    /**
+     * @description Which way the message crossed the adapter. `inbound` is what the
+     *     customer sent in through the provider; `outbound` is what left for
+     *     them — an agent's console reply, or an admin send.
+     * @enum {string}
+     */
+    ChannelMessageDirection: 'inbound' | 'outbound';
+    /**
+     * @description One row of a channel's message log (FR-MOD-08.5.4-.8) — the record the
+     *     adapter writes whenever something crosses it in either direction.
+     *
+     *     `text` carries customer content, which is why the read surface is gated
+     *     on `channels--all:ro` rather than being folded into the channel list.
+     *     It is stored already masked (FR-MOD-08.9.5): a card number a customer
+     *     typed never reached the column, so nothing is unmasked here either.
+     */
+    ChannelMessage: {
+      /** Format: uuid */
+      id: string;
+      direction: components['schemas']['ChannelMessageDirection'];
+      /**
+       * @description The customer's identity on this channel — the sender for an inbound
+       *     message, the recipient for an outbound one.
+       */
+      external_id: string;
+      /**
+       * @description The chat the message belongs to. Null only for an outbound message
+       *     addressed straight to an `external_id`, which belongs to no chat.
+       */
+      chat_id?: string | null;
+      /** @description The message body, as stored (already card-masked). */
+      text?: string | null;
+      /**
+       * @description The provider's own id for the message. Present on outbound (the
+       *     mock provider mints it) and the proof a send actually left; null
+       *     on inbound.
+       */
+      provider_message_id?: string | null;
+      /** Format: date-time */
+      created_at: string;
     };
     /**
      * @description The workspace event that triggers a delivery. A closed vocabulary so a
@@ -18033,6 +18094,62 @@ export interface operations {
         };
         content?: never;
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listChannelMessages: {
+    parameters: {
+      query?: {
+        /** @description Restrict to one direction. Both when omitted. */
+        direction?: components['schemas']['ChannelMessageDirection'];
+        /**
+         * @description Only messages belonging to this chat. Uses the
+         *     `(license_id, chat_id)` index.
+         */
+        chat_id?: string;
+        /** @description Lower bound on `created_at`. Open-ended when omitted. */
+        date_from?: string;
+        /** @description Upper bound on `created_at`. Open-ended (now) when omitted. */
+        date_to?: string;
+        /** @description Opaque keyset cursor from the previous page. */
+        page_id?: components['parameters']['PageId'];
+        limit?: components['parameters']['Limit'];
+      };
+      header?: {
+        /**
+         * @description Scope the request to one brand of the caller's license (Multibrand,
+         *     PRD §5.3 · NFR-S4). Omitted means every brand of the license — the
+         *     single-brand default, so a workspace that never uses Multibrand is
+         *     unaffected. A brand id that is not one of the caller's own is answered
+         *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
+         */
+        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+      };
+      path: {
+        /** @description The adapter channel. */
+        type: components['parameters']['ChannelTypePath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description A page of channel messages, newest first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ChannelMessage'][];
+            /** @description Opaque cursor for the next page; absent on the last. */
+            next_page_id?: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];

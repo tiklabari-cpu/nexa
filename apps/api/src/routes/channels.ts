@@ -42,6 +42,24 @@ const outboundBody = z
     message: 'Provide exactly one of chat_id or external_id.',
   });
 
+/**
+ * The message-log read filters (M-CHOBS-a).
+ *
+ * `limit` has no upper bound in the schema — the service clamps it to the max
+ * rather than rejecting, so an over-large page is answered, not refused. Zero,
+ * negatives and non-integers are still a 400: they are wrong, not merely large.
+ * `direction` is the closed `channel_messages_direction_check` vocabulary, so
+ * a typo is a 400 rather than a silently-empty list.
+ */
+const messageQuery = z.object({
+  limit: z.coerce.number().int().min(1).optional(),
+  page_id: z.string().max(512).optional(),
+  direction: z.enum(['inbound', 'outbound']).optional(),
+  chat_id: z.string().trim().min(1).max(64).optional(),
+  date_from: z.coerce.date().optional(),
+  date_to: z.coerce.date().optional(),
+});
+
 /** The `:type` path segment, narrowed to a real adapter channel or a 404. */
 function channelTypeParam(value: string): ChannelType {
   if (!isChannelType(value)) throw ApiError.notFound('Unknown channel.');
@@ -144,6 +162,48 @@ export default async function channelRoutes(
       // keeps that indistinguishable from another tenant's (NFR-S5).
       if (changed === 0) throw ApiError.notFound('Channel not found.');
       return reply.status(204).send();
+    },
+  );
+
+  // --- The message log: what actually crossed the channel ---------------------
+
+  /**
+   * Read side of `channel_messages` (M-CHOBS-a). The table had a writer and no
+   * reader, so "did that reply really go out" was a question only a psql prompt
+   * could answer — and e2e, which cannot see the provider, had to stop at the
+   * composer.
+   *
+   * Gated on `channels--all:ro` (or the write scope, which subsumes it — the
+   * same pair `GET /channels` takes). Deliberately *not* the read scope alone
+   * being widened: these rows carry the customer's own words, so the door stays
+   * the channel-administration door rather than the inbox one. RLS confines the
+   * result to the caller's workspace; no clause here does.
+   */
+  app.get<{ Params: { type: string } }>(
+    '/channels/:type/messages',
+    { config: { scopes: ['channels--all:ro', 'channels--all:rw'] } },
+    async (request, reply) => {
+      const type = channelTypeParam(request.params.type);
+      const query = parse(messageQuery, request.query);
+      if (query.date_from && query.date_to && query.date_from > query.date_to) {
+        throw ApiError.validation('`date_from` must be before `date_to`.');
+      }
+
+      const result = await request.withTenant((tx) =>
+        channels.listMessages(tx, type, {
+          ...(query.limit !== undefined ? { limit: query.limit } : {}),
+          ...(query.page_id ? { pageId: query.page_id } : {}),
+          ...(query.direction ? { direction: query.direction } : {}),
+          ...(query.chat_id ? { chatId: query.chat_id } : {}),
+          ...(query.date_from ? { dateFrom: query.date_from } : {}),
+          ...(query.date_to ? { dateTo: query.date_to } : {}),
+        }),
+      );
+
+      return reply.send({
+        items: result.items,
+        ...(result.nextPageId ? { next_page_id: result.nextPageId } : {}),
+      });
     },
   );
 

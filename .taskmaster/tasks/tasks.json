@@ -8687,10 +8687,10 @@
             "title": "M-TRACE-b [OPUS-XHIGH] Kapsama raporu script`i + sınırının açıkça belgelenmesi",
             "description": "`scripts/` altında: PRD madde kataloğunu okur, `-a`nın kuralına göre testleri tarar, **testi olmayan maddeleri listeler**. Girdi kataloğu `prd-uyum-denetimi.md` Ek A'daki 247 madde olabilir — ama o bir markdown tablosu; ayrıştırılmalı mı yapılandırılmış kaynağa mı taşınmalı, kararını yorumla. **Sınırı belgele:** bir madde etiketli ama testi kriteri ölçmüyorsa script bunu göremez — yeşil rapor yanlış güven verir (07.4 dersinin tam tekrarı). Kapsam dışı listesi tut (KVKK, workflow builder, masaüstü uygulaması) yoksa bilinçli kararlar \"eksik\" diye raporlanır. Çıktı: insan özeti + CI'ın tüketeceği makine biçimi.",
             "details": "Bağımlılık: M-TRACE-a. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "184",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T13:46:23.136Z"
           },
           {
             "id": 3,
@@ -8713,12 +8713,12 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T13:44:57.742Z"
+        "updatedAt": "2026-09-04T13:46:23.136Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T13:44:57.743Z",
+      "lastModified": "2026-09-04T13:46:23.137Z",
       "taskCount": 184,
       "completedCount": 182,
       "tags": [

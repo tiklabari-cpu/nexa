@@ -25,6 +25,13 @@
  * Both are tested here by actually moving a workspace between plans and reading
  * back, rather than by seeding the end state — the row surviving the move is
  * half of what is being asserted.
+ *
+ * The requirement IDs in the `describe` titles are coverage claims under
+ * CONVENTIONS §7 — each says "this block goes red if that requirement
+ * regresses", and sits at the narrowest block where that is true. They are not
+ * the same thing as the IDs in this comment, which are provenance: `11.5-b`
+ * above is a PLAN work item, not a catalogue requirement, so the extractor
+ * skips it while still reading `FR-MOD-10.1.1` beside it.
  */
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -60,7 +67,7 @@ interface ErrorBody {
   error: { type: string; message: string; details?: { entitlement?: string; plan?: string } };
 }
 
-describe('plan entitlements (11.5-b)', () => {
+describe('plan entitlements (FR-MOD-10.1.1 · 11.5-b)', () => {
   /** The European deployment — where the fixture tenants live. */
   let server: TestServer;
   /** The same build configured as the US deployment, for the HIPAA workspace. */
@@ -171,7 +178,7 @@ describe('plan entitlements (11.5-b)', () => {
   // white_label — the write gate, and the read path that makes it mean anything
   // =========================================================================
 
-  describe('white_label — widget branding', () => {
+  describe('white_label — widget branding (FR-MOD-11.5)', () => {
     it('refuses powered_by=false on growth, and stores nothing at all', async () => {
       await planA('growth');
       const token = await ownerToken(['access_rules:rw']);
@@ -274,7 +281,7 @@ describe('plan entitlements (11.5-b)', () => {
       expect((restored.json() as WidgetView).powered_by).toBe(false);
     });
 
-    it('answers per workspace: A on enterprise stays unbranded while B on growth does not', async () => {
+    it('answers per workspace: A on enterprise stays unbranded while B on growth does not (NFR-S4)', async () => {
       await planA('enterprise');
       await seedSubscription(owner, fx.b.licenseId, 'growth');
       await seedDefaultBrand(owner, fx.b.licenseId);
@@ -312,7 +319,7 @@ describe('plan entitlements (11.5-b)', () => {
   // sso — NFR-S11's surface (the debt S11-i could not pay: no gate existed yet)
   // =========================================================================
 
-  describe('sso — federation and directory provisioning', () => {
+  describe('sso — federation and directory provisioning (NFR-S11)', () => {
     const createBody = {
       name: 'Okta (corp)',
       idp_entity_id: 'https://idp.example.test/saml/metadata',
@@ -413,7 +420,7 @@ describe('plan entitlements (11.5-b)', () => {
   // hipaa — the debt C4-g transferred here (tm 82.7): no gate existed yet
   // =========================================================================
 
-  describe('hipaa — the BAA', () => {
+  describe('hipaa — the BAA (NFR-C4)', () => {
     const accept = (token: string) =>
       usServer.post('/settings/compliance/baa', { accepted: true }, auth(token));
 
@@ -456,7 +463,7 @@ describe('plan entitlements (11.5-b)', () => {
   // siem_export — the debt C6-g transferred here (tm 83.8)
   // =========================================================================
 
-  describe('siem_export — the audit trail leaving', () => {
+  describe('siem_export — the audit trail leaving (NFR-S12)', () => {
     function sink(): SiemSink {
       return new SiemSink(owner, {
         siemDir,

@@ -8668,7 +8668,7 @@
         "description": "Mevcut DoD kapisi \"kod var + testler yesil\" i olcuyor. Denetimde ilk turun verdigi her bes TAM dan biri ikinci turda coktu, ve 07.4 metriginin testi yesilken kriter yanlisti. Bu kalem hangi testin hangi gereksinimi korudugunu makineyle okunabilir kilar ve kapiya baglar.",
         "details": "Denetim `prd-uyum-denetimi.md` §2 (çürütme turu neden gerekliydi) ve §8 · `CONVENTIONS.md` §1.\n\n**Sıfırdan başlamıyorsun:** desen kısmen var — kodda ve testlerde `FR-MOD-11.5 · 11.5-d`, `08.9.5-a/b`, `ADR-09` gibi referanslar yorumlarda geçiyor. Kural bunu **düzenli** hale getirmeli, yeni bir şey icat etmemeli.\n\n`-d` (PLAN doğruluk taraması) **en sona bırakılmalı** — diğer düzeltme kalemleri kapanmadan koşarsa düzeltilmiş maddeleri de `◐`ye çeker.",
         "testStrategy": "Kalem bütününün kabul kriteri: CI adımının **gerçekten kırmızı verdiği** gösterilir — etiketsiz bir gereksinim ID'si eklenince kapı düşer, etiket eklenince yeşile döner. \"Adım eklendi\" yetmez; bu tam da denetimin eleştirdiği şeydir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -8677,10 +8677,10 @@
             "title": "M-TRACE-a [OPUS-MAX] BÖLÜNMEZ: test↔gereksinim izlenebilirlik konvansiyonu (b ve c bunun üstüne kuruluyor)",
             "description": "Etiket nerede yaşar — test adında mı, yorumda mı, bir yardımcıda (`covers('FR-MOD-08.5.5')`) mı? Her birinin grep'lenebilirliği ve gürültüsü farklı. Bir test birden çok maddeyi korur, bir madde birden çok testle korunur — çoktan-çoğa ilişkiyi nasıl ifade ediyorsun? Kural **geriye dönük** olarak 2701 entegrasyon + 1174 birim testine uygulanamaz: kademeli benimseme nasıl işleyecek, yalnız yeni/değişen testler mi zorunlu? Çıktı: kural + `CONVENTIONS.md`'ye yazılmış hali + en az bir dosyada uygulanmış hali + etiketlerin makineyle çıkarılabildiğini gösteren örnek komut.",
             "details": "Bağımlılık: yok. Dilim V7-4. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "184",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T12:48:30.097Z"
           },
           {
             "id": 2,
@@ -8713,12 +8713,12 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
+        "updatedAt": "2026-09-04T12:48:30.097Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T12:46:14.483Z",
+      "lastModified": "2026-09-04T12:48:30.098Z",
       "taskCount": 184,
       "completedCount": 182,
       "tags": [

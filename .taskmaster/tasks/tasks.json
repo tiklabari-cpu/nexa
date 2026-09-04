@@ -8588,10 +8588,10 @@
             "title": "M-UI-i [SONNET-XHIGH] Skill preview özet narrasyonu + editörün ilk testleri",
             "description": "PRD **562-578** (06.2.5). API `summary` DÖNÜYOR (`playbook.ts:441`) ve DTO'da alan var; editörün `PreviewResult`'ı render etmiyor (yalnız StatusDot/errors/reply/transfer). PRD dört eylemin anlatılmasını istiyor: toplama, etiket, **özet**, transfer + hata gösterimi. **Editör tarafında HİÇ test yok** — maddenin KISMİ çıkma sebebinin yarısı budur; yalnız render eklemek kapatmaz.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T09:15:45.541Z"
           },
           {
             "id": 10,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T08:30:49.772Z"
+        "updatedAt": "2026-09-04T09:15:45.541Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T08:30:49.772Z",
+      "lastModified": "2026-09-04T09:15:45.542Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

@@ -30,6 +30,7 @@ import {
   SKILL_TEMPLATES,
   TEMPLATE_CATEGORIES,
   type SkillTemplate,
+  type TemplateBadge,
   type TemplateCategory,
 } from './templates.js';
 
@@ -42,6 +43,19 @@ const CATEGORY_LABEL_KEYS: Record<TemplateCategory, string> = {
   prebuilt: 'playbook.category.prebuilt',
   ai: 'playbook.category.ai',
   trending: 'playbook.category.trending',
+};
+
+/** A highlight, not a category (FR-MOD-05.2) — see RecommendedSkills.tsx's own copy. */
+const BADGE_LABEL_KEYS: Record<TemplateBadge, string> = {
+  popular: 'playbook.badge.popular',
+  essential: 'playbook.badge.essential',
+};
+
+/** Reuses existing status tokens (already AA-checked in tokens.test.ts) rather than
+ * minting a new colour for a two-value highlight. */
+const BADGE_CLASSES: Record<TemplateBadge, string> = {
+  popular: 'bg-info/10 text-info',
+  essential: 'bg-ai/10 text-ai',
 };
 
 /** Fixed row height (px) the `VirtualList` spacer maths are built on — every row must render at exactly this height. */
@@ -285,7 +299,16 @@ function TemplateRow({
         </span>
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{templateName(template, t)}</p>
+        <div className="flex items-center gap-1.5">
+          <p className="truncate text-sm font-medium">{templateName(template, t)}</p>
+          {template.badge && (
+            <span
+              className={`shrink-0 rounded-sm px-1.5 py-0.5 text-2xs font-medium ${BADGE_CLASSES[template.badge]}`}
+            >
+              {t(BADGE_LABEL_KEYS[template.badge])}
+            </span>
+          )}
+        </div>
         <p className="truncate text-2xs text-content-secondary">{templateSummary(template, t)}</p>
         {template.requiresIntegration ? (
           <p className="truncate text-2xs text-warning">

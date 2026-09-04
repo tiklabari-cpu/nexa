@@ -292,6 +292,8 @@ export const playbook: Messages = {
   'playbook.category.trending': 'Trend',
   'playbook.common.opening': 'Açılıyor…',
   'playbook.common.needsIntegration': '{app} uygulamasının bağlı olmasını gerektirir.',
+  'playbook.badge.popular': 'Popüler',
+  'playbook.badge.essential': 'Temel',
 
   // Recommended skills (RecommendedSkills.tsx)
   'playbook.recommended.title': 'Önerilen beceriler',

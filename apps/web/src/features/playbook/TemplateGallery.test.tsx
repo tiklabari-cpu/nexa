@@ -45,6 +45,27 @@ describe('TemplateGallery', () => {
     expect(within(dialog).getByText(/Shopify app connected/)).toBeInTheDocument();
   });
 
+  it('highlights a Popular/Essential card, orthogonal to its category tab (FR-MOD-05.2)', async () => {
+    const user = userEvent.setup();
+    render(<TemplateGallery open onClose={() => {}} onUse={() => {}} pendingId={null} />);
+    const dialog = screen.getByRole('dialog');
+
+    // Trending (11 entries) fits entirely inside the default virtualized
+    // window — "Recover an abandoned cart" carries the `popular` badge.
+    await user.click(within(dialog).getByRole('tab', { name: /Trending/ }));
+    expect(within(dialog).getByText('Popular')).toBeInTheDocument();
+    // Its own category tab still reads Trending, not Popular — the badge is a
+    // highlight, not a second category.
+    expect(within(dialog).getByText('Ask for feedback')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Essential')).not.toBeInTheDocument();
+
+    // AI (11 entries, same guarantee) — "Troubleshoot, then escalate" carries
+    // `essential` ("Prioritise a VIP customer" in the same tab carries `popular`,
+    // so only the essential assertion is exclusive to this tab).
+    await user.click(within(dialog).getByRole('tab', { name: /AI/ }));
+    expect(within(dialog).getByText('Essential')).toBeInTheDocument();
+  });
+
   it('hands the chosen template back when a card is used', async () => {
     const user = userEvent.setup();
     const onUse = vi.fn();

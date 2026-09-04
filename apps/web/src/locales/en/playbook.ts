@@ -297,6 +297,10 @@ export const playbook: Messages = {
   'playbook.category.trending': 'Trending',
   'playbook.common.opening': 'Opening…',
   'playbook.common.needsIntegration': 'Needs the {app} app connected.',
+  // A card highlight, orthogonal to category (FR-MOD-05.2) — shared by the
+  // gallery row and the recommended card.
+  'playbook.badge.popular': 'Popular',
+  'playbook.badge.essential': 'Essential',
 
   // Recommended skills (RecommendedSkills.tsx)
   'playbook.recommended.title': 'Recommended skills',

@@ -19,6 +19,7 @@ import {
   findCategoryMeta,
   recommendedTemplates,
   type SkillTemplate,
+  type TemplateBadge,
   type TemplateCategory,
 } from './templates.js';
 
@@ -28,6 +29,20 @@ const CATEGORY_LABEL_KEYS: Record<TemplateCategory, string> = {
   prebuilt: 'playbook.category.prebuilt',
   ai: 'playbook.category.ai',
   trending: 'playbook.category.trending',
+};
+
+/** Mirrors TemplateGallery.tsx's own copy. A highlight, not a category (FR-MOD-05.2) —
+ * so it never borrows the category's brand colour or its `text-content-tertiary` chrome. */
+const BADGE_LABEL_KEYS: Record<TemplateBadge, string> = {
+  popular: 'playbook.badge.popular',
+  essential: 'playbook.badge.essential',
+};
+
+/** Reuses existing status tokens (already AA-checked in tokens.test.ts) rather than
+ * minting a new colour for a two-value highlight. */
+const BADGE_CLASSES: Record<TemplateBadge, string> = {
+  popular: 'bg-info/10 text-info',
+  essential: 'bg-ai/10 text-ai',
 };
 
 export function RecommendedSkills({
@@ -93,13 +108,24 @@ function RecommendedCard({
       role="listitem"
       className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 shadow-xs"
     >
-      {category && (
-        <span className="flex items-center gap-1 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-          <span aria-hidden="true" className="text-content-brand">
-            {category.icon}
-          </span>
-          {t(CATEGORY_LABEL_KEYS[category.id])}
-        </span>
+      {(category || template.badge) && (
+        <div className="flex items-center justify-between gap-1">
+          {category && (
+            <span className="flex items-center gap-1 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+              <span aria-hidden="true" className="text-content-brand">
+                {category.icon}
+              </span>
+              {t(CATEGORY_LABEL_KEYS[category.id])}
+            </span>
+          )}
+          {template.badge && (
+            <span
+              className={`shrink-0 rounded-sm px-1.5 py-0.5 text-2xs font-medium ${BADGE_CLASSES[template.badge]}`}
+            >
+              {t(BADGE_LABEL_KEYS[template.badge])}
+            </span>
+          )}
+        </div>
       )}
 
       <div className="min-w-0 flex-1">

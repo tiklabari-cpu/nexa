@@ -256,3 +256,156 @@ dosyasındaki **tek ifade** olduğunda. Yanına bir ifade daha koyulduğunda Pos
 ifadeli sorgu için açtığı örtük transaction devreye girer ve migration
 `25001 — CREATE INDEX CONCURRENTLY cannot run inside a transaction block` ile düşer.
 Yani: eşzamanlı index'in kendi migration dosyası olur.
+
+## 7) Test ↔ gereksinim izlenebilirliği — etiket nerede yaşar (tm 184.1)
+
+Bu bölüm bir **karar** ve onun gerekçesidir. Denetimin (`prd-uyum-denetimi.md` §8) şu
+eleştirisinin cevabı: mevcut DoD kapısı "kod var + testler yeşil"i ölçüyor, PRD'nin istediği
+"kabul kriterinin **kendisi** test ediliyor mu"yu ölçmüyor.
+
+Bu bölüm **yalnız etiketi** kurar. Kapsama raporunu üreten script (tm 184.2) ve kapıyı CI'a
+bağlayan adım (tm 184.3) bunun üstüne gelir; ikisi de burada tanımlanan biçimi okur.
+
+### 7.1 Karar: etiket test başlığında, parantez içinde yaşar
+
+```ts
+describe('white_label — widget markası (FR-MOD-11.5)', () => {
+  it('growth üzerinde powered_by=false reddediliyor', async () => { … });
+});
+
+it('BAA imzasını enterprise üzerinde kaydediyor (NFR-C4)', async () => { … });
+```
+
+Kural **yeni bir şey icat etmiyor** — depoda zaten baskın olan biçimi düzenliyor. Ölçüldü
+(2026-09-04, `git ls-files` ile izlenen 472 test dosyası; §7.6'nın komutlarıyla yeniden
+üretilebilir — parantez içindeki sayı bu kuralın YAZILMASINDAN ÖNCEKİ durumdur, aradaki fark
+§7.6'daki örnek dosyanın etiketlenmesidir):
+
+| Ölçüm                                                               |         Değer |
+| ------------------------------------------------------------------- | ------------: |
+| Herhangi bir katalog ID'si **anan** test dosyası                    |       **322** |
+| Başlık düzeyinde **iddia taşıyan** test dosyası                     | **141** (140) |
+| Başlık düzeyindeki iddia satırı                                     | **202** (196) |
+| Bu satırlarda geçen **farklı** katalog ID'si (247 maddenin içinden) |   **74** (73) |
+| Yalnız yorumda geçen ID satırı                                      |       **587** |
+
+Yani 140 dosya bu kuralı kimse söylemeden zaten uyguluyordu, üstelik **üç koşucunun üçünde de**:
+vitest (`apps/api` 43 · `apps/web` 66 · `apps/widget` 11 · `apps/rtm` 2 · `packages/types` 2 ·
+`apps/load` 1), Playwright (`apps/e2e` 15) ve jest (`apps/mobile` 1). Kuralın taşıdığı yük bu
+yüzden küçük: biçim değil, **biçimin anlamı** (§7.2) ve nereye yazılacağı (§7.4) sabitleniyor.
+
+**Neden yorum DEĞİL.** Yorum en yaygın biçim (586 satır) ama iddia taşıyamaz. İki nedenle:
+(1) dosya başlığındaki bir docblock **dosyanın konusunu** söyler, hangi `it`in o kriteri
+düşürdüğünü değil — 28 testlik bir dosyada "bu dosya FR-MOD-11.5'i kapsıyor" cümlesi
+doğrulanamaz; (2) yorum ile onun altındaki `expect` arasında hiçbir bağ yok, yorum yerinde
+kalırken assertion boşaltılabilir. Yorumdaki ID'ler **köken bilgisi** olarak yerinde kalır
+("bu kod şu maddeyi uyguluyor") ve kapsama iddiası SAYILMAZ.
+
+**Neden `covers()` yardımcısı DEĞİL.** Cazip tarafı gerçek: ID'yi üretilmiş bir union tipine
+bağlarsan yazım hatası `typecheck`te düşer. Bedeli daha büyük: üç koşucu (vitest · jest ·
+Playwright) için üç uyarlama, her test dosyasına bir import, ve `describe`in içinde mi dışında
+mı çağrıldığına bağlı bir yaşam döngüsü. Başlık ise **hiçbir koşucu API'sine dokunmuyor** —
+düz metin, yukarıdaki tabloda üç koşucuda da çalıştığı ölçülmüş durumda. Yazım hatası riski
+tm 184.2'nin script'inde katalogla eşleştirilerek karşılanır; kaçınılmak istenen bağlanma
+maliyetinden ucuzdur.
+
+**Başlığın üçüncü faydası:** etiket test çıktısına düşer. Kırmızı bir test artık hangi
+gereksinimi düşürdüğünü kendi adında söylüyor — yorum bunu yapamaz.
+
+### 7.2 Etiketin anlamı — bu bir iddiadır, konu başlığı değil
+
+> Bir etiket şu cümlenin taahhüdüdür: **bu blok bu gereksinim bozulursa KIRMIZI verir.**
+
+"Bu test o maddenin civarında" yeterli değildir. Kriteri değil dönüş kodunu ölçen bir test
+(denetim §3/D7: `FR-MOD-07.4` fixture'ı `reason`suz olay yazdığı için hatayı yakalayamıyordu)
+etiketi **hak etmez** — yeşil raporu yanlış güvene çevirir. Şüphedeysen etiketleme.
+
+### 7.3 ID uzayı — yalnız katalog maddeleri
+
+Etikete girecek ID **`prd-uyum-denetimi.md` Ek A'daki 247 maddeden biri** olmalıdır. Dört ad alanı:
+
+| Ad alanı                 | Örnek                              |
+| ------------------------ | ---------------------------------- |
+| `FR-MOD-<n>[.<n>…]`      | `FR-MOD-11.5` · `FR-MOD-08.5.4`    |
+| `FR-<bölüm>.<madde>`     | `FR-00-01.A` · `FR-EK-B.1`         |
+| `NFR-<harf><sayı>`       | `NFR-C4` · `NFR-S11` · `NFR-A11Y3` |
+| `SEMA-MIMARI.<n>[.<n>…]` | `SEMA-MIMARI.8.4c`                 |
+
+Katalog maddesi OLMAYAN iki şey etikete girmez — ikisi de yorumda serbesttir:
+
+- **PLAN iş kalemi kimliği** (`11.5-b`, `02.9-a`, `M-TRACE-a`): bir işin adı, bir gereksinim
+  değil. Katalog ID'siyle birlikte ayrıntı olarak yazılabilir — `(FR-MOD-11.5 · 11.5-b)` —
+  çıkarıcı yalnız `FR-MOD-11.5`'i alır, `11.5-b`'yi görmezden gelir.
+- **ADR numarası** (`ADR-09`): mimari karar, kabul kriteri değil.
+
+**Eğik çizgi kısaltması YASAK.** Depoda yorumlarda `NFR-C5/S9` ve `NFR-S4/S5` gibi kısaltmalar
+var; çıkarıcı bunu genişletemez, yalnız ilk ID'yi görür ve ikincisi **sessizce kaybolur**.
+Etikette her ID tam yazılır: `(NFR-C5 · NFR-S9)`.
+
+### 7.4 Çoktan-çoğa
+
+- **Bir test → birden çok madde:** aynı parantezde `·` ile ayır — `(FR-MOD-08.9.5 · NFR-C5)`.
+  Ayırıcı depodaki mevcut yorum deyimidir (`(FR-MOD-04.5 · NFR-S11 · M-TEAM-e)`), yeni değil.
+- **Bir madde → birden çok test:** kendiliğinden çalışır; çıkarıcı bir küme toplar, sayı
+  tutmaz. Aynı ID'yi kaç blok isterse etiketleyebilir.
+- **Yuvalama:** `describe` üzerindeki etiket **içindeki her `it`e dağılır**. Bu yüzden etiket
+  **iddianın gerçekten doğru olduğu en dar bloğa** yazılır. Dosyanın en üstündeki `describe`e
+  koyulan geniş bir etiket, o dosyadaki ilgisiz her testi de o maddeyi koruyor gibi gösterir —
+  tam olarak kaçınılmak istenen sahte kapsama budur.
+
+Konum, parantezin başlıkta nerede durduğu değildir: sonda olması okunaklıdır ve mevcut 101
+`FR-MOD` başlığının 94'ü öyle, ama zorunlu değil — `'hedef kayıtları (FR-MOD-13.3) — dönüşüm
+kaydı'` geçerli. Zorunlu olan tek şey ID'nin **parantez içinde** olması; düz metne gömülü bir
+anma (`'FR-MOD-13.7'nin adlandırdığı dört yüzeyi sayar'`) iddia sayılmaz ve çıkarılmaz.
+
+### 7.5 Kademeli benimseme — geriye dönük uygulanmaz
+
+472 dosya / ~7.100 test geriye dönük etiketlenmez; bunu denemek ya turlarca sürer ya da
+gözden geçirilmemiş, dolayısıyla §7.2'yi ihlal eden etiketler üretir. Kural şu şekilde yürür:
+
+- **Zorunlu:** yeni yazılan ya da değişen bir test, bir PRD kabul kriterini koruyorsa
+  etiketlenir. Kapı bunu tm 184.3'te ölçer.
+- **Gönüllü:** mevcut 141 dosyanın dışındaki her şey. Bir dosyaya başka bir iş için
+  dokunuluyorsa etiket eklemek teşvik edilir, şart değildir.
+- **Borç ayrı raporlanır:** etiketsiz maddelerin listesi tm 184.2'nin çıktısıdır ve kapıyı
+  kırmızı yapmaz. Bugün 247 maddenin 74'ü etiketli; kalan 173'ü "kapsanmıyor" DEĞİL,
+  "etiketlenmemiş" demektir — ikisini karıştırmak kuralın ilk yanlış kullanımı olur.
+
+### 7.6 Etiketler makineyle çıkarılabilir — örnek komut
+
+Aşağıdaki iki komut depo kökünden koşar (Git Bash). tm 184.2 bunları script'e çevirecek;
+buradaki amaç biçimin **bugün** çıkarılabilir olduğunu göstermek.
+
+```bash
+# Dış parantezler ŞART: alternasyon gruplanmazsa `\($NEXA_REQ_ID` yalnız ilk
+# seçeneğe bağlanır, kalan üçü `describe(` çıpasından da parantez şartından da
+# bağımsız eşleşir ve yorum satırları sonuca sızar (bu turda ölçüldü: 73 yerine
+# 149 ID, aralarında hiç etiketlenmemiş dosyaların yorumları).
+NEXA_REQ_ID='(FR-MOD-[0-9][0-9.]*|FR-[0-9A-Z][0-9A-Z-]*\.[0-9A-Za-z]+|NFR-[A-Z0-9]+|SEMA-MIMARI\.[0-9A-Za-z][0-9A-Za-z.-]*)'
+
+# 1) Her kapsama iddiası, yeriyle birlikte (dosya:satır)
+git ls-files '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' \
+  | xargs grep -nE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($NEXA_REQ_ID"
+
+# 2) İddia edilen maddelerin kümesi (247'nin içinden bugün 74)
+git ls-files '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' \
+  | xargs grep -hE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($NEXA_REQ_ID" \
+  | grep -oE "\($NEXA_REQ_ID[^)]*\)" | grep -oE "$NEXA_REQ_ID" | sort -u
+```
+
+Regex katalogun 247 ID'sinin 246'sını eşliyor; eşleşmeyen tek satır `FR-MOD-02.4.1–.6`, bir
+aralık gösterimi (kısa çizgi değil **en-dash**) — ondan yalnız `FR-MOD-02.4.1` çıkar. tm 184.2
+katalog ayrıştırıcısını yazarken bu tek kaleme özel davranmalı.
+
+Uygulanmış örnek: `apps/api/test/integration/entitlements.test.ts` — dosya başlığındaki
+köken yorumu yerinde bırakıldı, iddialar dört iç `describe`e dar biçimde dağıtıldı
+(`FR-MOD-11.5` · `NFR-S11` · `NFR-C4` · `NFR-S12`), üst `describe` yalnız hepsinde doğru olan
+maddeyi (`FR-MOD-10.1.1`, plan geçişi / downgrade kısıtları) taşıyor.
+
+### 7.7 Bu kuralın SATIN ALMADIĞI şey
+
+Etiket, testin o kriteri **doğru** ölçtüğünü kanıtlamaz — yalnız birinin öyle iddia ettiğini
+kaydeder. `FR-MOD-07.4` etiketli olsaydı bile fixture'ı kör olduğu için yeşil kalacaktı.
+Yani bu bölüm kapsama **raporunu** mümkün kılar, kapsamanın **kalitesini** garanti etmez;
+sınır tm 184.2'de açıkça belgelenir. Etiketli bir maddenin yeşil görünmesi, gözden geçirmenin
+yerine geçmez.

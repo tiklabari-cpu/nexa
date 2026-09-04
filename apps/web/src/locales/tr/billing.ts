@@ -133,11 +133,13 @@ export const billing: Messages = {
   'billing.paymentMethod.form.brandLabel': 'Kart markası',
   'billing.paymentMethod.form.last4Label': 'Son 4 hane',
   'billing.paymentMethod.form.last4Placeholder': '4242',
+  'billing.paymentMethod.form.last4Error': 'Son 4 haneyi girin — tam olarak 4 rakam.',
   'billing.paymentMethod.form.expiryLabel': 'Son kullanma tarihi',
   'billing.paymentMethod.form.expiryMonthLabel': 'Son kullanma ayı',
   'billing.paymentMethod.form.expiryYearLabel': 'Son kullanma yılı',
   'billing.paymentMethod.form.holderLabel': 'Kart sahibinin adı',
   'billing.paymentMethod.form.holderPlaceholder': 'Ayşe Yılmaz',
+  'billing.paymentMethod.form.holderRequiredError': 'Kart sahibinin adını girin.',
   'billing.paymentMethod.form.saveError': 'Ödeme yöntemi kaydedilemedi. Bilgileri kontrol edin.',
   'billing.paymentMethod.form.stripeNotice':
     'Gerçek bir Stripe kart bileşeni burada yer alırdı. Yalnızca maskelenmiş bilgiler saklanır.',

@@ -9,7 +9,7 @@
  * ended" without that reads as "your data is gone".
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import {
   Card,
   CardSkeleton,
@@ -23,6 +23,7 @@ import { Banner } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
+import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
 
 interface UsageSummary {
   period: string;
@@ -950,6 +951,8 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
  * The masked-card form. Deliberately has no full-card-number field — the
  * out-of-scope data (PRD §11.1/1) has nowhere to be entered.
  */
+type PaymentFormValues = Record<'brand' | 'last4' | 'expMonth' | 'expYear' | 'holder', string>;
+
 function PaymentMethodForm({
   method,
   pending,
@@ -971,36 +974,49 @@ function PaymentMethodForm({
 }): ReactElement {
   const t = useTranslate();
   const thisYear = new Date().getFullYear();
-  const [brand, setBrand] = useState(method?.brand ?? 'visa');
-  const [last4, setLast4] = useState(method?.last4 ?? '');
-  const [expMonth, setExpMonth] = useState(String(method?.exp_month ?? 1));
-  // Default a year ahead, not the current year — a card expiring this January
-  // would already be in the past for most of the year and the save would be
-  // rejected as expired.
-  const [expYear, setExpYear] = useState(String(method?.exp_year ?? thisYear + 1));
-  const [holder, setHolder] = useState(method?.holder_name ?? '');
 
-  const last4Valid = /^\d{4}$/.test(last4);
-  const canSubmit = last4Valid && holder.trim().length > 0 && !pending;
-
-  const submit = (event: FormEvent): void => {
-    event.preventDefault();
-    if (!canSubmit) return;
-    onSubmit({
-      brand,
-      last4,
-      exp_month: Number(expMonth),
-      exp_year: Number(expYear),
-      holder_name: holder.trim(),
-    });
-  };
+  // The one validation primitive owns "is this a card?" and "may I submit?".
+  // `brand`/`expMonth`/`expYear` have no validator — they are `<select>`s that
+  // always hold one of their own options, so they are never invalid.
+  const form = useForm<PaymentFormValues>({
+    initial: {
+      brand: method?.brand ?? 'visa',
+      last4: method?.last4 ?? '',
+      expMonth: String(method?.exp_month ?? 1),
+      // Default a year ahead, not the current year — a card expiring this
+      // January would already be in the past for most of the year and the
+      // save would be rejected as expired.
+      expYear: String(method?.exp_year ?? thisYear + 1),
+      holder: method?.holder_name ?? '',
+    },
+    validators: {
+      last4: compose(
+        required(t('billing.paymentMethod.form.last4Error')),
+        cardLast4(t('billing.paymentMethod.form.last4Error')),
+      ),
+      holder: required(t('billing.paymentMethod.form.holderRequiredError')),
+    },
+    onSubmit: (values) => {
+      onSubmit({
+        brand: values.brand,
+        last4: values.last4,
+        exp_month: Number(values.expMonth),
+        exp_year: Number(values.expYear),
+        holder_name: values.holder.trim(),
+      });
+    },
+  });
+  const last4Error = form.errorFor('last4');
+  const holderError = form.errorFor('holder');
+  const canSubmit = form.canSubmit && !pending;
 
   const field = 'rounded-md border border-border bg-inset px-3 py-2 text-sm';
 
   return (
     <form
       data-testid="payment-form"
-      onSubmit={submit}
+      onSubmit={form.handleSubmit}
+      noValidate
       role="group"
       aria-label={t('billing.paymentMethod.title')}
       className="flex flex-col gap-3 rounded-md border border-border p-3"
@@ -1011,8 +1027,8 @@ function PaymentMethodForm({
         </label>
         <select
           id="pm-brand"
-          value={brand}
-          onChange={(e) => setBrand(e.target.value)}
+          value={form.values.brand}
+          onChange={(e) => form.setValue('brand', e.target.value)}
           className={`${field} capitalize`}
         >
           {CARD_BRANDS.map((b) => (
@@ -1031,11 +1047,15 @@ function PaymentMethodForm({
           id="pm-last4"
           inputMode="numeric"
           maxLength={4}
-          value={last4}
-          onChange={(e) => setLast4(e.target.value.replace(/\D/g, '').slice(0, 4))}
+          value={form.values.last4}
+          onChange={(e) => form.setValue('last4', e.target.value.replace(/\D/g, '').slice(0, 4))}
+          onBlur={() => form.blur('last4')}
+          aria-invalid={last4Error ? true : undefined}
+          aria-describedby={last4Error ? 'pm-last4-error' : undefined}
           placeholder={t('billing.paymentMethod.form.last4Placeholder')}
           className={`w-24 ${field}`}
         />
+        <FieldError id="pm-last4-error" message={last4Error} />
       </div>
 
       <div className="flex flex-col gap-1">
@@ -1045,8 +1065,8 @@ function PaymentMethodForm({
         <div className="flex gap-2">
           <select
             aria-label={t('billing.paymentMethod.form.expiryMonthLabel')}
-            value={expMonth}
-            onChange={(e) => setExpMonth(e.target.value)}
+            value={form.values.expMonth}
+            onChange={(e) => form.setValue('expMonth', e.target.value)}
             className={`w-20 ${field}`}
           >
             {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
@@ -1057,8 +1077,8 @@ function PaymentMethodForm({
           </select>
           <select
             aria-label={t('billing.paymentMethod.form.expiryYearLabel')}
-            value={expYear}
-            onChange={(e) => setExpYear(e.target.value)}
+            value={form.values.expYear}
+            onChange={(e) => form.setValue('expYear', e.target.value)}
             className={`w-28 ${field}`}
           >
             {Array.from({ length: 11 }, (_, i) => thisYear + i).map((y) => (
@@ -1076,11 +1096,15 @@ function PaymentMethodForm({
         </label>
         <input
           id="pm-holder"
-          value={holder}
-          onChange={(e) => setHolder(e.target.value)}
+          value={form.values.holder}
+          onChange={(e) => form.setValue('holder', e.target.value)}
+          onBlur={() => form.blur('holder')}
+          aria-invalid={holderError ? true : undefined}
+          aria-describedby={holderError ? 'pm-holder-error' : undefined}
           placeholder={t('billing.paymentMethod.form.holderPlaceholder')}
           className={field}
         />
+        <FieldError id="pm-holder-error" message={holderError} />
       </div>
 
       {error && (

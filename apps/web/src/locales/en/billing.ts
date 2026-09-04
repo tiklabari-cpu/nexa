@@ -137,11 +137,13 @@ export const billing: Messages = {
   'billing.paymentMethod.form.brandLabel': 'Card brand',
   'billing.paymentMethod.form.last4Label': 'Last 4 digits',
   'billing.paymentMethod.form.last4Placeholder': '4242',
+  'billing.paymentMethod.form.last4Error': 'Enter the last 4 digits — exactly 4 numbers.',
   'billing.paymentMethod.form.expiryLabel': 'Expiry',
   'billing.paymentMethod.form.expiryMonthLabel': 'Expiry month',
   'billing.paymentMethod.form.expiryYearLabel': 'Expiry year',
   'billing.paymentMethod.form.holderLabel': 'Cardholder name',
   'billing.paymentMethod.form.holderPlaceholder': 'Jane Doe',
+  'billing.paymentMethod.form.holderRequiredError': 'Enter the cardholder name.',
   'billing.paymentMethod.form.saveError': 'Could not save the payment method. Check the details.',
   'billing.paymentMethod.form.stripeNotice':
     'A real Stripe card element would mount here. Only the masked details are stored.',

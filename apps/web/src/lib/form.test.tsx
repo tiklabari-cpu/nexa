@@ -5,6 +5,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import {
+  cardLast4,
   compose,
   domain,
   email,
@@ -53,6 +54,14 @@ describe('validators', () => {
     expect(domain()('nodots')).not.toBeNull();
     expect(domain()('has space.com')).not.toBeNull();
     expect(domain()('https://x.com')).not.toBeNull(); // a URL is not a domain
+  });
+
+  it('cardLast4 accepts exactly 4 digits, rejects the rest', () => {
+    expect(cardLast4()('1234')).toBeNull();
+    expect(cardLast4()('')).not.toBeNull();
+    expect(cardLast4()('123')).not.toBeNull();
+    expect(cardLast4()('12345')).not.toBeNull();
+    expect(cardLast4()('12a4')).not.toBeNull();
   });
 
   it('compose returns the first failing message, in order', () => {

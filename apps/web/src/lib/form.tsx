@@ -103,6 +103,15 @@ export function phoneNumber(message = 'Enter a valid phone number, e.g. +1555123
   return (value) => (PHONE_NUMBER.test(value.trim()) ? null : message);
 }
 
+// Mirrors the API's payment-method zod schema (`apps/api/src/routes/reports.ts`
+// `paymentMethodBody.last4`) so a malformed value is caught here rather than
+// round-tripping to the server first.
+const CARD_LAST4 = /^\d{4}$/;
+
+export function cardLast4(message = 'Enter the last 4 digits — exactly 4 numbers.'): Validator {
+  return (value) => (CARD_LAST4.test(value.trim()) ? null : message);
+}
+
 export interface SubmitHelpers<V extends Record<string, string>> {
   /** Pin a server-reported problem onto one field (e.g. "email already invited"). */
   setFieldError: (name: keyof V, message: string | null) => void;

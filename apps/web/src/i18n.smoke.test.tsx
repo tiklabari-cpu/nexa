@@ -16,6 +16,7 @@ import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ReactElement } from 'react';
+import { defaultScopesForRole } from '@nexa/types';
 import { AppShell } from './components/AppShell.js';
 import { useAuth } from './lib/auth-store.js';
 import type { Locale } from './lib/i18n.js';
@@ -56,7 +57,8 @@ beforeEach(() => {
       role: 'owner',
       organization_id: 'o-1',
       license_id: '1000003',
-      scopes: [],
+      // Reports is asserted below, and it carries a scope now (FR-MOD-01.2).
+      scopes: defaultScopesForRole('owner'),
       routing_status: 'accepting_chats',
     },
   });

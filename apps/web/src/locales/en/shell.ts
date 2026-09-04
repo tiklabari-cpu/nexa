@@ -23,6 +23,13 @@ export const shell: Messages = {
   'shell.nav.expand': 'Expand navigation',
   'shell.nav.collapse': 'Collapse navigation',
 
+  // Rail badges (FR-MOD-01.2). Just the count's spoken form — `RailButton`
+  // prefixes it with the module's own label to build the accessible name.
+  'shell.nav.badge.inbox.one': '{count} unread',
+  'shell.nav.badge.inbox.other': '{count} unread',
+  'shell.nav.badge.team.one': '{count} pending invite',
+  'shell.nav.badge.team.other': '{count} pending invites',
+
   // Invite (FR-MOD-01.1.5). "+N" is free seats — not yet known (or none to
   // report) falls back to the plain label.
   'shell.invite.label': 'Invite',

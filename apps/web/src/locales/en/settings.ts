@@ -35,6 +35,43 @@ export const settings: Messages = {
   'settings.pageTitle': 'Settings',
   'settings.pageDescription': 'Widget installation, saved replies and routing.',
 
+  // Company details — CompanyDetails.tsx (FR-MOD-08.3)
+  'settings.company.title': 'Company details',
+  'settings.company.description':
+    'Who this workspace is: the name on invoices and on the widget, the sector reports group it under, the postal address, and the clock the team works to.',
+  'settings.company.loadError': 'Could not load the company details.',
+  'settings.company.nameLabel': 'Company name',
+  'settings.company.nameRequiredError': 'Enter the company name.',
+  'settings.company.nameTooLongError': 'Use 200 characters or fewer.',
+  'settings.company.sectorLabel': 'Sector',
+  'settings.company.sectorUnset': 'Not set',
+  'settings.company.sectorHint':
+    'A fixed list, so reports can group workspaces by it. Pick Other if none fits.',
+  'settings.company.sector.ecommerce_retail': 'E-commerce and retail',
+  'settings.company.sector.saas_technology': 'SaaS and technology',
+  'settings.company.sector.financial_services': 'Financial services',
+  'settings.company.sector.healthcare': 'Healthcare',
+  'settings.company.sector.travel_hospitality': 'Travel and hospitality',
+  'settings.company.sector.education': 'Education',
+  'settings.company.sector.real_estate': 'Real estate',
+  'settings.company.sector.telecommunications': 'Telecommunications',
+  'settings.company.sector.media_entertainment': 'Media and entertainment',
+  'settings.company.sector.gaming_gambling': 'Gaming and gambling',
+  'settings.company.sector.nonprofit_government': 'Non-profit and government',
+  'settings.company.sector.professional_services': 'Professional services',
+  'settings.company.sector.manufacturing_logistics': 'Manufacturing and logistics',
+  'settings.company.sector.other': 'Other',
+  'settings.company.addressLabel': 'Address',
+  'settings.company.addressPlaceholder': 'Street, city, postcode, country',
+  'settings.company.addressTooLongError': 'Use {max} characters or fewer.',
+  'settings.company.timezoneLabel': 'Time zone',
+  'settings.company.timezoneHintPrefix':
+    'The workspace clock. A new work schedule starts in this zone; an agent who works another one can override it in Team →',
+  'settings.company.timezoneHintLink': 'Work schedule',
+  'settings.company.timezoneHintSuffix': '.',
+  'settings.company.timezoneSavedNote':
+    'Saved. Work schedules already saved keep the zone they were saved with — changing this never moves an agent’s existing hours.',
+
   // Integrations — Integrations.tsx
   'settings.integrations.title': 'Integrations',
   'settings.integrations.description':

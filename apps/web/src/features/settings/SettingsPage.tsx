@@ -15,6 +15,7 @@ import { Page } from '../../components/Page.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Brands } from './Brands.js';
+import { CompanyDetails } from './CompanyDetails.js';
 import { McpConnection } from './McpConnection.js';
 import { WebsiteWidgets } from './WebsiteWidgets.js';
 import { WidgetCustomization } from './WidgetCustomization.js';
@@ -69,9 +70,13 @@ export function SettingsPage(): ReactElement {
   const canManageTicketRules = scopes.includes('tickets--all:rw');
   const canManageBrands = scopes.includes('brands--all:rw');
   const canManageScheduledExports = scopes.includes('reports_manage');
+  // Read and write are the same scope on `/settings/company` — see
+  // `CompanyDetails.tsx` for why there is no read-only viewer of this section.
+  const canManageCompany = scopes.includes('organization--my:rw');
 
   return (
     <Page title={t('settings.pageTitle')} description={t('settings.pageDescription')}>
+      <CompanyDetails canManage={canManageCompany} />
       <ChannelsGrid />
       <Integrations />
       <McpConnection />

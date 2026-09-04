@@ -117,6 +117,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/AuditLog.tsx',
   'src/features/settings/BannedCustomerIps.tsx',
   'src/features/settings/Brands.tsx',
+  'src/features/settings/CompanyDetails.tsx',
   'src/features/settings/Compliance.tsx',
   'src/features/settings/FileSharing.tsx',
   'src/features/settings/IpAllowlist.tsx',

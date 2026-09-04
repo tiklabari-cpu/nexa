@@ -361,6 +361,100 @@ describe('agent work schedule (PRD §5.3-Vardiya)', () => {
   });
 
   // ==========================================================================
+  // The company timezone is the one source of truth (FR-MOD-08.3 · M-CO-b)
+  // ==========================================================================
+
+  describe('the default week takes its zone from the company', () => {
+    // Two columns in this schema carry a timezone — `organizations.timezone`
+    // and `work_schedules.timezone` — and the second is an *override* of the
+    // first, not a peer. These are the tests of that decision: seeding the
+    // unset case from a hard-coded `UTC` instead would mean a workspace that
+    // moved to `Europe/Istanbul` still hands every new hire a UTC week to
+    // save, and the three-hour shift is invisible in the staffing forecast and
+    // the business-hours SLA clock alike.
+
+    it('returns the company zone, not UTC, for an agent who has never set one', async () => {
+      await owner.organization.update({
+        where: { id: fx.a.organizationId },
+        data: { timezone: 'Europe/Istanbul' },
+      });
+
+      const res = await getSchedule(fx.a.agentAccountId, selfToken);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        ...DEFAULT_WORK_SCHEDULE,
+        timezone: 'Europe/Istanbul',
+      });
+      // The zone is the only thing the company decides — the shipped week is
+      // still the shipped week.
+      expect(res.json().schedule).toEqual(DEFAULT_WORK_SCHEDULE.schedule);
+    });
+
+    it('leaves a saved schedule on its own zone when the company zone changes', async () => {
+      await putSchedule(fx.a.agentAccountId, LATE_SHIFT, selfToken);
+
+      await owner.organization.update({
+        where: { id: fx.a.organizationId },
+        data: { timezone: 'America/New_York' },
+      });
+
+      // An override is an override: those hours were chosen against a stated
+      // clock, and re-pointing them would move a real shift by the offset
+      // between the two zones.
+      const res = await getSchedule(fx.a.agentAccountId, selfToken);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual(LATE_SHIFT);
+    });
+
+    it('falls back to the company zone for a row that will not normalise', async () => {
+      await owner.workSchedule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          agentId: fx.a.agentAccountId,
+          timezone: 'Europe/Istanbul',
+          // `end` before `start` — a row `normalizeWorkSchedule` refuses, the
+          // kind hand-edited in psql or written before a rule tightened.
+          schedule: [{ day: 'monday', start: '20:00', end: '08:00', enabled: true }],
+        },
+      });
+      await owner.organization.update({
+        where: { id: fx.a.organizationId },
+        data: { timezone: 'Asia/Tokyo' },
+      });
+
+      // There is no trustworthy per-agent choice left in an unreadable row, so
+      // the workspace's zone answers rather than a constant nobody chose.
+      const res = await getSchedule(fx.a.agentAccountId, selfToken);
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({ ...DEFAULT_WORK_SCHEDULE, timezone: 'Asia/Tokyo' });
+    });
+
+    it('reads its own tenant’s company zone, not another workspace’s', async () => {
+      await owner.organization.update({
+        where: { id: fx.a.organizationId },
+        data: { timezone: 'Europe/Istanbul' },
+      });
+      await owner.organization.update({
+        where: { id: fx.b.organizationId },
+        data: { timezone: 'Asia/Tokyo' },
+      });
+
+      const bSelf = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.agentAccountId,
+        scopes: ['agents--my:ro'],
+      });
+
+      expect((await getSchedule(fx.a.agentAccountId, selfToken)).json().timezone).toBe(
+        'Europe/Istanbul',
+      );
+      expect((await getSchedule(fx.b.agentAccountId, bSelf)).json().timezone).toBe('Asia/Tokyo');
+    });
+  });
+
+  // ==========================================================================
   // Audit trail (NFR-S12)
   // ==========================================================================
 

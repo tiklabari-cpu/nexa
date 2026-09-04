@@ -15,10 +15,20 @@
  * a known weekday, 24h `HH:MM`). Saving always sends the normalised shape.
  *
  * Assumption: the route never reports "no plan" — an agent with no saved row
- * reads back `DEFAULT_WORK_SCHEDULE`, so "not set" and "set to the default"
- * are the same answer (WORKSCHED-c). The empty state this screen owns
- * (FR-EK-B.1) is therefore the roster itself: nobody the viewer may schedule
- * yet, not an individual agent's plan.
+ * reads back the default week, so "not set" and "set to the default" are the
+ * same answer (WORKSCHED-c). The empty state this screen owns (FR-EK-B.1) is
+ * therefore the roster itself: nobody the viewer may schedule yet, not an
+ * individual agent's plan.
+ *
+ * The zone in that default is the *company* one (Settings → Company details,
+ * FR-MOD-08.3 · M-CO-b), not `DEFAULT_WORK_SCHEDULE`'s literal `UTC`: the
+ * workspace says what time it is here, and the picker below is an override for
+ * the agent who does not work that clock. The server decides this — the route
+ * seeds the unset case from `organizations.timezone` — so the merge against
+ * `DEFAULT_WORK_SCHEDULE` here only ever fills gaps in a response that already
+ * carries a zone. Changing the company zone never rewrites a saved row: those
+ * hours were chosen against a stated clock, and silently re-pointing them
+ * would move a shift by however far the two zones are apart.
  */
 import { useMemo, useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -41,22 +51,8 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { formatWeekday } from '../../lib/format.js';
+import { IANA_TIMEZONES } from '../../lib/timezones.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
-
-/**
- * `Intl.supportedValuesOf('timeZone')` does not include the `UTC` alias on
- * every engine, and `DEFAULT_WORK_SCHEDULE.timezone` is `'UTC'` — prepended so
- * the shipped default is always a selectable option, not just a stored value.
- * Falls back to a short, workable list for an engine without the API at all.
- */
-const TIMEZONES: readonly string[] = (() => {
-  try {
-    const zones = Intl.supportedValuesOf('timeZone');
-    return zones.includes('UTC') ? zones : ['UTC', ...zones];
-  } catch {
-    return ['UTC', 'Europe/Istanbul', 'Europe/London', 'America/New_York', 'Asia/Tokyo'];
-  }
-})();
 
 interface AgentOption {
   id: string;
@@ -274,10 +270,10 @@ function WorkScheduleModal({
             onChange={(event) => setEdits((prev) => ({ ...prev, timezone: event.target.value }))}
             className="mb-4 w-full rounded-md border border-border bg-inset px-2 py-1.5 text-sm"
           >
-            {!TIMEZONES.includes(value.timezone) && (
+            {!IANA_TIMEZONES.includes(value.timezone) && (
               <option value={value.timezone}>{value.timezone}</option>
             )}
-            {TIMEZONES.map((zone) => (
+            {IANA_TIMEZONES.map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
               </option>

@@ -125,6 +125,7 @@ const BASE_VIEWS: InboxView[] = [
   'my',
   'queued',
   'unassigned',
+  'supervised',
   'archived',
   'ai',
   'ai_solved',

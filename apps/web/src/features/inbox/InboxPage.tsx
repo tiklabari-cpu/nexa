@@ -59,11 +59,18 @@ import {
 import { parseChatSort, writeChatSort, type ChatSort } from './chat-sort.js';
 import type { InboxView, TicketView, TrafficTab } from './types.js';
 
+/**
+ * The Chats group, in the PRD's own order (02.1.1): All · My chats · Queued ·
+ * Unassigned · Supervised · Archive. `supervised` is the conversations this
+ * agent is watching without owning — the Traffic board's Supervise action is
+ * what puts one here.
+ */
 const VIEWS: Array<{ id: InboxView; icon: string }> = [
   { id: 'all', icon: '▤' },
   { id: 'my', icon: '◍' },
   { id: 'queued', icon: '◔' },
   { id: 'unassigned', icon: '◌' },
+  { id: 'supervised', icon: '◉' },
   { id: 'archived', icon: '▣' },
 ];
 
@@ -84,6 +91,7 @@ const VIEW_LABEL_KEY: Record<InboxView, string> = {
   my: 'inbox.rail.view.my',
   queued: 'inbox.rail.view.queued',
   unassigned: 'inbox.rail.view.unassigned',
+  supervised: 'inbox.rail.view.supervised',
   archived: 'inbox.rail.view.archived',
   ai: 'inbox.rail.view.ai',
   ai_solved: 'inbox.rail.view.aiSolved',
@@ -551,11 +559,13 @@ export function InboxPage(): ReactElement {
                         ? t('inbox.list.empty.tabDescription')
                         : view === 'archived'
                           ? t('inbox.list.empty.archived')
-                          : view === 'ai'
-                            ? t('inbox.list.empty.ai')
-                            : view === 'ai_solved'
-                              ? t('inbox.list.empty.aiSolved')
-                              : t('inbox.list.empty.description')
+                          : view === 'supervised'
+                            ? t('inbox.list.empty.supervised')
+                            : view === 'ai'
+                              ? t('inbox.list.empty.ai')
+                              : view === 'ai_solved'
+                                ? t('inbox.list.empty.aiSolved')
+                                : t('inbox.list.empty.description')
                     }
                   />
                 ) : (

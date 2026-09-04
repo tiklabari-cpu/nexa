@@ -9,6 +9,7 @@ export const inbox: Messages = {
   'inbox.rail.view.my': 'Sohbetlerim',
   'inbox.rail.view.queued': 'Sırada',
   'inbox.rail.view.unassigned': 'Atanmamış',
+  'inbox.rail.view.supervised': 'Gözetlenen',
   'inbox.rail.view.archived': 'Arşiv',
   'inbox.rail.aiHeading': 'AI Ajanları',
   'inbox.rail.view.ai': 'AI ajanı',
@@ -64,6 +65,8 @@ export const inbox: Messages = {
   'inbox.list.empty.tabDescription': 'Şu anda bu sekmeyle eşleşen sohbet yok.',
   'inbox.list.empty.title': 'Henüz burada bir şey yok',
   'inbox.list.empty.archived': 'Kapatılan sohbetler burada görünür.',
+  'inbox.list.empty.supervised':
+    'Şu anda gözetlediğiniz sohbet yok. Trafik ekranından bir sohbeti gözetlemeye alın, burada görünsün.',
   'inbox.list.empty.ai': 'AI ajanının yürüttüğü sohbetler burada görünür.',
   'inbox.list.empty.aiSolved': "AI'nın kendi başına çözdüğü sohbetler burada görünür.",
   'inbox.list.empty.description': 'Yeni sohbetler geldikçe burada görünür.',

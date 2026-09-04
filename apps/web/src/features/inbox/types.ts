@@ -67,7 +67,8 @@ export interface ChatDetail {
   visitor?: ChatVisitor | null;
 }
 
-export type InboxView = 'all' | 'my' | 'queued' | 'unassigned' | 'archived' | 'ai' | 'ai_solved';
+export type InboxView =
+  'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
 
 /** Real-time list tabs — a live segmentation of the loaded chats (FR-MOD-03.1.1). */
 export type TrafficTab = 'all' | 'chatting' | 'queued' | 'waiting';

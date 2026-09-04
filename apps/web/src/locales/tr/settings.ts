@@ -788,4 +788,52 @@ export const settings: Messages = {
   'settings.twoFactor.reauth.confirmButton': 'Onayla',
   'settings.twoFactor.reauth.confirming': 'Onaylanıyor…',
   'settings.twoFactor.reauth.discardConfirm': 'Bu iptal edilsin mi?',
+
+  // Kişisel erişim jetonları — PersonalAccessTokens.tsx (M-UI-b)
+  'settings.pat.title': 'Kişisel erişim jetonları',
+  'settings.pat.description':
+    'API’yi sizin adınıza çağıran script’ler ve entegrasyonlar için uzun ömürlü kimlik bilgileri.',
+  'settings.pat.loadError': 'Kişisel erişim jetonlarınız yüklenemedi.',
+  'settings.pat.noAccess':
+    'Bu oturumun kişisel erişim jetonlarını okuma yetkisi yok. Yönetmek için yeniden giriş yapın.',
+  'settings.pat.unnamed': 'Adlandırılmamış jeton',
+  'settings.pat.scopeCount.one': '{count} kapsam',
+  'settings.pat.scopeCount.other': '{count} kapsam',
+  'settings.pat.created': 'Oluşturuldu: {when}',
+  'settings.pat.lastUsed': 'Son kullanım: {when}',
+  'settings.pat.neverUsed': 'Hiç kullanılmadı',
+  'settings.pat.expires': 'Geçerlilik bitişi: {when}',
+  'settings.pat.neverExpires': 'Süresiz',
+  'settings.pat.revokeButton': 'İptal et',
+  'settings.pat.revokeAriaLabel': '{name} jetonunu iptal et',
+  'settings.pat.empty.title': 'Henüz jeton yok',
+  'settings.pat.empty.description':
+    'Oturumunuzu ödünç vermek yerine, bir script ya da entegrasyondan API’yi çağırmak için bir jeton oluşturun.',
+
+  'settings.pat.form.nameLabel': 'Jeton adı',
+  'settings.pat.form.namePlaceholder': 'Gecelik raporlama işi',
+  'settings.pat.form.nameError':
+    'Bu jetona bir ad verin; sonradan neyi iptal ettiğinizi bilesiniz.',
+  'settings.pat.form.expiryLabel': 'Geçerlilik süresi',
+  'settings.pat.form.days': '{days} gün',
+  'settings.pat.form.scopesLabel': 'Kapsamlar',
+  'settings.pat.form.scopesHint':
+    'Yalnız kendi oturumunuzun sahip olduğu kapsamlar verilebilir ve bunlar jeton oluşturulurken sabitlenir — gerekenin en azını verin.',
+  'settings.pat.form.createButton': 'Jeton oluştur',
+  'settings.pat.form.creating': 'Oluşturuluyor…',
+
+  'settings.pat.issued.title': '{name} hazır',
+  'settings.pat.issued.description': 'Şimdi kopyalayın — bu jeton yalnız bir kez gösteriliyor.',
+  'settings.pat.issued.tokenLabel': 'Jeton',
+  'settings.pat.issued.copyAriaLabel': 'Jetonu kopyala',
+  'settings.pat.issued.warning':
+    'Bu jeton bir daha gösterilmeyecek. Kaybederseniz iptal edip yenisini oluşturun.',
+  'settings.pat.issued.usageLabel': 'Nasıl gönderilir',
+  'settings.pat.issued.doneButton': 'Tamam',
+
+  'settings.pat.revoke.title': '{name} iptal edilsin mi?',
+  'settings.pat.revoke.description':
+    'Bu jetonu hala kullanan her şey anında çalışmayı durdurur ve bu geri alınamaz.',
+  'settings.pat.revoke.confirmButton': 'Jetonu iptal et',
+  'settings.pat.revoke.revoking': 'İptal ediliyor…',
 };

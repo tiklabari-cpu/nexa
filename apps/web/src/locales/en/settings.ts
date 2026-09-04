@@ -789,4 +789,51 @@ export const settings: Messages = {
   'settings.twoFactor.reauth.confirmButton': 'Confirm',
   'settings.twoFactor.reauth.confirming': 'Confirming…',
   'settings.twoFactor.reauth.discardConfirm': 'Discard this?',
+
+  // Personal access tokens — PersonalAccessTokens.tsx (M-UI-b)
+  'settings.pat.title': 'Personal access tokens',
+  'settings.pat.description':
+    'Long-lived credentials for scripts and integrations that call the API as you.',
+  'settings.pat.loadError': 'Could not load your personal access tokens.',
+  'settings.pat.noAccess':
+    'This session is not allowed to read personal access tokens. Sign in again to manage them.',
+  'settings.pat.unnamed': 'Untitled token',
+  'settings.pat.scopeCount.one': '{count} scope',
+  'settings.pat.scopeCount.other': '{count} scopes',
+  'settings.pat.created': 'Created {when}',
+  'settings.pat.lastUsed': 'Last used {when}',
+  'settings.pat.neverUsed': 'Never used',
+  'settings.pat.expires': 'Expires {when}',
+  'settings.pat.neverExpires': 'No expiry',
+  'settings.pat.revokeButton': 'Revoke',
+  'settings.pat.revokeAriaLabel': 'Revoke token {name}',
+  'settings.pat.empty.title': 'No tokens yet',
+  'settings.pat.empty.description':
+    'Create one to call the API from a script or an integration, instead of borrowing your session.',
+
+  'settings.pat.form.nameLabel': 'Token name',
+  'settings.pat.form.namePlaceholder': 'Nightly reporting job',
+  'settings.pat.form.nameError': 'Name this token, so you know what you are revoking later.',
+  'settings.pat.form.expiryLabel': 'Expires after',
+  'settings.pat.form.days': '{days} days',
+  'settings.pat.form.scopesLabel': 'Scopes',
+  'settings.pat.form.scopesHint':
+    'Only the scopes your own session holds can be granted, and they are fixed when the token is created — give it the least it needs.',
+  'settings.pat.form.createButton': 'Create token',
+  'settings.pat.form.creating': 'Creating…',
+
+  'settings.pat.issued.title': '{name} is ready',
+  'settings.pat.issued.description': 'Copy it now — this is the only time it is shown.',
+  'settings.pat.issued.tokenLabel': 'Token',
+  'settings.pat.issued.copyAriaLabel': 'Copy token',
+  'settings.pat.issued.warning':
+    'This token will not be shown again. If you lose it, revoke it and create another.',
+  'settings.pat.issued.usageLabel': 'How to send it',
+  'settings.pat.issued.doneButton': 'Done',
+
+  'settings.pat.revoke.title': 'Revoke {name}?',
+  'settings.pat.revoke.description':
+    'Anything still using this token stops working immediately, and it cannot be undone.',
+  'settings.pat.revoke.confirmButton': 'Revoke token',
+  'settings.pat.revoke.revoking': 'Revoking…',
 };

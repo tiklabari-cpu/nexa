@@ -121,6 +121,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/FileSharing.tsx',
   'src/features/settings/IpAllowlist.tsx',
   'src/features/settings/McpConnection.tsx',
+  'src/features/settings/PersonalAccessTokens.tsx',
   'src/features/settings/RoutingRules.tsx',
   'src/features/settings/SalesTracker.tsx',
   'src/features/settings/Sandbox.tsx',

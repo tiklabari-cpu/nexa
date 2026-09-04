@@ -33,6 +33,7 @@ import { TrustedDomains } from './TrustedDomains.js';
 import { CannedResponses } from './CannedResponses.js';
 import { ChatTimeout } from './ChatTimeout.js';
 import { TwoFactor } from './TwoFactor.js';
+import { PersonalAccessTokens } from './PersonalAccessTokens.js';
 import { Tags } from './Tags.js';
 import { TicketEmailTemplates } from './TicketEmailTemplates.js';
 import { CustomFieldsSettings } from './CustomFieldsSettings.js';
@@ -48,6 +49,7 @@ export { NotificationSettings } from './NotificationSettings.js';
 export { Integrations } from './Integrations.js';
 export { TrustedDomains } from './TrustedDomains.js';
 export { CannedResponses } from './CannedResponses.js';
+export { PersonalAccessTokens } from './PersonalAccessTokens.js';
 export { Tags } from './Tags.js';
 export { TicketEmailTemplates } from './TicketEmailTemplates.js';
 export { CustomFieldsSettings } from './CustomFieldsSettings.js';
@@ -83,6 +85,7 @@ export function SettingsPage(): ReactElement {
       <IpAllowlist canEdit={canManageAccess} />
       <SsoConnection canEdit={canManageAccess} />
       <TwoFactor />
+      <PersonalAccessTokens />
       <Compliance canEdit={canManageAccess} />
       <SiemExport canEdit={canManageAccess} />
       <SlaPolicy canEdit={canManageAccess} />

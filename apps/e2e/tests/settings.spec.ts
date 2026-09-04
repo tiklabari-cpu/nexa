@@ -719,6 +719,76 @@ test.describe('settings', () => {
   });
 });
 
+test.describe('personal access tokens', () => {
+  /**
+   * FR-MOD-08.8.2 · M-UI-b — the loop the audit measured as broken at the
+   * console end: `routes/auth.ts` could mint, list and revoke a PAT, and
+   * `apps/web` never called any of it, so a credential the API documents was
+   * unobtainable to the person the API belongs to.
+   *
+   * The claim is not "a screen renders". It is that a token created *through the
+   * console* is a working API credential with exactly the scopes that were
+   * ticked, and that revoking it *through the console* kills it — so the
+   * request that answered 200 answers 401 afterwards. Both halves are made
+   * against the real API with the real plaintext, which the browser shows
+   * exactly once.
+   */
+  test('mints a working token from the console, then revokes it into a 401', async ({
+    agentPage,
+    request,
+  }) => {
+    await agentPage.goto('/app/settings');
+    const section = agentPage.getByRole('region', { name: 'Personal access tokens' });
+    await expect(
+      section.getByRole('heading', { name: 'Personal access tokens', level: 2 }),
+    ).toBeVisible();
+
+    const name = `e2e-pat-${Date.now().toString().slice(-6)}`;
+    await section.getByLabel('Token name').fill(name);
+
+    // The picker offers the session's own scopes and nothing wider — a token
+    // cannot be stronger than the session minting it.
+    const scopes = section.getByRole('group', { name: 'Scopes' });
+    await expect(scopes.getByLabel('reports_read', { exact: true })).toBeVisible();
+    await expect(scopes.getByLabel('chats--all:rw', { exact: true })).toBeVisible();
+    await scopes.getByLabel('reports_read', { exact: true }).check();
+
+    await section.getByRole('button', { name: 'Create token' }).click();
+
+    // Shown once, and the panel says so.
+    const panel = agentPage.getByRole('dialog');
+    await expect(panel.getByText('This token will not be shown again.')).toBeVisible();
+    const secret = (await panel.getByTestId('pat-token').innerText()).trim();
+    expect(secret.length).toBeGreaterThan(20);
+    await agentPage.screenshot({ path: 'kanit/08.8.2-pat-shown-once.png', fullPage: true });
+    await panel.getByRole('button', { name: 'Done' }).click();
+    // Closing discards it: the plaintext is in component state and nowhere else.
+    await expect(agentPage.getByTestId('pat-token')).toHaveCount(0);
+
+    const row = section.locator('li').filter({ hasText: name });
+    await expect(row).toBeVisible();
+
+    // It is a real credential — and it carries exactly the one scope that was
+    // ticked, which is the PRD's "scope oluşturmada sabitlenir".
+    const asToken = await request.get(`${API_BASE}/auth/me`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(asToken.status()).toBe(200);
+    expect(((await asToken.json()) as { scopes: string[] }).scopes).toEqual(['reports_read']);
+
+    await row.getByRole('button', { name: `Revoke token ${name}` }).click();
+    const confirm = agentPage.getByRole('dialog');
+    await confirm.getByRole('button', { name: 'Revoke token' }).click();
+    await expect(section.locator('li').filter({ hasText: name })).toHaveCount(0);
+
+    // Same request, same token, after the console revoked it.
+    const afterRevoke = await request.get(`${API_BASE}/auth/me`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    expect(afterRevoke.status()).toBe(401);
+  });
+});
+
 test.describe('audit log', () => {
   // NFR-S12 / 08.9.7-j: the trail's own most basic entry — signing in — is
   // what proves it is actually being written, end to end. The `agentPage`

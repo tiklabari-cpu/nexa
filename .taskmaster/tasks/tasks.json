@@ -8518,10 +8518,10 @@
             "title": "M-UI-b [OPUS-XHIGH] Kişisel erişim jetonu (PAT) ekranı — kimlik bilgisi yüzeyi",
             "description": "PRD **594-659**. `apps/web/src` içinde `personal-access-token` geçen TEK SATIR yok; API hazır (`routes/auth.ts` ~955 yükselme kapısı: oturumun sahip olmadığı scope verilemez). Oluştur/listele/iptal. **Jeton yalnız oluşturulduğu anda bir kez gösterilir**, ekran bunu açıkça söylemeli. Scope seçici yalnız oturumun sahip olduklarını göstermeli (`role-scopes.ts`) — kullanıcıya reddedilecek seçenek sunma. Jetonu log'lama, URL'e koyma, analitiğe gönderme. e2e: oluştur → jetonla API çağrısı çalışır → iptal → 401.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T01:11:35.107Z"
           },
           {
             "id": 3,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T01:10:03.477Z"
+        "updatedAt": "2026-09-04T01:11:35.107Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T01:10:03.479Z",
+      "lastModified": "2026-09-04T01:11:35.108Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

@@ -12,11 +12,12 @@
  * broken widget rather than missing configuration.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 interface TrustedDomain {
@@ -30,8 +31,6 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [domain, setDomain] = useState('');
-  const [includeSubdomains, setIncludeSubdomains] = useState(false);
 
   const list = useQuery({
     queryKey: ['settings', 'trusted-domains'],
@@ -44,11 +43,7 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
   const add = useMutation({
     mutationFn: (body: { domain: string; include_subdomains: boolean }) =>
       api.post<TrustedDomain>('/settings/trusted-domains', body),
-    onSuccess: () => {
-      setDomain('');
-      setIncludeSubdomains(false);
-      invalidate();
-    },
+    onSuccess: invalidate,
   });
 
   const remove = useMutation({
@@ -56,11 +51,28 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
     onSuccess: invalidate,
   });
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    if (!domain.trim()) return;
-    add.mutate({ domain: domain.trim(), include_subdomains: includeSubdomains });
-  }
+  // Only "is this empty?" — unlike the website-widgets install form, this
+  // field's server (`normaliseTrustedDomain`) deliberately accepts a full
+  // pasted URL and keeps only its host, so a stricter client-side format
+  // check here would refuse input the server is happy to normalise.
+  const form = useForm({
+    initial: { domain: '', includeSubdomains: 'false' },
+    validators: {
+      domain: required(t('settings.trustedDomains.domainRequiredError')),
+    },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await add.mutateAsync({
+          domain: values.domain.trim(),
+          include_subdomains: values.includeSubdomains === 'true',
+        });
+        reset();
+      } catch (error) {
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+  const domainError = form.errorFor('domain');
 
   return (
     <Section
@@ -73,7 +85,8 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
         <Card>
           {canEdit && (
             <form
-              onSubmit={submit}
+              onSubmit={form.handleSubmit}
+              noValidate
               className="flex flex-wrap items-end gap-3 border-b border-border p-4"
             >
               <label htmlFor="new-domain" className="flex min-w-56 flex-1 flex-col gap-1">
@@ -82,33 +95,39 @@ export function TrustedDomains({ canEdit }: { canEdit: boolean }): ReactElement 
                 </span>
                 <input
                   id="new-domain"
-                  value={domain}
-                  onChange={(event) => setDomain(event.target.value)}
+                  value={form.values.domain}
+                  onChange={(event) => form.setValue('domain', event.target.value)}
+                  onBlur={() => form.blur('domain')}
+                  aria-invalid={domainError ? true : undefined}
+                  aria-describedby={domainError ? 'new-domain-error' : undefined}
                   placeholder="shop.example"
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
+                <FieldError id="new-domain-error" message={domainError} />
               </label>
 
               <label className="flex items-center gap-2 pb-1.5 text-sm text-content-secondary">
                 <input
                   type="checkbox"
-                  checked={includeSubdomains}
-                  onChange={(event) => setIncludeSubdomains(event.target.checked)}
+                  checked={form.values.includeSubdomains === 'true'}
+                  onChange={(event) =>
+                    form.setValue('includeSubdomains', String(event.target.checked))
+                  }
                 />
                 {t('settings.trustedDomains.includeSubdomains')}
               </label>
 
               <button
                 type="submit"
-                disabled={!domain.trim() || add.isPending}
+                disabled={!form.canSubmit}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {add.isPending ? t('settings.adding') : t('settings.trustedDomains.addButton')}
+                {form.isSubmitting ? t('settings.adding') : t('settings.trustedDomains.addButton')}
               </button>
 
-              {add.isError && (
+              {form.submitError && (
                 <p role="alert" className="w-full text-2xs text-danger">
-                  {t(errorMessageKey(add.error))}
+                  {form.submitError}
                 </p>
               )}
             </form>

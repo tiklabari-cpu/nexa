@@ -190,6 +190,7 @@ export const playbook: Messages = {
     'What the AI answers from. Indexed on save, so it is answerable immediately.',
   'playbook.knowledge.formTitle': 'Title',
   'playbook.knowledge.formTitlePlaceholder': 'Delivery and returns',
+  'playbook.knowledge.formTitleRequiredError': 'Enter a title.',
   'playbook.knowledge.formType': 'Type',
   'playbook.knowledge.typeWebsite': 'Website',
   'playbook.knowledge.typeFile': 'File',
@@ -199,8 +200,10 @@ export const playbook: Messages = {
   'playbook.knowledge.formUrlPlaceholder': 'https://example.com/help/delivery',
   'playbook.knowledge.formUrlHelp':
     'Crawled and indexed on save. Private and internal addresses are refused.',
+  'playbook.knowledge.formUrlRequiredError': 'Enter a URL to crawl.',
   'playbook.knowledge.formContent': 'Content',
   'playbook.knowledge.formContentPlaceholder': 'Standard delivery takes 3 to 5 working days…',
+  'playbook.knowledge.formContentRequiredError': 'Enter the content.',
   'playbook.knowledge.crawling': 'Crawling…',
   'playbook.knowledge.indexing': 'Indexing…',
   'playbook.knowledge.addSource': 'Add source',

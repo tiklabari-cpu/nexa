@@ -49,6 +49,7 @@ export const settings: Messages = {
     'The allowlist the widget checks. Adding a website above fills this in for you; edit it here only for finer control, such as covering subdomains.',
   'settings.trustedDomains.loadError': 'Could not load trusted domains.',
   'settings.trustedDomains.domainLabel': 'Domain',
+  'settings.trustedDomains.domainRequiredError': 'Enter a domain.',
   'settings.trustedDomains.includeSubdomains': 'Include subdomains',
   'settings.trustedDomains.addButton': 'Add domain',
   'settings.trustedDomains.empty.title': 'No domains yet',
@@ -382,6 +383,7 @@ export const settings: Messages = {
     'Sources allowed to reach the agent/admin panel once enforcement is on below. A saved list can never exclude the address you are connecting from — the server refuses a change that would lock you out.',
   'settings.ipAllowlist.loadError': 'Could not load the IP allowlist.',
   'settings.ipAllowlist.entryLabel': 'Address or CIDR range',
+  'settings.ipAllowlist.entryRequiredError': 'Enter an address or CIDR range.',
   'settings.ipAllowlist.labelLabel': 'Label (optional)',
   'settings.ipAllowlist.addButton': 'Add entry',
   'settings.ipAllowlist.empty.title': 'No allowlist entries',
@@ -396,10 +398,14 @@ export const settings: Messages = {
   'settings.ipAllowlist.enforceHint':
     'Once on, only the addresses above may reach the agent/admin panel.',
   'settings.ipAllowlist.idleTimeoutLabel': 'Idle timeout (minutes)',
+  'settings.ipAllowlist.idleTimeoutError':
+    'Enter a number of minutes, or leave it blank to turn it off.',
   'settings.ipAllowlist.idleTimeoutSummary': 'Idle timeout: {value}',
   'settings.ipAllowlist.minutesValue.one': '{count} minute',
   'settings.ipAllowlist.minutesValue.other': '{count} minutes',
   'settings.ipAllowlist.maxSessionsLabel': 'Max concurrent sessions',
+  'settings.ipAllowlist.maxSessionsError':
+    'Enter a whole number of 1 or more, or leave it blank for the default.',
   'settings.ipAllowlist.maxSessionsSummary': 'Max concurrent sessions: {value}',
   'settings.ipAllowlist.defaultMaxSessions': '25 (default)',
   'settings.ipAllowlist.requireTwoFactorLabel': 'Two-factor authentication',
@@ -644,6 +650,7 @@ export const settings: Messages = {
     'A visitor on one of these addresses is refused a chat, even from a fresh session. To ban a named contact instead, use the block action on their profile in Customers.',
   'settings.bannedIps.loadError': 'Could not load blocked addresses.',
   'settings.bannedIps.ipLabel': 'IP address',
+  'settings.bannedIps.ipRequiredError': 'Enter an IP address.',
   'settings.bannedIps.ipHint':
     'An IPv4 or IPv6 address. The visitor is blocked until you remove it here.',
   'settings.bannedIps.blockButton': 'Block address',
@@ -669,6 +676,7 @@ export const settings: Messages = {
   'settings.fileSharing.allowedTypesHint':
     'MIME types, comma separated — the form a browser labels a file with.',
   'settings.fileSharing.maxSizeLabel': 'Max size (MB)',
+  'settings.fileSharing.maxSizeError': 'Enter a size from 1 to 100 MB.',
 
   // Skills (expertise catalogue) — Skills.tsx
   'settings.skills.title': 'Skills',

@@ -274,7 +274,9 @@ export const team: Messages = {
   'team.copilot.deleteButton': 'Delete',
   'team.copilot.add.title': 'Add a source',
   'team.copilot.add.error': 'Could not add that source. Check the name and content and try again.',
+  'team.copilot.add.nameRequiredError': 'Enter a name.',
   'team.copilot.add.contentLabel': 'Content',
+  'team.copilot.add.contentRequiredError': 'Enter the content.',
   'team.copilot.add.submit': 'Add source',
   'team.copilot.add.submitting': 'Adding…',
 };

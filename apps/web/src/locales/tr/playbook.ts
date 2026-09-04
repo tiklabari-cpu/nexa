@@ -186,6 +186,7 @@ export const playbook: Messages = {
     'AI’nın yanıtladığı kaynak. Kaydedildiği anda dizinlenir, hemen yanıtlanabilir olur.',
   'playbook.knowledge.formTitle': 'Başlık',
   'playbook.knowledge.formTitlePlaceholder': 'Teslimat ve iadeler',
+  'playbook.knowledge.formTitleRequiredError': 'Bir başlık girin.',
   'playbook.knowledge.formType': 'Tür',
   'playbook.knowledge.typeWebsite': 'Web sitesi',
   'playbook.knowledge.typeFile': 'Dosya',
@@ -195,8 +196,10 @@ export const playbook: Messages = {
   'playbook.knowledge.formUrlPlaceholder': 'https://ornek.com/yardim/teslimat',
   'playbook.knowledge.formUrlHelp':
     'Kaydedildiğinde taranır ve dizinlenir. Özel ve dahili adresler reddedilir.',
+  'playbook.knowledge.formUrlRequiredError': 'Taranacak bir URL girin.',
   'playbook.knowledge.formContent': 'İçerik',
   'playbook.knowledge.formContentPlaceholder': 'Standart teslimat 3 ila 5 iş günü sürer…',
+  'playbook.knowledge.formContentRequiredError': 'İçeriği girin.',
   'playbook.knowledge.crawling': 'Taranıyor…',
   'playbook.knowledge.indexing': 'Dizinleniyor…',
   'playbook.knowledge.addSource': 'Kaynak ekle',

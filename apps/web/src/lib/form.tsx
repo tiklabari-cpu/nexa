@@ -33,6 +33,13 @@ export function required(message = 'This field is required.'): Validator {
   return (value) => (value.trim() ? null : message);
 }
 
+/** Wraps a validator so a blank value passes — for a field where "not set" is
+ *  itself a valid answer and only a non-blank value must be well-formed
+ *  (an optional email or phone number, say). */
+export function optional(validator: Validator): Validator {
+  return (value) => (value.trim() === '' ? null : validator(value));
+}
+
 export function minLength(length: number, message?: string): Validator {
   return (value) =>
     value.trim().length >= length ? null : (message ?? `Enter at least ${length} characters.`);

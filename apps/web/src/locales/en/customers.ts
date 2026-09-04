@@ -81,6 +81,7 @@ export const customers: Messages = {
     'Not routed to a team yet. Groups appear here once one of their conversations is assigned.',
   'customers.detail.field.name': 'Name',
   'customers.detail.field.email': 'Email',
+  'customers.detail.field.emailError': 'Enter a valid email address.',
   'customers.detail.field.phone': 'Phone',
   'customers.detail.saving': 'Saving…',
   'customers.detail.saveChanges': 'Save changes',

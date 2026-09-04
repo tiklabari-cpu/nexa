@@ -16,6 +16,7 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDate } from '../../lib/format.js';
+import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 interface CopilotSource {
@@ -53,9 +54,7 @@ export function CopilotKnowledge(): ReactElement {
   const canRead = scopes.includes('agents-bot--all:ro') || scopes.includes('agents-bot--all:rw');
   const canEdit = scopes.includes('agents-bot--all:rw');
 
-  const [name, setName] = useState('');
   const [type, setType] = useState<string>('article');
-  const [content, setContent] = useState('');
 
   const sources = useQuery({
     queryKey: ['team', 'copilot-knowledge'],
@@ -68,18 +67,34 @@ export function CopilotKnowledge(): ReactElement {
   const add = useMutation({
     mutationFn: (body: { name: string; type: string; content: string }) =>
       api.post<CopilotSource>('/copilot/knowledge', body),
-    onSuccess: async () => {
-      await invalidate();
-      setName('');
-      setContent('');
-      setType('article');
-    },
+    onSuccess: invalidate,
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/copilot/knowledge/${id}`),
     onSuccess: invalidate,
   });
+
+  const form = useForm({
+    initial: { name: '', content: '' },
+    validators: {
+      name: required(t('team.copilot.add.nameRequiredError')),
+      content: required(t('team.copilot.add.contentRequiredError')),
+    },
+    onSubmit: async (values, { reset, setSubmitError }) => {
+      try {
+        await add.mutateAsync({ name: values.name.trim(), type, content: values.content.trim() });
+        setType('article');
+        reset();
+      } catch {
+        // A static, deliberately generic message (team.copilot.add.error) —
+        // unchanged from before this screen used the shared primitive.
+        setSubmitError(t('team.copilot.add.error'));
+      }
+    },
+  });
+  const nameError = form.errorFor('name');
+  const contentError = form.errorFor('content');
 
   // Without the read scope there is nothing to show and nothing was fetched —
   // say so plainly rather than render an empty base as if it were curated.
@@ -97,9 +112,6 @@ export function CopilotKnowledge(): ReactElement {
   }
 
   const items = sources.data?.items ?? [];
-  const trimmedName = name.trim();
-  const trimmedContent = content.trim();
-  const canAdd = canEdit && trimmedName.length > 0 && trimmedContent.length > 0 && !add.isPending;
 
   return (
     <Section title={t('team.copilot.title')} description={t('team.copilot.description')}>
@@ -162,18 +174,11 @@ export function CopilotKnowledge(): ReactElement {
         )}
 
         {canEdit && (
-          <form
-            className="border-t border-border p-4"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (!canAdd) return;
-              add.mutate({ name: trimmedName, type, content: trimmedContent });
-            }}
-          >
+          <form className="border-t border-border p-4" onSubmit={form.handleSubmit} noValidate>
             <h3 className="mb-3 text-sm font-medium">{t('team.copilot.add.title')}</h3>
-            {add.isError && (
+            {form.submitError && (
               <p role="alert" className="mb-3 text-sm text-danger">
-                {t('team.copilot.add.error')}
+                {form.submitError}
               </p>
             )}
 
@@ -187,10 +192,14 @@ export function CopilotKnowledge(): ReactElement {
                 </label>
                 <input
                   id="copilot-source-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
+                  value={form.values.name}
+                  onChange={(event) => form.setValue('name', event.target.value)}
+                  onBlur={() => form.blur('name')}
+                  aria-invalid={nameError ? true : undefined}
+                  aria-describedby={nameError ? 'copilot-source-name-error' : undefined}
                   className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
                 />
+                <FieldError id="copilot-source-name-error" message={nameError} />
               </div>
               <div>
                 <label
@@ -223,18 +232,24 @@ export function CopilotKnowledge(): ReactElement {
             <textarea
               id="copilot-source-content"
               rows={3}
-              value={content}
-              onChange={(event) => setContent(event.target.value)}
-              className="mb-3 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+              value={form.values.content}
+              onChange={(event) => form.setValue('content', event.target.value)}
+              onBlur={() => form.blur('content')}
+              aria-invalid={contentError ? true : undefined}
+              aria-describedby={contentError ? 'copilot-source-content-error' : undefined}
+              className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
             />
+            <FieldError id="copilot-source-content-error" message={contentError} />
 
-            <div className="flex justify-end">
+            <div className="mt-3 flex justify-end">
               <button
                 type="submit"
-                disabled={!canAdd}
+                disabled={!form.canSubmit}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40"
               >
-                {add.isPending ? t('team.copilot.add.submitting') : t('team.copilot.add.submit')}
+                {form.isSubmitting
+                  ? t('team.copilot.add.submitting')
+                  : t('team.copilot.add.submit')}
               </button>
             </div>
           </form>

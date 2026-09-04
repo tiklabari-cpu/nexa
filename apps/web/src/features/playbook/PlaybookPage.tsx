@@ -18,6 +18,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
@@ -691,10 +692,7 @@ function KnowledgePanel({
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [name, setName] = useState('');
-  const [content, setContent] = useState('');
   const [sourceType, setSourceType] = useState<KnowledgeType>('article');
-  const [sourceUrl, setSourceUrl] = useState('');
   const [subtab, setSubtab] = useState<KnowledgeTab>('all');
 
   const sources = useQuery({
@@ -704,31 +702,49 @@ function KnowledgePanel({
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['playbook'] });
 
-  const isWebsite = sourceType === 'website';
   // A website is crawled from a URL; everything else indexes pasted content.
-  const canAdd =
-    name.trim().length > 0 && (isWebsite ? sourceUrl.trim().length > 0 : content.trim().length > 0);
+  const isWebsite = sourceType === 'website';
 
   const create = useMutation({
-    mutationFn: () =>
+    mutationFn: (body: { name: string; type: KnowledgeType; sourceUrl: string; content: string }) =>
       api.post<KnowledgeSource>('/knowledge-sources', {
         ai_agent_id: aiAgentId,
-        name: name.trim(),
-        type: sourceType,
-        ...(isWebsite ? { source_url: sourceUrl.trim() } : { content: content.trim() }),
+        name: body.name,
+        type: body.type,
+        ...(body.type === 'website' ? { source_url: body.sourceUrl } : { content: body.content }),
       }),
-    onSuccess: () => {
-      setName('');
-      setContent('');
-      setSourceUrl('');
-      invalidate();
-    },
+    onSuccess: invalidate,
   });
 
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/knowledge-sources/${id}`),
     onSuccess: invalidate,
   });
+
+  const form = useForm({
+    initial: { name: '', sourceUrl: '', content: '' },
+    validators: {
+      name: required(t('playbook.knowledge.formTitleRequiredError')),
+      sourceUrl: isWebsite ? required(t('playbook.knowledge.formUrlRequiredError')) : undefined,
+      content: isWebsite ? undefined : required(t('playbook.knowledge.formContentRequiredError')),
+    },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await create.mutateAsync({
+          name: values.name.trim(),
+          type: sourceType,
+          sourceUrl: values.sourceUrl.trim(),
+          content: values.content.trim(),
+        });
+        reset();
+      } catch (error) {
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+  const nameError = form.errorFor('name');
+  const sourceUrlError = form.errorFor('sourceUrl');
+  const contentError = form.errorFor('content');
 
   const allItems = sources.data?.items ?? [];
   const counts = countSourcesByTab(allItems);
@@ -742,10 +758,8 @@ function KnowledgePanel({
       <Card>
         {canEdit && aiAgentId && (
           <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (canAdd) create.mutate();
-            }}
+            onSubmit={form.handleSubmit}
+            noValidate
             className="flex flex-col gap-2 border-b border-border p-4"
           >
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
@@ -755,11 +769,15 @@ function KnowledgePanel({
                 </span>
                 <input
                   id="source-name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
+                  value={form.values.name}
+                  onChange={(event) => form.setValue('name', event.target.value)}
+                  onBlur={() => form.blur('name')}
+                  aria-invalid={nameError ? true : undefined}
+                  aria-describedby={nameError ? 'source-name-error' : undefined}
                   placeholder={t('playbook.knowledge.formTitlePlaceholder')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
+                <FieldError id="source-name-error" message={nameError} />
               </label>
 
               {/* Sibling label, not a wrapper: wrapping a <select> folds its
@@ -794,14 +812,18 @@ function KnowledgePanel({
                 </span>
                 <input
                   id="source-url"
-                  value={sourceUrl}
-                  onChange={(event) => setSourceUrl(event.target.value)}
+                  value={form.values.sourceUrl}
+                  onChange={(event) => form.setValue('sourceUrl', event.target.value)}
+                  onBlur={() => form.blur('sourceUrl')}
+                  aria-invalid={sourceUrlError ? true : undefined}
+                  aria-describedby={sourceUrlError ? 'source-url-error' : undefined}
                   placeholder={t('playbook.knowledge.formUrlPlaceholder')}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
                 <span className="text-2xs text-content-tertiary">
                   {t('playbook.knowledge.formUrlHelp')}
                 </span>
+                <FieldError id="source-url-error" message={sourceUrlError} />
               </label>
             ) : (
               <label htmlFor="source-content" className="flex flex-col gap-1">
@@ -810,30 +832,34 @@ function KnowledgePanel({
                 </span>
                 <textarea
                   id="source-content"
-                  value={content}
-                  onChange={(event) => setContent(event.target.value)}
+                  value={form.values.content}
+                  onChange={(event) => form.setValue('content', event.target.value)}
+                  onBlur={() => form.blur('content')}
                   rows={4}
+                  aria-invalid={contentError ? true : undefined}
+                  aria-describedby={contentError ? 'source-content-error' : undefined}
                   placeholder={t('playbook.knowledge.formContentPlaceholder')}
                   className="resize-y rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
+                <FieldError id="source-content-error" message={contentError} />
               </label>
             )}
 
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={!canAdd || create.isPending}
+                disabled={!form.canSubmit}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {create.isPending
+                {form.isSubmitting
                   ? isWebsite
                     ? t('playbook.knowledge.crawling')
                     : t('playbook.knowledge.indexing')
                   : t('playbook.knowledge.addSource')}
               </button>
-              {create.isError && (
+              {form.submitError && (
                 <span role="alert" className="text-2xs text-danger">
-                  {t(errorMessageKey(create.error))}
+                  {form.submitError}
                 </span>
               )}
             </div>

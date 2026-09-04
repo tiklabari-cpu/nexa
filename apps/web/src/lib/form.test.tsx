@@ -11,6 +11,7 @@ import {
   email,
   emailList,
   minLength,
+  optional,
   required,
   splitList,
   useForm,
@@ -62,6 +63,14 @@ describe('validators', () => {
     expect(cardLast4()('123')).not.toBeNull();
     expect(cardLast4()('12345')).not.toBeNull();
     expect(cardLast4()('12a4')).not.toBeNull();
+  });
+
+  it('optional lets a blank value pass but still enforces format when set', () => {
+    const rule = optional(email('bad'));
+    expect(rule('')).toBeNull();
+    expect(rule('   ')).toBeNull();
+    expect(rule('nope')).toBe('bad');
+    expect(rule('a@b.com')).toBeNull();
   });
 
   it('compose returns the first failing message, in order', () => {

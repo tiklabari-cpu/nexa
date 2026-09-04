@@ -39,6 +39,7 @@ export const settings: Messages = {
     "Widget'ın kontrol ettiği izin listesi. Yukarıda bir web sitesi eklemek burayı sizin için doldurur; yalnızca alt alan adlarını kapsamak gibi ince ayarlar için burayı elle düzenleyin.",
   'settings.trustedDomains.loadError': 'Güvenilir alan adları yüklenemedi.',
   'settings.trustedDomains.domainLabel': 'Alan adı',
+  'settings.trustedDomains.domainRequiredError': 'Bir alan adı girin.',
   'settings.trustedDomains.includeSubdomains': 'Alt alan adlarını dahil et',
   'settings.trustedDomains.addButton': 'Alan adı ekle',
   'settings.trustedDomains.empty.title': 'Henüz alan adı yok',
@@ -380,6 +381,7 @@ export const settings: Messages = {
     'Aşağıda zorunlu kılma açıldığında temsilci/yönetici paneline erişebilecek kaynaklar. Kaydedilen bir liste, bağlandığınız adresi asla dışlayamaz — sunucu sizi kilitleyecek bir değişikliği reddeder.',
   'settings.ipAllowlist.loadError': 'IP izin listesi yüklenemedi.',
   'settings.ipAllowlist.entryLabel': 'Adres veya CIDR aralığı',
+  'settings.ipAllowlist.entryRequiredError': 'Bir adres veya CIDR aralığı girin.',
   'settings.ipAllowlist.labelLabel': 'Etiket (opsiyonel)',
   'settings.ipAllowlist.addButton': 'Girdi ekle',
   'settings.ipAllowlist.empty.title': 'Henüz izin listesi girdisi yok',
@@ -394,10 +396,14 @@ export const settings: Messages = {
   'settings.ipAllowlist.enforceHint':
     'Açıldığında, yalnızca yukarıdaki adresler temsilci/yönetici paneline erişebilir.',
   'settings.ipAllowlist.idleTimeoutLabel': 'Boşta kalma süresi (dakika)',
+  'settings.ipAllowlist.idleTimeoutError':
+    'Bir dakika sayısı girin veya kapatmak için boş bırakın.',
   'settings.ipAllowlist.idleTimeoutSummary': 'Boşta kalma süresi: {value}',
   'settings.ipAllowlist.minutesValue.one': '{count} dakika',
   'settings.ipAllowlist.minutesValue.other': '{count} dakika',
   'settings.ipAllowlist.maxSessionsLabel': 'Maksimum eşzamanlı oturum',
+  'settings.ipAllowlist.maxSessionsError':
+    '1 veya daha büyük bir tam sayı girin, ya da varsayılan için boş bırakın.',
   'settings.ipAllowlist.maxSessionsSummary': 'Maksimum eşzamanlı oturum: {value}',
   'settings.ipAllowlist.defaultMaxSessions': '25 (varsayılan)',
   'settings.ipAllowlist.requireTwoFactorLabel': 'İki adımlı doğrulama',
@@ -643,6 +649,7 @@ export const settings: Messages = {
     "Bu adreslerden birindeki bir ziyaretçi, taze bir oturumdan bile olsa bir sohbet için reddedilir. Bunun yerine adlı bir kişiyi yasaklamak için Müşteriler'de profilindeki engelleme eylemini kullanın.",
   'settings.bannedIps.loadError': 'Engellenen adresler yüklenemedi.',
   'settings.bannedIps.ipLabel': 'IP adresi',
+  'settings.bannedIps.ipRequiredError': 'Bir IP adresi girin.',
   'settings.bannedIps.ipHint':
     'Bir IPv4 veya IPv6 adresi. Siz burada kaldırana kadar ziyaretçi engellenir.',
   'settings.bannedIps.blockButton': 'Adresi engelle',
@@ -668,6 +675,7 @@ export const settings: Messages = {
   'settings.fileSharing.allowedTypesHint':
     'MIME türleri, virgülle ayrılmış — bir tarayıcının bir dosyayı etiketlediği biçim.',
   'settings.fileSharing.maxSizeLabel': 'Maksimum boyut (MB)',
+  'settings.fileSharing.maxSizeError': '1 ile 100 MB arasında bir boyut girin.',
 
   // Yetenekler (uzmanlık kataloğu) — Skills.tsx
   'settings.skills.title': 'Yetenekler',

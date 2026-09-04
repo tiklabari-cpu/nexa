@@ -19,14 +19,20 @@
  * the confirmation exists to inform, not to gate a rejection — the roster
  * count comes from `GET /agents`, the same call `TeamPage.tsx` renders.
  */
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent, type ReactElement } from 'react';
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+} from '@tanstack/react-query';
+import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { FieldError, optional, required, useForm, type Validator } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 interface IpAllowlistEntry {
@@ -64,8 +70,6 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [entry, setEntry] = useState('');
-  const [label, setLabel] = useState('');
 
   const list = useQuery({
     queryKey: ['settings', 'ip-allowlist'],
@@ -78,11 +82,7 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
   const add = useMutation({
     mutationFn: (body: { entry: string; label: string | null }) =>
       api.post<IpAllowlistEntry>('/settings/ip-allowlist', body),
-    onSuccess: () => {
-      setEntry('');
-      setLabel('');
-      invalidate();
-    },
+    onSuccess: invalidate,
   });
 
   const remove = useMutation({
@@ -90,12 +90,21 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
     onSuccess: invalidate,
   });
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    const value = entry.trim();
-    if (!value) return;
-    add.mutate({ entry: value, label: label.trim() || null });
-  }
+  const form = useForm({
+    initial: { entry: '', label: '' },
+    validators: { entry: required(t('settings.ipAllowlist.entryRequiredError')) },
+    onSubmit: async (values, { reset }) => {
+      try {
+        await add.mutateAsync({ entry: values.entry.trim(), label: values.label.trim() || null });
+        reset();
+      } catch {
+        // Surfaced below via the shared `add.isError` banner, including the
+        // self-lockout guard's deliberately untranslated, name-the-exact-fix
+        // message (08.9.6-g) — nothing extra to do here.
+      }
+    },
+  });
+  const entryError = form.errorFor('entry');
 
   return (
     <Section
@@ -108,7 +117,8 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
         <Card>
           {canEdit && (
             <form
-              onSubmit={submit}
+              onSubmit={form.handleSubmit}
+              noValidate
               className="flex flex-wrap items-end gap-3 border-b border-border p-4"
             >
               <label htmlFor="new-allowlist-entry" className="flex min-w-56 flex-1 flex-col gap-1">
@@ -117,11 +127,15 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
                 </span>
                 <input
                   id="new-allowlist-entry"
-                  value={entry}
-                  onChange={(event) => setEntry(event.target.value)}
+                  value={form.values.entry}
+                  onChange={(event) => form.setValue('entry', event.target.value)}
+                  onBlur={() => form.blur('entry')}
+                  aria-invalid={entryError ? true : undefined}
+                  aria-describedby={entryError ? 'new-allowlist-entry-error' : undefined}
                   placeholder="10.0.0.0/24"
                   className="rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none placeholder:text-content-tertiary"
                 />
+                <FieldError id="new-allowlist-entry-error" message={entryError} />
               </label>
 
               <label htmlFor="new-allowlist-label" className="flex w-48 flex-col gap-1">
@@ -130,8 +144,8 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
                 </span>
                 <input
                   id="new-allowlist-label"
-                  value={label}
-                  onChange={(event) => setLabel(event.target.value)}
+                  value={form.values.label}
+                  onChange={(event) => form.setValue('label', event.target.value)}
                   placeholder="Office VPN"
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
                 />
@@ -139,10 +153,10 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
 
               <button
                 type="submit"
-                disabled={!entry.trim() || add.isPending}
+                disabled={!form.canSubmit}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
-                {add.isPending ? t('settings.adding') : t('settings.ipAllowlist.addButton')}
+                {form.isSubmitting ? t('settings.adding') : t('settings.ipAllowlist.addButton')}
               </button>
 
               {add.isError && (
@@ -196,12 +210,24 @@ function IpAllowlistEntries({ canEdit }: { canEdit: boolean }): ReactElement {
 
 // --- Session policy ------------------------------------------------------------
 
+function positiveMinutes(message: string): Validator {
+  return (value) => {
+    const minutes = Number(value.trim());
+    return Number.isFinite(minutes) && minutes >= 1 ? null : message;
+  };
+}
+
+function positiveSessionCount(message: string): Validator {
+  return (value) => {
+    const sessions = Number(value.trim());
+    return Number.isInteger(sessions) && sessions >= 1 ? null : message;
+  };
+}
+
 function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [idleMinutes, setIdleMinutes] = useState<string | null>(null);
-  const [maxSessions, setMaxSessions] = useState<string | null>(null);
   /** Set only while the "turn two-factor on" confirmation is open. */
   const [confirmTwoFactor, setConfirmTwoFactor] = useState(false);
 
@@ -225,8 +251,6 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
       api.patch<SecuritySettings>('/settings/security', body),
     onSuccess: (data) => {
       queryClient.setQueryData(['settings', 'security'], data);
-      setIdleMinutes(null);
-      setMaxSessions(null);
       setConfirmTwoFactor(false);
     },
   });
@@ -242,33 +266,6 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
     return <ErrorNotice message={t('settings.ipAllowlist.sessionPolicyLoadError')} />;
 
   const current = settings.data;
-  // `?? current` throughout: the inputs are uncontrolled drafts until touched,
-  // so an unsaved edit survives a background refetch (FileSharing's pattern).
-  const idleDraft =
-    idleMinutes ??
-    (current?.session_idle_timeout_seconds != null
-      ? String(Math.round(current.session_idle_timeout_seconds / 60))
-      : '');
-  const maxDraft =
-    maxSessions ??
-    (current?.max_concurrent_sessions != null ? String(current.max_concurrent_sessions) : '');
-
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    if (!current) return;
-
-    const idleValue = idleDraft.trim();
-    const maxValue = maxDraft.trim();
-    const minutes = idleValue === '' ? null : Number(idleValue);
-    const sessions = maxValue === '' ? null : Number(maxValue);
-    if (minutes !== null && (!Number.isFinite(minutes) || minutes < 1)) return;
-    if (sessions !== null && (!Number.isInteger(sessions) || sessions < 1)) return;
-
-    save.mutate({
-      session_idle_timeout_seconds: minutes === null ? null : Math.round(minutes * 60),
-      max_concurrent_sessions: sessions,
-    });
-  }
 
   return (
     <Section
@@ -312,83 +309,12 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
             </p>
           </div>
         ) : (
-          <form onSubmit={submit} className="flex flex-col gap-4 p-4">
-            <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={current!.ip_allowlist_enforced}
-                disabled={save.isPending}
-                onChange={(event) => save.mutate({ ip_allowlist_enforced: event.target.checked })}
-              />
-              <span className="flex-1 text-sm">
-                {t('settings.ipAllowlist.enforceCheckboxLabel')}
-                <span className="block text-2xs text-content-tertiary">
-                  {t('settings.ipAllowlist.enforceHint')}
-                </span>
-              </span>
-            </label>
-
-            <label className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                checked={current!.require_two_factor}
-                disabled={save.isPending}
-                onChange={(event) => handleRequireTwoFactorChange(event.target.checked)}
-              />
-              <span className="flex-1 text-sm">
-                {t('settings.ipAllowlist.requireTwoFactorCheckboxLabel')}
-                <span className="block text-2xs text-content-tertiary">
-                  {t('settings.ipAllowlist.requireTwoFactorHint')}
-                </span>
-              </span>
-            </label>
-
-            <div className="flex flex-wrap items-end gap-3">
-              <label htmlFor="idle-timeout" className="flex w-40 flex-col gap-1">
-                <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  {t('settings.ipAllowlist.idleTimeoutLabel')}
-                </span>
-                <input
-                  id="idle-timeout"
-                  type="number"
-                  min={1}
-                  value={idleDraft}
-                  onChange={(event) => setIdleMinutes(event.target.value)}
-                  placeholder={t('settings.off')}
-                  className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
-                />
-              </label>
-
-              <label htmlFor="max-sessions" className="flex w-40 flex-col gap-1">
-                <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                  {t('settings.ipAllowlist.maxSessionsLabel')}
-                </span>
-                <input
-                  id="max-sessions"
-                  type="number"
-                  min={1}
-                  value={maxDraft}
-                  onChange={(event) => setMaxSessions(event.target.value)}
-                  placeholder={t('settings.ipAllowlist.defaultMaxSessions')}
-                  className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
-                />
-              </label>
-
-              <button
-                type="submit"
-                disabled={save.isPending}
-                className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-              >
-                {save.isPending ? t('settings.saving') : t('settings.save')}
-              </button>
-            </div>
-
-            {save.isError && !confirmTwoFactor && (
-              <p role="alert" className="text-2xs text-danger">
-                {t(errorMessageKey(save.error))}
-              </p>
-            )}
-          </form>
+          <SessionPolicyForm
+            current={current!}
+            save={save}
+            confirmTwoFactor={confirmTwoFactor}
+            onRequireTwoFactorChange={handleRequireTwoFactorChange}
+          />
         )}
       </Card>
 
@@ -433,5 +359,143 @@ function SessionPolicy({ canEdit }: { canEdit: boolean }): ReactElement {
         </Modal>
       )}
     </Section>
+  );
+}
+
+/**
+ * Mounted only once the settings have loaded, so `useForm`'s `initial` is the
+ * real saved values on the very first render (`SlaPolicy`'s reasoning). The two
+ * checkboxes save immediately on change, outside `useForm`'s value state —
+ * only the idle-timeout/max-sessions pair goes through the submit button.
+ */
+function SessionPolicyForm({
+  current,
+  save,
+  confirmTwoFactor,
+  onRequireTwoFactorChange,
+}: {
+  current: SecuritySettings;
+  save: UseMutationResult<SecuritySettings, unknown, Partial<SecuritySettings>>;
+  confirmTwoFactor: boolean;
+  onRequireTwoFactorChange: (checked: boolean) => void;
+}): ReactElement {
+  const t = useTranslate();
+
+  const form = useForm({
+    initial: {
+      idleMinutes:
+        current.session_idle_timeout_seconds != null
+          ? String(Math.round(current.session_idle_timeout_seconds / 60))
+          : '',
+      maxSessions:
+        current.max_concurrent_sessions != null ? String(current.max_concurrent_sessions) : '',
+    },
+    validators: {
+      idleMinutes: optional(positiveMinutes(t('settings.ipAllowlist.idleTimeoutError'))),
+      maxSessions: optional(positiveSessionCount(t('settings.ipAllowlist.maxSessionsError'))),
+    },
+    onSubmit: async (values) => {
+      try {
+        await save.mutateAsync({
+          session_idle_timeout_seconds:
+            values.idleMinutes.trim() === '' ? null : Math.round(Number(values.idleMinutes) * 60),
+          max_concurrent_sessions:
+            values.maxSessions.trim() === '' ? null : Number(values.maxSessions),
+        });
+      } catch {
+        // Surfaced below via the shared `save.isError` banner — the same
+        // mutation the two checkboxes and the confirmation modal use.
+      }
+    },
+  });
+  const idleError = form.errorFor('idleMinutes');
+  const maxSessionsError = form.errorFor('maxSessions');
+
+  return (
+    <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-4 p-4">
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={current.ip_allowlist_enforced}
+          disabled={save.isPending}
+          onChange={(event) => save.mutate({ ip_allowlist_enforced: event.target.checked })}
+        />
+        <span className="flex-1 text-sm">
+          {t('settings.ipAllowlist.enforceCheckboxLabel')}
+          <span className="block text-2xs text-content-tertiary">
+            {t('settings.ipAllowlist.enforceHint')}
+          </span>
+        </span>
+      </label>
+
+      <label className="flex items-start gap-3">
+        <input
+          type="checkbox"
+          checked={current.require_two_factor}
+          disabled={save.isPending}
+          onChange={(event) => onRequireTwoFactorChange(event.target.checked)}
+        />
+        <span className="flex-1 text-sm">
+          {t('settings.ipAllowlist.requireTwoFactorCheckboxLabel')}
+          <span className="block text-2xs text-content-tertiary">
+            {t('settings.ipAllowlist.requireTwoFactorHint')}
+          </span>
+        </span>
+      </label>
+
+      <div className="flex flex-wrap items-end gap-3">
+        <label htmlFor="idle-timeout" className="flex w-40 flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('settings.ipAllowlist.idleTimeoutLabel')}
+          </span>
+          <input
+            id="idle-timeout"
+            type="number"
+            min={1}
+            value={form.values.idleMinutes}
+            onChange={(event) => form.setValue('idleMinutes', event.target.value)}
+            onBlur={() => form.blur('idleMinutes')}
+            aria-invalid={idleError ? true : undefined}
+            aria-describedby={idleError ? 'idle-timeout-error' : undefined}
+            placeholder={t('settings.off')}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+          />
+          <FieldError id="idle-timeout-error" message={idleError} />
+        </label>
+
+        <label htmlFor="max-sessions" className="flex w-40 flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('settings.ipAllowlist.maxSessionsLabel')}
+          </span>
+          <input
+            id="max-sessions"
+            type="number"
+            min={1}
+            value={form.values.maxSessions}
+            onChange={(event) => form.setValue('maxSessions', event.target.value)}
+            onBlur={() => form.blur('maxSessions')}
+            aria-invalid={maxSessionsError ? true : undefined}
+            aria-describedby={maxSessionsError ? 'max-sessions-error' : undefined}
+            placeholder={t('settings.ipAllowlist.defaultMaxSessions')}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
+          />
+          <FieldError id="max-sessions-error" message={maxSessionsError} />
+        </label>
+
+        <button
+          type="submit"
+          disabled={!form.canSubmit}
+          className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+        >
+          {form.isSubmitting ? t('settings.saving') : t('settings.save')}
+        </button>
+      </div>
+
+      {save.isError && !confirmTwoFactor && (
+        <p role="alert" className="text-2xs text-danger">
+          {t(errorMessageKey(save.error))}
+        </p>
+      )}
+    </form>
   );
 }

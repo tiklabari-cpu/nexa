@@ -6,12 +6,13 @@
  * and the last one to press save silently wins.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { type ReactElement } from 'react';
 import { Card, CardSkeleton } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { email, FieldError, optional, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { CustomFields } from '../custom-fields/CustomFields.js';
 import type { CustomerDetail } from './types.js';
@@ -273,17 +274,6 @@ function EditForm({
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
-  const [name, setName] = useState(customer.name ?? '');
-  const [email, setEmail] = useState(customer.email ?? '');
-  const [phone, setPhone] = useState(customer.phone ?? '');
-
-  // A refetch after saving must not clobber what the agent is currently typing,
-  // so the form is only re-seeded when the record itself changes identity.
-  useEffect(() => {
-    setName(customer.name ?? '');
-    setEmail(customer.email ?? '');
-    setPhone(customer.phone ?? '');
-  }, [customer.id]);
 
   const save = useMutation({
     mutationFn: (changes: Record<string, string | null>) =>
@@ -291,24 +281,37 @@ function EditForm({
     onSuccess: onSaved,
   });
 
-  const dirty =
-    name !== (customer.name ?? '') ||
-    email !== (customer.email ?? '') ||
-    phone !== (customer.phone ?? '');
-
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    if (!dirty) return;
-
-    // Only what changed. An empty field means "clear it", which the API accepts
-    // as an explicit null.
-    const changes: Record<string, string | null> = {};
-    if (name !== (customer.name ?? '')) changes['name'] = name.trim() || null;
-    if (email !== (customer.email ?? '')) changes['email'] = email.trim() || null;
-    if (phone !== (customer.phone ?? '')) changes['phone'] = phone.trim() || null;
-
-    save.mutate(changes);
-  }
+  // Remounted by the caller's `key={customer.id}` whenever the record changes
+  // identity, so `useForm`'s seed-once `initial` never goes stale — and a
+  // refetch after saving (same identity) leaves an in-flight edit alone.
+  const form = useForm({
+    initial: {
+      name: customer.name ?? '',
+      email: customer.email ?? '',
+      phone: customer.phone ?? '',
+    },
+    validators: {
+      email: optional(email(t('customers.detail.field.emailError'))),
+      // No format check: the server (`customers.ts`) stores this as a plain
+      // string up to 40 characters, not the channel adapters' delivery-address
+      // format `phoneNumber` mirrors — an already-saved "+44 77 1234 5678"
+      // must stay editable, not get silently stuck on Save.
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      // Only what changed. An empty field means "clear it", which the API accepts
+      // as an explicit null.
+      const changes: Record<string, string | null> = {};
+      if (values.name !== (customer.name ?? '')) changes['name'] = values.name.trim() || null;
+      if (values.email !== (customer.email ?? '')) changes['email'] = values.email.trim() || null;
+      if (values.phone !== (customer.phone ?? '')) changes['phone'] = values.phone.trim() || null;
+      try {
+        await save.mutateAsync(changes);
+      } catch (error) {
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+  const emailError = form.errorFor('email');
 
   if (!canEdit) {
     return (
@@ -322,40 +325,42 @@ function EditForm({
   }
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2 px-4 py-3">
+    <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-2 px-4 py-3">
       <Field
         id="customer-name"
         label={t('customers.detail.field.name')}
-        value={name}
-        onChange={setName}
+        value={form.values.name}
+        onChange={(value) => form.setValue('name', value)}
       />
       <Field
         id="customer-email"
         label={t('customers.detail.field.email')}
-        value={email}
-        onChange={setEmail}
+        value={form.values.email}
+        onChange={(value) => form.setValue('email', value)}
+        onBlur={() => form.blur('email')}
+        error={emailError}
         type="email"
       />
       <Field
         id="customer-phone"
         label={t('customers.detail.field.phone')}
-        value={phone}
-        onChange={setPhone}
+        value={form.values.phone}
+        onChange={(value) => form.setValue('phone', value)}
         type="tel"
       />
 
-      {save.isError && (
+      {form.submitError && (
         <p role="alert" className="text-2xs text-danger">
-          {t(errorMessageKey(save.error))}
+          {form.submitError}
         </p>
       )}
 
       <button
         type="submit"
-        disabled={!dirty || save.isPending}
+        disabled={!form.canSubmit || !form.isDirty}
         className="mt-1 rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
       >
-        {save.isPending ? t('customers.detail.saving') : t('customers.detail.saveChanges')}
+        {form.isSubmitting ? t('customers.detail.saving') : t('customers.detail.saveChanges')}
       </button>
     </form>
   );
@@ -366,12 +371,16 @@ function Field({
   label,
   value,
   onChange,
+  onBlur,
+  error,
   type = 'text',
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
+  onBlur?: () => void;
+  error?: string | null;
   type?: string;
 }): ReactElement {
   return (
@@ -384,8 +393,12 @@ function Field({
         type={type}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-error` : undefined}
         className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
       />
+      <FieldError id={`${id}-error`} message={error ?? null} />
     </label>
   );
 }

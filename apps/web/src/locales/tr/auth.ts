@@ -172,6 +172,7 @@ export const auth: Messages = {
     'Sohbet widget’ını eklemek istediğiniz siteyi girin. Bu, sitenin alan adını da güvenilir listesine ekler; böylece widget hemen orada konuşma başlatabilir.',
   'auth.onboarding.website.domainLabel': 'Website alan adı',
   'auth.onboarding.website.domainPlaceholder': 'magaza.ornek',
+  'auth.onboarding.website.domainRequiredError': 'Bir web sitesi alan adı girin.',
   'auth.onboarding.website.submit': 'Website ekle',
   'auth.onboarding.website.submitting': 'Ekleniyor…',
   'auth.onboarding.website.added':
@@ -181,6 +182,8 @@ export const auth: Messages = {
     'Ekip arkadaşlarınızı e-postayla ekleyin — birden fazlasını boşluk veya virgülle ayırın. Temsilci olarak katılırlar; rollerini daha sonra değiştirebilirsiniz. Şimdilik tek başınaysanız bu adımı atlayın.',
   'auth.onboarding.team.emailsLabel': 'Ekip arkadaşı e-postaları',
   'auth.onboarding.team.emailsPlaceholder': 'sam@ornek.com, priya@ornek.com',
+  'auth.onboarding.team.emailsEmptyError': 'En az bir e-posta adresi girin.',
+  'auth.onboarding.team.emailsInvalidError': 'Geçersiz adres: {addresses}',
   'auth.onboarding.team.submit': 'Davet gönder',
   'auth.onboarding.team.submitting': 'Gönderiliyor…',
   // Turkish does not inflect a noun after a numeral (see shell.trial.remaining.*

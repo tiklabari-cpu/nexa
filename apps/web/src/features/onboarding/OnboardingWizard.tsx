@@ -18,11 +18,12 @@
  * making the owner click back through welcome/website/team.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useEffect, useRef, useState, type FormEvent, type ReactElement } from 'react';
+import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { OnboardingSeedResult, OnboardingState } from '@nexa/types';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { emailList, FieldError, required, splitList, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { useStepper } from '../../lib/stepper.js';
 
@@ -205,7 +206,6 @@ function WelcomeStep({ name }: { name: string | null }): ReactElement {
 function WebsiteStep(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
-  const [domain, setDomain] = useState('');
   const [added, setAdded] = useState<string | null>(null);
 
   const add = useMutation({
@@ -219,38 +219,56 @@ function WebsiteStep(): ReactElement {
     },
     onSuccess: (website) => {
       setAdded(website.domain);
-      setDomain('');
     },
   });
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    if (domain.trim()) add.mutate(domain.trim());
-  }
+  // Only "is this empty?" — `POST /websites` runs the pasted value through
+  // `normaliseTrustedDomain`, which deliberately accepts a full URL and keeps
+  // only its host (settings.spec.ts's "normalises a pasted URL" case), so a
+  // stricter client-side format check would refuse input the server accepts.
+  const form = useForm({
+    initial: { domain: '' },
+    validators: {
+      domain: required(t('auth.onboarding.website.domainRequiredError')),
+    },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await add.mutateAsync(values.domain.trim());
+        reset();
+      } catch (error) {
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+  const domainError = form.errorFor('domain');
 
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">{t('auth.onboarding.website.heading')}</h2>
       <p className="text-sm text-content-secondary">{t('auth.onboarding.website.body')}</p>
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-2">
+      <form onSubmit={form.handleSubmit} noValidate className="flex flex-wrap items-end gap-2">
         <label htmlFor="onboarding-domain" className="flex min-w-56 flex-1 flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
             {t('auth.onboarding.website.domainLabel')}
           </span>
           <input
             id="onboarding-domain"
-            value={domain}
-            onChange={(event) => setDomain(event.target.value)}
+            value={form.values.domain}
+            onChange={(event) => form.setValue('domain', event.target.value)}
+            onBlur={() => form.blur('domain')}
+            aria-invalid={domainError ? true : undefined}
+            aria-describedby={domainError ? 'onboarding-domain-error' : undefined}
             placeholder={t('auth.onboarding.website.domainPlaceholder')}
             className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
           />
+          <FieldError id="onboarding-domain-error" message={domainError} />
         </label>
         <button
           type="submit"
-          disabled={!domain.trim() || add.isPending}
+          disabled={!form.canSubmit}
           className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
         >
-          {add.isPending
+          {form.isSubmitting
             ? t('auth.onboarding.website.submitting')
             : t('auth.onboarding.website.submit')}
         </button>
@@ -260,9 +278,9 @@ function WebsiteStep(): ReactElement {
           {t('auth.onboarding.website.added', { domain: added })}
         </p>
       )}
-      {add.isError && (
+      {form.submitError && (
         <p role="alert" className="text-2xs text-danger">
-          {t(errorMessageKey(add.error))}
+          {form.submitError}
         </p>
       )}
     </div>
@@ -273,7 +291,6 @@ function WebsiteStep(): ReactElement {
 function TeamStep(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
-  const [emails, setEmails] = useState('');
   const [sent, setSent] = useState<number | null>(null);
 
   const invite = useMutation({
@@ -281,43 +298,57 @@ function TeamStep(): ReactElement {
       api.post<{ items: unknown[] }>('/invitations', { emails: list, role: 'agent' }),
     onSuccess: (result) => {
       setSent(result.items.length);
-      setEmails('');
     },
   });
 
-  function submit(event: FormEvent): void {
-    event.preventDefault();
-    const list = emails
-      .split(/[\s,]+/)
-      .map((value) => value.trim())
-      .filter(Boolean);
-    if (list.length > 0) invite.mutate(list);
-  }
+  const form = useForm({
+    initial: { emails: '' },
+    validators: {
+      emails: emailList({
+        emptyMessage: t('auth.onboarding.team.emailsEmptyError'),
+        invalidMessage: (bad) =>
+          t('auth.onboarding.team.emailsInvalidError', { addresses: bad.join(', ') }),
+      }),
+    },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await invite.mutateAsync(splitList(values.emails));
+        reset();
+      } catch (error) {
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+  const emailsError = form.errorFor('emails');
 
   return (
     <div className="flex flex-col gap-3">
       <h2 className="text-lg font-semibold">{t('auth.onboarding.team.heading')}</h2>
       <p className="text-sm text-content-secondary">{t('auth.onboarding.team.body')}</p>
-      <form onSubmit={submit} className="flex flex-col gap-2">
+      <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-2">
         <label htmlFor="onboarding-emails" className="flex flex-col gap-1">
           <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
             {t('auth.onboarding.team.emailsLabel')}
           </span>
           <input
             id="onboarding-emails"
-            value={emails}
-            onChange={(event) => setEmails(event.target.value)}
+            value={form.values.emails}
+            onChange={(event) => form.setValue('emails', event.target.value)}
+            onBlur={() => form.blur('emails')}
+            aria-invalid={emailsError ? true : undefined}
+            aria-describedby={emailsError ? 'onboarding-emails-error' : undefined}
             placeholder={t('auth.onboarding.team.emailsPlaceholder')}
             className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary"
           />
+          <FieldError id="onboarding-emails-error" message={emailsError} />
         </label>
         <div>
           <button
             type="submit"
-            disabled={!emails.trim() || invite.isPending}
+            disabled={!form.canSubmit}
             className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
           >
-            {invite.isPending
+            {form.isSubmitting
               ? t('auth.onboarding.team.submitting')
               : t('auth.onboarding.team.submit')}
           </button>
@@ -328,9 +359,9 @@ function TeamStep(): ReactElement {
           {t('auth.onboarding.team.sent', { count: sent })}
         </p>
       )}
-      {invite.isError && (
+      {form.submitError && (
         <p role="alert" className="text-2xs text-danger">
-          {t(errorMessageKey(invite.error))}
+          {form.submitError}
         </p>
       )}
     </div>

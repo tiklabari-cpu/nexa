@@ -268,7 +268,9 @@ export const team: Messages = {
   'team.copilot.deleteButton': 'Sil',
   'team.copilot.add.title': 'Kaynak ekle',
   'team.copilot.add.error': 'Bu kaynak eklenemedi. Adı ve içeriği kontrol edip tekrar deneyin.',
+  'team.copilot.add.nameRequiredError': 'Bir ad girin.',
   'team.copilot.add.contentLabel': 'İçerik',
+  'team.copilot.add.contentRequiredError': 'İçeriği girin.',
   'team.copilot.add.submit': 'Kaynak ekle',
   'team.copilot.add.submitting': 'Ekleniyor…',
 };

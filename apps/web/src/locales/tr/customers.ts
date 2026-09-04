@@ -72,6 +72,7 @@ export const customers: Messages = {
     'Henüz bir ekibe yönlendirilmedi. Sohbetlerinden biri atandığında ekipler burada görünür.',
   'customers.detail.field.name': 'Ad',
   'customers.detail.field.email': 'E-posta',
+  'customers.detail.field.emailError': 'Geçerli bir e-posta adresi girin.',
   'customers.detail.field.phone': 'Telefon',
   'customers.detail.saving': 'Kaydediliyor…',
   'customers.detail.saveChanges': 'Değişiklikleri kaydet',

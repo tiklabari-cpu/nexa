@@ -15,7 +15,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
-import { FieldError, required } from '../../lib/form.js';
+import { FieldError, required, useForm } from '../../lib/form.js';
 import type { AiAgent, AnswerLength } from './types.js';
 
 const LANGUAGE_OPTIONS: [string, string][] = [
@@ -45,36 +45,57 @@ export function ProfileForm({
   const t = useTranslate();
   const api = useApiClient();
 
-  const [name, setName] = useState(agent.name);
-  const [nameTouched, setNameTouched] = useState(false);
-  const [avatarUrl, setAvatarUrl] = useState(agent.avatar_url ?? '');
-  const [tone, setTone] = useState(agent.tone ?? '');
+  // `languages` (a multi-select) is not a single string, so it sits outside
+  // the one-string-per-field primitive; every other field is a plain string
+  // and goes through `useForm` for its "required name" validation and errors.
   const [languages, setLanguages] = useState<string[]>(agent.languages);
-  const [answerLength, setAnswerLength] = useState<AnswerLength | ''>(agent.answer_length ?? '');
+  const languagesDirty = JSON.stringify(languages) !== JSON.stringify(agent.languages);
 
   const save = useMutation({
-    mutationFn: () =>
-      api.patch<AiAgent>(`/ai-agents/${agent.id}`, {
-        name: name.trim(),
-        avatar_url: avatarUrl.trim() || null,
-        tone: tone.trim() || null,
-        languages,
-        answer_length: answerLength || null,
-      }),
+    mutationFn: (body: {
+      name: string;
+      avatar_url: string | null;
+      tone: string | null;
+      languages: string[];
+      answer_length: AnswerLength | null;
+    }) => api.patch<AiAgent>(`/ai-agents/${agent.id}`, body),
     onSuccess: onSaved,
   });
 
-  const nameError = required(t('playbook.profile.nameRequired'))(name);
-  // Dirty is measured against the live agent prop, so a successful save (which
-  // refetches the agent) settles the form back to clean with no manual reset.
-  const dirty =
-    name !== agent.name ||
-    avatarUrl !== (agent.avatar_url ?? '') ||
-    tone !== (agent.tone ?? '') ||
-    JSON.stringify(languages) !== JSON.stringify(agent.languages) ||
-    (answerLength || null) !== (agent.answer_length ?? null);
+  const initialValues = {
+    name: agent.name,
+    avatarUrl: agent.avatar_url ?? '',
+    tone: agent.tone ?? '',
+    answerLength: agent.answer_length ?? '',
+  };
 
-  const canSave = canEdit && !nameError && dirty && !save.isPending;
+  const form = useForm({
+    initial: initialValues,
+    validators: {
+      name: required(t('playbook.profile.nameRequired')),
+    },
+    onSubmit: (values) => {
+      // Dirty is measured against the live agent prop, so a successful save
+      // (which refetches the agent) settles the form back to clean with no
+      // manual reset. `form.isDirty` is not available here (this callback
+      // builds the options `useForm` itself is constructed from), so the same
+      // "any field differs from its initial" check is redone against `values`.
+      const fieldsDirty = (Object.keys(initialValues) as (keyof typeof initialValues)[]).some(
+        (key) => values[key] !== initialValues[key],
+      );
+      if (!fieldsDirty && !languagesDirty) return;
+      save.mutate({
+        name: values.name.trim(),
+        avatar_url: values.avatarUrl.trim() || null,
+        tone: values.tone.trim() || null,
+        languages,
+        answer_length: (values.answerLength || null) as AnswerLength | null,
+      });
+    },
+  });
+  const nameError = form.errorFor('name');
+  const dirty = form.isDirty || languagesDirty;
+  const canSave = canEdit && form.isValid && dirty && !save.isPending;
 
   function toggleLanguage(code: string): void {
     setLanguages((current) =>
@@ -85,28 +106,22 @@ export function ProfileForm({
   return (
     <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
       <Card>
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            if (canSave) save.mutate();
-          }}
-          className="flex flex-col gap-3 p-4"
-        >
+        <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3 p-4">
           <label htmlFor="persona-name" className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
               {t('playbook.profile.name')}
             </span>
             <input
               id="persona-name"
-              value={name}
+              value={form.values.name}
               disabled={!canEdit}
-              onChange={(event) => setName(event.target.value)}
-              onBlur={() => setNameTouched(true)}
-              aria-invalid={nameTouched && nameError ? true : undefined}
-              aria-describedby={nameTouched && nameError ? 'persona-name-error' : undefined}
+              onChange={(event) => form.setValue('name', event.target.value)}
+              onBlur={() => form.blur('name')}
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={nameError ? 'persona-name-error' : undefined}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none disabled:opacity-60"
             />
-            <FieldError id="persona-name-error" message={nameTouched ? nameError : null} />
+            <FieldError id="persona-name-error" message={nameError} />
           </label>
 
           <label htmlFor="persona-avatar" className="flex flex-col gap-1">
@@ -115,9 +130,9 @@ export function ProfileForm({
             </span>
             <input
               id="persona-avatar"
-              value={avatarUrl}
+              value={form.values.avatarUrl}
               disabled={!canEdit}
-              onChange={(event) => setAvatarUrl(event.target.value)}
+              onChange={(event) => form.setValue('avatarUrl', event.target.value)}
               placeholder={t('playbook.profile.avatarPlaceholder')}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
             />
@@ -129,9 +144,9 @@ export function ProfileForm({
             </span>
             <input
               id="persona-tone"
-              value={tone}
+              value={form.values.tone}
               disabled={!canEdit}
-              onChange={(event) => setTone(event.target.value)}
+              onChange={(event) => form.setValue('tone', event.target.value)}
               placeholder={t('playbook.profile.tonePlaceholder')}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
             />
@@ -176,9 +191,9 @@ export function ProfileForm({
             </label>
             <select
               id="persona-length"
-              value={answerLength}
+              value={form.values.answerLength}
               disabled={!canEdit}
-              onChange={(event) => setAnswerLength(event.target.value as AnswerLength | '')}
+              onChange={(event) => form.setValue('answerLength', event.target.value)}
               className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none disabled:opacity-60"
             >
               <option value="">{t('playbook.profile.noPreference')}</option>
@@ -210,11 +225,11 @@ export function ProfileForm({
       </Card>
 
       <PersonaPreview
-        name={name}
-        avatarUrl={avatarUrl}
-        tone={tone}
+        name={form.values.name}
+        avatarUrl={form.values.avatarUrl}
+        tone={form.values.tone}
         languages={languages}
-        answerLength={answerLength}
+        answerLength={form.values.answerLength as AnswerLength | ''}
       />
     </div>
   );

@@ -386,6 +386,8 @@ paths:
     $ref: "./paths/settings.yaml#/compliance"
   /settings/compliance/baa:
     $ref: "./paths/settings.yaml#/complianceBaa"
+  /settings/company:
+    $ref: "./paths/settings.yaml#/company"
   /settings/sla:
     $ref: "./paths/settings.yaml#/slaPolicy"
   /settings/sandbox:
@@ -2133,6 +2135,48 @@ components:
           description: >-
             When the owner accepted the BAA, or null if never. Set once, on
             the first acceptance, and not moved by a later one.
+
+    CompanyDetails:
+      type: object
+      description: |
+        Company name, sector, address and timezone (FR-MOD-08.3 ·
+        `organizations`), what PRD §8.4 calls the billing/brand/report basis.
+        Organization-scoped, not license- or brand-scoped.
+      required: [name, sector, address, timezone]
+      properties:
+        name: { type: string }
+        sector:
+          type: string
+          nullable: true
+          description: >-
+            A closed list (a report grouping) rather than free text — `null`
+            until a workspace sets one.
+          enum:
+            [
+              ecommerce_retail,
+              saas_technology,
+              financial_services,
+              healthcare,
+              travel_hospitality,
+              education,
+              real_estate,
+              telecommunications,
+              media_entertainment,
+              gaming_gambling,
+              nonprofit_government,
+              professional_services,
+              manufacturing_logistics,
+              other,
+            ]
+        address:
+          type: string
+          nullable: true
+          description: Free text; null until a workspace sets one.
+        timezone:
+          type: string
+          description: >-
+            An IANA zone name, e.g. `Europe/Istanbul`. Defaults to `UTC` — the
+            column is never null.
 
     ChatTimeoutSettings:
       type: object

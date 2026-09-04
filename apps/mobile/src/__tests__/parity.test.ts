@@ -789,7 +789,11 @@ describe('module parity matrix — what is still owed', () => {
       // the security trail, by id — an Owner/Admin console read behind
       // `audit_log--all:ro`, the same door the list it hangs off already sits
       // behind and one this app has never had. Nothing to re-scope.
-      contractEndpoints: 196,
+      // 196 → 197 with `/settings/company` (M-CO-a, tm 182.1). Company
+      // name/sector/address/timezone — Owner/Admin console configuration
+      // behind `organization--my:rw`, part of the Settings module this app
+      // has never had (`OUT_OF_SCOPE` below). Nothing to re-scope.
+      contractEndpoints: 197,
       scopeBoundaries: 1,
     });
   });

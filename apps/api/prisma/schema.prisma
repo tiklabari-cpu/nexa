@@ -34,6 +34,25 @@ model Organization {
   /// `organizations_region_immutable` trigger enforce both halves, neither of
   /// which Prisma models, so this comment is the only place the schema says so.
   region    String   @default("eu")
+  /// Company details (FR-MOD-08.3 · M-CO-a): the billing/branding/report basis
+  /// PRD §8.4 asks for. Closed list, not free text — reportable rather than
+  /// merely descriptive, matching every other classification column here
+  /// (`region`, `licenses.billing_cycle`, `licenses.status`): a workspace
+  /// typing "Gaming" today and "gaming" tomorrow would fragment a report that
+  /// groups by this column. `COMPANY_SECTORS` (`@nexa/types`) is the value
+  /// list; `organizations_sector_check` is the other half Prisma cannot model.
+  /// Null until a workspace fills in Settings → Company details.
+  sector    String?
+  /// Free text (FR-MOD-08.3). Unlike `sector` this has no natural closed set —
+  /// postal formats vary too widely across the regions this product serves —
+  /// so it stays one string rather than a structured street/city/postal
+  /// breakdown; MVP collects no separate billing address to reuse one from.
+  address   String?
+  /// IANA zone, e.g. `"Europe/Istanbul"` (FR-MOD-08.3). Defaults to UTC like
+  /// `work_schedules.timezone`. Whether this is the source an agent's own
+  /// work-schedule timezone defaults from, or a separate fact, is M-CO-b's
+  /// decision — this column only records the workspace-level one.
+  timezone  String   @default("UTC")
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   licenses     License[]

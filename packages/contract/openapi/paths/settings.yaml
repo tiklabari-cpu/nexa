@@ -987,6 +987,98 @@ complianceBaa:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# --- Company details (FR-MOD-08.3 · M-CO-a) ---------------------------------
+#
+# Name, sector, address and timezone — PRD §8.4's "fatura/marka/rapor temeli"
+# (billing/brand/report basis). Organization-scoped rather than license- or
+# brand-scoped: one workspace may hold several licenses and brands, and this is
+# one set of facts about the company behind all of them. Unlike most of
+# `/settings/*` the row always exists — `organizations` is created at signup —
+# so there is no upsert-on-first-write and no "no row yet" default state.
+
+company:
+  get:
+    tags: [Settings]
+    operationId: getCompanyDetails
+    summary: Company name, sector, address and timezone
+    description: |
+      A workspace that has never opened this screen still reads real values:
+      `name` from signup, `timezone` defaulting to `UTC`, and `sector`/`address`
+      `null` until set.
+    responses:
+      "200":
+        description: The current company details
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CompanyDetails" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Settings]
+    operationId: updateCompanyDetails
+    summary: Change the company name, sector, address or timezone
+    description: |
+      **Owner or admin.**
+
+      `sector` must be one of the closed list `CompanyDetails` documents — a
+      value reports can group by, not free text (PRD §8.4 "rapor temeli").
+      Send `null` to clear it. `address` is free text, bounded, and `null`
+      clears it too. `timezone` must name a zone the runtime's own tz database
+      recognises; unlike the other two fields there is no way to unset it,
+      only replace it — the column is `NOT NULL` and defaults to `UTC`, so
+      every workspace always has one.
+
+      Records `settings.company_updated` in the audit trail, naming the
+      fields that changed.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              name: { type: string, minLength: 1, maxLength: 200 }
+              sector:
+                type: string
+                nullable: true
+                enum:
+                  [
+                    ecommerce_retail,
+                    saas_technology,
+                    financial_services,
+                    healthcare,
+                    travel_hospitality,
+                    education,
+                    real_estate,
+                    telecommunications,
+                    media_entertainment,
+                    gaming_gambling,
+                    nonprofit_government,
+                    professional_services,
+                    manufacturing_logistics,
+                    other,
+                  ]
+              address: { type: string, maxLength: 500, nullable: true }
+              timezone:
+                type: string
+                minLength: 1
+                maxLength: 100
+                description: An IANA zone name, e.g. `Europe/Istanbul`.
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/CompanyDetails" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 # SIEM export configuration (NFR-C6 · C6-b).
 #
 # Where the workspace's audit trail is shipped, and how the feed is doing. Part

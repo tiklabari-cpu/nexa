@@ -11,9 +11,12 @@ import type { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import {
+  COMPANY_ADDRESS_MAX_LENGTH,
+  COMPANY_SECTORS,
   DEFAULT_SALES_TRACKER_CONFIG,
   DEFAULT_WIDGET_APPEARANCE,
   EXPERTISE_NAME_MAX_LENGTH,
+  isIanaTimeZone,
   ROUTING_RULE_KINDS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
@@ -24,6 +27,7 @@ import {
 } from '@nexa/types';
 import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@nexa/types';
 import type {
+  CompanySector,
   Region,
   SandboxView,
   SsoAttributeMappingKey,
@@ -613,6 +617,29 @@ const updateTagBody = z
 const acceptBaaBody = z.object({ accepted: z.literal(true) });
 
 /**
+ * Company details (FR-MOD-08.3 · M-CO-a).
+ *
+ * `sector` accepts `null` (clears it) alongside the closed `COMPANY_SECTORS`
+ * list; anything else — free text, a value not in the list — is a 400 rather
+ * than a report bucket nobody else's workspace uses. `timezone` has no `null`
+ * form: the column is `NOT NULL DEFAULT 'UTC'`, so there is nothing to clear,
+ * only replace, and `isIanaTimeZone` refuses a misspelled zone before it can
+ * reach a screen or a report as a silent no-op.
+ */
+const updateCompanyBody = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    sector: z.enum(COMPANY_SECTORS).nullable().optional(),
+    address: z.string().trim().min(1).max(COMPANY_ADDRESS_MAX_LENGTH).nullable().optional(),
+    timezone: z
+      .string()
+      .refine(isIanaTimeZone, { message: 'must be a real IANA time zone, e.g. Europe/Istanbul' })
+      .optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
  * Configuring the SIEM export (NFR-C6 · C6-b).
  *
  * `target` is the closed `SIEM_EXPORT_TARGETS` vocabulary — the same set the
@@ -665,6 +692,20 @@ function serialiseCompliance(region: Region, signedAt: Date | null) {
     region,
     baa_available: region === 'us',
     hipaa_baa_signed_at: signedAt ? signedAt.toISOString() : null,
+  };
+}
+
+function serialiseCompany(org: {
+  name: string;
+  sector: string | null;
+  address: string | null;
+  timezone: string;
+}) {
+  return {
+    name: org.name,
+    sector: org.sector as CompanySector | null,
+    address: org.address,
+    timezone: org.timezone,
   };
 }
 
@@ -1871,6 +1912,67 @@ export default async function settingsRoutes(
       });
 
       return reply.send(serialiseCompliance(region, signedAt));
+    },
+  );
+
+  // --- Company details (FR-MOD-08.3 · M-CO-a) --------------------------------
+  //
+  // Name, sector, address and timezone — PRD §8.4's billing/branding/report
+  // basis. Organization-scoped: `organizations` is created at signup, so
+  // unlike most of `/settings/*` there is no upsert-on-first-write and no
+  // "no row yet" default state — the row this reads and writes always exists.
+  //
+  // `minimumRole: admin` on the read too, like `/settings/compliance` and
+  // unlike `/settings/security`: scope possession alone already excludes an
+  // agent (`organization--my:rw` is admin-only in `role-scopes.ts` and no
+  // `:ro` counterpart exists to hand out more narrowly), so this is the same
+  // belt-and-suspenders the compliance read carries, not a stricter gate.
+
+  app.get(
+    '/settings/company',
+    { config: { scopes: ['organization--my:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const organizationId = request.tenant().organizationId;
+      const org = await request.withTenant((tx) =>
+        tx.organization.findUniqueOrThrow({
+          where: { id: organizationId },
+          select: { name: true, sector: true, address: true, timezone: true },
+        }),
+      );
+      return reply.send(serialiseCompany(org));
+    },
+  );
+
+  app.patch(
+    '/settings/company',
+    { config: { scopes: ['organization--my:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(updateCompanyBody, request.body);
+      const organizationId = request.tenant().organizationId;
+
+      const data = {
+        ...(body.name !== undefined ? { name: body.name } : {}),
+        ...(body.sector !== undefined ? { sector: body.sector } : {}),
+        ...(body.address !== undefined ? { address: body.address } : {}),
+        ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+      };
+
+      const org = await request.withTenant(async (tx) => {
+        const updated = await tx.organization.update({
+          where: { id: organizationId },
+          data,
+          select: { name: true, sector: true, address: true, timezone: true },
+        });
+        // Field *names*, not values — the same restraint `settings.security_updated`
+        // applies, even though nothing here is sensitive; the pattern is the point.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.company_updated',
+          metadata: { fields: Object.keys(body) },
+        });
+        return updated;
+      });
+
+      return reply.send(serialiseCompany(org));
     },
   );
 

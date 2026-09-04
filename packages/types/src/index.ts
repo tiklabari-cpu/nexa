@@ -23,3 +23,4 @@ export * from './sandbox.js';
 export * from './mobile-auth.js';
 export * from './notifications.js';
 export * from './push.js';
+export * from './company.js';

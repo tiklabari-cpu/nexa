@@ -3762,6 +3762,43 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/settings/company': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Company name, sector, address and timezone
+     * @description A workspace that has never opened this screen still reads real values:
+     *     `name` from signup, `timezone` defaulting to `UTC`, and `sector`/`address`
+     *     `null` until set.
+     */
+    get: operations['getCompanyDetails'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Change the company name, sector, address or timezone
+     * @description **Owner or admin.**
+     *
+     *     `sector` must be one of the closed list `CompanyDetails` documents — a
+     *     value reports can group by, not free text (PRD §8.4 "rapor temeli").
+     *     Send `null` to clear it. `address` is free text, bounded, and `null`
+     *     clears it too. `timezone` must name a zone the runtime's own tz database
+     *     recognises; unlike the other two fields there is no way to unset it,
+     *     only replace it — the column is `NOT NULL` and defaults to `UTC`, so
+     *     every workspace always has one.
+     *
+     *     Records `settings.company_updated` in the audit trail, naming the
+     *     fields that changed.
+     */
+    patch: operations['updateCompanyDetails'];
+    trace?: never;
+  };
   '/settings/sla': {
     parameters: {
       query?: never;
@@ -7645,6 +7682,38 @@ export interface components {
        * @description When the owner accepted the BAA, or null if never. Set once, on the first acceptance, and not moved by a later one.
        */
       hipaa_baa_signed_at: string | null;
+    };
+    /**
+     * @description Company name, sector, address and timezone (FR-MOD-08.3 ·
+     *     `organizations`), what PRD §8.4 calls the billing/brand/report basis.
+     *     Organization-scoped, not license- or brand-scoped.
+     */
+    CompanyDetails: {
+      name: string;
+      /**
+       * @description A closed list (a report grouping) rather than free text — `null` until a workspace sets one.
+       * @enum {string|null}
+       */
+      sector:
+        | 'ecommerce_retail'
+        | 'saas_technology'
+        | 'financial_services'
+        | 'healthcare'
+        | 'travel_hospitality'
+        | 'education'
+        | 'real_estate'
+        | 'telecommunications'
+        | 'media_entertainment'
+        | 'gaming_gambling'
+        | 'nonprofit_government'
+        | 'professional_services'
+        | 'manufacturing_logistics'
+        | 'other'
+        | null;
+      /** @description Free text; null until a workspace sets one. */
+      address: string | null;
+      /** @description An IANA zone name, e.g. `Europe/Istanbul`. Defaults to `UTC` — the column is never null. */
+      timezone: string;
     };
     /**
      * @description Per-license idle-chat auto-close window (FR-MOD-08.7.3, `inbox_settings`).
@@ -16412,6 +16481,79 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['ComplianceSettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getCompanyDetails: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current company details */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompanyDetails'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateCompanyDetails: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          /** @enum {string|null} */
+          sector?:
+            | 'ecommerce_retail'
+            | 'saas_technology'
+            | 'financial_services'
+            | 'healthcare'
+            | 'travel_hospitality'
+            | 'education'
+            | 'real_estate'
+            | 'telecommunications'
+            | 'media_entertainment'
+            | 'gaming_gambling'
+            | 'nonprofit_government'
+            | 'professional_services'
+            | 'manufacturing_logistics'
+            | 'other'
+            | null;
+          address?: string | null;
+          /** @description An IANA zone name, e.g. `Europe/Istanbul`. */
+          timezone?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CompanyDetails'];
         };
       };
       400: components['responses']['BadRequest'];

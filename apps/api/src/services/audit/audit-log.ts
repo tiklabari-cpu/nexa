@@ -200,6 +200,10 @@ export const AUDIT_ACTIONS = [
   'group.member_removed',
   // Workspace configuration
   'settings.security_updated',
+  // Company details (FR-MOD-08.3 · M-CO-a): name/sector/address/timezone, the
+  // billing/branding/report basis. Field names only, like most settings
+  // entries — none of the four is sensitive on its own.
+  'settings.company_updated',
   // Routing decides who is offered which conversations, so the whole life of a
   // rule is an authority change, not just an edit to it: adding one diverts
   // work to a team, and deleting one sends it somewhere else again — with the

@@ -89,6 +89,14 @@ export const ADMIN_SCOPES: Scope[] = [
   // configuration — owners and admins do it, ordinary agents work the inbox.
   'channels--all:rw',
   'access_rules:rw',
+  // Company details (FR-MOD-08.3 · M-CO-a): name/sector/address/timezone,
+  // the billing/branding/report basis. Defined in the scope catalogue since
+  // it was transcribed from the source platform, but until now granted to
+  // nobody's default session — `GET`/`PATCH /settings/company` could not be
+  // reached from the console at all. No `:ro` counterpart exists upstream
+  // either, so this one scope covers both verbs, same as `access_rules`
+  // covers both halves of the security screen it gates.
+  'organization--my:rw',
   // Managing the brand catalogue (Multibrand, PRD §5.3) — creating, renaming and
   // removing brands is workspace configuration, an owner/admin power.
   'brands--all:rw',

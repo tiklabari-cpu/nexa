@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 180.1 — M-READY-a · Readiness operatörü `&&`'e çevrildi + `active` bayrağı okunuyor — done — 2026-09-04 UTC
+
+- **Yapıldı:** `readiness.ts` `evaluateReadiness`: `ready = hasKnowledge || hasSkill` → `hasKnowledge && hasSkill` (PRD KK4: "Knowledge boş VEYA hiç aktif skill yokken uyarı" = AND gerektirir). `hasSteps` → `isRunnable` oldu, artık `skill.active`'i de kontrol ediyor (pasif ama adımlı skill artık "çalıştırılabilir" sayılmıyor). `evaluateReadiness`'in skill parametre tipi `Pick<Skill,'steps'>` → `Pick<Skill,'steps'|'active'>`; `PlaybookPage.tsx` çağrı yeri zaten tam `Skill[]` geçiyordu, değişiklik gerekmedi.
+- **Testler PRD'nin 5 senaryosuna göre yeniden yazıldı** (`readiness.test.ts`, 5→7): yalnız knowledge → değil, yalnız skill → değil, ikisi → hazır, adımlı-ama-pasif skill → değil, ikisi boş → değil; + 2 eski kenar durumu (indekslenmemiş kaynak, adımsız skill) korundu.
+- **Doğrulama (tam DoD kapısı, hepsi exit 0):** `typecheck` 13/13 · `lint` 10/10 · `format:check` · `test` web 134/1560 (+2 test) · api `test:unit` 76/1259 (değişmedi) · api integration `--shard=1/3,2/3,3/3` → 117 dosya/2888 test (değişmedi, bu task backend'e dokunmadı) · rtm `test:integration` 7/92 (değişmedi) · `build` 8/8. Kontrat/migration değişmedi → `contract:generate`/`db:check-drift` kapsam dışı. İlgili e2e yok (`apps/e2e/tests/ai-agent.spec.ts`+`playbook.spec.ts` readiness'i hiç dokunmuyor); tam e2e koşulmadı — kapsam dışı ekranlara dokunmadığı için gereksiz churn.
+- **Sonraki pencereye not:** `PLAN.md` 06.1 satırı eski uzun-form kanıt hücresinden `✅ → K06.1` biçimine taşındı (CONVENTIONS §1.2 disiplini); eski kanıt + bu turun kanıtı `#### K06.1` bloğunda.
+
 ## 179.4 — M-COUNT-d · Traffic sekme sayaçları sunucunun `total`'ına bağlandı — done — 2026-09-04 UTC
 
 - **Yapıldı:** `traffic-service.ts#listLive`'da `total`'ın anlamı "bu sayfa" → "bu sorgunun eşleştiği tüm pano" (activity + her filtre) oldu — `fetchWindow` artık sayfa 1 dahil her sayfada `MAX_SOURCE_ROWS` (500), `total: pageRows.length` (limit'e kırpılmadan önceki tam pencere). `TrafficPage.tsx`: yalnız aktif sekmenin rozeti + üst "N visitor(s)" sayacı `list.total`'a bağlandı; unfiltered `all` panosunda gösterilen diğer altı rozet hâlâ `countByTab(items)` (kapsam dışı — tek `total` skaleri 6 kovaya birden doğru sayı veremez). Sekme mantığı (aktif sekme / unfiltered pano) DEĞİŞMEDİ.

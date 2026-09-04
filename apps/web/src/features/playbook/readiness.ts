@@ -1,11 +1,12 @@
 /**
- * Is the AI agent ready to be turned on? (FR-MOD-06.1)
+ * Is the AI agent ready to be turned on? (FR-MOD-06.1, PRD KK4)
  *
- * Turning an agent on with nothing to answer from and no skill to run makes it
- * look live while it does nothing — the hardest misconfiguration to notice,
- * because there is no error, just silence in front of a customer. So the page
- * refuses activation until the agent has *something* to do: at least one indexed
- * knowledge source to answer from, or at least one skill with steps to run.
+ * PRD KK4: a warning is shown when knowledge is empty OR there is no active
+ * skill — so readiness requires BOTH: at least one indexed knowledge source
+ * to answer from, AND at least one *active* skill with steps to run. An
+ * agent with only one of the two would turn on looking live while it can
+ * only half-do its job — the hardest misconfiguration to notice, because
+ * there is no error, just a gap in front of a customer.
  *
  * A pure function so the rule is unit-testable on its own and reads the same
  * everywhere it is quoted — the banner, the disabled toggle, its tooltip.
@@ -17,7 +18,7 @@ export interface Readiness {
   ready: boolean;
   /** There is indexed knowledge to answer from. */
   hasKnowledge: boolean;
-  /** There is at least one skill with steps the engine could run. */
+  /** There is at least one active skill with steps the engine could run. */
   hasSkill: boolean;
   /** Why it is not ready, or null when it is. Shown verbatim in the UI. */
   reason: string | null;
@@ -28,18 +29,18 @@ function isIndexed(source: Pick<KnowledgeSource, 'chunk_count'>): boolean {
   return source.chunk_count > 0;
 }
 
-/** A skill can do something once it has at least one step, on or off. */
-function hasSteps(skill: Pick<Skill, 'steps'>): boolean {
-  return skill.steps.length > 0;
+/** A skill can do something once it has at least one step and is active. */
+function isRunnable(skill: Pick<Skill, 'steps' | 'active'>): boolean {
+  return skill.active && skill.steps.length > 0;
 }
 
 export function evaluateReadiness(
   sources: readonly Pick<KnowledgeSource, 'chunk_count'>[],
-  skills: readonly Pick<Skill, 'steps'>[],
+  skills: readonly Pick<Skill, 'steps' | 'active'>[],
 ): Readiness {
   const hasKnowledge = sources.some(isIndexed);
-  const hasSkill = skills.some(hasSteps);
-  const ready = hasKnowledge || hasSkill;
+  const hasSkill = skills.some(isRunnable);
+  const ready = hasKnowledge && hasSkill;
 
   return {
     ready,
@@ -47,6 +48,6 @@ export function evaluateReadiness(
     hasSkill,
     reason: ready
       ? null
-      : 'Add a knowledge source or a skill with steps before turning the AI on — with neither, it would answer nothing.',
+      : 'Add a knowledge source and an active skill with steps before turning the AI on — with either missing, it would leave part of the job undone.',
   };
 }

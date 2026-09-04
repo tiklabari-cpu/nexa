@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 181.1 — M-UI-a · Tag library group scope — console selector added, backend confirmed already writing — done — 2026-09-04 UTC
+
+- **Yapıldı:** Denetim D2'nin "canned responses emsaliyle ölü kolon olabilir" uyarısını `routes/settings.ts` üzerinde doğruladım — `createTagBody`/`updateTagBody` `group_ids`'i tm 17'den beri kabul ediyor ve `assertGroupsExist` ile doğruluyor, backend zaten canlıydı. Eksik olan tek şey `Tags.tsx`'in `group_ids.length`'i basıp bir seçici sunmamasıydı. `Tags.tsx`'e: (1) oluşturma formunda `GET /groups`'tan gelen takım onay kutuları, (2) var olan bir etiketin kapsamını `PATCH /settings/tags/:id` ile değiştiren satır-içi "Edit teams" düzenleyici eklendi. Takım yoksa (workspace'te hiç ekip tanımlı değilse) seçici hiç render edilmiyor.
+- **Doğrulama (tam DoD kapısı, hepsi exit 0):** `typecheck` 2/2 · `lint` web+e2e · `format:check` (repo geneli) · `pnpm -w test` → api **193/4147** (değişmedi, kod dokunulmadı) + web **135/1566** (+8, yeni `Tags.test.tsx`) + diğer paketler yeşil · `pnpm -w build` 8/8 · `pnpm -w test:e2e` **221/221 (16,4 dk)**, içinde yeni `settings.spec.ts` "scopes a tag to a team, on create and on a later edit" (gerçek API'ye karşı create+edit round-trip — dead-column kanıtı) + a11y taraması iki temada da 0 blocking. Kontrat/migration bu turda değişmedi → `contract:generate`/`db:check-drift` kapsam dışı. E2e turlarının çıkardığı `kanit` PNG churn (~90) `git checkout` ile geri alındı.
+- **PLAN.md:** 08.7.1 satırı eski uzun-form kanıt hücresinden `✅ → K08.7.1` biçimine taşındı (CONVENTIONS §1.2), yeni `#### K08.7.1` bloğu açıldı.
+- **Sonraki pencereye not:** M-UI ailesinin geri kalanı (181.2 PAT ekranı, 181.3 routing-rule POST/DELETE, 181.4 [MAX] bildirim taşıma, 181.5 audit detay, 181.6/.7 form kütüphanesi, 181.8 şablon rozetleri, 181.9 skill preview, 181.10 ajan bazlı AI performansı) hâlâ `pending`. `#### K08.7.1`'in açtığı kalıp (checkbox listesi + satır-içi düzenleyici, `fieldset`+`legend` ile a11y grouping) 181.2'nin scope seçicisinde de işe yarayabilir.
+
 ## 180.1 — M-READY-a · Readiness operatörü `&&`'e çevrildi + `active` bayrağı okunuyor — done — 2026-09-04 UTC
 
 - **Yapıldı:** `readiness.ts` `evaluateReadiness`: `ready = hasKnowledge || hasSkill` → `hasKnowledge && hasSkill` (PRD KK4: "Knowledge boş VEYA hiç aktif skill yokken uyarı" = AND gerektirir). `hasSteps` → `isRunnable` oldu, artık `skill.active`'i de kontrol ediyor (pasif ama adımlı skill artık "çalıştırılabilir" sayılmıyor). `evaluateReadiness`'in skill parametre tipi `Pick<Skill,'steps'>` → `Pick<Skill,'steps'|'active'>`; `PlaybookPage.tsx` çağrı yeri zaten tam `Skill[]` geçiyordu, değişiklik gerekmedi.

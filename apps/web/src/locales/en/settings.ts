@@ -83,6 +83,10 @@ export const settings: Messages = {
   'settings.tags.teamCount.other': '{count} teams',
   'settings.tags.inUse': '{count} in use',
   'settings.tags.deleteAriaLabel': 'Delete tag {name}',
+  'settings.tags.teamsLabel': 'Teams',
+  'settings.tags.teamsHint': 'Leave every box unchecked to apply this tag to all teams.',
+  'settings.tags.editTeamsButton': 'Edit teams',
+  'settings.tags.editTeamsAriaLabel': 'Edit teams for tag {name}',
 
   // Chat timeout — ChatTimeout.tsx
   'settings.chatTimeout.title': 'Chat timeout',

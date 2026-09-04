@@ -20,6 +20,10 @@ import {
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
+interface ErrorBody {
+  error: { type: string; message: string; details?: Record<string, unknown> };
+}
+
 describe('settings', () => {
   let owner: PrismaClient;
   let server: TestServer;
@@ -553,12 +557,14 @@ describe('settings', () => {
     // needs rather than depending on data it does not own.
     let fallbackId: string;
     let conditionalId: string;
+    let supportId: bigint;
 
     beforeEach(async () => {
       const support = await owner.group.create({
         data: { licenseId: fx.a.licenseId, name: 'Support' },
         select: { id: true },
       });
+      supportId = support.id;
       const fallback = await owner.routingRule.create({
         data: {
           licenseId: fx.a.licenseId,
@@ -708,6 +714,179 @@ describe('settings', () => {
 
       expect(ids).toContain(fallbackId);
       for (const id of otherIds) expect(ids).not.toContain(id);
+    });
+
+    // ------------------------------------------------------------------
+    // Creating (FR-MOD-08.6.1 — "New rule")
+    // ------------------------------------------------------------------
+
+    it('creates a conditional rule that then appears in the list', async () => {
+      const response = await server.post(
+        '/settings/routing-rules',
+        {
+          name: 'Checkout',
+          conditions: { url_contains: ['/checkout'] },
+          target_group_id: Number(supportId),
+          priority: 5,
+        },
+        auth(adminToken),
+      );
+
+      expect(response.statusCode).toBe(201);
+      const created = response.json() as {
+        id: string;
+        name: string;
+        target_group_name: string;
+        is_fallback: boolean;
+        enabled: boolean;
+        priority: number;
+      };
+      expect(created).toMatchObject({
+        name: 'Checkout',
+        target_group_name: 'Support',
+        is_fallback: false,
+        enabled: true,
+        priority: 5,
+      });
+
+      const list = await server.get('/settings/routing-rules', auth(readToken));
+      expect((list.json() as { items: Array<{ id: string }> }).items.map((r) => r.id)).toContain(
+        created.id,
+      );
+    });
+
+    it('refuses a conditional rule that targets no team', async () => {
+      // `routing_rules_target_check` refuses it too, but as a database error
+      // with nothing an admin can act on. A rule routing nowhere would sit in
+      // the list looking configured.
+      const response = await server.post(
+        '/settings/routing-rules',
+        { name: 'Goes nowhere', conditions: { url_contains: ['/x'] } },
+        auth(adminToken),
+      );
+
+      expect(response.statusCode).toBe(400);
+      expect((response.json() as ErrorBody).error.type).toBe('validation');
+    });
+
+    it('refuses a second fallback for the same kind, and says which one exists', async () => {
+      // Two of them and which team an unmatched conversation lands in depends
+      // on row order, with nothing on the screen to say so.
+      const response = await server.post(
+        '/settings/routing-rules',
+        { name: 'Another catch-all', is_fallback: true, target_group_id: Number(supportId) },
+        auth(adminToken),
+      );
+
+      expect(response.statusCode).toBe(409);
+      const { error } = response.json() as ErrorBody;
+      expect(error.type).toBe('fallback_rule_exists');
+      expect(error.details).toMatchObject({ rule_id: fallbackId, kind: 'chat' });
+
+      // And nothing was written: the unique index is not what answered.
+      expect(
+        await owner.routingRule.count({
+          where: { licenseId: fx.a.licenseId, kind: 'chat', isFallback: true },
+        }),
+      ).toBe(1);
+    });
+
+    it('allows a fallback for a kind that has none', async () => {
+      const response = await server.post(
+        '/settings/routing-rules',
+        { kind: 'ticket', is_fallback: true, target_group_id: Number(supportId) },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(201);
+      expect(response.json() as { kind: string; is_fallback: boolean }).toMatchObject({
+        kind: 'ticket',
+        is_fallback: true,
+      });
+    });
+
+    it('refuses a target team belonging to another tenant', async () => {
+      // The id is real, which is why the check has to be tenant-scoped rather
+      // than a plain existence lookup.
+      const otherGroup = await owner.group.findFirst({
+        where: { licenseId: fx.b.licenseId },
+        select: { id: true },
+      });
+      const response = await server.post(
+        '/settings/routing-rules',
+        {
+          name: 'Theirs',
+          conditions: { url_contains: ['/x'] },
+          target_group_id: Number(otherGroup!.id),
+        },
+        auth(adminToken),
+      );
+
+      expect(response.statusCode).toBe(400);
+      expect(await owner.routingRule.count({ where: { licenseId: fx.a.licenseId } })).toBe(2);
+    });
+
+    it('refuses an expertise requirement naming no area on this workspace', async () => {
+      const response = await server.post(
+        '/settings/routing-rules',
+        {
+          name: 'Billing experts',
+          conditions: { url_contains: ['/billing'], expertise_ids: [999_999] },
+          target_group_id: Number(supportId),
+        },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(404);
+    });
+
+    it('refuses a create from a read-only token', async () => {
+      const response = await server.post(
+        '/settings/routing-rules',
+        { name: 'Nope', conditions: { url_contains: ['/x'] }, target_group_id: Number(supportId) },
+        auth(readToken),
+      );
+      expect(response.statusCode).toBe(403);
+    });
+
+    // ------------------------------------------------------------------
+    // Deleting
+    // ------------------------------------------------------------------
+
+    it('deletes a rule that is not the fallback', async () => {
+      const response = await server.del(
+        `/settings/routing-rules/${conditionalId}`,
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(204);
+      expect(await owner.routingRule.findUnique({ where: { id: conditionalId } })).toBeNull();
+    });
+
+    it('refuses to delete the fallback rule', async () => {
+      // Otherwise deleting it would simply be the way around the refusal to
+      // disable it, and unmatched conversations would have nowhere to go.
+      const response = await server.del(`/settings/routing-rules/${fallbackId}`, auth(adminToken));
+
+      expect(response.statusCode).toBe(403);
+      expect(await owner.routingRule.findUnique({ where: { id: fallbackId } })).not.toBeNull();
+    });
+
+    it('never deletes another tenant’s rule', async () => {
+      const other = await owner.routingRule.findFirst({
+        where: { licenseId: fx.b.licenseId },
+        select: { id: true },
+      });
+      const response = await server.del(`/settings/routing-rules/${other!.id}`, auth(adminToken));
+
+      expect(response.statusCode).toBe(404);
+      expect(await owner.routingRule.findUnique({ where: { id: other!.id } })).not.toBeNull();
+    });
+
+    it('refuses a delete from a read-only token', async () => {
+      const response = await server.del(
+        `/settings/routing-rules/${conditionalId}`,
+        auth(readToken),
+      );
+      expect(response.statusCode).toBe(403);
+      expect(await owner.routingRule.findUnique({ where: { id: conditionalId } })).not.toBeNull();
     });
   });
 

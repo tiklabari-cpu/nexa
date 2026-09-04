@@ -695,8 +695,25 @@ export const settings: Messages = {
   'settings.routing.ruleLabel': 'Kural',
   'settings.routing.noTeam': 'ekip yok',
   'settings.routing.fallbackDisabledTitle': 'Yedek kural devre dışı bırakılamaz',
+  'settings.routing.fallbackDeleteTitle':
+    'Yedek kural silinemez — bunun yerine başka bir ekibe yönlendirin',
+  'settings.routing.deleteAriaLabel': '{name} kuralını sil',
   'settings.routing.anything': 'Herhangi biri',
   'settings.routing.conditionSkill': 'yetenek {names}',
+  'settings.routing.form.nameLabel': 'Kural adı',
+  'settings.routing.form.nameError': 'Kurala bir ad verin.',
+  'settings.routing.form.urlLabel': 'Sayfa adresi şunu içerdiğinde',
+  'settings.routing.form.urlError': 'Adresin içermesi gereken metni girin.',
+  'settings.routing.form.teamLabel': 'Şu ekibe gönder',
+  'settings.routing.form.teamPlaceholder': 'Bir ekip seçin',
+  'settings.routing.form.teamError': 'Bu kuralın göndereceği ekibi seçin.',
+  'settings.routing.form.priorityLabel': 'Öncelik',
+  'settings.routing.form.priorityError': '0 ile 1000 arasında tam bir sayı girin.',
+  'settings.routing.form.asFallbackLabel':
+    'Bunu yedek yap — başka hiçbir kuralın eşleşmediği her şeyi alır',
+  'settings.routing.form.addButton': 'Kural ekle',
+  'settings.routing.form.noTeams':
+    'Önce bir ekip oluşturun — bir kuralın sohbetleri gönderecek bir yeri olmalı.',
 
   // Talep kuralları — TicketRules.tsx
   'settings.ticketRules.title': 'Talep kuralları',

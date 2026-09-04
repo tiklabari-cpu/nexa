@@ -140,6 +140,10 @@ describe('error taxonomy', () => {
     // reference is a foreign key, so this refusal is the only thing between a
     // delete and silently unroutable chats.
     'group_in_use',
+    // Routing rules (FR-MOD-08.6.1): the 409 for adding a second fallback to a
+    // kind that already has one. Two of them would make the team an unmatched
+    // conversation lands in depend on row order.
+    'fallback_rule_exists',
   ];
 
   it('carries the 24 documented types, plus Nexa additions', () => {

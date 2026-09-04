@@ -24,6 +24,8 @@ export const common: Messages = {
   'common.errors.chat_anonymized': 'This conversation was anonymised and can no longer be opened.',
   'common.errors.chat_inactive': 'This conversation is no longer active.',
   'common.errors.customer_banned': 'This visitor is banned.',
+  'common.errors.fallback_rule_exists':
+    'This workspace already has a fallback routing rule — edit that one instead.',
   'common.errors.greeting_not_found': 'We could not find that greeting.',
   'common.errors.group_in_use':
     'This team is still in use — a routing rule points at it, or conversations are open with it.',

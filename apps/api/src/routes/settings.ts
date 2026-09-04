@@ -14,6 +14,7 @@ import {
   DEFAULT_SALES_TRACKER_CONFIG,
   DEFAULT_WIDGET_APPEARANCE,
   EXPERTISE_NAME_MAX_LENGTH,
+  ROUTING_RULE_KINDS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
   SALES_TRACKER_CURRENCIES,
@@ -383,6 +384,32 @@ const updateRuleBody = z
     conditions: ruleConditionsBody.optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
+ * A new rule. The `target_group_id` requirement is the endpoint's copy of the
+ * `routing_rules_target_check` constraint: a conditional rule that targets
+ * nothing can never route a conversation anywhere, yet it sits in the list
+ * looking configured. Stated here so the refusal names the field, rather than
+ * arriving as a database error nobody can act on.
+ */
+const createRuleBody = z
+  .object({
+    name: z.string().trim().min(1).max(120).optional(),
+    kind: z.enum(ROUTING_RULE_KINDS).default('chat'),
+    conditions: ruleConditionsBody.optional(),
+    target_group_id: z.coerce.bigint().nullable().optional(),
+    priority: z.number().int().min(0).max(1000).default(0),
+    is_fallback: z.boolean().default(false),
+    enabled: z.boolean().default(true),
+  })
+  .refine(
+    (body) =>
+      body.is_fallback || (body.target_group_id !== undefined && body.target_group_id !== null),
+    {
+      message: 'target_group_id is required unless the rule is the fallback',
+      path: ['target_group_id'],
+    },
+  );
 
 /**
  * `type/subtype`, the shape a browser actually puts in `Content-Type`.
@@ -2342,21 +2369,81 @@ export default async function settingsRoutes(
       const names = new Map(groups.map((g) => [g.id.toString(), g.name]));
 
       return reply.send({
-        items: rules.map((rule) => ({
-          id: rule.id,
-          name: rule.name,
-          kind: rule.kind,
-          conditions: rule.conditions,
-          target_group_id: rule.targetGroupId === null ? null : Number(rule.targetGroupId),
-          // Resolved here so the UI does not have to fetch groups separately
-          // just to render a rule as anything other than a bare number.
-          target_group_name:
+        items: rules.map((rule) =>
+          // The team name is resolved here so the UI does not have to fetch
+          // groups separately just to render a rule as anything other than a
+          // bare number.
+          serialiseRoutingRule(
+            rule,
             rule.targetGroupId === null ? null : (names.get(rule.targetGroupId.toString()) ?? null),
-          priority: rule.priority,
-          is_fallback: rule.isFallback,
-          enabled: rule.enabled,
-        })),
+          ),
+        ),
       });
+    },
+  );
+
+  app.post(
+    '/settings/routing-rules',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(createRuleBody, request.body);
+      const tenant = request.tenant();
+
+      const { created, groupName } = await request.withTenant(async (tx) => {
+        let group: { id: bigint; name: string } | null = null;
+        if (body.target_group_id !== undefined && body.target_group_id !== null) {
+          group = await tx.group.findFirst({
+            where: { id: body.target_group_id },
+            select: { id: true, name: true },
+          });
+          // RLS scopes the lookup to the caller's licence, so another tenant's
+          // team id is simply not found here — the same refusal an invented one
+          // gets, which is what keeps ids un-enumerable across tenants (NFR-S5).
+          if (!group) throw ApiError.validation('That team does not exist.');
+        }
+
+        // Checked here rather than left to `uq_one_fallback_routing_rule`: the
+        // index raises a P2002 that says nothing an admin can act on, and the
+        // screen needs to answer "you already have one, edit that instead".
+        if (body.is_fallback) {
+          const existing = await tx.routingRule.findFirst({
+            where: { kind: body.kind, isFallback: true },
+            select: { id: true },
+          });
+          if (existing) {
+            throw new ApiError(
+              'fallback_rule_exists',
+              'This workspace already has a fallback rule for that kind. Edit the existing one instead.',
+              { details: { rule_id: existing.id, kind: body.kind } },
+            );
+          }
+        }
+
+        const row = await tx.routingRule.create({
+          data: {
+            licenseId: tenant.licenseId,
+            name: body.name ?? null,
+            kind: body.kind,
+            conditions: await resolveRuleConditions(tx, body.conditions),
+            targetGroupId: body.target_group_id ?? null,
+            priority: body.priority,
+            isFallback: body.is_fallback,
+            enabled: body.enabled,
+          },
+        });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.routing_rule_created',
+          target: `routing_rule:${row.id}`,
+          metadata: {
+            kind: row.kind,
+            is_fallback: row.isFallback,
+            target_group_id: row.targetGroupId === null ? null : Number(row.targetGroupId),
+          },
+        });
+        return { created: row, groupName: group?.name ?? null };
+      });
+
+      return reply.status(201).send(serialiseRoutingRule(created, groupName));
     },
   );
 
@@ -2389,41 +2476,10 @@ export default async function settingsRoutes(
           if (!group) throw ApiError.validation('That team does not exist.');
         }
 
-        // A rule may narrow routing to agents holding certain expertise
-        // (FR-MOD-08.6.3). Every id must name an area on this workspace: RLS
-        // scopes the lookup to the caller's licence, so a cross-tenant or unknown
-        // id simply is not found — a 404 that keeps ids un-enumerable across
-        // tenants (NFR-S5). The `conditions` object replaces the rule's stored
-        // one wholesale; expertise ids are stored as plain numbers because jsonb
-        // has no bigint, and dropped entirely when empty so a rule without a
-        // requirement stores no marker for one.
-        let conditionsData: Prisma.InputJsonValue | undefined;
-        if (body.conditions !== undefined) {
-          const expertiseIds = body.conditions.expertise_ids
-            ? [...new Set(body.conditions.expertise_ids.map((id) => id.toString()))].map((s) =>
-                BigInt(s),
-              )
-            : [];
-          if (expertiseIds.length > 0) {
-            const found = await tx.expertise.findMany({
-              where: { id: { in: expertiseIds } },
-              select: { id: true },
-            });
-            if (found.length !== expertiseIds.length) {
-              throw ApiError.notFound('One or more expertise areas were not found.');
-            }
-          }
-          conditionsData = {
-            ...(body.conditions.url_contains ? { url_contains: body.conditions.url_contains } : {}),
-            ...(body.conditions.url_equals ? { url_equals: body.conditions.url_equals } : {}),
-            ...(body.conditions.country_codes
-              ? { country_codes: body.conditions.country_codes }
-              : {}),
-            ...(expertiseIds.length > 0
-              ? { expertise_ids: expertiseIds.map((id) => Number(id)) }
-              : {}),
-          };
-        }
+        const conditionsData =
+          body.conditions === undefined
+            ? undefined
+            : await resolveRuleConditions(tx, body.conditions);
 
         const row = await tx.routingRule.update({
           where: { id: ruleId },
@@ -2456,17 +2512,44 @@ export default async function settingsRoutes(
               )
             )?.name ?? null);
 
-      return reply.send({
-        id: updated.id,
-        name: updated.name,
-        kind: updated.kind,
-        conditions: updated.conditions,
-        target_group_id: updated.targetGroupId === null ? null : Number(updated.targetGroupId),
-        target_group_name: groupName,
-        priority: updated.priority,
-        is_fallback: updated.isFallback,
-        enabled: updated.enabled,
+      return reply.send(serialiseRoutingRule(updated, groupName));
+    },
+  );
+
+  app.delete<{ Params: { ruleId: string } }>(
+    '/settings/routing-rules/:ruleId',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const ruleId = parse(uuid, request.params.ruleId);
+
+      await request.withTenant(async (tx) => {
+        const existing = await tx.routingRule.findFirst({
+          where: { id: ruleId },
+          select: { id: true, kind: true, isFallback: true },
+        });
+        // RLS scopes the read to the caller's licence, so another tenant's rule
+        // is not found rather than forbidden (NFR-S5).
+        if (!existing) throw ApiError.notFound('Routing rule not found.');
+
+        // The same refusal disabling it gets, for the same reason — and if a
+        // delete were allowed it would simply be the way around that refusal.
+        // Retargeting it (`PATCH { target_group_id }`) is how it is changed.
+        if (existing.isFallback) {
+          throw new ApiError(
+            'not_allowed',
+            'The fallback rule cannot be deleted — conversations matching nothing would be dropped. Point it at another team instead.',
+          );
+        }
+
+        await tx.routingRule.delete({ where: { id: ruleId } });
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.routing_rule_deleted',
+          target: `routing_rule:${ruleId}`,
+          metadata: { kind: existing.kind },
+        });
       });
+
+      return reply.status(204).send();
     },
   );
 
@@ -2657,6 +2740,72 @@ export default async function settingsRoutes(
  * apply to no one. RLS narrows the lookup to this tenant, so referencing another
  * workspace's group fails here exactly as an unknown id does.
  */
+/**
+ * The stored `conditions` object for a rule, with its expertise ids checked.
+ *
+ * A rule may narrow routing to agents holding certain expertise
+ * (FR-MOD-08.6.3). Every id must name an area on this workspace: RLS scopes the
+ * lookup to the caller's licence, so a cross-tenant or unknown id simply is not
+ * found — a 404 that keeps ids un-enumerable across tenants (NFR-S5).
+ *
+ * The object *replaces* a rule's stored conditions wholesale, so a partial edit
+ * has to resend the parts it keeps. Expertise ids are stored as plain numbers
+ * because jsonb has no bigint, and dropped entirely when empty so a rule
+ * without a requirement stores no marker for one.
+ */
+async function resolveRuleConditions(
+  tx: Prisma.TransactionClient,
+  conditions: z.infer<typeof ruleConditionsBody> | undefined,
+): Promise<Prisma.InputJsonValue> {
+  if (conditions === undefined) return {};
+
+  const expertiseIds = conditions.expertise_ids
+    ? [...new Set(conditions.expertise_ids.map((id) => id.toString()))].map((s) => BigInt(s))
+    : [];
+  if (expertiseIds.length > 0) {
+    const found = await tx.expertise.findMany({
+      where: { id: { in: expertiseIds } },
+      select: { id: true },
+    });
+    if (found.length !== expertiseIds.length) {
+      throw ApiError.notFound('One or more expertise areas were not found.');
+    }
+  }
+
+  return {
+    ...(conditions.url_contains ? { url_contains: conditions.url_contains } : {}),
+    ...(conditions.url_equals ? { url_equals: conditions.url_equals } : {}),
+    ...(conditions.country_codes ? { country_codes: conditions.country_codes } : {}),
+    ...(expertiseIds.length > 0 ? { expertise_ids: expertiseIds.map((id) => Number(id)) } : {}),
+  };
+}
+
+function serialiseRoutingRule(
+  rule: {
+    id: string;
+    name: string | null;
+    kind: string;
+    conditions: Prisma.JsonValue;
+    targetGroupId: bigint | null;
+    priority: number;
+    isFallback: boolean;
+    enabled: boolean;
+  },
+  targetGroupName: string | null,
+) {
+  return {
+    id: rule.id,
+    name: rule.name,
+    kind: rule.kind,
+    conditions: rule.conditions,
+    target_group_id: rule.targetGroupId === null ? null : Number(rule.targetGroupId),
+    target_group_name: targetGroupName,
+    priority: rule.priority,
+    is_fallback: rule.isFallback,
+    enabled: rule.enabled,
+  };
+}
+
 async function assertGroupsExist(tx: Prisma.TransactionClient, groupIds: bigint[]): Promise<void> {
   if (groupIds.length === 0) return;
   const unique = [...new Set(groupIds.map((id) => id.toString()))];

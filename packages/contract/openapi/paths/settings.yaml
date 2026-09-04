@@ -1394,6 +1394,53 @@ routingRules:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+  post:
+    tags: [Settings]
+    operationId: createRoutingRule
+    summary: Add a routing rule
+    description: |
+      Admin or owner only.
+
+      Two shapes, and the difference is `is_fallback`:
+
+      * A **conditional** rule must name a `target_group_id` — one that routes
+        nowhere can never send a conversation anywhere, and would sit in the
+        list looking configured.
+      * The **fallback** catches everything the conditional rules missed. At
+        most one exists per `kind`, so asking for a second is a 409
+        (`fallback_rule_exists`): with two of them, which team receives an
+        unmatched conversation would depend on row order, and nothing on the
+        screen would say so.
+
+      `conditions` are the match predicates (`url_contains`, `url_equals`,
+      `country_codes`), plus `expertise_ids`, which is not a match predicate —
+      it narrows the eligible agent pool (FR-MOD-08.6.3). An id naming no
+      expertise area on this workspace is a 404, and a `target_group_id` naming
+      no team here is a 400.
+
+      Records `settings.routing_rule_created`.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/RoutingRuleInput" }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RoutingRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: This workspace already has a fallback rule for that kind (`fallback_rule_exists`)
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 routingRule:
   parameters:
     - name: ruleId
@@ -1448,6 +1495,30 @@ routingRule:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Settings]
+    operationId: deleteRoutingRule
+    summary: Remove a routing rule
+    description: |
+      Admin or owner only.
+
+      The fallback rule cannot be deleted, for the reason it cannot be disabled:
+      conversations matching nothing would have nowhere to go, and the
+      configuration would still look healthy. A delete that was allowed would
+      also be a way around the disable refusal. Retarget it instead
+      (`PATCH … { target_group_id }`).
+
+      A team the deleted rule was the last one pointing at becomes deletable
+      again — `DELETE /groups/{groupId}` refuses while any rule targets it.
+
+      Records `settings.routing_rule_deleted`.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 # Expertise catalogue — the areas skill-based routing draws on (FR-MOD-08.6.3).

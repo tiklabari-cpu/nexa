@@ -483,6 +483,47 @@ describe('audit log writer (NFR-S12)', () => {
       );
     });
 
+    it('records a routing rule being added and removed', async () => {
+      // Adding a rule diverts work to a team and deleting one sends it
+      // somewhere else again — both are authority changes wearing the clothes
+      // of a settings edit, so both are on the trail, not just the edit.
+      const group = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Sales' },
+        select: { id: true },
+      });
+
+      const createdCount = await count('settings.routing_rule_created');
+      const created = await server.post(
+        '/settings/routing-rules',
+        {
+          name: 'Pricing page',
+          conditions: { url_contains: ['/pricing'] },
+          target_group_id: Number(group.id),
+        },
+        auth(adminToken),
+      );
+      expect(created.statusCode).toBe(201);
+      const ruleId = (created.json() as { id: string }).id;
+
+      expect(await count('settings.routing_rule_created')).toBe(createdCount + 1);
+      const createdEntry = await latest('settings.routing_rule_created');
+      expect(createdEntry?.target).toBe(`routing_rule:${ruleId}`);
+      expect(createdEntry?.metadata).toMatchObject({
+        kind: 'chat',
+        is_fallback: false,
+        target_group_id: Number(group.id),
+      });
+
+      const deletedCount = await count('settings.routing_rule_deleted');
+      expect(
+        (await server.del(`/settings/routing-rules/${ruleId}`, auth(adminToken))).statusCode,
+      ).toBe(204);
+      expect(await count('settings.routing_rule_deleted')).toBe(deletedCount + 1);
+      expect((await latest('settings.routing_rule_deleted'))?.target).toBe(
+        `routing_rule:${ruleId}`,
+      );
+    });
+
     it('records a subscription change', async () => {
       const before = await count('billing.subscription_updated');
       const res = await server.patch('/billing/subscription', { seats: 5 }, auth(adminToken));

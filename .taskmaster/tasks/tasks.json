@@ -8558,10 +8558,10 @@
             "title": "M-UI-f [SONNET-XHIGH] Form kütüphanesi pilotu: Payment ve Add-website (PRD adıyla sayıyor)",
             "description": "PRD **722-733** (FR-EK-A.1). `useForm(` kullanan 20 dosya var ama `<form` içeren 40 dosya var; atlananlar tam da PRD'nin adıyla saydığı bu ikisini içeriyor. KK: istemci tarafı anlık validasyon + **alan-altı** hata mesajı + geçerli girdi olmadan submit pasif. **Davranışı değiştirme, kuruluşu değiştir** — mevcut testler kırılıyorsa davranış değişmiş demektir, dur ve incele. Payment bir ödeme yüzeyi: kart verisi log/URL'e girmez.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T06:08:17.141Z"
           },
           {
             "id": 7,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T05:21:28.563Z"
+        "updatedAt": "2026-09-04T06:08:17.141Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T05:21:28.564Z",
+      "lastModified": "2026-09-04T06:08:17.143Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

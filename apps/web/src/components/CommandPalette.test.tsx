@@ -12,6 +12,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { defaultScopesForRole } from '@nexa/types';
 import { CommandPalette } from './CommandPalette.js';
 import { useAuth } from '../lib/auth-store.js';
 
@@ -141,7 +142,9 @@ describe('command palette', () => {
 
   it('lists every module as a jump target when empty', async () => {
     const user = userEvent.setup();
-    renderPalette([]);
+    // Every `NavDestination` carries a scope now (FR-MOD-01.2); an admin
+    // session is what reaches all of them, `[]` no longer does.
+    renderPalette(defaultScopesForRole('admin'));
     await openPalette(user);
 
     for (const name of [
@@ -159,7 +162,7 @@ describe('command palette', () => {
 
   it('filters modules and jumps to the chosen one on Enter', async () => {
     const user = userEvent.setup();
-    renderPalette([]);
+    renderPalette(defaultScopesForRole('admin'));
     await openPalette(user);
 
     await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'report');
@@ -174,7 +177,7 @@ describe('command palette', () => {
 
   it('matches a module by keyword, not only its label', async () => {
     const user = userEvent.setup();
-    renderPalette([]);
+    renderPalette(defaultScopesForRole('admin'));
     await openPalette(user);
 
     await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'subscription');
@@ -293,12 +296,13 @@ describe('command palette — action results', () => {
     renderPalette([]);
     await openPalette(user);
 
-    // An empty scope set filters every action away; the palette is unharmed.
+    // An empty scope set filters every action AND every module away now
+    // (FR-MOD-01.2) — the palette is unharmed, it just has nothing to offer.
     expect(screen.queryByText('Actions')).toBeNull();
-    expect(screen.getByRole('option', { name: /Inbox/ })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Inbox/ })).toBeNull();
 
     await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'report');
-    expect(screen.getByRole('option', { name: /Reports/ })).toBeInTheDocument();
+    expect(await screen.findByText('No matches.')).toBeInTheDocument();
   });
 
   it('never offers Developers as a destination for a caller without access_rules:rw', async () => {
@@ -662,7 +666,19 @@ describe('command palette — mixed-kind keyboard navigation', () => {
     stubFetch();
     const user = userEvent.setup();
     renderPalette(
-      ['agents--my:rw', 'customers:ro', 'tickets--all:ro', 'chats--all:ro'],
+      // Every nav destination now needs its own scope (FR-MOD-01.2) to reach
+      // all eight non-Developers ones: `reports_read` (Home, Reports, Billing),
+      // `agents-bot--all:ro` (Playbook) and `tags--groups:ro` (Settings) join
+      // the four this test already held for the action and content groups.
+      [
+        'agents--my:rw',
+        'customers:ro',
+        'tickets--all:ro',
+        'chats--all:ro',
+        'reports_read',
+        'agents-bot--all:ro',
+        'tags--groups:ro',
+      ],
       'accepting_chats',
     );
     await openPalette(user);

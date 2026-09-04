@@ -17,7 +17,7 @@ import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
-import { InviteTeammates } from '../features/team/InviteTeammates.js';
+import { InviteTeammates, usePendingInvitations } from '../features/team/InviteTeammates.js';
 import { roleAtLeast } from '../features/team/RoleMenu.js';
 import { useRealtime } from '../features/inbox/useInbox.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
@@ -181,6 +181,7 @@ function IconRail(): ReactElement {
   // role never carries it, so the rail hides the door rather than showing one
   // that only 403s (FR-MOD-01.1.5).
   const canInvite = roleAtLeast(role, 'admin');
+  const badges = useNavBadges();
 
   return (
     <nav
@@ -194,8 +195,12 @@ function IconRail(): ReactElement {
 
       <BrandSwitcher />
 
-      {MODULES.map((item) => (
-        <RailButton key={item.to} item={item} pinned={pinned} />
+      {MODULES.filter((item) => isNavVisible(item, scopes)).map((item) => (
+        <RailButton
+          key={item.to}
+          item={badges[item.to] ? { ...item, badge: badges[item.to] } : item}
+          pinned={pinned}
+        />
       ))}
 
       <div className={`mt-auto flex flex-col gap-1 ${pinned ? 'items-stretch' : 'items-center'}`}>
@@ -213,6 +218,64 @@ function IconRail(): ReactElement {
       </div>
     </nav>
   );
+}
+
+interface ChatCountEnvelope {
+  total: number;
+}
+
+/**
+ * Live counts overlaid on the rail (FR-MOD-01.2 — "badge sayaç"). Both sources
+ * are counts the module already exposes server-side rather than a new
+ * endpoint: Inbox sums the `unassigned` + `queued` views — mutually exclusive
+ * in `chat-service.ts`'s `viewFilter` (assigned-or-queued is one of the two,
+ * never both), so summing double-counts nothing — and Team reads the same
+ * pending-invite list `InviteTeammates.tsx` already queries under
+ * `['invitations']`, so this shares that cache rather than adding a second
+ * request once that page is open. A caller without the read scope gets a 403
+ * that resolves to no entry, the same way `TrialBanner`'s billing read above
+ * resolves to no banner — no retry storm (`retry: false`), no badge.
+ */
+function useNavBadges(): Partial<Record<string, { count: number; ariaLabel: string }>> {
+  const api = useApiClient();
+  const t = useTranslate();
+
+  const unassigned = useQuery({
+    queryKey: ['chats', 'count', 'unassigned'],
+    // paging-exempt: only `total` is read, same reasoning as `LeadsPill` below.
+    queryFn: () => api.get<ChatCountEnvelope>('/chats?view=unassigned&limit=1'),
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+  const queued = useQuery({
+    queryKey: ['chats', 'count', 'queued'],
+    queryFn: () => api.get<ChatCountEnvelope>('/chats?view=queued&limit=1'),
+    retry: false,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+  });
+  const invitations = usePendingInvitations();
+
+  const badges: Partial<Record<string, { count: number; ariaLabel: string }>> = {};
+
+  const inboxCount = (unassigned.data?.total ?? 0) + (queued.data?.total ?? 0);
+  if (inboxCount > 0) {
+    badges['/app/inbox'] = {
+      count: inboxCount,
+      ariaLabel: t('shell.nav.badge.inbox', { count: inboxCount }),
+    };
+  }
+
+  const teamCount = invitations.data?.items.length ?? 0;
+  if (teamCount > 0) {
+    badges['/app/team'] = {
+      count: teamCount,
+      ariaLabel: t('shell.nav.badge.team', { count: teamCount }),
+    };
+  }
+
+  return badges;
 }
 
 /**
@@ -250,6 +313,10 @@ function NavPinToggle({
 function RailButton({ item, pinned }: { item: NavDestination; pinned: boolean }): ReactElement {
   const t = useTranslate();
   const label = t(item.labelKey);
+  // The badge's count is never spoken on its own (NFR-A11Y) — folded into the
+  // link's own accessible name instead, so a screen reader hears "Inbox, 3
+  // unread" rather than a bare digit next to an icon.
+  const accessibleLabel = item.badge ? `${label}, ${item.badge.ariaLabel}` : label;
   const shared = `relative flex h-9 items-center gap-3 rounded-md text-base transition-colors ${
     pinned ? 'px-3' : 'w-9 justify-center'
   }`;
@@ -257,8 +324,8 @@ function RailButton({ item, pinned }: { item: NavDestination; pinned: boolean })
   return (
     <NavLink
       to={item.to}
-      aria-label={label}
-      title={label}
+      aria-label={accessibleLabel}
+      title={accessibleLabel}
       className={({ isActive }) =>
         `${shared} ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:bg-white/5 hover:text-white'}`
       }
@@ -272,7 +339,19 @@ function RailButton({ item, pinned }: { item: NavDestination; pinned: boolean })
             />
           )}
           <span aria-hidden="true">{item.icon}</span>
-          {pinned && <span className="truncate text-sm">{label}</span>}
+          {pinned && <span className="flex-1 truncate text-sm">{label}</span>}
+          {item.badge && (
+            <span
+              aria-hidden="true"
+              className={
+                pinned
+                  ? 'flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-semibold leading-none text-white'
+                  : 'absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-500 px-1 text-[10px] font-semibold leading-none text-white'
+              }
+            >
+              {item.badge.count}
+            </span>
+          )}
         </>
       )}
     </NavLink>

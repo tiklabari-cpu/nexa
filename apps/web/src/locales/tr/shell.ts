@@ -25,6 +25,13 @@ export const shell: Messages = {
   'shell.nav.expand': 'Gezinmeyi genişlet',
   'shell.nav.collapse': 'Gezinmeyi daralt',
 
+  // Ray rozetleri (FR-MOD-01.2). Yalnız sayının söylenen hâli — `RailButton`
+  // erişilebilir adı kurarken modülün kendi etiketiyle birleştirir.
+  'shell.nav.badge.inbox.one': '{count} okunmamış',
+  'shell.nav.badge.inbox.other': '{count} okunmamış',
+  'shell.nav.badge.team.one': '{count} bekleyen davet',
+  'shell.nav.badge.team.other': '{count} bekleyen davet',
+
   // Davet (FR-MOD-01.1.5). "+N" boş koltuk sayısıdır — henüz bilinmiyorsa
   // (ya da bildirecek bir şey yoksa) düz etikete düşer.
   'shell.invite.label': 'Davet et',

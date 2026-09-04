@@ -21,6 +21,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { defaultScopesForRole } from '@nexa/types';
 import { AppShell } from './AppShell.js';
 import { readBrandId, useAuth, useBrandStore } from '../lib/auth-store.js';
 import { useNavStore } from '../lib/nav-store.js';
@@ -98,7 +99,11 @@ beforeEach(() => {
       role: 'owner',
       organization_id: 'o-1',
       license_id: '1000003',
-      scopes: [],
+      // A real owner session — matters now that every `MODULES` entry (not
+      // just Developers) carries a `scope` (FR-MOD-01.2). An empty array here
+      // would hide the rail out from under every test in this file that has
+      // nothing to do with scope gating.
+      scopes: defaultScopesForRole('owner'),
       routing_status: 'accepting_chats',
     },
   });
@@ -148,6 +153,9 @@ describe('module navigation', () => {
   });
 
   it('hides Developers from the rail for a caller without access_rules:rw', () => {
+    useAuth.setState((state) => ({
+      agent: state.agent && { ...state.agent, scopes: defaultScopesForRole('agent') },
+    }));
     renderShell();
     expect(screen.queryByRole('link', { name: 'Developers' })).toBeNull();
   });
@@ -158,6 +166,115 @@ describe('module navigation', () => {
     }));
     renderShell();
     expect(screen.getByRole('link', { name: 'Developers' })).toBeInTheDocument();
+  });
+});
+
+describe('module visibility by scope (FR-MOD-01.2)', () => {
+  it('hides Reports, Billing and Playbook from an agent-scoped caller', () => {
+    useAuth.setState((state) => ({
+      agent: state.agent && {
+        ...state.agent,
+        role: 'agent',
+        scopes: defaultScopesForRole('agent'),
+      },
+    }));
+    renderShell();
+
+    // The doors an ordinary agent's default scopes cannot open — none of
+    // `reports_read`, `billing_manage`/`billing_admin` or `agents-bot--all:*`
+    // are in `DEFAULT_AGENT_SCOPES` (role-scopes.ts).
+    expect(screen.queryByRole('link', { name: 'Reports' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Billing' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Playbook' })).toBeNull();
+
+    // What the same scopes DO open, so this is a hide, not a broken rail.
+    expect(screen.getByRole('link', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Customers' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Team' })).toBeInTheDocument();
+  });
+
+  it('shows Reports and Billing for an admin-scoped caller', () => {
+    useAuth.setState((state) => ({
+      agent: state.agent && {
+        ...state.agent,
+        role: 'admin',
+        scopes: defaultScopesForRole('admin'),
+      },
+    }));
+    renderShell();
+
+    expect(screen.getByRole('link', { name: 'Reports' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Billing' })).toBeInTheDocument();
+  });
+});
+
+describe('rail badges (FR-MOD-01.2)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function stubCounts({
+    unassigned = 0,
+    queued = 0,
+    invitations = 0,
+  }: {
+    unassigned?: number;
+    queued?: number;
+    invitations?: number;
+  }) {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: string) => {
+        const url = String(input);
+        if (url.includes('/chats?view=unassigned'))
+          return jsonResponse({ items: [], total: unassigned });
+        if (url.includes('/chats?view=queued')) return jsonResponse({ items: [], total: queued });
+        if (url.includes('/invitations')) {
+          return jsonResponse({
+            items: Array.from({ length: invitations }, (_, i) => ({
+              id: `inv-${i}`,
+              email: `person-${i}@acme.localhost`,
+              role: 'agent',
+              invited_by_name: 'Dana Okonkwo',
+              expires_at: new Date().toISOString(),
+            })),
+          });
+        }
+        return {
+          ok: false,
+          status: 404,
+          headers: { get: () => null },
+          json: async () => ({
+            error: { type: 'not_found', message: 'Not found.', request_id: '-' },
+          }),
+        } as unknown as Response;
+      }),
+    );
+  }
+
+  it('carries no badge when every count is zero', async () => {
+    stubCounts({});
+    renderShell();
+
+    await screen.findByText('Inbox module');
+    expect(screen.getByRole('link', { name: 'Inbox' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Team' })).toBeInTheDocument();
+  });
+
+  it('shows the Inbox badge as the unassigned + queued total, named for a screen reader', async () => {
+    stubCounts({ unassigned: 2, queued: 1 });
+    renderShell();
+
+    const link = await screen.findByRole('link', { name: 'Inbox, 3 unread' });
+    expect(within(link).getByText('3')).toBeInTheDocument();
+  });
+
+  it('shows the Team badge as the pending invite count', async () => {
+    stubCounts({ invitations: 2 });
+    renderShell();
+
+    const link = await screen.findByRole('link', { name: 'Team, 2 pending invites' });
+    expect(within(link).getByText('2')).toBeInTheDocument();
   });
 });
 

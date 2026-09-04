@@ -19,6 +19,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { defaultScopesForRole } from '@nexa/types';
 import { AppShell } from './AppShell.js';
 import { useAuth } from '../lib/auth-store.js';
 import { useRealtimeStatus } from '../lib/realtime-status.js';
@@ -83,7 +84,9 @@ beforeEach(() => {
       role: 'owner',
       organization_id: 'o-1',
       license_id: '1000003',
-      scopes: [],
+      // One test below clicks the Reports rail link, which carries a scope
+      // now (FR-MOD-01.2).
+      scopes: defaultScopesForRole('owner'),
       routing_status: 'accepting_chats',
     },
   });

@@ -8645,7 +8645,7 @@
         "description": "Omnichannel cift yonlu oldu (tm G1, `channel_messages` a outbound yaziliyor) ama tabloyu okuyan bir uc yok. Bu yuzden e2e teslimati gozlemleyemiyor ve bir operator \"bu mesaj gercekten gitti mi\" sorusunu konsoldan cevaplayamiyor.",
         "details": "Denetim `prd-uyum-denetimi.md` §3 D1 · `HANDOFF.md` G1 girişi (\"Kalan borç\") · `services/channels/channel-service.ts` (`record`) ve `ChannelMessage` modeli.\n\nG1 turunda `channels.spec.ts` ve `telegram.spec.ts`'ten elle atılan `POST /channels/:type/messages` adımı kaldırıldı (artık çift gönderim olurdu). Bu iş kalemi o adımın **dürüst yerine koymasıdır**: teslimatı gerçekten gözlemleyen bir okuma yolu.",
         "testStrategy": "Yön/sohbet/zaman filtreleri; keyset sayfalama; cross-tenant izolasyon; scope reddi; sorgunun mevcut indekslere oturduğu EXPLAIN ile ölçülür (`reports-billing.test.ts` deseni). e2e: ajanın konsoldan yazdığı cevabın gerçekten gönderildiği bu uçla doğrulanır.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
         "subtasks": [
@@ -8654,13 +8654,13 @@
             "title": "M-CHOBS-a [OPUS-XHIGH] GET /channels/:type/messages — yeni yetkili uç, müşteri içeriği taşır",
             "description": "Yön (inbound/outbound), sohbet ve zaman aralığı filtreleri; keyset sayfalama (mevcut `page_id` deseni). Mesaj metni müşteri içeriği: scope'u dar tut (`channels--all:ro`), cross-tenant izolasyonu test et. `ChannelMessage` indeksleri `(license_id, channel_type, created_at)` ve `(license_id, chat_id)` var — sorguyu bunlara oturt, yeni indeks açmadan önce ölç.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "183",
-            "updatedAt": "2026-09-04T16:03:07.971Z"
+            "updatedAt": "2026-09-04T17:30:28.817Z"
           }
         ],
-        "updatedAt": "2026-09-04T16:03:07.971Z"
+        "updatedAt": "2026-09-04T17:30:28.817Z"
       },
       {
         "id": "184",
@@ -8718,9 +8718,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T16:03:07.971Z",
+      "lastModified": "2026-09-04T17:30:28.818Z",
       "taskCount": 184,
-      "completedCount": 183,
+      "completedCount": 184,
       "tags": [
         "master"
       ]

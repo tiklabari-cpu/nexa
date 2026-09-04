@@ -8578,10 +8578,10 @@
             "title": "M-UI-h [SONNET-XHIGH] AI Agent şablon rozetleri — tip ve veri var, render yok",
             "description": "PRD **552-561** (05.2). `TemplateBadge` tipi tanımlı (`templates.ts:54`), `badge` alanı dört kayıtta dolu, hiçbir bileşen render etmiyor → Popular/Essential kartlarda görünmüyor. Rozet bir kategori değil vurgu — kategori ucu (prebuilt/ai/trending) zaten basılıyor, karıştırma. Yeni renk eklersen `tokens.test.ts` AA kontrast eşiğini de güncelle. i18n.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T08:30:49.772Z"
           },
           {
             "id": 9,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T07:44:34.055Z"
+        "updatedAt": "2026-09-04T08:30:49.772Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T07:44:34.056Z",
+      "lastModified": "2026-09-04T08:30:49.772Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

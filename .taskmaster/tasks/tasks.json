@@ -8568,10 +8568,10 @@
             "title": "M-UI-g [SONNET-MAX] Form kütüphanesi süpürmesi: kalan formların envanteri ve taşınması",
             "description": "Geniş mekanik yüzey (~20 dosya). Önce envanter: `comm -23 <(grep -rln \"<form\" apps/web/src --include=*.tsx|sort) <(grep -rln \"useForm(\" apps/web/src --include=*.tsx|sort)`. Öncelik: kullanıcı verisi yazan ve hata gösterme ihtiyacı yüksek olanlar (ayarlar, davet, kural oluşturma); salt arama kutusu olanlar düşük — taşınmaya değmiyorsa nedenini yaz. Her taşımadan sonra o dosyanın testini koş, hepsini sona bırakma. **Taşınanları ve kalanları HANDOFF'a açıkça listele** — sessiz kısmi teslim denetimin en çok şikayet ettiği şey.",
             "details": "Bağımlılık: M-UI-f. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "181",
-            "updatedAt": "2026-09-04T06:18:33.568Z"
+            "updatedAt": "2026-09-04T07:44:34.055Z"
           },
           {
             "id": 8,
@@ -8604,7 +8604,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-09-04T06:18:33.568Z"
+        "updatedAt": "2026-09-04T07:44:34.055Z"
       },
       {
         "id": "182",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T06:18:33.569Z",
+      "lastModified": "2026-09-04T07:44:34.056Z",
       "taskCount": 184,
       "completedCount": 180,
       "tags": [

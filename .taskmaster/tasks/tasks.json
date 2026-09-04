@@ -8612,7 +8612,7 @@
         "description": "Denetimde YOK cikti ve onceligi Onemli. `Organization` modelinde yalnizca `name` + `region` var (schema.prisma:29-43); sektor/adres/saat dilimi alani yok, `/settings/company` benzeri uc yok (settings.ts teki 46 route un hicbiri sirket bilgisi yazmiyor), web tarafinda boyle bir bolum yok.",
         "details": "PRD satır **594-659** (FR-MOD-08.3) · denetim `prd-uyum-denetimi.md` §6 (YOK listesi).\n\n**Saat dilimi çakışması — asıl dikkat noktası:** çalışma saatleri özelliği (`WorkSchedule`, `work_schedule.updated` audit eylemi) zaten bir saat dilimi taşıyor. Şirket saat dilimi ile ajan/çalışma saati saat dilimi çakışmamalı — hangisi hangisini besliyor? İki ayrı doğruluk kaynağı olursa raporlar sessizce kayar.",
         "testStrategy": "`db:check-drift` exit 0. Kaydet → geri oku; scope reddi; cross-tenant izolasyon; **çalışma saatleri bu saat dilimini kullanıyor** (iki kaynak kararının testi). e2e + `kanit/08.3-company.png`. PLAN.md 08.3 satırı ⬜ → ✅.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [
@@ -8621,10 +8621,10 @@
             "title": "M-CO-a [SONNET-XHIGH] Organization şema alanları + migration + GET/PATCH /settings/company",
             "description": "Sektör / adres / saat dilimi. Sektör serbest metin mi kapalı liste mi — kapalı liste raporlanabilir ama esnek değil, kararını yorumla. Kontrat + `contract:generate` + generated senkron. Scope mevcut ayar uçlarıyla tutarlı.",
             "details": "Bağımlılık: yok. Dilim V7-3. Pencere protokolü: `TASK-RUNNER-PROMPT.md` (bootstrap → resume → build → doğrulama → kapanış); DoD kapısı `CONVENTIONS.md` §1. Etiket = model × efor, PLAN §5.1.1.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "182",
-            "updatedAt": "2026-08-31T00:00:00.000Z"
+            "updatedAt": "2026-09-04T11:03:57.008Z"
           },
           {
             "id": 2,
@@ -8637,7 +8637,7 @@
             "updatedAt": "2026-08-31T00:00:00.000Z"
           }
         ],
-        "updatedAt": "2026-08-31T00:00:00.000Z"
+        "updatedAt": "2026-09-04T11:03:57.008Z"
       },
       {
         "id": "183",
@@ -8718,7 +8718,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-04T09:53:56.364Z",
+      "lastModified": "2026-09-04T11:03:57.009Z",
       "taskCount": 184,
       "completedCount": 181,
       "tags": [

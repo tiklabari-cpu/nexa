@@ -194,6 +194,158 @@ describe('AuditLogPage', () => {
   });
 });
 
+/**
+ * The expandable row and its by-id detail (M-UI-e).
+ *
+ * Two things are worth pinning beyond "it renders": that the screen shows
+ * *every* metadata field rather than an allowlist of its own — the write-time
+ * decision is the decision — and that the detail is fetched by id, which is
+ * what makes `?entry=<id>` resolve for an entry the current list does not hold.
+ */
+describe('AuditLogPage entry detail', () => {
+  const DETAIL = {
+    ...LOGIN_ENTRY,
+    chain_seq: 41,
+  };
+
+  /** Routes the shared `api.get` mock: list path vs. detail path. */
+  function mockApi(detail: Record<string, unknown> = DETAIL, list = ENTRIES): void {
+    api.get.mockImplementation((path: string) =>
+      path.startsWith('/audit-log/') ? Promise.resolve(detail) : Promise.resolve(list),
+    );
+  }
+
+  function toggle(): HTMLElement {
+    return screen.getByRole('button', { name: /^Detail for member\.role_changed at / });
+  }
+
+  it('does not fetch a detail until a row is expanded', async () => {
+    mockApi();
+    renderPage(<AuditLogPage />);
+
+    await screen.findByRole('table');
+    expect(api.get).not.toHaveBeenCalledWith(expect.stringContaining('/audit-log/'));
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it("expands a row and shows the entry's metadata as labelled pairs", async () => {
+    mockApi();
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    await userEvent.click(toggle());
+
+    expect(api.get).toHaveBeenCalledWith('/audit-log/entry-1');
+    // `{from: 'agent', to: 'admin'}` — the pair that makes a role change
+    // readable at all — as a definition list, not a JSON blob.
+    expect(await screen.findByText('from')).toBeInTheDocument();
+    expect(screen.getByText('to')).toBeInTheDocument();
+    expect(screen.getByText('#41')).toBeInTheDocument();
+    expect(toggle()).toHaveAttribute('aria-expanded', 'true');
+  });
+
+  it('shows the personal fields the writer deliberately kept, rather than a second allowlist', async () => {
+    // The verification mailbox is personal data and is recorded on purpose —
+    // an incident reviewer has to know who was asked to vouch for a domain.
+    // A read-side filter would silently eat exactly this.
+    mockApi({
+      ...LOGIN_ENTRY,
+      action: 'settings.security_updated',
+      metadata: {
+        resource: 'sso_domain',
+        operation: 'challenge_sent',
+        domain: 'acme.test',
+        mailbox: 'admin@acme.test',
+      },
+      chain_seq: 7,
+    });
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    await userEvent.click(toggle());
+
+    expect(await screen.findByText('admin@acme.test')).toBeInTheDocument();
+    expect(screen.getByText('acme.test')).toBeInTheDocument();
+    // …and the screen says why a field somebody expects may be absent, so a
+    // reviewer does not read "not shown" into "never written".
+    expect(screen.getByText(/never values, secrets or message content/)).toBeInTheDocument();
+  });
+
+  it('says an unchained entry is unchained instead of leaving the position blank', async () => {
+    mockApi({ ...LOGIN_ENTRY, chain_seq: null });
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    await userEvent.click(toggle());
+
+    expect(await screen.findByText(/Not chained/)).toBeInTheDocument();
+  });
+
+  it('says so when the action recorded no further detail', async () => {
+    mockApi({ ...LOGIN_ENTRY, metadata: {}, chain_seq: 3 });
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    await userEvent.click(toggle());
+
+    expect(await screen.findByText('This action records no further detail.')).toBeInTheDocument();
+  });
+
+  it('writes the expansion to the URL and collapses it again', async () => {
+    mockApi();
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    await userEvent.click(toggle());
+    await screen.findByText('#41');
+
+    await userEvent.click(toggle());
+    await waitFor(() => expect(screen.queryByText('#41')).not.toBeInTheDocument());
+    expect(toggle()).toHaveAttribute('aria-expanded', 'false');
+  });
+
+  it('restores an expansion named in the URL on reload', async () => {
+    mockApi();
+    renderPage(<AuditLogPage />, ['/?entry=entry-1']);
+
+    await screen.findByRole('table');
+    expect(await screen.findByText('#41')).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith('/audit-log/entry-1');
+  });
+
+  it('opens a linked entry the current list does not contain', async () => {
+    // The case a row-only expansion cannot serve, and the reason the endpoint
+    // exists: a bookmark from an incident ticket, an entry past the list's
+    // 30-day window, or simply a page that has not been loaded.
+    mockApi({
+      ...LOGIN_ENTRY,
+      id: 'entry-elsewhere',
+      metadata: { kind: 'webhook' },
+      chain_seq: 12,
+    });
+    renderPage(<AuditLogPage />, ['/?entry=entry-elsewhere']);
+
+    await screen.findByRole('table');
+    expect(
+      await screen.findByText('Linked entry — outside the current filter or page'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('webhook')).toBeInTheDocument();
+    expect(api.get).toHaveBeenCalledWith('/audit-log/entry-elsewhere');
+  });
+
+  it('shows an error notice when the entry itself cannot be loaded', async () => {
+    api.get.mockImplementation((path: string) =>
+      path.startsWith('/audit-log/') ? Promise.reject(new Error('gone')) : Promise.resolve(ENTRIES),
+    );
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    await userEvent.click(toggle());
+
+    expect(await screen.findByText(/Could not load this entry/)).toBeInTheDocument();
+  });
+});
+
 /** One sentinel for this file's DoD claim of being translated (I18N-j, tm 133.10). */
 describe('AuditLogPage localisation (NFR-I18N2)', () => {
   afterEach(() => {

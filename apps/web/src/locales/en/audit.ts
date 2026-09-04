@@ -35,6 +35,19 @@ export const audit: Messages = {
   'audit.column.actor': 'Actor',
   'audit.column.target': 'Target',
   'audit.column.ip': 'IP',
+  'audit.column.detail': 'Detail',
+  'audit.detail.toggleAriaLabel': 'Detail for {action} at {time}',
+  'audit.detail.entryId': 'Entry ID',
+  'audit.detail.chainPosition': 'Chain position',
+  'audit.detail.chainUnavailable':
+    'Not chained — written before this workspace’s audit chain existed',
+  'audit.detail.recordedDetail': 'Recorded detail',
+  'audit.detail.noMetadata': 'This action records no further detail.',
+  'audit.detail.minimalNote':
+    'Audit entries deliberately record field names, counts and roles — never values, secrets or message content. Some actions omit the source address on purpose.',
+  'audit.detail.linkedEntry': 'Linked entry — outside the current filter or page',
+  'audit.detail.loadError':
+    'Could not load this entry. It may have passed the workspace’s retention window.',
   'audit.group.authentication': 'Authentication',
   'audit.group.team': 'Team',
   'audit.group.settings': 'Settings',

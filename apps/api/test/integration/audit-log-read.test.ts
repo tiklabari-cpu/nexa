@@ -450,4 +450,148 @@ describe('audit log read', () => {
       expect(itemsOf(resPaid).map((e) => e.id)).toEqual([bEntry]);
     });
   });
+
+  // --- One entry, by id (08.9.7 · M-UI-e) ------------------------------------
+
+  describe('one entry, by id', () => {
+    /** The detail's own JSON, typed loosely so the *absence* of a key is assertable. */
+    const detail = (res: { json: () => unknown }) => res.json() as Record<string, unknown>;
+
+    it('refuses an unauthenticated caller with 401', async () => {
+      const id = await seedEntry(fx.a);
+      const res = await server.get(`/audit-log/${id}`);
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('refuses an agent — even one holding the scope (role gate)', async () => {
+      const id = await seedEntry(fx.a);
+      const res = await server.get(`/audit-log/${id}`, auth(agentWithScopeToken));
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('refuses an admin without the audit scope (scope gate)', async () => {
+      const id = await seedEntry(fx.a);
+      const res = await server.get(`/audit-log/${id}`, auth(adminNoScopeToken));
+      expect(res.statusCode).toBe(403);
+    });
+
+    it('returns the entry with its metadata exactly as stored', async () => {
+      // A shape that is deliberately kept despite being personal data: the
+      // mailbox asked to vouch for a domain (`settings.ts` writes it with that
+      // reasoning). If the read side ever grew a filter of its own, this is the
+      // field it would quietly eat.
+      const id = await seedEntry(fx.a, {
+        action: 'settings.security_updated',
+        target: 'sso_connection:detail',
+        metadata: {
+          resource: 'sso_domain',
+          operation: 'challenge_sent',
+          domain: 'acme.test',
+          mailbox: 'admin@acme.test',
+        },
+        ip: '203.0.113.42',
+      });
+
+      const res = await server.get(`/audit-log/${id}`, auth(ownerReadToken));
+      expect(res.statusCode).toBe(200);
+      const entry = detail(res);
+      expect(entry['id']).toBe(id);
+      expect(entry['action']).toBe('settings.security_updated');
+      expect(entry['target']).toBe('sso_connection:detail');
+      expect(entry['actor_type']).toBe('agent');
+      expect(entry['ip']).toBe('203.0.113.42');
+      expect(entry['metadata']).toEqual({
+        resource: 'sso_domain',
+        operation: 'challenge_sent',
+        domain: 'acme.test',
+        mailbox: 'admin@acme.test',
+      });
+      expect(typeof entry['created_at']).toBe('string');
+    });
+
+    it("answers 404 — never 403 — for another tenant's real entry id", async () => {
+      const foreign = await seedEntry(fx.b, { action: 'auth.login', target: 'token:foreign' });
+
+      const res = await server.get(`/audit-log/${foreign}`, auth(ownerReadToken));
+      // The id exists; a 403 would say so and turn short ids into an
+      // enumeration oracle (NFR-S5). It must be indistinguishable from the
+      // unknown-id answer below.
+      expect(res.statusCode).toBe(404);
+      expect(errorType(res)).toBe('not_found');
+    });
+
+    it('answers 404 for an id nobody holds', async () => {
+      const res = await server.get(
+        '/audit-log/99999999-9999-4999-8999-999999999999',
+        auth(ownerReadToken),
+      );
+      expect(res.statusCode).toBe(404);
+      expect(errorType(res)).toBe('not_found');
+    });
+
+    it('rejects a malformed id with 400', async () => {
+      const res = await server.get('/audit-log/not-a-uuid', auth(ownerReadToken));
+      expect(res.statusCode).toBe(400);
+      expect(errorType(res)).toBe('validation');
+    });
+
+    it('returns an entry the list has aged out of its 30-day window', async () => {
+      // The reason this endpoint is not redundant with the list: a link into an
+      // incident ticket has to keep resolving after the browse window moves on.
+      const old = new Date(Date.now() - 90 * 86_400_000);
+      const id = await seedEntry(fx.a, {
+        action: 'member.role_changed',
+        target: 'account:aged',
+        createdAt: old,
+      });
+
+      const list = await server.get('/audit-log', auth(ownerReadToken));
+      expect(itemsOf(list).map((e) => e.id)).not.toContain(id);
+
+      const res = await server.get(`/audit-log/${id}`, auth(ownerReadToken));
+      expect(res.statusCode).toBe(200);
+      expect(detail(res)['id']).toBe(id);
+    });
+
+    it('carries the chain position, and never the hashes beside it', async () => {
+      // Chained rows are written by `writeAuditEntry`; seeding one directly is
+      // enough here, because what is under test is what the *reader* discloses.
+      const row = await owner.auditLogEntry.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          actorId: fx.a.ownerAccountId,
+          actorType: 'agent',
+          action: 'auth.login',
+          metadata: {} as Prisma.InputJsonObject,
+          chainSeq: BigInt(41),
+          prevHash: 'kQ7xPREVIOUS',
+          hash: '9Zb2THISROW',
+        },
+        select: { id: true },
+      });
+
+      const res = await server.get(`/audit-log/${row.id}`, auth(ownerReadToken));
+      expect(res.statusCode).toBe(200);
+      const entry = detail(res);
+      // A number, because arithmetic on it (`n + 1` is what continuity means)
+      // is the field's entire purpose.
+      expect(entry['chain_seq']).toBe(41);
+      // The evidentiary half stays behind `audit_log--export:ro` + the
+      // `siem_export` entitlement. A read-scope caller collecting these record
+      // by record would acquire the Enterprise feed's capability sideways.
+      expect(entry).not.toHaveProperty('prev_hash');
+      expect(entry).not.toHaveProperty('hash');
+      expect(JSON.stringify(entry)).not.toContain('9Zb2THISROW');
+      expect(JSON.stringify(entry)).not.toContain('kQ7xPREVIOUS');
+    });
+
+    it('reports chain_seq as null on an entry written before the chain existed', async () => {
+      const id = await seedEntry(fx.a, { action: 'auth.login' });
+      const res = await server.get(`/audit-log/${id}`, auth(ownerReadToken));
+      expect(res.statusCode).toBe(200);
+      // Honest rather than absent: the row makes no claim, and inventing one
+      // would forge the assurance the chain exists to give.
+      expect(detail(res)['chain_seq']).toBeNull();
+    });
+  });
 });

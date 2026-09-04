@@ -6041,6 +6041,58 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/audit-log/{entryId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        entryId: string;
+      };
+      cookie?: never;
+    };
+    /**
+     * Read one audit log entry
+     * @description One entry of the workspace's security trail, by id. Owner/Admin with
+     *     `audit_log--all:ro` — exactly the gates `GET /audit-log` applies, no more
+     *     and no less. An id belonging to another workspace is a 404, never a 403:
+     *     a 403 would confirm the id is real and turn the endpoint into an
+     *     enumeration oracle (NFR-S5).
+     *
+     *     Unlike the list, there is no date window. An entry named by id is returned
+     *     whatever its age; the workspace's retention horizon is the only bound.
+     *
+     *     **`metadata` is returned exactly as stored, unfiltered.** The decision
+     *     about what a security event may keep was made at *write* time, per action,
+     *     and the reasoning is recorded beside each `writeAuditEntry` call — the
+     *     verification mailbox is kept because an incident reviewer needs to know
+     *     who was asked to vouch for a domain; the card's last four are kept and the
+     *     expiry and holder are not; `auth.ip_denied` deliberately stores no address
+     *     at all. `sanitizeAuditMetadata` then strips anything credential-shaped on
+     *     the way in. Re-filtering here could only subtract evidence somebody
+     *     deliberately kept, in a second place that would drift out of step with the
+     *     first — and it would make this response disagree with the SIEM export and
+     *     with the list, which return the same field unfiltered for the same reason.
+     *
+     *     **`chain_seq` is here; `prev_hash` and `hash` are not.** The position is
+     *     what a reader can *use*: positions are handed out gaplessly, so a hole in
+     *     the numbering is a deleted entry, and `null` says honestly that this row
+     *     predates the workspace's chain and cannot be vouched for. The hashes are
+     *     the evidentiary half of NFR-C6, and they are sold behind a different door
+     *     — `audit_log--export:ro` plus the `siem_export` entitlement. Returning
+     *     them on the ungated read scope would let an integration holding only
+     *     `audit_log--all:ro` reassemble, record by record, the tamper-evidence the
+     *     Enterprise feed *is*. They are also of no use without the workspace's
+     *     derived key, which no read surface carries.
+     */
+    get: operations['getAuditLogEntry'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/kb-articles': {
     parameters: {
       query?: never;
@@ -7904,6 +7956,33 @@ export interface components {
       ip?: string | null;
       /** Format: date-time */
       created_at: string;
+    };
+    /**
+     * @description One entry read by id (`GET /audit-log/{entryId}`) — every field the list
+     *     already returns, plus the entry's position in the workspace's
+     *     tamper-evident chain.
+     *
+     *     Nothing is redacted relative to the list. The read surfaces would only
+     *     disagree with each other about what happened, and the field-level
+     *     decision about what an event may keep was already made at write time,
+     *     per action, with its reasoning recorded there.
+     */
+    AuditLogEntryDetail: components['schemas']['AuditLogEntry'] & {
+      /**
+       * @description This entry's position in the workspace's audit chain (NFR-C6 ·
+       *     C6-c). Positions are handed out gaplessly, so a missing number
+       *     between two entries means one was deleted — which is the whole
+       *     of what a reader can do with it, and why it is here while
+       *     `prev_hash`/`hash` are not: those are the evidentiary half,
+       *     gated on `audit_log--export:ro` + the `siem_export`
+       *     entitlement, and unusable anyway without the workspace's
+       *     derived key.
+       *
+       *     `null` on entries written before the chain existed. Those
+       *     cannot be back-computed, and saying so is the honest answer —
+       *     claiming they are chained would forge the assurance.
+       */
+      chain_seq?: number | null;
     };
     /**
      * @description One line of the SIEM export (NFR-C6). The read surface's entry plus
@@ -19617,6 +19696,33 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAuditLogEntry: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        entryId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The entry. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AuditLogEntryDetail'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

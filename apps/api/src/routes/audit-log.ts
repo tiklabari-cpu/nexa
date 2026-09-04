@@ -15,15 +15,17 @@
  * dashboard integration acquiring the firehose by being handed the reading
  * scope (PLAN §6.1.4).
  *
- * Filters (action, actor, date range) narrow the same base list, additively —
- * a single-entry view is a separate surface (detail).
+ * Filters (action, actor, date range) narrow the same base list, additively.
+ * The single-entry view (`/audit-log/:entryId`) is a third surface on the same
+ * rows: same two gates as the list, no window, and one extra field. See the
+ * comment above the handler for what it does and does not disclose.
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { AUDIT_ACTIONS } from '../services/audit/audit-log.js';
-import { listAuditLog } from '../services/audit/audit-log-reader.js';
+import { getAuditLogEntry, listAuditLog } from '../services/audit/audit-log-reader.js';
 import { deriveChainKey } from '../services/audit/audit-chain.js';
 import {
   decodeExportCursor,
@@ -61,6 +63,14 @@ const exportQuery = z.object({
   limit: z.coerce.number().int().min(1).optional(),
   page_id: z.string().max(512).optional(),
 });
+
+/**
+ * The detail route's only input. A malformed id is a 400 rather than a 404:
+ * unlike an id that is merely unknown, it says nothing about what this
+ * workspace holds, so refusing it out loud costs no confidentiality and saves a
+ * pointless query.
+ */
+const entryParams = z.object({ entryId: z.string().uuid() });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -193,6 +203,47 @@ export default async function auditLogRoutes(
           .header('x-nexa-export-chain-ok', page.chain.ok ? 'true' : 'false')
           .send(sealed.body)
       );
+    },
+  );
+
+  /**
+   * One entry, by id (M-UI-e). Registered after `/audit-log/export` so the
+   * static segment is unambiguous to a reader; Fastify's radix tree prefers it
+   * either way.
+   *
+   * **The same two gates as the list, deliberately identical.** Whoever may
+   * page the trail may open one row of it. A looser check here would be a way
+   * around the list's; a tighter one would keep evidence from exactly the
+   * person the entry was written for.
+   *
+   * **Why this is not redundant with the list.** The list is a browse: its rows
+   * are thrown away when a filter changes, and it defaults to the last 30 days.
+   * This is a reference — a link pasted into an incident ticket — so it takes
+   * no window and resolves for as long as retention keeps the row.
+   *
+   * **What it discloses.** `metadata` exactly as stored (the write-time
+   * decision is the decision; re-filtering here could only subtract evidence
+   * somebody deliberately kept, and would put this response at odds with the
+   * list and the SIEM export) plus `chain_seq`, the entry's gapless position —
+   * which is the part of the chain a reader can *use*, since a hole in the
+   * numbering is a deleted row. `prev_hash`/`hash` stay out: they are the
+   * evidentiary half of NFR-C6, sold behind `audit_log--export:ro` + the
+   * `siem_export` entitlement, and letting a read-only integration collect
+   * them record by record would hand it that capability sideways.
+   */
+  app.get<{ Params: { entryId: string } }>(
+    '/audit-log/:entryId',
+    { config: { scopes: ['audit_log--all:ro'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const { entryId } = parse(entryParams, request.params);
+
+      const entry = await request.withTenant((tx) => getAuditLogEntry(tx, entryId));
+      // Unknown and belonging-to-another-workspace are the same answer. RLS
+      // makes the second indistinguishable from the first here, and a 403 would
+      // confirm the id is real — an enumeration oracle (NFR-S5).
+      if (!entry) throw ApiError.notFound('Audit log entry not found.');
+
+      return reply.send(entry);
     },
   );
 }

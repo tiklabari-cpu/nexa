@@ -4008,7 +4008,7 @@ describe('reports and billing', () => {
   // =========================================================================
 
   describe('subscription and the trial gate', () => {
-    it('bills nothing during the trial', async () => {
+    it('bills nothing during the trial (FR-MOD-10.2)', async () => {
       const response = await server.get('/billing/subscription', auth);
       expect(response.statusCode).toBe(200);
       expect(response.json().access).toBe('trialing');
@@ -4037,7 +4037,7 @@ describe('reports and billing', () => {
       expect(response.json().estimated_total_cents).toBe(2 * 9900);
     });
 
-    it('turns read-only when the trial expires, without deleting anything', async () => {
+    it('turns read-only when the trial expires, without deleting anything (FR-MOD-10.2)', async () => {
       const chatId = await conversation({ agentReplies: true });
       await owner.license.update({
         where: { id: fx.a.licenseId },
@@ -4059,7 +4059,7 @@ describe('reports and billing', () => {
       expect(await owner.chat.count({ where: { licenseId: fx.a.licenseId } })).toBeGreaterThan(0);
     });
 
-    it('refuses writes once read-only', async () => {
+    it('refuses writes once read-only (FR-MOD-10.2)', async () => {
       await owner.license.update({
         where: { id: fx.a.licenseId },
         data: { trialEndsAt: new Date(Date.now() - 86_400_000) },
@@ -4083,7 +4083,7 @@ describe('reports and billing', () => {
       expect((await server.get('/auth/me', auth)).statusCode).toBe(200);
     });
 
-    it('keeps a live trial writable', async () => {
+    it('keeps a live trial writable (FR-MOD-10.2)', async () => {
       const response = await server.post('/chats', { customer_id: fx.a.customerId }, auth);
       expect([200, 201]).toContain(response.statusCode);
     });
@@ -4284,7 +4284,7 @@ describe('reports and billing', () => {
       ).toBe(7);
     });
 
-    it('stays writable while the trial is read-only — subscribing is the way back', async () => {
+    it('stays writable while the trial is read-only — subscribing is the way back (FR-MOD-10.2)', async () => {
       await owner.license.update({
         where: { id: fx.a.licenseId },
         data: { trialEndsAt: new Date(Date.now() - 86_400_000) },

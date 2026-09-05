@@ -1838,6 +1838,97 @@ async function seedPagingWorkspace(passwordHash: string): Promise<void> {
   console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
 }
 
+/**
+ * A trial that ended before this run started (FR-MOD-10.2).
+ *
+ * `license-gate.ts` re-reads `trialEndsAt` on every mutating request rather
+ * than caching it, so read-only mode is a fact about the row, not about
+ * elapsed wall-clock time in a test. But nothing public ever moves that row
+ * backwards — `fixtures.ts`'s own rule is that e2e drives the product through
+ * its API and never the database, and there is no endpoint that ages a
+ * workspace's trial (there should not be one). A live-trial signup can only
+ * ever be aged forward by waiting fourteen real days, so the one way to get an
+ * e2e-reachable "read-only since before the run started" workspace is to seed
+ * it already expired, the same way `MISPLACED_US`/`PAGING` seed a state a
+ * public signup could never produce.
+ *
+ * Deliberately the same minimum as `MISPLACED_US`: no conversations, no
+ * customers — the claim under test is the write gate and the subscribe path,
+ * neither of which needs existing data to demonstrate (the gate's own point,
+ * ADR-10, is that data would stay readable if there were any).
+ */
+const OVERDUE = {
+  organizationName: 'Overdue Outfitters',
+  slug: 'overdue',
+  ownerName: 'Rae Overdue',
+} as const;
+
+async function seedOverdueTrialWorkspace(passwordHash: string): Promise<void> {
+  const existing = await prisma.organization.findFirst({
+    where: { name: OVERDUE.organizationName },
+    select: { id: true },
+  });
+  if (existing) {
+    console.log(`  ${OVERDUE.organizationName}: already present, skipping`);
+    return;
+  }
+
+  const organization = await prisma.organization.create({
+    data: { name: OVERDUE.organizationName, region: 'eu' },
+    select: { id: true },
+  });
+
+  const license = await prisma.license.create({
+    data: {
+      organizationId: organization.id,
+      plan: 'growth',
+      billingCycle: 'monthly',
+      status: 'trialing',
+      // Two days past the fourteen it was granted — well clear of any clock
+      // skew between the seed run and the tests that read it.
+      trialEndsAt: new Date(Date.now() - 2 * 86_400_000),
+      // A null here would send the owner to the setup wizard instead of the
+      // inbox — this fixture is about the write gate, not onboarding.
+      onboardingCompletedAt: new Date(),
+      surveyAnsweredAt: new Date(),
+    },
+    select: { id: true },
+  });
+
+  const owner = await prisma.account.create({
+    data: {
+      email: `owner@${OVERDUE.slug}.localhost`,
+      name: OVERDUE.ownerName,
+      passwordHash,
+    },
+    select: { id: true, email: true },
+  });
+
+  await prisma.agentMembership.create({
+    data: {
+      licenseId: license.id,
+      agentId: owner.id,
+      role: 'owner',
+      routingStatus: 'accepting_chats',
+      concurrentChatsLimit: 6,
+    },
+  });
+
+  await prisma.oauthClient.create({
+    data: {
+      id: `nexa-agent-app-${OVERDUE.slug}`,
+      organizationId: organization.id,
+      displayName: 'Nexa Agent App',
+      clientType: 'public',
+      redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
+      scopes: [],
+    },
+  });
+
+  console.log(`  ${OVERDUE.organizationName}  (trial ended two days before this seed ran)`);
+  console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
+}
+
 async function main(): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {
     throw new Error('The demo seed must never run against production.');
@@ -1860,6 +1951,7 @@ async function main(): Promise<void> {
   }
   await seedMisplacedUsWorkspace(passwordHash);
   await seedPagingWorkspace(passwordHash);
+  await seedOverdueTrialWorkspace(passwordHash);
 
   console.log('');
   console.log('  ⚠  Seed credentials are public and identical on every machine.');

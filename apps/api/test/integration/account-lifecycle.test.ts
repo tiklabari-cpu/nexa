@@ -369,7 +369,7 @@ describe('account lifecycle', () => {
   // =========================================================================
 
   describe('signup', () => {
-    it('creates the workspace, the owner and a 14-day trial (I1, I3)', async () => {
+    it('creates the workspace, the owner and a 14-day trial (FR-MOD-10.2 · I1, I3)', async () => {
       const response = await server.post('/auth/signup', {
         email: 'founder@newco.test',
         password: STRONG_PASSWORD,

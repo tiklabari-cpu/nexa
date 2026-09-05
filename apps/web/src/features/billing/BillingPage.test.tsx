@@ -571,7 +571,7 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1–.3)', (
   });
 });
 
-describe('BillingPage — trial and read-only banners (ADR-10)', () => {
+describe('BillingPage — trial and read-only banners (FR-MOD-10.2 · ADR-10)', () => {
   it('shows the trial countdown and end date', async () => {
     mockBilling({
       access: 'trialing',

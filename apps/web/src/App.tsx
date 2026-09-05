@@ -23,6 +23,8 @@ import { InboxPage } from './features/inbox/InboxPage.js';
 import { HomePage } from './features/home/HomePage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
 import { TeamPage } from './features/team/TeamPage.js';
+import { TeamAiAgentsPage } from './features/team/TeamAiAgentsPage.js';
+import { TeamsPage } from './features/team/TeamsPage.js';
 import { OnboardingWizard } from './features/onboarding/OnboardingWizard.js';
 import { useAuth } from './lib/auth-store.js';
 
@@ -92,6 +94,8 @@ export function App(): ReactElement {
         <Route path="customers/campaigns" element={<CampaignsPage />} />
         <Route path="customers/goals" element={<GoalsPage />} />
         <Route path="team" element={<TeamPage />} />
+        <Route path="team/ai-agents" element={<TeamAiAgentsPage />} />
+        <Route path="team/teams" element={<TeamsPage />} />
         <Route path="reports" element={<ReportsPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="playbook" element={<PlaybookPage />} />

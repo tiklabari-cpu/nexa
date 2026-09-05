@@ -70,8 +70,8 @@ test.describe('invite teammates — dirty guard (FR-EK-A.2)', () => {
   });
 });
 
-test.describe('invite from the shell (FR-MOD-01.1.5)', () => {
-  test("the rail's Invite button opens the same modal from a screen that is not Team", async ({
+test.describe('quick create from the shell (FR-MOD-01.1.5 · FR-MOD-04.1)', () => {
+  test("the rail's quick-create menu opens the invite modal from a screen that is not Team", async ({
     agentPage,
   }) => {
     // The seeded owner starts on the Inbox (fixtures.ts) — deliberately not
@@ -80,6 +80,7 @@ test.describe('invite from the shell (FR-MOD-01.1.5)', () => {
     await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
 
     const rail = agentPage.getByRole('navigation', { name: 'Modules' });
+    await rail.getByRole('button', { name: 'Quick create' }).click();
     await rail.getByRole('button', { name: /^Invite/ }).click();
 
     const dialog = agentPage.getByRole('dialog', { name: 'Invite teammates' });
@@ -94,6 +95,50 @@ test.describe('invite from the shell (FR-MOD-01.1.5)', () => {
     await dialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(dialog).toBeHidden();
     expect(nagged).toBe(false);
+  });
+
+  test("the rail's quick-create menu opens the same New team dialog Teams.tsx uses", async ({
+    agentPage,
+  }) => {
+    await expect(agentPage.getByRole('heading', { name: 'Inbox', level: 1 })).toBeVisible();
+
+    const rail = agentPage.getByRole('navigation', { name: 'Modules' });
+    await rail.getByRole('button', { name: 'Quick create' }).click();
+    await rail.getByRole('button', { name: 'New team' }).click();
+
+    const dialog = agentPage.getByRole('dialog', { name: 'New team' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toBeHidden();
+  });
+});
+
+test.describe('Team — module navigation (FR-MOD-04.1)', () => {
+  test('each tab is a deep-linkable route, and the AI agents / Teams tabs carry their own sections', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/team/ai-agents');
+    await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+    await expect(agentPage.getByRole('link', { name: 'AI agents' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(agentPage.getByRole('heading', { name: 'Chatbots' })).toBeVisible();
+    await expect(agentPage.getByRole('heading', { name: 'AI agent performance' })).toBeVisible();
+    await expect(agentPage.getByRole('heading', { name: 'Copilot knowledge' })).toBeVisible();
+
+    await agentPage.goto('/app/team/teams');
+    await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+    await expect(agentPage.getByRole('link', { name: 'Teams' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(agentPage.getByRole('button', { name: 'New team' })).toBeVisible();
+
+    // And back to the Teammates tab via the tab bar itself, not a `goto`.
+    await agentPage.getByRole('link', { name: 'Teammates' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/team$/);
+    await expect(agentPage.getByRole('table', { name: 'Agents on this licence' })).toBeVisible();
   });
 });
 
@@ -295,8 +340,8 @@ test.describe('Team — the console screen (FR-MOD-04.5)', () => {
     let chatId: string | undefined;
 
     try {
-      // --- 1. Team → create the team through the console -------------------
-      await agentPage.goto('/app/team');
+      // --- 1. Team → Teams tab → create the team through the console -------
+      await agentPage.goto('/app/team/teams');
       await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
 
       await agentPage.getByRole('button', { name: 'New team' }).click();

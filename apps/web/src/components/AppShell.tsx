@@ -18,6 +18,7 @@ import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
 import { InviteTeammates, usePendingInvitations } from '../features/team/InviteTeammates.js';
+import { CreateTeamButton } from '../features/team/CreateTeamButton.js';
 import { roleAtLeast } from '../features/team/RoleMenu.js';
 import { useRealtime } from '../features/inbox/useInbox.js';
 import { useNotifications } from '../features/notifications/useNotifications.js';
@@ -181,6 +182,8 @@ function IconRail(): ReactElement {
   // role never carries it, so the rail hides the door rather than showing one
   // that only 403s (FR-MOD-01.1.5).
   const canInvite = roleAtLeast(role, 'admin');
+  // `POST /groups` requires `groups--all:rw` — `Teams.tsx`'s own `canManage` gate.
+  const canManageTeams = scopes.includes('groups--all:rw');
   const badges = useNavBadges();
 
   return (
@@ -210,7 +213,9 @@ function IconRail(): ReactElement {
         {/* Qualified leads (FR-MOD-01.1.2) — "what needs a look", between who's
             online and who to invite. */}
         <LeadsPill pinned={pinned} />
-        {canInvite && <InviteRailButton pinned={pinned} />}
+        {(canInvite || canManageTeams) && (
+          <QuickCreateMenu pinned={pinned} canInvite={canInvite} canManageTeams={canManageTeams} />
+        )}
         {FOOTER.filter((item) => isNavVisible(item, scopes)).map((item) => (
           <RailButton key={item.to} item={item} pinned={pinned} />
         ))}
@@ -367,58 +372,114 @@ interface RosterCount {
 }
 
 /**
- * "Invite +N" (FR-MOD-01.1.5) — reachable from every module, not just Team.
+ * "+" quick create (FR-MOD-04.1) — reachable from every module, not just Team.
  *
- * Opens `InviteTeammates`'s own modal through its `trigger` render prop, so
- * the form, validation and mutation stay in one place (CONVENTIONS §5 — no
- * second copy); only this button is new. Mounted only when `canInvite`
- * (IconRail), which already mirrors the server's role gate, so the button
- * itself does not repeat that check.
+ * Was a single button straight into `InviteTeammates`'s modal; Team now owns
+ * two "add a worker" flows (a teammate, a team) and the rail is where an
+ * agent already reached for the first, so it grows into a menu rather than
+ * gaining a second rail entry. A third item — creating an AI agent from
+ * here — is deliberately not offered: `POST /ai-agents` does not exist yet
+ * (`routes/playbook.ts` only lists and patches), so there is nothing this
+ * menu could open for it (`#### K04.1` in PLAN.md has the fuller record).
  *
- * "+N" is free seats (`seats − active teammates`), read through the same
- * `['billing','subscription']` and `['agents']` cache keys `TrialBanner` and
- * `PresenceAvatars` already populate on every mount — no extra request in the
- * common case. Either read not yet resolved (or refused) falls back to the
- * plain label rather than blocking the button on two round trips.
+ * Each item gates on the same permission its own screen already enforces —
+ * Invite on `canInvite` (IconRail, mirrors the server's `accounts--all:rw`),
+ * New team on `canManageTeams` (mirrors `groups--all:rw`, `Teams.tsx`'s own
+ * `canManage`) — so an item without permission is hidden rather than shown
+ * and left to 403, the same courtesy the old single button paid. The menu
+ * itself only mounts when at least one item would show (IconRail).
+ *
+ * Both items reuse their screen's exact modal through the same `trigger`
+ * render-prop contract `InviteTeammates` already established (CONVENTIONS §5
+ * — no second copy of either form).
  */
-function InviteRailButton({ pinned }: { pinned: boolean }): ReactElement {
+function QuickCreateMenu({
+  pinned,
+  canInvite,
+  canManageTeams,
+}: {
+  pinned: boolean;
+  canInvite: boolean;
+  canManageTeams: boolean;
+}): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
 
+  // "+N" is free seats (`seats − active teammates`), read through the same
+  // `['billing','subscription']` and `['agents']` cache keys `TrialBanner` and
+  // `PresenceAvatars` already populate on every mount — no extra request in
+  // the common case. Skipped entirely for a caller who cannot invite anyway,
+  // rather than firing a read that only comes back 403.
   const subscription = useQuery({
     queryKey: ['billing', 'subscription'],
     queryFn: () => api.get<SeatsInfo>('/billing/subscription'),
     retry: false,
     staleTime: 60_000,
+    enabled: canInvite,
   });
   const roster = useQuery({
     queryKey: ['agents'],
     queryFn: () => api.get<RosterCount>('/agents'),
     retry: false,
+    enabled: canInvite,
   });
 
   const free =
     subscription.data && roster.data ? subscription.data.seats - roster.data.items.length : null;
-  const label =
+  const inviteLabel =
     free === null ? t('shell.invite.label') : t('shell.invite.labelWithCount', { count: free });
+  const label = t('shell.quickCreate.label');
+  const itemClassName =
+    'block w-full rounded-md px-2 py-1.5 text-left text-sm text-content hover:bg-surface-2';
 
   return (
-    <InviteTeammates
-      trigger={(open) => (
-        <button
-          type="button"
-          onClick={open}
-          aria-label={label}
-          title={label}
-          className={`flex h-9 items-center gap-3 rounded-md text-base text-white/50 transition-colors hover:bg-white/5 hover:text-white ${
-            pinned ? 'px-3' : 'w-9 justify-center'
-          }`}
-        >
+    <Dropdown
+      label={label}
+      triggerTitle={label}
+      trigger={
+        <>
           <span aria-hidden="true">⊕</span>
           {pinned && <span className="truncate text-sm">{label}</span>}
-        </button>
+        </>
+      }
+      triggerClassName={`flex h-9 items-center gap-3 rounded-md text-base text-white/50 transition-colors hover:bg-white/5 hover:text-white ${
+        pinned ? 'px-3' : 'w-9 justify-center'
+      }`}
+      panelClassName="bottom-11 left-0 w-56 p-1"
+    >
+      {() => (
+        // Deliberately not closing the `<details>` on click. `Modal` is not a
+        // portal — it renders where its caller sits in the tree — so a modal
+        // opened from a menu item still mounts *inside* this panel; closing
+        // the panel in the same click would collapse it to `display: none`
+        // before paint and take the just-opened modal down with it (the panel
+        // is hidden with `display`, not visibility, precisely so a closed
+        // `<details>`'s children are actually gone — `Dropdown.tsx`'s own
+        // history). The modal's full-screen backdrop covers the still-"open"
+        // panel underneath either way, so nothing is visibly wrong; closing
+        // it is only cosmetic and left for whichever the agent dismisses next.
+        <div className="flex flex-col gap-0.5">
+          {canInvite && (
+            <InviteTeammates
+              trigger={(open) => (
+                <button type="button" onClick={open} className={itemClassName}>
+                  {inviteLabel}
+                </button>
+              )}
+            />
+          )}
+          {canManageTeams && (
+            <CreateTeamButton
+              trigger={(open) => (
+                <button type="button" onClick={open} className={itemClassName}>
+                  {t('team.teams.newButton')}
+                </button>
+              )}
+            />
+          )}
+        </div>
       )}
-    />
+    </Dropdown>
   );
 }
 
@@ -428,7 +489,7 @@ interface LeadsCount {
 
 /**
  * "N Leads qualified" pill (FR-MOD-01.1.2) — reachable from every module, next
- * to `PresenceAvatars` and `InviteRailButton` above.
+ * to `PresenceAvatars` and `QuickCreateMenu` above.
  *
  * **"Qualified"** is `segment=leads` on `GET /customers` ("gave an email") —
  * the exact filter the Customers page's own Leads tab already uses, read with

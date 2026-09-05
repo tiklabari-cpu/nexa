@@ -138,6 +138,9 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/WidgetCustomization.tsx',
   'src/features/team/CopilotKnowledge.tsx',
   'src/features/team/TeamAiPerformance.tsx',
+  'src/features/team/TeamTabs.tsx',
+  'src/features/team/TeamAiAgentsPage.tsx',
+  'src/features/team/TeamsPage.tsx',
   'src/components/ui/Banner.tsx',
   'src/components/ui/Panel.tsx',
 ];
@@ -170,6 +173,9 @@ const TEXT_FREE_FILES: readonly string[] = [
   // translation (the same reason `replySuggestions.ts` stays out of the
   // catalogue entirely, noted at the top of `locales/en/inbox.ts`).
   'src/features/inbox/richText.tsx',
+  // No text of its own — a bare open/close boolean around `TeamEditor`, whose
+  // own file (already registered) carries every word the form shows.
+  'src/features/team/CreateTeamButton.tsx',
 ];
 
 /**

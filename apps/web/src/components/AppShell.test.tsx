@@ -524,7 +524,7 @@ describe('leads pill (FR-MOD-01.1.2)', () => {
   });
 });
 
-describe('invite (FR-MOD-01.1.5)', () => {
+describe('quick create (FR-MOD-01.1.5 · FR-MOD-04.1)', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
@@ -565,22 +565,67 @@ describe('invite (FR-MOD-01.1.5)', () => {
     );
   }
 
-  it('shows the plain label from every module when the seat count is not yet known', async () => {
+  /** Open the rail's "+" menu — every item below lives behind it now. */
+  async function openMenu(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(await screen.findByRole('button', { name: 'Quick create' }));
+  }
+
+  it('shows the plain Invite label from every module when the seat count is not yet known', async () => {
+    const user = userEvent.setup();
     renderShell('/app/reports');
-    expect(await screen.findByRole('button', { name: 'Invite' })).toBeInTheDocument();
+    await openMenu(user);
+    expect(screen.getByRole('button', { name: 'Invite' })).toBeInTheDocument();
   });
 
-  it('hides the button for a caller below admin — the server rule (accounts--all:rw)', () => {
+  it('hides the menu for a caller with neither permission — role and scopes both below admin', () => {
     useAuth.setState((state) => ({
-      agent: state.agent && { ...state.agent, role: 'agent' },
+      agent: state.agent && {
+        ...state.agent,
+        role: 'agent',
+        scopes: defaultScopesForRole('agent'),
+      },
     }));
     renderShell();
+    expect(screen.queryByRole('button', { name: 'Quick create' })).toBeNull();
+  });
+
+  it('offers only New team to a caller who can manage teams but is not admin-ranked', async () => {
+    const user = userEvent.setup();
+    useAuth.setState((state) => ({
+      agent: state.agent && {
+        ...state.agent,
+        role: 'agent',
+        scopes: [...defaultScopesForRole('agent'), 'groups--all:rw'],
+      },
+    }));
+    renderShell();
+    await openMenu(user);
+
+    expect(screen.getByRole('button', { name: 'New team' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Invite/ })).toBeNull();
   });
 
+  it('offers only Invite to an admin-ranked caller without the team-management scope', async () => {
+    const user = userEvent.setup();
+    useAuth.setState((state) => ({
+      agent: state.agent && {
+        ...state.agent,
+        role: 'admin',
+        scopes: defaultScopesForRole('agent'),
+      },
+    }));
+    renderShell();
+    await openMenu(user);
+
+    expect(screen.getByRole('button', { name: /^Invite/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'New team' })).toBeNull();
+  });
+
   it('shows free seats — subscription seats minus active teammates', async () => {
+    const user = userEvent.setup();
     stubSeatsAndRoster(5, ['a-1', 'a-2']);
     renderShell();
+    await openMenu(user);
 
     expect(await screen.findByRole('button', { name: 'Invite +3' })).toBeInTheDocument();
   });
@@ -588,9 +633,19 @@ describe('invite (FR-MOD-01.1.5)', () => {
   it('opens the same invite modal InviteTeammates uses on the Team page', async () => {
     const user = userEvent.setup();
     renderShell();
+    await openMenu(user);
 
-    await user.click(await screen.findByRole('button', { name: 'Invite' }));
+    await user.click(screen.getByRole('button', { name: 'Invite' }));
     expect(screen.getByRole('dialog', { name: 'Invite teammates' })).toBeVisible();
+  });
+
+  it('opens the same New team dialog Teams.tsx uses', async () => {
+    const user = userEvent.setup();
+    renderShell();
+    await openMenu(user);
+
+    await user.click(screen.getByRole('button', { name: 'New team' }));
+    expect(screen.getByRole('dialog', { name: 'New team' })).toBeVisible();
   });
 });
 

@@ -30,6 +30,10 @@ export const shell: Messages = {
   'shell.nav.badge.team.one': '{count} pending invite',
   'shell.nav.badge.team.other': '{count} pending invites',
 
+  // Quick create (FR-MOD-04.1). The rail's "+" menu — invite a teammate, or
+  // start a new team.
+  'shell.quickCreate.label': 'Quick create',
+
   // Invite (FR-MOD-01.1.5). "+N" is free seats — not yet known (or none to
   // report) falls back to the plain label.
   'shell.invite.label': 'Invite',

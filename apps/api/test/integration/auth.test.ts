@@ -8,7 +8,8 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI, RTM_PATHS } from '@nexa/types';
+import { parseEnv } from '../../src/config/env.js';
 import { deriveCodeChallenge, generateToken, hashToken } from '../../src/lib/crypto.js';
 import {
   grantToken,
@@ -790,6 +791,24 @@ describe('auth', () => {
         widgetOrigin(`checkout.${fx.a.trustedDomain}`),
       );
       expect(response.statusCode).toBe(200);
+    });
+
+    it('hands the widget the gateway address its socket dials (FR-MOD-11.6)', async () => {
+      const response = await post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        widgetOrigin(fx.a.trustedDomain),
+      );
+
+      expect(response.statusCode).toBe(200);
+      // The widget cannot derive this — the gateway is a separate process on
+      // its own origin, and nothing in the API's base URL says where. Delivered
+      // with the credential the socket logs in with, so a widget never holds
+      // one without the other.
+      expect(response.json().rtm_url).toBe(`${parseEnv().RTM_BASE_URL}${RTM_PATHS.customer}`);
+      // Built from the shared constant rather than a string written out again
+      // here: a hand-copied path would pass this test and miss the gateway.
+      expect(response.json().rtm_url).toMatch(/^wss?:\/\/.+\/v1\/customer\/rtm\/ws$/);
     });
 
     it("issues a fresh identity when handed another tenant's customer id", async () => {

@@ -9007,10 +9007,10 @@
             "description": "Ana akis (forward -> ticket, gonderen eslesme, spam suzme, CC maskeleme) TAM. PRD KK`nin iki maddesi eksik: \"Coklu adres forward -> ticket\" ve \"test dogrulama\".",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- Adres semasi SABIT: `<organization_id>@<INBOUND_EMAIL_DOMAIN>` — `email-inbound.ts:57-70`,\n  konsolda `Channels.tsx:332`. Bir calisma alani ikinci bir adres (ornegin `support@` ve `billing@`)\n  tanimlayamiyor.\n- `INBOUND_EMAIL_DOMAIN` varsayilani `inbound.nexa.localhost` (`config/env.ts:234`).\n- PRD KK: \"Coklu adres forward -> ticket; **test dogrulama**\". Ikinci madde: adresin gercekten\n  calistigini kullaniciya kanitlayan bir eylem (bir test mesaji gonder / son gelen mesaji goster).\n\n## Yapilacak (contract-first)\n\n1. **Model karari.** Coklu adres nasil temsil edilir?\n   (i) Adres **etiketi** kolonu + ayni domain (`<org>+<label>@domain` ya da `<label>.<org>@domain`) —\n       migration hafif, yonlendirme kurali basit. **Onerilen.**\n   (ii) Ayri bir `inbound_addresses` tablosu — daha genel, daha pahali, RLS + tekillik kurallari ister.\n   Karari ve gerekcesini `#### K08.5.3` maddesine yaz. Hangi model olursa olsun: iki kiracinin ayni\n   adresi almasi IMKANSIZ olmali (veritabani seviyesinde unique).\n2. **Yonlendirme:** hangi adrese gelen mesaj hangi kuyruga/etikete duser? En az \"adres -> ticket\"\n   calismali; adres -> takim esleme opsiyonel ve ayri bir kalem olarak notta anilir.\n3. **Test dogrulama:** konsolda \"Send test email\" ya da \"Son alinan mesajlar\" eylemi. tm 183.1\n   `GET /channels/:type/messages` ucunu ZATEN acti — dogrulama yuzeyi buna dayanabilir, yeni uc\n   acmadan once oraya bak.\n4. Sozlesme once: OpenAPI + `@nexa/types`, sonra migration, sonra backend+unit, sonra konsol.\n\n## Bilinen tuzaklar\n\n- **OpenAPI`ye YENI YOL eklemek `apps/mobile` parity testinin sabitledigi uc sayisini bozar** —\n  yeni yol gerekiyorsa sayaci YORUMLA BIRLIKTE guncelle (bilinen, belgelenmis tuzak).\n- Migration: CONVENTIONS §6.3 (genislet -> tasi -> daralt). Var olan tek adresin ARDINDA KALAN\n  bir gecis yolu olmali; bugunku adres calismaya devam etmeli (musterilerin filtreleri ona bagli).\n- `db:check-drift` exit 0 sart. Shadow DB Prisma uzerinden; `psql` PATH`te degil (`docker exec -i nexa-db`).\n- Spam suzme ve CC maskeleme mevcut ve DOGRU — regresyon testleriyle koru, yeniden yazma.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. Integration: ayni kiracida IKI adres tanimlanir; ikisine gelen forward AYRI ticket uretir ve her\n   ticket dogru adresi tasir. Baslik `(FR-MOD-08.5.3)` etiketi tasir.\n2. Tekillik: iki kiracinin ayni adresi almasi 409/validation ile reddediliyor (veritabani kisiti\n   seviyesinde de dogrulanir).\n3. Geriye uyum: bugunku `<organization_id>@<domain>` adresi HALA calisiyor.\n4. Cross-tenant: bir kiracinin adresine gelen mesaj digerinin ticket`ina DUSMUYOR.\n5. Dogrulama eylemi: konsoldan tetiklenen test mesaji, `GET /channels/:type/messages` ile\n   okunabiliyor (e2e ya da integration).\nDoD (tam kapi): `typecheck` · `lint` · `format:check` · `build` · `contract:generate` sonrasi\ngenerated senkron · `db:check-drift` exit 0 · api unit + integration (§1.3) · web · ilgili e2e.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "193",
-            "updatedAt": "2026-09-05T15:16:27.724Z"
+            "updatedAt": "2026-09-05T16:29:09.881Z"
           },
           {
             "id": 2,
@@ -9023,7 +9023,7 @@
             "parentId": "193"
           }
         ],
-        "updatedAt": "2026-09-05T15:16:27.724Z"
+        "updatedAt": "2026-09-05T16:29:09.881Z"
       },
       {
         "id": "194",
@@ -9409,7 +9409,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T15:16:27.726Z",
+      "lastModified": "2026-09-05T16:29:09.886Z",
       "taskCount": 204,
       "completedCount": 192,
       "tags": [

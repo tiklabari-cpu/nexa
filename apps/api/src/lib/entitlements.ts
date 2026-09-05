@@ -154,38 +154,50 @@ export async function poweredByFor(
 }
 
 /**
- * The most `applySeatEffect` (`routes/scim.ts`) may raise a workspace's
- * purchased seat count in one reconciliation, before an administrator has to
- * confirm the new commitment at `PATCH /billing/subscription` (§D116 LOW (5)).
+ * The most any *automatic* path may grow a workspace's headcount before an
+ * administrator has to confirm the new commitment at `PATCH
+ * /billing/subscription` (§D116 LOW (5)).
  *
  * `ensureSeatsCoverHeadcount` raising `seats` to match headcount is
  * deliberate — see its own doc comment — and this does not undo that: the
  * bill following the people is what "$99 per user per month" (ADR-13)
  * already promises, and refusing an ordinary directory sync would be worse
- * than the problem this closes. What is different here is *where the number
- * comes from*. SCIM reaches only the `enterprise` plan (`scimRoute`'s
- * `entitlement: 'sso'`, granted only there — `PLANS` in
- * `services/billing/subscription-service.ts`), and enterprise is priced by a
- * signed, out-of-band quote (ADR-13): `PLANS.enterprise.unitPriceCents` is
- * deliberately `null`, so this schema holds no committed seat count to check
- * growth against — only whatever the last human checkout or reconciliation
- * left in `subscription.seats`. A misconfigured connector re-provisioning the
- * same source directory into the wrong tenant, or looping on a create it
- * believes failed, has nothing here to stop it from raising that number
- * without limit.
+ * than the problem this closes. This constant is a safety rail on growth
+ * nobody is watching, not a price and not a plan quota — neither tier in
+ * `PLANS` caps seats, and inventing a cap here would invent a commercial rule
+ * the PRD never states.
  *
- * This constant is that stop: a safety rail on *unattended* growth, not a
- * price. It plays the same role `MAX_ACTIVE_SCIM_TOKENS` (`routes/settings.ts`)
- * plays for how many live directory credentials a workspace may hold, and is
- * sized the way `SCIM_MAX_PAGE_SIZE` (`lib/scim.ts`) is — generous enough for
- * a real directory sync, bounded enough that reaching it is itself the
- * signal something is wrong, not a real company's headcount.
+ * One number, two callers, and they reach it from opposite directions:
+ *
+ *   - **SCIM** (`assertScimSeatCeiling`) has no listed price to check growth
+ *     against. It reaches only the `enterprise` plan (`scimRoute`'s
+ *     `entitlement: 'sso'`, granted only there — `PLANS` in
+ *     `services/billing/subscription-service.ts`), and enterprise is priced by
+ *     a signed, out-of-band quote (ADR-13): `PLANS.enterprise.unitPriceCents`
+ *     is deliberately `null`, so this schema holds no committed seat count to
+ *     compare against — only whatever the last human checkout or
+ *     reconciliation left in `subscription.seats`. A misconfigured connector
+ *     re-provisioning the same directory into the wrong tenant, or looping on
+ *     a create it believes failed, has nothing else to stop it.
+ *   - **Console invitations** (`assertInviteSeatCeiling`) do have a listed
+ *     price, and that is the argument *for* the rail rather than against it:
+ *     200 seats on the self-serve tier is $19,800 a month, which is not a
+ *     commitment anybody makes by pasting a list into a textarea. The
+ *     invitation is authored by an administrator but the seat lands later,
+ *     when a stranger clicks a link — so the moment the bill moves is not a
+ *     moment anyone is watching either (FR-MOD-04.4).
+ *
+ * It plays the same role `MAX_ACTIVE_SCIM_TOKENS` (`routes/settings.ts`) plays
+ * for how many live directory credentials a workspace may hold, and is sized
+ * the way `SCIM_MAX_PAGE_SIZE` (`lib/scim.ts`) is — generous enough for a real
+ * company, bounded enough that reaching it is itself the signal something is
+ * wrong.
  */
-export const SCIM_SEAT_CEILING = 200;
+export const SEAT_CEILING = 200;
 
 /**
- * Refuse a directory-driven seat increase past {@link SCIM_SEAT_CEILING},
- * before anything is written.
+ * Refuse a directory-driven seat increase past {@link SEAT_CEILING}, before
+ * anything is written.
  *
  * Takes the active headcount the caller is *about* to reach, not one read
  * after the fact: checked too late, this would be answering for a workspace
@@ -197,12 +209,47 @@ export const SCIM_SEAT_CEILING = 200;
  * (§D116 LOW (5)).
  */
 export function assertScimSeatCeiling(nextActiveHeadcount: number): void {
-  if (nextActiveHeadcount <= SCIM_SEAT_CEILING) return;
+  if (nextActiveHeadcount <= SEAT_CEILING) return;
   throw new ApiError(
     'limit_reached',
     `Directory provisioning would raise this workspace to ${nextActiveHeadcount} active ` +
-      `members, above the ${SCIM_SEAT_CEILING}-seat safety ceiling on unattended growth. ` +
+      `members, above the ${SEAT_CEILING}-seat safety ceiling on unattended growth. ` +
       'An administrator must confirm the new seat count at Settings → Billing before ' +
       'provisioning more active members over SCIM.',
+  );
+}
+
+/**
+ * Refuse a console invitation past {@link SEAT_CEILING}, before the invitation
+ * rows are written (FR-MOD-04.4).
+ *
+ * **Counted at the invitation, not at the join**, and the argument is the same
+ * one `assertScimSeatCeiling` makes about ordering: the only person who can do
+ * anything about a seat ceiling is an administrator, and the only moment one is
+ * present on this path is `POST /invitations`. Checked at
+ * `POST /auth/invitations/accept` instead, the refusal would land on a new hire
+ * holding a valid link, who cannot buy seats, cannot revoke anybody, and is
+ * given no route forward at all.
+ *
+ * It costs nothing to hold the line here because the arithmetic is
+ * non-increasing: `nextCommitment` counts active members **plus every
+ * outstanding invitation**, and accepting one converts an invitation into a
+ * membership — one off each side. So a workspace that passed this check can
+ * never cross the ceiling by somebody accepting, and the accept path never has
+ * to refuse.
+ *
+ * `users_limit_reached` (429), not `limit_reached`: the error catalogue
+ * (v2-03 §1.9) already has a word for "no seats left" and both web locales
+ * already translate it. SCIM keeps the generic type because what it names is a
+ * rail on a connector, not a seat a person was going to sit in.
+ */
+export function assertInviteSeatCeiling(nextCommitment: number): void {
+  if (nextCommitment <= SEAT_CEILING) return;
+  throw new ApiError(
+    'users_limit_reached',
+    `These invitations would commit this workspace to ${nextCommitment} seats — its members ` +
+      `plus everyone still holding an invitation — above the ${SEAT_CEILING}-seat ceiling. ` +
+      'Revoke invitations that are no longer wanted, or talk to sales about a plan for a ' +
+      'team this size.',
   );
 }

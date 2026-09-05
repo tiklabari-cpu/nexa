@@ -464,6 +464,23 @@ export interface paths {
      *     than creating a second account — one email is one person (PRD §8.4:
      *     `accounts.email citext unique`), and a duplicate would split their history
      *     in two.
+     *
+     *     **This is where a seat reaches the bill** (FR-MOD-04.4). Joining raises
+     *     the workspace's purchased seat count to its new headcount, in the same
+     *     transaction as the membership, by the same rule and the same function SCIM
+     *     provisioning uses — one door, one billing truth. It only ever goes up;
+     *     lowering is a downgrade an administrator makes at
+     *     `PATCH /billing/subscription`. A workspace still on its trial has bought
+     *     nothing, so nothing is raised.
+     *
+     *     Accepting the same invitation twice cannot charge twice: the token is
+     *     spent by the first call (401 afterwards), and the raise sets seats *to*
+     *     the headcount rather than incrementing them.
+     *
+     *     This call is never refused for a seat ceiling. The person holding the link
+     *     cannot buy seats or revoke anybody, and the check at `POST /invitations`
+     *     already counts outstanding invitations, so accepting one can never be the
+     *     call that crosses it.
      */
     post: operations['acceptInvitation'];
     delete?: never;
@@ -479,7 +496,19 @@ export interface paths {
       path?: never;
       cookie?: never;
     };
-    /** Invitations that have not been accepted yet */
+    /**
+     * Invitations that have not been accepted yet
+     * @description Also carries what these invitations will do to the bill (`seats`), so the
+     *     invite modal can say what a click costs before it is clicked
+     *     (FR-MOD-04.4, "koltuk faturaya yansır").
+     *
+     *     It rides here rather than on a billing endpoint because it is a fact
+     *     *about these invitations*, and because sending the invite modal to
+     *     `/billing/*` would make telling an administrator the price depend on a
+     *     billing scope `accounts--all:rw` does not imply. Nothing in it is new
+     *     disclosure: the headcount is the roster the same page renders, and the
+     *     unit price is the published list price (ADR-13).
+     */
     get: operations['listInvitations'];
     put?: never;
     /**
@@ -493,6 +522,17 @@ export interface paths {
      *     Re-inviting an address that already has a pending invitation replaces it
      *     rather than accumulating a second one — two live links to the same
      *     workspace for the same person is one more than anybody wanted.
+     *
+     *     **A seat is counted when somebody joins, not here.** An invitation that is
+     *     revoked or left to expire never reaches the bill, so there is no seat to
+     *     give back — see `POST /auth/invitations/accept`.
+     *
+     *     What *is* checked here is the ceiling, because this is the only moment on
+     *     this path when an administrator is present to do something about it:
+     *     members plus every outstanding invitation plus the addresses in this
+     *     request must stay within `seats.ceiling` from `GET /invitations`, or the
+     *     call is refused with `users_limit_reached` (429) and **nothing is
+     *     written**.
      */
     post: operations['createInvitations'];
     delete?: never;
@@ -11431,6 +11471,35 @@ export interface operations {
         content: {
           'application/json': {
             items: components['schemas']['Invitation'][];
+            /** @description What accepting these invitations would cost. */
+            seats: {
+              /**
+               * @description Active (non-suspended) members today. Each invitation
+               *     that is accepted adds one, and the purchased seat count
+               *     follows it up — never down.
+               */
+              headcount: number;
+              /**
+               * @description Seats currently bought. `null` on a trial: nothing has
+               *     been bought, so joining costs nothing yet.
+               */
+              purchased: number | null;
+              /**
+               * @description List price per seat per month. `null` on a quoted tier —
+               *     Enterprise is priced in a contract this deployment never
+               *     sees (ADR-13), and printing a number there would invent
+               *     one.
+               */
+              unit_price_cents: number | null;
+              /**
+               * @description The most members-plus-outstanding-invitations this
+               *     workspace may commit to before `POST /invitations`
+               *     refuses with `users_limit_reached`. Published so the
+               *     modal can warn instead of letting the refusal be a
+               *     surprise.
+               */
+              ceiling: number;
+            };
           };
         };
       };

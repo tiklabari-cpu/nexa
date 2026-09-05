@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, emailList, splitList, useForm } from '../../lib/form.js';
+import { formatMoney } from '../../lib/format.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Modal } from '../../components/ui/index.js';
@@ -28,11 +29,27 @@ interface Invitation {
   accept_url?: string;
 }
 
-export function usePendingInvitations() {
+/** What accepting these invitations would cost (FR-MOD-04.4). */
+interface SeatSummary {
+  headcount: number;
+  /** `null` on a trial — nothing has been bought, so joining costs nothing yet. */
+  purchased: number | null;
+  /** `null` on a quoted plan: Enterprise's price lives in a contract, not here. */
+  unit_price_cents: number | null;
+  ceiling: number;
+}
+
+interface InvitationList {
+  items: Invitation[];
+  seats: SeatSummary;
+}
+
+export function usePendingInvitations(options: { enabled?: boolean } = {}) {
   const api = useApiClient();
   return useQuery({
     queryKey: ['invitations'],
-    queryFn: () => api.get<{ items: Invitation[] }>('/invitations'),
+    queryFn: () => api.get<InvitationList>('/invitations'),
+    ...(options.enabled === undefined ? {} : { enabled: options.enabled }),
   });
 }
 
@@ -64,6 +81,11 @@ export function InviteTeammates({
 
   const api = useApiClient();
   const client = useQueryClient();
+
+  // Only while the modal is open. The rail renders this component on every
+  // screen (FR-MOD-01.1.5), and a seat summary fetched app-wide to answer a
+  // question nobody has asked yet is a request per page load for nothing.
+  const pending = usePendingInvitations({ enabled: open });
 
   const invite = useMutation({
     mutationFn: (body: { emails: string[]; role: string }) =>
@@ -179,6 +201,14 @@ export function InviteTeammates({
           <option value="agent">{t('team.role.agent')}</option>
         </select>
 
+        {pending.data && !copied && (
+          <SeatNotice
+            seats={pending.data.seats}
+            outstanding={pending.data.items.length}
+            adding={emailCount}
+          />
+        )}
+
         {copied && (
           <div className="mb-4 rounded-md border border-border bg-inset p-3">
             <p role="status" className="mb-2 text-xs text-content-secondary">
@@ -216,6 +246,61 @@ export function InviteTeammates({
         </div>
       </form>
     </Modal>
+  );
+}
+
+/**
+ * What these invitations will do to the bill, before any of them is sent
+ * (FR-MOD-04.4, "koltuk faturaya yansır" — the half of that criterion facing
+ * the person who is about to click).
+ *
+ * A seat is counted when somebody *joins*, not when they are invited, so the
+ * wording is deliberately conditional ("once they accept"): an invitation that
+ * is revoked or left to expire never reaches the bill. Saying "adds a seat"
+ * here would be the copy promising something the server does not do.
+ */
+function SeatNotice({
+  seats,
+  outstanding,
+  adding,
+}: {
+  seats: SeatSummary;
+  outstanding: number;
+  adding: number;
+}): ReactElement {
+  const t = useTranslate();
+  const price = formatMoney(seats.unit_price_cents);
+  const projected = seats.headcount + adding;
+  // The server counts members plus every outstanding invitation plus this
+  // request; mirrored here so the refusal is predictable rather than a
+  // surprise at submit time.
+  const overCeiling = seats.headcount + outstanding + adding > seats.ceiling;
+
+  return (
+    <div className="mb-4 rounded-md border border-border bg-inset p-3 text-xs text-content-secondary">
+      <p>
+        {seats.purchased === null
+          ? t('team.invite.seats.trial')
+          : t('team.invite.seats.inUse', {
+              headcount: seats.headcount,
+              purchased: seats.purchased,
+            })}
+      </p>
+      <p className="mt-1">
+        {adding === 0
+          ? price
+            ? t('team.invite.seats.rule', { price })
+            : t('team.invite.seats.ruleQuoted')
+          : seats.purchased !== null && projected <= seats.purchased
+            ? t('team.invite.seats.within', { count: adding, purchased: seats.purchased })
+            : t('team.invite.seats.projected', { count: adding, projected })}
+      </p>
+      {overCeiling && (
+        <p role="status" className="mt-1 text-danger">
+          {t('team.invite.seats.overCeiling', { ceiling: seats.ceiling })}
+        </p>
+      )}
+    </div>
   );
 }
 

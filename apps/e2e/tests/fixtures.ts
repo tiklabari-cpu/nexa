@@ -144,6 +144,21 @@ export const STATESIDE_OWNER: TenantOwner = {
 };
 
 /**
+ * The seeded workspace whose trial ended before this run started
+ * (`FR-MOD-10.2` — `trial-expired.spec.ts`).
+ *
+ * Seeded rather than signed up here for the same reason `PAGING_OWNER` is:
+ * nothing public ages a trial, so a workspace already read-only for that
+ * reason can only exist if the seed writes it that way (`seedOverdueTrialWorkspace`,
+ * `apps/api/prisma/seed.ts`).
+ */
+export const OVERDUE_OWNER: TenantOwner = {
+  email: 'owner@overdue.localhost',
+  password: DEMO.password,
+  orgPrefix: 'Overdue',
+};
+
+/**
  * An owner Bearer token for a given seeded tenant, via the same OAuth 2.1 + PKCE
  * flow the web app runs (`auth-store.ts`). A handful of e2e steps have to drive
  * the API directly — registering a webhook to prove its audit entry reaches the

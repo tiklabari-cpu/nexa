@@ -9018,12 +9018,13 @@
             "description": "`#` kisayolu calisiyor, yinelenen shortcut `(license, scope, shortcut)` unique ile engelleniyor, \"Modified by\" izi tutuluyor. EKSIK: PRD KK`nin \"grup scope\" maddesi — semada `group_id` ve `visibility` kolonlari var, hicbir uc onlari okumuyor ya da yazmiyor.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `apps/api/prisma/schema.prisma` `model CannedResponse` (:1170-1187):\n  `groupId BigInt? @map(\"group_id\")` · `visibility String @default(\"all\")` · `@@index([licenseId, groupId])`.\n- `grep -n \"visibility\" apps/api/src/routes/settings.ts` -> **0 satir**. Iki kolon da olu.\n- PRD KK: \"`#` composer`da; yinelenen shortcut engeli; **grup scope**; surum izi (Modified by)\".\n- **Emsal HAZIR:** tm 181.1 (M-UI-a) etiketlerde ayni isi yapti (\"Etiket grup kapsami ekrani — ucun\n  olu kolon olmadigini da dogrula\"). O turun kararlarini ve ekranini oku, ayni dili kullan.\n\n## Yapilacak (contract-first)\n\n1. **`visibility` anlami sabitlenir.** Bugunku varsayilan `\"all\"`. Ikinci deger ne? (`\"group\"`?\n   `\"private\"`?) Deger kumesini KISITLA (veritabani CHECK ya da enum) — serbest string bir\n   yil sonra uc farkli yazimla dolar.\n2. **Uc:** hazir yanit olusturma/guncelleme `group_id` + `visibility` kabul eder; listeleme\n   **cagirana gore suzer** (kendi grubunun + herkese acik olanlar). Suzme SUNUCUDA olur —\n   istemcide suzmek, sayfalanmis bir listede yanlis sonuc verir ve gizli olani tel uzerinde tasir.\n3. **Composer `#` menusu** ayni suzulmus listeyi tuketir (bugunku uc ne donduruyorsa onu gosteriyor;\n   uc suzunce menu kendiliginden dogru olur — ama TESTLE dogrula).\n4. **Konsol:** hazir yanit duzenleme yuzeyine grup secici. Kullanicinin uyesi OLMADIGI grubu\n   secebilmesi bir yetki karari — tm 181.1`in verdigi karari izle.\n5. Silinen grup: `group_id` FK`si nasil davranir? (`ON DELETE SET NULL` -> yanit herkese acik olur mu,\n   yoksa grup silinemez mi?) tm 175`in `group_in_use` 409 deseni emsal — karari yaz.\n\n## Bilinen tuzaklar\n\n- Kolonlar ZATEN var; migration gerekmeyebilir. Gerekiyorsa (CHECK kisiti gibi) §6.3 kurallari gecerli.\n- `@@unique([licenseId, scope, shortcut])` grup kapsami gelince anlamini degistirir mi? Iki farkli\n   grup ayni `#hello` kisayolunu isteyebilir. Bu kisiti gevsetmek bir KARAR — gevsetirsen menu\n   belirsizlesir (hangi metin?), gevsetmezsen gruplar birbirinin kisayolunu bloklar. Karari yaz.\n- Cross-tenant + cross-group negatif testleri zorunlu: baska grubun ozel yaniti listede GORUNMEZ.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. Integration: grup A`ya ozel bir hazir yanit olusturulur; grup A uyesi listede GORUR, grup B uyesi\n   GORMEZ, `visibility: \"all\"` olan herkeste gorunur. Baslik `(FR-MOD-08.7.2)` etiketi tasir.\n2. Cross-tenant: baska kiracinin yaniti hicbir kosulda gorunmuyor.\n3. `visibility` gecersiz degeri 400 `validation` ile reddediliyor.\n4. Composer `#` menusu suzulmus listeyi gosteriyor (web birim testi).\n5. Grup silme davranisi secilen karara gore assert ediliyor (409 ya da SET NULL).\n6. Mevcut yinelenen-shortcut ve \"Modified by\" testleri HALA yesil.\nDoD (tam kapi): `typecheck` · `lint` · `format:check` · `build` · `contract:generate` senkron ·\nmigration eklendiyse `db:check-drift` · api integration (§1.3) · web · ilgili e2e — hepsi exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "193"
+            "parentId": "193",
+            "updatedAt": "2026-09-05T16:31:02.617Z"
           }
         ],
-        "updatedAt": "2026-09-05T16:29:09.881Z"
+        "updatedAt": "2026-09-05T16:31:02.617Z"
       },
       {
         "id": "194",
@@ -9409,7 +9410,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T16:29:09.886Z",
+      "lastModified": "2026-09-05T16:31:02.619Z",
       "taskCount": 204,
       "completedCount": 192,
       "tags": [

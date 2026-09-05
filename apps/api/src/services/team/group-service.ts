@@ -267,6 +267,23 @@ export async function deleteGroup(
     );
   }
 
+  // A saved reply scoped to this team (FR-MOD-08.7.2) is the third thing that
+  // would be stranded. `canned_responses.group_id` carries no foreign key
+  // either, so the two alternatives were: let the delete through and repair the
+  // rows, or refuse. Repairing means `ON DELETE SET NULL` semantics — the row
+  // survives with no team — and the only legal shape for a reply with no team
+  // is `visibility = 'all'`, so deleting a team would silently publish that
+  // team's private replies to the whole workspace. A refusal costs an admin one
+  // extra step and is visible; the widening would be neither.
+  const scopedReplies = await tx.cannedResponse.count({ where: { groupId } });
+  if (scopedReplies > 0) {
+    throw new ApiError(
+      'group_in_use',
+      'Saved replies are still scoped to this team. Re-scope or delete them first.',
+      { details: { canned_responses: scopedReplies } },
+    );
+  }
+
   // Memberships cascade with the group (`GroupAgent.group` onDelete Cascade).
   // The `chat_access` rows of archived chats are left alone on purpose: they are
   // the record of who could see a conversation while it was open, group ids are

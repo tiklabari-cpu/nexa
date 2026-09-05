@@ -105,6 +105,13 @@ export const settings: Messages = {
   'settings.cannedResponses.empty.title': 'No saved replies',
   'settings.cannedResponses.empty.description': 'Save the answers your team types most often.',
   'settings.cannedResponses.deleteAriaLabel': 'Delete #{shortcut}',
+  'settings.cannedResponses.teamLabel': 'Team',
+  'settings.cannedResponses.allTeams': 'All teams',
+  'settings.cannedResponses.teamOnly': '{name} only',
+  'settings.cannedResponses.teamHint': 'Leave this on All teams to let everyone use the reply.',
+  'settings.cannedResponses.editTeamButton': 'Edit team',
+  'settings.cannedResponses.editTeamAriaLabel': 'Edit team for #{shortcut}',
+  'settings.cannedResponses.teamForLabel': 'Team for #{shortcut}',
 
   // Tags — Tags.tsx
   'settings.tags.title': 'Tags',

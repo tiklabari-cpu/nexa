@@ -422,16 +422,16 @@ model IpAllowlistEntry {
 /// published in the IdP's own metadata. The secret in this feature is the SCIM
 /// bearer token (S11-e), which is hashed.
 model SsoConnection {
-  id                String   @id @default(uuid()) @db.Uuid
-  licenseId         BigInt   @map("license_id")
+  id                           String    @id @default(uuid()) @db.Uuid
+  licenseId                    BigInt    @map("license_id")
   /// Human label for the connection, e.g. `Okta (corp)`.
-  name              String
+  name                         String
   /// The IdP's SAML EntityID — what an assertion's `Issuer` must equal.
-  idpEntityId       String   @map("idp_entity_id")
+  idpEntityId                  String    @map("idp_entity_id")
   /// Absolute `http(s)` URL an AuthnRequest is sent to (HTTP-Redirect binding).
-  idpSsoUrl         String   @map("idp_sso_url")
+  idpSsoUrl                    String    @map("idp_sso_url")
   /// PEM-encoded X.509 signing certificate published by the IdP.
-  idpCertificatePem String   @map("idp_certificate_pem")
+  idpCertificatePem            String    @map("idp_certificate_pem")
   /// The certificate this connection was rotated away from, kept trusted until
   /// `previousCertificateExpiresAt` so an IdP key roll does not black out
   /// sign-in while the IdP is still signing with the old key. Null unless the
@@ -443,7 +443,7 @@ model SsoConnection {
   previousCertificateExpiresAt DateTime? @map("previous_certificate_expires_at") @db.Timestamptz(6)
   /// Which assertion attribute fills which account field; see
   /// `SSO_ATTRIBUTE_MAPPING_KEYS`. `{}` means the connection said nothing.
-  attributeMapping  Json     @default("{}") @map("attribute_mapping")
+  attributeMapping             Json      @default("{}") @map("attribute_mapping")
   /// The e-mail domains this identity provider has been declared authoritative
   /// for. Just-in-time provisioning — SAML sign-in and the workspace's SCIM
   /// connector alike — may only name addresses inside them, so an IdP cannot
@@ -459,25 +459,25 @@ model SsoConnection {
   /// (PLAN §D134). A claim only counts once its `SsoDomainVerification` row
   /// carries a `verifiedAt`; the two are kept in step by a trigger, so adding a
   /// domain here opens a pending proof and removing one destroys it.
-  verifiedDomains   String[] @default([]) @map("verified_domains")
+  verifiedDomains              String[]  @default([]) @map("verified_domains")
   /// Accept an assertion sent with no AuthnRequest of ours to correlate it
   /// against. Off by default — that flow gives up the `InResponseTo` binding
   /// replay detection rests on, so it is chosen, never inherited.
-  allowIdpInitiated Boolean  @default(false) @map("allow_idp_initiated")
+  allowIdpInitiated            Boolean   @default(false) @map("allow_idp_initiated")
   /// Whether sign-in through this connection is live. Off until configured, so
   /// a half-written row can never become a way in.
-  enabled           Boolean  @default(false) @map("enabled")
+  enabled                      Boolean   @default(false) @map("enabled")
   /// Make this connection the *only* way in: password sign-in is refused for
   /// the license while this is set and `enabled` is too (NFR-S11 · S11-h). Read
   /// as the pair, never alone — a disabled connection enforces nothing, which is
   /// how a workspace recovers when its IdP stops answering. The owner keeps a
   /// password door either way (§C-A17.7), and it cannot be switched on unless
   /// somebody still holds a key to it.
-  enforced          Boolean  @default(false) @map("enforced")
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  enforced                     Boolean   @default(false) @map("enforced")
+  createdAt                    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                    DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  license           License                 @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  license             License                 @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   domainVerifications SsoDomainVerification[]
 
   /// One connection per IdP within a license. Two rows for one EntityID would
@@ -505,15 +505,15 @@ model SsoConnection {
 /// connection, never by a route: a rule a caller has to remember is a rule some
 /// later caller will not.
 model SsoDomainVerification {
-  id           String @id @default(uuid()) @db.Uuid
-  connectionId String @map("connection_id") @db.Uuid
+  id               String    @id @default(uuid()) @db.Uuid
+  connectionId     String    @map("connection_id") @db.Uuid
   /// Denormalised from the connection so this table carries the same ordinary
   /// tenant policy as every other one, rather than reaching through a join.
-  licenseId    BigInt @map("license_id")
+  licenseId        BigInt    @map("license_id")
   /// Normalised exactly as `readVerifiedDomain` produces it — lowercase, no
   /// trailing dot — because it is compared with plain equality against both the
   /// claim list and the domain half of an asserted address.
-  domain       String
+  domain           String
   /// SHA-256 of the challenge token, never the token. Null before the first
   /// challenge and again after a successful one: a spent secret left in the row
   /// is a secret waiting to be replayed.
@@ -716,11 +716,11 @@ model AgentExpertise {
 /// A partial unique index (in the migration) enforces at most one *active* chat
 /// per license+customer — the invariant the whole inbox model rests on.
 model Chat {
-  id         String   @id @db.VarChar(12)
-  licenseId  BigInt   @map("license_id")
-  customerId String   @map("customer_id") @db.Uuid
-  active     Boolean  @default(true)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  id          String   @id @db.VarChar(12)
+  licenseId   BigInt   @map("license_id")
+  customerId  String   @map("customer_id") @db.Uuid
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   /// When this conversation last moved — the `created_at` of its newest event,
   /// or its own creation time while it has none. This is the inbox list's sort
   /// key (FR-MOD-02.2.2 "RTM'de yukarı taşınır"), maintained on the write path
@@ -1034,36 +1034,36 @@ model ThreadTag {
 ///     folded under its primary and hidden from the lists.
 ///   - `followers` — agents watching a ticket without owning it.
 model Ticket {
-  id            String    @id @db.VarChar(12)
-  licenseId     BigInt    @map("license_id")
-  customerId    String?   @map("customer_id") @db.Uuid
-  sourceChatId  String?   @map("source_chat_id") @db.VarChar(12)
-  subject       String
-  status        String    @default("open")
+  id               String    @id @db.VarChar(12)
+  licenseId        BigInt    @map("license_id")
+  customerId       String?   @map("customer_id") @db.Uuid
+  sourceChatId     String?   @map("source_chat_id") @db.VarChar(12)
+  subject          String
+  status           String    @default("open")
   /// Queue priority (FR-MOD-13.6). Higher is more urgent; 0 is the default. A
   /// signed integer rather than an enum so the ordering is the database's, not
   /// a lookup the query has to carry.
-  priority      Int       @default(0)
-  assigneeId    String?   @map("assignee_id") @db.Uuid
-  groupId       BigInt?   @map("group_id")
+  priority         Int       @default(0)
+  assigneeId       String?   @map("assignee_id") @db.Uuid
+  groupId          BigInt?   @map("group_id")
   /// The primary this ticket was merged into, or null when it stands alone. The
   /// FK is `ON DELETE SET NULL`, and a CHECK in the migration forbids pointing at
   /// itself; "no chains" (a merged ticket cannot itself be a target) is enforced
   /// in the service.
-  mergedIntoId  String?   @map("merged_into_id") @db.VarChar(12)
+  mergedIntoId     String?   @map("merged_into_id") @db.VarChar(12)
   /// The forwarding address this ticket arrived at, or null when it did not
   /// arrive by e-mail (FR-MOD-08.5.3). Read by the addresses list, which reports
   /// each address's own activity — the signal that proves an address works.
-  inboundAddressId String?  @map("inbound_address_id") @db.Uuid
-  lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
-  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  inboundAddressId String?   @map("inbound_address_id") @db.Uuid
+  lastMessageAt    DateTime? @map("last_message_at") @db.Timestamptz(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  license           License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
-  customer          Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
-  sourceChat        Chat?              @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
-  mergedInto        Ticket?            @relation("TicketMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  license           License              @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  customer          Customer?            @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  sourceChat        Chat?                @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
+  mergedInto        Ticket?              @relation("TicketMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
   inboundAddress    InboundEmailAddress? @relation(fields: [inboundAddressId], references: [id], onDelete: SetNull)
-  mergedTickets     Ticket[]           @relation("TicketMerge")
+  mergedTickets     Ticket[]             @relation("TicketMerge")
   followers         TicketFollower[]
   tags              TicketTag[]
   customFieldValues CustomFieldValue[]
@@ -1196,6 +1196,19 @@ model Rating {
 // ===========================================================================
 
 /// Saved replies, inserted in the composer with `#shortcut`.
+///
+/// `visibility` and `groupId` are one decision in two columns and move together
+/// — `all` carries no team, `group` requires one. A CHECK
+/// (`canned_responses_visibility_check`, 20260905150000) holds the pair; Prisma
+/// cannot express it, which is why it is stated here.
+///
+/// `groupId` deliberately carries no relation: `groups` has a composite key
+/// (`licenseId, id`) and a foreign key would need both columns, but the reason
+/// it stays absent is the same one `chat_access.group_id` and
+/// `routing_rules.target_group_id` give — deleting a team is refused by
+/// `group-service.deleteGroup` rather than repaired by the database, because
+/// the only repair available (SET NULL) would widen a team's private replies to
+/// the whole workspace.
 model CannedResponse {
   id         String   @id @default(uuid()) @db.Uuid
   licenseId  BigInt   @map("license_id")
@@ -1264,17 +1277,17 @@ model Campaign {
 /// poll can match, so its size tracks the pending backlog, not history. Same
 /// shape as `webhook_deliveries`' pending-queue index above.
 model CampaignSend {
-  id         String   @id @default(uuid()) @db.Uuid
-  licenseId  BigInt   @map("license_id")
-  campaignId String   @map("campaign_id") @db.Uuid
-  customerId String   @map("customer_id") @db.Uuid
+  id          String    @id @default(uuid()) @db.Uuid
+  licenseId   BigInt    @map("license_id")
+  campaignId  String    @map("campaign_id") @db.Uuid
+  customerId  String    @map("customer_id") @db.Uuid
   /// The proactive conversation this send opened, once the visitor engages.
-  chatId     String?  @map("chat_id") @db.VarChar(12)
+  chatId      String?   @map("chat_id") @db.VarChar(12)
   /// The visitor replied — this send counts as a Chat.
-  engaged    Boolean  @default(false)
+  engaged     Boolean   @default(false)
   /// The visitor reached a goal — this send counts as a Conversion.
-  converted  Boolean  @default(false)
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  converted   Boolean   @default(false)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
   /// When the customer's widget actually surfaced this send's message. NULL
   /// means still owed — the poll response has not carried it to the visitor
   /// yet. Deliberately separate from `created_at` (when the trigger matched):
@@ -1771,21 +1784,21 @@ model Webhook {
 /// by a CHECK. It used to mean "the third in-request attempt failed", which
 /// stopped meaning "gave up" the moment a scheduler began carrying the row on.
 model WebhookDelivery {
-  id        String @id @default(uuid()) @db.Uuid
-  licenseId BigInt @map("license_id")
-  webhookId String @map("webhook_id") @db.Uuid
+  id            String    @id @default(uuid()) @db.Uuid
+  licenseId     BigInt    @map("license_id")
+  webhookId     String    @map("webhook_id") @db.Uuid
   /// Null on rows written before redelivery existed; those can never be queued.
-  eventId    String? @map("event_id") @db.Uuid
-  action     String
-  attempt    Int
-  ok         Boolean
-  statusCode Int?    @map("status_code")
-  error      String?
-  permanent  Boolean @default(false)
+  eventId       String?   @map("event_id") @db.Uuid
+  action        String
+  attempt       Int
+  ok            Boolean
+  statusCode    Int?      @map("status_code")
+  error         String?
+  permanent     Boolean   @default(false)
   /// `pending` | `delivered` | `failed` | `exhausted`. The migration's CHECK
   /// constraint is the authority on the vocabulary; there is deliberately no
   /// default, so every writer has to say which of the four it means.
-  state      String
+  state         String
   /// Live only while `state = 'pending'`: when the delivery is next owed a try
   /// and — pushed forward by the sweep that claims it — the lease that stops a
   /// second worker taking the same row.
@@ -1795,8 +1808,8 @@ model WebhookDelivery {
   /// jsonb because these are the bytes the signature commits to and jsonb
   /// would reorder them; kept off terminal rows so a delivered webhook leaves
   /// no lasting copy of a customer payload in the log.
-  payload   String?
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  payload       String?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   webhook Webhook @relation(fields: [webhookId], references: [id], onDelete: Cascade)
@@ -2025,9 +2038,9 @@ model AuditLogEntry {
   /// Claiming those rows are chained would be the false assurance this whole
   /// control exists to prevent, so they are honestly marked as not chained; the
   /// verifier reports any *post-genesis* row that is unchained as a finding.
-  chainSeq  BigInt?  @map("chain_seq")
-  prevHash  String?  @map("prev_hash")
-  hash      String?
+  chainSeq BigInt? @map("chain_seq")
+  prevHash String? @map("prev_hash")
+  hash     String?
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
@@ -2063,23 +2076,23 @@ model AuditLogEntry {
 /// trail leaves no trace. With it, the first surviving row is expected at
 /// `prunedThroughSeq + 1`, and anything else is a finding.
 model AuditChainHead {
-  licenseId BigInt @id @map("license_id")
+  licenseId        BigInt   @id @map("license_id")
   /// The position of the last entry chained for this licence. Advanced under a
   /// row lock, which is what serialises concurrent writers: two transactions
   /// reading the same head would otherwise fork the chain in two.
-  seq       BigInt @default(0)
+  seq              BigInt   @default(0)
   /// That entry's hash — the `prevHash` of whatever comes next. Null only
   /// between the row being created and the first entry landing.
-  hash      String?
+  hash             String?
   /// When this licence's chain began. A row written after this instant and left
   /// unchained is a finding, which is what stops "unchained" being usable as a
   /// way to hide an entry in plain sight.
-  genesisAt DateTime @default(now()) @map("genesis_at") @db.Timestamptz(6)
+  genesisAt        DateTime @default(now()) @map("genesis_at") @db.Timestamptz(6)
   /// The highest position retention has legitimately removed. Written by
   /// `audit_prune_expired`, the one function permitted to delete from the log.
-  prunedThroughSeq BigInt? @map("pruned_through_seq")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  prunedThroughSeq BigInt?  @map("pruned_through_seq")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
@@ -2102,8 +2115,8 @@ model AuditChainHead {
 /// touch it, because there the caller holds the cursor and two consumers
 /// sharing one position would each skip the other's rows.
 model SiemExportCursor {
-  id        String @id @default(uuid()) @db.Uuid
-  licenseId BigInt @map("license_id")
+  id        String  @id @default(uuid()) @db.Uuid
+  licenseId BigInt  @map("license_id")
   /// A `SIEM_EXPORT_TARGETS` value — `file` today, the `.data/siem` sink.
   /// Constrained in the database (`siem_export_cursors_target_check`): a target
   /// nothing can deliver to would sit in the settings screen looking like a

@@ -3356,6 +3356,15 @@ export interface paths {
      * Saved replies
      * @description Also read by the composer, which offers them behind `#`. Ordered by
      *     shortcut so the picker is predictable.
+     *
+     *     **Filtered to the caller.** A token holding `canned_responses--all:ro`
+     *     curates the library and sees all of it. A token holding only
+     *     `canned_responses--groups:ro` — what an ordinary agent's session carries —
+     *     sees the workspace-wide replies (`visibility: all`) plus those scoped to a
+     *     team they belong to. The narrowing happens here rather than in the client:
+     *     filtering a paged list after the fact returns short pages, and a private
+     *     reply that reaches the browser before being hidden has already left the
+     *     workspace.
      */
     get: operations['listCannedResponses'];
     put?: never;
@@ -8173,6 +8182,17 @@ export interface components {
       };
       state: components['schemas']['OnboardingState'];
     };
+    /**
+     * @description A saved reply, offered in the composer behind `#` (FR-MOD-08.7.2).
+     *
+     *     `visibility` and `group_id` are one decision spelled in two columns and
+     *     they move together: `all` means the whole workspace may use the reply
+     *     and carries no `group_id`; `group` means only members of `group_id` see
+     *     it, and the id is then required. A reply labelled with a team but
+     *     visible to everyone would be ownership metadata rather than a scope, and
+     *     a team-only reply with no team would be one nobody could reach — the
+     *     database refuses both pairings.
+     */
     CannedResponse: {
       /** Format: uuid */
       id: string;
@@ -8180,8 +8200,19 @@ export interface components {
       text: string;
       /** @enum {string} */
       scope: 'chat' | 'ticket';
-      /** Format: int64 */
-      group_id?: number | null;
+      /**
+       * Format: int64
+       * @description The team this reply is scoped to; null when `visibility` is `all`.
+       */
+      group_id: number | null;
+      /**
+       * @description Who may see the reply. `all` — everyone in the workspace; `group` —
+       *     members of `group_id` only. The list endpoint applies this
+       *     server-side, so a reply a caller may not use never reaches them.
+       * @default all
+       * @enum {string}
+       */
+      visibility: 'all' | 'group';
       updated_by?: string | null;
       /** Format: date-time */
       created_at: string;
@@ -15940,6 +15971,19 @@ export interface operations {
            * @enum {string}
            */
           scope?: 'chat' | 'ticket';
+          /**
+           * @description `group` requires `group_id`; `all` refuses one. Omitting both
+           *     saves a workspace-wide reply, which is what every reply saved
+           *     before this field existed is.
+           * @default all
+           * @enum {string}
+           */
+          visibility?: 'all' | 'group';
+          /**
+           * Format: int64
+           * @description The team the reply belongs to. Required when `visibility` is `group`.
+           */
+          group_id?: number | null;
         };
       };
     };
@@ -16006,6 +16050,18 @@ export interface operations {
         'application/json': {
           shortcut?: string;
           text?: string;
+          /** @enum {string} */
+          visibility?: 'all' | 'group';
+          /**
+           * Format: int64
+           * @description Re-scoping is a pair, so the two fields are read together: the
+           *     values sent are merged over the stored ones and the result has
+           *     to be a legal pairing. Narrowing an existing reply to a team is
+           *     therefore `{"visibility": "group", "group_id": 7}`, and
+           *     widening it back is `{"visibility": "all"}` — which clears the
+           *     team on its own.
+           */
+          group_id?: number | null;
         };
       };
     };

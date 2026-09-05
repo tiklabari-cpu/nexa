@@ -714,6 +714,15 @@ cannedResponses:
     description: |
       Also read by the composer, which offers them behind `#`. Ordered by
       shortcut so the picker is predictable.
+
+      **Filtered to the caller.** A token holding `canned_responses--all:ro`
+      curates the library and sees all of it. A token holding only
+      `canned_responses--groups:ro` — what an ordinary agent's session carries —
+      sees the workspace-wide replies (`visibility: all`) plus those scoped to a
+      team they belong to. The narrowing happens here rather than in the client:
+      filtering a paged list after the fact returns short pages, and a private
+      reply that reaches the browser before being hidden has already left the
+      workspace.
     parameters:
       - name: scope
         in: query
@@ -752,6 +761,19 @@ cannedResponses:
                 description: Typed after `#` in the composer. Letters, digits, `_` and `-`.
               text: { type: string, minLength: 1, maxLength: 10000 }
               scope: { type: string, enum: [chat, ticket], default: chat }
+              visibility:
+                type: string
+                enum: [all, group]
+                default: all
+                description: |
+                  `group` requires `group_id`; `all` refuses one. Omitting both
+                  saves a workspace-wide reply, which is what every reply saved
+                  before this field existed is.
+              group_id:
+                type: integer
+                format: int64
+                nullable: true
+                description: The team the reply belongs to. Required when `visibility` is `group`.
     responses:
       "201":
         description: Saved
@@ -789,6 +811,18 @@ cannedResponse:
             properties:
               shortcut: { type: string, pattern: "^[A-Za-z0-9_-]{1,40}$" }
               text: { type: string, minLength: 1, maxLength: 10000 }
+              visibility: { type: string, enum: [all, group] }
+              group_id:
+                type: integer
+                format: int64
+                nullable: true
+                description: |
+                  Re-scoping is a pair, so the two fields are read together: the
+                  values sent are merged over the stored ones and the result has
+                  to be a legal pairing. Narrowing an existing reply to a team is
+                  therefore `{"visibility": "group", "group_id": 7}`, and
+                  widening it back is `{"visibility": "all"}` — which clears the
+                  team on its own.
     responses:
       "200":
         description: Updated

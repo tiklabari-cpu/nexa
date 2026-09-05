@@ -301,6 +301,266 @@ describe('settings', () => {
     });
   });
 
+  // --- Canned responses: team scope ------------------------------------------
+
+  /**
+   * `group_id` and `visibility` were two columns nothing read (audit D2). What
+   * makes them real is not that a write path exists but that the *list* narrows
+   * — so every assertion below is made through `GET /settings/canned-responses`
+   * as a particular caller, not by reading the row back.
+   */
+  describe('canned response team scope (FR-MOD-08.7.2)', () => {
+    let salesId: number;
+    let supportId: number;
+    /** An agent in Sales, holding only the group-scoped read. */
+    let salesToken: string;
+    /** An agent in Support, same scope, different team. */
+    let supportToken: string;
+
+    const shortcutsFor = async (token: string): Promise<string[]> => {
+      const res = await server.get('/settings/canned-responses', auth(token));
+      expect(res.statusCode).toBe(200);
+      return (res.json() as { items: Array<{ shortcut: string }> }).items.map((i) => i.shortcut);
+    };
+
+    const save = (body: Record<string, unknown>) =>
+      server.post('/settings/canned-responses', body, auth(adminToken));
+
+    beforeEach(async () => {
+      const [sales, support] = await Promise.all([
+        owner.group.create({
+          data: { licenseId: fx.a.licenseId, name: 'Sales' },
+          select: { id: true },
+        }),
+        owner.group.create({
+          data: { licenseId: fx.a.licenseId, name: 'Support' },
+          select: { id: true },
+        }),
+      ]);
+      salesId = Number(sales.id);
+      supportId = Number(support.id);
+
+      await owner.groupAgent.createMany({
+        data: [
+          { licenseId: fx.a.licenseId, groupId: sales.id, agentId: fx.a.agentAccountId },
+          { licenseId: fx.a.licenseId, groupId: support.id, agentId: fx.a.ownerAccountId },
+        ],
+      });
+
+      [salesToken, supportToken] = await Promise.all([
+        grantToken(owner, {
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          ownerId: fx.a.agentAccountId,
+          scopes: ['canned_responses--groups:ro'],
+        }),
+        grantToken(owner, {
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          ownerId: fx.a.ownerAccountId,
+          scopes: ['canned_responses--groups:ro'],
+        }),
+      ]);
+    });
+
+    it("shows a team's reply to that team and hides it from the next one", async () => {
+      const scoped = await save({
+        shortcut: 'discount',
+        text: 'I can offer 10% this week.',
+        visibility: 'group',
+        group_id: salesId,
+      });
+      expect(scoped.statusCode).toBe(201);
+      expect(scoped.json()).toMatchObject({ visibility: 'group', group_id: salesId });
+
+      const open = await save({ shortcut: 'openinghours', text: 'We are open 9-5.' });
+      expect(open.statusCode).toBe(201);
+      expect(open.json()).toMatchObject({ visibility: 'all', group_id: null });
+
+      // The whole property, in two reads of the same endpoint.
+      expect(await shortcutsFor(salesToken)).toEqual(['discount', 'openinghours']);
+      expect(await shortcutsFor(supportToken)).toEqual(['openinghours']);
+    });
+
+    it('lets the library curator see a team reply they are not in', async () => {
+      await save({
+        shortcut: 'discount',
+        text: 'I can offer 10% this week.',
+        visibility: 'group',
+        group_id: salesId,
+      });
+
+      // `readToken` holds `canned_responses--all:ro` and its owner is in
+      // Support, not Sales. An admin who could not see the row could not fix or
+      // delete it either.
+      expect(await shortcutsFor(readToken)).toContain('discount');
+    });
+
+    it('narrows and widens an existing reply through PATCH', async () => {
+      const created = await save({ shortcut: 'refunds', text: 'Refunds take 3-5 days.' });
+      const { id } = created.json() as { id: string };
+      expect(await shortcutsFor(supportToken)).toContain('refunds');
+
+      const narrowed = await server.patch(
+        `/settings/canned-responses/${id}`,
+        { visibility: 'group', group_id: salesId },
+        auth(adminToken),
+      );
+      expect(narrowed.statusCode).toBe(200);
+      expect(narrowed.json()).toMatchObject({ visibility: 'group', group_id: salesId });
+      expect(await shortcutsFor(supportToken)).not.toContain('refunds');
+      expect(await shortcutsFor(salesToken)).toContain('refunds');
+
+      // Widening clears the team on its own — the client does not have to send
+      // `group_id: null` alongside it.
+      const widened = await server.patch(
+        `/settings/canned-responses/${id}`,
+        { visibility: 'all' },
+        auth(adminToken),
+      );
+      expect(widened.statusCode).toBe(200);
+      expect(widened.json()).toMatchObject({ visibility: 'all', group_id: null });
+      expect(await shortcutsFor(supportToken)).toContain('refunds');
+    });
+
+    it('moves a reply from one team to the other', async () => {
+      const created = await save({
+        shortcut: 'escalate',
+        text: 'Let me pass this on.',
+        visibility: 'group',
+        group_id: salesId,
+      });
+      const { id } = created.json() as { id: string };
+
+      const moved = await server.patch(
+        `/settings/canned-responses/${id}`,
+        { group_id: supportId },
+        auth(adminToken),
+      );
+      expect(moved.statusCode).toBe(200);
+      expect(await shortcutsFor(salesToken)).not.toContain('escalate');
+      expect(await shortcutsFor(supportToken)).toContain('escalate');
+    });
+
+    it.each(['private', 'group_only', 'ALL'])(
+      'rejects the visibility %j, which is outside the set',
+      async (visibility) => {
+        const res = await save({ shortcut: 'nope', text: 'x', visibility, group_id: salesId });
+        expect(res.statusCode).toBe(400);
+        expect((res.json() as ErrorBody).error.type).toBe('validation');
+      },
+    );
+
+    it('rejects an illegal pairing of visibility and team', async () => {
+      // Team-only with no team: a reply nobody could reach.
+      const noTeam = await save({ shortcut: 'a', text: 'x', visibility: 'group' });
+      expect(noTeam.statusCode).toBe(400);
+
+      // Everyone, but labelled with a team: ownership dressed up as a scope.
+      const bothWays = await save({
+        shortcut: 'b',
+        text: 'x',
+        visibility: 'all',
+        group_id: salesId,
+      });
+      expect(bothWays.statusCode).toBe(400);
+
+      // A `group_id` on its own does not silently flip the visibility either.
+      const created = await save({ shortcut: 'c', text: 'x' });
+      const { id } = created.json() as { id: string };
+      const halfEdit = await server.patch(
+        `/settings/canned-responses/${id}`,
+        { group_id: salesId },
+        auth(adminToken),
+      );
+      expect(halfEdit.statusCode).toBe(400);
+    });
+
+    it('refuses a team that does not exist, and one that belongs elsewhere', async () => {
+      const invented = await save({
+        shortcut: 'd',
+        text: 'x',
+        visibility: 'group',
+        group_id: 987654321,
+      });
+      expect(invented.statusCode).toBe(400);
+
+      // A real id — just not this workspace's. Refused the same way an invented
+      // one is, because the lookup runs inside the caller's tenant.
+      const theirs = await owner.group.create({
+        data: { licenseId: fx.b.licenseId, name: 'Their team' },
+        select: { id: true },
+      });
+      const crossTenant = await save({
+        shortcut: 'e',
+        text: 'x',
+        visibility: 'group',
+        group_id: Number(theirs.id),
+      });
+      expect(crossTenant.statusCode).toBe(400);
+    });
+
+    it("never shows another tenant's team-scoped reply, whatever the team ids", async () => {
+      const theirTeam = await owner.group.create({
+        data: { licenseId: fx.b.licenseId, name: 'Their team' },
+        select: { id: true },
+      });
+      await owner.cannedResponse.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          shortcut: 'theirsecret',
+          text: 'Other tenant only',
+          visibility: 'group',
+          groupId: theirTeam.id,
+          updatedAt: new Date(),
+        },
+      });
+      // Their agent is in their team, ours is in ours; the two id sequences are
+      // shared, so a team id of ours could name a team of theirs.
+      await owner.groupAgent.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          groupId: theirTeam.id,
+          agentId: fx.b.agentAccountId,
+        },
+      });
+
+      expect(await shortcutsFor(salesToken)).not.toContain('theirsecret');
+      expect(await shortcutsFor(supportToken)).not.toContain('theirsecret');
+      expect(await shortcutsFor(readToken)).not.toContain('theirsecret');
+    });
+
+    it('leaves an agent in no team with the workspace-wide replies only', async () => {
+      await save({ shortcut: 'everyone', text: 'Hi.' });
+      await save({
+        shortcut: 'salesonly',
+        text: 'Deal.',
+        visibility: 'group',
+        group_id: salesId,
+      });
+
+      await owner.groupAgent.deleteMany({ where: { agentId: fx.a.agentAccountId } });
+
+      // Membership is read fresh on every request rather than trusted from the
+      // token: taking someone off a team has to take effect now, not when their
+      // credential next rotates.
+      expect(await shortcutsFor(salesToken)).toEqual(['everyone']);
+    });
+
+    it('keeps a shortcut unique across the workspace even once teams own replies', async () => {
+      // The decision, asserted so it cannot drift: `#` is an address, and an
+      // address with two answers has no answer. Two teams cannot both claim one.
+      await save({ shortcut: 'hi', text: 'Sales hi', visibility: 'group', group_id: salesId });
+      const clash = await save({
+        shortcut: 'hi',
+        text: 'Support hi',
+        visibility: 'group',
+        group_id: supportId,
+      });
+      expect(clash.statusCode).toBe(403);
+    });
+  });
+
   // --- Tag library -----------------------------------------------------------
 
   describe('tags', () => {

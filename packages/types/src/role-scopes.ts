@@ -64,6 +64,16 @@ export const DEFAULT_AGENT_SCOPES: Scope[] = [
   'customers:ro',
   'groups--my:ro',
   'tags--groups:ro',
+  // Reading the saved replies the composer offers behind `#` (FR-MOD-08.7.2),
+  // for the reason `tags--groups:ro` sits above it: the inbox reads the library
+  // an agent is expected to *use*, so leaving the scope off left the `#` picker
+  // permanently empty for the role that mans it — the endpoint refused the
+  // request, and an empty picker looks the same as a workspace with no saved
+  // replies. `--groups`, not `--all`: an agent sees the workspace-wide replies
+  // plus their own teams', which is exactly what the route now enforces
+  // (`services/team/canned-response-access.ts`). Curating the library stays an
+  // owner/admin power, spelled `canned_responses--all:rw` in `ADMIN_SCOPES`.
+  'canned_responses--groups:ro',
   // Reading the brand catalogue (Multibrand, PRD §5.3): an agent picks the brand
   // they are working under, so they read brands but do not create or rename them.
   'brands--all:ro',

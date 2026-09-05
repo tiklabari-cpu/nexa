@@ -95,6 +95,14 @@ export const settings: Messages = {
   'settings.cannedResponses.empty.title': 'Henüz kayıtlı yanıt yok',
   'settings.cannedResponses.empty.description': 'Ekibinizin en sık yazdığı yanıtları kaydedin.',
   'settings.cannedResponses.deleteAriaLabel': '#{shortcut} kısayolunu sil',
+  'settings.cannedResponses.teamLabel': 'İlgili ekip',
+  'settings.cannedResponses.allTeams': 'Tüm ekipler',
+  'settings.cannedResponses.teamOnly': 'yalnız {name}',
+  'settings.cannedResponses.teamHint':
+    'Yanıtı herkesin kullanabilmesi için Tüm ekipler seçili kalsın.',
+  'settings.cannedResponses.editTeamButton': 'Ekibi düzenle',
+  'settings.cannedResponses.editTeamAriaLabel': '#{shortcut} kısayolunun ekibini düzenle',
+  'settings.cannedResponses.teamForLabel': '#{shortcut} kısayolunun ekibi',
 
   // Etiketler — Tags.tsx
   'settings.tags.title': 'Etiketler',

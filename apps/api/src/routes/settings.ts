@@ -83,6 +83,12 @@ import {
   saveSlaPolicy,
   serialiseSlaPolicy,
 } from '../services/sla/sla-service.js';
+import {
+  CANNED_VISIBILITIES,
+  cannedVisibilityFilter,
+  resolveCannedVisibility,
+  type CannedVisibility,
+} from '../services/team/canned-response-access.js';
 
 const SHORTCUT = /^[A-Za-z0-9_-]{1,40}$/;
 
@@ -350,10 +356,20 @@ function serialiseScimToken(row: {
 
 const cannedListQuery = z.object({ scope: z.enum(['chat', 'ticket']).optional() });
 
+/**
+ * The team a saved reply belongs to, as a client spells it. `null` is how a
+ * reply is widened back to the workspace, so it is a value rather than an
+ * absence — `undefined` on a PATCH means "leave the scope alone".
+ */
+const cannedGroupId = z.coerce.bigint().nullable();
+const cannedVisibility = z.enum(CANNED_VISIBILITIES);
+
 const createCannedBody = z.object({
   shortcut: z.string().trim().regex(SHORTCUT, 'letters, digits, _ and - only, up to 40'),
   text: z.string().trim().min(1).max(10_000),
   scope: z.enum(['chat', 'ticket']).default('chat'),
+  visibility: cannedVisibility.default('all'),
+  group_id: cannedGroupId.default(null),
 });
 
 const updateCannedBody = z
@@ -364,8 +380,42 @@ const updateCannedBody = z
       .regex(SHORTCUT, 'letters, digits, _ and - only, up to 40')
       .optional(),
     text: z.string().trim().min(1).max(10_000).optional(),
+    visibility: cannedVisibility.optional(),
+    group_id: cannedGroupId.optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
+ * The `(visibility, group_id)` pair a write should store, or a 400.
+ *
+ * Checked here as well as in the database because the CHECK constraint's
+ * refusal reaches a client as a 500 — Prisma reports it as an unknown database
+ * error, not as a validation failure — and because this is where the *reason*
+ * can be said. The constraint stays anyway: it is what makes the pairing true
+ * of every row rather than of every row this route wrote.
+ *
+ * `group` also has to name a team that exists, and `assertGroupsExist` runs
+ * inside the caller's tenant, so a real id belonging to another workspace is
+ * refused the same way an invented one is.
+ */
+async function resolveCannedScope(
+  tx: Prisma.TransactionClient,
+  visibility: CannedVisibility,
+  groupId: bigint | null,
+): Promise<{ visibility: CannedVisibility; groupId: bigint | null }> {
+  if (visibility === 'all') {
+    if (groupId !== null) {
+      throw ApiError.validation('A reply visible to everyone cannot also belong to a team.');
+    }
+    return { visibility, groupId: null };
+  }
+
+  if (groupId === null) {
+    throw ApiError.validation('Name the team this reply belongs to, or make it visible to all.');
+  }
+  await assertGroupsExist(tx, [groupId]);
+  return { visibility, groupId };
+}
 
 /**
  * A rule's match/eligibility conditions. `expertise_ids` (FR-MOD-08.6.3) narrows
@@ -1633,18 +1683,29 @@ export default async function settingsRoutes(
 
   // --- Canned responses ------------------------------------------------------
 
+  // Read is open to `--groups` as well as `--all`, because the composer's `#`
+  // picker reads this list: an ordinary agent (who holds
+  // `canned_responses--groups:ro`, not the tenant-wide set) has to see the
+  // replies they are expected to send. What that narrower scope gets is
+  // narrower — `services/team/canned-response-access.ts` decides it, and the
+  // decision is applied to the query rather than to the response.
   app.get(
     '/settings/canned-responses',
     { config: { scopes: ['canned_responses--all:ro', 'canned_responses--groups:ro'] } },
     async (request, reply) => {
       const query = parse(cannedListQuery, request.query);
+      const principal = request.requirePrincipal();
 
-      const items = await request.withTenant((tx) =>
-        tx.cannedResponse.findMany({
-          where: query.scope ? { scope: query.scope } : {},
+      const items = await request.withTenant(async (tx) => {
+        const visibility = await resolveCannedVisibility(tx, principal);
+        return tx.cannedResponse.findMany({
+          where: {
+            ...(query.scope ? { scope: query.scope } : {}),
+            ...cannedVisibilityFilter(visibility),
+          },
           orderBy: { shortcut: 'asc' },
-        }),
-      );
+        });
+      });
 
       return reply.send({ items: items.map(serialiseCanned) });
     },
@@ -1659,18 +1720,21 @@ export default async function settingsRoutes(
       const principal = request.requirePrincipal();
 
       try {
-        const created = await request.withTenant((tx) =>
-          tx.cannedResponse.create({
+        const created = await request.withTenant(async (tx) => {
+          const scope = await resolveCannedScope(tx, body.visibility, body.group_id);
+          return tx.cannedResponse.create({
             data: {
               licenseId: tenant.licenseId,
               shortcut: body.shortcut,
               text: body.text,
               scope: body.scope,
+              visibility: scope.visibility,
+              groupId: scope.groupId,
               updatedBy: principal.kind === 'agent' ? principal.accountId : null,
               updatedAt: new Date(),
             },
-          }),
-        );
+          });
+        });
         return reply.status(201).send(serialiseCanned(created));
       } catch (error) {
         if (isUniqueViolation(error)) {
@@ -1696,15 +1760,38 @@ export default async function settingsRoutes(
         const updated = await request.withTenant(async (tx) => {
           const existing = await tx.cannedResponse.findFirst({
             where: { id },
-            select: { id: true },
+            select: { id: true, visibility: true, groupId: true },
           });
           if (!existing) throw ApiError.notFound('Saved reply not found.');
+
+          // The pair is re-checked as a whole, merged over what is stored: a
+          // PATCH that names only `visibility: "all"` has to be allowed to
+          // clear the team, and one that names only a `group_id` has to be
+          // refused when the stored visibility is `all` rather than quietly
+          // half-applied.
+          const rescoping = body.visibility !== undefined || body.group_id !== undefined;
+          const scope = rescoping
+            ? await resolveCannedScope(
+                tx,
+                body.visibility ?? (existing.visibility as CannedVisibility),
+                body.group_id !== undefined
+                  ? body.group_id
+                  : // Widening to the whole workspace clears the team by
+                    // itself; anything else keeps whatever is stored, so a
+                    // `group_id` sent alongside `visibility: "all"` is refused
+                    // rather than dropped.
+                    body.visibility === 'all'
+                    ? null
+                    : existing.groupId,
+              )
+            : null;
 
           return tx.cannedResponse.update({
             where: { id },
             data: {
               ...(body.shortcut !== undefined ? { shortcut: body.shortcut } : {}),
               ...(body.text !== undefined ? { text: body.text } : {}),
+              ...(scope ? { visibility: scope.visibility, groupId: scope.groupId } : {}),
               updatedBy: principal.kind === 'agent' ? principal.accountId : null,
               updatedAt: new Date(),
             },
@@ -3278,6 +3365,7 @@ function serialiseCanned(row: {
   text: string;
   scope: string;
   groupId: bigint | null;
+  visibility: string;
   updatedBy: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -3288,6 +3376,7 @@ function serialiseCanned(row: {
     text: row.text,
     scope: row.scope,
     group_id: row.groupId === null ? null : Number(row.groupId),
+    visibility: row.visibility,
     updated_by: row.updatedBy,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),

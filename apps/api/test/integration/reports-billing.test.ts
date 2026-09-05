@@ -701,6 +701,94 @@ describe('reports and billing', () => {
 
   // =========================================================================
 
+  describe('low-confidence warning on Total cases + the resolution split (FR-MOD-07.3.2)', () => {
+    /**
+     * A closed thread written directly (bypassing `/chats`), for tests that
+     * need to cross the sample threshold (`MINIMUM_SAMPLE_CASES`, 20) without
+     * paying for that many real conversations through the API. No events at
+     * all — the split classification (manual/assisted/automated) does not
+     * matter to these tests, only the count does.
+     */
+    async function closedChat(): Promise<void> {
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Bulk closed' },
+        select: { id: true },
+      });
+      const chatId = generateShortId();
+      const at = justNow();
+      await owner.chat.create({
+        data: { id: chatId, licenseId: fx.a.licenseId, customerId: customer.id, createdAt: at },
+      });
+      await owner.thread.create({
+        data: {
+          id: generateShortId(),
+          chatId,
+          licenseId: fx.a.licenseId,
+          active: false,
+          createdAt: at,
+          closedAt: at,
+        },
+      });
+    }
+
+    /** A ticket written directly — counts toward `total_cases` without touching `closed`. */
+    async function createTicket(): Promise<void> {
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Bulk ticket' },
+        select: { id: true },
+      });
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: fx.a.licenseId,
+          customerId: customer.id,
+          subject: 'Bulk',
+          status: 'open',
+          createdAt: justNow(),
+        },
+      });
+    }
+
+    it('flags both the total-cases card and the resolution split under the sample threshold', async () => {
+      await conversation({ agentReplies: false });
+      await conversation({ agentReplies: false });
+
+      const totals = (await server.get('/reports/overview', auth)).json().totals;
+      expect(totals.total_cases).toBe(2);
+      expect(totals.closed).toBe(2);
+      expect(totals.low_confidence).toBe(true);
+      expect(totals.split_low_confidence).toBe(true);
+    });
+
+    it('clears both flags once the window holds the minimum sample size', async () => {
+      for (let i = 0; i < 20; i += 1) await closedChat();
+
+      const totals = (await server.get('/reports/overview', auth)).json().totals;
+      expect(totals.total_cases).toBe(20);
+      expect(totals.closed).toBe(20);
+      expect(totals.low_confidence).toBe(false);
+      expect(totals.split_low_confidence).toBe(false);
+    });
+
+    it('binds the total-cases flag to every case in the window but the split flag to closed cases only', async () => {
+      // 3 closed chats + 17 tickets: `total_cases` reaches the threshold while
+      // `closed` stays far below it — proof the two flags read different
+      // denominators rather than happening to always agree.
+      await conversation({ agentReplies: false });
+      await conversation({ agentReplies: false });
+      await conversation({ agentReplies: false });
+      for (let i = 0; i < 17; i += 1) await createTicket();
+
+      const totals = (await server.get('/reports/overview', auth)).json().totals;
+      expect(totals.closed).toBe(3);
+      expect(totals.total_cases).toBe(20);
+      expect(totals.low_confidence).toBe(false);
+      expect(totals.split_low_confidence).toBe(true);
+    });
+  });
+
+  // =========================================================================
+
   describe('period comparison (07.3.1)', () => {
     it('compares against the equal-length window immediately before', async () => {
       // Two chats land in the current 10-day window; one is backdated into the

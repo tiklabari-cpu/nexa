@@ -101,6 +101,10 @@ export const reports: Messages = {
   'reports.overview.kpi.conversations': 'Sohbetler',
   'reports.overview.kpi.totalCases': 'Toplam vaka',
   'reports.overview.kpi.totalCasesHint': '{chats} sohbet + {tickets} talep',
+  'reports.overview.kpi.totalCasesLowConfidence.one':
+    'Bu aralıkta yalnızca {count} vaka var — bundan anlamlı bir sonuç çıkarmak için yeterli değil',
+  'reports.overview.kpi.totalCasesLowConfidence.other':
+    'Bu aralıkta yalnızca {count} vaka var — bundan anlamlı bir sonuç çıkarmak için yeterli değil',
   'reports.overview.kpi.queuedNow': 'Şu anda sırada',
   'reports.overview.queue.waiting': 'Temsilci bekleniyor',
   'reports.overview.queue.empty': 'Bekleyen yok',
@@ -108,6 +112,10 @@ export const reports: Messages = {
   'reports.overview.resolution.title': 'Çözüm',
   'reports.overview.resolution.description':
     'Kapanan sohbetlerin nasıl ele alındığı (PRD §7.3.2). Manuel, destekli ve otomatik, her kapanan vakanın toplamını oluşturur.',
+  'reports.overview.resolution.lowConfidence.one':
+    'Bu aralıkta yalnızca {count} kapanmış vaka var — paylar güvenilir olmayabilir',
+  'reports.overview.resolution.lowConfidence.other':
+    'Bu aralıkta yalnızca {count} kapanmış vaka var — paylar güvenilir olmayabilir',
   'reports.overview.chats.title': 'Sohbetler',
   'reports.overview.chats.description':
     'AI’nın sohbetleri ne kadar hızlı sonuçlandırdığı ve ne kadar sürdükleri (PRD §7.3.3).',

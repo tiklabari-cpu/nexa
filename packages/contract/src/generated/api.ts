@@ -9395,6 +9395,13 @@ export interface components {
          *     the same number.
          */
         total_cases: number;
+        /**
+         * @description Too few cases in the window to read `total_cases` at face
+         *     value (FR-MOD-07.3.2). The same flag and the same threshold as
+         *     `sla.low_confidence` below — both count the exact same thing,
+         *     every case in the window (`chats + tickets`).
+         */
+        low_confidence: boolean;
         closed: number;
         manual: number;
         assisted: number;
@@ -9405,6 +9412,14 @@ export interface components {
         assisted_rate?: number | null;
         /** @description Share of *closed* chats. Null when nothing closed. */
         automated_rate?: number | null;
+        /**
+         * @description Too few *closed* cases for the manual/assisted/automated
+         *     shares above to mean much (FR-MOD-07.3.2). Independent from
+         *     `low_confidence`: a window can hold plenty of cases and still
+         *     have closed only a handful of them, and it is `closed` this
+         *     flag is bound to.
+         */
+        split_low_confidence: boolean;
         queued_now: number;
         /** @description Goals reached in the range (FR-MOD-13.3) — the funnel's converted stage. */
         achieved_goals: number;

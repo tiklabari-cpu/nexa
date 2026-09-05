@@ -69,6 +69,8 @@ interface ReportsOverview {
     chats: number;
     tickets: number;
     total_cases: number;
+    /** Too few cases in the window to read `total_cases` at face value (FR-MOD-07.3.2). */
+    low_confidence: boolean;
     closed: number;
     manual: number;
     assisted: number;
@@ -76,6 +78,8 @@ interface ReportsOverview {
     manual_rate: number | null;
     assisted_rate: number | null;
     automated_rate: number | null;
+    /** Too few *closed* cases for manual/assisted/automated to mean much (FR-MOD-07.3.2). */
+    split_low_confidence: boolean;
     queued_now: number;
     achieved_goals: number;
   };
@@ -602,10 +606,17 @@ function OverviewTab(props: TabProps): ReactElement {
             label={t('reports.overview.kpi.totalCases')}
             value={formatCount(data.totals.total_cases)}
             delta={<CountDelta current={data.totals.total_cases} previous={prev.total_cases} />}
-            hint={t('reports.overview.kpi.totalCasesHint', {
-              chats: formatCount(data.totals.chats) ?? data.totals.chats,
-              tickets: formatCount(data.totals.tickets) ?? data.totals.tickets,
-            })}
+            tone={data.totals.low_confidence ? 'warn' : 'neutral'}
+            hint={
+              data.totals.low_confidence
+                ? t('reports.overview.kpi.totalCasesLowConfidence', {
+                    count: data.totals.total_cases,
+                  })
+                : t('reports.overview.kpi.totalCasesHint', {
+                    chats: formatCount(data.totals.chats) ?? data.totals.chats,
+                    tickets: formatCount(data.totals.tickets) ?? data.totals.tickets,
+                  })
+            }
           />
           <Kpi
             label={t('reports.common.closed')}
@@ -641,21 +652,37 @@ function OverviewTab(props: TabProps): ReactElement {
             label={t('reports.common.resolution.manual')}
             value={formatCount(data.totals.manual)}
             delta={<CountDelta current={data.totals.manual} previous={prev.manual} />}
-            hint={closedShare(t, data.totals.manual_rate)}
+            hint={resolutionShareHint(
+              t,
+              data.totals.split_low_confidence,
+              data.totals.closed,
+              data.totals.manual_rate,
+            )}
+            tone={data.totals.split_low_confidence ? 'warn' : 'neutral'}
           />
           <Kpi
             label={t('reports.common.resolution.assisted')}
             value={formatCount(data.totals.assisted)}
             delta={<CountDelta current={data.totals.assisted} previous={prev.assisted} />}
-            hint={closedShare(t, data.totals.assisted_rate)}
-            tone="good"
+            hint={resolutionShareHint(
+              t,
+              data.totals.split_low_confidence,
+              data.totals.closed,
+              data.totals.assisted_rate,
+            )}
+            tone={data.totals.split_low_confidence ? 'warn' : 'good'}
           />
           <Kpi
             label={t('reports.common.resolution.automated')}
             value={formatCount(data.totals.automated)}
             delta={<CountDelta current={data.totals.automated} previous={prev.automated} />}
-            hint={closedShare(t, data.totals.automated_rate)}
-            tone="good"
+            hint={resolutionShareHint(
+              t,
+              data.totals.split_low_confidence,
+              data.totals.closed,
+              data.totals.automated_rate,
+            )}
+            tone={data.totals.split_low_confidence ? 'warn' : 'good'}
           />
         </KpiGrid>
       </Section>
@@ -2424,6 +2451,25 @@ function closedShare(t: TFunction, rate: number | null): string {
   return rate === null
     ? t('reports.common.closedShare.none')
     : t('reports.common.closedShare.value', { rate: formatRate(rate) ?? '' });
+}
+
+/**
+ * Hint for the Overview's manual/assisted/automated cards (FR-MOD-07.3.2).
+ * Below the sample threshold (`split_low_confidence`), a share computed from
+ * a handful of closed cases is not shown at all — a percentage next to a
+ * warning icon would still read as a fact — and the hint states the closed
+ * count that makes it unreliable instead. Above it, the usual closed-share
+ * text from {@link closedShare} is unchanged.
+ */
+function resolutionShareHint(
+  t: TFunction,
+  lowConfidence: boolean,
+  closed: number,
+  rate: number | null,
+): string {
+  return lowConfidence
+    ? t('reports.overview.resolution.lowConfidence', { count: closed })
+    : closedShare(t, rate);
 }
 
 /**

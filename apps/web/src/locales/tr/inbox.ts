@@ -197,7 +197,8 @@ export const inbox: Messages = {
   'inbox.copilot.title': 'Copilot',
   'inbox.copilot.collapseLabel': 'Copilot panelini daralt',
   'inbox.copilot.detailsButton': 'Ayrıntılar',
-  'inbox.copilot.disabledNotice': "Copilot'u kullanmak için sohbeti yeniden açın.",
+  'inbox.copilot.disabledNotice':
+    'Yanıt taslağı oluşturmak veya göndermek için sohbeti yeniden açın.',
   'inbox.copilot.section.summary': 'Özet',
   'inbox.copilot.summary.description':
     'Bu sohbeti özetleyin ve ekibiniz için dahili not olarak paylaşın.',
@@ -205,6 +206,7 @@ export const inbox: Messages = {
   'inbox.copilot.summary.pending': 'Özetleniyor…',
   'inbox.copilot.summary.error': 'Özetlenemedi — yeniden deneyin.',
   'inbox.copilot.summary.noteAdded': 'Dahili not olarak eklendi.',
+  'inbox.copilot.summary.notSaved': 'Not olarak kaydedilmedi — arşiv salt okunur.',
   'inbox.copilot.section.reply': 'Önerilen yanıt',
   'inbox.copilot.reply.description': 'Copilot bilgi tabanından bir yanıt taslağı oluşturun.',
   'inbox.copilot.reply.cta': 'Yanıt taslağı oluştur',

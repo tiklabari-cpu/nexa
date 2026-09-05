@@ -208,7 +208,7 @@ export const inbox: Messages = {
   'inbox.copilot.title': 'Copilot',
   'inbox.copilot.collapseLabel': 'Collapse Copilot panel',
   'inbox.copilot.detailsButton': 'Details',
-  'inbox.copilot.disabledNotice': 'Reopen the conversation to use Copilot.',
+  'inbox.copilot.disabledNotice': 'Reopen the conversation to draft or send a reply.',
   'inbox.copilot.section.summary': 'Summary',
   'inbox.copilot.summary.description':
     'Summarise this conversation and post it as an internal note for your team.',
@@ -216,6 +216,7 @@ export const inbox: Messages = {
   'inbox.copilot.summary.pending': 'Summarising…',
   'inbox.copilot.summary.error': 'Could not summarise — try again.',
   'inbox.copilot.summary.noteAdded': 'Added as an internal note.',
+  'inbox.copilot.summary.notSaved': 'Not saved as a note — the archive is read-only.',
   'inbox.copilot.section.reply': 'Suggested reply',
   'inbox.copilot.reply.description': 'Draft a reply from the copilot knowledge base.',
   'inbox.copilot.reply.cta': 'Draft a reply',

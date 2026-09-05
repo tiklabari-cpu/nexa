@@ -8879,12 +8879,13 @@
             "description": "Salt-okuma dogru ve Reopen/Create ticket erisilebilir. Ama PRD`nin arsiv icin acikca istedigi \"Copilot ozeti\" alinamiyor: buton `chatActive === false` iken disabled.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `apps/web/src/features/inbox/CopilotPanel.tsx:131` — ozet butonu `disabled={!chatActive || summary.isPending}`.\n  Ayni dosyada `:119` arsivlenmis sohbette bir \"disabled\" notu basiyor.\n- PRD `FR-MOD-02.8` aciklamasi: \"Archive (chat history/archives) — **salt-okuma transcript + Copilot\n  ozeti**; Reopen/Create ticket\". KK: \"Kapanan sohbetler; salt-okuma; reopen/ticket aksiyonlari;\n  denetim kaydi\".\n- Mantiken de ters: bir sohbetin ozetini istemek icin en iyi an, sohbet BITTIKTEN sonradir.\n\n## Yapilacak\n\n1. Ozet butonunun kapisini `chatActive`ten ayir. Hangi Copilot aksiyonlarinin arsivde anlamli oldugunu\n   TEK TEK karar ver ve gerekceyi kodun yanina yaz:\n   - **Ozet (summary):** arsivde ANLAMLI -> acilir.\n   - **Yanit onerisi (reply) / draft gelistirme (enhance):** arsivde anlamsiz (gonderilecek mesaj yok)\n     -> kapali KALIR. Bu ayrimi yapmadan tek bayragi kaldirmak, sonucu kesin hayal kirikligi olan\n     butonlar acar.\n2. Sunucu tarafini DOGRULA: ozet ucu arsivlenmis (aktif olmayan) bir sohbet icin calisiyor mu?\n   Calismiyorsa uc de acilir — ama once `grep`le bak, uc zaten calisiyor olabilir (D2 deseni).\n3. `FR-MOD-02.5` (\"Copilot ozeti — internal note\") `Should (v1)` ve ZATEN kapali; arsivde ozet\n   alindiginda internal note olarak eklenebiliyorsa o yol bozulmamali (arsiv salt-okuma!) — internal\n   note yazmak bir YAZMA islemidir, arsivde reddedilmesi dogru olabilir. Karari ver ve yaz.\n4. `#### K02.8` maddesine \"denetim kaydi\" (KK`nin dorduncu maddesi) durumunu da yaz: arsivleme\n   audit`e giriyor mu? Girmiyorsa `◐` birak ve eksigi yaz — `✅` UYDURMA.\n\n## Bilinen tuzaklar\n\n- `chatActive` bayragi `CopilotPanel.tsx:79-84`te prop olarak geliyor; kaldirmak yerine anlamini\n  daraltmak (`canDraft` gibi) daha guvenli — cagiran taraf da guncellenir.\n- LLM saglayicisi MOCK (deterministik stub, MASTER-PROMPT); ozet testi sabit ciktiya assert eder.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `CopilotPanel.test.tsx`: `chatActive=false` iken **Ozet** butonu ETKIN, **Reply/Enhance** pasif.\n   Baslik `(FR-MOD-02.8)` etiketi tasir.\n2. Integration: arsivlenmis bir sohbet icin ozet ucu 200 donuyor (aktif olmayan sohbet reddedilmiyor).\n3. Arsivin salt-okuma invarianti KORUNUYOR: ozet almak sohbete yeni bir musteri-gorunur olay YAZMIYOR\n   (olay sayaci degismedi assert`i).\n4. e2e: arsiv gorunumunden bir sohbet acilir -> ozet alinir -> metin panelde gorunur.\nDoD: `typecheck` · `lint` · `format:check` · `build` · web (`--maxWorkers=4`) · api integration ·\nilgili e2e — hepsi exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "189"
+            "parentId": "189",
+            "updatedAt": "2026-09-05T08:15:53.528Z"
           }
         ],
-        "updatedAt": "2026-09-05T07:52:28.232Z"
+        "updatedAt": "2026-09-05T08:15:53.528Z"
       },
       {
         "id": "190",
@@ -9401,7 +9402,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T07:52:28.233Z",
+      "lastModified": "2026-09-05T08:15:53.528Z",
       "taskCount": 204,
       "completedCount": 188,
       "tags": [

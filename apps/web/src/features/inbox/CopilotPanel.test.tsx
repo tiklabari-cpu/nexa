@@ -4,7 +4,8 @@
  * The panel opens per conversation and offers three assists. These pin the
  * behaviour that matters: the summary and draft actions call the right endpoint,
  * a drafted reply is handed to the composer through the shared store rather than
- * sent, and an archived conversation disables the lot with a reason.
+ * sent, and an archived conversation disables reply/enhance with a reason while
+ * leaving summary available (FR-MOD-02.8).
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -47,14 +48,14 @@ function stubFetch(responses: Record<string, unknown>): { calls: Call[] } {
   return { calls };
 }
 
-function renderPanel(active = true) {
+function renderPanel(canDraft = true) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const onShowDetails = vi.fn();
   render(
     <QueryClientProvider client={queryClient}>
       <CopilotPanel
         chatId="CHAT123"
-        chatActive={active}
+        canDraft={canDraft}
         onShowDetails={onShowDetails}
         onCollapse={vi.fn()}
       />
@@ -147,14 +148,32 @@ describe('CopilotPanel', () => {
     expect(onShowDetails).toHaveBeenCalled();
   });
 
-  it('disables the assists on an archived conversation, with a reason', () => {
+  it('disables reply/enhance on an archived conversation, with a reason — but not summary (FR-MOD-02.8)', () => {
     stubFetch({});
     renderPanel(false);
-    expect(screen.getByText('Reopen the conversation to use Copilot.')).toBeTruthy();
+    expect(screen.getByText('Reopen the conversation to draft or send a reply.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Draft a reply' })).toHaveProperty('disabled', true);
+    expect(screen.getByRole('button', { name: 'Rephrase' })).toHaveProperty('disabled', true);
+    // The one assist meaningful on a closed conversation stays enabled.
     expect(screen.getByRole('button', { name: 'Summarise conversation' })).toHaveProperty(
       'disabled',
-      true,
+      false,
     );
+  });
+
+  it('summarises an archived conversation without claiming a note was added (FR-MOD-02.8)', async () => {
+    const { calls } = stubFetch({
+      '/summary': { summary: 'Customer asked about a late order.', note_event_id: null },
+    });
+    renderPanel(false);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Summarise conversation' }));
+
+    await waitFor(() => expect(screen.getByText(/late order/)).toBeTruthy());
+    expect(screen.getByText('Not saved as a note — the archive is read-only.')).toBeTruthy();
+    expect(screen.queryByText('Added as an internal note.')).toBeNull();
+    const summaryCall = calls.find((c) => c.path === '/copilot/chats/CHAT123/summary');
+    expect(summaryCall?.method).toBe('POST');
   });
 
   describe('BI command — asking about reports (12.4-bi-d)', () => {
@@ -358,7 +377,7 @@ describe('CopilotPanel localisation (NFR-I18N2)', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithLocale(
       <QueryClientProvider client={queryClient}>
-        <CopilotPanel chatId="CHAT123" chatActive onShowDetails={vi.fn()} onCollapse={vi.fn()} />
+        <CopilotPanel chatId="CHAT123" canDraft onShowDetails={vi.fn()} onCollapse={vi.fn()} />
       </QueryClientProvider>,
       'tr',
     );

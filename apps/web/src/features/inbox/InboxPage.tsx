@@ -753,7 +753,7 @@ export function InboxPage(): ReactElement {
               (panelTab.tab === 'copilot' ? (
                 <CopilotPanel
                   chatId={selectedId}
-                  chatActive={chat.data.active}
+                  canDraft={chat.data.active}
                   onShowDetails={panelTab.showDetails}
                   onCollapse={() => rightPanel.setExpanded(true)}
                 />

@@ -201,3 +201,56 @@ describe('Transcript — where the reader ends up', () => {
     expect(log.scrollTop).toBe(80 - ROW_PX);
   });
 });
+
+describe('Transcript — rich text (FR-MOD-02.3.5)', () => {
+  function agentMessage(seq: number, text: string): ChatEvent {
+    return { ...message(seq), author_id: 'AGENT1', author_type: 'agent', text };
+  }
+
+  function customerMessage(seq: number, text: string): ChatEvent {
+    return { ...message(seq), author_type: 'customer', text };
+  }
+
+  it('renders an agent’s **bold** and *italic* markdown as formatted text', () => {
+    render(
+      <Transcript
+        chatId="TJ1H8CFKRV"
+        events={[agentMessage(1, '**bold** and *italic*')]}
+        loading={false}
+        currentAgentId={null}
+      />,
+    );
+    expect(screen.getByText('bold', { selector: 'strong' })).toBeInTheDocument();
+    expect(screen.getByText('italic', { selector: 'em' })).toBeInTheDocument();
+  });
+
+  it('renders a `- ` line as a bullet', () => {
+    render(
+      <Transcript
+        chatId="TJ1H8CFKRV"
+        events={[agentMessage(1, '- first\n- second')]}
+        loading={false}
+        currentAgentId={null}
+      />,
+    );
+    expect(screen.getByText(/• first/)).toBeInTheDocument();
+    expect(screen.getByText(/• second/)).toBeInTheDocument();
+  });
+
+  // The XSS-negative half of the decision (`#### K02.3.5`): the parser never
+  // touches raw HTML either way, so this is a product boundary, not a
+  // sanitisation one — a customer's own asterisks must read back exactly as
+  // they typed them rather than being reinterpreted as the agent's formatting.
+  it('leaves the customer’s own asterisks as literal text', () => {
+    render(
+      <Transcript
+        chatId="TJ1H8CFKRV"
+        events={[customerMessage(1, '**not bold**')]}
+        loading={false}
+        currentAgentId={null}
+      />,
+    );
+    expect(screen.getByText('**not bold**')).toBeInTheDocument();
+    expect(screen.queryByText('not bold', { selector: 'strong' })).not.toBeInTheDocument();
+  });
+});

@@ -162,6 +162,12 @@ const TEXT_FREE_FILES: readonly string[] = [
   'src/components/VirtualList.tsx',
   'src/components/ui/Dropdown.tsx',
   'src/components/ui/Modal.tsx',
+  // Not a design-system primitive but the same shape of exemption: every word
+  // `renderRichText` puts on screen is `content` lifted from a chat message,
+  // never chrome of its own — and PRD §9 excludes conversation content from
+  // translation (the same reason `replySuggestions.ts` stays out of the
+  // catalogue entirely, noted at the top of `locales/en/inbox.ts`).
+  'src/features/inbox/richText.tsx',
 ];
 
 /**

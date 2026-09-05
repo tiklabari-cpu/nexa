@@ -2,6 +2,7 @@ import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import type { ChatEvent } from './types.js';
 import type { FailedSend } from './failedSends.js';
 import { AttachmentView } from './Attachment.js';
+import { renderRichText } from './richText.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
 
 /**
@@ -207,7 +208,12 @@ function FailedBubble({
         }`}
       >
         {entry.input.text && (
-          <span className="whitespace-pre-wrap break-words">{entry.input.text}</span>
+          // A failed send is always the agent's own attempt (never a customer's),
+          // so it renders through the same rich-text subset it will show once
+          // Retry succeeds (FR-MOD-02.3.5).
+          <span className="whitespace-pre-wrap break-words">
+            {renderRichText(entry.input.text)}
+          </span>
         )}
         {entry.input.attachmentUrl && (
           <div className={entry.input.text ? 'mt-2' : ''}>
@@ -277,8 +283,16 @@ function Bubble({
               pending ? 'opacity-60' : ''
             }`}
           >
-            {/* React escapes this; there is no dangerouslySetInnerHTML anywhere. */}
-            {event.text && <span className="whitespace-pre-wrap break-words">{event.text}</span>}
+            {/* React escapes this; there is no dangerouslySetInnerHTML anywhere.
+              A customer's own text is never run through `renderRichText`
+              (FR-MOD-02.3.5 decision, `#### K02.3.5`): their literal asterisks
+              read back exactly as typed rather than being reinterpreted as an
+              agent's formatting. */}
+            {event.text && (
+              <span className="whitespace-pre-wrap break-words">
+                {event.author_type === 'customer' ? event.text : renderRichText(event.text)}
+              </span>
+            )}
             {event.attachment_url && (
               <div className={event.text ? 'mt-2' : ''}>
                 <AttachmentView url={event.attachment_url} />

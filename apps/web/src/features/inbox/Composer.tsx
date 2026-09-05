@@ -26,6 +26,9 @@ import {
   useCannedResponses,
   useMatchingResponses,
 } from './useCannedResponses.js';
+import { EMOJI_CATEGORIES, insertAtCaret } from './emoji.js';
+import { applyBulletPrefix, wrapSelection } from './richText.js';
+import { Dropdown } from '../../components/ui/Dropdown.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 /**
@@ -197,6 +200,61 @@ export function Composer({
       input.focus();
       input.setSelectionRange(result.caret, result.caret);
     });
+  };
+
+  // Rich text (FR-MOD-02.3.5): a small markdown subset — bold/italic wrap the
+  // selection (or seed an empty pair at the caret), list prefixes every line
+  // the selection touches with `- `. `richText.tsx#renderRichText` is what
+  // turns this back into formatting, in the transcript rather than here — a
+  // `<textarea>` cannot show a live bold preview, so the toolbar edits the raw
+  // markdown the same way a GitHub comment box does.
+  const applyMarker = (marker: string): void => {
+    const input = inputRef.current;
+    if (!input) return;
+    const result = wrapSelection(
+      text,
+      { start: input.selectionStart, end: input.selectionEnd },
+      marker,
+    );
+    setText(result.text);
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(result.selectionStart, result.selectionEnd);
+    });
+  };
+
+  const applyList = (): void => {
+    const input = inputRef.current;
+    if (!input) return;
+    const result = applyBulletPrefix(text, {
+      start: input.selectionStart,
+      end: input.selectionEnd,
+    });
+    setText(result.text);
+    requestAnimationFrame(() => {
+      input.focus();
+      input.setSelectionRange(result.selectionStart, result.selectionEnd);
+    });
+  };
+
+  // Emoji (FR-MOD-02.3.5): inserted at the caret, same as a canned response —
+  // but through `insertAtCaret` rather than `insert()`/`applyShortcut`, which
+  // always adds a trailing space and has no `shortcut` range to replace here.
+  const insertEmoji = (emoji: string): void => {
+    const input = inputRef.current;
+    const caret = input ? input.selectionStart : text.length;
+    const result = insertAtCaret(text, caret, emoji);
+    setText(result.text);
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(result.caret, result.caret);
+    });
+  };
+
+  const emojiCategoryLabel = (id: string): string => {
+    if (id === 'gestures') return t('inbox.composer.emoji.category.gestures');
+    if (id === 'symbols') return t('inbox.composer.emoji.category.symbols');
+    return t('inbox.composer.emoji.category.smileys');
   };
 
   // Reply Suggestions (FR-MOD-02.3.2). The agent asks for them by pressing Space
@@ -484,6 +542,73 @@ export function Composer({
         <div className="flex items-center gap-2">
           <button
             type="button"
+            aria-label={t('inbox.composer.richText.bold')}
+            onClick={() => applyMarker('**')}
+            className="rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+          >
+            <BoldIcon />
+          </button>
+          <button
+            type="button"
+            aria-label={t('inbox.composer.richText.italic')}
+            onClick={() => applyMarker('*')}
+            className="rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+          >
+            <ItalicIcon />
+          </button>
+          <button
+            type="button"
+            aria-label={t('inbox.composer.richText.list')}
+            onClick={applyList}
+            className="rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+          >
+            <ListIcon />
+          </button>
+          <Dropdown
+            label={t('inbox.composer.emoji.trigger')}
+            trigger={<EmojiIcon />}
+            triggerClassName="flex items-center justify-center rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+            // Anchored above the trigger: the composer sits at the bottom of
+            // the window, so a downward panel would open off-screen — the
+            // same reason the canned-response picker opens upward.
+            panelClassName="bottom-10 left-0 w-64 p-2"
+          >
+            {({ close }) => (
+              <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
+                {EMOJI_CATEGORIES.map((category) => (
+                  <div key={category.id}>
+                    <p
+                      id={`composer-emoji-${category.id}`}
+                      className="mb-1 px-1 text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+                    >
+                      {emojiCategoryLabel(category.id)}
+                    </p>
+                    <div
+                      role="group"
+                      aria-labelledby={`composer-emoji-${category.id}`}
+                      className="flex flex-wrap gap-1"
+                    >
+                      {category.items.map((emoji) => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => {
+                            insertEmoji(emoji);
+                            close();
+                          }}
+                          className="rounded-md p-1 text-lg leading-none hover:bg-surface-2"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Dropdown>
+          <button
+            type="button"
             aria-label={t('inbox.composer.attachFile')}
             onClick={() => fileRef.current?.click()}
             disabled={uploading}
@@ -528,6 +653,71 @@ function PaperclipIcon(): ReactElement {
       aria-hidden="true"
     >
       <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+    </svg>
+  );
+}
+
+// The glyph carries the icon's whole meaning, so it — not a path trace of the
+// letterform — is what sits in the (aria-hidden) svg; the button around it
+// supplies the real accessible name, same as `PaperclipIcon` above.
+function BoldIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <text x="12" y="17" textAnchor="middle" fontSize="14" fontWeight="700" fill="currentColor">
+        B
+      </text>
+    </svg>
+  );
+}
+
+function ItalicIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden="true">
+      <text x="12" y="17" textAnchor="middle" fontSize="14" fontStyle="italic" fill="currentColor">
+        I
+      </text>
+    </svg>
+  );
+}
+
+function ListIcon(): ReactElement {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="4" cy="6" r="1" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="12" r="1" fill="currentColor" stroke="none" />
+      <circle cx="4" cy="18" r="1" fill="currentColor" stroke="none" />
+      <line x1="9" y1="6" x2="20" y2="6" />
+      <line x1="9" y1="12" x2="20" y2="12" />
+      <line x1="9" y1="18" x2="20" y2="18" />
+    </svg>
+  );
+}
+
+function EmojiIcon(): ReactElement {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
     </svg>
   );
 }

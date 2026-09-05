@@ -12,10 +12,16 @@ customers:
     operationId: listCustomers
     summary: List customers
     description: |
-      Ordered by most recent activity, which is what a support team actually
-      scans for. Paginated by opaque keyset cursor rather than offset — with new
-      conversations arriving constantly an offset page shifts under the reader
-      and silently skips people.
+      Ordered by `sort` + `order` over the **whole** collection, not the page —
+      the default is most recent activity first, which is what a support team
+      actually scans for. Paginated by opaque keyset cursor rather than offset —
+      with new conversations arriving constantly an offset page shifts under the
+      reader and silently skips people.
+
+      **`page_id` belongs to one sort.** The cursor carries the value of the
+      sorted column of the last row on the previous page, so it means nothing
+      under a different `sort`/`order` — presenting one issued under another
+      ordering is a `400` rather than a silent restart from page one.
 
       Anonymous visitors are included: someone who opened the widget and never
       gave a name is still a person waiting for an answer. They surface with a
@@ -54,6 +60,27 @@ customers:
           `true` restricts to customers with at least one ticket in the
           caller's license; `false` to those with none.
         schema: { type: boolean }
+      - name: sort
+        in: query
+        description: |
+          The column the whole collection is ordered by. `chats`/`tickets`
+          are deliberately absent: what the table shows is a count scoped to
+          the caller's license, and the database cannot order the whole
+          collection by that scoped number without disagreeing with the
+          cell it prints — see `CUSTOMER_SORT_KEYS` (`@nexa/types`). A
+          customer with no value in the sorted column (no name, no country)
+          sorts last in *both* directions, so an empty cell never outranks a
+          real one just because the order flipped.
+        schema:
+          type: string
+          enum: [last_activity, name, country]
+          default: last_activity
+      - name: order
+        in: query
+        schema:
+          type: string
+          enum: [asc, desc]
+          default: desc
       - $ref: "../openapi.yaml#/components/parameters/PageId"
       - $ref: "../openapi.yaml#/components/parameters/Limit"
     responses:

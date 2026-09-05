@@ -968,8 +968,12 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         await agentPage.goto('/app/customers');
         await expect(agentPage.getByRole('table', { name: 'Customers' })).toBeVisible();
 
+        // Scoped to `tbody`: the table header now carries its own buttons too
+        // (Name/Country/Last active are sortable, FR-MOD-03.2.3), and they sit
+        // before the rows in DOM order — an unscoped `.first()` would focus a
+        // header's sort control instead of a row's.
         const firstRowControl = (p: Page): Locator =>
-          p.getByRole('table', { name: 'Customers' }).getByRole('button').first();
+          p.getByRole('table', { name: 'Customers' }).locator('tbody').getByRole('button').first();
 
         await scanInteractionStates(agentPage, 'Customers', theme, testInfo, {
           focus: [

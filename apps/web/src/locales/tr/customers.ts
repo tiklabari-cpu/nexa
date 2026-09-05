@@ -32,13 +32,15 @@ export const customers: Messages = {
     'Widget üzerinden mesaj gönderen kişiler otomatik olarak burada görünür.',
   'customers.page.table.caption': 'Müşteriler',
   'customers.page.table.name': 'Ad',
+  'customers.page.table.email': 'E-posta',
+  'customers.page.table.phone': 'Telefon',
   'customers.page.table.country': 'Ülke',
   'customers.page.table.chats': 'Sohbetler',
+  'customers.page.table.tickets': 'Talepler',
   'customers.page.table.lastActive': 'Son aktif',
   'customers.page.unnamedVisitor': 'İsimsiz ziyaretçi',
   'customers.page.lead': 'aday',
   'customers.page.banned': 'Engellendi',
-  'customers.page.noContactDetails': 'İletişim bilgisi yok',
   'customers.page.never': 'Hiç',
 
   // Contacts filter panel — CustomersFilters.tsx (field labels/options/errors

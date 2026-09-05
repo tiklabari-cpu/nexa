@@ -1271,10 +1271,16 @@ export interface paths {
     };
     /**
      * List customers
-     * @description Ordered by most recent activity, which is what a support team actually
-     *     scans for. Paginated by opaque keyset cursor rather than offset — with new
-     *     conversations arriving constantly an offset page shifts under the reader
-     *     and silently skips people.
+     * @description Ordered by `sort` + `order` over the **whole** collection, not the page —
+     *     the default is most recent activity first, which is what a support team
+     *     actually scans for. Paginated by opaque keyset cursor rather than offset —
+     *     with new conversations arriving constantly an offset page shifts under the
+     *     reader and silently skips people.
+     *
+     *     **`page_id` belongs to one sort.** The cursor carries the value of the
+     *     sorted column of the last row on the previous page, so it means nothing
+     *     under a different `sort`/`order` — presenting one issued under another
+     *     ordering is a `400` rather than a silent restart from page one.
      *
      *     Anonymous visitors are included: someone who opened the widget and never
      *     gave a name is still a person waiting for an answer. They surface with a
@@ -12580,6 +12586,18 @@ export interface operations {
          *     caller's license; `false` to those with none.
          */
         has_tickets?: boolean;
+        /**
+         * @description The column the whole collection is ordered by. `chats`/`tickets`
+         *     are deliberately absent: what the table shows is a count scoped to
+         *     the caller's license, and the database cannot order the whole
+         *     collection by that scoped number without disagreeing with the
+         *     cell it prints — see `CUSTOMER_SORT_KEYS` (`@nexa/types`). A
+         *     customer with no value in the sorted column (no name, no country)
+         *     sorts last in *both* directions, so an empty cell never outranks a
+         *     real one just because the order flipped.
+         */
+        sort?: 'last_activity' | 'name' | 'country';
+        order?: 'asc' | 'desc';
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
         limit?: components['parameters']['Limit'];

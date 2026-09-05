@@ -8,6 +8,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { CUSTOMER_SORT_KEYS, DEFAULT_CUSTOMER_SORT_KEY, SORT_ORDERS } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
@@ -38,6 +39,10 @@ const listQuery = z.object({
   last_activity_from: z.string().regex(DATE_ONLY, 'must be YYYY-MM-DD').optional(),
   last_activity_to: z.string().regex(DATE_ONLY, 'must be YYYY-MM-DD').optional(),
   has_tickets: booleanQuery.optional(),
+  // The database can order the whole collection by this set only — see
+  // `CUSTOMER_SORT_KEYS` (`@nexa/types`) for why chats/tickets are absent.
+  sort: z.enum(CUSTOMER_SORT_KEYS).default(DEFAULT_CUSTOMER_SORT_KEY),
+  order: z.enum(SORT_ORDERS).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   page_id: z.string().max(512).optional(),
 });
@@ -91,6 +96,8 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
         customers.list(tx, tenant, {
           segment: query.segment,
           limit: query.limit,
+          sort: query.sort,
+          order: query.order,
           ...(query.query ? { query: query.query } : {}),
           ...(query.page_id ? { pageId: query.page_id } : {}),
           ...(query.country_code !== undefined ? { countryCode: query.country_code } : {}),

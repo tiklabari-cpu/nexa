@@ -8,6 +8,7 @@
  */
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  countryFlag,
   formatCount,
   formatDate,
   formatDateTime,
@@ -79,5 +80,24 @@ describe('locale-agnostic helpers are unaffected', () => {
   it('formatRate stays a plain percentage', () => {
     expect(formatRate(0.873)).toBe('87%');
     expect(formatRate(null)).toBeNull();
+  });
+});
+
+describe('countryFlag (FR-MOD-03.2.3)', () => {
+  it('builds the regional-indicator flag from an upper-case code', () => {
+    expect(countryFlag('US')).toBe('🇺🇸');
+    expect(countryFlag('DE')).toBe('🇩🇪');
+  });
+
+  it('upper-cases a lower-case code before building the flag', () => {
+    expect(countryFlag('us')).toBe(countryFlag('US'));
+  });
+
+  it('returns null for anything that is not exactly two letters', () => {
+    expect(countryFlag(null)).toBeNull();
+    expect(countryFlag(undefined)).toBeNull();
+    expect(countryFlag('')).toBeNull();
+    expect(countryFlag('USA')).toBeNull();
+    expect(countryFlag('1A')).toBeNull();
   });
 });

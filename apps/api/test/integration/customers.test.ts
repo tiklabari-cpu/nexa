@@ -330,6 +330,170 @@ describe('customers', () => {
     });
   });
 
+  // --- Sorting (FR-MOD-03.2.3) -------------------------------------------------
+
+  describe('sorting (FR-MOD-03.2.3)', () => {
+    const SORTABLE = 6;
+    const SORT_PAGE = 4;
+
+    /** Zero-padded so the string order is the numeric one: index 0 sorts first. */
+    function sortableName(i: number): string {
+      return `Sort ${String(i).padStart(2, '0')}`;
+    }
+
+    /**
+     * Activity increases with the index, so `sortableName(0)` — alphabetically
+     * first — is also the *oldest*, and therefore the last row under the
+     * default order (most recent activity first). Reaching it takes asking the
+     * server to sort by name; the same property `tickets.test.ts`'s
+     * `seedForSorting` relies on for `sortableSubject`.
+     */
+    async function seedForSorting(): Promise<void> {
+      const base = Date.now();
+      for (let i = 0; i < SORTABLE; i += 1) {
+        await owner.customer.create({
+          data: {
+            organizationId: fx.a.organizationId,
+            name: sortableName(i),
+            lastActivityAt: new Date(base + i * 60_000),
+          },
+        });
+      }
+    }
+
+    const listing = async (query: string) => {
+      const response = await server.get(`/customers?${query}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      return response.json() as {
+        items: Array<{ id: string; name: string | null }>;
+        total: number;
+        next_page_id?: string;
+      };
+    };
+
+    it('orders the whole collection by name, not the page the caller happens to hold', async () => {
+      await seedForSorting();
+
+      // Under the default order (most recent activity first) the alphabetically
+      // first name is the last row — not merely below the fold, on another page.
+      const firstPage = await listing(`limit=${SORT_PAGE}`);
+      expect(firstPage.items.map((c) => c.name)).not.toContain(sortableName(0));
+
+      // Fetched generously (past the fixture's own default customer, which may
+      // sort ahead of every `Sort NN` name) and then narrowed to just the
+      // sortable fixtures — what matters here is their relative order, not
+      // which absolute slot they land in.
+      const byName = await listing(`limit=${SORTABLE + 2}&sort=name&order=asc`);
+      const sortedNames = byName.items
+        .map((c) => c.name)
+        .filter((name): name is string => name?.startsWith('Sort ') ?? false);
+      expect(sortedNames).toEqual(Array.from({ length: SORTABLE }, (_, i) => sortableName(i)));
+    });
+
+    it('walks every page under a non-default sort without dropping or repeating', async () => {
+      await seedForSorting();
+
+      const seen: Array<string | null> = [];
+      let pageId: string | undefined;
+      for (let guard = 0; guard < 10; guard += 1) {
+        const page = await listing(
+          `limit=${SORT_PAGE}&sort=name&order=asc` +
+            (pageId ? `&page_id=${encodeURIComponent(pageId)}` : ''),
+        );
+        seen.push(...page.items.map((c) => c.name));
+        if (!page.next_page_id) break;
+        pageId = page.next_page_id;
+      }
+
+      // Only the sortable fixtures' own names, in ascending order — a keyset
+      // predicate that disagreed with its `ORDER BY` would still return rows,
+      // just the wrong ones at the seam.
+      const sorted = seen.filter((name): name is string => name?.startsWith('Sort ') ?? false);
+      expect(sorted).toEqual(Array.from({ length: SORTABLE }, (_, i) => sortableName(i)));
+    });
+
+    it('floats a customer with no name last in both directions', async () => {
+      const named = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Has A Name' },
+        select: { id: true },
+      });
+      const anonymous = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: null },
+        select: { id: true },
+      });
+
+      for (const order of ['asc', 'desc'] as const) {
+        const page = await listing(`limit=100&sort=name&order=${order}`);
+        const index = page.items.findIndex((c) => c.id === anonymous.id);
+        // Last, in either direction — a nameless customer must never outrank a
+        // real one just because the order flipped.
+        expect(index).toBe(page.items.length - 1);
+        expect(page.items.some((c) => c.id === named.id)).toBe(true);
+      }
+    });
+
+    it('orders by country code, with an empty cell trailing', async () => {
+      await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Alpha', countryCode: 'US' },
+      });
+      await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Beta', countryCode: 'DE' },
+      });
+      await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Gamma', countryCode: null },
+      });
+
+      const page = await listing('limit=100&sort=country&order=asc');
+      const names = page.items
+        .map((c) => c.name)
+        .filter((name): name is string => ['Alpha', 'Beta', 'Gamma'].includes(name ?? ''));
+      // DE < US alphabetically, and the customer with no country trails both.
+      expect(names).toEqual(['Beta', 'Alpha', 'Gamma']);
+    });
+
+    it('refuses a page_id that was minted under a different ordering', async () => {
+      await seedForSorting();
+
+      const first = await listing(`limit=${SORT_PAGE}&sort=name&order=asc`);
+      const cursor = encodeURIComponent(first.next_page_id!);
+
+      // The same cursor under the ordering it belongs to: the next page,
+      // matching whatever a single unpaginated read of the same ordering says
+      // belongs right after the first page — not a hard-coded slot, since the
+      // fixture's own default customer may sort ahead of every `Sort NN` name.
+      const whole = await listing(`limit=100&sort=name&order=asc`);
+      const next = await listing(`limit=${SORT_PAGE}&sort=name&order=asc&page_id=${cursor}`);
+      expect(next.items[0]?.name).toBe(whole.items[SORT_PAGE]?.name);
+
+      // Under another column, and under the other direction of the same
+      // column, it is meaningless. Answering with page one would look like a
+      // page two and quietly repeat rows the caller already has.
+      for (const query of [
+        `sort=country&order=asc&page_id=${cursor}`,
+        `sort=name&order=desc&page_id=${cursor}`,
+        `page_id=${cursor}`,
+      ]) {
+        const response = await server.get(
+          `/customers?limit=${SORT_PAGE}&${query}`,
+          auth(readToken),
+        );
+        expect(response.statusCode).toBe(400);
+        expect((response.json() as { error: { type: string } }).error.type).toBe('validation');
+      }
+    });
+
+    it('refuses a sort the database cannot order the whole collection by', async () => {
+      // `chats` and `tickets` are table columns but not sortable ones: each is a
+      // license-scoped count (`CustomerService#counts`), and the database
+      // cannot order the whole collection by that without disagreeing with the
+      // number printed in the cell.
+      for (const sort of ['chats', 'tickets', 'created_at']) {
+        const response = await server.get(`/customers?sort=${sort}`, auth(readToken));
+        expect(response.statusCode).toBe(400);
+      }
+    });
+  });
+
   // --- Filter panel (FR-MOD-03.2.1) -------------------------------------------
 
   describe('condition filters (FR-MOD-03.2.1)', () => {

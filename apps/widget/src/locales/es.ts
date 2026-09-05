@@ -3,6 +3,7 @@ export const es: Record<string, string> = {
   'launcher.text': 'Chat',
   'launcher.open': 'Abrir chat',
   'launcher.close': 'Cerrar chat',
+  'launcher.unread': 'Abrir chat ({n} sin leer)',
   'panel.label': 'Chat de atención al cliente',
   'transcript.label': 'Conversación',
   'status.queue': 'Eres el número {n} en la cola',

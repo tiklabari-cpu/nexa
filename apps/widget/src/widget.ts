@@ -22,8 +22,34 @@ const PANEL = { width: 380, height: 620 } as const;
 /** Frame size while the proactive greeting card sits above the launcher. */
 const GREETING = { width: 340, height: 250 } as const;
 const POLL_INTERVAL_MS = 4_000;
+/**
+ * The cadence while the panel is *closed* (FR-MOD-11.1).
+ *
+ * Four seconds buys liveness inside an open conversation — a reply that lands
+ * while the visitor is watching. A closed panel is not watching anything: all
+ * it owes the visitor is an unread badge and a proactive card, and neither is
+ * worth 900 requests an hour from every tab a returning visitor leaves open.
+ * Fifteen times fewer requests, at the cost of a badge that is at most half a
+ * minute late — which is the right side of that trade for a nudge.
+ */
+const CLOSED_POLL_INTERVAL_MS = 30_000;
 /** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
 const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
+/**
+ * Watermark for the unread badge (FR-MOD-11.1): the `created_at` of the newest
+ * message *from the team* the visitor has actually had on screen. Anything
+ * newer than it is unread.
+ *
+ * A watermark rather than a counter, and `localStorage` rather than the
+ * `sessionStorage` the dismissal keys above use — both for the same reason.
+ * The case the badge exists for is precisely the one where the visitor is not
+ * around: they close the panel (or the tab) and the agent answers afterwards.
+ * A counter kept in memory dies on the next reload; a session-scoped one dies
+ * with the tab, which is exactly when the reply arrives. The watermark instead
+ * is re-derived from the server's own transcript on every poll, so it survives
+ * reloads, cannot drift, and self-corrects.
+ */
+const LAST_READ_KEY = 'nexa.last_read_at';
 /**
  * Same pattern, one key per campaign (FR-MOD-03.3.2): the campaign's `id` is
  * stable per visitor, so dismissing *this* campaign must not swallow a
@@ -85,6 +111,13 @@ interface State {
   agentTyping: boolean;
   /** The proactive card (greeting or campaign) is on screen (panel still closed). */
   greetingOpen: boolean;
+  /**
+   * Messages from the team that arrived while the panel was closed
+   * (FR-MOD-11.1) — the number on the launcher badge. Derived on every poll
+   * from `events` and the `LAST_READ_KEY` watermark, never incremented, so a
+   * missed poll or a reload cannot make it drift from the transcript.
+   */
+  unread: number;
   /**
    * A campaign message owed to this visitor (FR-MOD-03.3.2), from the widget's
    * own poll — not a second card system, the same slot `greetingOpen` occupies.
@@ -164,6 +197,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     agent: null,
     agentTyping: false,
     greetingOpen: false,
+    unread: 0,
     campaign: null,
     prechat: false,
     pendingDetails: null,
@@ -181,6 +215,15 @@ export function mount(doc: Document = document, win: Window = window): void {
     ratingSubmitting: false,
     closed: false,
   };
+
+  /**
+   * The unread watermark (FR-MOD-11.1), read once here and written back
+   * whenever the visitor has the transcript on screen. Null on a first-ever
+   * visit — and then everything from the team counts as unread, which is the
+   * safe direction: a badge for a reply they had already seen costs one glance,
+   * a missing badge costs the reply.
+   */
+  let lastRead = lastReadAt(win);
 
   const ui = buildUi(doc, t);
   // Non-null past the guard above; aliased so the appearance closure keeps that
@@ -533,16 +576,71 @@ export function mount(doc: Document = document, win: Window = window): void {
     postToHost(win, { type: 'nexa:resize', width: size.width, height: size.height });
   }
 
-  function setOpen(open: boolean): void {
-    state.open = open;
-    ui.panel.hidden = !open;
+  /**
+   * The launcher's whole visible state: shown or superseded by the panel, its
+   * accessible name, and the unread badge (FR-MOD-11.1).
+   *
+   * The count is on the button's own `aria-label` rather than left to the
+   * badge to announce — a screen-reader user hearing "Open chat" has no way to
+   * know two replies are waiting behind it. The badge itself is `aria-hidden`
+   * so the number is announced once, not twice.
+   */
+  function renderLauncher(): void {
     // The launcher sits in the same corner as the panel's composer. Left
     // visible it covers the Send button and swallows the click — the panel
     // looks fine and simply will not send. The panel's own × is the close
     // affordance once it is open.
-    ui.launcher.hidden = open;
-    ui.launcher.setAttribute('aria-expanded', String(open));
-    ui.launcher.setAttribute('aria-label', t(open ? 'launcher.close' : 'launcher.open'));
+    ui.launcher.hidden = state.open;
+    ui.launcher.setAttribute('aria-expanded', String(state.open));
+    const unread = state.unread;
+    ui.launcher.setAttribute(
+      'aria-label',
+      state.open
+        ? t('launcher.close')
+        : unread > 0
+          ? t('launcher.unread', { n: unread })
+          : t('launcher.open'),
+    );
+    // Not rendered at zero: an empty badge is a permanent dot that means
+    // nothing, and it would sit on the launcher of every visitor who has
+    // never been answered.
+    ui.badge.hidden = unread === 0;
+    // Two digits is all the 64 px launcher has room for; past that the exact
+    // number stops being the point.
+    ui.badge.textContent = unread === 0 ? '' : unread > 9 ? '9+' : String(unread);
+    // The KK's "badge/animation on a new greeting": a proactive card owns the
+    // attention pulse too, since it has no number to show. Reduced-motion is
+    // honoured globally by the stylesheet's last rule.
+    ui.launcher.classList.toggle('nx-attention', !state.open && (unread > 0 || state.greetingOpen));
+  }
+
+  /**
+   * Re-derive the unread count from the transcript, then repaint the launcher.
+   *
+   * With the panel open there is nothing unread by definition — the newest
+   * team message is on screen, so it becomes the watermark. With the panel
+   * closed the count is whatever arrived past that watermark. Called after
+   * every poll and on every open/close.
+   */
+  function syncUnread(): void {
+    if (state.open) {
+      const newest = newestTeamMessageAt(state.events);
+      if (newest && (lastRead === null || newest > lastRead)) {
+        lastRead = newest;
+        rememberLastReadAt(win, newest);
+      }
+      state.unread = 0;
+    } else {
+      state.unread = state.events.filter(
+        (event) => isTeamMessage(event) && (lastRead === null || event.created_at > lastRead),
+      ).length;
+    }
+    renderLauncher();
+  }
+
+  function setOpen(open: boolean): void {
+    state.open = open;
+    ui.panel.hidden = !open;
 
     // Opening supersedes the proactive card, but does not count as dismissing it.
     if (open && state.greetingOpen) {
@@ -555,14 +653,26 @@ export function mount(doc: Document = document, win: Window = window): void {
     // remembers locally.
     if (open) state.campaign = null;
 
+    // Opening marks the transcript read and drops the badge; closing starts
+    // counting again from the message that was last on screen.
+    syncUnread();
     resize();
     postToHost(win, { type: open ? 'nexa:open' : 'nexa:close' });
 
     if (open) {
       renderPrechat();
       (state.prechat ? ui.prechatName : ui.input).focus();
+      // First open: this mints, fetches and starts the poll. Every open after
+      // that it returns immediately — so the panel would otherwise sit on
+      // whatever the last slow poll left until the next one, up to half a
+      // minute of staleness the visitor is now watching.
+      if (state.connected) void refresh();
       void connect();
     }
+    // The two cadences are far enough apart (4 s vs 30 s) that waiting out the
+    // pending timer would be visible either way: a stale panel on open, or one
+    // last needless request on close.
+    repollAtOpenState();
   }
 
   // --- Proactive card: greeting or campaign, one slot (FR-MOD-03.3.2) ------
@@ -608,6 +718,7 @@ export function mount(doc: Document = document, win: Window = window): void {
         resize();
       }
       shownCardKind = null;
+      renderLauncher();
       return;
     }
     shownCardKind = card.kind;
@@ -618,6 +729,8 @@ export function mount(doc: Document = document, win: Window = window): void {
       ui.greeting.hidden = false;
       resize();
     }
+    // A card just took the slot — the launcher's attention cue follows it.
+    renderLauncher();
   }
 
   function dismissCard(): void {
@@ -633,6 +746,9 @@ export function mount(doc: Document = document, win: Window = window): void {
     shownCardKind = null;
     state.greetingOpen = false;
     ui.greeting.hidden = true;
+    // The card is gone; so is the attention cue that pointed at it. An unread
+    // reply still keeps the launcher lit — those are different claims.
+    renderLauncher();
     if (!state.open) resize();
   }
 
@@ -740,6 +856,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderRating();
       renderClosed();
       renderCard();
+      syncUnread();
       startPolling();
     } catch (error) {
       state.error = t('error.connect');
@@ -946,6 +1063,8 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderRating();
       renderClosed();
       renderCard();
+      // Last, so it counts against the transcript this poll just installed.
+      syncUnread();
     } catch (error) {
       console.warn('nexa widget: refresh failed', error);
     }
@@ -962,17 +1081,40 @@ export function mount(doc: Document = document, win: Window = window): void {
    * Kept running while the panel is closed, not just while it is open
    * (FR-MOD-03.3.2): a campaign owed to this visitor is delivered on this same
    * poll (`campaign-delivery.ts`), and the whole point of the proactive card
-   * is that it can appear without the visitor having opened anything. Still
-   * gated on tab visibility — a backgrounded tab gains nothing from polling
-   * and only adds load.
+   * is that it can appear without the visitor having opened anything. Since
+   * FR-MOD-11.1 the closed poll carries the unread badge too — but at
+   * `CLOSED_POLL_INTERVAL_MS`, not the open panel's four seconds. Still gated
+   * on tab visibility — a backgrounded tab gains nothing from polling and only
+   * adds load.
+   *
+   * A self-rescheduling timeout rather than an interval, because the cadence
+   * changes with the panel: `setInterval` would hold whichever period it was
+   * created with for the life of the widget.
    */
-  let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let pollTimer: ReturnType<typeof setTimeout> | null = null;
+  let polling = false;
 
   function startPolling(): void {
-    if (pollTimer !== null) return;
-    pollTimer = setInterval(() => {
-      if (!doc.hidden) void refresh();
-    }, POLL_INTERVAL_MS);
+    if (polling) return;
+    polling = true;
+    schedulePoll();
+  }
+
+  function schedulePoll(): void {
+    if (pollTimer !== null) clearTimeout(pollTimer);
+    pollTimer = setTimeout(
+      () => {
+        pollTimer = null;
+        if (!doc.hidden) void refresh();
+        schedulePoll();
+      },
+      state.open ? POLL_INTERVAL_MS : CLOSED_POLL_INTERVAL_MS,
+    );
+  }
+
+  /** The panel opened or closed — move to the other cadence now, not in 30 s. */
+  function repollAtOpenState(): void {
+    if (polling) schedulePoll();
   }
 
   // --- Wiring --------------------------------------------------------------
@@ -1116,6 +1258,11 @@ export function mount(doc: Document = document, win: Window = window): void {
     // campaign can be owed yet — that needs a poll, and nothing has connected
     // — so this always resolves to the greeting or nothing.
     renderCard();
+    // A visitor who has a conversation here connects without being asked, so
+    // the closed panel can find out an agent answered (FR-MOD-11.1). Before
+    // this, the first poll of a page load waited for the panel to be opened —
+    // which is the one moment an unread badge is of no use any more.
+    if (returningVisitor(win)) void connect();
   }
 }
 
@@ -1196,6 +1343,8 @@ function readFormAnswers(host: HTMLElement): Record<string, string> | null {
 
 interface Ui {
   launcher: HTMLButtonElement;
+  /** Unread count on the launcher (FR-MOD-11.1); hidden at zero. */
+  badge: HTMLElement;
   panel: HTMLElement;
   transcript: HTMLElement;
   typing: HTMLElement;
@@ -1263,6 +1412,15 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   launcher.setAttribute('aria-expanded', 'false');
   launcher.setAttribute('aria-label', t('launcher.open'));
   launcher.textContent = t('launcher.text');
+
+  // Unread badge (FR-MOD-11.1). `aria-hidden` because the launcher's own
+  // aria-label already carries the count in words — the number on its own
+  // ("2") announced next to "Open chat" says nothing.
+  const badge = doc.createElement('span');
+  badge.className = 'nx-badge';
+  badge.setAttribute('aria-hidden', 'true');
+  badge.hidden = true;
+  launcher.append(badge);
 
   const panel = doc.createElement('section');
   panel.className = 'nx-panel';
@@ -1566,6 +1724,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
 
   return {
     launcher,
+    badge,
     panel,
     transcript,
     typing,
@@ -1771,6 +1930,70 @@ function rememberGreetingDismissed(win: Window): void {
   }
 }
 
+/**
+ * The unread watermark (FR-MOD-11.1) — `localStorage`, not the session storage
+ * above, because the reply the badge is for usually lands after the tab is
+ * gone. Same guard: blocked site data throws, and a widget that cannot
+ * remember simply re-badges a message the visitor already read.
+ */
+function lastReadAt(win: Window): string | null {
+  try {
+    return win.localStorage.getItem(LAST_READ_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberLastReadAt(win: Window, isoDate: string): void {
+  try {
+    win.localStorage.setItem(LAST_READ_KEY, isoDate);
+  } catch {
+    // Ignored — the badge just counts from further back next load.
+  }
+}
+
+/**
+ * Whether an event is a message *from the team* — the only kind that can be
+ * unread. The visitor's own messages are not news to them, and a
+ * `system_message` ("Chat transferred") is a notice, not something waiting for
+ * an answer: badging it would send a visitor to an empty reply.
+ */
+function isTeamMessage(event: WidgetEvent): boolean {
+  return (
+    event.type !== 'system_message' &&
+    (event.author_type === 'agent' || event.author_type === 'bot')
+  );
+}
+
+/** `created_at` of the newest team message in a transcript, or null if none. */
+function newestTeamMessageAt(events: WidgetEvent[]): string | null {
+  let newest: string | null = null;
+  for (const event of events) {
+    if (!isTeamMessage(event)) continue;
+    if (newest === null || event.created_at > newest) newest = event.created_at;
+  }
+  return newest;
+}
+
+/**
+ * Whether this browser has talked to us before (FR-MOD-11.1) — the id
+ * `WidgetApi#connect` stores on a successful mint.
+ *
+ * Read at mount to decide whether to connect without being asked. A first-ever
+ * visitor is left alone: they have no conversation, so nothing can be unread,
+ * and minting for them would create a customer record for every page view of
+ * every site running the snippet. A returning one is connected straight away,
+ * because otherwise the badge cannot exist — nothing polls until the panel is
+ * opened, and by then the visitor has already found the reply themselves.
+ */
+function returningVisitor(win: Window): boolean {
+  try {
+    return win.localStorage.getItem('nexa.customer_id') !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** Same pattern as `greetingDismissed`, keyed per campaign id. */
 function campaignDismissed(win: Window, campaignId: string): boolean {
   try {
@@ -1938,6 +2161,26 @@ body {
   background: var(--nx-brand); color: #fff;
   font: inherit; font-weight: 600; cursor: pointer;
   box-shadow: 0 8px 24px rgb(16 24 40 / .24);
+}
+/* Unread badge (FR-MOD-11.1). Logical inset like everything else here, so it
+   rides to the launcher's other shoulder under dir="rtl" (NFR-I18N1). The
+   overhang is 4 px into the 10 px the frame leaves around the launcher — a
+   badge outside that would be clipped by the iframe, not by the page. */
+.nx-badge {
+  position: absolute; inset-block-start: -4px; inset-inline-end: -4px;
+  min-width: 22px; height: 22px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 9999px; border: 2px solid var(--nx-surface);
+  background: #c42a2a; color: #fff;
+  font-size: 12px; font-weight: 700; line-height: 1;
+}
+/* The KK's "badge/animation": a ring that breathes, on the launcher's own
+   shadow so nothing shifts in layout. The reduced-motion rule at the end of
+   this sheet turns it off for anyone who asked for that. */
+.nx-launcher.nx-attention { animation: nx-attention 2s ease-in-out infinite; }
+@keyframes nx-attention {
+  0%, 100% { box-shadow: 0 8px 24px rgb(16 24 40 / .24), 0 0 0 0 rgb(196 42 42 / .45); }
+  50% { box-shadow: 0 8px 24px rgb(16 24 40 / .24), 0 0 0 10px rgb(196 42 42 / 0); }
 }
 .nx-panel {
   position: fixed; inset: 8px;

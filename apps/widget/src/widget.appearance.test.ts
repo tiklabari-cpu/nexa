@@ -96,6 +96,10 @@ beforeEach(() => {
   document.body.replaceChildren();
   document.documentElement.removeAttribute('data-nx-theme');
   document.documentElement.style.removeProperty('--nx-brand');
+  // A mint stores `nexa.customer_id`, and since tm 195.1 that id makes the
+  // next mount connect on its own (FR-MOD-11.1) — so one test's identity
+  // would decide whether the next one's widget is connected before it opens.
+  window.localStorage.clear();
 });
 
 afterEach(() => {

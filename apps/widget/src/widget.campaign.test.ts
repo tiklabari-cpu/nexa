@@ -215,8 +215,11 @@ describe('widget campaign card (FR-MOD-03.3.2)', () => {
 
     // The background poll keeps running with the panel closed the whole time
     // (tm 176.3 widened it past "only while open") — this is what discovers
-    // the second, different campaign.
-    await vi.advanceTimersByTimeAsync(4_000);
+    // the second, different campaign. It runs at the closed cadence, which
+    // tm 195.1 slowed from 4 s to 30 s when it started connecting returning
+    // visitors at mount: a nudge is not worth 900 requests an hour from every
+    // idle tab.
+    await vi.advanceTimersByTimeAsync(30_000);
     await waitForPoll(2);
     expect(card(root).hidden).toBe(false);
     expect(cardMessage(root).textContent).toBe('Second offer.');
@@ -236,7 +239,8 @@ describe('widget campaign card (FR-MOD-03.3.2)', () => {
 
     // No campaign left to offer on the next poll — a downgrade to the generic
     // greeting is exactly what this dismissal was meant to also rule out.
-    await vi.advanceTimersByTimeAsync(4_000);
+    // Closed cadence, same as above (tm 195.1).
+    await vi.advanceTimersByTimeAsync(30_000);
     await waitForPoll(2);
     expect(card(root).hidden).toBe(true);
   });

@@ -4,6 +4,7 @@ export const ar: Record<string, string> = {
   'launcher.text': 'محادثة',
   'launcher.open': 'فتح المحادثة',
   'launcher.close': 'إغلاق المحادثة',
+  'launcher.unread': 'فتح المحادثة ({n} غير مقروءة)',
   'panel.label': 'محادثة دعم العملاء',
   'transcript.label': 'المحادثة',
   'status.queue': 'أنت رقم {n} في قائمة الانتظار',

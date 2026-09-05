@@ -3,6 +3,7 @@ export const tr: Record<string, string> = {
   'launcher.text': 'Sohbet',
   'launcher.open': 'Sohbeti aç',
   'launcher.close': 'Sohbeti kapat',
+  'launcher.unread': 'Sohbeti aç ({n} okunmamış)',
   'panel.label': 'Müşteri destek sohbeti',
   'transcript.label': 'Konuşma',
   'status.queue': 'Sırada {n}. sıradasınız',

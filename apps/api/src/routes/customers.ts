@@ -13,9 +13,31 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 
+/**
+ * Not `z.coerce.boolean()`: that is `Boolean(value)`, and `Boolean('false')` is
+ * `true`. A query string only ever carries text, so asking for "no tickets"
+ * would silently return everyone who has one.
+ */
+const booleanQuery = z.enum(['true', 'false']).transform((value) => value === 'true');
+
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 const listQuery = z.object({
   query: z.string().trim().max(320).optional(),
   segment: z.enum(['all', 'leads', 'recent', 'banned']).default('all'),
+  // Upper-cased here, once, rather than at every read: the stored column and
+  // the filter panel's own client both follow the same convention
+  // (`traffic-filters.ts`, `routing-service.ts`), which is what lets this stay
+  // a plain `=` an index can serve instead of a case-insensitive scan.
+  country_code: z
+    .string()
+    .trim()
+    .length(2)
+    .transform((value) => value.toUpperCase())
+    .optional(),
+  last_activity_from: z.string().regex(DATE_ONLY, 'must be YYYY-MM-DD').optional(),
+  last_activity_to: z.string().regex(DATE_ONLY, 'must be YYYY-MM-DD').optional(),
+  has_tickets: booleanQuery.optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   page_id: z.string().max(512).optional(),
 });
@@ -71,6 +93,14 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
           limit: query.limit,
           ...(query.query ? { query: query.query } : {}),
           ...(query.page_id ? { pageId: query.page_id } : {}),
+          ...(query.country_code !== undefined ? { countryCode: query.country_code } : {}),
+          ...(query.last_activity_from !== undefined
+            ? { lastActivityFrom: query.last_activity_from }
+            : {}),
+          ...(query.last_activity_to !== undefined
+            ? { lastActivityTo: query.last_activity_to }
+            : {}),
+          ...(query.has_tickets !== undefined ? { hasTickets: query.has_tickets } : {}),
         }),
       );
 

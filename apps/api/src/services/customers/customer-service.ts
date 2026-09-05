@@ -27,6 +27,13 @@ export interface ListOptions {
   segment: CustomerSegment;
   limit: number;
   pageId?: string;
+  /** Exact match, already upper-cased by the caller (route validates the shape). */
+  countryCode?: string;
+  /** `YYYY-MM-DD`, inclusive of the whole day in UTC. */
+  lastActivityFrom?: string;
+  lastActivityTo?: string;
+  /** Restricts to customers with (`true`) or without (`false`) a ticket in the caller's license. */
+  hasTickets?: boolean;
 }
 
 export interface CustomerSummary {
@@ -291,6 +298,34 @@ export class CustomerService {
         break;
       case 'all':
         break;
+    }
+
+    // The filter panel's conditions (FR-MOD-03.2.1) — each one additive, same
+    // as the segment above. `countryCode` is a plain `=`, not `mode:
+    // 'insensitive'`: the route already upper-cased it, matching the stored
+    // convention, which is what lets `customers_organization_id_country_code_idx`
+    // serve it instead of a sequential scan.
+    if (options.countryCode !== undefined) {
+      filters.push({ countryCode: options.countryCode });
+    }
+    if (options.lastActivityFrom !== undefined) {
+      filters.push({
+        lastActivityAt: { gte: new Date(`${options.lastActivityFrom}T00:00:00.000Z`) },
+      });
+    }
+    if (options.lastActivityTo !== undefined) {
+      filters.push({
+        lastActivityAt: { lte: new Date(`${options.lastActivityTo}T23:59:59.999Z`) },
+      });
+    }
+    if (options.hasTickets !== undefined) {
+      // Scoped to the caller's license, matching `#counts` below: a ticket in
+      // another license of the same organisation must not count here either.
+      filters.push(
+        options.hasTickets
+          ? { tickets: { some: { licenseId: tenant.licenseId } } }
+          : { tickets: { none: { licenseId: tenant.licenseId } } },
+      );
     }
 
     return filters.length === 1 ? filters[0]! : { AND: filters };

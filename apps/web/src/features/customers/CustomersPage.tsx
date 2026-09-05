@@ -22,6 +22,13 @@ import { formatCount, formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { usePagedQuery } from '../../lib/paged-query.js';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
+import { CustomersFilters } from './CustomersFilters.js';
+import {
+  buildCustomerParams,
+  conditionsFromSearchParams,
+  CUSTOMER_FIELD_DEFS,
+  type CustomerCondition,
+} from './customers-filters.js';
 import { CustomersTabs } from './CustomersTabs.js';
 import type { CustomerSummary, Segment } from './types.js';
 
@@ -35,9 +42,15 @@ const SEGMENTS: Array<{ id: Segment; labelKey: string }> = [
 /** Rows per request. The table chains pages from here, so it is a page, not a cap. */
 const CUSTOMERS_PAGE_SIZE = 50;
 
-function customersUrl(segment: Segment, query: string, pageId: string | undefined): string {
+function customersUrl(
+  segment: Segment,
+  query: string,
+  conditions: readonly CustomerCondition[],
+  pageId: string | undefined,
+): string {
   const params = new URLSearchParams({ segment, limit: String(CUSTOMERS_PAGE_SIZE) });
   if (query) params.set('query', query);
+  for (const [key, value] of buildCustomerParams(conditions)) params.append(key, value);
   if (pageId) params.set('page_id', pageId);
   return `/customers?${params.toString()}`;
 }
@@ -54,6 +67,14 @@ export function CustomersPage(): ReactElement {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // The filter panel (FR-MOD-03.2.1) is uncontrolled once mounted (see
+  // `ConditionFilters`); this only seeds it from a reload/shared link and
+  // holds the last list it reported — always a fully valid one, see
+  // `handleFiltersChange`. Mirrors `TrafficPage`'s own `conditions` state.
+  const [conditions, setConditions] = useState<CustomerCondition[]>(() =>
+    conditionsFromSearchParams(searchParams),
+  );
 
   // Two deep links land here: `?customer=` (command palette, a bookmark, a
   // colleague) names one person — switch to the segment that contains
@@ -86,9 +107,17 @@ export function CustomersPage(): ReactElement {
     return () => clearTimeout(timer);
   }, [search]);
 
+  function handleFiltersChange(next: CustomerCondition[]): void {
+    setConditions(next);
+    const params = new URLSearchParams(searchParams);
+    for (const def of CUSTOMER_FIELD_DEFS) params.delete(def.field);
+    for (const condition of next) params.set(condition.field, condition.value);
+    setSearchParams(params, { replace: true });
+  }
+
   const list = usePagedQuery<CustomerSummary>({
-    queryKey: ['customers', segment, debounced],
-    buildUrl: (pageId) => customersUrl(segment, debounced, pageId),
+    queryKey: ['customers', segment, debounced, conditions],
+    buildUrl: (pageId) => customersUrl(segment, debounced, conditions, pageId),
   });
 
   const items = list.items;
@@ -171,6 +200,8 @@ export function CustomersPage(): ReactElement {
         ))}
       </div>
 
+      <CustomersFilters initialConditions={conditions} onChange={handleFiltersChange} />
+
       {list.error ? (
         <ErrorNotice message={t('customers.page.loadError')} />
       ) : (
@@ -191,10 +222,12 @@ export function CustomersPage(): ReactElement {
             ) : items.length === 0 ? (
               <EmptyState
                 title={t(
-                  debounced ? 'customers.page.empty.searchTitle' : 'customers.page.empty.title',
+                  debounced || conditions.length > 0
+                    ? 'customers.page.empty.searchTitle'
+                    : 'customers.page.empty.title',
                 )}
                 description={t(
-                  debounced
+                  debounced || conditions.length > 0
                     ? 'customers.page.empty.searchDescription'
                     : 'customers.page.empty.description',
                 )}

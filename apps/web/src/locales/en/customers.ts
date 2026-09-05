@@ -50,6 +50,17 @@ export const customers: Messages = {
   'customers.page.noContactDetails': 'No contact details',
   'customers.page.never': 'Never',
 
+  // Contacts filter panel — CustomersFilters.tsx (field labels/options/errors
+  // stay in customers-filters.ts, English-only — see the file's own note,
+  // same convention as traffic.filters.*)
+  'customers.filters.heading': 'Match all filters',
+  'customers.filters.clear': 'Clear',
+  'customers.filters.addFilter': 'Add filter',
+  'customers.filters.addFilterTrigger': '+ Add filter',
+  'customers.filters.allApplied': 'Every filter is already applied.',
+  'customers.filters.empty': 'No filters applied — everyone is shown.',
+  'customers.filters.removeField': 'Remove {label} filter',
+
   // Customer detail panel — CustomerDetailPanel.tsx
   'customers.detail.emptySelection': 'Select someone to see their history.',
   'customers.detail.loadError': 'Could not load this customer.',

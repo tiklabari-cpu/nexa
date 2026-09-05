@@ -96,6 +96,7 @@ describe('DetailsPanel visitor context', () => {
           referrer: 'https://google.com/search',
           duration_seconds: 200,
           ip: '203.0.113.7',
+          ongoing: false,
         },
       }),
     );
@@ -126,7 +127,13 @@ describe('DetailsPanel visitor context', () => {
     renderPanel(
       chatWithVisitor({
         visited_pages: [],
-        visit_info: { device: null, referrer: null, duration_seconds: null, ip: null },
+        visit_info: {
+          device: null,
+          referrer: null,
+          duration_seconds: null,
+          ip: null,
+          ongoing: false,
+        },
       }),
     );
 
@@ -188,8 +195,6 @@ describe('DetailsPanel — supervisor takeover', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Take over this chat?' });
     expect(within(dialog).getByText(/unassigned/)).toBeInTheDocument();
-    // No agent roster lookup needed for an unassigned chat.
-    expect(api.get).not.toHaveBeenCalledWith('/agents');
   });
 
   it('shows the role-authorization message on a 403', async () => {

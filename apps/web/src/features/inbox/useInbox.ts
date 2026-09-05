@@ -667,6 +667,19 @@ export function useChatAction(chatId: string | null) {
     if (chatId) void queryClient.invalidateQueries({ queryKey: eventsKey(chatId) });
   };
 
+  // Moving the assignee is the one action on this panel the PRD asks to save
+  // *instantly* (FR-MOD-02.4.1–.6), so the new name is on screen before the
+  // round trip and the shared helper takes it back off if the server refuses.
+  const optimisticAssign = optimisticCacheUpdate<ChatDetail | undefined, string>({
+    queryClient,
+    queryKey: ['chat', chatId],
+    update: (current, agentId) =>
+      current?.thread
+        ? { ...current, thread: { ...current.thread, assignee_id: agentId } }
+        : current,
+    invalidateKeys: [['chats']],
+  });
+
   return {
     archive: useMutation({
       mutationFn: () => api.post(`/chats/${chatId}/deactivate`),
@@ -683,6 +696,21 @@ export function useChatAction(chatId: string | null) {
     untag: useMutation({
       mutationFn: (tag: string) => api.delete(`/chats/${chatId}/tags/${encodeURIComponent(tag)}`),
       onSuccess: invalidate,
+    }),
+    // Hand the conversation to a named teammate (FR-MOD-02.4.1–.6). The
+    // consented hand-off, not the seizure below: `transfer` is scope-gated
+    // (`chats--*:rw`) and open to anyone who may write to the chat, which is
+    // why the Details panel offers it to an ordinary agent while `takeover`
+    // stays with supervisors.
+    //
+    // No new endpoint: `POST /chats/{id}/transfer` already carries this, and
+    // Traffic's "Assign chat to me" has been calling it since slice 9. It
+    // refuses a closed chat (`chat_inactive`) and an offline teammate
+    // (`group_unavailable`) — both 409s, both left on `.error` for the caller
+    // to word, since the panel and the modal answer them differently.
+    assign: useMutation({
+      mutationFn: (agentId: string) => api.post(`/chats/${chatId}/transfer`, { agent_id: agentId }),
+      ...optimisticAssign,
     }),
     // Supervisor seizure (FR-MOD-08.6.3) — role-gated at the route; this mutation
     // just calls it. A losing race surfaces as `takeover_conflict` (409) on

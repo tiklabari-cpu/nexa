@@ -1418,6 +1418,7 @@ export class ChatService {
         referrer: visit.cameFrom,
         duration_seconds: visitDurationSeconds(visit.startedAt, visit.endedAt),
         ip: visit.ip,
+        ongoing: visit.endedAt === null,
       },
     };
   }
@@ -2033,6 +2034,14 @@ export interface ChatVisitor {
     referrer: string | null;
     duration_seconds: number | null;
     ip: string | null;
+    /**
+     * Whether the visit is still open, and therefore whether `duration_seconds`
+     * is a running total or a final one. The console shows a live counter
+     * (FR-MOD-02.4.1–.6, "süre/ziyaret canlı"), and it can only do that safely
+     * if it knows which of the two it was handed: ticking a finished visit
+     * forward would put a number on screen that nothing ever measured.
+     */
+    ongoing: boolean;
   };
 }
 

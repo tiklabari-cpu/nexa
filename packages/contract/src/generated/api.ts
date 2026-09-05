@@ -6693,6 +6693,15 @@ export interface components {
         duration_seconds: number | null;
         /** @description Visitor IP (NFR-S9 personal data; agents only). */
         ip: string | null;
+        /**
+         * @description True while the visit is still open (no recorded end). The PRD
+         *     asks for a live duration, and `duration_seconds` is only a
+         *     measurement taken when the response was written: a client may
+         *     tick it forward while this is true, and must not while it is
+         *     false — a finished visit has a fixed length, and a counter
+         *     climbing past it would be an invented number.
+         */
+        ongoing: boolean;
       };
     };
     /**

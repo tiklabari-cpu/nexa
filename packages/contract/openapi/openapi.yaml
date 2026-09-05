@@ -844,7 +844,7 @@ components:
               at: { type: string, format: date-time }
         visit_info:
           type: object
-          required: [device, referrer, duration_seconds, ip]
+          required: [device, referrer, duration_seconds, ip, ongoing]
           properties:
             device:
               type: string
@@ -862,6 +862,15 @@ components:
               type: string
               nullable: true
               description: Visitor IP (NFR-S9 personal data; agents only).
+            ongoing:
+              type: boolean
+              description: |
+                True while the visit is still open (no recorded end). The PRD
+                asks for a live duration, and `duration_seconds` is only a
+                measurement taken when the response was written: a client may
+                tick it forward while this is true, and must not while it is
+                false — a finished visit has a fixed length, and a counter
+                climbing past it would be an invented number.
 
     ChatSupervision:
       type: object

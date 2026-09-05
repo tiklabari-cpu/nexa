@@ -26,6 +26,7 @@ import {
   visitorSends,
   widgetFrame,
 } from './fixtures.js';
+import { assertNoBlockingViolations, scanScreen } from './a11y.js';
 
 const SAMPLE_PNG = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -318,7 +319,12 @@ test.describe('campaign card', () => {
       // --- The widget's own poll picks it up, panel still closed the whole
       // time — nothing the visitor clicked made this appear. The workspace's
       // own text, shown as-is (only the CTAs below are translated).
-      await expect(frame.getByText(message)).toBeVisible({ timeout: 20_000 });
+      //
+      // One closed-panel poll interval is 30 s since tm 195.1 (FR-MOD-11.1)
+      // started connecting returning visitors at mount — 4 s of that from
+      // every idle tab was not what a proactive nudge is worth. The card is
+      // therefore up to half a minute late, and this wait has to outlast it.
+      await expect(frame.getByText(message)).toBeVisible({ timeout: 60_000 });
       await expect(frame.getByRole('button', { name: "Let's chat" })).toBeVisible();
       await visitor.screenshot({ path: 'kanit/03.3.2-campaign-card.png', fullPage: true });
 
@@ -377,10 +383,95 @@ test.describe('campaign card', () => {
       await expect(frame.getByText('Chat ended.')).toBeVisible();
       await frame.getByRole('button', { name: 'Close chat' }).click();
 
-      await expect(frame.getByText(message)).toBeVisible({ timeout: 20_000 });
+      // Closed-panel cadence, same as the test above (tm 195.1).
+      await expect(frame.getByText(message)).toBeVisible({ timeout: 60_000 });
       await visitor.screenshot({ path: 'kanit/03.3.2-campaign-arrival.png', fullPage: true });
     } finally {
       await visitorContext.close();
+    }
+  });
+});
+
+test.describe('unread badge', () => {
+  /**
+   * FR-MOD-11.1: a reply that lands while the panel is shut has to reach the
+   * launcher, or the visitor only finds it by opening the chat on a hunch.
+   *
+   * The half that could not be faked below the browser is the *closed* widget
+   * connecting at all. Until tm 195.1 nothing polled until the panel was
+   * opened, so this whole sequence — visitor writes in, closes the panel, agent
+   * answers — ended with a launcher that looked exactly like an unanswered one.
+   * A jsdom test can drive the poll directly; only a real page can show that
+   * one starts without being asked.
+   *
+   * Isolated by host, like the campaign specs above: this visitor gets a
+   * subdomain of their own so no other spec's conversation can be the one the
+   * agent answers.
+   */
+  test('an agent reply with the panel closed lights the launcher (FR-MOD-11.1)', async ({
+    browser,
+    organizationId,
+  }, testInfo) => {
+    // The closed panel polls every 30 s by design — the badge is worth a slow
+    // test, not 900 requests an hour from every idle tab.
+    test.setTimeout(180_000);
+    const stamp = Date.now().toString().slice(-6);
+    const site = tenantSubdomain(`unread-${stamp}`);
+    const question = `Is the rack in stock — ${stamp}`;
+    const answer = `Two left, we can hold one — ${stamp}`;
+
+    const visitorContext = await browser.newContext();
+    const agentContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    const agent = await agentContext.newPage();
+
+    try {
+      await signIn(agent);
+      await agent.getByLabel('Availability').selectOption('accepting_chats');
+
+      await openWidget(visitor, organizationId, { host: site.origin });
+      await visitorSends(visitor, question);
+
+      // --- The visitor walks away from an open conversation ----------------
+      const frame = widgetFrame(visitor);
+      await frame.getByRole('button', { name: 'Close chat' }).click();
+      // Closing re-offers the greeting card; waving it away leaves the bare
+      // launcher, which is the surface this test is about.
+      await frame.getByRole('button', { name: 'Just browsing' }).click();
+
+      // Nothing from the team yet, so no badge and no count in the name.
+      await expect(frame.getByRole('button', { name: 'Open chat', exact: true })).toBeVisible();
+      await expect(frame.locator('.nx-badge')).toBeHidden();
+
+      // --- The agent answers -----------------------------------------------
+      const list = agent.getByRole('region', { name: 'Conversations' });
+      await expect(list).toContainText(question, { timeout: 20_000 });
+      await list.getByRole('button').first().click();
+      await agent.getByRole('radio', { name: 'Reply' }).click();
+      await agent.getByPlaceholder('Type your reply').fill(answer);
+      await agent.getByRole('button', { name: 'Send' }).click();
+      await expect(agent.locator('main')).toContainText(answer);
+
+      // --- …and the closed launcher says so ---------------------------------
+      // Generous, because one closed-panel poll interval is 30 s.
+      await expect(frame.locator('.nx-badge')).toHaveText('1', { timeout: 60_000 });
+      // Through the accessibility tree, not just the pixels: the count has to
+      // reach a visitor who never sees the red circle.
+      await expect(frame.getByRole('button', { name: 'Open chat (1 unread)' })).toBeVisible();
+      await visitor.screenshot({ path: 'kanit/11.1-unread-badge.png', fullPage: true });
+
+      // A state axe has never seen before: white on red, on the launcher.
+      assertNoBlockingViolations(await scanScreen(visitor, 'Widget unread badge', testInfo));
+
+      // --- Opening is what marks it read ------------------------------------
+      await frame.getByRole('button', { name: 'Open chat (1 unread)' }).click();
+      await expect(frame.getByRole('log', { name: 'Conversation' })).toContainText(answer);
+      await frame.getByRole('button', { name: 'Close chat' }).click();
+      await expect(frame.getByRole('button', { name: 'Open chat', exact: true })).toBeVisible();
+      await expect(frame.locator('.nx-badge')).toBeHidden();
+    } finally {
+      await visitorContext.close();
+      await agentContext.close();
     }
   });
 });

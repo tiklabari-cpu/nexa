@@ -101,6 +101,8 @@ beforeEach(() => {
   document.head.replaceChildren();
   document.body.replaceChildren();
   window.sessionStorage.clear();
+  // See widget.unread.test.ts: a stored customer id auto-connects the mount.
+  window.localStorage.clear();
   stubFetch();
 });
 

@@ -1164,6 +1164,253 @@ describe('agent chat api', () => {
       expect(acme.json().items).toHaveLength(2);
       expect(northwind.json().items).toHaveLength(1);
     });
+
+    // =====================================================================
+    // Ordering: last activity, not creation time (PRD FR-MOD-02.2.2 —
+    // «Tıklama transcript açar; RTM'de yukarı taşınır + unread»).
+    //
+    // The half that was missing was the second one. The list ordered on
+    // `chats.created_at`, a column nothing ever updates, so a visitor who wrote
+    // stayed exactly where they had started: an agent working the list from the
+    // top was working it in the order conversations *opened*, which on a busy
+    // inbox has nothing to do with who is waiting.
+    // =====================================================================
+
+    describe('ordering by last activity', () => {
+      const ids = (body: { items: Array<{ id: string }> }): string[] =>
+        body.items.map((chat) => chat.id);
+
+      interface Page {
+        items: Array<{ id: string; unread_count: number }>;
+        total: number;
+        next_page_id?: string;
+      }
+
+      const list = async (query = '', token = acmeAdminToken): Promise<Page> => {
+        const response = await server.get(`/chats${query}`, auth(token));
+        expect(response.statusCode).toBe(200);
+        return response.json() as Page;
+      };
+
+      /** A conversation with a visitor who can still write into it. */
+      async function conversationWithVisitor(label: string) {
+        const visitor = await customerTokenFor(fx.a);
+        const chat = await startChat(acmeAdminToken, {
+          customerId: visitor.customer_id,
+          text: `opened ${label}`,
+        });
+        return { chatId: chat.id, token: visitor.token };
+      }
+
+      it('moves the conversation a visitor just wrote in to the top (FR-MOD-02.2.2)', async () => {
+        const a = await conversationWithVisitor('A');
+        const b = await conversationWithVisitor('B');
+
+        // As it stands: B opened last, so B is on top. Both orders agree at this
+        // point, which is exactly why the defect was invisible on a fresh
+        // workspace and why the assertion below is the one that matters.
+        expect(ids(await list())).toEqual([b.chatId, a.chatId]);
+
+        const wrote = await server.post(
+          '/customer/chat/events',
+          { text: 'are you still there?' },
+          auth(a.token),
+        );
+        expect(wrote.statusCode).toBe(201);
+
+        // The requirement, as one assertion: the conversation that spoke is now
+        // first. Ordered by `created_at` this list would still read [B, A].
+        const after = await list();
+        expect(ids(after)).toEqual([a.chatId, b.chatId]);
+        // «+ unread» is the same clause of the same acceptance criterion, and it
+        // worked before this change — asserted here so re-ordering cannot
+        // quietly cost it.
+        expect(after.items[0]?.unread_count).toBe(1);
+      });
+
+      it('sorted oldest-first, puts the least recently active first (FR-MOD-02.2.1)', async () => {
+        const a = await conversationWithVisitor('A');
+        const b = await conversationWithVisitor('B');
+
+        // One key, two directions: "Oldest" is the stale end of the same axis
+        // rather than a second meaning of order. Before A speaks it is the stale
+        // end; after, B is.
+        expect(ids(await list('?sort=oldest'))).toEqual([a.chatId, b.chatId]);
+        await server.post('/customer/chat/events', { text: 'hello?' }, auth(a.token));
+        expect(ids(await list('?sort=oldest'))).toEqual([b.chatId, a.chatId]);
+      });
+
+      it('bumps the row for an agent-authored event too, not only an inbound one', async () => {
+        const a = await conversationWithVisitor('A');
+        const b = await conversationWithVisitor('B');
+        expect(ids(await list())).toEqual([b.chatId, a.chatId]);
+
+        // `#appendEvent` is the single place an event is ever written, so every
+        // producer — a reply, a close, a transfer, a takeover — moves the row.
+        // Asserted through the agent surface because that is the one a
+        // regression would most plausibly route around.
+        await server.post(
+          `/chats/${a.chatId}/events`,
+          { type: 'message', text: 'still here' },
+          auth(acmeAdminToken),
+        );
+        expect(ids(await list())).toEqual([a.chatId, b.chatId]);
+      });
+
+      it('keeps the page chain whole when a row on a page already read is bumped', async () => {
+        const seeded = await seedChats(7);
+        const first = await list('?limit=3');
+        expect(first.items).toHaveLength(3);
+        expect(first.next_page_id).toBeDefined();
+
+        // A chat *on the page already read* is the case the console actually
+        // produces: the agent is looking at the top of the list when a message
+        // lands on one of the rows in front of them. Its key moves further above
+        // a cursor it was already above, so the rest of the chain is untouched.
+        const bumped = first.items[1]!.id;
+        await server.post(
+          `/chats/${bumped}/events`,
+          { type: 'message', text: 'bump' },
+          auth(acmeAdminToken),
+        );
+
+        const seen = [...ids(first)];
+        let cursor = first.next_page_id;
+        for (let page = 0; page < 5 && cursor; page += 1) {
+          const body = await list(`?limit=3&page_id=${encodeURIComponent(cursor)}`);
+          seen.push(...ids(body));
+          cursor = body.next_page_id;
+        }
+
+        expect(new Set(seen).size).toBe(seen.length); // nothing handed out twice
+        expect([...seen].sort()).toEqual([...seeded].sort()); // nothing skipped
+      });
+
+      it('never repeats a row when one climbs out of a page not yet read', async () => {
+        const seeded = await seedChats(7);
+        const first = await list('?limit=3');
+
+        // The other direction, stated rather than hidden. A row *below* the
+        // cursor that gets an event climbs above it, into the pages already
+        // read — no ordering on a key that moves can avoid that. What it must
+        // never do is hand the same row out twice: a duplicate is a list that is
+        // wrong, while a late arrival is a list that is one beat stale.
+        const climber = seeded[1]!; // second-oldest: page 2, newest-first
+        await server.post(
+          `/chats/${climber}/events`,
+          { type: 'message', text: 'climb' },
+          auth(acmeAdminToken),
+        );
+
+        const seen = [...ids(first)];
+        let cursor = first.next_page_id;
+        for (let page = 0; page < 5 && cursor; page += 1) {
+          const body = await list(`?limit=3&page_id=${encodeURIComponent(cursor)}`);
+          seen.push(...ids(body));
+          cursor = body.next_page_id;
+        }
+
+        expect(new Set(seen).size).toBe(seen.length);
+        expect(seen).not.toContain(climber);
+        expect(new Set([...seen, climber]).size).toBe(seeded.length);
+
+        // And the repair is not hypothetical: re-reading the first page — what
+        // `useInbox.ts`'s `refreshChatHeads` does on every push — finds it, at
+        // the top, which is where it now belongs.
+        expect(ids(await list('?limit=3'))[0]).toBe(climber);
+      });
+
+      it("is not re-ordered by another tenant's traffic", async () => {
+        const a = await conversationWithVisitor('A');
+        const b = await conversationWithVisitor('B');
+        const before = ids(await list());
+        expect(before).toEqual([b.chatId, a.chatId]);
+
+        const opened = await server.post(
+          '/chats',
+          { customer_id: fx.b.customerId, initial_event: { type: 'message', text: 'hi' } },
+          auth(northwindToken),
+        );
+        expect([200, 201]).toContain(opened.statusCode);
+        await server.post(
+          `/chats/${(opened.json() as { id: string }).id}/events`,
+          { type: 'message', text: 'loud neighbour' },
+          auth(northwindToken),
+        );
+
+        // The newest activity in the database now belongs to the other tenant.
+        // Acme's list must not merely hide that row — its *order* must not know
+        // the event happened at all.
+        expect(ids(await list())).toEqual(before);
+      });
+
+      it('serves the order out of an index, inside the NFR-P2 read budget (EXPLAIN ANALYZE)', async () => {
+        await seedChats(6);
+
+        // The query `listChatsInTenant` issues, reduced to the part under test:
+        // the tenant predicate (what RLS's `license_id = nexa_current_license()`
+        // evaluates to), the default view's `active`, the new ordering, and the
+        // page's LIMIT.
+        const sql = `SELECT id FROM chats WHERE license_id = $1 AND active
+                     ORDER BY last_event_at DESC, id DESC LIMIT 51`;
+
+        const explain = async (plannerSetup: string[] = []): Promise<Record<string, unknown>> =>
+          owner.$transaction(async (tx) => {
+            for (const statement of plannerSetup) await tx.$executeRawUnsafe(statement);
+            const [row] = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(
+              `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+              fx.a.licenseId,
+            );
+            const raw = row?.['QUERY PLAN'];
+            const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Array<
+              Record<string, unknown>
+            >;
+            return parsed[0] ?? {};
+          });
+
+        // Two claims, kept separate because they fail for different reasons.
+        //
+        // (1) Structural: this order is servable *from an index*, with no sort
+        //     step. It is the claim that matters at production row counts —
+        //     without it every page is a full scan of the workspace's chats plus
+        //     a top-N sort — and it is what a change that drops the index, or
+        //     orders on an expression, would break. Measured with sorting and
+        //     the unordered access paths switched off, because on six rows in
+        //     one heap page they are genuinely cheaper and the planner is right
+        //     to prefer them (it picks a bitmap scan on `uq_one_active_chat`
+        //     plus a quicksort). Switching them off asks the question the probe
+        //     is about — "can this order come out of an index at all" — rather
+        //     than the one the fixture size answers, "is this table small". The
+        //     knobs are hints, not prohibitions: PostgreSQL still emits a sort
+        //     if that is the only way to produce the order, so a missing index
+        //     fails this assertion rather than silently satisfying it.
+        const indexed = await explain([
+          'SET LOCAL enable_seqscan = off',
+          'SET LOCAL enable_bitmapscan = off',
+          'SET LOCAL enable_sort = off',
+        ]);
+        const indexedPlan = JSON.stringify(indexed['Plan'] ?? {});
+        expect(indexedPlan).toContain('chats_license_id_last_event_at_idx');
+        expect(indexedPlan).not.toContain('"Node Type":"Sort"');
+
+        // (2) Budgetary: NFR-P2 puts reads at p99 < 150 ms. On this dataset
+        //     execution is sub-millisecond either way, so the assertion is a
+        //     floor a plan regression would blow through rather than a
+        //     production measurement; the figures are recorded in HANDOFF as the
+        //     evidence this requirement owes.
+        const planned = await explain();
+        const plannedMs = planned['Execution Time'];
+        const indexedMs = indexed['Execution Time'];
+        expect(typeof plannedMs).toBe('number');
+        expect(typeof indexedMs).toBe('number');
+        console.log(
+          'NFR-P2 GET /chats ordering (last_event_at DESC, id DESC, limit 51) — ' +
+            `${String(plannedMs)} ms as planned · ${String(indexedMs)} ms forced onto the index`,
+        );
+        expect(plannedMs as number).toBeLessThan(READ_BUDGET_MS);
+        expect(indexedMs as number).toBeLessThan(READ_BUDGET_MS);
+      });
+    });
   });
 
   // =========================================================================

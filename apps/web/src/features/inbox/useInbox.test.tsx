@@ -243,7 +243,7 @@ describe('useChatList — paging', () => {
     expect(cursorRequests()).toHaveLength(1);
   });
 
-  it('an event updates its chat on whichever page holds it, without a request', async () => {
+  it('an event lifts its chat to the top from whichever page holds it, without a request (FR-MOD-02.2.2)', async () => {
     api.get.mockImplementation((url: string) =>
       Promise.resolve(
         url.includes('page_id=')
@@ -272,9 +272,117 @@ describe('useChatList — paging', () => {
       expect(updated?.last_event?.text).toBe('still here');
       expect(updated?.unread_count).toBe(1);
     });
+    // The acceptance criterion's second half: the row *moves*, and it moves all
+    // the way to the top — a chat that just produced an event has the greatest
+    // `last_event_at` in the view by construction, so first is where the
+    // server's own order puts it. `c3` was on page 2 and is now above `c1`.
+    expect(result.current.items.map((c) => c.id)).toEqual(['c3', 'c1', 'c2']);
+    // Still no request: the push carried the event, and the event *is* the sort
+    // key (`chatActivityAt`), so the new position needs nothing fetched.
     expect(api.get.mock.calls).toHaveLength(requestsBefore);
-    // The rows around it are untouched.
-    expect(result.current.items.map((c) => c.id)).toEqual(['c1', 'c2', 'c3']);
+  });
+
+  it('sorted oldest-first the same event sends the row to the bottom instead', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('page_id=')
+          ? chatPage([chat('c3', 12)])
+          : chatPage([chat('c1', 10), chat('c2', 11)], 'cursor-1'),
+      ),
+    );
+
+    const { result } = renderHook(() => useChatList('all', 'oldest'), {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    act(() => {
+      result.current.fetchNext();
+    });
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+
+    act(() => {
+      applyPush(queryClient, 'incoming_event', {
+        chat_id: 'c1',
+        event: message('e1', 'c1', 'still here'),
+      });
+    });
+
+    // "Oldest" is the same key read the other way round (FR-MOD-02.2.1), so the
+    // most recently active conversation belongs at the far end. Moving it up
+    // here would contradict the control the agent just chose.
+    await waitFor(() => expect(result.current.items.map((c) => c.id)).toEqual(['c2', 'c3', 'c1']));
+  });
+
+  it('lifts the row on one list without disturbing another view that also holds it', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('view=my')
+          ? chatPage([chat('c1', 14), chat('c9', 9)])
+          : chatPage([chat('c1', 14), chat('c2', 13), chat('c9', 9)]),
+      ),
+    );
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    const all = renderHook(() => useChatList('all'), { wrapper });
+    const mine = renderHook(() => useChatList('my'), { wrapper });
+    await waitFor(() => expect(all.result.current.items).toHaveLength(3));
+    await waitFor(() => expect(mine.result.current.items).toHaveLength(2));
+
+    act(() => {
+      applyPush(queryClient, 'incoming_event', {
+        chat_id: 'c9',
+        event: message('e1', 'c9', 'over here'),
+      });
+    });
+
+    // The sidebar mounts a list per view and the open one mounts a ninth, all
+    // in the same cache. One push has to land in every list that holds the row —
+    // and land at that list's own top, not at the position it took in another.
+    await waitFor(() =>
+      expect(all.result.current.items.map((c) => c.id)).toEqual(['c9', 'c1', 'c2']),
+    );
+    expect(mine.result.current.items.map((c) => c.id)).toEqual(['c9', 'c1']);
+  });
+
+  it('survives a neighbour under the same key prefix that is not a page chain', async () => {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('page_id=')
+          ? chatPage([chat('c3', 12)])
+          : chatPage([chat('c1', 14), chat('c2', 13)], 'cursor-1'),
+      ),
+    );
+
+    const { result, queryClient } = renderChatList();
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+
+    // `AppShell`'s rail badges (FR-MOD-01.2) park their counters under
+    // `['chats', 'count', …]` on purpose, so the one invalidate that refreshes
+    // the lists refreshes them too. They hold an envelope, not a page chain —
+    // and a push walking every `['chats', …]` entry reaches them.
+    queryClient.setQueryData(['chats', 'count', 'unassigned'], { items: [], total: 4 });
+
+    act(() => {
+      applyPush(queryClient, 'incoming_event', {
+        chat_id: 'c2',
+        event: message('e1', 'c2', 'still here'),
+      });
+    });
+
+    // A throw here would not merely skip one row: it escapes `applyPush`, so
+    // every push after it in the same handler is lost too, and the list stops
+    // being live at all — silently, because nothing rethrows into the UI.
+    await waitFor(() => expect(result.current.items.map((c) => c.id)).toEqual(['c2', 'c1']));
+    expect(queryClient.getQueryData(['chats', 'count', 'unassigned'])).toEqual({
+      items: [],
+      total: 4,
+    });
   });
 
   it('an event about a chat on no loaded page re-reads the first page', async () => {
@@ -394,6 +502,44 @@ describe('mergeChatHead', () => {
     // the agent can no longer act on.
     const merged = mergeChatHead(cache, chatPage([chat('c1', 14), chat('c3', 12)], 'cursor-fresh'));
     expect(merged?.pages[0]?.items.map((c) => c.id)).toEqual(['c1', 'c3']);
+  });
+
+  it('does not let a read taken before a push undo it (FR-MOD-02.2.2)', () => {
+    // The race an ordering key that *moves* creates, and one this suite would
+    // not have needed while the key was `created_at`. A second conversation
+    // starting triggers a head re-read; a message lands on `c2` while that read
+    // is in flight, so the push moves `c2` to the top and the read then comes
+    // back describing the workspace as it was a moment earlier.
+    const pushed = chat('c2', 13, { last_event: message('e9', 'c2', 'are you there?') });
+    const afterPush = {
+      ...cache,
+      pages: [chatPage([pushed, chat('c1', 14)], 'cursor-1'), cache.pages[1]!],
+    };
+
+    // The stale read still has `c2` second, with no event on it at all.
+    const merged = mergeChatHead(afterPush, chatPage([chat('c1', 14), chat('c2', 13)], 'cursor-2'));
+
+    // Row by row the later of the two wins, so the climb survives the read.
+    // Overwriting wholesale would put `c2` back under `c1` — the row would move
+    // up and then visibly drop back, which is worse than never moving.
+    expect(merged?.pages[0]?.items.map((c) => c.id)).toEqual(['c2', 'c1']);
+    expect(merged?.pages[0]?.items[0]?.last_event?.text).toBe('are you there?');
+  });
+
+  it('keeps a row bumped above everything the stale read returned', () => {
+    // The same race for a row the fresh window never reached: `c3` lives on page
+    // 2, a push moved it to the top of page 1, and the read — taken first —
+    // returns a window that has no idea. It is newer than every row the server
+    // returned, which is what separates it from a row that has left the view.
+    const pushed = chat('c3', 12, { last_event: message('e9', 'c3', 'still waiting') });
+    const afterPush = {
+      ...cache,
+      pages: [chatPage([pushed, chat('c1', 14), chat('c2', 13)], 'cursor-1'), chatPage([])],
+    };
+
+    const merged = mergeChatHead(afterPush, chatPage([chat('c1', 14), chat('c2', 13)], 'cursor-2'));
+
+    expect(merged?.pages[0]?.items.map((c) => c.id)).toEqual(['c3', 'c1', 'c2']);
   });
 
   it('takes the fresh cursor when no page follows the first', () => {

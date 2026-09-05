@@ -79,12 +79,29 @@ function transcriptUrl(chatId: string, beforeEventId: string | undefined): strin
 type ChatListCache = InfiniteData<PagedResponse<ChatSummary>, string | undefined>;
 
 /**
- * The server's order, as one predicate: `created_at` descending, `id`
+ * When this conversation last moved — the server's ordering key, read off the
+ * row rather than fetched as a field of its own.
+ *
+ * `chats.last_event_at` is by construction the `created_at` of the chat's
+ * newest event, or the chat's own creation time while it has none
+ * (`20260905120000_chats_last_event_at`), which is exactly what these two
+ * fields already say. So the contract needed no new property for the client to
+ * order by the same key the server does — and, more usefully, a push updates
+ * `last_event` and therefore updates the sort key in the same stroke.
+ */
+export function chatActivityAt(chat: ChatSummary): string {
+  return chat.last_event?.created_at ?? chat.created_at;
+}
+
+/**
+ * The server's order, as one predicate: last activity descending, `id`
  * descending as the tie-break (`listChatsInTenant`'s `orderBy`, and the two
  * columns its cursor is built from).
  */
 function isOlderChat(a: ChatSummary, b: ChatSummary): boolean {
-  return a.created_at === b.created_at ? a.id < b.id : a.created_at < b.created_at;
+  const aAt = chatActivityAt(a);
+  const bAt = chatActivityAt(b);
+  return aAt === bAt ? a.id < b.id : aAt < bAt;
 }
 
 /**
@@ -98,13 +115,20 @@ function isOlderChat(a: ChatSummary, b: ChatSummary): boolean {
  * plain re-read that sort uses instead.
  *
  * This is the whole reason the contract pages by keyset cursor rather than by
- * offset. The cursor is `(created_at, id)` and a chat's `created_at` never
- * moves, so page 2 means "everything older than this particular chat" — a
- * stable statement. A conversation that starts right now is the newest row
- * there is: it can only enter at the top of page 1, and every page already
- * scrolled past still describes exactly the same rows it did before. With an
- * offset cursor `?offset=50` would now point one row later and the agent would
+ * offset. The cursor is `(last_event_at, id)`, so page 2 means "everything less
+ * recently active than this particular point" — a statement about a point in
+ * the order, which stays true even though the row it was taken from can move.
+ * A conversation that just spoke is the most recently active row there is: it
+ * can only enter at the top of page 1, and every page already scrolled through
+ * still describes rows at or below the boundary it was cut at. With an offset
+ * cursor `?offset=50` would now point one row later and the agent would
  * silently never see the conversation that slid across the boundary.
+ *
+ * What the moving key does cost is the opposite direction: a row further down
+ * that gets an event climbs *above* the cursors of the pages already loaded, so
+ * the chain no longer covers it. That is why every push re-reads the head — it
+ * is where the row went — and why `applyPush` moves the row itself rather than
+ * only repainting it in place.
  *
  * So a refresh only has to re-read page 1. Two details make the seam exact:
  *
@@ -134,14 +158,44 @@ export function mergeChatHead(
     return { pages: [fresh], pageParams: cache.pageParams.slice(0, 1) };
   }
 
+  const newest = fresh.items[0]!;
   const returned = new Set(fresh.items.map((chat) => chat.id));
-  const displaced = head.items.filter(
-    (chat) => !returned.has(chat.id) && isOlderChat(chat, oldest),
+  const cached = new Map(head.items.map((chat) => [chat.id, chat]));
+
+  // Row by row, the later of the two wins. A read that was already in flight
+  // when a push landed describes an *earlier* instant than the cache does, and
+  // once the ordering key moves, letting it overwrite the cache wholesale is not
+  // a cosmetic staleness — it puts the row back where it was, undoing the climb
+  // the requirement is about. Measured, because it is a real race rather than a
+  // theoretical one: a second visitor opening a conversation starts this read,
+  // and a message arriving in the six hundred milliseconds before it returns was
+  // silently rolled back (`inbox-ordering.spec.ts` is the case that caught it).
+  const freshened = fresh.items.map((chat) => {
+    const local = cached.get(chat.id);
+    return local && isOlderChat(chat, local) ? local : chat;
+  });
+
+  // Cached rows the fresh page did not return, and why each is kept:
+  //
+  //   - Older than the window's last row: page 2 starts after the boundary this
+  //     page already had, so nothing else covers them.
+  //   - Newer than the window's *first* row: nothing the server returned is that
+  //     recent, so this row was bumped after the read was taken — the same race
+  //     as above, for a row the stale window did not reach at all.
+  //
+  // What is left in between is the gap the fresh window did cover and did not
+  // return: rows that have genuinely left the view (archived, transferred away).
+  // Those are dropped, which is the whole point of re-reading the head.
+  const keptFromCache = head.items.filter(
+    (chat) => !returned.has(chat.id) && (isOlderChat(chat, oldest) || isOlderChat(newest, chat)),
   );
 
   const nextPageId = rest.length > 0 ? head.next_page_id : fresh.next_page_id;
   const merged: PagedResponse<ChatSummary> = {
-    items: [...fresh.items, ...displaced],
+    // Sorted rather than concatenated: with two sources of truth for a row's
+    // recency, neither list is ordered on its own any more. One predicate,
+    // `isOlderChat`, is what keeps this page in the server's order.
+    items: [...freshened, ...keptFromCache].sort((a, b) => (isOlderChat(a, b) ? 1 : -1)),
     ...(fresh.total !== undefined ? { total: fresh.total } : {}),
     ...(nextPageId !== undefined ? { next_page_id: nextPageId } : {}),
   };
@@ -298,9 +352,24 @@ export function useChatList(
 
 /**
  * Applies `patch` to one chat wherever it sits in the paged cache, across every
- * view. Returns whether it was found at all — a push about a chat on no loaded
- * page is the signal that it may have just entered a view, and the only case
- * where a request is worth spending.
+ * view, and moves it to where its new activity time puts it. Returns whether it
+ * was found at all — a push about a chat on no loaded page is the signal that it
+ * may have just entered a view, and the only case where a request is worth
+ * spending.
+ *
+ * Moving, not just repainting, is the requirement (FR-MOD-02.2.2 — "RTM'de
+ * yukarı taşınır"): a visitor who writes has to reach the top of the list the
+ * agent is working down, not merely change the preview text of a row buried
+ * forty conversations deep. And "the top" is not a guess about the server's
+ * order — a chat that just produced an event has, by the column's own
+ * invariant, the greatest `last_event_at` in the whole view, so it is the first
+ * row sorted newest-first and the last row sorted oldest-first. Either way it
+ * lands at an *end* of the loaded chain, which is the one position that needs
+ * no knowledge of the rows below the last loaded page.
+ *
+ * The sort comes off the query key (`chatsKey`) rather than being passed in:
+ * the sidebar's eight lists and the open list are all in this cache at once and
+ * do not share a sort, so one push has to land differently in different lists.
  */
 function patchChatInPages(
   queryClient: QueryClient,
@@ -308,21 +377,43 @@ function patchChatInPages(
   patch: (chat: ChatSummary) => ChatSummary,
 ): boolean {
   let touched = false;
-  queryClient.setQueriesData<ChatListCache>({ queryKey: ['chats'] }, (cache) => {
-    if (!cache) return cache;
-    let hit = false;
-    const pages = cache.pages.map((page) => {
-      if (!page.items.some((chat) => chat.id === chatId)) return page;
-      hit = true;
+  for (const [queryKey] of queryClient.getQueriesData<ChatListCache>({ queryKey: ['chats'] })) {
+    const oldestFirst = queryKey[2] === 'oldest';
+    queryClient.setQueryData<ChatListCache>(queryKey, (cache) => {
+      // `['chats']` is a prefix, not a namespace this owns: `AppShell`'s rail
+      // badges keep their counters under `['chats', 'count', …]` deliberately,
+      // so the one `invalidateQueries({ queryKey: ['chats'] })` that refreshes
+      // the lists refreshes the badges with them. Those hold an envelope, not a
+      // page chain. Reaching for `.pages` on one throws — and a throw here is
+      // not a lost row, it is a *dead push handler*: it escapes `applyPush`,
+      // so nothing after it in the same push runs either.
+      if (!cache || !Array.isArray(cache.pages) || cache.pages.length === 0) return cache;
+
+      // Lift the row out of whichever page holds it, then put it back at the
+      // end the sort calls for. Done in one pass so a row cannot be duplicated
+      // by being inserted before it is removed.
+      let lifted: ChatSummary | undefined;
+      const pages = cache.pages.map((page) => {
+        const hit = page.items.find((chat) => chat.id === chatId);
+        if (!hit) return page;
+        lifted = hit;
+        return { ...page, items: page.items.filter((chat) => chat.id !== chatId) };
+      });
+      if (!lifted) return cache;
+      touched = true;
+
+      const moved = patch(lifted);
+      const target = oldestFirst ? pages.length - 1 : 0;
       return {
-        ...page,
-        items: page.items.map((chat) => (chat.id === chatId ? patch(chat) : chat)),
+        ...cache,
+        pages: pages.map((page, index) =>
+          index === target
+            ? { ...page, items: oldestFirst ? [...page.items, moved] : [moved, ...page.items] }
+            : page,
+        ),
       };
     });
-    if (!hit) return cache;
-    touched = true;
-    return { ...cache, pages };
-  });
+  }
   return touched;
 }
 
@@ -708,6 +799,11 @@ export function applyPush(
       // searching every page rather than invalidating: a conversation the agent
       // scrolled down to is as live as one at the top, and refreshing it costs
       // nothing because the push already carries what changed.
+      //
+      // Writing `last_event` is also what re-orders the list: it *is* the sort
+      // key the client reads (`chatActivityAt`), so the row carries its new
+      // position with it and `patchChatInPages` only has to put it at the end
+      // the sort calls for.
       //
       // `unread_count` is the server's own rule (`countUnread`): a flag, not a
       // running count — 1 while the newest event is newer than this agent's

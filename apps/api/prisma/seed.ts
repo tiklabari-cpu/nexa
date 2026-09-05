@@ -1344,7 +1344,19 @@ async function createConversation(input: {
   const startedAt = at ?? new Date(Date.now() - messages.length * 120_000);
 
   await prisma.chat.create({
-    data: { id: chatId, licenseId, customerId, active, createdAt: startedAt },
+    data: {
+      id: chatId,
+      licenseId,
+      customerId,
+      active,
+      createdAt: startedAt,
+      // The inbox list's ordering key (FR-MOD-02.2.2), written here for the
+      // same reason `createdAt` is: left to its `now()` default, every seeded
+      // conversation would claim it had just spoken, and a fixture laid down to
+      // *be* an order would arrive with none. Its value is the invariant the
+      // column carries — the `created_at` of the last event written below.
+      lastEventAt: new Date(startedAt.getTime() + Math.max(messages.length - 1, 0) * 120_000),
+    },
   });
   await prisma.chatAccess.create({ data: { chatId, groupId } });
   await prisma.chatUser.create({
@@ -1662,10 +1674,17 @@ async function seedPagingWorkspace(passwordHash: string): Promise<void> {
   });
 
   // Laid down backwards from a fixed base, so the console's order
-  // (`created_at DESC, id DESC`) *is* the numbering: `Paging Visitor 01` is the
-  // first row and `Paging Visitor 60` the last one, ten rows into the second
-  // page. That is what lets a test name the row only paging can reach rather
-  // than counting rows and hoping.
+  // (`last_event_at DESC, id DESC`) *is* the numbering: `Paging Visitor 01` is
+  // the first row and `Paging Visitor 60` the last one, ten rows into the
+  // second page. That is what lets a test name the row only paging can reach
+  // rather than counting rows and hoping.
+  //
+  // The two orders agree here, deliberately: each conversation's events start
+  // at its own `createdAt` and step forward by the same amount, so last
+  // activity is monotonic in creation time and the numbering means the same
+  // thing under either. The one exception is the long conversation at index 0,
+  // whose two hundred and fifty events carry it further forward still — and it
+  // is the first row under both readings.
   const base = new Date(Date.now() - 6 * 3_600_000);
   const startedAt = (index: number): Date => new Date(base.getTime() - index * PAGING.stepMs);
 
@@ -1731,6 +1750,13 @@ async function seedPagingWorkspace(passwordHash: string): Promise<void> {
       // full sixty either way.
       active: false,
       createdAt: c.createdAt,
+      // The list orders on this (FR-MOD-02.2.2), so the numbering above is only
+      // the console's order if it is written: the `now()` default would give all
+      // sixty the same instant and leave `id DESC` — a random order — deciding
+      // which row is first. Its value is the invariant the column carries, the
+      // `created_at` of the last event written below, which for this fixture is
+      // monotonic in `createdAt` and so preserves the numbering exactly.
+      lastEventAt: new Date(c.createdAt.getTime() + (c.messages.length - 1) * PAGING.stepMs),
     })),
   });
   await prisma.chatAccess.createMany({

@@ -494,6 +494,27 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      /**
+       * The composer's emoji picker, open (FR-MOD-02.3.5).
+       *
+       * Not reachable from the inbox scan above, the same reason the internal
+       * note tab needed its own scan just above this one: the panel only
+       * exists in the DOM once the trigger has been activated.
+       */
+      test('the composer emoji picker has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto(`/app/inbox?chat=${activeChatId}`);
+        await scanPanel(agentPage, 'Inbox composer emoji picker', theme, testInfo, async () => {
+          const trigger = agentPage.getByRole('button', { name: 'Insert emoji' });
+          await expect(trigger).toBeVisible();
+          await trigger.click();
+          await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+          await expect(agentPage.getByRole('button', { name: '👍' })).toBeVisible();
+        });
+      });
+
       test('customers has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/customers');

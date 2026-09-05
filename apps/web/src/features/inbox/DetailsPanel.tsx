@@ -1,17 +1,37 @@
 import { useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { StatusDot } from '../../components/StatusDot.js';
-import { Banner, Modal, Panel, PanelSection } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
+import { Banner, Dropdown, Modal, Panel, PanelSection } from '../../components/ui/index.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useChatAction } from './useInbox.js';
+import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
 import type { ChatDetail } from './types.js';
-import type { AppChatData } from '@nexa/types';
+import { hasAnyScope, type AppChatData } from '@nexa/types';
 
 /** Roles that may seize a chat from whoever holds it — mirrors the route's own gate. */
 const SUPERVISOR_ROLES = new Set(['admin', 'viceowner', 'owner']);
+
+/** Just enough of `GET /agents` to name an assignee and say whether they can take work. */
+interface RosterAgent {
+  id: string;
+  name: string | null;
+  routing_status: 'accepting_chats' | 'not_accepting_chats' | 'offline';
+}
+
+const ROUTING_TONE: Record<RosterAgent['routing_status'], StatusTone> = {
+  accepting_chats: 'success',
+  not_accepting_chats: 'warning',
+  offline: 'neutral',
+};
+
+const ROUTING_KEY: Record<RosterAgent['routing_status'], string> = {
+  accepting_chats: 'team.status.acceptingChats',
+  not_accepting_chats: 'team.status.notAccepting',
+  offline: 'team.status.offline',
+};
 
 /**
  * Right-hand context panel: who this is, what the conversation is tagged with,
@@ -35,14 +55,51 @@ export function DetailsPanel({
   const api = useApiClient();
   const actions = useChatAction(chatId);
   const role = useAuth((s) => s.agent?.role ?? null);
+  const scopes = useAuth((s) => s.agent?.scopes) ?? [];
   const t = useTranslate();
   // Takeover only makes sense on a chat still open to reassign (a closed one
   // answers 409 `chat_inactive`) and to a supervisor-ranked caller — the same
   // pair the route itself checks (chats.ts: roleAtLeast(role, 'admin')).
   const canTakeover = chat.active && role !== null && SUPERVISOR_ROLES.has(role);
+  // Handing the chat to a named teammate is the consented move, so it asks for
+  // what `POST /chats/{id}/transfer` asks for — write access to the chat — and
+  // not for a rank. An ordinary agent holds `chats--access:rw` and may do it.
+  //
+  // `hasAnyScope` rather than `Array.includes`, for the reason 13.2-k found on
+  // the Traffic board: an owner's set is `chats--all:rw` and holds no literal
+  // narrower scope, so a membership test would disable the control for exactly
+  // the people who run the queue. One expander keeps the control's answer and
+  // the route's answer the same.
+  const canAssign = chat.active && hasAnyScope(scopes, ['chats--all:rw', 'chats--access:rw']);
   const tags = chat.thread?.tags ?? [];
   const visitedPages = chat.visitor?.visited_pages ?? [];
   const visitInfo = chat.visitor?.visit_info ?? null;
+  // The visit's length, running (`visitDuration.ts`) while the visit is open —
+  // the PRD's "süre/ziyaret canlı". A closed visit keeps the server's figure.
+  const liveDuration = useLiveDurationSeconds(
+    visitInfo?.duration_seconds ?? null,
+    visitInfo?.ongoing ?? false,
+  );
+
+  // The roster that turns an assignee id into a person (FR-MOD-02.4.1–.6): the
+  // panel used to show the bare word "Assigned", which names nobody. Same query
+  // key `['team', 'agents']` the takeover dialog and the Team page already use,
+  // so this opens no second cache — and `GET /agents` returns only unsuspended
+  // teammates, which is precisely the list you may hand a conversation to.
+  const roster = useQuery({
+    queryKey: ['team', 'agents'],
+    queryFn: () => api.get<{ items: RosterAgent[] }>('/agents'),
+    staleTime: 60_000,
+  });
+  const rosterItems = roster.data?.items ?? [];
+  const assigneeId = chat.thread?.assignee_id ?? null;
+  // A name when the roster can supply one. The fallback is the word this row
+  // showed before it could name anybody, so a roster the caller may not read
+  // (or one still in flight) degrades to the old panel rather than to a blank.
+  const assigneeName = assigneeId
+    ? (rosterItems.find((agent) => agent.id === assigneeId)?.name ??
+      t('inbox.details.assignee.assigned'))
+    : t('inbox.details.assignee.unassigned');
 
   // Suggest the curated library (FR-MOD-08.7.1) so a team applies agreed labels
   // rather than re-inventing a spelling per conversation. A free-typed tag still
@@ -96,23 +153,44 @@ export function DetailsPanel({
             <span className="font-mono text-2xs">{chat.id}</span>
           </Row>
           <Row label={t('inbox.details.row.assignee')}>
-            <div className="flex items-center gap-2">
-              <span className="text-xs">
-                {chat.thread?.assignee_id
-                  ? t('inbox.details.assignee.assigned')
-                  : t('inbox.details.assignee.unassigned')}
-              </span>
+            <div className="flex min-w-0 items-center gap-2">
+              {canAssign ? (
+                <AssigneePicker
+                  agents={rosterItems}
+                  assigneeId={assigneeId}
+                  assigneeName={assigneeName}
+                  unavailable={roster.isError}
+                  onPick={(agentId) => actions.assign.mutate(agentId)}
+                />
+              ) : (
+                // Seeing who holds the conversation is part of reading it, so a
+                // caller who may not reassign still gets the name — the section
+                // is never hidden, only the control is.
+                <span className="truncate text-xs">{assigneeName}</span>
+              )}
               {canTakeover && (
                 <button
                   type="button"
                   onClick={() => setTakeoverOpen(true)}
-                  className="rounded-sm border border-border px-1.5 py-0.5 text-2xs hover:bg-surface-2"
+                  className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs hover:bg-surface-2"
                 >
                   {t('inbox.details.takeover.cta')}
                 </button>
               )}
             </div>
           </Row>
+          {actions.assign.isError && (
+            // The refusal, in the agent's language and specific to what was
+            // refused. `transfer` answers with three distinct verdicts and they
+            // need three distinct sentences: the chat closed under you
+            // (`chat_inactive`), the teammate is offline (`group_unavailable`),
+            // or you may not write to this chat at all. The optimistic name is
+            // already back to what the server holds — `useChatAction.assign`
+            // rolls the cache back — so this says why, it does not undo.
+            <Banner tone="danger" className="mt-2">
+              {t(assignErrorKey(actions.assign.error))}
+            </Banner>
+          )}
           {chat.thread?.queue_position != null && (
             <Row label={t('inbox.details.row.queue')}>
               <span className="tabular text-xs text-warning">#{chat.thread.queue_position}</span>
@@ -258,9 +336,7 @@ export function DetailsPanel({
                 </span>
               </Row>
               <Row label={t('inbox.details.row.duration')}>
-                <span className="tabular text-xs">
-                  {formatDuration(visitInfo.duration_seconds)}
-                </span>
+                <span className="tabular text-xs">{formatDuration(liveDuration)}</span>
               </Row>
               <Row label={t('inbox.details.row.ip')}>
                 <span className="font-mono text-2xs">{visitInfo.ip ?? '—'}</span>
@@ -299,7 +375,12 @@ export function DetailsPanel({
       {takeoverOpen && (
         <TakeoverModal
           chatId={chatId}
-          assigneeId={chat.thread?.assignee_id ?? null}
+          assigneeName={
+            assigneeId
+              ? (rosterItems.find((agent) => agent.id === assigneeId)?.name ??
+                t('inbox.details.takeover.fallbackName'))
+              : null
+          }
           onClose={() => setTakeoverOpen(false)}
         />
       )}
@@ -308,36 +389,140 @@ export function DetailsPanel({
 }
 
 /**
+ * The assignee, and the menu that changes it (FR-MOD-02.4.1–.6).
+ *
+ * The name is the trigger, so the row reads as a value first and a control
+ * second: an agent scanning the panel wants to know *who*, and only sometimes
+ * wants to change it. Picking saves immediately — the PRD asks this row to save
+ * on selection, and a Save button next to a one-field menu is a step that only
+ * ever gets in the way.
+ *
+ * Offline teammates stay in the list rather than being filtered out or greyed:
+ * `routing_status` here is up to a minute old, so hiding them would sometimes
+ * hide somebody who is in fact back, and the server has the current answer
+ * anyway (it refuses with `group_unavailable`, which the panel words). The dot
+ * says who is likely to answer; the refusal is authoritative.
+ */
+function AssigneePicker({
+  agents,
+  assigneeId,
+  assigneeName,
+  unavailable,
+  onPick,
+}: {
+  agents: RosterAgent[];
+  assigneeId: string | null;
+  assigneeName: string;
+  /** The roster call failed — offer no list rather than an empty one. */
+  unavailable: boolean;
+  onPick: (agentId: string) => void;
+}): ReactElement {
+  const t = useTranslate();
+
+  return (
+    <Dropdown
+      label={t('inbox.details.assign.label')}
+      className="min-w-0"
+      trigger={
+        <span className="flex items-center gap-1 truncate rounded-sm border border-border px-1.5 py-0.5 text-xs hover:bg-surface-2">
+          <span className="truncate">{assigneeName}</span>
+          <span aria-hidden="true" className="text-content-tertiary">
+            ▾
+          </span>
+        </span>
+      }
+      panelClassName="right-0 mt-1 max-h-64 w-56 overflow-y-auto p-1"
+    >
+      {({ close }) => {
+        if (unavailable) {
+          return (
+            <p className="px-2 py-1.5 text-2xs text-content-tertiary">
+              {t('inbox.details.assign.unavailable')}
+            </p>
+          );
+        }
+        if (agents.length === 0) {
+          return (
+            <p className="px-2 py-1.5 text-2xs text-content-tertiary">
+              {t('inbox.details.assign.empty')}
+            </p>
+          );
+        }
+        return (
+          <ul>
+            {agents.map((agent) => {
+              const current = agent.id === assigneeId;
+              return (
+                <li key={agent.id}>
+                  <button
+                    type="button"
+                    // The one already holding it is not a choice — picking them
+                    // would write a hand-off event that moved nothing.
+                    disabled={current}
+                    aria-current={current ? 'true' : undefined}
+                    onClick={() => {
+                      close(true);
+                      onPick(agent.id);
+                    }}
+                    className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs hover:bg-surface-2 disabled:cursor-default disabled:opacity-60"
+                  >
+                    <span aria-hidden="true" className="w-3 shrink-0 text-content-tertiary">
+                      {current ? '✓' : ''}
+                    </span>
+                    <span className="min-w-0 flex-1 truncate">
+                      {agent.name ?? t('inbox.details.takeover.fallbackName')}
+                    </span>
+                    {/* Glyph *and* word, never colour alone (NFR-A11Y2): who is
+                        likely to pick this up is the whole reason to read the list. */}
+                    <StatusDot
+                      tone={ROUTING_TONE[agent.routing_status]}
+                      label={t(ROUTING_KEY[agent.routing_status])}
+                    />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        );
+      }}
+    </Dropdown>
+  );
+}
+
+/**
+ * The sentence for a refused hand-off.
+ *
+ * Through the ADR-06 catalogue rather than `error.message`, so a Turkish
+ * console answers in Turkish (NFR-I18N2) — with one override. `transfer` raises
+ * `group_unavailable` for an offline *teammate* as well as an unavailable team,
+ * and the shared sentence for that type says "team", which would name the wrong
+ * subject in the one place this panel can hit it.
+ */
+function assignErrorKey(error: unknown): string {
+  if (error instanceof ApiClientError && error.type === 'group_unavailable') {
+    return 'inbox.details.assign.offline';
+  }
+  return errorMessageKey(error);
+}
+
+/**
  * The confirmation dialog for a supervisor takeover. Split out of
- * `DetailsPanel` so its own `useChatAction` mutation and agent-roster lookup
- * only run while the dialog is actually open.
+ * `DetailsPanel` so its own `useChatAction` mutation only runs while the
+ * dialog is actually open; the assignee's name comes from the panel, which
+ * needs the roster for its own picker and so has already asked for it.
  */
 function TakeoverModal({
   chatId,
-  assigneeId,
+  assigneeName,
   onClose,
 }: {
   chatId: string;
-  assigneeId: string | null;
+  /** The current holder's name, or null when the chat is unassigned. */
+  assigneeName: string | null;
   onClose: () => void;
 }): ReactElement {
-  const api = useApiClient();
   const actions = useChatAction(chatId);
   const t = useTranslate();
-
-  // Names the current holder in the confirmation copy — the same roster
-  // `GET /agents` already serves every other assignee picker from (agents.ts:
-  // "assignee pickers, routing UIs"). Skipped entirely on an unassigned chat.
-  const agents = useQuery({
-    queryKey: ['team', 'agents'],
-    queryFn: () => api.get<{ items: Array<{ id: string; name: string | null }> }>('/agents'),
-    enabled: assigneeId !== null,
-    staleTime: 60_000,
-  });
-  const assigneeName = assigneeId
-    ? (agents.data?.items.find((a) => a.id === assigneeId)?.name ??
-      t('inbox.details.takeover.fallbackName'))
-    : null;
 
   return (
     <Modal onClose={onClose} title={t('inbox.details.takeover.title')}>
@@ -400,17 +585,4 @@ function prettyPath(url: string): string {
     // Already a bare path, or something we cannot parse — show it verbatim.
     return url;
   }
-}
-
-/** "45s" · "3m 20s" · "1h 4m". A dash when the length is unknown. */
-function formatDuration(seconds: number | null): string {
-  if (seconds === null || seconds < 0) return '—';
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    const rest = seconds % 60;
-    return rest ? `${minutes}m ${rest}s` : `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
 }

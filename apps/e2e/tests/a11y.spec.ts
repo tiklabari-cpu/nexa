@@ -515,6 +515,29 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      /**
+       * The Details panel's assignee menu, open (FR-MOD-02.4.1–.6).
+       *
+       * Same reason as the two above: the list of teammates is only in the DOM
+       * after the trigger is activated, so the inbox scan never sees it. It is
+       * worth its own scan because it is the one menu in this panel that
+       * carries a status colour per row.
+       */
+      test('the assignee menu has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto(`/app/inbox?chat=${activeChatId}`);
+        await scanPanel(agentPage, 'Inbox assignee menu', theme, testInfo, async () => {
+          const details = agentPage.getByRole('complementary', { name: 'Conversation details' });
+          const trigger = details.getByRole('button', { name: 'Change assignee' });
+          await expect(trigger).toBeVisible();
+          await trigger.click();
+          await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+          await expect(details.getByRole('button', { name: /Priya Nair/ })).toBeVisible();
+        });
+      });
+
       test('customers has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/customers');

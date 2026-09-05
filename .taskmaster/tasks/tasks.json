@@ -8857,9 +8857,10 @@
             "description": "PRD KK: \"Bolumler katlanir; tag/assignee aninda kaydeder; sure/ziyaret canli\". Katlanma ve tag aninda kaydetme var; **assignee aninda kaydeder** karsilanmiyor — panel yalniz \"Assigned/Unassigned\" metni gosteriyor, ajan adi bile yok.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `apps/web/src/features/inbox/DetailsPanel.tsx:98-115` — `Row label={t(\"inbox.details.row.assignee\")}`\n  icinde yalniz `assignee_id ? \"assigned\" : \"unassigned\"` metni + (rol izin veriyorsa) bir **Takeover**\n  butonu. Atama/transfer kontrolu YOK.\n- Ajan ADI yalniz `TakeoverModal` icinde cozuluyor (:317-341, `GET /agents` roster`indan) — panelde degil.\n- Yani sunucu yolu ve roster HAZIR; eksik olan panelin kendisi (denetimin D2 deseni: \"API`de var,\n  konsolda yok\").\n\n## Yapilacak\n\n1. Assignee satirinda **ad** gosterilir (roster `GET /agents`, `TakeoverModal`in kullandigi ayni\n   `[\"team\",\"agents\"]` cache anahtari — ikinci bir cache ACMA, ikisi ayrisir).\n2. Atama/transfer kontrolu: acilir liste + secim aninda PATCH (PRD \"aninda kaydeder\"). Hangi ucun\n   kullanilacagi once dogrulanir — transfer/atama ucu `chats` rotalarinda zaten var (`useChatAction`\n   ailesine bak); YENI UC ACMADAN once mevcut olani kullan.\n3. Yetki: atayabilen ile yalniz gorebilen ayrilir. Kapi rol/scope`tan gelir, `canTakeover` deseninin\n   ayni yeri. Gorebilen ama atayamayan kullaniciya salt-okuma metin gosterilir (bolum GIZLENMEZ —\n   assignee bilgisi okuma yetkisinin parcasi).\n4. Iyimser guncelleme + hata geri alma; catisma (baska ajan ayni anda aldi) sunucunun 409 cumlesiyle.\n5. Arsivlenmis sohbette kontrol pasif (`chat.active === false`) — mevcut `canTakeover` gerekcesi\n   (DetailsPanel.tsx:39 yorumu) aynen gecerli.\n\n## Bilinen tuzaklar\n\n- `DetailsPanel.tsx` en son tm 133.3 (i18n) ile degisti; her yeni metin `en`+`tr` katalogda olmali,\n  i18n sentinel testi eksik anahtari yakalar.\n- Roster sorgusu `enabled: assigneeId !== null` ile kisitliydi (modal icin); panelde HER ZAMAN gerekir —\n  `staleTime` koru, her acilista yeniden cekme.\n- PRD ayni satirda \"sure/ziyaret canli\" da diyor; ziyaret bilgisi tm 27.x`te teslim edildi\n  (`#### K02.4.1-.6` ilk maddesi). Sure sayaci canli degilse onu da bu turda kapat, degilse\n  `◐` birakip eksigi maddeye yaz — `✅` UYDURMA.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `DetailsPanel.test.tsx`: atanmis sohbette ajan ADI render ediliyor; acilir listeden baska bir\n   ajan secilince PATCH gidiyor ve panel yeni adi gosteriyor. Baslik `(FR-MOD-02.4.1–.6)` etiketi tasir\n   (en-dash aralik katalogda boyle yaziliyor — `req-coverage` bu alias`i taniyor).\n2. Yetkisiz kullanicida kontrol YOK ama assignee metni VAR.\n3. 409 catismasi sunucunun cumlesiyle gosteriliyor ve panel eski degere donuyor.\n4. Arsivlenmis sohbette kontrol pasif.\n5. e2e: ajan A sohbeti ajan B`ye atar -> B kendi \"My chats\" gorunumunde gorur.\nDoD: `typecheck` · `lint` · `format:check` · `build` · web (`--maxWorkers=4`) · api integration\n(atama ucu regresyonu) · ilgili e2e — hepsi exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "189"
+            "parentId": "189",
+            "updatedAt": "2026-09-05T06:24:12.633Z"
           },
           {
             "id": 7,
@@ -8882,7 +8883,7 @@
             "parentId": "189"
           }
         ],
-        "updatedAt": "2026-09-05T06:16:35.822Z"
+        "updatedAt": "2026-09-05T06:24:12.633Z"
       },
       {
         "id": "190",
@@ -9399,7 +9400,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T06:16:35.823Z",
+      "lastModified": "2026-09-05T06:24:12.634Z",
       "taskCount": 204,
       "completedCount": 188,
       "tags": [

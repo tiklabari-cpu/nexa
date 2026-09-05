@@ -758,7 +758,7 @@ describe('agent chat api', () => {
       expect(response.json().error.type).toBe('group_not_found');
     });
 
-    it('refuses to transfer to an offline agent', async () => {
+    it('refuses to transfer to an offline agent (FR-MOD-02.4.1–.6)', async () => {
       const chat = await startChat(acmeAdminToken);
       await owner.agentMembership.update({
         where: {
@@ -773,6 +773,10 @@ describe('agent chat api', () => {
         auth(acmeAdminToken),
       );
       expect(response.statusCode).toBe(409);
+      // The Details panel's assignee menu words this refusal specifically
+      // ("that teammate is offline") by branching on the ADR-06 type, so the
+      // type is part of the contract here and not merely the status.
+      expect(response.json().error.type).toBe('group_unavailable');
     });
 
     it('refuses both or neither target', async () => {
@@ -1984,7 +1988,31 @@ describe('agent chat api', () => {
         referrer: 'https://google.com/search?q=brakes',
         duration_seconds: 300,
         ip: '203.0.113.7',
+        // The visit ended, so its length is final: the console must not tick it.
+        ongoing: false,
       });
+    });
+
+    it('marks a visit still in progress as ongoing (FR-MOD-02.4.1–.6)', async () => {
+      // "Süre/ziyaret canlı" needs the console to know which figure it was
+      // handed. `duration_seconds` alone cannot say: on an open visit it is a
+      // running total measured at response time, on a closed one it is the
+      // whole length, and the two are indistinguishable once serialised.
+      const chat = await startChat(acmeAdminToken, { customerId: fx.a.customerId });
+      await owner.visit.create({
+        data: {
+          customerId: fx.a.customerId,
+          licenseId: fx.a.licenseId,
+          pages: [{ url: 'https://shop.example/bikes' }],
+          startedAt: new Date(Date.now() - 90_000),
+          endedAt: null,
+        },
+      });
+
+      const response = await server.get(`/chats/${chat.id}`, auth(acmeAdminToken));
+      expect(response.statusCode).toBe(200);
+      expect(response.json().visitor.visit_info.ongoing).toBe(true);
+      expect(response.json().visitor.visit_info.duration_seconds).toBeGreaterThanOrEqual(90);
     });
 
     it('reports no visitor when nothing was recorded, without failing', async () => {

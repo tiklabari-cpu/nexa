@@ -23,8 +23,9 @@ import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 import { usePagedQuery, type PagedQueryResult, type PagedResponse } from '../../lib/paged-query.js';
 import { useTypingStore } from './typing.js';
 import { useConflictStore, type ConflictAgent } from './conflict.js';
+import { useFailedSendStore } from './failedSends.js';
 import { DEFAULT_CHAT_SORT, type ChatSort } from './chat-sort.js';
-import type { ChatDetail, ChatEvent, ChatSummary, InboxView } from './types.js';
+import type { ChatDetail, ChatEvent, ChatSummary, InboxView, SendInput } from './types.js';
 
 const RTM_URL = import.meta.env['VITE_RTM_URL'] ?? 'ws://localhost:4001/v1/agent/rtm/ws';
 
@@ -575,7 +576,16 @@ export function useMarkSeen(chatId: string | null, seenUpTo: string | null): voi
   useEffect(() => () => flushRef.current(), []);
 }
 
-type SendInput = { text: string; recipients: 'all' | 'agents'; attachmentUrl?: string };
+/**
+ * A fresh identity for one outgoing message.
+ *
+ * Minted where the message is *composed*, not where it is posted: every attempt
+ * at the same message has to carry the same key, or the retry the agent presses
+ * would be a second message rather than a replay of the first.
+ */
+export function newIdempotencyKey(): string {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
 
 export function useSendMessage(chatId: string | null) {
   const api = useApiClient();
@@ -622,13 +632,27 @@ export function useSendMessage(chatId: string | null) {
         text: input.text,
         recipients: input.recipients,
         ...(input.attachmentUrl ? { attachment_url: input.attachmentUrl } : {}),
-        // Survives a retry after a timeout without sending twice.
-        idempotency_key: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+        // Survives a retry after a timeout without sending twice — the key
+        // travels with the input, so the retry replays this message instead of
+        // posting a second one (`types.ts` · `SendInput`).
+        idempotency_key: input.idempotencyKey,
       }),
-    // No open chat means no transcript to touch; skip straight to the request.
-    onMutate: (input) =>
-      chatId ? optimistic.onMutate(input) : Promise.resolve({ previous: undefined }),
-    onError: optimistic.onError,
+    onMutate: (input) => {
+      // One representation per message at a time. While this attempt is in
+      // flight the transcript shows the optimistic "Sending…" bubble, so the
+      // failed row for the same key steps aside; `onError` puts it back.
+      if (chatId) useFailedSendStore.getState().clear(chatId, input.idempotencyKey);
+      // No open chat means no transcript to touch; skip straight to the request.
+      return chatId ? optimistic.onMutate(input) : Promise.resolve({ previous: undefined });
+    },
+    onError: (error, input, context) => {
+      optimistic.onError(error, input, context);
+      // The rollback above takes the guess back out of the transcript, which is
+      // right — the server does not have this message. What it must not do is
+      // lose it: the attempt reappears as a failed row that carries the text,
+      // the reason, and the retry (FR-MOD-02.3.3 · FR-MOD-02.3.6).
+      if (chatId) useFailedSendStore.getState().record(chatId, input, error);
+    },
     onSettled: optimistic.onSettled,
   });
 }

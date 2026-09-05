@@ -118,7 +118,6 @@ export const inbox: Messages = {
   'inbox.composer.uploading': 'Uploading…',
   'inbox.composer.hint': 'Enter to send · Shift+Enter for a new line',
   'inbox.composer.attachError': 'Could not attach that file.',
-  'inbox.composer.sendError': 'Not sent — try again.',
   'inbox.composer.send.pending': 'Sending…',
   'inbox.composer.send.cta': 'Send',
 
@@ -127,6 +126,8 @@ export const inbox: Messages = {
   'inbox.transcript.noteLabel': 'Internal note — not sent to the customer',
   'inbox.transcript.loadingOlder': 'Loading earlier messages…',
   'inbox.transcript.sending': 'Sending…',
+  'inbox.transcript.notSent': 'Not sent',
+  'inbox.transcript.retry': 'Retry',
   'inbox.transcript.aiSuffix': 'AI',
 
   // "Visitor is typing…"

@@ -445,7 +445,10 @@ describe('agent chat api', () => {
   // =========================================================================
 
   describe('events', () => {
-    it('replays an idempotent send instead of duplicating it', async () => {
+    // The server half of the composer's Retry (FR-MOD-02.3.6): the console
+    // re-posts a failed send under the same key, so this replay is what stands
+    // between "try again" and two copies in the customer's transcript.
+    it('replays an idempotent send instead of duplicating it (FR-MOD-02.3.6)', async () => {
       const chat = await startChat(acmeAdminToken);
       const body = { type: 'message', text: 'Only once', idempotency_key: 'req-1' };
 

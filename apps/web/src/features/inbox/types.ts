@@ -14,6 +14,22 @@ export interface ChatEvent {
   created_at: string;
 }
 
+/**
+ * One outgoing message, as the composer hands it to the send mutation.
+ *
+ * The idempotency key is part of the input rather than something the mutation
+ * mints for itself, because a retry has to replay *this* message: the server
+ * answers a repeat of a key it has already seen with the event it created the
+ * first time, so the same key is what stands between "try again" and two
+ * messages in the customer's transcript (`FR-MOD-02.3.6`).
+ */
+export interface SendInput {
+  text: string;
+  recipients: 'all' | 'agents';
+  attachmentUrl?: string;
+  idempotencyKey: string;
+}
+
 export interface ChatSummary {
   id: string;
   customer_id: string;

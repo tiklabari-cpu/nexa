@@ -8,7 +8,13 @@ import {
   type ReactElement,
 } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { eventsKey, flattenTranscript, useSendMessage, type TranscriptCache } from './useInbox.js';
+import {
+  eventsKey,
+  flattenTranscript,
+  newIdempotencyKey,
+  useSendMessage,
+  type TranscriptCache,
+} from './useInbox.js';
 import { useTypingStore } from './typing.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -112,12 +118,37 @@ export function Composer({
     requestAnimationFrame(() => inputRef.current?.focus());
   }, [copilotDraft, chatId]);
 
+  /**
+   * Send, and clear.
+   *
+   * **When the field clears, and where a refused message goes.** It clears on
+   * submit, without waiting for the server — the fluid path, and the one the
+   * agent's next keystroke assumes. What that used to cost was the message
+   * itself: a refusal rolled the transcript back to before the optimistic
+   * bubble, and the text here was already gone, so the words disappeared from
+   * both places with no notice and nothing to press.
+   *
+   * They are *not* written back into this field. A refused send leaves the
+   * composer and becomes a row in the transcript (`failedSends.ts`) carrying
+   * the text, the reason, and — when another attempt can plausibly succeed —
+   * Retry. One message, one place: putting it back here while that row is on
+   * screen would show it twice and make "which copy actually goes" a guess.
+   *
+   * That is also the answer to the conflict a restore would create. By the time
+   * a send fails the agent is often mid-way through the next message, and text
+   * they are still typing must never be overwritten by something the server
+   * refused a moment ago — which is guaranteed here structurally rather than by
+   * a check, because nothing on the failure path writes to `text` at all.
+   */
   const submit = (): void => {
     if (!canSend) return;
     stopTyping();
     send.mutate({
       text: text.trim(),
       recipients: mode,
+      // Minted per message, so every attempt at *this* message — including the
+      // one behind the Retry control — replays it instead of duplicating it.
+      idempotencyKey: newIdempotencyKey(),
       ...(attachment ? { attachmentUrl: attachment.fileUrl } : {}),
     });
     setText('');
@@ -468,11 +499,6 @@ export function Composer({
           {uploadError && (
             <span role="alert" className="text-2xs text-danger">
               {uploadError}
-            </span>
-          )}
-          {send.isError && (
-            <span role="alert" className="text-2xs text-danger">
-              {t('inbox.composer.sendError')}
             </span>
           )}
           <button

@@ -8835,9 +8835,10 @@
             "description": "Iki PRD kaleminin KK`si ayni kelimeyi kullaniyor: \"hata retry\". Bugun basarisiz gonderimde ajanin yazdigi metin GERI GELMIYOR ve tekrar-gonder aksiyonu YOK — yazilan mesaj sessizce kayboluyor.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `apps/web/src/features/inbox/Composer.tsx:123` — `submit()` metni gonderim SONUCUNU BEKLEMEDEN\n  `setText(\"\")` ile temizliyor.\n- `apps/web/src/features/inbox/useInbox.ts` — `optimistic.onError` yalniz transcript cache`ini geri\n  aliyor (denetim :539); composer metni geri gelmiyor.\n- `Composer.tsx:478-486` — gonder butonu yalniz `submit` cagiriyor; basarisiz bir gonderimi tekrar\n  denemeye yarayan hicbir kontrol yok.\n- PRD: `FR-MOD-02.3.3` KK \"Bos mesaj engellenir; optimistic gonderim; **hata retry**\";\n  `FR-MOD-02.3.6` KK \"Bosken pasif; **hata retry**\". Iki satir da bu alt-gorevle kapanir.\n\n## Yapilacak\n\n1. **Karar:** metin ne zaman temizlenir? Iki dogru cevap var: (i) iyimser temizle + hatada geri koy,\n   (ii) sonucu bekle. (i) daha akici ama geri koyma sirasinda kullanici yeni bir sey yazmis olabilir —\n   o durumda YAZDIGININ USTUNE YAZMA (bu, hatanin kendisinden daha kotu bir kayiptir). Karari ve\n   catisma cozumunu kodun yanina yaz.\n2. Basarisiz olay transcript`te \"gonderilemedi\" durumuyla KALIR ve yaninda **Retry** kontrolu bulunur;\n   retry ayni idempotent gonderimi yeniden dener (`send_event` deseni — mevcut idempotency anahtarini\n   kullan, yenisini icat etme; ayni mesajin iki kez gitmesi bu isin en kotu sonucudur).\n3. Kalici hata (403/422) ile gecici hata (5xx/ag) ayrilir: gecicide Retry sunulur, kalicida sunucunun\n   cumlesi gosterilir ve Retry gizlenir (sonucu kesin 403 olan bir buton tuzaktir — tm 181.3 emsali).\n4. Ek (`attachment`) tasiyan gonderimde retry ekin kendisini de tasimali ya da acikca reddetmeli.\n\n## Bilinen tuzaklar\n\n- `apps/web` vitest CPU yuku altinda `userEvent` testlerinde 5000 ms timeout verir; `--maxWorkers=4`.\n- Optimistic rollback`in TanStack Query tarafi (`onError`) ile bilesen state`i AYRI iki dunya;\n  ikisini tek kaynaga bagla yoksa \"metin geri geldi ama transcript`te hala hayalet balon var\" olur.\n- Ayni turda 189.5 (rich text/emoji) ACILMAZ — ikisi de `Composer.tsx` dokunuyor.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `Composer.test.tsx`: msw 500 dondurur -> metin composer`da GERI GELIR (ya da hic silinmez, secilen\n   karara gore) ve transcript`te basarisiz balon + Retry kontrolu gorunur. Baslik\n   `(FR-MOD-02.3.3 · FR-MOD-02.3.6)` etiketi tasir (CONVENTIONS §7, coktan-coga ` · ` ile).\n2. Retry`ye basilinca AYNI idempotency anahtariyla tek bir istek gider (msw cagri sayaci = 2 istek,\n   sunucu tarafinda tek olay — integration testinde iki kez ayni anahtarla POST -> tek event).\n3. Kalici hata (403) -> Retry YOK, sunucunun cumlesi gorunur.\n4. Kullanici retry beklerken yeni metin yazdiysa eski metin ustune YAZILMAZ.\n5. e2e: ag hatasi enjekte edilir (route abort) -> ajan Retry ile mesaji gonderir, musteri gorur.\nDoD: `typecheck` · `lint` · `format:check` · `build` · web (`--maxWorkers=4`) · api integration\n(idempotency) · ilgili e2e — hepsi exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "189"
+            "parentId": "189",
+            "updatedAt": "2026-09-05T04:59:29.028Z"
           },
           {
             "id": 5,
@@ -8880,7 +8881,7 @@
             "parentId": "189"
           }
         ],
-        "updatedAt": "2026-09-05T04:57:00.901Z"
+        "updatedAt": "2026-09-05T04:59:29.028Z"
       },
       {
         "id": "190",
@@ -9397,7 +9398,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T04:57:00.904Z",
+      "lastModified": "2026-09-05T04:59:29.029Z",
       "taskCount": 204,
       "completedCount": 188,
       "tags": [

@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, type ReactElement } from 'react';
 import type { ChatEvent } from './types.js';
+import type { FailedSend } from './failedSends.js';
 import { AttachmentView } from './Attachment.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
 
@@ -35,6 +36,8 @@ export function Transcript({
   hasOlder = false,
   isLoadingOlder = false,
   onLoadOlder,
+  failedSends = [],
+  onRetry,
 }: {
   /** Which conversation this is — the one thing that means "start over". */
   chatId: string;
@@ -45,6 +48,13 @@ export function Transcript({
   hasOlder?: boolean;
   isLoadingOlder?: boolean;
   onLoadOlder?: () => void;
+  /**
+   * Messages the server refused, still waiting on the agent (`failedSends.ts`).
+   * They sit after the last event because that is when they were written — and
+   * because the decision they ask for is the newest thing on screen.
+   */
+  failedSends?: readonly FailedSend[];
+  onRetry?: (entry: FailedSend) => void;
 }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
@@ -155,6 +165,72 @@ export function Transcript({
           showDayDivider={needsDayDivider(events[index - 1], event)}
         />
       ))}
+      {failedSends.map((entry) => (
+        <FailedBubble key={entry.input.idempotencyKey} entry={entry} onRetry={onRetry} />
+      ))}
+    </div>
+  );
+}
+
+/**
+ * A message the server refused (FR-MOD-02.3.3 · FR-MOD-02.3.6).
+ *
+ * It looks like the agent's own bubble because that is what it is — the same
+ * words, in the same place they would have landed — outlined in the danger
+ * colour and labelled, so it can never be mistaken for a message that went.
+ *
+ * Retry appears only when another attempt can plausibly succeed. A button whose
+ * outcome is a certain second 403 is a trap: it invites the agent to press it
+ * until they give up, when what they actually need is the reason. So a
+ * permanent refusal shows the reason and no button, and a transient one shows
+ * both.
+ */
+function FailedBubble({
+  entry,
+  onRetry,
+}: {
+  entry: FailedSend;
+  onRetry?: (entry: FailedSend) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const isNote = entry.input.recipients === 'agents';
+
+  return (
+    <div className="flex max-w-[72%] flex-col items-end gap-1 self-end">
+      {isNote && (
+        <span className="text-2xs font-medium text-note">{t('inbox.transcript.noteLabel')}</span>
+      )}
+      <div
+        data-testid="failed-send"
+        className={`rounded-lg border border-danger px-3 py-2 text-sm ${
+          isNote ? 'bg-[var(--bubble-note-bg)] text-content' : 'bg-brand-500 text-white'
+        }`}
+      >
+        {entry.input.text && (
+          <span className="whitespace-pre-wrap break-words">{entry.input.text}</span>
+        )}
+        {entry.input.attachmentUrl && (
+          <div className={entry.input.text ? 'mt-2' : ''}>
+            {/* The file is already uploaded — a retry re-sends the same URL, so
+              the attachment travels with the message rather than being lost
+              with the attempt. */}
+            <AttachmentView url={entry.input.attachmentUrl} />
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2 text-2xs">
+        <span className="font-medium text-danger">{t('inbox.transcript.notSent')}</span>
+        <span className="text-content-tertiary">{t(entry.errorKey)}</span>
+        {entry.retryable && onRetry && (
+          <button
+            type="button"
+            onClick={() => onRetry(entry)}
+            className="rounded-sm border border-border px-2 py-0.5 font-medium text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+          >
+            {t('inbox.transcript.retry')}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

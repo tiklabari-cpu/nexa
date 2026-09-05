@@ -10,6 +10,7 @@
  */
 import type { WidgetFormField, WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
+import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import {
   createTranslator,
   isRtlLocale,
@@ -342,6 +343,36 @@ export function mount(doc: Document = document, win: Window = window): void {
       : t('typing.generic');
   }
 
+  // --- Composer emoji picker (FR-MOD-11.4) ----------------------------------
+
+  /** Closed by default and on every outside click / Escape — same shape as the menu below. */
+  let emojiOpen = false;
+
+  function renderEmojiPicker(): void {
+    ui.emojiPanel.hidden = !emojiOpen;
+    ui.emojiButton.setAttribute('aria-expanded', String(emojiOpen));
+  }
+
+  /**
+   * Inserted at the caret, no trailing space, same as the canned-reply
+   * shortcut's non-space cousin (`insertEmojiAtCaret`, not `applyShortcut`).
+   *
+   * The explicit length guard is the reason this is not a one-line
+   * `ui.input.value = …`: `maxLength` only stops a *typed or pasted*
+   * keystroke — it does not stop this function's own `.value =` assignment —
+   * so without it a picker click past the limit would silently grow the
+   * composer beyond what the server's `z.string().max(10_000)` (customer.ts)
+   * accepts, and the visitor would only find out on send.
+   */
+  function insertEmoji(glyph: string): void {
+    const caret = ui.input.selectionStart;
+    const result = insertEmojiAtCaret(ui.input.value, caret, glyph);
+    if (result.text.length > ui.input.maxLength) return;
+    ui.input.value = result.text;
+    ui.input.focus();
+    ui.input.setSelectionRange(result.caret, result.caret);
+  }
+
   // --- Rating (FR-MOD-07.8-b / 08.7.7 / 11.4) -------------------------------
 
   /** The header's "⋮" dropdown, closed by default and on every outside click. */
@@ -472,6 +503,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.input.disabled = state.closed;
     ui.send.disabled = state.closed || state.sending;
     ui.attach.disabled = state.closed || state.uploading;
+    ui.emojiButton.disabled = state.closed;
   }
 
   /**
@@ -1141,6 +1173,19 @@ export function mount(doc: Document = document, win: Window = window): void {
   });
   ui.attach.addEventListener('click', () => ui.file.click());
   ui.file.addEventListener('change', () => void onPickFile());
+  ui.emojiButton.addEventListener('click', () => {
+    emojiOpen = !emojiOpen;
+    renderEmojiPicker();
+  });
+  // Delegated: the panel holds 24 static glyph buttons built once in `buildUi`.
+  ui.emojiPanel.addEventListener('click', (event) => {
+    const glyph = (event.target as HTMLElement).closest<HTMLButtonElement>('.nx-emoji-item')
+      ?.dataset.emoji;
+    if (!glyph) return;
+    insertEmoji(glyph);
+    emojiOpen = false;
+    renderEmojiPicker();
+  });
   ui.input.addEventListener('keydown', (event) => {
     // Enter sends, Shift+Enter breaks the line — the convention every chat uses.
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -1210,6 +1255,10 @@ export function mount(doc: Document = document, win: Window = window): void {
       menuOpen = false;
       renderMenu();
     }
+    if (emojiOpen && !ui.emojiWrap.contains(event.target as Node)) {
+      emojiOpen = false;
+      renderEmojiPicker();
+    }
   });
 
   doc.addEventListener('keydown', (event) => {
@@ -1223,6 +1272,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       menuOpen = false;
       renderMenu();
       ui.menuButton.focus();
+      return;
+    }
+    if (event.key === 'Escape' && emojiOpen) {
+      emojiOpen = false;
+      renderEmojiPicker();
+      ui.emojiButton.focus();
       return;
     }
     // On the Chat page there is nothing to close to, so Escape must not blank it.
@@ -1354,6 +1409,10 @@ interface Ui {
   input: HTMLTextAreaElement;
   attach: HTMLButtonElement;
   file: HTMLInputElement;
+  /** Composer emoji picker (FR-MOD-11.4): trigger + panel, closed by default. */
+  emojiWrap: HTMLElement;
+  emojiButton: HTMLButtonElement;
+  emojiPanel: HTMLElement;
   send: HTMLButtonElement;
   close: HTMLButtonElement;
   avatar: HTMLElement;
@@ -1623,6 +1682,46 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   file.setAttribute('aria-hidden', 'true');
   file.tabIndex = -1;
 
+  // Emoji picker (FR-MOD-11.4): a categorised popup, same shape as the header
+  // "⋮" menu — a trigger + an absolutely-positioned panel, opened upward
+  // (`bottom: 100%` in the stylesheet below) since the composer sits at the
+  // bottom of the panel and a downward panel would open off the visible card.
+  const emojiWrap = doc.createElement('div');
+  emojiWrap.className = 'nx-emoji-wrap';
+  const emojiButton = doc.createElement('button');
+  emojiButton.type = 'button';
+  emojiButton.className = 'nx-emoji-btn';
+  emojiButton.setAttribute('aria-haspopup', 'true');
+  emojiButton.setAttribute('aria-expanded', 'false');
+  emojiButton.setAttribute('aria-label', t('emoji.trigger'));
+  // A glyph rather than an SVG, same call as the paperclip button beside it.
+  emojiButton.textContent = '🙂';
+  const emojiPanel = doc.createElement('div');
+  emojiPanel.className = 'nx-emoji-panel';
+  emojiPanel.hidden = true;
+  for (const category of WIDGET_EMOJI_CATEGORIES) {
+    const heading = doc.createElement('p');
+    heading.className = 'nx-emoji-heading';
+    heading.id = `nx-emoji-${category.id}`;
+    heading.textContent = t(`emoji.category.${category.id}`);
+    const group = doc.createElement('div');
+    group.className = 'nx-emoji-group';
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-labelledby', heading.id);
+    for (const glyph of category.items) {
+      const item = doc.createElement('button');
+      item.type = 'button';
+      item.className = 'nx-emoji-item';
+      item.textContent = glyph;
+      // Read back in `mount` via delegation on `emojiPanel` — `buildUi` only
+      // builds DOM, it does not close over `mount`'s `insertEmoji`/`emojiOpen`.
+      item.dataset.emoji = glyph;
+      group.append(item);
+    }
+    emojiPanel.append(heading, group);
+  }
+  emojiWrap.append(emojiButton, emojiPanel);
+
   const input = doc.createElement('textarea');
   input.className = 'nx-input';
   input.rows = 2;
@@ -1635,7 +1734,7 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   send.className = 'nx-send';
   send.textContent = t('send');
 
-  form.append(attach, file, input, send);
+  form.append(attach, file, emojiWrap, input, send);
 
   // Pre-chat form — a fixed, minimal one on purpose (FR-MOD-11.2): the visual
   // form builder is a separate v1 feature this must not depend on.
@@ -1734,6 +1833,9 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     input,
     attach,
     file,
+    emojiWrap,
+    emojiButton,
+    emojiPanel,
     send,
     close,
     avatar,
@@ -2311,6 +2413,30 @@ body {
   width: 38px; font-size: 16px; line-height: 1; cursor: pointer; color: inherit;
 }
 .nx-attach:disabled { opacity: .6; cursor: default; }
+.nx-emoji-wrap { position: relative; }
+.nx-emoji-btn {
+  border: 1px solid var(--nx-border); border-radius: 8px; background: transparent;
+  width: 38px; font-size: 16px; line-height: 1; cursor: pointer; color: inherit;
+}
+.nx-emoji-btn:disabled { opacity: .6; cursor: default; }
+.nx-emoji-panel {
+  position: absolute; inset-inline-start: 0; bottom: 100%; margin-bottom: 6px;
+  width: 220px; max-height: 200px; overflow-y: auto; z-index: 1;
+  padding: 8px; display: flex; flex-direction: column; gap: 8px;
+  background: var(--nx-surface); color: var(--nx-text);
+  border: 1px solid var(--nx-border); border-radius: 8px;
+  box-shadow: 0 8px 24px rgb(16 24 40 / .18);
+}
+.nx-emoji-heading {
+  margin: 0 0 4px; font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .02em; color: var(--nx-muted);
+}
+.nx-emoji-group { display: flex; flex-wrap: wrap; gap: 2px; }
+.nx-emoji-item {
+  border: 0; background: transparent; border-radius: 6px; padding: 0;
+  width: 28px; height: 28px; font-size: 16px; line-height: 1; cursor: pointer;
+}
+.nx-emoji-item:hover { background: var(--nx-customer); }
 .nx-chip {
   display: flex; align-items: center; gap: 8px;
   margin: 0 12px 8px; padding: 6px 10px;

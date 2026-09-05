@@ -1091,6 +1091,27 @@ test.describe('WCAG 2.1 AA (axe)', () => {
     });
   });
 
+  /**
+   * The widget composer's own emoji picker, open (FR-MOD-11.4) — not reachable
+   * from the closed-panel scan just above, the same reason the inbox's own
+   * picker (tm 189.5) needed its own scan: the panel only exists in the DOM
+   * once the trigger has been activated.
+   */
+  test('the widget composer emoji picker has no serious or critical violations', async ({
+    page,
+    organizationId,
+  }, testInfo) => {
+    await openWidget(page, organizationId);
+    await scanReadyScreen(page, 'Widget composer emoji picker', testInfo, async () => {
+      const frame = widgetFrame(page);
+      const trigger = frame.getByRole('button', { name: 'Insert emoji' });
+      await expect(trigger).toBeVisible();
+      await trigger.click();
+      await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await expect(frame.getByRole('button', { name: '👍' })).toBeVisible();
+    });
+  });
+
   test('public knowledge base has no serious or critical violations', async ({
     page,
   }, testInfo) => {

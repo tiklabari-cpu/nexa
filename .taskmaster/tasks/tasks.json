@@ -8928,7 +8928,7 @@
         "description": "Denetim Team modulunun dort `Must` kalemini KISMI buldu: modul-ici gezinme yok, \"Copy invite link\" bagimsiz bir header aksiyonu degil, ayri profil paneli hic yok ve `last_seen_at` hicbir yerde yazilmiyor, davet edilen koltuk faturaya yansimiyor.",
         "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## (a) Bu isi doguran gerekce\n\ntm 184.4 (M-TRACE-d · `cf9ad43`) PLAN.md damgalarini `prd-uyum-denetimi.md`ye (2026-08-30, 12 denetci +\n12 curutucu ajan) karsi yeniden okudu ve Faz-0`in 28 `Must` satirini `✅`ten `◐`ye indirdi; §F.00`in\nmekanik kurali geregi (\"bir faz ancak `Must` kapsaminda 0 ◐ ve 0 ⬜ kaldiginda kapanir\") Faz-0 kapisi\n`❌ ACIK`a dondu. tm 185 o 28 kalemi tek tek triyaj etti: 3 kalem denetimden SONRA kapanmisti (damga `✅`e\ngeri alindi), kalan 25 kalem is gorevine donusturuldu. Bu gorev o gorevlerden biridir.\n\nKapanis kosulu tek: **PRD kabul kriteri (KK)**. \"Kod var + test yesil\" YETMEZ — GL-3/GL-4/GL-8`in hatasi\ntam olarak buydu ve M-TRACE ailesi (tm 184.1-184.3) bu kapiyi teshis etti. Kanit blogu PLAN.md`nin\n`## K. Kanit Gecmisi` bolumundedir (`#### K<kod>`), tablo hucresinde DEGIL (CONVENTIONS §1.2).\n\n## (b) Kapsanan PLAN satirlari\n\n| PLAN satir (2026-09-04) | Kod | Kanit blogu | Alt-gorev |\n| --- | --- | --- | --- |\n| 239 | 04.1 | `#### K04.1` | 191.1 |\n| 240 | 04.3.1 | `#### K04.3.1` | 191.2 |\n| 242 | 04.3.4 | `#### K04.3.4` | 191.3 |\n| 243 | 04.4 | `#### K04.4` | 191.4 |\n\n## (c) Ana dosyalar\n\n- `apps/web/src/features/team/` — `TeamPage.tsx` (`Section` bloklari :204/:210/:387/:440),\n  `InviteTeammates.tsx` (:71-75, :182-195), `TeamMembers.tsx`, `Teams.tsx` (tm 175.4).\n- `apps/web/src/components/AppShell.tsx:268` — `InviteRailButton` (\"+\" hizli olustur).\n- `apps/api/src/services/billing/subscription-service.ts:274` — `ensureSeatsCoverHeadcount`.\n- `apps/api/src/routes/scim.ts:517` — bugun bu fonksiyonu cagiran TEK yer.\n\n## (d) Kapsam SINIRI\n\n- YALNIZ dort satir. `04.2` (AI performansi — tm 181.10), `04.5` (Teams yazma yollari — tm 175 M-TEAM),\n  `04.6` DISARIDA; ucu de denetimden sonra kapandi ya da Faz-0 `Must` degil.\n- Rol/izin modeli DEGISMEZ. Bu dort kalem yuzey ve faturalama dikisi; scope semasina dokunma.\n\n## Kapanista yapilacak PLAN.md guncellemesi\n\nBu ailenin TUM alt-gorevleri bittiginde ilgili `Must` satirinin damgasi `◐ → K<kod>` yerine\n`✅ → K<kod>` olur (PLAN.md §3, satir no `grep -n` ile bulunur — 2026-09-04 itibariyle gecerli satir\nnumaralari asagida yazili, dosya degistikce kayar). Tek bir alt-gorev bir satiri tek basina kapatiyorsa\no satiri o alt-gorev cevirir. Kanit tablo hucresine YAZILMAZ; `#### K<kod>` blogunun sonuna madde\nolarak eklenir: `- ✅ <ne yapildi> — `<dosya>` · test `<dosya>` (n) · tm <id>`.\nFaz-0 `Must` sayaci (PLAN.md:18 kapi tablosu) her kapanan satirda guncellenir.",
         "testStrategy": "Aile ancak dort alt-gorev de DoD kapisindan gectiginde done. Kapanista dort satirda da `◐` KALMAMALI.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -8938,9 +8938,10 @@
             "description": "PRD KK: \"Insan + AI varliklari tek cati\". Uc varlik grubu (Teammates, AI agents + Copilot, Teams) tek sayfada `Section` bloklari olarak var; PRD`nin tarif ettigi modul-ici kenar cubugu/gezinme yok ve \"+\" hizli olustur yalnizca teammate davetini aciyor.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `TeamPage.tsx` dort `Section` blogu (pending invitations, teammates, AI agents, teams) — tek uzun\n  sayfa. Modul-ici gezinme (kenar cubugu / sekme) YOK.\n- `AppShell.tsx:268` `InviteRailButton` — \"+\" yalniz teammate davetini aciyor; AI agent ya da takim\n  olusturmaya gotursen yol yok.\n\n## Yapilacak\n\n1. Modul-ici gezinme ekle. Bicim karari senin: kenar cubugu mu, sekme mi? PRD \"kenar cubugu\" diyor\n   ama sol ana ray zaten bir kenar cubugu — iki kenar cubugu yan yana dar ekranlarda urunu bozar.\n   Kararini ve gerekcesini `#### K04.1` maddesine yaz. Hangi bicim olursa olsun: derin baglanti\n   verilebilir olmali (`/app/team/teams` gibi) yoksa \"Teams ekranina git\" diye bir link paylasilamaz.\n2. \"+\" hizli olustur bir menuye donusur: Invite teammate · New team · (AI agent varsa) New AI agent.\n   Her ogenin kapisi kendi scope`u; yetkisi olmayana oge GOSTERILMEZ (403 kapisi degil, gizleme).\n3. Mevcut bolumler KORUNUR — gezinme onlarin uzerine gelir, yerlerine gecmez. Bir kullanicinin bugun\n   bildigi yol bozulmamali.\n\n## Bilinen tuzaklar\n\n- `getByRole(\"link\", {name})` alt dizi eslediginde strict-mode ihlali verir (tm 182.2: \"Team →\"\n  etiketi rayin \"Team\" bagintisini belirsiz yapmisti). Yeni gezinme etiketlerini secerken bunu dusun.\n- Ic gezinme rota ekliyorsa router testleri + e2e derin baglanti testi guncellenir.\n- a11y: `nav` landmark`i `aria-label` tasimali; iki `nav` ayni isimle axe ihlali verir.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `TeamPage.test.tsx`: gezinme ogeleri render ediliyor, secim ilgili bolume/rotaya goturuyor.\n   Baslik `(FR-MOD-04.1)` etiketi tasir.\n2. \"+\" menusu: yetkisi olan kullanicida uc oge, yalniz `accounts--my:rw` tasiyan kullanicida\n   yalnizca davet ogesi.\n3. Derin baglanti: `/app/team/<bolum>` dogrudan acildiginda o bolum secili geliyor.\n4. a11y: `axe` 0 serious/critical (iki `nav` isim catismasi dahil).\nDoD: `typecheck` · `lint` · `format:check` · `build` · web (`--maxWorkers=4`) · ilgili e2e/a11y exit 0.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "191"
+            "parentId": "191",
+            "updatedAt": "2026-09-05T11:48:18.728Z"
           },
           {
             "id": 2,
@@ -8973,7 +8974,7 @@
             "parentId": "191"
           }
         ],
-        "updatedAt": "2026-09-04T20:28:29.304Z"
+        "updatedAt": "2026-09-05T11:48:18.728Z"
       },
       {
         "id": "192",
@@ -9404,7 +9405,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T10:53:10.454Z",
+      "lastModified": "2026-09-05T11:48:18.731Z",
       "taskCount": 204,
       "completedCount": 190,
       "tags": [

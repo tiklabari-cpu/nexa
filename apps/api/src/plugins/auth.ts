@@ -27,6 +27,7 @@ import {
 import { authFailureBucket } from './rate-limit.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerTokenService } from '../services/auth/customer-token.js';
+import { LastSeenRecorder } from '../services/auth/last-seen.js';
 import { roleAtLeast, tenantOf, type Principal } from '../services/auth/principal.js';
 import { TokenService } from '../services/auth/token-service.js';
 
@@ -99,6 +100,7 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   const { env } = options;
 
   const tokens = new TokenService(app.db);
+  const lastSeen = new LastSeenRecorder();
   const customerTokens = new CustomerTokenService(
     env.CUSTOMER_TOKEN_SECRET,
     env.CUSTOMER_TOKEN_TTL,
@@ -422,6 +424,45 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     if (config.exactRole) {
       if (principal.kind !== 'agent' || principal.role !== config.exactRole) {
         throw ApiError.authorization(`This action requires the ${config.exactRole} role.`);
+      }
+    }
+
+    // --- Last seen (FR-MOD-04.3.4) ----------------------------------------
+    // The durable "this person was here" stamp the Team profile panel reads.
+    // Only an agent principal has a person behind it: a bot, an app, a SCIM
+    // client and a customer token are all credentials nobody would recognise on
+    // a roster, and stamping an account for them would be a lie about a human.
+    //
+    // After the gates on purpose. A request refused for its scope or its role
+    // still proves someone was there, but it also never reached any of this
+    // workspace's data, and a bookkeeping write is not the thing to make an
+    // exception for — the next allowed request stamps it a moment later anyway.
+    //
+    // Coarsened to a minute by `LastSeenRecorder`, so the common case costs a
+    // map lookup rather than an `UPDATE` (why, and why per-process, is written
+    // out there). The write runs through `request.withTenant` because `accounts`
+    // is global and its UPDATE policy is "the caller's licence shares a
+    // membership with this account" — outside a tenant context it would match
+    // nothing.
+    //
+    // Never fatal. A person's last-seen stamp is not worth failing the request
+    // they were making, so a failure is logged and swallowed; the same contract
+    // `tokens.touch` holds one line above.
+    if (principal.kind === 'agent') {
+      try {
+        await lastSeen.record(principal.accountId, (at, staleBefore) =>
+          request.withTenant((tx) =>
+            tx.account.updateMany({
+              where: {
+                id: principal.accountId,
+                OR: [{ lastSeenAt: null }, { lastSeenAt: { lt: staleBefore } }],
+              },
+              data: { lastSeenAt: at },
+            }),
+          ),
+        );
+      } catch (error) {
+        request.log.warn({ err: error }, 'last-seen stamp not recorded');
       }
     }
 

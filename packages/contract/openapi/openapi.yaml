@@ -264,6 +264,8 @@ paths:
     $ref: "./paths/agents.yaml#/agentSuspension"
   /agents/{agentId}/role:
     $ref: "./paths/agents.yaml#/agentRole"
+  /agents/{agentId}/chat-limit:
+    $ref: "./paths/agents.yaml#/agentChatLimit"
   /agents/{agentId}/expertise:
     $ref: "./paths/agents.yaml#/agentExpertise"
   /agents/{agentId}/work-schedule:
@@ -3658,6 +3660,22 @@ components:
           type: integer
           description: Routing never assigns past this. Over-limit means queued.
         two_factor_enabled: { type: boolean }
+        last_seen_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When this person was last active anywhere in Nexa, coarsened to the
+            minute (FR-MOD-04.3.4). Account-wide by design — `accounts` is a
+            person, not a membership, so someone who works two workspaces
+            carries one timestamp across both. `null` means never seen since the
+            column started being written.
+
+            Not the same thing as presence: presence is a live socket and
+            disappears when the tab closes, this is a durable stamp. And not the
+            per-licence "last sign-in" the access-review report answers with
+            (NFR-C6) — that one is read off the audit trail precisely because it
+            has to be about *this* workspace.
         suspended:
           type: boolean
           description: |

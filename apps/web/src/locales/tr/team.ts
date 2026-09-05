@@ -190,6 +190,25 @@ export const team: Messages = {
   'team.invite.pending.invitedBy': 'Davet eden',
   'team.invite.pending.revoke': 'İptal et',
 
+  // Temsilci profil paneli — AgentProfile.tsx (FR-MOD-04.3.4)
+  'team.profile.openAriaLabel': '{name} — profil',
+  'team.profile.title': 'Profil — {name}',
+  'team.profile.description': 'Bu takım arkadaşı kim ve yönlendirme ona ne kadar kapasite veriyor.',
+  'team.profile.role': 'Rol',
+  'team.profile.email': 'E-posta',
+  'team.profile.lastSeen': 'Son görülme',
+  'team.profile.neverSeen': 'Hiç',
+  'team.profile.chattingTeams': 'Sohbet takımları',
+  'team.profile.noTeams': 'Henüz hiçbir takımda değil.',
+  'team.profile.chatLimit': 'Eş zamanlı sohbet limiti',
+  'team.profile.chatLimitHint': 'Bu kadar sohbet açıkken yönlendirme yeni sohbetleri sıraya alır.',
+  'team.profile.chatLimitError': '1 ile 50 arasında bir tam sayı girin.',
+  'team.profile.saveError': 'Bu sohbet limiti kaydedilemedi.',
+  'team.profile.save': 'Limiti kaydet',
+  'team.profile.saving': 'Kaydediliyor…',
+  'team.profile.manageProfile': 'Profili yönet',
+  'team.profile.close': 'Kapat',
+
   // Per-agent skills — AgentSkills.tsx
   'team.skills.manageAriaLabel': '{name} için yetenekleri yönet',
   'team.skills.noSkills': 'Yetenek yok',

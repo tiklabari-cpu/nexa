@@ -197,6 +197,25 @@ export const team: Messages = {
   'team.invite.pending.invitedBy': 'Invited by',
   'team.invite.pending.revoke': 'Revoke',
 
+  // Teammate profile panel — AgentProfile.tsx (FR-MOD-04.3.4)
+  'team.profile.openAriaLabel': 'Profile — {name}',
+  'team.profile.title': 'Profile — {name}',
+  'team.profile.description': 'Who this teammate is, and the capacity routing gives them.',
+  'team.profile.role': 'Role',
+  'team.profile.email': 'Email',
+  'team.profile.lastSeen': 'Last seen',
+  'team.profile.neverSeen': 'Never',
+  'team.profile.chattingTeams': 'Chatting teams',
+  'team.profile.noTeams': 'Not in any team yet.',
+  'team.profile.chatLimit': 'Concurrent chats limit',
+  'team.profile.chatLimitHint': 'Routing queues new conversations once this many are open.',
+  'team.profile.chatLimitError': 'Enter a whole number from 1 to 50.',
+  'team.profile.saveError': 'Could not save that chat limit.',
+  'team.profile.save': 'Save limit',
+  'team.profile.saving': 'Saving…',
+  'team.profile.manageProfile': 'Manage profile',
+  'team.profile.close': 'Close',
+
   // Per-agent skills — AgentSkills.tsx
   'team.skills.manageAriaLabel': 'Manage skills for {name}',
   'team.skills.noSkills': 'No skills',

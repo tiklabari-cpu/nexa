@@ -34,6 +34,7 @@ interface AgentFixture {
   concurrent_chats_limit: number;
   two_factor_enabled: boolean;
   suspended: boolean;
+  last_seen_at: string | null;
   expertise: unknown[];
 }
 
@@ -48,6 +49,7 @@ function agent(id: string, over: Partial<AgentFixture> = {}): AgentFixture {
     concurrent_chats_limit: 5,
     two_factor_enabled: false,
     suspended: false,
+    last_seen_at: null,
     expertise: [],
     ...over,
   };
@@ -213,5 +215,49 @@ describe('header "Copy invite link" action (FR-MOD-04.3.1)', () => {
     const dialog = screen.getByRole('dialog', { name: 'Invite teammates' });
     expect(dialog).toBeVisible();
     expect(within(dialog).getByLabelText('Email addresses')).toBeInTheDocument();
+  });
+});
+
+describe('roster row opens the profile panel (FR-MOD-04.3.4)', () => {
+  it("the teammate's name is the way in, and the panel names their team", async () => {
+    stubRoster([agent('A1', { name: 'Alex Moreau' })]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/agents?status=suspended')) return jsonResponse({ items: [] });
+        if (url.includes('/agents')) {
+          return jsonResponse({ items: [agent('A1', { name: 'Alex Moreau' })] });
+        }
+        if (url.includes('/ai-agents')) return jsonResponse({ items: [] });
+        if (url.includes('/groups')) {
+          return jsonResponse({
+            items: [
+              {
+                id: 1,
+                name: 'Support',
+                language_code: 'en',
+                agents: [{ agent_id: 'A1', priority: 'normal' }],
+              },
+            ],
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    renderPage();
+
+    await screen.findByRole('table', { name: 'Agents on this licence' });
+    await userEvent.click(
+      within(rosterTable()).getByRole('button', { name: 'Profile — Alex Moreau' }),
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Profile — Alex Moreau' });
+    expect(within(dialog).getByText('Chatting teams')).toBeInTheDocument();
+    // The team list the page already holds feeds the panel — no second request.
+    expect(within(dialog).getByText('Support')).toBeInTheDocument();
+    // An owner may restaff an agent, so the editable limit is present.
+    expect(
+      within(dialog).getByRole('spinbutton', { name: 'Concurrent chats limit' }),
+    ).toBeInTheDocument();
   });
 });

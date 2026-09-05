@@ -217,6 +217,81 @@ test.describe('Team — per-agent skill assignment (FR-MOD-08.6.3)', () => {
   });
 });
 
+test.describe('Team — teammate profile panel (FR-MOD-04.3.4)', () => {
+  /**
+   * The audited gap end to end: the roster row now opens a panel carrying the
+   * PRD's fields, and the one field that *does* something — the concurrent
+   * chats limit — is written through the endpoint routing reads.
+   *
+   * "Last seen" is asserted as *not* "Never" rather than as a timestamp: the
+   * value is written by the very act of signing this browser in, so the
+   * meaningful claim is that the column is no longer the dead one the audit
+   * found. The limit is restored in a `finally` because the whole suite shares
+   * one seeded tenant and other files route against this agent's capacity.
+   */
+  test('opens from the roster row and writes a new chat limit through it', async ({
+    agentPage,
+    request,
+  }) => {
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+    const roster = await request.get(`${API_BASE}/agents`, { headers: auth });
+    expect(roster.ok(), `roster read failed: ${roster.status()}`).toBe(true);
+    const { items } = (await roster.json()) as {
+      items: Array<{ id: string; name: string; concurrent_chats_limit: number }>;
+    };
+    const me = items.find((agent) => agent.name === DEMO.agentName);
+    expect(me, 'seeded owner not found on the roster').toBeTruthy();
+    const originalLimit = me!.concurrent_chats_limit;
+
+    try {
+      await agentPage.goto('/app/team');
+      await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+
+      await agentPage.getByRole('button', { name: `Profile — ${DEMO.agentName}` }).click();
+      const dialog = agentPage.getByRole('dialog', { name: `Profile — ${DEMO.agentName}` });
+      await expect(dialog).toBeVisible();
+
+      // The PRD's fields, including the two the audit found missing entirely.
+      await expect(dialog.getByText('Last seen')).toBeVisible();
+      await expect(dialog.getByText('Never')).toBeHidden();
+      await expect(dialog.getByText('Chatting teams')).toBeVisible();
+      // Your own profile is the one case with a link out to Settings.
+      await expect(dialog.getByRole('link', { name: 'Manage profile' })).toHaveAttribute(
+        'href',
+        '/app/settings',
+      );
+      await agentPage.screenshot({ path: 'kanit/04.3.4-profile-panel.png', fullPage: true });
+
+      const field = dialog.getByRole('spinbutton', { name: 'Concurrent chats limit' });
+      await expect(field).toHaveValue(String(originalLimit));
+      const nextLimit = originalLimit === 7 ? 8 : 7;
+      await field.fill(String(nextLimit));
+
+      const saved = agentPage.waitForResponse(
+        (r) => r.url().includes(`/agents/${me!.id}/chat-limit`) && r.request().method() === 'PUT',
+      );
+      await dialog.getByRole('button', { name: 'Save limit' }).click();
+      expect((await saved).ok()).toBe(true);
+      await expect(dialog).toBeHidden();
+
+      // The roster redraws from the server, so the number on screen is the one
+      // routing will read — not an optimistic echo of the form.
+      const row = agentPage
+        .getByRole('table', { name: 'Agents on this licence' })
+        .locator('tr')
+        .filter({ hasText: DEMO.agentName });
+      await expect(row.getByText(String(nextLimit), { exact: true })).toBeVisible();
+    } finally {
+      await request
+        .put(`${API_BASE}/agents/${me!.id}/chat-limit`, {
+          headers: auth,
+          data: { concurrent_chats_limit: originalLimit },
+        })
+        .catch(() => {});
+    }
+  });
+});
+
 test.describe('Team — changing a teammate’s role (NFR-S12)', () => {
   /**
    * The endpoint has existed since the role model landed and no screen ever

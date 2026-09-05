@@ -616,6 +616,23 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // The teammate profile panel (FR-MOD-04.3.4) only exists once a roster row
+      // is opened, so the Team scan above never reaches it. Read-only here: the
+      // limit field is left alone, the panel is only looked at.
+      test('the teammate profile dialog has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/team');
+        await scanPanel(agentPage, 'Teammate profile dialog', theme, testInfo, async () => {
+          await agentPage
+            .getByRole('button', { name: /^Profile —/ })
+            .first()
+            .click();
+          await expect(agentPage.getByRole('dialog', { name: /^Profile —/ })).toBeVisible();
+        });
+      });
+
       test('settings has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/settings');

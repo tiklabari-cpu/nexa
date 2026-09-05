@@ -18,12 +18,15 @@
  * Three shapes are worth reading twice.
  *
  * **Last sign-in comes from the audit trail, not from a column.** `accounts`
- * carries a `last_seen_at`, but nothing writes it, and a field that is always
- * null would read as "never signed in" for the entire workspace — the most
- * damaging possible answer to give an auditor. The trail is the record that
- * actually exists (`auth.login`, `auth.sso_login`), and it is per-licence, which
- * is what CC6.1 asks about: the same person may sign into another workspace
- * daily and this one never. The cost is that the trail is pruned on retention
+ * carries a `last_seen_at`, and since FR-MOD-04.3.4 (tm 191.3) something does
+ * write it — but it is still the wrong column for this report, and now for a
+ * sharper reason than "always null". It is *account-wide*: `accounts` is a
+ * person, and a person may work for several workspaces, so a consultant who is
+ * in another tenant's console every day carries a fresh stamp into this
+ * report while never once having signed in here. The trail is per-licence,
+ * which is exactly what CC6.1 asks about, and it records the act being reviewed
+ * (`auth.login`, `auth.sso_login`) rather than mere activity. The cost is that
+ * the trail is pruned on retention
  * (`RETENTION_AUDIT_DAYS`), so "no sign-in recorded" means *not since the trail
  * begins* — which is why `audit_trail_starts_at` travels with the report rather
  * than being left for the reader to assume.

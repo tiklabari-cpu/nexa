@@ -27,6 +27,7 @@ export const inbox: Messages = {
   'inbox.rail.ticketView.unassigned': 'Unassigned',
   'inbox.rail.ticketView.myOpen': 'My open',
   'inbox.rail.ticketView.solved': 'Solved',
+  'inbox.rail.ticketView.more': 'More',
   'inbox.rail.viewsHeading': 'Views',
   'inbox.rail.channelPromo.text':
     'Connect Messenger, WhatsApp or SMS to see their conversations here.',
@@ -293,6 +294,7 @@ export const inbox: Messages = {
   'inbox.ticketGrid.empty.title': 'No tickets here',
   'inbox.ticketGrid.empty.description':
     'Follow-up work created from a conversation shows up in this grid.',
+  'inbox.ticketGrid.error.title': 'Ticket views unavailable',
   'inbox.ticketGrid.visitorFallback': 'Visitor',
   'inbox.ticketGrid.assigneeUnassigned': 'Unassigned',
 

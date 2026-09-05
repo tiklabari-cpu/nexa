@@ -113,6 +113,12 @@ describe('TicketGrid', () => {
     expect(screen.getByText('No tickets here')).toBeInTheDocument();
   });
 
+  it('shows "Ticket views unavailable" instead of the empty state when the list request failed (FR-MOD-02.1.3)', () => {
+    renderGrid({ tickets: [], error: true });
+    expect(screen.getByText('Ticket views unavailable')).toBeInTheDocument();
+    expect(screen.queryByText('No tickets here')).toBeNull();
+  });
+
   it('forwards onEndReached to the shared virtualizer (NFR-P5)', () => {
     // The grid's two rows fit inside the virtualizer's fallback viewport, so
     // the window already covers the end on mount — proving the prop reaches

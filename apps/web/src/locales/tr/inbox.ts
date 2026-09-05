@@ -19,6 +19,7 @@ export const inbox: Messages = {
   'inbox.rail.ticketView.unassigned': 'Atanmamış',
   'inbox.rail.ticketView.myOpen': 'Açık taleplerim',
   'inbox.rail.ticketView.solved': 'Çözüldü',
+  'inbox.rail.ticketView.more': 'Daha fazla',
   'inbox.rail.viewsHeading': 'Görünümler',
   'inbox.rail.channelPromo.text':
     'Sohbetlerini burada görmek için Messenger, WhatsApp veya SMS bağlayın.',
@@ -282,6 +283,7 @@ export const inbox: Messages = {
   'inbox.ticketGrid.empty.title': 'Burada talep yok',
   'inbox.ticketGrid.empty.description':
     'Bir sohbetten oluşturulan takip işleri bu ızgarada görünür.',
+  'inbox.ticketGrid.error.title': 'Talep görünümleri kullanılamıyor',
   'inbox.ticketGrid.visitorFallback': 'Ziyaretçi',
   'inbox.ticketGrid.assigneeUnassigned': 'Atanmamış',
 

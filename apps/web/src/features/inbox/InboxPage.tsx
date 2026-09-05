@@ -394,6 +394,21 @@ export function InboxPage(): ReactElement {
                 />
               </li>
             ))}
+            {/* "More" (FR-MOD-02.1.3): the PRD's fourth item — a doorway into the
+              grid, not a fifth filter. Every button above already opens the same
+              sortable grid directly (no separate compact preview to expand from),
+              so this never carries `active`; it lands where rapor-1's own
+              `grid/{all|unassigned|my-open}` route defaults to with no prior
+              context — the `all` filter. `solved` stays: it is a working filter
+              today, and taking it from agents costs more than this addition. */}
+            <li>
+              <ViewButton
+                label={t('inbox.rail.ticketView.more')}
+                icon="⋯"
+                active={false}
+                onClick={() => selectTicketView('all')}
+              />
+            </li>
           </ul>
 
           {/* Views (FR-MOD-02.1.4): channel views — or a promo when no channel is
@@ -449,15 +464,20 @@ export function InboxPage(): ReactElement {
                 {/* The view's size, from the server's `total` — not the number of
                     rows this browser has chained so far (D3 · FR-MOD-02.1.2).
                     Falls back to the loaded count only before the first page
-                    lands, when there is no server number to show yet. */}
-                <span className="tabular text-2xs text-content-tertiary">
-                  {tickets.total ?? ticketItems.length}
-                </span>
+                    lands, when there is no server number to show yet. Hidden on
+                    a load error (FR-MOD-02.1.3): a "0" beside "unavailable"
+                    would read as a contradiction, not a size. */}
+                {!tickets.isError && (
+                  <span className="tabular text-2xs text-content-tertiary">
+                    {tickets.total ?? ticketItems.length}
+                  </span>
+                )}
               </header>
               <div className="min-h-0 flex-1 overflow-hidden p-4">
                 <TicketGrid
                   tickets={ticketItems}
                   loading={tickets.isPending}
+                  error={tickets.isError}
                   sort={ticketSort}
                   onSort={changeTicketSort}
                   onOpen={setSelectedTicketId}

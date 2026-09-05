@@ -139,6 +139,7 @@ function ColumnHeader({
 export function TicketGrid({
   tickets,
   loading,
+  error = false,
   sort,
   onSort,
   onOpen,
@@ -147,6 +148,10 @@ export function TicketGrid({
 }: {
   tickets: Ticket[];
   loading: boolean;
+  /** The list query failed (FR-MOD-02.1.3) — distinct from a filter that is
+   * honestly empty, so the reader is not told "no tickets" when the real
+   * answer is "couldn't ask". */
+  error?: boolean;
   sort: TicketSort;
   onSort: (key: TicketSortKey) => void;
   onOpen: (id: string) => void;
@@ -157,6 +162,15 @@ export function TicketGrid({
   const t = useTranslate();
   if (loading) {
     return <ListSkeleton rows={6} />;
+  }
+
+  if (error) {
+    return (
+      <EmptyState
+        title={t('inbox.ticketGrid.error.title')}
+        description={t('common.errors.service_unavailable')}
+      />
+    );
   }
 
   if (tickets.length === 0) {

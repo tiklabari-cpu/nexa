@@ -489,6 +489,43 @@ test.describe('agent identity', () => {
   });
 });
 
+test.describe('emoji picker', () => {
+  // FR-MOD-11.4: the composer's fourth tool — message, attach, emoji, send.
+  // Proven end to end rather than only against the picker's own unit tests,
+  // because a surrogate-pair glyph is exactly what a caret-math slip or a
+  // lossy request body would corrupt silently.
+  test('inserts an emoji at the caret and it reaches the transcript intact', async ({
+    page,
+    organizationId,
+  }) => {
+    await openWidget(page, organizationId);
+    const frame = widgetFrame(page);
+    const composer = frame.getByRole('textbox', { name: 'Message' });
+
+    const stamp = Date.now().toString().slice(-6);
+    const before = `Order ${stamp} `;
+    await composer.fill(`${before}!`);
+    // Caret placed right after the order number — not at the end — so the
+    // assertion below actually exercises "at the caret", not just "appended".
+    await composer.evaluate((el: HTMLTextAreaElement, pos: number) => {
+      el.setSelectionRange(pos, pos);
+    }, before.length);
+
+    const trigger = frame.getByRole('button', { name: 'Insert emoji' });
+    await trigger.click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    // U+1F600 GRINNING FACE — a surrogate pair (2 UTF-16 code units, not 1).
+    await frame.getByRole('button', { name: '😀' }).click();
+    await expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    await expect(composer).toHaveValue(`${before}😀!`);
+
+    await frame.getByRole('button', { name: 'Send' }).click();
+    // The pair survives the round trip through the request body and the
+    // server's own storage/echo — nothing split or substituted it.
+    await expect(frame.getByRole('log', { name: 'Conversation' })).toContainText(`${before}😀!`);
+  });
+});
+
 test.describe('attachments', () => {
   // FR-MOD-02.3.5 + FR-MOD-11.4: a file can be attached from either composer,
   // sent, and seen on the other side — proven across the real cross-origin

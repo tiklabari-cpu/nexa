@@ -247,17 +247,49 @@ describe('copilot (agent-assist)', () => {
       expect(notes.length).toBeGreaterThan(0);
     });
 
-    it('refuses to summarise an archived chat (409)', async () => {
+    it('summarises an archived chat without writing to the read-only transcript (FR-MOD-02.8)', async () => {
       const token = await agentToken(fx.a);
-      const chatId = await chatWithMessage(token, 'Hello?');
+      const chatId = await chatWithMessage(token, 'Hello, is anyone there?');
       await server.post(`/chats/${chatId}/deactivate`, undefined, auth(token));
+
+      const beforeCount = await owner.event.count({ where: { chatId } });
 
       const response = await server.post(
         `/copilot/chats/${chatId}/summary`,
         undefined,
         auth(token),
       );
-      expect(response.statusCode).toBe(409);
+      expect(response.statusCode).toBe(201);
+      const body = response.json() as { summary: string; note_event_id: string | null };
+      expect(body.summary).toContain('Hello, is anyone there?');
+      // Archive is read-only: no internal note is written, so there is nothing
+      // to point `note_event_id` at.
+      expect(body.note_event_id).toBeNull();
+
+      const afterCount = await owner.event.count({ where: { chatId } });
+      expect(afterCount).toBe(beforeCount);
+    });
+
+    it('still feeds the Assisted metric when the summary is taken after archiving (FR-MOD-02.8 · FR-MOD-07.3.2)', async () => {
+      const token = await agentToken(fx.a);
+      const chatId = await chatWithMessage(token, 'My order has not arrived yet.');
+      await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', text: 'On it — checking now.' },
+        auth(token),
+      );
+      await server.post(`/chats/${chatId}/deactivate`, undefined, auth(token));
+
+      const summary = await server.post(`/copilot/chats/${chatId}/summary`, undefined, auth(token));
+      expect(summary.statusCode).toBe(201);
+      expect((summary.json() as { note_event_id: string | null }).note_event_id).toBeNull();
+
+      const totals = (await server.get('/reports/overview', auth(token))).json().totals as {
+        assisted: number;
+        manual: number;
+      };
+      expect(totals.assisted).toBe(1);
+      expect(totals.manual).toBe(0);
     });
 
     it("cannot summarise another tenant's chat", async () => {

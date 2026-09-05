@@ -8,6 +8,11 @@
  * never sends itself — "Insert into reply" hands it to the composer, where the
  * agent edits and sends it. Using any of these records an assist server-side, so
  * the conversation counts as "assisted" in Reports (07.3.2).
+ *
+ * Summary is available on an archived conversation too (FR-MOD-02.8) — arguably
+ * the moment it is most useful, since the conversation is now finished. Reply
+ * and enhance stay gated on `canDraft`: there is no composer to send a drafted
+ * reply into once the chat is closed, so offering them would be a dead end.
  */
 import { useState, type ReactElement } from 'react';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -76,12 +81,17 @@ function widenedBiQuestion(metric: string): string | null {
 
 export function CopilotPanel({
   chatId,
-  chatActive,
+  canDraft,
   onShowDetails,
   onCollapse,
 }: {
   chatId: string;
-  chatActive: boolean;
+  /**
+   * Whether a drafted reply can be sent from this chat — false on an archived
+   * conversation. Named for what it gates (reply/enhance), not for chat
+   * activity in general: summary ignores it (FR-MOD-02.8).
+   */
+  canDraft: boolean;
   /** Switch the panel back to the Details tab. */
   onShowDetails: () => void;
   /** Hide the panel entirely (Expand mode). */
@@ -116,19 +126,20 @@ export function CopilotPanel({
         </button>
       }
     >
-      {!chatActive && (
+      {!canDraft && (
         <p className="border-b border-border px-4 py-3 text-xs text-content-tertiary">
           {t('inbox.copilot.disabledNotice')}
         </p>
       )}
 
-      {/* Summary → internal note (12.3 / 02.5) */}
+      {/* Summary → internal note (12.3 / 02.5). Not gated on canDraft: a
+          summary is worth having on an archived chat too (FR-MOD-02.8). */}
       <PanelSection title={t('inbox.copilot.section.summary')}>
         <p className="text-xs text-content-secondary">{t('inbox.copilot.summary.description')}</p>
         <button
           type="button"
           onClick={() => summary.mutate()}
-          disabled={!chatActive || summary.isPending}
+          disabled={summary.isPending}
           className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
         >
           {summary.isPending ? t('inbox.copilot.summary.pending') : t('inbox.copilot.summary.cta')}
@@ -141,7 +152,14 @@ export function CopilotPanel({
         {summary.data && (
           <div className="rounded-md bg-inset p-2 text-xs">
             <p className="text-content-secondary">{summary.data.summary}</p>
-            <p className="mt-1 text-2xs text-success">{t('inbox.copilot.summary.noteAdded')}</p>
+            {summary.data.note_event_id ? (
+              <p className="mt-1 text-2xs text-success">{t('inbox.copilot.summary.noteAdded')}</p>
+            ) : (
+              // Archived chat: the server did not write a note (read-only).
+              <p className="mt-1 text-2xs text-content-tertiary">
+                {t('inbox.copilot.summary.notSaved')}
+              </p>
+            )}
           </div>
         )}
       </PanelSection>
@@ -152,7 +170,7 @@ export function CopilotPanel({
         <button
           type="button"
           onClick={() => reply.mutate()}
-          disabled={!chatActive || reply.isPending}
+          disabled={!canDraft || reply.isPending}
           className="w-full rounded-md border border-border px-3 py-2 text-sm hover:bg-surface-2 disabled:opacity-50"
         >
           {reply.isPending ? t('inbox.copilot.reply.pending') : t('inbox.copilot.reply.cta')}
@@ -200,7 +218,7 @@ export function CopilotPanel({
               key={mode}
               type="button"
               onClick={() => enhance.mutate({ text: draftText, mode })}
-              disabled={!chatActive || !draftText.trim() || enhance.isPending}
+              disabled={!canDraft || !draftText.trim() || enhance.isPending}
               className="rounded-sm border border-border px-2 py-1 text-2xs hover:bg-surface-2 disabled:opacity-50"
             >
               {t(ENHANCE_MODE_LABEL_KEY[mode])}

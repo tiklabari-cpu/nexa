@@ -2453,11 +2453,15 @@ export interface paths {
     get?: never;
     put?: never;
     /**
-     * Summarise a conversation into an internal note
-     * @description Writes the summary as an internal note on the chat (FR-MOD-12.3 / 02.5) —
-     *     visible to the team, never to the customer, and preserved in the archived
-     *     transcript. Records a copilot assist, so the chat counts as "assisted" in
-     *     Reports (07.3.2).
+     * Summarise a conversation, as an internal note when the chat is active
+     * @description On an active chat, writes the summary as an internal note (FR-MOD-12.3 /
+     *     02.5) — visible to the team, never to the customer, and preserved in the
+     *     archived transcript. Records a copilot assist either way, so the chat
+     *     counts as "assisted" in Reports (07.3.2).
+     *
+     *     On an archived chat (FR-MOD-02.8), the summary is still produced — that is
+     *     the moment an agent is most likely to want one — but archive is read-only,
+     *     so no internal note is written and `note_event_id` comes back null.
      */
     post: operations['copilotSummary'];
     delete?: never;
@@ -14462,7 +14466,7 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Summary written as an internal note */
+      /** @description Summary produced, written as an internal note when the chat is active */
       201: {
         headers: {
           [name: string]: unknown;
@@ -14470,7 +14474,8 @@ export interface operations {
         content: {
           'application/json': {
             summary: string;
-            note_event_id: string;
+            /** @description Null when the chat is archived — no internal note is written. */
+            note_event_id: string | null;
           };
         };
       };

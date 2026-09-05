@@ -195,24 +195,36 @@ export default async function copilotRoutes(
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
+      // A summary is worth reading on an archived chat too (FR-MOD-02.8) — that
+      // is the one moment an agent is most likely to want it. `sendEvent` below
+      // used to be the thing proving visibility (it 404s a chat the caller
+      // cannot see); an archived chat skips it, so visibility is checked here
+      // explicitly, the same gate `reply`/`enhance` use.
+      const chat = await chats.get(tenant, principal, chatId);
+
       const turns = await request.withTenant((tx) => copilot.conversationTurns(tx, chatId));
       const summary = summariseConversation(turns);
 
-      // The summary lands as an internal note through the same path the composer
-      // uses, so it fans out over RTM and is filtered from the customer on read.
-      // sendEvent enforces visibility and rejects an archived chat, so an assist
-      // can never write into a conversation the agent cannot see.
-      const { event } = await chats.sendEvent(tenant, principal, chatId, {
-        type: 'message',
-        text: summary,
-        recipients: 'agents',
-      });
+      // On an active chat the summary lands as an internal note through the same
+      // path the composer uses, so it fans out over RTM and is filtered from the
+      // customer on read. An archived chat is read-only (FR-MOD-02.8 KK) — a
+      // summary taken there is for the agent's eyes only and must not write a
+      // transcript event, so `note_event_id` comes back null.
+      const noteEventId = chat.active
+        ? (
+            await chats.sendEvent(tenant, principal, chatId, {
+              type: 'message',
+              text: summary,
+              recipients: 'agents',
+            })
+          ).event.id
+        : null;
 
       await request.withTenant((tx) =>
         copilot.recordAssist(tx, tenant, chatId, 'summary', summary),
       );
 
-      return reply.status(201).send({ summary, note_event_id: event.id });
+      return reply.status(201).send({ summary, note_event_id: noteEventId });
     },
   );
 

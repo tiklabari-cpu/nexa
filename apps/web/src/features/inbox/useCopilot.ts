@@ -12,7 +12,8 @@ import { eventsKey } from './useInbox.js';
 
 export interface CopilotSummary {
   summary: string;
-  note_event_id: string;
+  /** Null when the chat is archived — no internal note is written (FR-MOD-02.8). */
+  note_event_id: string | null;
 }
 
 export interface CopilotReplyDraft {

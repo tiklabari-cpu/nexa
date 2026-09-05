@@ -11,6 +11,19 @@ import type { Messages } from '../merge.js';
  * that page, which I18N-i/j (tm 133.9, 133.10) still owns untouched.
  */
 export const team: Messages = {
+  // Module-internal navigation — TeamTabs.tsx (FR-MOD-04.1)
+  'team.tabs.ariaLabel': 'Team views',
+  'team.tabs.teammates': 'Teammates',
+  'team.tabs.aiAgents': 'AI agents',
+  'team.tabs.teams': 'Teams',
+
+  // AI agents page — TeamAiAgentsPage.tsx
+  'team.aiAgentsPage.description':
+    'Bot accounts, how the AI is performing, and what Copilot may draw on.',
+
+  // Teams page — TeamsPage.tsx
+  'team.teamsPage.description': 'Create teams and decide who is in each one.',
+
   // Team page — TeamPage.tsx
   'team.page.title': 'Team',
   'team.page.description': 'Teammates, availability and the teams routing sends work to.',

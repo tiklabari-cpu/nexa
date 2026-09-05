@@ -562,6 +562,29 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // Module-internal navigation (FR-MOD-04.1): the tab bar is its own `nav`
+      // landmark beside the shell's own `nav aria-label="Modules"` — worth its
+      // own scan since two landmarks sharing a name is an axe violation
+      // (`landmark-unique`) neither page's individual markup would catch alone.
+      test('team ai agents has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/team/ai-agents');
+        await scanPanel(agentPage, 'Team AI agents', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+          await expect(agentPage.getByRole('heading', { name: 'Chatbots' })).toBeVisible();
+        });
+      });
+
+      test('team teams has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/team/teams');
+        await scanPanel(agentPage, 'Team teams', theme, testInfo, async () => {
+          await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+        });
+      });
+
       // Not reachable from the scan above — the editor only renders once
       // opened, the same reason the campaign/goal builders each needed their
       // own scan. Nothing is persisted: the form is never submitted.
@@ -569,7 +592,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/team');
+        await agentPage.goto('/app/team/teams');
         await scanPanel(agentPage, 'New team dialog', theme, testInfo, async () => {
           await agentPage.getByRole('button', { name: 'New team' }).click();
           await expect(agentPage.getByRole('dialog', { name: 'New team' })).toBeVisible();
@@ -583,7 +606,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/team');
+        await agentPage.goto('/app/team/teams');
         await scanPanel(agentPage, 'Team members dialog', theme, testInfo, async () => {
           await agentPage
             .getByRole('button', { name: /^Manage members/ })
@@ -1056,6 +1079,8 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       '/app/customers/goals',
       '/app/customers/real-time',
       '/app/team',
+      '/app/team/ai-agents',
+      '/app/team/teams',
       '/app/reports',
       '/app/billing',
       '/app/playbook',

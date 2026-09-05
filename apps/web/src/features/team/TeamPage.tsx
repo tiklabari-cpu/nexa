@@ -1,10 +1,12 @@
 /**
- * Team — who is on the licence and how work reaches them.
+ * Team → Teammates (FR-MOD-04.1's first entity group) — who is on the licence
+ * and how work reaches them.
  *
- * Teams are shown next to teammates rather than on a separate screen because
- * they are the same question from two directions: an agent sees a conversation
- * *because* a team they belong to has access to it, and routing picks between
- * available agents using their priority within that team (ADR-08).
+ * The KPI row still counts teams and chatbots alongside teammates: it is the
+ * module's overview, so it stays here on the landing tab rather than
+ * following those two entity groups to their own routes (`TeamAiAgentsPage.tsx`,
+ * `TeamsPage.tsx`) — see `TeamTabs.tsx` for the navigation between the three,
+ * and `#### K04.1` in PLAN.md for why a tab bar rather than a second sidebar.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
@@ -17,11 +19,9 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
-import { TeamAiPerformance } from './TeamAiPerformance.js';
-import { CopilotKnowledge } from './CopilotKnowledge.js';
 import { AgentSkills, type Expertise } from './AgentSkills.js';
 import { RoleMenu, roleAtLeast, type Role } from './RoleMenu.js';
-import { Teams, type Group } from './Teams.js';
+import { TeamTabs } from './TeamTabs.js';
 import { WorkSchedule } from './WorkSchedule.js';
 
 interface Agent {
@@ -43,6 +43,11 @@ interface Chatbot {
   active: boolean;
   avatar_url: string | null;
   skills_count: number;
+}
+
+/** Just enough of `Teams.tsx`'s `Group` shape for the KPI count below. */
+interface GroupSummary {
+  id: number;
 }
 
 /**
@@ -91,8 +96,6 @@ export function TeamPage(): ReactElement {
   const api = useApiClient();
   const currentAgentId = useAuth((s) => s.agent?.account_id ?? null);
   const currentRole = useAuth((s) => s.agent?.role ?? null);
-  const scopes = useAuth((s) => s.agent?.scopes) ?? [];
-  const canManageTeams = scopes.includes('groups--all:rw');
   const suspension = useSuspension();
 
   const agents = useQuery({
@@ -112,7 +115,7 @@ export function TeamPage(): ReactElement {
 
   const groups = useQuery({
     queryKey: ['team', 'groups'],
-    queryFn: () => api.get<{ items: Group[] }>('/groups'),
+    queryFn: () => api.get<{ items: GroupSummary[] }>('/groups'),
   });
 
   const items = useMemo(() => agents.data?.items ?? [], [agents.data]);
@@ -168,7 +171,11 @@ export function TeamPage(): ReactElement {
     roleAtLeast(currentRole, agent.role);
 
   return (
-    <Page title={t('team.page.title')} description={t('team.page.description')}>
+    <Page
+      title={t('team.page.title')}
+      description={t('team.page.description')}
+      actions={<TeamTabs />}
+    >
       {agents.error || groups.error ? (
         <ErrorNotice message={t('team.page.loadError')} />
       ) : (
@@ -385,59 +392,6 @@ export function TeamPage(): ReactElement {
           />
 
           <Section
-            title={t('team.page.chatbots.title')}
-            description={t('team.page.chatbots.description')}
-          >
-            <Card>
-              {chatbots.isPending ? (
-                <ListSkeleton rows={2} />
-              ) : botItems.length === 0 ? (
-                <EmptyState
-                  title={t('team.page.empty.noChatbotsTitle')}
-                  description={t('team.page.empty.noChatbotsDescription')}
-                />
-              ) : (
-                <table className="w-full text-sm">
-                  <caption className="sr-only">{t('team.page.botTable.caption')}</caption>
-                  <thead>
-                    <tr className="border-b border-border text-left">
-                      <Th>{t('team.page.table.name')}</Th>
-                      <Th>{t('team.page.botTable.status')}</Th>
-                      <Th align="right">{t('team.page.table.skills')}</Th>
-                      <Th align="right">{t('team.page.botTable.seatCost')}</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {botItems.map((bot) => (
-                      <tr key={bot.id} className="border-b border-border last:border-0">
-                        <td className="px-4 py-2.5 font-medium">{bot.name}</td>
-                        <td className="px-4 py-2.5">
-                          <StatusDot
-                            tone={bot.active ? 'success' : 'neutral'}
-                            label={bot.active ? t('team.page.botActive') : t('team.status.off')}
-                          />
-                        </td>
-                        <td className="tabular px-4 py-2.5 text-right text-content-secondary">
-                          {formatCount(bot.skills_count)}
-                        </td>
-                        <td className="px-4 py-2.5 text-right text-2xs font-medium text-success">
-                          {t('team.page.free')}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </Card>
-          </Section>
-
-          {/* AI agents (team side) — per-agent performance + Copilot knowledge
-              management, the two AI entries the Team screen owns (FR-MOD-04.2). */}
-          <TeamAiPerformance />
-
-          <CopilotKnowledge />
-
-          <Section
             title={t('team.page.suspended.title')}
             description={t('team.page.suspended.description')}
           >
@@ -499,15 +453,14 @@ export function TeamPage(): ReactElement {
               )}
             </Card>
           </Section>
-
-          <Teams agents={items} canManage={canManageTeams} />
         </>
       )}
     </Page>
   );
 }
 
-function Th({
+/** Shared with `TeamAiAgentsPage.tsx`'s bot table — one header cell, not two. */
+export function Th({
   children,
   align = 'left',
 }: {

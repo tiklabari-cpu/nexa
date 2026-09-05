@@ -2,6 +2,19 @@ import type { Messages } from '../merge.js';
 
 /** Ekip ve bir temsilcinin kendi bildirim tercihleri. See the English file. */
 export const team: Messages = {
+  // Modül içi gezinme — TeamTabs.tsx (FR-MOD-04.1)
+  'team.tabs.ariaLabel': 'Ekip görünümleri',
+  'team.tabs.teammates': 'Ekip arkadaşları',
+  'team.tabs.aiAgents': 'AI temsilciler',
+  'team.tabs.teams': 'Ekipler',
+
+  // AI temsilciler sayfası — TeamAiAgentsPage.tsx
+  'team.aiAgentsPage.description':
+    'Bot hesapları, AI’ın performansı ve Copilot’un yararlanabileceği bilgiler.',
+
+  // Ekipler sayfası — TeamsPage.tsx
+  'team.teamsPage.description': 'Ekipler oluşturun ve her birinde kimlerin olacağına karar verin.',
+
   // Team page — TeamPage.tsx
   'team.page.title': 'Ekip',
   'team.page.description': 'Ekip arkadaşları, müsaitlik ve yönlendirmenin iş gönderdiği ekipler.',

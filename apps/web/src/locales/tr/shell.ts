@@ -32,6 +32,10 @@ export const shell: Messages = {
   'shell.nav.badge.team.one': '{count} bekleyen davet',
   'shell.nav.badge.team.other': '{count} bekleyen davet',
 
+  // Hızlı oluştur (FR-MOD-04.1). Rayın "+" menüsü — bir ekip arkadaşı davet
+  // et, ya da yeni bir ekip başlat.
+  'shell.quickCreate.label': 'Hızlı oluştur',
+
   // Davet (FR-MOD-01.1.5). "+N" boş koltuk sayısıdır — henüz bilinmiyorsa
   // (ya da bildirecek bir şey yoksa) düz etikete düşer.
   'shell.invite.label': 'Davet et',

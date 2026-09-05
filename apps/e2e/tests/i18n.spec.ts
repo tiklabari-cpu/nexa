@@ -6,7 +6,7 @@
  * asserting the strings that component owns. What none of them could prove is
  * the claim the requirement actually makes — that *the agent* can change one
  * control and have the whole product follow. That claim spans the switcher, the
- * store, `localStorage`, the router and twenty screens, and it is exactly the
+ * store, `localStorage`, the router and twenty-two screens, and it is exactly the
  * claim that was once made falsely: §D113 records a console declared translated
  * on the strength of a switcher that relabelled the rail while every page body
  * underneath stayed English in both languages.
@@ -48,7 +48,7 @@ interface Surface {
   heading?: string;
 }
 
-/** The fourteen routes an agent reaches from inside the shell. */
+/** The sixteen routes an agent reaches from inside the shell. */
 const APP_SURFACES: readonly Surface[] = [
   {
     name: 'home',
@@ -101,6 +101,20 @@ const APP_SURFACES: readonly Surface[] = [
     heading: 'Ekip',
     tr: 'Ekip arkadaşları, müsaitlik ve yönlendirmenin iş gönderdiği ekipler.',
     en: 'Teammates, availability and the teams routing sends work to.',
+  },
+  {
+    name: 'team-ai-agents',
+    path: '/app/team/ai-agents',
+    heading: 'Ekip',
+    tr: 'Bot hesapları, AI’ın performansı ve Copilot’un yararlanabileceği bilgiler.',
+    en: 'Bot accounts, how the AI is performing, and what Copilot may draw on.',
+  },
+  {
+    name: 'team-teams',
+    path: '/app/team/teams',
+    heading: 'Ekip',
+    tr: 'Ekipler oluşturun ve her birinde kimlerin olacağına karar verin.',
+    en: 'Create teams and decide who is in each one.',
   },
   {
     name: 'reports',
@@ -290,17 +304,21 @@ test.describe('console i18n', () => {
     await chooseLanguage(agentPage, 'en', 'tr');
 
     // The rail is the surface §D113's false claim rested on — it switching is
-    // necessary and nowhere near sufficient, hence the fourteen screens below.
+    // necessary and nowhere near sufficient, hence the sixteen screens below.
     await expect(agentPage.getByRole('heading', { name: 'Gelen Kutusu', level: 1 })).toBeVisible();
     expect(await storedLocale(agentPage)).toBe('tr');
 
     for (const surface of APP_SURFACES) await walk(agentPage, surface);
 
-    // Team's two AI sections sit below the fold, inside the shell's own scroll
-    // container, where a full-page screenshot does not reach — and they are the
-    // last two screens the console had left in English (they were missed by
-    // I18N-e and translated by this task). Scroll to them and say so plainly.
-    await agentPage.goto('/app/team');
+    // Team's two AI sections moved to their own route (`/app/team/ai-agents`,
+    // FR-MOD-04.1) but are still inside the shell's own scroll container,
+    // where a full-page screenshot does not always reach — and they were the
+    // last two screens the console had left in English (missed by I18N-e,
+    // translated by a later task). Scroll to them and say so plainly; the
+    // `team-ai-agents` surface above already proved the page's own heading and
+    // description translate, this goes one layer deeper into the two sections
+    // that sentinel does not name.
+    await agentPage.goto('/app/team/ai-agents');
     const aiPerformance = agentPage.getByRole('heading', { name: 'AI temsilci performansı' });
     await aiPerformance.scrollIntoViewIfNeeded();
     await expect(aiPerformance).toBeVisible();
@@ -362,8 +380,8 @@ test.describe('console i18n', () => {
     // quietly dropped from the walk would leave both tests green and the claim
     // — "the whole console" — unproven, which is the failure mode this file
     // exists to prevent.
-    expect(SURFACES).toHaveLength(20);
-    expect(new Set(SURFACES.map((surface) => surface.path)).size).toBe(20);
-    expect(new Set(SURFACES.map((surface) => surface.name)).size).toBe(20);
+    expect(SURFACES).toHaveLength(22);
+    expect(new Set(SURFACES.map((surface) => surface.path)).size).toBe(22);
+    expect(new Set(SURFACES.map((surface) => surface.name)).size).toBe(22);
   });
 });

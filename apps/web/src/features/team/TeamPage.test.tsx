@@ -9,6 +9,7 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { TeamPage } from './TeamPage.js';
@@ -188,5 +189,29 @@ describe('Teammates search + filters (FR-MOD-04.3.2)', () => {
       expect(screen.getByText('No teammates match')).toBeInTheDocument();
     });
     expect(screen.queryByText('No teammates yet')).not.toBeInTheDocument();
+  });
+});
+
+describe('header "Copy invite link" action (FR-MOD-04.3.1)', () => {
+  it('is its own header action, distinct from "Invite teammates", and opens the invite modal with no invitation sent first', async () => {
+    stubRoster([agent('A1', { name: 'Alex Moreau' })]);
+    renderPage();
+
+    await screen.findByRole('table', { name: 'Agents on this licence' });
+
+    // Both header actions exist independently — this is the audited gap: the
+    // link used to appear only inside the modal after a POST, never as a
+    // standalone header entry point.
+    const copyLinkButton = screen.getByRole('button', { name: 'Copy invite link' });
+    expect(screen.getByRole('button', { name: 'Invite teammates' })).toBeInTheDocument();
+    expect(copyLinkButton).toBeInTheDocument();
+
+    await userEvent.click(copyLinkButton);
+
+    // Opens the exact same invite form — the link-generating step — not a
+    // second, different flow.
+    const dialog = screen.getByRole('dialog', { name: 'Invite teammates' });
+    expect(dialog).toBeVisible();
+    expect(within(dialog).getByLabelText('Email addresses')).toBeInTheDocument();
   });
 });

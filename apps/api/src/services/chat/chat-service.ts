@@ -1451,6 +1451,29 @@ export class ChatService {
       input: NewEventInput;
     },
   ): Promise<SerialisedEvent> {
+    // The conversation just moved, so the inbox list's sort key moves with it
+    // (FR-MOD-02.2.2 — "RTM'de yukarı taşınır"). Written here rather than at the
+    // six call sites because this is the one place an event is ever appended:
+    // a send, a close, a reopen, a transfer and a takeover all come through
+    // here, so all five bump the row, and nothing can append without bumping it.
+    //
+    // `now()` is the transaction timestamp, which is exactly what the INSERT
+    // below takes as `created_at`'s DEFAULT — so the invariant this column
+    // carries ("the created_at of the newest event") holds to the microsecond
+    // rather than approximately.
+    //
+    // `GREATEST`, not assignment: two transactions appending to the same chat
+    // commit in whatever order they finish, and the later-starting one must not
+    // be able to drag the key backwards behind an event that is already newer.
+    //
+    // Before the `threads` bump on purpose. Closing a chat updates `chats`
+    // first and then lands here, so taking the `chats` row first keeps every
+    // path that writes both in the same order and leaves no lock cycle between
+    // a reply and a close.
+    await tx.$executeRaw`
+      UPDATE chats SET last_event_at = GREATEST(last_event_at, now()) WHERE id = ${input.chatId}
+    `;
+
     const updated = await tx.$queryRaw<Array<{ event_sequence: number }>>`
       UPDATE threads SET event_sequence = event_sequence + 1
       WHERE id = ${input.threadId}
@@ -1589,15 +1612,28 @@ export async function listChatsInTenant(
   // one object — `where` — as the single statement of what the view is. That
   // is what makes "the total counts the list" true by construction rather than
   // by two filters happening to agree.
+  //
+  // The key is `last_event_at`, which — unlike `created_at` — *moves*. That is
+  // the whole point (FR-MOD-02.2.2), and it is also the one thing a keyset
+  // cursor is normally chosen to avoid, so it is worth being precise about what
+  // it costs. A page is "everything strictly older than this row", and the row
+  // an event touches gets *newer*: it can only cross the boundary upwards, into
+  // the pages already read. So the two failures a moving key threatens are not
+  // symmetric here — a row can never be handed out twice by the same chain
+  // (the next page excludes everything at or above the cursor), and the row
+  // that moves up out of an unread page is missing from the chain until the
+  // list re-reads its head, which is precisely what every push makes it do
+  // (`useInbox.ts`, `refreshChatHeads`). Sorted oldest-first the direction
+  // reverses and the client re-reads the whole loaded chain instead.
   const paged = cursor
     ? {
         AND: [
           where,
           {
             OR: [
-              { createdAt: { [options.sort === 'newest' ? 'lt' : 'gt']: cursor.createdAt } },
+              { lastEventAt: { [options.sort === 'newest' ? 'lt' : 'gt']: cursor.activityAt } },
               {
-                createdAt: cursor.createdAt,
+                lastEventAt: cursor.activityAt,
                 id: { [options.sort === 'newest' ? 'lt' : 'gt']: cursor.id },
               },
             ],
@@ -1617,9 +1653,16 @@ export async function listChatsInTenant(
   const [rows, total] = await Promise.all([
     tx.chat.findMany({
       where: paged,
-      // Tie-break on id: `created_at` alone is not unique, and a cursor built
-      // on a non-unique column silently skips or repeats rows.
-      orderBy: [{ createdAt: direction }, { id: direction }],
+      // Last activity, not creation time: a conversation the visitor just wrote
+      // in belongs at the top of the list the agent is working down
+      // (FR-MOD-02.2.2). `sort` (FR-MOD-02.2.1) picks the direction of the same
+      // key, so "Oldest" reads as the least recently active first — the stale
+      // end of the same axis, rather than a second meaning of order.
+      //
+      // Tie-break on id: `last_event_at` alone is not unique (two chats can be
+      // touched inside one transaction timestamp), and a cursor built on a
+      // non-unique column silently skips or repeats rows.
+      orderBy: [{ lastEventAt: direction }, { id: direction }],
       take: options.limit + 1,
       include: {
         customer: { select: { name: true, email: true } },
@@ -1668,7 +1711,7 @@ export async function listChatsInTenant(
     items,
     total,
     ...(hasMore && last
-      ? { nextPageId: encodeCursor({ createdAt: last.createdAt, id: last.id }) }
+      ? { nextPageId: encodeCursor({ activityAt: last.lastEventAt, id: last.id }) }
       : {}),
   };
 }
@@ -1875,13 +1918,25 @@ function countUnread(
   return new Date(lastEvent.created_at) > seenUpTo ? 1 : 0;
 }
 
+/**
+ * Where a page of the chat list stopped: the ordering key of its last row, plus
+ * that row's id to break the tie.
+ *
+ * `activityAt` is `chats.last_event_at`, and unlike the `created_at` this used
+ * to carry, it can move after the cursor is minted. That makes a cursor a
+ * *bookmark* rather than an identity: it still names an exact point in the
+ * order, but the row it was taken from may no longer be sitting on that point.
+ * Nothing downstream needs it to — the comparison is against the point, not the
+ * row — which is why a stale cursor reads as a slightly old position rather
+ * than an error, the same way `audit-log-reader.ts` treats one.
+ */
 interface Cursor {
-  createdAt: Date;
+  activityAt: Date;
   id: string;
 }
 
 function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(`${cursor.createdAt.toISOString()}|${cursor.id}`).toString('base64url');
+  return Buffer.from(`${cursor.activityAt.toISOString()}|${cursor.id}`).toString('base64url');
 }
 
 function decodeCursor(pageId: string | undefined): Cursor | null {
@@ -1889,8 +1944,8 @@ function decodeCursor(pageId: string | undefined): Cursor | null {
   try {
     const [iso, id] = Buffer.from(pageId, 'base64url').toString('utf8').split('|');
     if (!iso || !id) return null;
-    const createdAt = new Date(iso);
-    return Number.isNaN(createdAt.getTime()) ? null : { createdAt, id };
+    const activityAt = new Date(iso);
+    return Number.isNaN(activityAt.getTime()) ? null : { activityAt, id };
   } catch {
     // A malformed cursor is a client bug, not an attack surface — start over
     // rather than failing the whole request.

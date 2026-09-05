@@ -713,6 +713,11 @@ model Chat {
   customerId String   @map("customer_id") @db.Uuid
   active     Boolean  @default(true)
   createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// When this conversation last moved — the `created_at` of its newest event,
+  /// or its own creation time while it has none. This is the inbox list's sort
+  /// key (FR-MOD-02.2.2 "RTM'de yukarı taşınır"), maintained on the write path
+  /// rather than derived per read so the order is one index range scan.
+  lastEventAt DateTime @default(now()) @map("last_event_at") @db.Timestamptz(6)
 
   license          License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   customer         Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
@@ -727,6 +732,10 @@ model Chat {
   trackedSales     TrackedSale[]
 
   @@index([licenseId, createdAt(sort: Desc)])
+  /// The inbox list's ordering index. Kept beside the `created_at` one rather
+  /// than replacing it: reports and the customer-facing lists still order a
+  /// workspace's chats by when they opened.
+  @@index([licenseId, lastEventAt(sort: Desc)])
   @@index([customerId])
   @@map("chats")
 }

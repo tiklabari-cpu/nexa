@@ -3,17 +3,22 @@
  * FR-MOD-10.1.1–.3, .6, 10.3 and 09.3.
  *
  * The demo workspace is on a trial, so nothing is billed now; what this proves
- * is that the levers work end to end — the cycle toggle and seats stepper
- * persist through `PATCH /billing/subscription` and the summary recomputes —
- * that invoices list and download (10.3), and that the masked payment method
- * saves through `PUT /billing/payment-method` (ADR-13 — no card is collected or
- * charged, and real card entry is out of scope, PRD §11.1/1).
+ * is that the levers work end to end — the plan tier picker, the cycle toggle
+ * and seats stepper persist through `PATCH /billing/subscription` and the
+ * summary recomputes — that invoices list and download (10.3), and that the
+ * masked payment method saves through `PUT /billing/payment-method` (ADR-13 —
+ * no card is collected or charged, and real card entry is out of scope, PRD
+ * §11.1/1).
  *
  * The seed is idempotent and does not reset a subscription a previous run left
- * behind, so the test starts from whatever cycle it finds and puts it back to
- * monthly — it must not depend on, or leave behind, a particular state. The
- * API-package purchase below cannot put itself back (a sale is a permanent
- * record, deliberately), so it asserts deltas instead.
+ * behind, so the test starts from whatever plan/cycle it finds and puts both
+ * back (growth, monthly) — it must not depend on, or leave behind, a
+ * particular state; `entitlements.spec.ts` reads this same workspace's plan
+ * and Playwright runs this suite with a single worker (`playwright.config.ts`,
+ * `workers: 1`), so "restore before returning" is what keeps that read
+ * deterministic rather than a race. The API-package purchase below cannot put
+ * itself back (a sale is a permanent record, deliberately), so it asserts
+ * deltas instead.
  */
 import type { Locator } from '@playwright/test';
 import { expect, test } from './fixtures.js';
@@ -48,7 +53,7 @@ async function readIncluded(terms: Locator): Promise<number> {
 }
 
 test.describe('billing checkout', () => {
-  test('changes seats and cycle, lists invoices, and saves a payment method', async ({
+  test('changes plan tier, seats and cycle, lists invoices, and saves a payment method (FR-MOD-10.1.1)', async ({
     agentPage,
   }) => {
     await agentPage.goto('/app/billing');
@@ -61,10 +66,34 @@ test.describe('billing checkout', () => {
     const annual = manage.getByRole('button', { name: /Annual/ });
     const summary = manage.getByTestId('billing-summary');
     const seatCount = manage.getByTestId('seat-count');
+    const growthPlan = manage.getByTestId('plan-option-growth');
+    const enterprisePlan = manage.getByTestId('plan-option-enterprise');
+    const confirmPlanChange = manage.getByRole('button', { name: 'Confirm plan change' });
 
     // Known starting point: Monthly is disabled only when already monthly.
     if (await monthly.isEnabled()) await monthly.click();
     await expect(annual).toBeEnabled();
+
+    // Plan tier (FR-MOD-10.1.1): known starting point first, same discipline as
+    // the cycle toggle above — growth is disabled only when already active.
+    if (await growthPlan.isEnabled()) {
+      await growthPlan.click();
+      await confirmPlanChange.click();
+    }
+    await expect(growthPlan).toHaveAttribute('aria-pressed', 'true');
+
+    await enterprisePlan.click();
+    // Enterprise is quoted, not listed — the confirm step says so rather than
+    // inventing a total for a price this product does not set.
+    await expect(manage.getByTestId('plan-confirm')).toContainText(/set in your contract/i);
+    await confirmPlanChange.click();
+    await expect(enterprisePlan).toHaveAttribute('aria-pressed', 'true');
+    await expect(growthPlan).toHaveAttribute('aria-pressed', 'false');
+
+    // Put the plan back the way we found it.
+    await growthPlan.click();
+    await confirmPlanChange.click();
+    await expect(growthPlan).toHaveAttribute('aria-pressed', 'true');
 
     // Adding a seat sticks after the PATCH round trip — the value is the
     // server's, not local optimism — then restore it.

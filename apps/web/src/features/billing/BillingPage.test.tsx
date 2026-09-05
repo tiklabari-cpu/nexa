@@ -15,6 +15,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
@@ -88,7 +89,32 @@ interface UsageOpts {
   apiPackages?: ApiPackageOpt[];
   /** This workspace's API-package purchase history (FR-MOD-09.3). */
   apiPackagePurchases?: ApiPackagePurchaseOpt[];
+  /** The plan tier this workspace is on (FR-MOD-10.1.1). */
+  plan?: string;
+  /** The plan catalogue `/billing/entitlements` serves — defaults to the real one. */
+  plans?: {
+    id: string;
+    pricing: 'listed' | 'quoted';
+    unit_price_cents: number | null;
+    ai_resolutions_included: number | null;
+  }[];
 }
+
+/** The real catalogue's values (`subscription-service.ts` `PLANS`). */
+const DEFAULT_PLANS = [
+  {
+    id: 'growth',
+    pricing: 'listed' as const,
+    unit_price_cents: 9900,
+    ai_resolutions_included: 200,
+  },
+  {
+    id: 'enterprise',
+    pricing: 'quoted' as const,
+    unit_price_cents: null,
+    ai_resolutions_included: null,
+  },
+];
 
 /** The real catalogue's values (`@nexa/types` `API_PACKAGE_CATALOG`), so the
  *  default in tests matches what production actually serves. */
@@ -155,9 +181,16 @@ function mockBilling(opts: UsageOpts): void {
         period_label: '202607',
       });
     }
+    if (path === '/billing/entitlements') {
+      return Promise.resolve({
+        plan: opts.plan ?? 'growth',
+        entitlements: {},
+        plans: opts.plans ?? DEFAULT_PLANS,
+      });
+    }
     if (path === '/billing/subscription') {
       return Promise.resolve({
-        plan: 'growth',
+        plan: opts.plan ?? 'growth',
         billing_cycle: opts.billingCycle ?? 'monthly',
         status: access === 'trialing' ? 'trialing' : 'active',
         access,
@@ -365,6 +398,162 @@ describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1–.3)', (
     const removeButton = await screen.findByRole('button', { name: 'Remove a seat' });
     expect(removeButton).toBeDisabled();
     expect(screen.getByText(/Minimum 1/)).toBeInTheDocument();
+  });
+
+  it('switches plan tier through a confirm step, PATCHing the plan field (FR-MOD-10.1.1)', async () => {
+    const user = userEvent.setup();
+    mockBilling({ plan: 'growth', seats: 3, billingCycle: 'monthly' });
+    api.patch.mockResolvedValue({
+      plan: 'enterprise',
+      billing_cycle: 'monthly',
+      status: 'active',
+      access: 'active',
+      trial: { ends_at: null, days_remaining: null },
+      seats: 3,
+      min_seats: 1,
+      unit_price_cents: 9900,
+      usage: {
+        ai_resolutions: {
+          used: 12,
+          included: 200,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 50,
+          overage_unit_price_cents: 50,
+        },
+        api_calls: {
+          used: 0,
+          included: 100_000,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 100_000,
+          overage_unit_price_cents: 2_950,
+        },
+      },
+      estimated_total_cents: 29700,
+      annual_savings_cents: 0,
+      provider: 'mock',
+    });
+    renderBilling(<BillingPage />);
+
+    const growthButton = await screen.findByTestId('plan-option-growth');
+    expect(growthButton).toHaveAttribute('aria-pressed', 'true');
+    const enterpriseButton = screen.getByTestId('plan-option-enterprise');
+    expect(enterpriseButton).toHaveAttribute('aria-pressed', 'false');
+
+    await user.click(enterpriseButton);
+    // Unlike the cycle toggle and seat stepper, a plan pick opens a confirm
+    // step first — nothing is sent until it is accepted.
+    expect(api.patch).not.toHaveBeenCalled();
+    // The contract's price lives outside this product, so the confirm text
+    // says so instead of inventing a total.
+    expect(screen.getByTestId('plan-confirm')).toHaveTextContent(/set in your contract/i);
+    expect(screen.getByTestId('plan-confirm')).toHaveTextContent(/effect immediately/i);
+
+    await user.click(screen.getByRole('button', { name: 'Confirm plan change' }));
+
+    expect(api.patch).toHaveBeenCalledWith('/billing/subscription', { plan: 'enterprise' });
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('plan-option-enterprise')).toHaveAttribute('aria-pressed', 'true');
+    });
+  });
+
+  it('states the new recurring price when confirming a switch to a listed plan', async () => {
+    const user = userEvent.setup();
+    mockBilling({ plan: 'enterprise', seats: 3, billingCycle: 'monthly' });
+    renderBilling(<BillingPage />);
+
+    await user.click(await screen.findByTestId('plan-option-growth'));
+
+    // 3 seats × $99/month.
+    expect(screen.getByTestId('plan-confirm')).toHaveTextContent('$297.00 / month');
+    expect(screen.getByTestId('plan-confirm')).toHaveTextContent(/effect immediately/i);
+  });
+
+  it("disables a plan whose quota already sits below this period's usage, with the reason shown (tm 181.3)", async () => {
+    mockBilling({ plan: 'enterprise', used: 250 });
+    renderBilling(<BillingPage />);
+
+    const growthButton = await screen.findByTestId('plan-option-growth');
+    expect(growthButton).toBeDisabled();
+    expect(screen.getByTestId('plan-option-growth-reason')).toHaveTextContent(
+      /includes 200 AI resolutions/i,
+    );
+    expect(screen.getByTestId('plan-option-growth-reason')).toHaveTextContent(/250 already used/i);
+  });
+
+  it("shows the server's own downgrade-rejection sentence under the plan selector, not a generic error", async () => {
+    const user = userEvent.setup();
+    mockBilling({ plan: 'enterprise', seats: 3 });
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message:
+          'The growth plan includes 200 AI resolutions, below the 250 already used this month.',
+        requestId: 'req-1',
+      }),
+    );
+    renderBilling(<BillingPage />);
+
+    await user.click(await screen.findByTestId('plan-option-growth'));
+    await user.click(screen.getByRole('button', { name: 'Confirm plan change' }));
+
+    expect(await screen.findByTestId('plan-change-error')).toHaveTextContent(
+      'The growth plan includes 200 AI resolutions, below the 250 already used this month.',
+    );
+  });
+
+  it('refreshes the AI usage meter after a plan change', async () => {
+    const user = userEvent.setup();
+    mockBilling({ plan: 'growth', seats: 3 });
+    api.patch.mockResolvedValue({
+      plan: 'enterprise',
+      billing_cycle: 'monthly',
+      status: 'active',
+      access: 'active',
+      trial: { ends_at: null, days_remaining: null },
+      seats: 3,
+      min_seats: 1,
+      unit_price_cents: 9900,
+      usage: {
+        ai_resolutions: {
+          used: 12,
+          included: 200,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 50,
+          overage_unit_price_cents: 50,
+        },
+        api_calls: {
+          used: 0,
+          included: 100_000,
+          overage: 0,
+          overage_cents: 0,
+          overage_unit: 100_000,
+          overage_unit_price_cents: 2_950,
+        },
+      },
+      estimated_total_cents: 29700,
+      annual_savings_cents: 0,
+      provider: 'mock',
+    });
+    renderBilling(<BillingPage />);
+
+    await screen.findByTestId('plan-option-growth');
+    const usageCallsBefore = api.get.mock.calls.filter(
+      (call) => call[0] === '/billing/usage',
+    ).length;
+
+    await user.click(screen.getByTestId('plan-option-enterprise'));
+    await user.click(screen.getByRole('button', { name: 'Confirm plan change' }));
+
+    await vi.waitFor(() => {
+      const usageCallsAfter = api.get.mock.calls.filter(
+        (call) => call[0] === '/billing/usage',
+      ).length;
+      expect(usageCallsAfter).toBeGreaterThan(usageCallsBefore);
+    });
   });
 
   it('shows a $0 charge now and the post-trial price while trialing', async () => {

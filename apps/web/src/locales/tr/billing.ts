@@ -36,6 +36,22 @@ export const billing: Messages = {
   'billing.managePlan.title': 'Planı yönet',
   'billing.managePlan.description':
     'Faturalandırma sahte (mock) — hiçbir ücret alınmaz. Değişiklikler yaptığınız anda kaydedilir.',
+
+  // Plan tier — PlanSelector
+  'billing.managePlan.plan.label': 'Plan katmanı',
+  'billing.managePlan.plan.loading': 'Planlar yükleniyor…',
+  'billing.managePlan.plan.loadError': 'Plan kataloğu yüklenemedi.',
+  'billing.managePlan.plan.genericError': 'Plan değiştirilemedi. Tekrar deneyin.',
+  'billing.managePlan.plan.overQuotaReason':
+    '{plan} planı {included} AI çözümü içeriyor — bu dönem kullanılan {used} çözümün altında.',
+  'billing.managePlan.plan.confirmListed':
+    '{plan} planına {price} / {cycle} karşılığında geçilsin mi? Bu değişiklik hemen geçerli olur.',
+  'billing.managePlan.plan.confirmQuoted':
+    '{plan} planına geçilsin mi? Fiyatı sözleşmenizde belirlenir, bu yüzden bugünkü ücretiniz o değişene kadar aynı kalır. Bu değişiklik hemen geçerli olur.',
+  'billing.managePlan.plan.confirmButton': 'Plan değişikliğini onayla',
+  'billing.managePlan.plan.confirming': 'Geçiliyor…',
+  'billing.managePlan.plan.cancelButton': 'Vazgeç',
+
   'billing.managePlan.cycleLabel': 'Faturalandırma dönemi',
   'billing.managePlan.monthly': 'Aylık',
   'billing.managePlan.annual': 'Yıllık',

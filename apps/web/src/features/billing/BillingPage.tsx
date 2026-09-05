@@ -20,6 +20,7 @@ import {
   Section,
 } from '../../components/Page.js';
 import { Banner } from '../../components/ui/index.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
@@ -62,6 +63,16 @@ interface Subscription {
   estimated_total_cents: number;
   annual_savings_cents: number;
   provider: string;
+}
+
+/** One tier of the plan catalogue (FR-MOD-10.1.1), from `/billing/entitlements`. */
+interface PlanCatalogItem {
+  id: string;
+  pricing: 'listed' | 'quoted';
+  /** `null` on a quoted tier — Enterprise's price lives in a contract, not here. */
+  unit_price_cents: number | null;
+  /** `null` on a quoted tier — no catalogue allowance to compare usage against. */
+  ai_resolutions_included: number | null;
 }
 
 interface Usage extends UsageSummary {
@@ -138,11 +149,16 @@ export function BillingPage(): ReactElement {
 
   const queryClient = useQueryClient();
   const change = useMutation({
-    mutationFn: (body: { billing_cycle?: string; seats?: number }) =>
+    mutationFn: (body: { plan?: string; billing_cycle?: string; seats?: number }) =>
       api.patch<Subscription>('/billing/subscription', body),
     // The reply is a full subscription view, so the whole page updates from it
-    // without a refetch round trip.
-    onSuccess: (updated) => queryClient.setQueryData(['billing', 'subscription'], updated),
+    // without a refetch round trip. A plan change can also move the AI
+    // allowance the usage meter compares against, so that query is invalidated
+    // too rather than left showing figures from the plan just left behind.
+    onSuccess: (updated) => {
+      queryClient.setQueryData(['billing', 'subscription'], updated);
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'usage'] });
+    },
   });
 
   if (subscription.error || usage.error) {
@@ -231,7 +247,20 @@ export function BillingPage(): ReactElement {
         </KpiGrid>
       </Section>
 
-      <ManagePlan sub={sub} onChange={change.mutate} pending={change.isPending} />
+      <ManagePlan
+        sub={sub}
+        aiUsed={ai.used}
+        onChange={change.mutate}
+        pending={change.isPending}
+        error={
+          change.error
+            ? change.error instanceof ApiClientError
+              ? // i18n-ignore — the downgrade guard names the exact quota exceeded and by how much; a generic sentence would leave the workspace guessing which plan to try (SsoConnection.tsx's same call).
+                change.error.message
+              : t('billing.managePlan.plan.genericError')
+            : null
+        }
+      />
 
       <Section title={t('billing.aiMeter.title')} description={t('billing.aiMeter.description')}>
         {/* Proactive warning from 80% (PRD §8.3 flow 5, KR2.3): the quota is
@@ -410,7 +439,8 @@ function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean })
 }
 
 /**
- * The checkout levers (FR-MOD-10.1.1–.3): billing cycle, seats and the summary.
+ * The checkout levers (FR-MOD-10.1.1–.3): plan tier, billing cycle, seats and
+ * the summary.
  *
  * Every change persists straight away through `PATCH /billing/subscription` and
  * the page re-reads from the reply, so the summary is the server's arithmetic,
@@ -423,12 +453,18 @@ function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean })
  */
 function ManagePlan({
   sub,
+  aiUsed,
   onChange,
   pending,
+  error,
 }: {
   sub: Subscription;
-  onChange: (body: { billing_cycle?: string; seats?: number }) => void;
+  /** This period's AI-resolution usage, so an over-quota downgrade shows disabled up front. */
+  aiUsed: number;
+  onChange: (body: { plan?: string; billing_cycle?: string; seats?: number }) => void;
   pending: boolean;
+  /** The last change's server error, already resolved to display text — `null` when there is none. */
+  error: string | null;
 }): ReactElement {
   const t = useTranslate();
   const annual = sub.billing_cycle === 'annual';
@@ -455,6 +491,18 @@ function ManagePlan({
     >
       <Card>
         <div className="flex flex-col gap-5 p-4">
+          {/* Plan tier (FR-MOD-10.1.1) */}
+          <PlanSelector
+            currentPlan={sub.plan}
+            seats={sub.seats}
+            cycleUnit={cycleUnit}
+            annual={annual}
+            aiUsed={aiUsed}
+            pending={pending}
+            error={error}
+            onSelect={(plan) => onChange({ plan })}
+          />
+
           {/* Billing cycle (FR-MOD-10.1.2) */}
           <div>
             <p className="mb-2 text-xs font-medium text-content-secondary">
@@ -565,6 +613,193 @@ function ManagePlan({
         </div>
       </Card>
     </Section>
+  );
+}
+
+/** `growth` → `Growth`, for display; catalogue ids are lowercase everywhere else. */
+function titleCase(value: string): string {
+  return value.length === 0 ? value : value[0]!.toUpperCase() + value.slice(1);
+}
+
+/**
+ * The plan tier picker (FR-MOD-10.1.1): the missing half of "Change plan" —
+ * `ManagePlan` already covered billing cycle and seats.
+ *
+ * The catalogue is read from `GET /billing/entitlements`'s `plans` array
+ * (`subscription-service.ts`'s `PLANS`, the same source the server's own
+ * downgrade guard reads) rather than hardcoded here — a client-side list would
+ * silently drift from the server's and could offer a plan that does not exist.
+ *
+ * Picking a different tier does not PATCH immediately, unlike the cycle
+ * toggle and seat stepper below: a plan change re-prices the bill and is not a
+ * one-click-undo the way flipping back to monthly is, so it opens an inline
+ * confirmation stating the new charge (or, on a quoted tier, that the contract
+ * sets the price) and that the change is effective immediately — there is no
+ * "at the next cycle" in this mocked billing model.
+ *
+ * A plan whose catalogue allowance is already below this period's AI usage is
+ * disabled up front, with the reason written next to it — matching tm 181.3's
+ * decision that a control certain to 4xx should not be a live trap. The
+ * server's own downgrade guard (`subscription-service.ts:191-201`) is the
+ * actual authority; this is a preview of the same rule so the rejection is
+ * rarely the first time the caller hears about it. If the preview and the
+ * server ever disagree (usage changed between page load and confirm, say),
+ * the server's 4xx message is shown verbatim below instead of a generic
+ * failure — it already names the exact plan and figures.
+ */
+function PlanSelector({
+  currentPlan,
+  seats,
+  cycleUnit,
+  annual,
+  aiUsed,
+  pending,
+  error,
+  onSelect,
+}: {
+  currentPlan: string;
+  seats: number;
+  cycleUnit: string;
+  annual: boolean;
+  aiUsed: number;
+  pending: boolean;
+  error: string | null;
+  onSelect: (plan: string) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+
+  const catalog = useQuery({
+    queryKey: ['billing', 'entitlements'],
+    queryFn: () => api.get<{ plans: PlanCatalogItem[] }>('/billing/entitlements'),
+  });
+
+  const planButton = (isCurrent: boolean): string =>
+    `rounded-md border px-3 py-2 text-sm font-medium capitalize transition-colors ${
+      isCurrent
+        ? 'border-brand-500 bg-brand-500 text-white'
+        : 'border-border text-content-secondary hover:bg-surface-2 disabled:opacity-40'
+    }`;
+
+  return (
+    <div>
+      <p className="mb-2 text-xs font-medium text-content-secondary">
+        {t('billing.managePlan.plan.label')}
+      </p>
+
+      {catalog.isPending && (
+        <p className="text-sm text-content-secondary">{t('billing.managePlan.plan.loading')}</p>
+      )}
+      {catalog.error && <ErrorNotice message={t('billing.managePlan.plan.loadError')} />}
+
+      {catalog.data && (
+        <>
+          <div
+            className="flex flex-wrap gap-2"
+            role="group"
+            aria-label={t('billing.managePlan.plan.label')}
+          >
+            {catalog.data.plans.map((plan) => {
+              const isCurrent = plan.id === currentPlan;
+              const overQuota =
+                !isCurrent &&
+                plan.ai_resolutions_included !== null &&
+                plan.ai_resolutions_included < aiUsed;
+              return (
+                <button
+                  key={plan.id}
+                  type="button"
+                  data-testid={`plan-option-${plan.id}`}
+                  aria-pressed={isCurrent}
+                  disabled={pending || isCurrent || overQuota}
+                  onClick={() => setConfirmingId(plan.id)}
+                  className={planButton(isCurrent)}
+                >
+                  {plan.id}
+                </button>
+              );
+            })}
+          </div>
+
+          {catalog.data.plans
+            .filter(
+              (plan) =>
+                plan.id !== currentPlan &&
+                plan.ai_resolutions_included !== null &&
+                plan.ai_resolutions_included < aiUsed,
+            )
+            .map((plan) => (
+              <p
+                key={plan.id}
+                data-testid={`plan-option-${plan.id}-reason`}
+                className="mt-1 text-2xs text-content-tertiary"
+              >
+                {t('billing.managePlan.plan.overQuotaReason', {
+                  plan: titleCase(plan.id),
+                  included: formatCount(plan.ai_resolutions_included ?? 0) ?? '',
+                  used: formatCount(aiUsed) ?? '',
+                })}
+              </p>
+            ))}
+
+          {confirmingId &&
+            (() => {
+              const plan = catalog.data.plans.find((p) => p.id === confirmingId);
+              if (!plan) return null;
+              const recurringCents =
+                plan.pricing === 'listed' && plan.unit_price_cents !== null
+                  ? seats * plan.unit_price_cents * (annual ? 10 : 1)
+                  : null;
+              return (
+                <div
+                  data-testid="plan-confirm"
+                  className="mt-2 flex flex-col gap-2 rounded-md border border-border p-3"
+                >
+                  <p className="text-sm">
+                    {recurringCents !== null
+                      ? t('billing.managePlan.plan.confirmListed', {
+                          plan: titleCase(plan.id),
+                          price: formatMoney(recurringCents) ?? '',
+                          cycle: cycleUnit,
+                        })
+                      : t('billing.managePlan.plan.confirmQuoted', { plan: titleCase(plan.id) })}
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => {
+                        onSelect(plan.id);
+                        setConfirmingId(null);
+                      }}
+                      className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                    >
+                      {pending
+                        ? t('billing.managePlan.plan.confirming')
+                        : t('billing.managePlan.plan.confirmButton')}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={pending}
+                      onClick={() => setConfirmingId(null)}
+                      className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+                    >
+                      {t('billing.managePlan.plan.cancelButton')}
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+        </>
+      )}
+
+      {error && (
+        <p role="alert" data-testid="plan-change-error" className="mt-2 text-2xs text-danger">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }
 

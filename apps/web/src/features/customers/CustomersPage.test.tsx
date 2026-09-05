@@ -8,7 +8,7 @@
  * wired) is left alone; this file adds coverage for `?segment=` only.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -270,5 +270,133 @@ describe('filter panel (FR-MOD-03.2.1)', () => {
 
     expect(await screen.findByLabelText('Country')).toHaveValue('DE');
     await screen.findByText('Mira DE');
+  });
+});
+
+/**
+ * The table columns (FR-MOD-03.2.3). The PRD counts seven — Name/Email/Phone/
+ * Country/Last active/Chats/Tickets — and the table used to render four,
+ * folding email/phone into a second line under Name and dropping Tickets
+ * entirely even though the server already sent `tickets_count` (tm 179).
+ */
+describe('table columns (FR-MOD-03.2.3)', () => {
+  it('renders all seven PRD columns as headers', async () => {
+    // The table only mounts once a row exists (`items.length > 0`) — the empty
+    // state renders no `<thead>` at all.
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(customerPage([customer('C1', { name: 'Robin Lee' })], 1))),
+    );
+    renderPage('/app/customers');
+    await screen.findByText('Robin Lee');
+
+    for (const name of ['Name', 'Email', 'Phone', 'Country', 'Last active', 'Chats', 'Tickets']) {
+      expect(screen.getByRole('columnheader', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('shows email, phone and tickets in their own cells, and the country name beside its flag', async () => {
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(
+        customerPage(
+          [
+            customer('C1', {
+              name: 'Robin Lee',
+              email: 'robin@example.test',
+              phone: '+1 555 0100',
+              country_code: 'US',
+              country: 'United States',
+              tickets_count: 3,
+            }),
+          ],
+          1,
+        ),
+      ),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage('/app/customers');
+
+    await screen.findByText('Robin Lee');
+    expect(screen.getByText('robin@example.test')).toBeInTheDocument();
+    expect(screen.getByText('+1 555 0100')).toBeInTheDocument();
+    expect(screen.getByText('United States')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Sorting (FR-MOD-03.2.3). The server does the ordering — a header click has
+ * to start a fresh page chain with `sort`/`order` in the request, not re-order
+ * the rows already on screen (the D3 pattern the audit named, and the same
+ * contract `TicketGrid`/`ticket-grid.ts` already proved for Tickets).
+ */
+describe('sorting (FR-MOD-03.2.3)', () => {
+  it('defaults to sorting by last activity, descending', async () => {
+    const fetchMock = vi.fn((_url: string) => Promise.resolve(customerPage([], 0)));
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage('/app/customers');
+    await screen.findByText('No customers yet');
+
+    const firstUrl = String(fetchMock.mock.calls[0]?.[0]);
+    expect(firstUrl).toContain('sort=last_activity');
+    expect(firstUrl).toContain('order=desc');
+  });
+
+  it('marks the active sortable header with aria-sort and leaves the others none', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(customerPage([customer('C1', { name: 'Robin Lee' })], 1))),
+    );
+    renderPage('/app/customers');
+    await screen.findByText('Robin Lee');
+
+    expect(screen.getByRole('columnheader', { name: 'Last active' })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
+    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveAttribute('aria-sort', 'none');
+  });
+
+  it('offers no sort control on Email, Phone, Chats or Tickets', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(customerPage([customer('C1', { name: 'Robin Lee' })], 1))),
+    );
+    renderPage('/app/customers');
+    await screen.findByText('Robin Lee');
+
+    for (const label of ['Email', 'Phone', 'Chats', 'Tickets']) {
+      const header = screen.getByRole('columnheader', { name: label });
+      expect(within(header).queryByRole('button')).toBeNull();
+      expect(header).not.toHaveAttribute('aria-sort');
+    }
+  });
+
+  it('asks the server to sort by name, ascending, instead of re-ordering the loaded rows', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('sort=name')) {
+        return Promise.resolve(customerPage([customer('C1', { name: 'Alex' })], 1));
+      }
+      return Promise.resolve(customerPage([customer('C2', { name: 'Zoe' })], 1));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage('/app/customers');
+    await screen.findByText('Zoe');
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Name' }));
+
+    // A fresh chain through the server's own sort, not a client re-sort of the
+    // row already on screen — "Zoe" is gone rather than merely moved.
+    await waitFor(() => expect(screen.getByText('Alex')).toBeInTheDocument());
+    expect(screen.queryByText('Zoe')).not.toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(
+        ([url]) => String(url).includes('sort=name') && String(url).includes('order=asc'),
+      ),
+    ).toBe(true);
   });
 });

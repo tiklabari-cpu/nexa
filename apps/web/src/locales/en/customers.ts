@@ -41,13 +41,15 @@ export const customers: Messages = {
     'People who message from the widget appear here automatically.',
   'customers.page.table.caption': 'Customers',
   'customers.page.table.name': 'Name',
+  'customers.page.table.email': 'Email',
+  'customers.page.table.phone': 'Phone',
   'customers.page.table.country': 'Country',
   'customers.page.table.chats': 'Chats',
+  'customers.page.table.tickets': 'Tickets',
   'customers.page.table.lastActive': 'Last active',
   'customers.page.unnamedVisitor': 'Unnamed visitor',
   'customers.page.lead': 'lead',
   'customers.page.banned': 'Banned',
-  'customers.page.noContactDetails': 'No contact details',
   'customers.page.never': 'Never',
 
   // Contacts filter panel — CustomersFilters.tsx (field labels/options/errors

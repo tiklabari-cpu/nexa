@@ -15,7 +15,14 @@
  * include conversations they can never open.
  */
 import type { Prisma } from '@prisma/client';
-import { sanitizeReferrer, type CustomFieldValue } from '@nexa/types';
+import {
+  DEFAULT_CUSTOMER_SORT_KEY,
+  sanitizeReferrer,
+  type CustomerSortKey,
+  type CustomFieldValue,
+  type SortOrder,
+} from '@nexa/types';
+import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
 import { visitorPageUrls } from '../campaigns/campaign-matching.js';
@@ -34,6 +41,9 @@ export interface ListOptions {
   lastActivityTo?: string;
   /** Restricts to customers with (`true`) or without (`false`) a ticket in the caller's license. */
   hasTickets?: boolean;
+  /** Column the whole collection is ordered by; defaults to most recent activity. */
+  sort?: CustomerSortKey;
+  order?: SortOrder;
 }
 
 export interface CustomerSummary {
@@ -76,12 +86,6 @@ export interface CustomerDetail extends CustomerSummary {
   custom_fields: CustomFieldValue[];
 }
 
-/** Ordering is (last_activity_at DESC, id DESC), so the cursor carries both. */
-interface Cursor {
-  lastActivityAt: string | null;
-  id: string;
-}
-
 const RECENT_WINDOW_DAYS = 30;
 const MAX_VISITS = 10;
 const MAX_CHATS = 10;
@@ -93,19 +97,31 @@ export class CustomerService {
     options: ListOptions,
   ): Promise<{ items: CustomerSummary[]; total: number; nextPageId?: string }> {
     const where = this.#where(tenant, options);
-    const cursor = decodeCursor(options.pageId);
+
+    // The sort is the server's, over every row the filter matches — not the
+    // browser's, over the page it happens to hold. Re-ordering a loaded window
+    // answers a different question than the header claims to (D3 pattern the
+    // audit named): past the first page, the row that should be first was
+    // never fetched.
+    const sort = options.sort ?? DEFAULT_CUSTOMER_SORT_KEY;
+    const order = options.order ?? 'desc';
+    const column = SORT_COLUMNS[sort];
+    const cursor = decodeCursor(options.pageId, sort, order);
 
     // Fetch one extra to learn whether another page exists, without a second
     // count query that could disagree with the page under concurrent writes.
     const [rows, total] = await Promise.all([
       tx.customer.findMany({
-        where: cursor ? { AND: [where, cursorPredicate(cursor)] } : where,
+        where: cursor ? { AND: [where, cursorFilter(column, order, cursor)] } : where,
         // `nulls: 'last'` is stated rather than left to the database. Postgres
         // defaults DESC to NULLS FIRST, which would put every never-active
         // visitor above the people who wrote in this morning — and, worse,
         // silently disagree with the keyset predicate below, ending pagination
-        // early and hiding customers with no error anywhere.
-        orderBy: [{ lastActivityAt: { sort: 'desc', nulls: 'last' } }, { id: 'desc' }],
+        // early and hiding customers with no error anywhere. The id tie-break
+        // stays `desc` under every sort, matching the cursor's own tie-break
+        // (`id < …`): a secondary order that flipped with `order` would
+        // disagree with it on rows that compare equal.
+        orderBy: [column.orderBy(order), { id: 'desc' }],
         take: options.limit + 1,
         include: this.#counts(tenant),
       }),
@@ -119,14 +135,7 @@ export class CustomerService {
     return {
       items: page.map(toSummary),
       total,
-      ...(hasMore && last
-        ? {
-            nextPageId: encodeCursor({
-              lastActivityAt: last.lastActivityAt?.toISOString() ?? null,
-              id: last.id,
-            }),
-          }
-        : {}),
+      ...(hasMore && last ? { nextPageId: encodeCursor(sort, order, column, last) } : {}),
     };
   }
 
@@ -403,44 +412,143 @@ function toSummary(row: CustomerRow): CustomerSummary {
   };
 }
 
+/** The cursor's comparable half — whatever the sorted column holds. */
+type SortValue = string | null;
+
 /**
- * Keyset predicate for (last_activity_at DESC, id DESC).
- *
- * Customers who have never been active have a null `last_activity_at`, and
- * Postgres sorts nulls last on DESC. Once the cursor reaches them, ordering
- * continues on id alone — without this branch the comparison against null would
- * match nothing and the page would end early, silently hiding every inactive
- * customer.
+ * One sortable column, expressed four ways: how to order by it, how to read the
+ * cursor value off a row, and the two `where` fragments the keyset predicate
+ * needs (past this value, exactly this value). Kept together so a column cannot
+ * be half-added — an `orderBy` without a matching predicate pages silently
+ * wrong rather than failing. Mirrors `ticket-service.ts`'s `SortColumn`.
  */
-function cursorPredicate(cursor: Cursor): Prisma.CustomerWhereInput {
-  if (cursor.lastActivityAt === null) {
-    return { lastActivityAt: null, id: { lt: cursor.id } };
+interface SortColumn {
+  /**
+   * Whether the column can be empty. Empty cells sort *last* in both directions
+   * — a customer with no name or no country should never outrank a real one
+   * just because the order flipped — so the keyset predicate has to treat them
+   * as a trailing block rather than as a comparable value.
+   */
+  nullable: boolean;
+  orderBy: (order: SortOrder) => Record<string, unknown>;
+  valueOf: (row: CustomerRow) => SortValue;
+  /** Rows past `value` in the reading direction. */
+  beyond: (op: 'gt' | 'lt', value: string) => Record<string, unknown>;
+  equals: (value: string) => Record<string, unknown>;
+  /** Rows whose cell is empty; only meaningful when `nullable`. */
+  empty: () => Record<string, unknown>;
+}
+
+const SORT_COLUMNS: Record<CustomerSortKey, SortColumn> = {
+  last_activity: {
+    nullable: true,
+    orderBy: (order) => ({ lastActivityAt: { sort: order, nulls: 'last' } }),
+    valueOf: (row) => row.lastActivityAt?.toISOString() ?? null,
+    beyond: (op, value) => ({ lastActivityAt: { [op]: new Date(value) } }),
+    equals: (value) => ({ lastActivityAt: new Date(value) }),
+    empty: () => ({ lastActivityAt: null }),
+  },
+  name: {
+    nullable: true,
+    orderBy: (order) => ({ name: { sort: order, nulls: 'last' } }),
+    valueOf: (row) => row.name,
+    beyond: (op, value) => ({ name: { [op]: value } }),
+    equals: (value) => ({ name: value }),
+    empty: () => ({ name: null }),
+  },
+  country: {
+    // Sorts on the code, not the free-text name: the code carries the
+    // organisation-scoped index (`customers_organization_id_country_code_idx`)
+    // and is written upper-case only, matching the filter panel's own
+    // condition (`country_code`) — the same column, sorted instead of matched.
+    nullable: true,
+    orderBy: (order) => ({ countryCode: { sort: order, nulls: 'last' } }),
+    valueOf: (row) => row.countryCode,
+    beyond: (op, value) => ({ countryCode: { [op]: value } }),
+    equals: (value) => ({ countryCode: value }),
+    empty: () => ({ countryCode: null }),
+  },
+};
+
+interface Cursor {
+  value: SortValue;
+  id: string;
+}
+
+/**
+ * Keyset pagination over `(<sorted column> <order>, id DESC)`. Mirrors
+ * `ticket-service.ts`'s `cursorFilter` — see there for why the id tie-break is
+ * not optional (two customers with the same name, or the same absent one, would
+ * otherwise make the cursor ambiguous).
+ */
+function cursorFilter(
+  column: SortColumn,
+  order: SortOrder,
+  cursor: Cursor,
+): Prisma.CustomerWhereInput {
+  if (cursor.value === null) {
+    return { AND: [column.empty(), { id: { lt: cursor.id } }] } as Prisma.CustomerWhereInput;
   }
-  const at = new Date(cursor.lastActivityAt);
   return {
     OR: [
-      { lastActivityAt: { lt: at } },
-      { lastActivityAt: at, id: { lt: cursor.id } },
-      { lastActivityAt: null },
+      column.beyond(order === 'asc' ? 'gt' : 'lt', cursor.value),
+      { AND: [column.equals(cursor.value), { id: { lt: cursor.id } }] },
+      // Empty cells trail the whole collection, so they are still ahead of any
+      // row that has a value — in *both* directions, which is why this arm is
+      // not conditioned on `order`.
+      ...(column.nullable ? [column.empty()] : []),
     ],
-  };
+  } as Prisma.CustomerWhereInput;
 }
 
-function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(JSON.stringify(cursor), 'utf8').toString('base64url');
+/**
+ * The cursor records the ordering it was issued under, not only the position —
+ * see `ticket-service.ts`'s `encodeCursor` for why: a keyset cursor is a
+ * position *in one ordering*, and carrying the sort is what makes a stale one
+ * detectable instead of silently answering with a page one that looks like a
+ * page two.
+ */
+function encodeCursor(
+  sort: CustomerSortKey,
+  order: SortOrder,
+  column: SortColumn,
+  row: CustomerRow,
+): string {
+  return Buffer.from(
+    JSON.stringify({ k: sort, o: order, v: column.valueOf(row), i: row.id }),
+  ).toString('base64url');
 }
 
-function decodeCursor(pageId: string | undefined): Cursor | null {
+function decodeCursor(
+  pageId: string | undefined,
+  sort: CustomerSortKey,
+  order: SortOrder,
+): Cursor | null {
   if (!pageId) return null;
+
+  let raw: unknown;
   try {
-    const parsed = JSON.parse(Buffer.from(pageId, 'base64url').toString('utf8')) as Cursor;
-    // A malformed cursor is treated as no cursor rather than an error: it is
-    // almost always a stale bookmark, and failing the whole request for that is
-    // worse than starting from the top.
-    return typeof parsed?.id === 'string' ? parsed : null;
+    raw = JSON.parse(Buffer.from(pageId, 'base64url').toString('utf8'));
   } catch {
+    // A malformed cursor is a client bug, not a server error: start from the
+    // beginning rather than 500.
     return null;
   }
+  if (typeof raw !== 'object' || raw === null) return null;
+
+  const { k, o, v, i } = raw as { k?: unknown; o?: unknown; v?: unknown; i?: unknown };
+  if (typeof i !== 'string' || typeof k !== 'string' || typeof o !== 'string') return null;
+  if (v !== null && typeof v !== 'string') return null;
+
+  // Refused rather than restarted. Restarting would hand back rows the caller
+  // already has, labelled as the next page — the exact failure a cursor exists
+  // to prevent, and one nothing downstream could notice.
+  if (k !== sort || o !== order) {
+    throw ApiError.validation('page_id was issued for a different sort; start the list again.');
+  }
+
+  if (v !== null && sort === 'last_activity' && Number.isNaN(Date.parse(v))) return null;
+  return { value: v, id: i };
 }
 
 function detectOs(userAgent: string | undefined): string | null {

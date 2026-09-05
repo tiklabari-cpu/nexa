@@ -10,7 +10,7 @@
  * everyone — see the note in the customer service.
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ReactElement } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Card, ErrorNotice, Page } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -18,11 +18,23 @@ import { ListSkeleton } from '../../components/Skeleton.js';
 import { VirtualTable } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
-import { formatCount, formatDate } from '../../lib/format.js';
-import { useTranslate } from '../../lib/i18n.js';
+import { countryFlag, formatCount, formatDate } from '../../lib/format.js';
+import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { usePagedQuery } from '../../lib/paged-query.js';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
 import { CustomersFilters } from './CustomersFilters.js';
+import {
+  ariaSortFor,
+  CUSTOMER_COLUMNS,
+  isSortableColumn,
+  parseCustomerSort,
+  toggleCustomerSort,
+  writeCustomerSort,
+  type CustomerColumn,
+  type CustomerColumnKey,
+  type CustomerSort,
+  type CustomerSortKey,
+} from './customer-grid.js';
 import {
   buildCustomerParams,
   conditionsFromSearchParams,
@@ -46,9 +58,15 @@ function customersUrl(
   segment: Segment,
   query: string,
   conditions: readonly CustomerCondition[],
+  sort: CustomerSort,
   pageId: string | undefined,
 ): string {
-  const params = new URLSearchParams({ segment, limit: String(CUSTOMERS_PAGE_SIZE) });
+  const params = new URLSearchParams({
+    segment,
+    sort: sort.key,
+    order: sort.order,
+    limit: String(CUSTOMERS_PAGE_SIZE),
+  });
   if (query) params.set('query', query);
   for (const [key, value] of buildCustomerParams(conditions)) params.append(key, value);
   if (pageId) params.set('page_id', pageId);
@@ -75,6 +93,18 @@ export function CustomersPage(): ReactElement {
   const [conditions, setConditions] = useState<CustomerCondition[]>(() =>
     conditionsFromSearchParams(searchParams),
   );
+
+  // The table sort is the URL's job (FR-MOD-03.2.3), same contract as Tickets'
+  // grid (`ticket-grid.ts`): shareable, survives a reload, and the server does
+  // the ordering — see `customer-grid.ts`. Passing `sort` into `list`'s query
+  // key below is what restarts the page chain on a header click rather than
+  // re-ordering the rows already loaded.
+  const sort = useMemo(() => parseCustomerSort(searchParams), [searchParams]);
+  const changeSort = (key: CustomerSortKey): void => {
+    setSearchParams(writeCustomerSort(searchParams, toggleCustomerSort(sort, key)), {
+      replace: true,
+    });
+  };
 
   // Two deep links land here: `?customer=` (command palette, a bookmark, a
   // colleague) names one person — switch to the segment that contains
@@ -116,8 +146,8 @@ export function CustomersPage(): ReactElement {
   }
 
   const list = usePagedQuery<CustomerSummary>({
-    queryKey: ['customers', segment, debounced, conditions],
-    buildUrl: (pageId) => customersUrl(segment, debounced, conditions, pageId),
+    queryKey: ['customers', segment, debounced, conditions, sort.key, sort.order],
+    buildUrl: (pageId) => customersUrl(segment, debounced, conditions, sort, pageId),
   });
 
   const items = list.items;
@@ -237,66 +267,81 @@ export function CustomersPage(): ReactElement {
                 items={items}
                 rowHeight={56}
                 caption={t('customers.page.table.caption')}
-                colSpan={4}
+                colSpan={CUSTOMER_COLUMNS.length}
                 onEndReached={list.fetchNext}
                 head={
                   <thead>
-                    <tr className="border-b border-border text-left">
-                      <Th>{t('customers.page.table.name')}</Th>
-                      <Th>{t('customers.page.table.country')}</Th>
-                      <Th align="right">{t('customers.page.table.chats')}</Th>
-                      <Th>{t('customers.page.table.lastActive')}</Th>
+                    <tr className="border-b border-border">
+                      {CUSTOMER_COLUMNS.map((column) => (
+                        <ColumnHeader
+                          key={column.key}
+                          column={column}
+                          sort={sort}
+                          onSort={changeSort}
+                          t={t}
+                        />
+                      ))}
                     </tr>
                   </thead>
                 }
-                renderRow={(customer) => (
-                  <tr
-                    key={customer.id}
-                    aria-selected={selectedId === customer.id}
-                    className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
-                      selectedId === customer.id
-                        ? 'bg-brand-100 dark:bg-brand-950'
-                        : 'hover:bg-surface-2'
-                    }`}
-                    onClick={() => setSelectedId(customer.id)}
-                  >
-                    <td className="px-4 py-2.5">
-                      <button
-                        type="button"
-                        // The row is clickable for the mouse; this keeps it
-                        // reachable by keyboard without an interactive <tr>.
-                        onClick={() => setSelectedId(customer.id)}
-                        className="text-left"
-                      >
-                        <span className="flex items-center gap-2 font-medium">
-                          {customer.name ?? (
-                            <span className="italic text-content-tertiary">
-                              {t('customers.page.unnamedVisitor')}
-                            </span>
-                          )}
-                          {customer.is_lead && (
-                            <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
-                              {t('customers.page.lead')}
-                            </span>
-                          )}
-                          {customer.banned && (
-                            <StatusDot tone="danger" label={t('customers.page.banned')} />
-                          )}
+                renderRow={(customer) => {
+                  const flag = countryFlag(customer.country_code);
+                  return (
+                    <tr
+                      key={customer.id}
+                      aria-selected={selectedId === customer.id}
+                      className={`cursor-pointer border-b border-border last:border-0 transition-colors ${
+                        selectedId === customer.id
+                          ? 'bg-brand-100 dark:bg-brand-950'
+                          : 'hover:bg-surface-2'
+                      }`}
+                      onClick={() => setSelectedId(customer.id)}
+                    >
+                      <td className="px-4 py-2.5">
+                        <button
+                          type="button"
+                          // The row is clickable for the mouse; this keeps it
+                          // reachable by keyboard without an interactive <tr>.
+                          onClick={() => setSelectedId(customer.id)}
+                          className="text-left"
+                        >
+                          <span className="flex items-center gap-2 font-medium">
+                            {customer.name ?? (
+                              <span className="italic text-content-tertiary">
+                                {t('customers.page.unnamedVisitor')}
+                              </span>
+                            )}
+                            {customer.is_lead && (
+                              <span className="rounded-sm bg-inset px-1.5 py-0.5 text-2xs font-normal text-content-secondary">
+                                {t('customers.page.lead')}
+                              </span>
+                            )}
+                            {customer.banned && (
+                              <StatusDot tone="danger" label={t('customers.page.banned')} />
+                            )}
+                          </span>
+                        </button>
+                      </td>
+                      <td className="px-4 py-2.5 text-content-secondary">
+                        <span className="block truncate">{customer.email ?? '—'}</span>
+                      </td>
+                      <td className="px-4 py-2.5 text-content-secondary">
+                        {customer.phone ?? '—'}
+                      </td>
+                      <td className="px-4 py-2.5 text-content-secondary">
+                        <span className="inline-flex items-center gap-1.5">
+                          {flag && <span aria-hidden="true">{flag}</span>}
+                          <span>{customer.country ?? customer.country_code ?? '—'}</span>
                         </span>
-                        <span className="block truncate text-2xs text-content-tertiary">
-                          {customer.email ?? customer.phone ?? t('customers.page.noContactDetails')}
-                        </span>
-                      </button>
-                    </td>
-                    <td className="px-4 py-2.5 text-content-secondary">
-                      {customer.country ?? customer.country_code ?? '—'}
-                    </td>
-                    <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
-                    <td className="px-4 py-2.5 text-content-secondary">
-                      {formatDate(customer.last_activity_at) ?? t('customers.page.never')}
-                    </td>
-                  </tr>
-                )}
+                      </td>
+                      <td className="px-4 py-2.5 text-content-secondary">
+                        {formatDate(customer.last_activity_at) ?? t('customers.page.never')}
+                      </td>
+                      <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
+                      <td className="tabular px-4 py-2.5 text-right">{customer.tickets_count}</td>
+                    </tr>
+                  );
+                }}
               />
             )}
           </Card>
@@ -315,21 +360,63 @@ export function CustomersPage(): ReactElement {
   );
 }
 
-function Th({
-  children,
-  align = 'left',
+/** Display word for a table column — `CUSTOMER_COLUMNS`'s own labels are English-only. */
+const COLUMN_LABEL_KEY: Record<CustomerColumnKey, string> = {
+  name: 'customers.page.table.name',
+  email: 'customers.page.table.email',
+  phone: 'customers.page.table.phone',
+  country: 'customers.page.table.country',
+  last_activity: 'customers.page.table.lastActive',
+  chats: 'customers.page.table.chats',
+  tickets: 'customers.page.table.tickets',
+};
+
+/**
+ * A column header. Sortable ones are a button carrying `aria-sort`; the rest
+ * are plain text, deliberately not a control that does nothing — mirrors
+ * `TicketGrid.tsx`'s own `ColumnHeader`.
+ */
+function ColumnHeader({
+  column,
+  sort,
+  onSort,
+  t,
 }: {
-  children: string;
-  align?: 'left' | 'right';
+  column: CustomerColumn;
+  sort: CustomerSort;
+  onSort: (key: CustomerSortKey) => void;
+  t: TFunction;
 }): ReactElement {
+  const className = `px-4 py-2 text-xs font-medium text-content-secondary ${
+    column.align === 'right' ? 'text-right' : 'text-left'
+  }`;
+  const label = t(COLUMN_LABEL_KEY[column.key]);
+
+  if (!isSortableColumn(column.key)) {
+    return (
+      <th scope="col" className={className}>
+        {label}
+      </th>
+    );
+  }
+
+  const key = column.key;
+  const active = sort.key === key;
+  const glyph = active ? (sort.order === 'asc' ? '▲' : '▼') : '↕';
   return (
-    <th
-      scope="col"
-      className={`px-4 py-2 text-xs font-medium text-content-secondary ${
-        align === 'right' ? 'text-right' : ''
-      }`}
-    >
-      {children}
+    <th scope="col" aria-sort={ariaSortFor(sort, key)} className={className}>
+      <button
+        type="button"
+        onClick={() => onSort(key)}
+        className={`inline-flex items-center gap-1 hover:text-content ${
+          active ? 'text-content' : ''
+        }`}
+      >
+        <span>{label}</span>
+        <span aria-hidden="true" className={active ? '' : 'text-content-tertiary'}>
+          {glyph}
+        </span>
+      </button>
     </th>
   );
 }

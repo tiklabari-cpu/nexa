@@ -80,6 +80,23 @@ export function formatMoney(
   return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(cents / 100);
 }
 
+/**
+ * ISO 3166-1 alpha-2 code → its flag emoji, via the Unicode regional indicator
+ * symbols (each letter maps to `U+1F1E6..U+1F1FF`, offset from `A`). `null` for
+ * anything that is not exactly two letters, so a caller can fall back to
+ * showing no flag rather than a mangled one.
+ *
+ * Purely decorative — some platforms render the two-letter code instead of a
+ * flag glyph, and a flag alone says nothing to a screen reader either way.
+ * Pair it with the country's name as real text (FR-MOD-03.2.3); never use this
+ * as the accessible name on its own.
+ */
+export function countryFlag(code: string | null | undefined): string | null {
+  if (!code || !/^[A-Za-z]{2}$/.test(code)) return null;
+  const points = [...code.toUpperCase()].map((letter) => 0x1f1e6 + letter.charCodeAt(0) - 65);
+  return String.fromCodePoint(...points);
+}
+
 /** ISO timestamp → a short absolute date. */
 export function formatDate(
   iso: string | null | undefined,

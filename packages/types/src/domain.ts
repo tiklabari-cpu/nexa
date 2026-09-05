@@ -98,6 +98,23 @@ export const DEFAULT_TICKET_SORT_KEY: TicketSortKey = 'last_message';
 export const SORT_ORDERS = ['asc', 'desc'] as const;
 export type SortOrder = (typeof SORT_ORDERS)[number];
 
+/**
+ * The columns `GET /customers` can order the *whole* collection by
+ * (FR-MOD-03.2.3).
+ *
+ * `chats_count` and `tickets_count` are absent for the same reason
+ * `TICKET_SORT_KEYS` leaves out `status`/`assignee`: what the table shows is a
+ * license-scoped count (`CustomerService#counts`'s `_count` with a `where`),
+ * and Prisma's relation-aggregate `orderBy` cannot carry that filter — sorting
+ * by the *unscoped* relation count would silently disagree with the number
+ * printed in the cell next to it.
+ */
+export const CUSTOMER_SORT_KEYS = ['last_activity', 'name', 'country'] as const;
+export type CustomerSortKey = (typeof CUSTOMER_SORT_KEYS)[number];
+
+/** Matches the server's existing default (`GET /customers` — most recent activity first). */
+export const DEFAULT_CUSTOMER_SORT_KEY: CustomerSortKey = 'last_activity';
+
 // --- AI ---------------------------------------------------------------------
 
 export const AI_AGENT_KINDS = ['ai_agent', 'copilot'] as const;

@@ -214,6 +214,23 @@ export const settings: Messages = {
   'settings.channels.email.name': 'E-posta',
   'settings.channels.email.description':
     'Destek gelen kutunuzu buraya yönlendirin, her e-posta bir talebe dönüşsün.',
+  'settings.channels.email.manage': 'Adresleri yönet',
+  'settings.channels.email.manageTitle': 'E-posta yönlendirme adresleri',
+  'settings.channels.email.manageDescription':
+    'Destek postanızı bunlardan herhangi birine yönlendirin, her mesaj bir talebe dönüşsün. Yeni kurduğunuz bir adresi denemek için test mesajı gönderin.',
+  'settings.channels.email.defaultAddress': 'Varsayılan',
+  'settings.channels.email.received': '{count} mesaj · son {when}',
+  'settings.channels.email.neverReceived': 'Henüz mesaj gelmedi.',
+  'settings.channels.email.sendTest': 'Test mesajı gönder',
+  'settings.channels.email.testSent': '{address} adresine test mesajı ulaştı — Talepler’e bakın.',
+  'settings.channels.email.remove': 'Kaldır',
+  'settings.channels.email.removeConfirm':
+    'Bu adres kaldırılsın mı? Buraya gönderilen postalar artık ulaşmaz. Mevcut talepler kalır.',
+  'settings.channels.email.add': 'Adres ekle',
+  'settings.channels.email.labelLabel': 'Adres adı (örneğin support)',
+  'settings.channels.email.labelRequired': 'Adres için bir ad girin.',
+  'settings.channels.email.labelInvalid':
+    '1-32 karakter; küçük harf, rakam veya aradaki tire kullanın (örneğin support).',
   'settings.channels.messenger.name': 'Facebook Messenger',
   'settings.channels.messenger.description': 'Messenger sohbetlerini yanıtlayın.',
   'settings.channels.messenger.connectCta': 'Facebook ile bağlan (sahte)',

@@ -347,3 +347,149 @@ channelWebhook:
                     reason: { type: string, enum: [spam] }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+
+emailAddresses:
+  get:
+    tags: [Configuration]
+    operationId: listInboundEmailAddresses
+    summary: The workspace's e-mail forwarding addresses
+    description: |
+      Every address support mail may be forwarded to (FR-MOD-08.5.3). The first
+      is always the workspace's default, `<organization_id>@<domain>` — the one
+      that has always existed and keeps working unchanged. Any further address
+      carries a label: `<organization_id>+support@<domain>`.
+
+      Each row reports its own activity — how many tickets have arrived at it and
+      when the last one did. That is the acceptance criterion's verification
+      half: an address a workspace has just pasted into a mail provider is either
+      receiving or it is not, and this is where that shows. `POST
+      /channels/email/addresses/{addressId}/test` produces the same evidence on
+      demand.
+
+      Gated on `channels--all:ro` (or the write scope, which subsumes it) — the
+      same channel-administration door `GET /channels` sits behind. RLS confines
+      the result to the caller's workspace.
+    responses:
+      "200":
+        description: The workspace's forwarding addresses, default first.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [domain, items]
+              properties:
+                domain:
+                  type: string
+                  description: |
+                    The inbound domain the deployment answers at
+                    (`INBOUND_EMAIL_DOMAIN`). Returned so the console shows the
+                    address the API will actually route, not one it guessed.
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/InboundEmailAddress" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    tags: [Configuration]
+    operationId: createInboundEmailAddress
+    summary: Define another forwarding address
+    description: |
+      Adds `<organization_id>+<label>@<domain>` to the workspace. The label is a
+      conservative slug (lowercase letters, digits, interior hyphens) because it
+      becomes part of an e-mail local part.
+
+      The organization id stays in front of the label, so an address belongs to
+      exactly one workspace by construction; the database enforces the same rule
+      independently through a unique key on the whole local part. A label already
+      taken in this workspace is a 400 that says only that the address is taken —
+      never who holds it (NFR-S5).
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [label]
+            properties:
+              label:
+                type: string
+                minLength: 1
+                maxLength: 32
+                pattern: "^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$"
+                description: The part that follows the `+`, e.g. `support`.
+    responses:
+      "201":
+        description: The new address.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/InboundEmailAddress" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+emailAddress:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/EmailAddressIdPath"
+  delete:
+    tags: [Configuration]
+    operationId: deleteInboundEmailAddress
+    summary: Stop accepting mail at a forwarding address
+    description: |
+      Mail sent to the address stops resolving at once. The tickets it already
+      produced are kept and simply stop naming an address — the conversation
+      outlives the mailbox it arrived through.
+
+      The workspace's default address cannot be deleted: it is the address every
+      existing forwarding rule points at, and removing it would silently drop
+      support mail. That refusal is a 400.
+    responses:
+      "204": { description: Deleted }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+emailAddressTest:
+  parameters:
+    - $ref: "../openapi.yaml#/components/parameters/EmailAddressIdPath"
+  post:
+    tags: [Configuration]
+    operationId: testInboundEmailAddress
+    summary: Send a test message to a forwarding address
+    description: |
+      The acceptance criterion's "test doğrulama" (FR-MOD-08.5.3): an action that
+      proves an address really works, rather than a screen asserting it does.
+
+      A message addressed to this address is put through the very same pipeline a
+      forwarded mail takes — the recipient resolves to this workspace, the sender
+      becomes (or is matched to) a customer, and a ticket is opened carrying the
+      address. It is a real ticket, not a simulation with the assertions removed;
+      that is what makes it evidence. Delivery itself is the mocked half in this
+      build (MASTER-PROMPT §5), so what this proves is everything from the
+      address inward.
+
+      The reply names the ticket that was created, and the address's
+      `last_received_at` moves — so the console can show the result immediately
+      and `GET /channels/email/addresses` reports it afterwards.
+    responses:
+      "200":
+        description: The ticket the test message produced.
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket_id, address]
+              properties:
+                ticket_id:
+                  type: string
+                  description: The ticket the test message opened.
+                address:
+                  type: string
+                  description: The address the message was sent to.
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

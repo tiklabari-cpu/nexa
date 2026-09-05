@@ -5028,6 +5028,117 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/channels/email/addresses': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The workspace's e-mail forwarding addresses
+     * @description Every address support mail may be forwarded to (FR-MOD-08.5.3). The first
+     *     is always the workspace's default, `<organization_id>@<domain>` — the one
+     *     that has always existed and keeps working unchanged. Any further address
+     *     carries a label: `<organization_id>+support@<domain>`.
+     *
+     *     Each row reports its own activity — how many tickets have arrived at it and
+     *     when the last one did. That is the acceptance criterion's verification
+     *     half: an address a workspace has just pasted into a mail provider is either
+     *     receiving or it is not, and this is where that shows. `POST
+     *     /channels/email/addresses/{addressId}/test` produces the same evidence on
+     *     demand.
+     *
+     *     Gated on `channels--all:ro` (or the write scope, which subsumes it) — the
+     *     same channel-administration door `GET /channels` sits behind. RLS confines
+     *     the result to the caller's workspace.
+     */
+    get: operations['listInboundEmailAddresses'];
+    put?: never;
+    /**
+     * Define another forwarding address
+     * @description Adds `<organization_id>+<label>@<domain>` to the workspace. The label is a
+     *     conservative slug (lowercase letters, digits, interior hyphens) because it
+     *     becomes part of an e-mail local part.
+     *
+     *     The organization id stays in front of the label, so an address belongs to
+     *     exactly one workspace by construction; the database enforces the same rule
+     *     independently through a unique key on the whole local part. A label already
+     *     taken in this workspace is a 400 that says only that the address is taken —
+     *     never who holds it (NFR-S5).
+     */
+    post: operations['createInboundEmailAddress'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/email/addresses/{addressId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The forwarding address's id, as `GET /channels/email/addresses` returns it. */
+        addressId: components['parameters']['EmailAddressIdPath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Stop accepting mail at a forwarding address
+     * @description Mail sent to the address stops resolving at once. The tickets it already
+     *     produced are kept and simply stop naming an address — the conversation
+     *     outlives the mailbox it arrived through.
+     *
+     *     The workspace's default address cannot be deleted: it is the address every
+     *     existing forwarding rule points at, and removing it would silently drop
+     *     support mail. That refusal is a 400.
+     */
+    delete: operations['deleteInboundEmailAddress'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/channels/email/addresses/{addressId}/test': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The forwarding address's id, as `GET /channels/email/addresses` returns it. */
+        addressId: components['parameters']['EmailAddressIdPath'];
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Send a test message to a forwarding address
+     * @description The acceptance criterion's "test doğrulama" (FR-MOD-08.5.3): an action that
+     *     proves an address really works, rather than a screen asserting it does.
+     *
+     *     A message addressed to this address is put through the very same pipeline a
+     *     forwarded mail takes — the recipient resolves to this workspace, the sender
+     *     becomes (or is matched to) a customer, and a ticket is opened carrying the
+     *     address. It is a real ticket, not a simulation with the assertions removed;
+     *     that is what makes it evidence. Delivery itself is the mocked half in this
+     *     build (MASTER-PROMPT §5), so what this proves is everything from the
+     *     address inward.
+     *
+     *     The reply names the ticket that was created, and the address's
+     *     `last_received_at` moves — so the console can show the result immediately
+     *     and `GET /channels/email/addresses` reports it afterwards.
+     */
+    post: operations['testInboundEmailAddress'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/uploads': {
     parameters: {
       query?: never;
@@ -7461,6 +7572,34 @@ export interface components {
       address?: string | null;
       /** @description Whether inbound and outbound currently flow for this channel. */
       connected: boolean;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
+     * @description A forwarding address the workspace's support mail arrives at
+     *     (FR-MOD-08.5.3). `address` is the whole thing — the local part is
+     *     `<organization_id>` for the default address and
+     *     `<organization_id>+<label>` for any other, so no two workspaces can be
+     *     handed the same address.
+     */
+    InboundEmailAddress: {
+      /** Format: uuid */
+      id: string;
+      /** @description The part after the `+`; null for the default address. */
+      label: string | null;
+      /** @description The full address, ready to paste into a forwarding rule. */
+      address: string;
+      /** @description Whether this is the workspace's original, unlabelled address. */
+      is_default: boolean;
+      /** @description How many tickets have arrived at this address. */
+      ticket_count: number;
+      /**
+       * Format: date-time
+       * @description When the most recent message arrived, or null while the address has
+       *     received nothing. Together with `ticket_count` this is the address's
+       *     verification signal — the proof that forwarding to it really works.
+       */
+      last_received_at: string | null;
       /** Format: date-time */
       created_at: string;
     };
@@ -10699,6 +10838,8 @@ export interface components {
     ChatId: string;
     /** @description The adapter channel. */
     ChannelTypePath: components['schemas']['ChannelType'];
+    /** @description The forwarding address's id, as `GET /channels/email/addresses` returns it. */
+    EmailAddressIdPath: string;
     /** @description The team's numeric id, as `GET /groups` returns it. */
     GroupIdPath: number;
     /** @description The agent account's uuid. */
@@ -18528,6 +18669,126 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       404: components['responses']['NotFound'];
+    };
+  };
+  listInboundEmailAddresses: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's forwarding addresses, default first. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /**
+             * @description The inbound domain the deployment answers at
+             *     (`INBOUND_EMAIL_DOMAIN`). Returned so the console shows the
+             *     address the API will actually route, not one it guessed.
+             */
+            domain: string;
+            items: components['schemas']['InboundEmailAddress'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createInboundEmailAddress: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The part that follows the `+`, e.g. `support`. */
+          label: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The new address. */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['InboundEmailAddress'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteInboundEmailAddress: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The forwarding address's id, as `GET /channels/email/addresses` returns it. */
+        addressId: components['parameters']['EmailAddressIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  testInboundEmailAddress: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description The forwarding address's id, as `GET /channels/email/addresses` returns it. */
+        addressId: components['parameters']['EmailAddressIdPath'];
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The ticket the test message produced. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            /** @description The ticket the test message opened. */
+            ticket_id: string;
+            /** @description The address the message was sent to. */
+            address: string;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
     };
   };
   createUpload: {

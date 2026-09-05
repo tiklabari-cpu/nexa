@@ -656,6 +656,27 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // The forwarding-address dialog (FR-MOD-08.5.3). The Settings scan below
+      // reaches the Email card but not what the card opens, and this dialog is
+      // the one that renders server-supplied text — each address's own activity
+      // line — so its colours are the ones nobody has looked at in either
+      // theme. Read-only: no address is defined and no test message is sent.
+      test('the email addresses dialog has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/settings');
+        await scanPanel(agentPage, 'Email addresses dialog', theme, testInfo, async () => {
+          await agentPage.getByRole('button', { name: 'Manage addresses' }).click();
+          const dialog = agentPage.getByRole('dialog', { name: 'Email forwarding addresses' });
+          await expect(dialog).toBeVisible();
+          // Wait for the list, or the scan races the response and looks at a
+          // dialog whose rows have not arrived. `Default` is the one label the
+          // workspace always has, whatever else it has defined.
+          await expect(dialog.getByText('Default')).toBeVisible();
+        });
+      });
+
       test('settings has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/settings');

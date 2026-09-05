@@ -221,6 +221,23 @@ export const settings: Messages = {
   'settings.channels.email.name': 'Email',
   'settings.channels.email.description':
     'Forward your support inbox here and each email becomes a ticket.',
+  'settings.channels.email.manage': 'Manage addresses',
+  'settings.channels.email.manageTitle': 'Email forwarding addresses',
+  'settings.channels.email.manageDescription':
+    'Forward support mail to any of these and each message becomes a ticket. Send a test message to check an address you have just set up.',
+  'settings.channels.email.defaultAddress': 'Default',
+  'settings.channels.email.received': '{count} received · last {when}',
+  'settings.channels.email.neverReceived': 'Nothing received yet.',
+  'settings.channels.email.sendTest': 'Send test message',
+  'settings.channels.email.testSent': 'Test message delivered to {address} — check your Tickets.',
+  'settings.channels.email.remove': 'Remove',
+  'settings.channels.email.removeConfirm':
+    'Remove this address? Mail sent to it will stop arriving. Existing tickets are kept.',
+  'settings.channels.email.add': 'Add address',
+  'settings.channels.email.labelLabel': 'Address name (for example support)',
+  'settings.channels.email.labelRequired': 'Enter a name for the address.',
+  'settings.channels.email.labelInvalid':
+    'Use 1-32 lowercase letters, digits or interior hyphens, e.g. support.',
   'settings.channels.messenger.name': 'Facebook Messenger',
   'settings.channels.messenger.description': 'Answer Messenger conversations.',
   'settings.channels.messenger.connectCta': 'Connect with Facebook (mock)',

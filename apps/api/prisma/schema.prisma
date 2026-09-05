@@ -135,6 +135,7 @@ model License {
   channels               Channel[]
   channelIdentities      ChannelIdentity[]
   channelMessages        ChannelMessage[]
+  inboundEmailAddresses  InboundEmailAddress[]
   websites               Website[]
   brands                 Brand[]
   webhooks               Webhook[]
@@ -1050,6 +1051,10 @@ model Ticket {
   /// itself; "no chains" (a merged ticket cannot itself be a target) is enforced
   /// in the service.
   mergedIntoId  String?   @map("merged_into_id") @db.VarChar(12)
+  /// The forwarding address this ticket arrived at, or null when it did not
+  /// arrive by e-mail (FR-MOD-08.5.3). Read by the addresses list, which reports
+  /// each address's own activity — the signal that proves an address works.
+  inboundAddressId String?  @map("inbound_address_id") @db.Uuid
   lastMessageAt DateTime? @map("last_message_at") @db.Timestamptz(6)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
@@ -1057,6 +1062,7 @@ model Ticket {
   customer          Customer?          @relation(fields: [customerId], references: [id], onDelete: SetNull)
   sourceChat        Chat?              @relation(fields: [sourceChatId], references: [id], onDelete: SetNull)
   mergedInto        Ticket?            @relation("TicketMerge", fields: [mergedIntoId], references: [id], onDelete: SetNull)
+  inboundAddress    InboundEmailAddress? @relation(fields: [inboundAddressId], references: [id], onDelete: SetNull)
   mergedTickets     Ticket[]           @relation("TicketMerge")
   followers         TicketFollower[]
   tags              TicketTag[]
@@ -1071,6 +1077,9 @@ model Ticket {
   /// (FR-MOD-03.2.1) — nothing indexed `customer_id` before this, so that
   /// probe was a sequential scan of the license's tickets per candidate row.
   @@index([licenseId, customerId], map: "tickets_license_customer_idx")
+  /// Serves the per-address activity the forwarding-address list reports
+  /// (FR-MOD-08.5.3) — without it that aggregate scans the licence's tickets.
+  @@index([inboundAddressId], map: "tickets_inbound_address_idx")
   @@map("tickets")
 }
 
@@ -1629,6 +1638,35 @@ model ChannelMessage {
   @@index([licenseId, channelType, createdAt])
   @@index([licenseId, chatId])
   @@map("channel_messages")
+}
+
+/// A forwarding address a workspace's support mail arrives at (FR-MOD-08.5.3).
+///
+/// The default address is `<organization_id>@<inbound-domain>` — the row whose
+/// `label` is null — and a workspace may define further ones as
+/// `<organization_id>+<label>@<inbound-domain>`. The organization id in front of
+/// the label is what makes an address un-collidable between tenants, and
+/// `local_part` carries the whole routing key, so the database rather than a
+/// parsing rule is what refuses two workspaces the same address.
+///
+/// Two constraints live only in 20260905140000_inbound_email_addresses: the
+/// label's slug CHECK, and the partial unique index that allows a licence
+/// exactly one default address (`WHERE label IS NULL`, registered in
+/// `scripts/check-drift.ts` because Prisma cannot express a WHERE predicate).
+model InboundEmailAddress {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  /// The part after the `+`, or null for the workspace's default address.
+  label     String?
+  /// The full local part a provider addressed: `<org>` or `<org>+<label>`.
+  localPart String   @unique @map("local_part")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License  @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  tickets Ticket[]
+
+  @@unique([licenseId, label])
+  @@map("inbound_email_addresses")
 }
 
 /// A site the widget is installed on.

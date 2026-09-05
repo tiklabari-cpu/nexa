@@ -312,6 +312,14 @@ export const AUDIT_ACTIONS = [
   // `channels` row already; the entry names only the channel type and brand.
   'channel.connected',
   'channel.disconnected',
+  // A forwarding address was opened or closed (FR-MOD-08.5.3). Its own pair
+  // rather than folding into `channel.*`: those record a provider being wired
+  // up, this records a new door customer mail can arrive through. The address
+  // is carried in the metadata because it is not a secret — the workspace
+  // hands it to a mail provider — and which mailbox opened is the question a
+  // reader of the trail is asking.
+  'email_address.created',
+  'email_address.deleted',
   // Credentials
   'pat.created',
   'pat.revoked',

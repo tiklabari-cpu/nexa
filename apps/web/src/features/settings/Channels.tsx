@@ -324,11 +324,19 @@ function ChatPageLink({ label }: { label: string }): ReactElement {
  * Whatever a customer sends here lands in the inbox as a ticket. Like the Chat
  * page link it copies to the clipboard and shows the value, so it can be pasted
  * into a mail provider's forwarding rule either way.
+ *
+ * The default address is still derived here rather than read from the API, so
+ * the card shows it to every agent and without a request. Everything *past* the
+ * default — the other addresses, their activity, the test action — lives behind
+ * the Manage dialog and the `channels--all` scope, which is where workspace
+ * configuration belongs.
  */
 function EmailForwardingAddress({ label }: { label: string }): ReactElement {
   const t = useTranslate();
   const orgId = useAuth((s) => s.agent?.organization_id ?? null);
+  const scopes = useAuth((s) => s.agent?.scopes ?? []);
   const [copied, setCopied] = useState(false);
+  const [managing, setManaging] = useState(false);
   const address = orgId ? `${orgId}@${INBOUND_EMAIL_DOMAIN}` : '';
 
   const copy = (): void => {
@@ -344,14 +352,25 @@ function EmailForwardingAddress({ label }: { label: string }): ReactElement {
 
   return (
     <div className="flex min-w-0 flex-col gap-1">
-      <button
-        type="button"
-        onClick={copy}
-        disabled={!address}
-        className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-      >
-        {copied ? t('settings.copied') : label}
-      </button>
+      <div className="flex flex-wrap items-center gap-1.5">
+        <button
+          type="button"
+          onClick={copy}
+          disabled={!address}
+          className="rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+        >
+          {copied ? t('settings.copied') : label}
+        </button>
+        {canReadChannels(scopes) && (
+          <button
+            type="button"
+            onClick={() => setManaging(true)}
+            className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+          >
+            {t('settings.channels.email.manage')}
+          </button>
+        )}
+      </div>
       {address && (
         <code
           data-testid="email-forwarding-address"
@@ -360,7 +379,195 @@ function EmailForwardingAddress({ label }: { label: string }): ReactElement {
           {address}
         </code>
       )}
+      {managing && <EmailAddressesDialog onClose={() => setManaging(false)} />}
     </div>
+  );
+}
+
+/** One row of the forwarding-address table, as `GET /channels/email/addresses` returns it. */
+interface InboundEmailAddressRow {
+  id: string;
+  label: string | null;
+  address: string;
+  is_default: boolean;
+  ticket_count: number;
+  last_received_at: string | null;
+}
+
+/**
+ * The label vocabulary, kept identical to the endpoint's own (FR-MOD-08.5.3).
+ *
+ * Written out here rather than borrowed from a similar-looking field: the
+ * server, the OpenAPI `pattern` and the `inbound_email_addresses_label_check`
+ * CHECK all say this same sentence, and a client rule that said something
+ * narrower would refuse addresses the product accepts.
+ */
+const LABEL_RE = /^[a-z0-9]([a-z0-9-]{0,30}[a-z0-9])?$/;
+
+/**
+ * Manage which mailboxes support mail may be forwarded to (FR-MOD-08.5.3).
+ *
+ * Two acceptance criteria meet here. *Multiple addresses*: the workspace can
+ * define `<org>+support@…` beside the address it has always had. And *test
+ * verification*: each row reports what it has actually received, and "Send test
+ * message" produces that evidence on demand rather than leaving an admin to
+ * guess whether a forwarding rule they just wrote works.
+ */
+function EmailAddressesDialog({ onClose }: { onClose: () => void }): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const client = useQueryClient();
+  const [tested, setTested] = useState<string | null>(null);
+
+  const addresses = useQuery({
+    queryKey: ['settings', 'email-addresses'],
+    queryFn: () =>
+      api.get<{ domain: string; items: InboundEmailAddressRow[] }>('/channels/email/addresses'),
+  });
+
+  const invalidate = (): void => {
+    void client.invalidateQueries({ queryKey: ['settings', 'email-addresses'] });
+  };
+
+  const create = useMutation({
+    mutationFn: (body: { label: string }) => api.post('/channels/email/addresses', body),
+    onSuccess: invalidate,
+  });
+
+  const remove = useMutation({
+    mutationFn: (addressId: string) => api.delete(`/channels/email/addresses/${addressId}`),
+    onSuccess: invalidate,
+  });
+
+  const sendTest = useMutation({
+    mutationFn: (addressId: string) =>
+      api.post<{ ticket_id: string; address: string }>(
+        `/channels/email/addresses/${addressId}/test`,
+      ),
+    onSuccess: (result) => {
+      setTested(result.address);
+      invalidate();
+    },
+  });
+
+  const form = useForm({
+    initial: { label: '' },
+    validators: {
+      label: compose(required(t('settings.channels.email.labelRequired')), (value) =>
+        LABEL_RE.test(value.trim()) ? null : t('settings.channels.email.labelInvalid'),
+      ),
+    },
+    onSubmit: async (values, { setSubmitError, reset }) => {
+      try {
+        await create.mutateAsync({ label: values.label.trim() });
+        reset();
+      } catch (failure) {
+        setSubmitError(t(errorMessageKey(failure)));
+      }
+    },
+  });
+
+  return (
+    <Modal
+      onClose={onClose}
+      title={t('settings.channels.email.manageTitle')}
+      description={t('settings.channels.email.manageDescription')}
+    >
+      {addresses.isError && <ErrorNotice message={t(errorMessageKey(addresses.error))} />}
+
+      <ul data-testid="email-address-list" className="mb-4 flex flex-col gap-2">
+        {(addresses.data?.items ?? []).map((row) => (
+          <li key={row.id} className="rounded-md border border-border p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+              <code className="min-w-0 break-all text-xs">{row.address}</code>
+              {row.is_default && (
+                <span className="text-2xs text-content-tertiary">
+                  {t('settings.channels.email.defaultAddress')}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-2xs text-content-secondary">
+              {row.last_received_at
+                ? t('settings.channels.email.received', {
+                    count: String(row.ticket_count),
+                    when: new Date(row.last_received_at).toLocaleString(),
+                  })
+                : t('settings.channels.email.neverReceived')}
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                onClick={() => sendTest.mutate(row.id)}
+                disabled={sendTest.isPending}
+                className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                {t('settings.channels.email.sendTest')}
+              </button>
+              {!row.is_default && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (window.confirm(t('settings.channels.email.removeConfirm'))) {
+                      remove.mutate(row.id);
+                    }
+                  }}
+                  disabled={remove.isPending}
+                  className="rounded-md border border-border px-2.5 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+                >
+                  {t('settings.channels.email.remove')}
+                </button>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      {tested && (
+        <p role="status" className="mb-3 text-sm text-content-secondary">
+          {t('settings.channels.email.testSent', { address: tested })}
+        </p>
+      )}
+      {sendTest.isError && <ErrorNotice message={t(errorMessageKey(sendTest.error))} />}
+      {remove.isError && <ErrorNotice message={t(errorMessageKey(remove.error))} />}
+
+      <form onSubmit={form.handleSubmit} noValidate>
+        {form.submitError && (
+          <p role="alert" className="mb-3 text-sm text-danger">
+            {form.submitError}
+          </p>
+        )}
+        <label htmlFor="email-address-label" className="mb-1.5 block text-sm font-medium">
+          {t('settings.channels.email.labelLabel')}
+        </label>
+        <input
+          id="email-address-label"
+          value={form.values.label}
+          onChange={(event) => form.setValue('label', event.target.value)}
+          onBlur={() => form.blur('label')}
+          aria-invalid={form.errorFor('label') ? true : undefined}
+          aria-describedby={form.errorFor('label') ? 'email-address-label-error' : undefined}
+          className="mb-1 w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+        />
+        <FieldError id="email-address-label-error" message={form.errorFor('label')} />
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('settings.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+          >
+            {t('settings.channels.email.add')}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 

@@ -291,7 +291,7 @@ export class TicketService {
   async createFromEmail(
     tx: TenantClient,
     tenant: TenantContext,
-    input: { subject: string; customerId: string },
+    input: { subject: string; customerId: string; inboundAddressId?: string | null },
   ): Promise<{ id: string }> {
     const subject = input.subject.trim() || '(no subject)';
     const created = await tx.ticket.create({
@@ -301,6 +301,10 @@ export class TicketService {
         subject,
         status: 'open',
         customerId: input.customerId,
+        // Which forwarding address this arrived at (FR-MOD-08.5.3). Null when
+        // the caller did not name one — a ticket that did not come by e-mail
+        // has no mailbox to point at.
+        inboundAddressId: input.inboundAddressId ?? null,
         // Set on creation so the ticket sorts from its first moment, matching
         // create(): a null activity timestamp sorts unpredictably in the queue.
         lastMessageAt: new Date(),

@@ -70,6 +70,14 @@ const KNOWN_UNMODELLABLE = [
     reason:
       "partial index (poll lookup of a visitor's still-pending campaign sends) — Prisma cannot express a WHERE predicate",
   },
+  {
+    // Created as `ON inbound_email_addresses(license_id) WHERE label IS NULL` in
+    // 20260905140000_inbound_email_addresses.
+    pattern:
+      /CREATE UNIQUE INDEX "inbound_email_addresses_one_default_per_license" ON "public"\."inbound_email_addresses"/,
+    reason:
+      'partial unique index (one default forwarding address per licence) — Prisma cannot express a WHERE predicate',
+  },
 ];
 
 async function main(): Promise<void> {

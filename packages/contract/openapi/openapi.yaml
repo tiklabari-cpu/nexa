@@ -468,6 +468,12 @@ paths:
     $ref: "./paths/channels.yaml#/channelWebhook"
   /channels/email/inbound:
     $ref: "./paths/channels.yaml#/emailInbound"
+  /channels/email/addresses:
+    $ref: "./paths/channels.yaml#/emailAddresses"
+  /channels/email/addresses/{addressId}:
+    $ref: "./paths/channels.yaml#/emailAddress"
+  /channels/email/addresses/{addressId}/test:
+    $ref: "./paths/channels.yaml#/emailAddressTest"
 
   /uploads:
     $ref: "./paths/uploads.yaml#/issueUpload"
@@ -1690,6 +1696,40 @@ components:
         connected:
           type: boolean
           description: Whether inbound and outbound currently flow for this channel.
+        created_at: { type: string, format: date-time }
+
+    InboundEmailAddress:
+      type: object
+      description: |
+        A forwarding address the workspace's support mail arrives at
+        (FR-MOD-08.5.3). `address` is the whole thing — the local part is
+        `<organization_id>` for the default address and
+        `<organization_id>+<label>` for any other, so no two workspaces can be
+        handed the same address.
+      required: [id, label, address, is_default, ticket_count, last_received_at, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        label:
+          type: string
+          nullable: true
+          description: The part after the `+`; null for the default address.
+        address:
+          type: string
+          description: The full address, ready to paste into a forwarding rule.
+        is_default:
+          type: boolean
+          description: Whether this is the workspace's original, unlabelled address.
+        ticket_count:
+          type: integer
+          description: How many tickets have arrived at this address.
+        last_received_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the most recent message arrived, or null while the address has
+            received nothing. Together with `ticket_count` this is the address's
+            verification signal — the proof that forwarding to it really works.
         created_at: { type: string, format: date-time }
 
     ChannelSendResult:
@@ -5629,6 +5669,12 @@ components:
       required: true
       description: The adapter channel.
       schema: { $ref: "#/components/schemas/ChannelType" }
+    EmailAddressIdPath:
+      name: addressId
+      in: path
+      required: true
+      description: The forwarding address's id, as `GET /channels/email/addresses` returns it.
+      schema: { type: string, format: uuid }
     GroupIdPath:
       name: groupId
       in: path

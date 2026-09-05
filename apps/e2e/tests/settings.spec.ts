@@ -154,6 +154,45 @@ test.describe('channels', () => {
 
     await agentPage.screenshot({ path: 'kanit/10-email-channel.png', fullPage: true });
   });
+
+  // FR-MOD-08.5.3, the other half of the acceptance criterion: a workspace can
+  // hold more than one forwarding address, and can find out whether one works
+  // without waiting for a customer to write in.
+  test('adds a second forwarding address and proves it receives', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings');
+    const email = agentPage.getByRole('region', { name: 'Channels' }).getByTestId('channel-email');
+    await email.getByRole('button', { name: 'Manage addresses' }).click();
+
+    const dialog = agentPage.getByRole('dialog', { name: 'Email forwarding addresses' });
+    // The address the workspace has always had is still there and still first.
+    await expect(dialog.getByText('Default')).toBeVisible();
+
+    // Unique per run: this drives the seeded database, and the same label twice
+    // is exactly the collision the endpoint refuses.
+    const label = `e2e-${Date.now()}`;
+    await dialog.getByLabel('Address name (for example support)').fill(label);
+    await dialog.getByRole('button', { name: 'Add address' }).click();
+
+    const row = dialog.getByRole('listitem').filter({ hasText: `+${label}@` });
+    await expect(row).toBeVisible();
+    await expect(row.getByText('Nothing received yet.')).toBeVisible();
+
+    // The verification action: a real message through the real pipeline.
+    await row.getByRole('button', { name: 'Send test message' }).click();
+    await expect(dialog.getByText(/Test message delivered to/)).toBeVisible();
+    // …and the address now reports its own traffic, which is the evidence that
+    // outlives the toast.
+    await expect(row.getByText(/1 received/)).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/08.5.3-email-addresses.png', fullPage: true });
+
+    // Put the seeded workspace back: this suite runs against a shared database,
+    // and an address per run would accumulate forever. Removing it is also the
+    // only place the delete path is driven through the console.
+    agentPage.once('dialog', (d) => d.accept());
+    await row.getByRole('button', { name: 'Remove' }).click();
+    await expect(row).toHaveCount(0);
+  });
 });
 
 test.describe('settings', () => {

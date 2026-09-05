@@ -498,6 +498,147 @@ describe('Telegram card — connected', () => {
 // status — which fails the moment an unbuilt card is added back without the
 // UI to render it.
 
+describe('Email forwarding addresses (FR-MOD-08.5.3)', () => {
+  const ADDRESSES = {
+    domain: 'inbound.nexa.localhost',
+    items: [
+      {
+        id: 'addr-default',
+        label: null,
+        address: 'org-1@inbound.nexa.localhost',
+        is_default: true,
+        ticket_count: 4,
+        last_received_at: '2026-09-05T10:00:00.000Z',
+      },
+      {
+        id: 'addr-support',
+        label: 'support',
+        address: 'org-1+support@inbound.nexa.localhost',
+        is_default: false,
+        ticket_count: 0,
+        last_received_at: null,
+      },
+    ],
+  };
+
+  /**
+   * Routes the addresses read separately from `/channels`, which the shared
+   * `stubFetch` answers with an empty channel list. Returns the spy so a test
+   * can assert what the console actually asked the server for.
+   */
+  function stubAddresses(overrides: { post?: unknown } = {}) {
+    const fetchSpy = vi.fn(async (url: string, init?: RequestInit) => {
+      const path = String(url);
+      if (path.includes('/channels/email/addresses')) {
+        if (init?.method === 'POST') return okJson(overrides.post ?? {});
+        if (init?.method === 'DELETE') return okJson({});
+        return okJson(ADDRESSES);
+      }
+      if (path.includes('/channels')) return okJson({ items: [] });
+      return okJson({ items: [] });
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+    return fetchSpy;
+  }
+
+  async function openDialog() {
+    renderChannels();
+    const card = await screen.findByTestId('channel-email');
+    await userEvent.click(within(card).getByRole('button', { name: 'Manage addresses' }));
+    return screen.getByRole('dialog', { name: 'Email forwarding addresses' });
+  }
+
+  it('lists every address the workspace holds, not just the default one', async () => {
+    stubAddresses();
+
+    const dialog = await openDialog();
+    expect(await within(dialog).findByText('org-1@inbound.nexa.localhost')).toBeInTheDocument();
+    expect(within(dialog).getByText('org-1+support@inbound.nexa.localhost')).toBeInTheDocument();
+  });
+
+  it("shows each address's own activity — the proof that forwarding to it works", async () => {
+    stubAddresses();
+
+    const dialog = await openDialog();
+    // The default has received mail; the address just defined has not, and says
+    // so rather than showing a zero that reads like an error.
+    expect(await within(dialog).findByText(/4 received/)).toBeInTheDocument();
+    expect(within(dialog).getByText('Nothing received yet.')).toBeInTheDocument();
+  });
+
+  it('offers Remove for a defined address but never for the default', async () => {
+    stubAddresses();
+
+    const dialog = await openDialog();
+    const rows = within(dialog).getAllByRole('listitem');
+    expect(within(rows[0] as HTMLElement).queryByRole('button', { name: 'Remove' })).toBeNull();
+    expect(
+      within(rows[1] as HTMLElement).getByRole('button', { name: 'Remove' }),
+    ).toBeInTheDocument();
+  });
+
+  it('refuses a label the endpoint would refuse, before sending it', async () => {
+    stubAddresses();
+
+    const dialog = await openDialog();
+    const submit = within(dialog).getByRole('button', { name: 'Add address' });
+    expect(submit).toBeDisabled();
+
+    const field = within(dialog).getByLabelText('Address name (for example support)');
+    // Uppercase is exactly what the server, the contract pattern and the CHECK
+    // all reject; the form must not be the one place that accepts it.
+    await userEvent.type(field, 'Support');
+    expect(submit).toBeDisabled();
+
+    await userEvent.clear(field);
+    await userEvent.type(field, 'support');
+    expect(submit).toBeEnabled();
+  });
+
+  it('sends a test message to the address the button belongs to and reports the result', async () => {
+    const fetchSpy = stubAddresses({
+      post: { ticket_id: 'TCK-1', address: 'org-1+support@inbound.nexa.localhost' },
+    });
+
+    const dialog = await openDialog();
+    const rows = await within(dialog).findAllByRole('listitem');
+    await userEvent.click(
+      within(rows[1] as HTMLElement).getByRole('button', { name: 'Send test message' }),
+    );
+
+    expect(
+      await within(dialog).findByText(/Test message delivered to org-1\+support@/),
+    ).toBeInTheDocument();
+    const called = fetchSpy.mock.calls.map((call) => String(call[0]));
+    expect(called.some((url) => url.includes('/channels/email/addresses/addr-support/test'))).toBe(
+      true,
+    );
+  });
+
+  it('keeps the manage action away from an agent without the channels scope', async () => {
+    stubAddresses();
+    useAuth.setState({
+      agent: {
+        account_id: 'agent-1',
+        email: 'agent@example.com',
+        name: 'Agent',
+        role: 'agent',
+        organization_id: 'org-1',
+        license_id: 'license-1',
+        scopes: ['chats--all:ro'],
+        routing_status: 'accepting_chats',
+      },
+    });
+    renderChannels();
+
+    const card = await screen.findByTestId('channel-email');
+    expect(within(card).queryByRole('button', { name: 'Manage addresses' })).toBeNull();
+    // The address itself is still shown — it is not a secret, and copying it is
+    // what the card has always been for.
+    expect(within(card).getByTestId('email-forwarding-address')).toBeInTheDocument();
+  });
+});
+
 describe('Channels localisation (NFR-I18N2)', () => {
   beforeEach(() => stubFetch({}));
 

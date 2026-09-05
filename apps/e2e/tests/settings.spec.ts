@@ -345,6 +345,129 @@ test.describe('settings', () => {
     }
   });
 
+  // FR-MOD-08.7.2: `canned_responses.group_id` and `.visibility` were columns
+  // nothing read or wrote. This drives the whole loop through the real stack —
+  // the console writes the pair, and a narrowly scoped credential proves the
+  // *server* is what hides the reply, not the screen.
+  test('scopes a saved reply to a team, and hides it from outside that team', async ({
+    agentPage,
+    request,
+  }) => {
+    const token = await ownerAccessToken(request);
+    const auth = { authorization: `Bearer ${token}` };
+    const stamp = Date.now().toString().slice(-6);
+    const teamName = `E2E Reply Scope ${stamp}`;
+    const shortcut = `teamonly${stamp}`;
+    let groupId: number | undefined;
+    let replyId: string | undefined;
+
+    /**
+     * What an ordinary agent's session would see. The owner is in no team, so a
+     * credential holding only `canned_responses--groups:ro` gets the
+     * workspace-wide replies and nothing else — which is exactly the reach the
+     * `#` picker has.
+     */
+    const scopedToken = await request.post(`${API_BASE}/auth/personal-access-tokens`, {
+      headers: auth,
+      data: { name: `e2e reply scope ${stamp}`, scopes: ['canned_responses--groups:ro'] },
+    });
+    expect(scopedToken.ok()).toBe(true);
+    const { token: narrow, id: narrowId } = (await scopedToken.json()) as {
+      token: string;
+      id: string;
+    };
+
+    const shortcutsAsAgent = async (): Promise<string[]> => {
+      const res = await request.get(`${API_BASE}/settings/canned-responses?scope=chat`, {
+        headers: { authorization: `Bearer ${narrow}` },
+      });
+      expect(res.ok()).toBe(true);
+      return ((await res.json()) as { items: Array<{ shortcut: string }> }).items.map(
+        (i) => i.shortcut,
+      );
+    };
+
+    try {
+      const createdGroup = await request.post(`${API_BASE}/groups`, {
+        headers: auth,
+        data: { name: teamName },
+      });
+      expect(createdGroup.ok()).toBe(true);
+      groupId = ((await createdGroup.json()) as { id: number }).id;
+
+      await agentPage.goto('/app/settings');
+      const section = (): ReturnType<typeof agentPage.getByRole> =>
+        agentPage.getByRole('region', { name: 'Saved replies' });
+      await expect(
+        section().getByRole('heading', { name: 'Saved replies', level: 2 }),
+      ).toBeVisible();
+
+      await section().getByLabel('Shortcut').fill(shortcut);
+      await section().getByLabel('Reply', { exact: true }).fill('Team-only answer.');
+      await section().getByLabel('Team', { exact: true }).selectOption({ label: teamName });
+
+      const createResponse = agentPage.waitForResponse(
+        (r) => r.url().includes('/settings/canned-responses') && r.request().method() === 'POST',
+      );
+      await section().getByRole('button', { name: 'Save reply' }).click();
+      const createBody = (await (await createResponse).json()) as {
+        id: string;
+        visibility: string;
+        group_id: number | null;
+      };
+      // The pair goes out whole — half of it is a 400.
+      expect(createBody).toMatchObject({ visibility: 'group', group_id: groupId });
+      replyId = createBody.id;
+
+      const row = section()
+        .locator('li')
+        .filter({ hasText: `#${shortcut}` });
+      await expect(row.getByText(`${teamName} only`)).toBeVisible();
+      await section().screenshot({ path: 'kanit/08.7.2-canned-team-scope.png' });
+
+      // The load-bearing assertion: the text never reaches a caller outside the
+      // team, so no client-side rule is standing between it and them.
+      expect(await shortcutsAsAgent()).not.toContain(shortcut);
+
+      // Widening it back exercises the PATCH half; "All teams" clears the team
+      // on its own.
+      await row.getByRole('button', { name: `Edit team for #${shortcut}` }).click();
+      const patchResponse = agentPage.waitForResponse(
+        (r) =>
+          r.url().endsWith(`/settings/canned-responses/${replyId}`) &&
+          r.request().method() === 'PATCH',
+      );
+      await row.getByLabel(`Team for #${shortcut}`).selectOption({ label: 'All teams' });
+      await row.getByRole('button', { name: 'Save', exact: true }).click();
+      const patchBody = (await (await patchResponse).json()) as {
+        visibility: string;
+        group_id: number | null;
+      };
+      expect(patchBody).toMatchObject({ visibility: 'all', group_id: null });
+      await expect(row.getByText('All teams')).toBeVisible();
+
+      expect(await shortcutsAsAgent()).toContain(shortcut);
+
+      await row.getByRole('button', { name: `Delete #${shortcut}` }).click();
+      await expect(section().getByText(`#${shortcut}`)).toHaveCount(0);
+      replyId = undefined;
+    } finally {
+      // The reply first: while one is scoped to the team, deleting the team is
+      // refused with `group_in_use` — the refusal this feature added.
+      if (replyId) {
+        await request
+          .delete(`${API_BASE}/settings/canned-responses/${replyId}`, { headers: auth })
+          .catch(() => {});
+      }
+      if (groupId) {
+        await request.delete(`${API_BASE}/groups/${groupId}`, { headers: auth }).catch(() => {});
+      }
+      await request
+        .delete(`${API_BASE}/auth/personal-access-tokens/${narrowId}`, { headers: auth })
+        .catch(() => {});
+    }
+  });
+
   test('refuses to disable the fallback routing rule', async ({ agentPage }) => {
     // Disabling it would leave conversations matching nothing with nowhere to
     // go, while the configuration still looked healthy.

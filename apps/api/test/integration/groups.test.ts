@@ -526,4 +526,83 @@ describe('teams — /groups write paths (FR-MOD-04.5)', () => {
       expect((await remove(group.id)).statusCode).toBe(204);
     });
   });
+
+  // ==========================================================================
+  // Delete refusal C — a saved reply is scoped to the team
+  // ==========================================================================
+
+  describe('delete refusal: a saved reply is scoped to the team (FR-MOD-08.7.2)', () => {
+    async function replyFor(groupId: number, shortcut = 'discount'): Promise<string> {
+      const row = await owner.cannedResponse.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          shortcut,
+          text: 'Team only.',
+          visibility: 'group',
+          groupId: BigInt(groupId),
+          updatedAt: new Date(),
+        },
+        select: { id: true },
+      });
+      return row.id;
+    }
+
+    it('409s and counts the replies that would otherwise go public', async () => {
+      const group = await createGroup('Sales');
+      await replyFor(group.id);
+
+      const res = await remove(group.id);
+
+      expect(res.statusCode).toBe(409);
+      const { error } = res.json() as ErrorBody;
+      expect(error.type).toBe('group_in_use');
+      expect(error.details).toMatchObject({ canned_responses: 1 });
+
+      // The point of the refusal: the only legal shape for a reply with no team
+      // is `visibility: 'all'`, so letting the delete through would publish this
+      // team's private text to the whole workspace.
+      expect(await groupRow(group.id)).not.toBeNull();
+    });
+
+    it('counts every scoped reply, not just the first', async () => {
+      const group = await createGroup('Sales');
+      await replyFor(group.id, 'one');
+      await replyFor(group.id, 'two');
+
+      const res = await remove(group.id);
+      expect(res.statusCode).toBe(409);
+      expect((res.json() as ErrorBody).error.details).toMatchObject({ canned_responses: 2 });
+    });
+
+    it('lets the delete through once the reply is workspace-wide again', async () => {
+      const group = await createGroup('Sales');
+      const replyId = await replyFor(group.id);
+
+      expect((await remove(group.id)).statusCode).toBe(409);
+
+      await owner.cannedResponse.update({
+        where: { id: replyId },
+        data: { visibility: 'all', groupId: null },
+      });
+
+      expect((await remove(group.id)).statusCode).toBe(204);
+      expect(await groupRow(group.id)).toBeNull();
+    });
+
+    it('ignores a workspace-wide reply and another team’s', async () => {
+      const group = await createGroup('Sales');
+      const other = await createGroup('Support');
+      await replyFor(other.id, 'theirs');
+      await owner.cannedResponse.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          shortcut: 'everyone',
+          text: 'Hi.',
+          updatedAt: new Date(),
+        },
+      });
+
+      expect((await remove(group.id)).statusCode).toBe(204);
+    });
+  });
 });

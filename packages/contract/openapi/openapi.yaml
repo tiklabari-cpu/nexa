@@ -2464,13 +2464,35 @@ components:
 
     CannedResponse:
       type: object
-      required: [id, shortcut, text, scope, created_at, updated_at]
+      description: |
+        A saved reply, offered in the composer behind `#` (FR-MOD-08.7.2).
+
+        `visibility` and `group_id` are one decision spelled in two columns and
+        they move together: `all` means the whole workspace may use the reply
+        and carries no `group_id`; `group` means only members of `group_id` see
+        it, and the id is then required. A reply labelled with a team but
+        visible to everyone would be ownership metadata rather than a scope, and
+        a team-only reply with no team would be one nobody could reach — the
+        database refuses both pairings.
+      required: [id, shortcut, text, scope, group_id, visibility, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         shortcut: { type: string }
         text: { type: string }
         scope: { type: string, enum: [chat, ticket] }
-        group_id: { type: integer, format: int64, nullable: true }
+        group_id:
+          type: integer
+          format: int64
+          nullable: true
+          description: The team this reply is scoped to; null when `visibility` is `all`.
+        visibility:
+          type: string
+          enum: [all, group]
+          default: all
+          description: |
+            Who may see the reply. `all` — everyone in the workspace; `group` —
+            members of `group_id` only. The list endpoint applies this
+            server-side, so a reply a caller may not use never reaches them.
         updated_by: { type: string, nullable: true }
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }

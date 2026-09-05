@@ -8824,10 +8824,10 @@
             "description": "PRD KK: \"Tiklama transcript acar; RTM`de yukari tasinir + unread\". Ikinci yari karsilanmiyor: liste `chats.created_at DESC, id` ile siraliyor ve `created_at` hic degismiyor; yeni mesaj yalniz satirin `last_event`/`unread` alanini YERINDE guncelliyor.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `apps/api/src/services/chat/chat-service.ts` — liste sunucuda `chats.created_at DESC` + `id` ile\n  siralaniyor (denetim :1555`i isaret ediyor; satir numarasi kaymis olabilir, `grep -n \"createdAt\"` ile bul).\n- `apps/web/src/features/inbox/useInbox.ts` — RTM olayi geldiginde satirin alanlari guncelleniyor,\n  liste yeniden SIRALANMIYOR (denetim :539 civarini isaret ediyor).\n- Sonuc: mesaj yazan musteri listenin dibinde kalir. Bu bir gorsel detay degil — ajanin isini\n  sirasiyla yapmasini imkansiz kilar.\n\n## Neden [OPUS-MAX] ve neden BOLUNMEZ\n\nSiralama anahtarini degistirmek **keyset sayfalamayi** dogrudan etkiler. Bugunku imlec `created_at`\ngibi DEGISMEYEN bir alana dayaniyor; `last_event_at` gibi DEGISEN bir alana gecince ayni satir iki\nsayfada birden gorunebilir ya da hic gorunmeyebilir (imlecin altindan kayar). Sunucu siralamasi +\nimlec + istemci yeniden siralamasi TEK karar; ucunu ayri pencerelerde yapmak tutarsiz bir liste uretir.\n\n## Yapilacak\n\n1. **Karar + olcum:** siralama anahtari ne olacak? Adaylar: (a) `chats` uzerinde bakimi yapilan bir\n   `last_event_at` kolonu (migration + olay yazan yolda guncelleme), (b) `threads`/`events` uzerinden\n   turetilen bir deger. (a) hizli okur, yazma yolunu kirletir; (b) yazmayi temiz tutar, okumayi\n   pahalilastirir. Karari **EXPLAIN ANALYZE ile olcerek** ver (NFR-P2 okuma butcesi 150 ms;\n   `reports-billing.test.ts` / tm 183.1 probe deseni). Gerekce testin icine yazilir.\n2. **Migration (gerekiyorsa):** CONVENTIONS §6.3 — genislet/tasi/darallt. Yeni kolon nullable ya da\n   `DEFAULT`lu eklenir; geri dolduran migration ayri ifade. `CREATE INDEX CONCURRENTLY` kullanacaksan\n   migration dosyasinda TEK ifade olmak zorunda (yanina ikinci ifade 25001 ile dusurur).\n3. **Imlec:** keyset imleci yeni anahtari tasimali ve **kararli** olmali (esitlikte `id` ikinci anahtar).\n   Bozuk/bayat imlec hata DEGIL bayat yer imi olarak ele alinir (`audit-log-reader.ts` deseni).\n4. **Istemci:** RTM olayi geldiginde ilgili sayfa cache`i yeniden siralanir; secili sohbet\n   KAYBOLMAZ (secim id ile tutulur, index ile degil).\n5. **unread:** PRD ayni cumlede \"+unread\" diyor; unread bugun calisiyor, regresyon testiyle korunur.\n\n## Bilinen tuzaklar\n\n- Migration uygulanmis bir dosyayi duzenlemek bu depoda TOLERE EDILIYOR ama yeni bir dosya acmak\n  daha temiz. `pnpm -w db:check-drift` exit 0 olmali; shadow DB gerekiyorsa Prisma uzerinden acilir\n  (`psql` PATH`te degil; container: `docker exec -i nexa-db`, kullanici `nexa`, MSYS_NO_PATHCONV=1).\n- Test veri depolari kosu basina izole (CONVENTIONS §1.1) — kirmizi gorursen \"baska pencere\"\n  aciklamasi GECERSIZ.\n- api `test` script`i unit+integration birlikte ~858 s; §1.3 geregi parcala ve her parcanin exit\n  code`unu handoff`a yaz.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. Integration: iki sohbet olusturulur (A once, B sonra) -> liste `[B, A]`. A`ya yeni bir musteri\n   olayi yazilir -> liste `[A, B]`. Baslik `(FR-MOD-02.2.2)` etiketi tasir.\n2. Keyset kararliligi: sayfa 1 cekilir, ilk sayfadaki bir sohbete olay yazilir, sayfa 2 cekilir —\n   **hicbir sohbet iki sayfada birden gorunmez ve hicbiri atlanmaz** (id kumesi karsilastirmasi).\n3. Cross-tenant: baska kiracinin olayi bu listeyi yeniden siralamaz.\n4. EXPLAIN ANALYZE probe`u: yeni siralama mevcut/yeni indeks uzerinden calisiyor, olculen sure\n   testin icine gerekcesiyle yazili (150 ms butcesi).\n5. Web: RTM olayi simule edilir -> satir listenin basina cikar, secili sohbet secili KALIR.\n6. e2e: musteri widget`tan yazar -> ajanin inbox listesinde ilgili satir en uste cikar.\nDoD (tam kapi): `typecheck` · `lint` · `format:check` · `build` · migration eklendiyse\n`db:check-drift` exit 0 · kontrat degistiyse `contract:generate` sonrasi generated senkron ·\napi unit + integration (§1.3 parcalama, shard exit code`lari yazilir) · web · ilgili e2e.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "189",
-            "updatedAt": "2026-09-05T02:53:13.154Z"
+            "updatedAt": "2026-09-05T04:57:00.901Z"
           },
           {
             "id": 4,
@@ -8880,7 +8880,7 @@
             "parentId": "189"
           }
         ],
-        "updatedAt": "2026-09-05T02:53:13.154Z"
+        "updatedAt": "2026-09-05T04:57:00.901Z"
       },
       {
         "id": "190",
@@ -9397,7 +9397,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T02:53:13.156Z",
+      "lastModified": "2026-09-05T04:57:00.904Z",
       "taskCount": 204,
       "completedCount": 188,
       "tags": [

@@ -352,6 +352,13 @@ model Customer {
 
   @@index([organizationId, lastActivityAt(sort: Desc)])
   @@index([organizationId, email])
+  /// Serves the Contacts filter panel's country condition (FR-MOD-03.2.1) —
+  /// an equality lookup, not a pattern match, so a plain composite index can
+  /// carry it. `country_code` is written and matched upper-case only (the
+  /// same normalisation `routing-service.ts` already applies), which is what
+  /// keeps this a plain `=` rather than a case-insensitive one no plain btree
+  /// index can serve.
+  @@index([organizationId, countryCode])
   @@map("customers")
 }
 
@@ -1060,6 +1067,10 @@ model Ticket {
   @@index([licenseId, lastMessageAt(sort: Desc), id(sort: Desc)], map: "tickets_license_last_message_idx")
   @@index([licenseId, assigneeId, lastMessageAt(sort: Desc)], map: "tickets_license_assignee_idx")
   @@index([mergedIntoId])
+  /// Serves the Contacts `has_tickets` filter's per-customer EXISTS check
+  /// (FR-MOD-03.2.1) — nothing indexed `customer_id` before this, so that
+  /// probe was a sequential scan of the license's tickets per candidate row.
+  @@index([licenseId, customerId], map: "tickets_license_customer_idx")
   @@map("tickets")
 }
 

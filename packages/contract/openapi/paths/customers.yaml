@@ -34,6 +34,26 @@ customers:
           type: string
           enum: [all, leads, recent, banned]
           default: all
+      - name: country_code
+        in: query
+        description: |
+          Exact match against the customer's 2-letter country code (ISO
+          3166-1 alpha-2), upper-cased before comparison.
+        schema: { type: string, minLength: 2, maxLength: 2 }
+      - name: last_activity_from
+        in: query
+        description: Only customers active on or after this date (inclusive, UTC).
+        schema: { type: string, format: date }
+      - name: last_activity_to
+        in: query
+        description: Only customers active on or before this date (inclusive, UTC).
+        schema: { type: string, format: date }
+      - name: has_tickets
+        in: query
+        description: |
+          `true` restricts to customers with at least one ticket in the
+          caller's license; `false` to those with none.
+        schema: { type: boolean }
       - $ref: "../openapi.yaml#/components/parameters/PageId"
       - $ref: "../openapi.yaml#/components/parameters/Limit"
     responses:

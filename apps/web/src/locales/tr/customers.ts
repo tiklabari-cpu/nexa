@@ -41,6 +41,17 @@ export const customers: Messages = {
   'customers.page.noContactDetails': 'İletişim bilgisi yok',
   'customers.page.never': 'Hiç',
 
+  // Contacts filter panel — CustomersFilters.tsx (field labels/options/errors
+  // stay in customers-filters.ts, English-only — see the file's own note,
+  // same convention as traffic.filters.*)
+  'customers.filters.heading': 'Tüm filtrelerle eşleştir',
+  'customers.filters.clear': 'Temizle',
+  'customers.filters.addFilter': 'Filtre ekle',
+  'customers.filters.addFilterTrigger': '+ Filtre ekle',
+  'customers.filters.allApplied': 'Tüm filtreler zaten uygulanmış.',
+  'customers.filters.empty': 'Uygulanan filtre yok — herkes gösteriliyor.',
+  'customers.filters.removeField': '{label} filtresini kaldır',
+
   // Customer detail panel — CustomerDetailPanel.tsx
   'customers.detail.emptySelection': 'Geçmişini görmek için birini seçin.',
   'customers.detail.loadError': 'Bu müşteri yüklenemedi.',

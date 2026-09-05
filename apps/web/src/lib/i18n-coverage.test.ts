@@ -68,6 +68,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/inbox/TypingIndicator.tsx',
   'src/features/customers/CustomersPage.tsx',
   'src/features/customers/CustomerDetailPanel.tsx',
+  'src/features/customers/CustomersFilters.tsx',
   'src/features/customers/CustomersTabs.tsx',
   'src/features/custom-fields/CustomFields.tsx',
   'src/features/traffic/TrafficPage.tsx',
@@ -160,6 +161,7 @@ const TEXT_FREE_FILES: readonly string[] = [
   'src/components/Skeleton.tsx',
   'src/components/StatusDot.tsx',
   'src/components/VirtualList.tsx',
+  'src/components/ui/ConditionFilters.tsx',
   'src/components/ui/Dropdown.tsx',
   'src/components/ui/Modal.tsx',
   // Not a design-system primitive but the same shape of exemption: every word

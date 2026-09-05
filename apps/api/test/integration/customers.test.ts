@@ -9,9 +9,13 @@
  * written by anything and would report 0 for everyone.
  */
 import type { PrismaClient } from '@prisma/client';
+import { generateShortId } from '@nexa/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+
+/** NFR-P2: reads at p99 < 150 ms. */
+const READ_BUDGET_MS = 150;
 
 describe('customers', () => {
   let owner: PrismaClient;
@@ -323,6 +327,274 @@ describe('customers', () => {
       // worse than showing the first page.
       const response = await server.get('/customers?page_id=not-a-cursor', auth(readToken));
       expect(response.statusCode).toBe(200);
+    });
+  });
+
+  // --- Filter panel (FR-MOD-03.2.1) -------------------------------------------
+
+  describe('condition filters (FR-MOD-03.2.1)', () => {
+    it('filters to a country code, upper-cased at the edge', async () => {
+      await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Robin FR', countryCode: 'FR' },
+      });
+      await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Robin US', countryCode: 'US' },
+      });
+
+      // Lower-case on the wire — the route upper-cases before it reaches the
+      // service, matching the stored (always upper-case) convention.
+      const response = await server.get('/customers?country_code=fr&limit=100', auth(readToken));
+      const names = (response.json() as { items: Array<{ name: string | null }> }).items.map(
+        (c) => c.name,
+      );
+
+      expect(names).toContain('Robin FR');
+      expect(names).not.toContain('Robin US');
+    });
+
+    it('rejects a country code that is not two letters', async () => {
+      const response = await server.get('/customers?country_code=FRA', auth(readToken));
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("never returns another organization's customer, regardless of which filter matches it", async () => {
+      await owner.customer.update({
+        where: { id: fx.a.customerId },
+        data: { countryCode: 'US' },
+      });
+      await owner.customer.update({
+        where: { id: fx.b.customerId },
+        data: { countryCode: 'US' },
+      });
+
+      const response = await server.get('/customers?country_code=US&limit=100', auth(readToken));
+      const ids = (response.json() as { items: Array<{ id: string }> }).items.map((c) => c.id);
+
+      expect(ids).toContain(fx.a.customerId);
+      expect(ids).not.toContain(fx.b.customerId);
+    });
+
+    it('filters to a last_activity range', async () => {
+      await owner.customer.create({
+        data: {
+          organizationId: fx.a.organizationId,
+          name: 'In range',
+          lastActivityAt: new Date('2026-01-15T12:00:00.000Z'),
+        },
+      });
+      await owner.customer.create({
+        data: {
+          organizationId: fx.a.organizationId,
+          name: 'Before range',
+          lastActivityAt: new Date('2025-12-01T00:00:00.000Z'),
+        },
+      });
+      await owner.customer.create({
+        data: {
+          organizationId: fx.a.organizationId,
+          name: 'After range',
+          lastActivityAt: new Date('2026-02-01T00:00:00.000Z'),
+        },
+      });
+
+      const response = await server.get(
+        '/customers?last_activity_from=2026-01-01&last_activity_to=2026-01-31&limit=100',
+        auth(readToken),
+      );
+      const names = (response.json() as { items: Array<{ name: string | null }> }).items.map(
+        (c) => c.name,
+      );
+
+      expect(names).toContain('In range');
+      expect(names).not.toContain('Before range');
+      expect(names).not.toContain('After range');
+    });
+
+    it('rejects a malformed date', async () => {
+      const response = await server.get(
+        '/customers?last_activity_from=01-01-2026',
+        auth(readToken),
+      );
+      expect(response.statusCode).toBe(400);
+    });
+
+    it("filters to customers with a ticket in the caller's license", async () => {
+      const withTicket = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Has a ticket' },
+        select: { id: true },
+      });
+      await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'No ticket' },
+      });
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: fx.a.licenseId,
+          customerId: withTicket.id,
+          subject: 'Has a ticket subject',
+        },
+      });
+
+      const withResponse = await server.get(
+        '/customers?has_tickets=true&limit=100',
+        auth(readToken),
+      );
+      const withNames = (
+        withResponse.json() as { items: Array<{ name: string | null }> }
+      ).items.map((c) => c.name);
+      expect(withNames).toContain('Has a ticket');
+      expect(withNames).not.toContain('No ticket');
+
+      const withoutResponse = await server.get(
+        '/customers?has_tickets=false&limit=100',
+        auth(readToken),
+      );
+      const withoutNames = (
+        withoutResponse.json() as { items: Array<{ name: string | null }> }
+      ).items.map((c) => c.name);
+      expect(withoutNames).toContain('No ticket');
+      expect(withoutNames).not.toContain('Has a ticket');
+    });
+
+    it("excludes another license's ticket from has_tickets (NFR-S4)", async () => {
+      // Mirrors "excludes another license's visits from visits_count" above: a
+      // stray row for the caller's own customer but a foreign license — the
+      // read must filter on licenseId, not customerId alone.
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: fx.b.licenseId,
+          customerId: fx.a.customerId,
+          subject: 'Foreign license ticket',
+        },
+      });
+
+      const response = await server.get('/customers?has_tickets=true&limit=100', auth(readToken));
+      const ids = (response.json() as { items: Array<{ id: string }> }).items.map((c) => c.id);
+
+      expect(ids).not.toContain(fx.a.customerId);
+    });
+
+    it('serves the country filter out of an index (EXPLAIN ANALYZE)', async () => {
+      // Sparse fixture (tm 183.1's own guidance): enough rows to exercise the
+      // predicate, few enough that the planner's row-count guess does not
+      // drown out the structural question.
+      await owner.customer.createMany({
+        data: Array.from({ length: 5 }, (_, i) => ({
+          organizationId: fx.a.organizationId,
+          name: `Country Probe ${i}`,
+          countryCode: i === 0 ? 'DE' : 'US',
+        })),
+      });
+
+      // The predicate `CustomerService#list` issues when only `country_code`
+      // narrows the query: the tenant scope, the equality (upper-cased before
+      // it gets here — see `routes/customers.ts`), the default ordering, and
+      // the page's LIMIT.
+      // `::uuid` on `$1`: `$queryRawUnsafe` sends parameters as text, and
+      // Postgres has no bare `uuid = text` operator to fall back on.
+      const sql = `SELECT id FROM customers WHERE organization_id = $1::uuid AND country_code = $2
+                   ORDER BY last_activity_at DESC NULLS LAST, id DESC LIMIT 26`;
+
+      const explain = async (plannerSetup: string[] = []): Promise<Record<string, unknown>> =>
+        owner.$transaction(async (tx) => {
+          for (const statement of plannerSetup) await tx.$executeRawUnsafe(statement);
+          const [row] = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(
+            `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+            fx.a.organizationId,
+            'DE',
+          );
+          const raw = row?.['QUERY PLAN'];
+          const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Array<
+            Record<string, unknown>
+          >;
+          return parsed[0] ?? {};
+        });
+
+      // Structural: the equality can be served from
+      // `customers_organization_id_country_code_idx` rather than a sequential
+      // scan of every customer this organization has ever had.
+      const indexed = await explain(['SET LOCAL enable_seqscan = off']);
+      const indexedPlan = JSON.stringify(indexed['Plan'] ?? {});
+      expect(indexedPlan).toContain('customers_organization_id_country_code_idx');
+
+      // Budgetary: sub-millisecond on this fixture either way, so this is a
+      // floor a plan regression would blow through rather than a production
+      // measurement — the figures are recorded in HANDOFF as the evidence
+      // NFR-P2 owes.
+      const planned = await explain();
+      const plannedMs = planned['Execution Time'];
+      const indexedMs = indexed['Execution Time'];
+      expect(typeof plannedMs).toBe('number');
+      expect(typeof indexedMs).toBe('number');
+      console.log(
+        'NFR-P2 GET /customers country_code filter — ' +
+          `${String(plannedMs)} ms as planned · ${String(indexedMs)} ms forced onto the index`,
+      );
+      expect(plannedMs as number).toBeLessThan(READ_BUDGET_MS);
+      expect(indexedMs as number).toBeLessThan(READ_BUDGET_MS);
+    });
+
+    it('serves the has_tickets filter out of an index (EXPLAIN ANALYZE)', async () => {
+      const withTicket = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Ticket Probe 1' },
+        select: { id: true },
+      });
+      await owner.customer.createMany({
+        data: Array.from({ length: 4 }, (_, i) => ({
+          organizationId: fx.a.organizationId,
+          name: `Ticket Probe ${i + 2}`,
+        })),
+      });
+      await owner.ticket.create({
+        data: {
+          id: generateShortId(),
+          licenseId: fx.a.licenseId,
+          customerId: withTicket.id,
+          subject: 'Probe ticket',
+        },
+      });
+
+      // The predicate `has_tickets: true` compiles to: an EXISTS check against
+      // this license's tickets for the candidate customer.
+      // `::uuid` on `$1` — see the sibling probe above for why.
+      const sql = `SELECT c.id FROM customers c WHERE c.organization_id = $1::uuid
+                   AND EXISTS (SELECT 1 FROM tickets t WHERE t.customer_id = c.id AND t.license_id = $2)
+                   ORDER BY c.last_activity_at DESC NULLS LAST, c.id DESC LIMIT 26`;
+
+      const explain = async (plannerSetup: string[] = []): Promise<Record<string, unknown>> =>
+        owner.$transaction(async (tx) => {
+          for (const statement of plannerSetup) await tx.$executeRawUnsafe(statement);
+          const [row] = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(
+            `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+            fx.a.organizationId,
+            fx.a.licenseId,
+          );
+          const raw = row?.['QUERY PLAN'];
+          const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Array<
+            Record<string, unknown>
+          >;
+          return parsed[0] ?? {};
+        });
+
+      // Structural: the EXISTS check can be served from
+      // `tickets_license_customer_idx` rather than a sequential scan of the
+      // license's tickets for every candidate customer row.
+      const indexed = await explain(['SET LOCAL enable_seqscan = off']);
+      const indexedPlan = JSON.stringify(indexed['Plan'] ?? {});
+      expect(indexedPlan).toContain('tickets_license_customer_idx');
+
+      const planned = await explain();
+      const plannedMs = planned['Execution Time'];
+      const indexedMs = indexed['Execution Time'];
+      expect(typeof plannedMs).toBe('number');
+      expect(typeof indexedMs).toBe('number');
+      console.log(
+        'NFR-P2 GET /customers has_tickets filter — ' +
+          `${String(plannedMs)} ms as planned · ${String(indexedMs)} ms forced onto the index`,
+      );
+      expect(plannedMs as number).toBeLessThan(READ_BUDGET_MS);
+      expect(indexedMs as number).toBeLessThan(READ_BUDGET_MS);
     });
   });
 

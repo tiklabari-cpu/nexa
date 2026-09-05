@@ -12566,6 +12566,20 @@ export interface operations {
          *     · `banned`.
          */
         segment?: 'all' | 'leads' | 'recent' | 'banned';
+        /**
+         * @description Exact match against the customer's 2-letter country code (ISO
+         *     3166-1 alpha-2), upper-cased before comparison.
+         */
+        country_code?: string;
+        /** @description Only customers active on or after this date (inclusive, UTC). */
+        last_activity_from?: string;
+        /** @description Only customers active on or before this date (inclusive, UTC). */
+        last_activity_to?: string;
+        /**
+         * @description `true` restricts to customers with at least one ticket in the
+         *     caller's license; `false` to those with none.
+         */
+        has_tickets?: boolean;
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
         limit?: components['parameters']['Limit'];

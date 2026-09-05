@@ -7,6 +7,13 @@
  * individual files, so the surface stays a single seam.
  */
 export { Banner, bannerDismissKey, type BannerTone } from './Banner.js';
+export {
+  ConditionFilters,
+  type Condition,
+  type ConditionFieldDef,
+  type ConditionFieldOption,
+  type ConditionFiltersLabels,
+} from './ConditionFilters.js';
 export { Dropdown } from './Dropdown.js';
 export { Modal } from './Modal.js';
 export { Panel, PanelSection } from './Panel.js';

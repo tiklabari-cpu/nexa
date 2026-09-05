@@ -9,6 +9,7 @@
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { CustomersPage } from './CustomersPage.js';
@@ -218,5 +219,56 @@ describe('paging (P5-PAGE-e)', () => {
     // panel's heading from the table row, which renders the same name as text.
     expect(await screen.findByRole('heading', { name: 'Robin Lee', level: 2 })).toBeInTheDocument();
     expect(screen.queryByText('Select someone to see their history.')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * The filter panel (FR-MOD-03.2.1). `TrafficPage`'s own condition panel
+ * already proved the panel's internal behaviour (`CustomersFilters.test.tsx`
+ * covers the same ground for Contacts' field set); what only this page can
+ * prove is that a condition actually reaches the request, and that the URL
+ * carries it across a reload.
+ */
+describe('filter panel (FR-MOD-03.2.1)', () => {
+  it('selecting a condition sends the request with the matching query parameter', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('country_code=US')) {
+        return Promise.resolve(customerPage([customer('C1', { name: 'Robin US' })], 1));
+      }
+      return Promise.resolve(customerPage([], 0));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage('/app/customers');
+    await screen.findByText('No customers yet');
+
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Add filter' }));
+    await user.click(screen.getByRole('button', { name: 'Country' }));
+    fireEvent.change(screen.getByLabelText('Country'), { target: { value: 'US' } });
+
+    // The field debounces 250ms before it commits (`ConditionFilters`) — the
+    // same generous timeout the search-box debounce test above uses.
+    await waitFor(() => expect(screen.getByText('Robin US')).toBeInTheDocument(), {
+      timeout: 2000,
+    });
+    expect(fetchMock.mock.calls.some(([url]) => String(url).includes('country_code=US'))).toBe(
+      true,
+    );
+  });
+
+  it('restores the same filter from a reloaded URL', async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes('country_code=DE')) {
+        return Promise.resolve(customerPage([customer('C2', { name: 'Mira DE' })], 1));
+      }
+      return Promise.resolve(customerPage([], 0));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderPage('/app/customers?country_code=DE');
+
+    expect(await screen.findByLabelText('Country')).toHaveValue('DE');
+    await screen.findByText('Mira DE');
   });
 });

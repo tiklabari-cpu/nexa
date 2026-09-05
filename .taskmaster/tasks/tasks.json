@@ -8868,9 +8868,10 @@
             "description": "Uc aksiyon da mevcut ve reopen sunucu tarafinda dogru (yeni thread + `chat_resumed` sistem olayi, teklik kurali korunuyor). Boslugun tamami TEST: Copy chat link icin ne birim ne e2e testi var; Reopen`in UI yolu icin de test yok.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- Denetim: \"(1) Copy chat link icin hicbir test yok — ne birim ne e2e; (2) Reopen`in UI yolu icin de\n  test yok\". Sunucu tarafi `chat-service.ts:849-877` (reopen -> yeni thread + `chat_resumed`) DOGRU\n  ve testli.\n- PRD KK: \"Ticket uretir; kalici link kopyalar; arsiv reopen -> yeni thread + `Reopened` olayi\".\n\n## Neden bu bir is kalemi (kod degil test)\n\nCONVENTIONS §7`nin tam konusu: bir kabul kriterini KORUYAN test yoksa, kriterin bugun calisiyor\nolmasi yarin da calisacagi anlamina gelmez. `#### K02.6` blogundaki ✅ iddiasi bu yuzden kanitsizdi.\nBu alt-gorev **once testleri yazar, sonra kirmizi cikan varsa duzeltir** — testi gecirmek icin\nkriteri gevsetme.\n\n## Yapilacak\n\n1. **Copy chat link** birim testi: kontrol tiklaninca panoya yazilan deger, sohbetin KALICI linki\n   (rota + chat id). jsdom`da `navigator.clipboard` mock`lanir; mevcut bir clipboard deseni varsa\n   (`grep -rn \"clipboard\" apps/web/src`) ona uy, yenisini icat etme.\n2. **Copy chat link** e2e: kopyalanan link YENI bir sayfada acilinca AYNI sohbet aciliyor. \"Kalici\n   link\" iddiasinin tek gercek kaniti budur; panoya bir sey yazildigini gormek yetmez.\n   (Playwright`ta pano izni gerekir: `context.grantPermissions([\"clipboard-read\",\"clipboard-write\"])`,\n   Chromium.)\n3. **Reopen UI** birim + e2e: arsivlenmis sohbette Reopen tiklanir -> transcript`te \"Reopened\" sistem\n   olayi gorunur, composer yeniden yazilabilir hale gelir.\n4. Uc testin basligi da `(FR-MOD-02.6)` etiketi tasir.\n\n## Bilinen tuzaklar\n\n- e2e sabit portlarda ve TOHUMLU `nexa` veritabanina karsi kosar; iki pencere ayni anda e2e kosamaz.\n  Bayat bir dev sunucu (5173) tum suiti kirmizi yapar — kosmadan once kontrol et.\n- Bir e2e turu ~55-84 `apps/e2e/kanit/*.png` yeniden yazar; bu beklenen churn, GERI AL.\n- Reopen testi arsivlenmis bir sohbet ister; tohumda varsa onu kullan, yoksa testin kendisi\n  arsivleyip yeniden acsin (tohuma yeni satir EKLEME — paylasilan veritabani).",
             "testStrategy": "OLCULEBILIR KAPI:\n1. Yeni/genisletilmis birim testleri (`apps/web`) ve e2e spec`leri yesil; her biri basliginda\n   `(FR-MOD-02.6)` tasiyor.\n2. `pnpm audit:req-coverage` ciktisinda `FR-MOD-02.6` artik **etiketli** gorunuyor (`--json`\n   ciktisindaki `untagged` listesinde YOK). Bu, isin yapildiginin makine kaniti.\n3. Kopyalanan linkin yeni sayfada ayni sohbeti actigi e2e ile kanitlanmis (assert: transcript`te\n   ayni chat id).\nDoD: `typecheck` · `lint` · `format:check` · `build` · web · ilgili e2e · `audit:req-coverage` exit 0.\nUrun kodu degismediyse bunu handoff`a acikca yaz (tm 184.x emsali).",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "189"
+            "parentId": "189",
+            "updatedAt": "2026-09-05T07:52:28.232Z"
           },
           {
             "id": 8,
@@ -8883,7 +8884,7 @@
             "parentId": "189"
           }
         ],
-        "updatedAt": "2026-09-05T07:13:00.192Z"
+        "updatedAt": "2026-09-05T07:52:28.232Z"
       },
       {
         "id": "190",
@@ -9400,7 +9401,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T07:13:00.196Z",
+      "lastModified": "2026-09-05T07:52:28.233Z",
       "taskCount": 204,
       "completedCount": 188,
       "tags": [

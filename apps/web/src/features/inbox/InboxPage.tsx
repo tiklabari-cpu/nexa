@@ -25,9 +25,11 @@ import {
   useChatList,
   useConnectedChannels,
   useMarkSeen,
+  useSendMessage,
   useTranscript,
   useViewCounts,
 } from './useInbox.js';
+import { useFailedSends } from './failedSends.js';
 import { useRightPanel } from './rightPanel.js';
 import { usePanelTab } from './panelTab.js';
 import {
@@ -233,6 +235,13 @@ export function InboxPage(): ReactElement {
   const chat = useChat(selectedId);
   const transcript = useTranscript(selectedId);
   const tickets = useTicketList(ticketView, ticketSort, onTickets);
+
+  // A refused reply waits in the transcript rather than vanishing with the
+  // attempt (FR-MOD-02.3.3 · FR-MOD-02.3.6). Retry goes back through the same
+  // mutation the composer uses — same optimistic bubble, same idempotency key,
+  // so the server treats it as a replay of one message and not a second one.
+  const failedSends = useFailedSends(onTickets ? null : selectedId);
+  const retrySend = useSendMessage(selectedId);
 
   // Read receipt (FR-MOD-02.2.2): only while the transcript pane is actually on
   // screen — the Tickets tab leaves `selectedId`/`transcript` fetching in the
@@ -716,6 +725,8 @@ export function InboxPage(): ReactElement {
                     hasOlder={transcript.hasOlder}
                     isLoadingOlder={transcript.isLoadingOlder}
                     onLoadOlder={transcript.loadOlder}
+                    failedSends={failedSends}
+                    onRetry={(entry) => retrySend.mutate(entry.input)}
                   />
 
                   <TypingIndicator

@@ -110,7 +110,6 @@ export const inbox: Messages = {
   'inbox.composer.uploading': 'Yükleniyor…',
   'inbox.composer.hint': 'Göndermek için Enter · Yeni satır için Shift+Enter',
   'inbox.composer.attachError': 'Bu dosya eklenemedi.',
-  'inbox.composer.sendError': 'Gönderilemedi — yeniden deneyin.',
   'inbox.composer.send.pending': 'Gönderiliyor…',
   'inbox.composer.send.cta': 'Gönder',
 
@@ -119,6 +118,8 @@ export const inbox: Messages = {
   'inbox.transcript.noteLabel': 'Dahili not — müşteriye gönderilmez',
   'inbox.transcript.loadingOlder': 'Önceki mesajlar yükleniyor…',
   'inbox.transcript.sending': 'Gönderiliyor…',
+  'inbox.transcript.notSent': 'Gönderilemedi',
+  'inbox.transcript.retry': 'Yeniden dene',
   'inbox.transcript.aiSuffix': 'AI',
 
   // "Visitor is typing…"

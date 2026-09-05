@@ -181,6 +181,11 @@ export const AUDIT_ACTIONS = [
   // owner is immutable, and no grant above the actor's own rank); the entry
   // records only the from/to roles, never the whole membership.
   'member.role_changed',
+  // A teammate's routing capacity was changed (FR-MOD-04.3.4). Not an authority
+  // change, but it decides who is offered conversations and who is not — the
+  // same reason `group.member_set` is recorded — and it is a change one person
+  // makes to another's working day. From/to only, like the role entry.
+  'member.chat_limit_changed',
   // A teammate's standing weekly availability was replaced (PRD §5.3-Vardiya).
   // Recorded because an admin can rewrite *someone else's* rostered hours, and
   // those hours are what the staffing forecast — and any later "why was nobody

@@ -19,8 +19,10 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { InviteTeammates, PendingInvitations } from './InviteTeammates.js';
+import { AgentProfile } from './AgentProfile.js';
 import { AgentSkills, type Expertise } from './AgentSkills.js';
 import { RoleMenu, roleAtLeast, type Role } from './RoleMenu.js';
+import type { Group } from './Teams.js';
 import { TeamTabs } from './TeamTabs.js';
 import { WorkSchedule } from './WorkSchedule.js';
 
@@ -34,6 +36,10 @@ interface Agent {
   concurrent_chats_limit: number;
   two_factor_enabled: boolean;
   suspended: boolean;
+  /** When this person was last active anywhere in Nexa (FR-MOD-04.3.4); null
+   *  until they have been seen once. Shown in the profile panel, not the row —
+   *  a scannable roster has no space for a seventh column. */
+  last_seen_at: string | null;
   expertise: Expertise[];
 }
 
@@ -43,11 +49,6 @@ interface Chatbot {
   active: boolean;
   avatar_url: string | null;
   skills_count: number;
-}
-
-/** Just enough of `Teams.tsx`'s `Group` shape for the KPI count below. */
-interface GroupSummary {
-  id: number;
 }
 
 /**
@@ -113,9 +114,13 @@ export function TeamPage(): ReactElement {
     queryFn: () => api.get<{ items: Chatbot[] }>('/ai-agents'),
   });
 
+  // Shares `Teams.tsx`'s query key, so React Query serves both from one
+  // request. The full `Group` (not just an id) because the profile panel's
+  // "Chatting teams" is read off the member lists this response already
+  // carries — a per-agent endpoint would be asking for what the client holds.
   const groups = useQuery({
     queryKey: ['team', 'groups'],
-    queryFn: () => api.get<{ items: GroupSummary[] }>('/groups'),
+    queryFn: () => api.get<{ items: Group[] }>('/groups'),
   });
 
   const items = useMemo(() => agents.data?.items ?? [], [agents.data]);
@@ -164,6 +169,11 @@ export function TeamPage(): ReactElement {
   // an unusable button is worse than an absent one, so the UI mirrors the rule:
   // owner/admin only, never the owner as a target, never yourself.
   const canManage = roleAtLeast(currentRole, 'admin');
+  // The profile panel's limit field mirrors the server's rule exactly
+  // (`agents--all:rw` + admin rank + the privilege ceiling): an admin may
+  // restaff themselves and anyone at or below their own rank, nobody above.
+  const canEditProfile = (agent: Agent): boolean =>
+    canManage && roleAtLeast(currentRole, agent.role);
   const canSuspend = (agent: Agent): boolean =>
     canManage &&
     agent.id !== currentAgentId &&
@@ -333,14 +343,23 @@ export function TeamPage(): ReactElement {
                         <div className="flex items-center gap-2.5">
                           <Avatar name={agent.name} email={agent.email} />
                           <div className="min-w-0">
-                            <p className="truncate font-medium">
-                              {agent.name}
+                            {/* A div, not a <p>: the profile panel's dialog is
+                                rendered by this subtree, and a <div> inside a
+                                <p> is invalid nesting the browser silently
+                                repairs by closing the paragraph early. */}
+                            <div className="flex items-center truncate font-medium">
+                              <AgentProfile
+                                agent={agent}
+                                teams={groups.data?.items ?? []}
+                                isSelf={agent.id === currentAgentId}
+                                canEdit={canEditProfile(agent)}
+                              />
                               {agent.id === currentAgentId && (
                                 <span className="ml-1.5 text-2xs text-content-tertiary">
                                   {t('team.page.you')}
                                 </span>
                               )}
-                            </p>
+                            </div>
                             <p className="truncate text-2xs text-content-tertiary">{agent.email}</p>
                           </div>
                         </div>

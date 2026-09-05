@@ -174,6 +174,17 @@ const listAgentsQuery = z.object({
   status: z.enum(['active', 'suspended', 'all']).default('active'),
 });
 const suspensionBody = z.object({ suspended: z.boolean() });
+/**
+ * How many conversations an agent holds at once (FR-MOD-04.3.4).
+ *
+ * The floor is 1 rather than 0 on purpose: a zero limit means "never assign to
+ * this person", which `routing_status: not_accepting_chats` already says — two
+ * spellings of one state eventually disagree, and the one an admin sets by
+ * accident is the one nobody notices. The ceiling of 50 is a typo guard: a
+ * stray digit on a 6 would otherwise quietly funnel an entire queue onto one
+ * agent, and routing would obey.
+ */
+const chatLimitBody = z.object({ concurrent_chats_limit: z.number().int().min(1).max(50) });
 const roleChangeBody = z.object({ role: z.enum(AGENT_ROLES) });
 // The complete expertise set to assign (FR-MOD-08.6.3). Coerced because JSON
 // carries these as numbers; capped so a single call cannot fan out unbounded.
@@ -261,6 +272,7 @@ const agentSelect = {
   name: true,
   email: true,
   avatarUrl: true,
+  lastSeenAt: true,
   expertise: {
     select: { expertise: { select: { id: true, name: true, slug: true } } },
   },
@@ -277,6 +289,7 @@ type MembershipWithAgent = {
     name: string;
     email: string;
     avatarUrl: string | null;
+    lastSeenAt: Date | null;
     expertise: { expertise: { id: bigint; name: string; slug: string } }[];
   };
 };
@@ -291,6 +304,11 @@ function serialiseAgent(m: MembershipWithAgent) {
     routing_status: m.routingStatus,
     concurrent_chats_limit: m.concurrentChatsLimit,
     two_factor_enabled: m.twoFactorEnabled,
+    // Account-wide, not per-licence: `accounts` is a person (PRD §8.4) and the
+    // panel's "last seen" asks when that person was last in the product. The
+    // access-review report deliberately answers a *different* question — when
+    // they were last in *this* workspace — from the audit trail instead.
+    last_seen_at: m.agent.lastSeenAt?.toISOString() ?? null,
     suspended: m.suspended,
     expertise: m.agent.expertise
       .map((e) => ({ id: Number(e.expertise.id), name: e.expertise.name, slug: e.expertise.slug }))
@@ -608,6 +626,86 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
           action: 'member.role_changed',
           target: `account:${agentId}`,
           metadata: { from: currentRole, to: nextRole },
+        });
+
+        return next;
+      });
+
+      return reply.send(serialiseAgent(updated));
+    },
+  );
+
+  /**
+   * How many conversations one teammate holds at once (FR-MOD-04.3.4).
+   *
+   * This is the only number on the Team profile panel that *does* something:
+   * `RoutingService` will not assign past it (`HAVING COUNT(t.id) <
+   * m.concurrent_chats_limit`), so lowering it takes effect on the very next
+   * assignment rather than at some later reconciliation, and raising it makes
+   * the agent eligible again immediately.
+   *
+   * Deliberately not self-service, unlike `routing_status`. Availability is a
+   * live switch the agent owns — "I am stepping away"; capacity is a staffing
+   * decision the workspace makes *about* them, and letting an agent set their
+   * own would let one person quietly opt out of the queue while still appearing
+   * to accept chats. So it carries the same double gate and the same privilege
+   * ceiling as the role change above: an admin may not restaff someone ranked
+   * over them.
+   */
+  app.put<{ Params: { agentId: string } }>(
+    '/agents/:agentId/chat-limit',
+    { config: { scopes: ['agents--all:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const params = z.object({ agentId: z.string().uuid() }).safeParse(request.params);
+      if (!params.success) throw ApiError.validation('agentId must be a UUID.');
+      const parsedBody = chatLimitBody.safeParse(request.body);
+      if (!parsedBody.success) {
+        throw ApiError.validation('concurrent_chats_limit must be a whole number from 1 to 50.');
+      }
+
+      const { agentId } = params.data;
+      const nextLimit = parsedBody.data.concurrent_chats_limit;
+
+      // `minimumRole` already proved this is an agent principal of admin rank or
+      // above; the narrowing is for the type system and a second line of defence.
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') {
+        throw ApiError.authorization('Only a signed-in teammate can change a chat limit.');
+      }
+      const actorRole = principal.role;
+
+      const updated = await request.withTenant(async (tx) => {
+        // RLS scopes this to the caller's licence, so a hit is always in-tenant
+        // and a miss is a 404 that keeps ids un-enumerable across tenants (NFR-S5).
+        const target = await tx.agentMembership.findFirst({
+          where: { agentId },
+          include: { agent: { select: agentSelect } },
+        });
+        if (!target) throw ApiError.notFound('Agent not found.');
+
+        // The ceiling, narrower than the role endpoint's because there is less
+        // to protect: nobody gains authority from a capacity change, so the only
+        // rule worth keeping is that rank still runs downwards. Changing your
+        // *own* capacity is allowed — an admin thinning their own queue is
+        // ordinary staffing, not the self-promotion the role endpoint refuses.
+        if (!roleAtLeast(actorRole, target.role as AgentRole)) {
+          throw ApiError.authorization('You cannot change an agent above your own role.');
+        }
+
+        // No-op when the number is unchanged: return the current agent without
+        // writing a second, misleading audit entry.
+        if (target.concurrentChatsLimit === nextLimit) return target;
+
+        const next = await tx.agentMembership.update({
+          where: { licenseId_agentId: { licenseId: target.licenseId, agentId } },
+          data: { concurrentChatsLimit: nextLimit },
+          include: { agent: { select: agentSelect } },
+        });
+
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'member.chat_limit_changed',
+          target: `account:${agentId}`,
+          metadata: { from: target.concurrentChatsLimit, to: nextLimit },
         });
 
         return next;

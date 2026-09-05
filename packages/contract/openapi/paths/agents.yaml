@@ -279,6 +279,61 @@ agentRole:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+agentChatLimit:
+  parameters:
+    - name: agentId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  put:
+    tags: [Configuration]
+    operationId: setAgentChatLimit
+    summary: Set how many conversations an agent holds at once
+    description: |
+      The capacity routing reads (FR-MOD-04.3.4 — "limit yonlendirmeyi besler").
+      `RoutingService` will not assign past it, so lowering the number takes
+      effect on the next assignment rather than on some later reconciliation,
+      and raising it makes the agent immediately eligible again.
+
+      Admin or owner only, and bounded by the same privilege ceiling the role
+      endpoint uses: an admin cannot change the capacity of anyone ranked above
+      themselves. Deliberately not self-service — an agent who no longer wants
+      work sets `routing_status`, which is a live switch they own; capacity is a
+      staffing decision the workspace makes about them.
+
+      The floor is `1`, not `0`: a zero limit is `not_accepting_chats` spelled a
+      second way, and two ways to say the same thing eventually disagree. The
+      ceiling of `50` is there so a mistyped number cannot quietly funnel a
+      whole queue onto one person.
+
+      Setting the limit an agent already holds is a no-op: the unchanged agent
+      is returned and nothing is written to the audit log.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [concurrent_chats_limit]
+            properties:
+              concurrent_chats_limit:
+                type: integer
+                minimum: 1
+                maximum: 50
+                description: Conversations this agent may hold at once before work queues.
+    responses:
+      "200":
+        description: The agent, with its new limit.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Agent" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 agentExpertise:
   parameters:
     - name: agentId

@@ -1828,6 +1828,45 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/agents/{agentId}/chat-limit': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Set how many conversations an agent holds at once
+     * @description The capacity routing reads (FR-MOD-04.3.4 — "limit yonlendirmeyi besler").
+     *     `RoutingService` will not assign past it, so lowering the number takes
+     *     effect on the next assignment rather than on some later reconciliation,
+     *     and raising it makes the agent immediately eligible again.
+     *
+     *     Admin or owner only, and bounded by the same privilege ceiling the role
+     *     endpoint uses: an admin cannot change the capacity of anyone ranked above
+     *     themselves. Deliberately not self-service — an agent who no longer wants
+     *     work sets `routing_status`, which is a live switch they own; capacity is a
+     *     staffing decision the workspace makes about them.
+     *
+     *     The floor is `1`, not `0`: a zero limit is `not_accepting_chats` spelled a
+     *     second way, and two ways to say the same thing eventually disagree. The
+     *     ceiling of `50` is there so a mistyped number cannot quietly funnel a
+     *     whole queue onto one person.
+     *
+     *     Setting the limit an agent already holds is a no-op: the unchanged agent
+     *     is returned and nothing is written to the audit log.
+     */
+    put: operations['setAgentChatLimit'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/agents/{agentId}/expertise': {
     parameters: {
       query?: never;
@@ -8919,6 +8958,21 @@ export interface components {
       concurrent_chats_limit: number;
       two_factor_enabled?: boolean;
       /**
+       * Format: date-time
+       * @description When this person was last active anywhere in Nexa, coarsened to the
+       *     minute (FR-MOD-04.3.4). Account-wide by design — `accounts` is a
+       *     person, not a membership, so someone who works two workspaces
+       *     carries one timestamp across both. `null` means never seen since the
+       *     column started being written.
+       *
+       *     Not the same thing as presence: presence is a live socket and
+       *     disappears when the tab closes, this is a durable stamp. And not the
+       *     per-licence "last sign-in" the access-review report answers with
+       *     (NFR-C6) — that one is read off the audit trail precisely because it
+       *     has to be about *this* workspace.
+       */
+      last_seen_at?: string | null;
+      /**
        * @description A suspended agent is reachable through this list (with
        *     `status=suspended` or `status=all`) but cannot be assigned work and
        *     does not occupy a billed seat (FR-MOD-04.6).
@@ -13461,6 +13515,40 @@ export interface operations {
     };
     responses: {
       /** @description The agent, with its new role. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Agent'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setAgentChatLimit: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        agentId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Conversations this agent may hold at once before work queues. */
+          concurrent_chats_limit: number;
+        };
+      };
+    };
+    responses: {
+      /** @description The agent, with its new limit. */
       200: {
         headers: {
           [name: string]: unknown;

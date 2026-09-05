@@ -793,7 +793,12 @@ describe('module parity matrix — what is still owed', () => {
       // name/sector/address/timezone — Owner/Admin console configuration
       // behind `organization--my:rw`, part of the Settings module this app
       // has never had (`OUT_OF_SCOPE` below). Nothing to re-scope.
-      contractEndpoints: 197,
+      // 197 -> 198 with `/agents/{agentId}/chat-limit` (F0-TEAMUI-c, tm 191.3).
+      // How many conversations a teammate holds at once - Owner/Admin staffing
+      // configuration on the console's Team profile panel, behind
+      // `agents--all:rw`. The phone reads the roster it does not administer it,
+      // so there is nothing here to re-scope.
+      contractEndpoints: 198,
       scopeBoundaries: 1,
     });
   });

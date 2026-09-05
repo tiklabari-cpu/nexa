@@ -9042,10 +9042,10 @@
             "description": "PRD KK: \"Plan tier gecisi; downgrade kisitlari (kullanim>plan)\". Sunucu ikisini de yapiyor ve testli; konsol `plan` alanini hic gondermiyor — denetimin D2 deseni (\"API`de var, konsolda yok\").",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `BillingPage.tsx:140-142`: `mutationFn: (body: { billing_cycle?: string; seats?: number }) =>\n  api.patch(\"/billing/subscription\", body)` — **`plan` alani yok**.\n- `ManagePlan` bileseni yalniz `billing_cycle` (:472/:481) ve `seats` (:504/:519) gonderiyor.\n- Sunucu: `PATCH /billing/subscription` plani kabul ediyor, bilinmeyen plani reddediyor, downgrade\n  guard`i `subscription-service.ts:191-201`te GERCEK (yeni planin kotasi bu ayki kullanimin\n  altindaysa red).\n\n## Yapilacak\n\n1. `ManagePlan`e plan tier secici ekle. Plan listesi **sunucudan** gelmeli (`grep`le bak: plan\n   katalogu bir uctan mi geliyor yoksa sabit mi?) — istemciye gomulu bir plan listesi sunucu\n   katalogundan sessizce ayrisir ve kullaniciya var olmayan bir plan sunar.\n2. **Downgrade reddi kullaniciya anlatilir.** Sunucunun 4xx cumlesi hangi kotanin asildigini soyluyor;\n   onu ALAN ALTINDA goster, genel bir \"islem basarisiz\"la degistirme. Mumkunse secenegi ONCEDEN\n   pasif goster (mevcut kullanim > plan kotasi) + sebebini yaz — sonucu kesin 4xx olan bir buton tuzaktir\n   (tm 181.3`un kaydettigi ayni karar).\n3. Onay adimi: plan degisimi faturayi degistirir, geri alinmasi kolay degildir. Onay metni yeni tutari\n   ve gecerlilik anini soylemeli.\n4. Mevcut `seats`/`billing_cycle` yollari BOZULMAZ; mutasyon govdesi genisler, degismez.\n\n## Bilinen tuzaklar\n\n- Read-only (trial bitti) durumda billing yazma yollari ACIK kalmali — `allowWhenReadOnly` bu yuzden\n  var. Yeni bir uc eklersen ayni `config`i vermeyi unutma, yoksa suresi bitmis musteri ODEYEMEZ.\n- `onSuccess` tam abonelik gorunumu donduruyor ve sayfayi ondan guncelliyor (`setQueryData`) —\n  plan degisiminden sonra kullanim/kota kartlari da tazelenmeli.\n- `apps/web` vitest `--maxWorkers=4`.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `BillingPage.test.tsx`: plan secilip onaylandiginda PATCH govdesi `plan` ALANINI tasiyor.\n   Baslik `(FR-MOD-10.1.1)` etiketi tasir.\n2. Sunucu downgrade reddi (msw 4xx) alan altinda sunucunun cumlesiyle gorunuyor; genel hata metni DEGIL.\n3. Kullanim kotanin ustundeyken ilgili plan secenegi pasif ve sebebi yazili.\n4. Integration (regresyon): `PATCH /billing/subscription` plan degisimi + downgrade guard`i HALA dogru.\n5. e2e: konsoldan plan degistirilir -> sayfa yeni plani gosterir.\nDoD: `typecheck` · `lint` · `format:check` · `build` · web (`--maxWorkers=4`) · api integration ·\nilgili e2e — hepsi exit 0.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "194",
-            "updatedAt": "2026-09-05T17:30:25.324Z"
+            "updatedAt": "2026-09-05T18:42:50.304Z"
           },
           {
             "id": 2,
@@ -9058,7 +9058,7 @@
             "parentId": "194"
           }
         ],
-        "updatedAt": "2026-09-05T17:30:25.324Z"
+        "updatedAt": "2026-09-05T18:42:50.304Z"
       },
       {
         "id": "195",
@@ -9411,7 +9411,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T17:30:25.325Z",
+      "lastModified": "2026-09-05T18:42:50.310Z",
       "taskCount": 204,
       "completedCount": 193,
       "tags": [

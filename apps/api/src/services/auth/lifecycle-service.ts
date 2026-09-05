@@ -15,7 +15,14 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
-import { withTenant, type TenantClient } from '../../lib/tenant.js';
+import {
+  withTenant,
+  TENANT_TRANSACTION_TIMEOUT_MS,
+  type TenantClient,
+  type TenantContext,
+} from '../../lib/tenant.js';
+import { assertInviteSeatCeiling } from '../../lib/entitlements.js';
+import { ensureSeatsCoverHeadcount } from '../billing/subscription-service.js';
 import { hashPassword } from '../../lib/crypto.js';
 import { type AgentRole, type Region } from '@nexa/types';
 import { ROLE_RANK } from './principal.js';
@@ -50,6 +57,17 @@ export interface AcceptedInvitation {
    * audit entry, C6-a2).
    */
   licenseId: bigint;
+  /**
+   * The seat count this join moved, or `null` when it moved nothing — because
+   * the workspace is on a trial with no subscription row, because it had
+   * already bought enough seats, or because the invitation only reinstated a
+   * membership that was already there.
+   *
+   * Returned rather than logged so the route can record *why* the bill changed
+   * (`billing.subscription_updated`, the same action SCIM writes) without
+   * reading the row back and guessing.
+   */
+  seatEffect: { from: number; to: number } | null;
 }
 
 export interface InvitationRecord {
@@ -273,6 +291,30 @@ export class LifecycleService {
     const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
     const unique = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))];
 
+    // --- The seat ceiling, before a single row is written (FR-MOD-04.4) ------
+    //
+    // What is counted is the workspace's *commitment*: the people already in it
+    // plus everyone still holding a live link, plus the addresses this call is
+    // about to add to that set. Re-inviting somebody who already has a live
+    // invitation adds nothing — the insert below replaces it rather than
+    // accumulating a second one, so counting it twice here would refuse a
+    // workspace for a seat it was never going to buy.
+    //
+    // An expired invitation *is* counted as new, because the same insert gives
+    // it a fresh seven days and it becomes a seat again.
+    const liveInvitation = { acceptedAt: null, expiresAt: { gt: new Date() } } as const;
+    const [headcount, outstanding, live] = await Promise.all([
+      tx.agentMembership.count({ where: { suspended: false } }),
+      tx.invitation.count({ where: liveInvitation }),
+      tx.invitation.findMany({
+        where: { email: { in: unique }, ...liveInvitation },
+        select: { email: true },
+      }),
+    ]);
+    const alreadyLive = new Set(live.map((row) => row.email.toLowerCase()));
+    const added = unique.filter((email) => !alreadyLive.has(email)).length;
+    assertInviteSeatCeiling(headcount + outstanding + added);
+
     const records: InvitationRecord[] = [];
     for (const email of unique) {
       const { token, hash } = newToken();
@@ -332,6 +374,42 @@ export class LifecycleService {
     return row;
   }
 
+  /**
+   * Consume an invitation, and let the bill follow the person in the same
+   * breath (FR-MOD-04.4).
+   *
+   * **A seat is counted when somebody joins, not when somebody is invited.**
+   * Both readings of the PRD's "koltuk faturaya yansır" are defensible; this
+   * one is chosen for three reasons.
+   *
+   *   1. It is the rule `ensureSeatsCoverHeadcount` already implements for
+   *      SCIM, whose provisioning call also creates a membership. Counting at
+   *      the invitation instead would give the same product two billing
+   *      truths depending on which door a teammate came through, which is the
+   *      defect this task exists to close — not a second version of it.
+   *   2. Revocation and expiry stop being a problem to solve. An invitation
+   *      that is never accepted never created a membership, so no seat was
+   *      ever counted and there is nothing to give back. The alternative needs
+   *      a compensating release on `DELETE /invitations/{id}` *and* a sweep for
+   *      expiry that nothing in this repo runs — and the half-built version of
+   *      that is exactly the "counted but never released" state a bill must
+   *      never reach.
+   *   3. `updateSubscription`'s floor (FR-MOD-10.1.3, "alt sınır = aktif
+   *      kullanıcı") is defined on active members. Seats bought for people who
+   *      have not arrived would sit above a floor the checkout screen computes
+   *      from headcount, so the two numbers on the billing screen would
+   *      disagree with each other.
+   *
+   * **In one transaction with the join**, which is why the SECURITY DEFINER
+   * call has moved inside `$transaction` rather than the seat raise being
+   * appended in the route. A membership that commits without its seat leaves
+   * the workspace in a state its *own* checkout refuses to save: the next
+   * admin to change the billing cycle is told the seat count is below the
+   * headcount they never chose. The tenant settings are `set_config(…, true)`
+   * — transaction-local, exactly as `withTenant` sets them — so they cannot
+   * outlive the transaction on a pooled connection, and they are set *after*
+   * the `auth_*` calls because those run as the definer and need no context.
+   */
   async acceptInvitation(input: {
     token: string;
     name?: string;
@@ -339,30 +417,69 @@ export class LifecycleService {
   }): Promise<AcceptedInvitation> {
     const passwordHash = input.password ? await hashPassword(input.password) : null;
 
-    // The function returns the account's email and name as well as its id. The
-    // obvious follow-up query would run with no tenant context — the person has
-    // only just joined — and row level security would filter it away, failing
-    // the request *after* the invitation had been consumed.
-    const rows = await this.#db.$queryRaw<
-      Array<{
-        joined_account: string;
-        joined_license: bigint;
-        joined_email: string;
-        joined_name: string;
-      }>
-    >`SELECT * FROM auth_accept_invitation(
-        ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash})`;
+    return this.#db.$transaction(
+      async (tx) => {
+        // The function returns the account's email and name as well as its id.
+        // The obvious follow-up query would run with no tenant context — the
+        // person has only just joined — and row level security would filter it
+        // away, failing the request *after* the invitation had been consumed.
+        const rows = await tx.$queryRaw<
+          Array<{
+            joined_account: string;
+            joined_license: bigint;
+            joined_email: string;
+            joined_name: string;
+          }>
+        >`SELECT * FROM auth_accept_invitation(
+            ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash})`;
 
-    const row = rows[0];
-    if (!row) throw ApiError.authentication('This invitation is no longer valid.');
+        const row = rows[0];
+        // Nothing was written on this branch — the UPDATE inside the function
+        // matched no row — so the rollback this throw causes discards nothing.
+        if (!row) throw ApiError.authentication('This invitation is no longer valid.');
 
-    return {
-      session: {
-        account: { id: row.joined_account, email: row.joined_email, name: row.joined_name },
-        memberships: await this.#membershipsOf(row.joined_account),
+        const memberships = await this.#membershipsOf(row.joined_account, tx);
+        const joined = memberships.find((m) => m.license_id === row.joined_license.toString());
+
+        return {
+          session: {
+            account: { id: row.joined_account, email: row.joined_email, name: row.joined_name },
+            memberships,
+          },
+          licenseId: row.joined_license,
+          // `auth_list_memberships` filters suspended and unapproved
+          // memberships out, so a token that only re-touched a suspended
+          // membership finds nothing here — and would raise nothing anyway,
+          // since `ensureSeatsCoverHeadcount` counts non-suspended members. The
+          // two agree by construction rather than by a second rule.
+          seatEffect: joined
+            ? await this.#raiseSeats(tx, {
+                licenseId: row.joined_license,
+                organizationId: joined.organization_id,
+              })
+            : null,
+        };
       },
-      licenseId: row.joined_license,
-    };
+      { timeout: TENANT_TRANSACTION_TIMEOUT_MS },
+    );
+  }
+
+  /**
+   * Enter the tenant the caller has just joined and reconcile its seats.
+   *
+   * Not `withTenant`, because that opens a transaction and this one is already
+   * inside the transaction the join committed in — nesting it would put the
+   * seat raise somewhere the join could not roll it back. The three settings
+   * are the same three, written the same way.
+   */
+  async #raiseSeats(
+    tx: TenantClient,
+    tenant: TenantContext,
+  ): Promise<{ from: number; to: number } | null> {
+    await tx.$executeRaw`SELECT set_config('app.current_license', ${tenant.licenseId.toString()}, true)`;
+    await tx.$executeRaw`SELECT set_config('app.current_organization', ${tenant.organizationId}, true)`;
+    await tx.$executeRaw`SELECT set_config('app.current_brand', '', true)`;
+    return ensureSeatsCoverHeadcount(tx, tenant);
   }
 
   /**
@@ -373,8 +490,8 @@ export class LifecycleService {
    * is exactly what happened before this was changed: signup succeeded and
    * reported the new owner as belonging to no workspace.
    */
-  async #membershipsOf(accountId: string): Promise<Membership[]> {
-    return this.#db.$queryRaw<Membership[]>`
+  async #membershipsOf(accountId: string, tx?: TenantClient): Promise<Membership[]> {
+    return (tx ?? this.#db).$queryRaw<Membership[]>`
       SELECT license_id::text AS license_id,
              organization_id::text AS organization_id,
              organization_name,

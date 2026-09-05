@@ -197,6 +197,24 @@ export const team: Messages = {
   'team.invite.pending.invitedBy': 'Invited by',
   'team.invite.pending.revoke': 'Revoke',
 
+  // What an invitation costs, before it is sent (FR-MOD-04.4). Conditional
+  // wording on purpose: the seat lands when somebody joins, not when they are
+  // invited, so a revoked or expired invitation never reaches the bill.
+  'team.invite.seats.trial': 'Nothing is billed yet — this workspace is on a trial.',
+  'team.invite.seats.inUse': '{headcount} of {purchased} seats in use.',
+  'team.invite.seats.rule':
+    'Each teammate who accepts takes a seat, at {price} per user per month.',
+  'team.invite.seats.ruleQuoted': 'Each teammate who accepts takes a seat on your contracted plan.',
+  'team.invite.seats.projected.one':
+    'Inviting 1 person takes this workspace to {projected} seats once they accept.',
+  'team.invite.seats.projected.other':
+    'Inviting {count} people takes this workspace to {projected} seats once they accept.',
+  'team.invite.seats.within.one': 'Inviting 1 person stays within the {purchased} seats bought.',
+  'team.invite.seats.within.other':
+    'Inviting {count} people stays within the {purchased} seats bought.',
+  'team.invite.seats.overCeiling':
+    'That would pass the {ceiling}-seat ceiling and be refused. Revoke invitations you no longer want, or talk to sales.',
+
   // Teammate profile panel — AgentProfile.tsx (FR-MOD-04.3.4)
   'team.profile.openAriaLabel': 'Profile — {name}',
   'team.profile.title': 'Profile — {name}',

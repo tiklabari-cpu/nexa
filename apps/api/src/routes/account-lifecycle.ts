@@ -15,6 +15,8 @@ import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { LifecycleService } from '../services/auth/lifecycle-service.js';
+import { SEAT_CEILING } from '../lib/entitlements.js';
+import { pricingForPlan } from '../services/billing/subscription-service.js';
 import { REGIONS, servesRegion, type AgentRole } from '@nexa/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
@@ -235,7 +237,7 @@ export default async function accountLifecycleRoutes(
 
   app.post('/auth/invitations/accept', { config: { public: true } }, async (request, reply) => {
     const body = parse(acceptBody, request.body);
-    const { session, licenseId } = await lifecycle.acceptInvitation({
+    const { session, licenseId, seatEffect } = await lifecycle.acceptInvitation({
       token: body.token,
       ...(body.name !== undefined ? { name: body.name } : {}),
       ...(body.password !== undefined ? { password: body.password } : {}),
@@ -245,10 +247,24 @@ export default async function accountLifecycleRoutes(
     // Best-effort, like signup and the password-reset confirmation below: a
     // completed join must not be undone because the trail could not be
     // written.
+    //
+    // The seat raise this block *reports* is deliberately not in this block:
+    // it committed with the membership inside `acceptInvitation`, because the
+    // two failures are not comparable. An unwritten audit row is a lost
+    // record. An unraised seat is a wrong bill, and a workspace whose own
+    // checkout then refuses to save — `updateSubscription` rejects seats below
+    // headcount (FR-MOD-10.1.3), so the next admin to change the billing cycle
+    // is stopped by a number nobody chose.
     if (membership) {
       try {
         const tenant = { licenseId, organizationId: membership.organization_id };
         await withTenant(app.db, tenant, async (tx) => {
+          const context = request.auditContext({
+            licenseId: tenant.licenseId,
+            actorId: session.account.id,
+            actorType: 'agent',
+          });
+
           // The invitation record — already looked up under this tenant's RLS
           // — is where the role and the invitation id live; neither travels
           // back through `acceptInvitation`'s SECURITY DEFINER return.
@@ -257,20 +273,35 @@ export default async function accountLifecycleRoutes(
             orderBy: { acceptedAt: 'desc' },
             select: { id: true, role: true },
           });
-          if (!invitation) return;
-          await writeAuditEntry(
-            tx,
-            request.auditContext({
-              licenseId: tenant.licenseId,
-              actorId: session.account.id,
-              actorType: 'agent',
-            }),
-            {
+          if (invitation) {
+            await writeAuditEntry(tx, context, {
               action: 'member.joined',
               target: `account:${session.account.id}`,
               metadata: { role: invitation.role, via: 'invitation', invitation_id: invitation.id },
-            },
-          );
+            });
+          }
+
+          // Not nested under the lookup above: the seat moved whether or not
+          // the invitation row could be found again, and a bill that changes
+          // with nothing in the trail to say why is the worse of the two
+          // silences.
+          //
+          // The same action and the same metadata shape SCIM's
+          // `applySeatEffect` writes, because it is the same event: the shape
+          // of this workspace's bill changed and no human pressed a button.
+          // Two words for one fact would leave an auditor unable to total the
+          // year.
+          if (seatEffect) {
+            await writeAuditEntry(tx, context, {
+              action: 'billing.subscription_updated',
+              metadata: {
+                fields: ['seats'],
+                from: seatEffect.from,
+                to: seatEffect.to,
+                via: 'invitation',
+              },
+            });
+          }
         });
       } catch (err) {
         request.log.warn({ err }, 'failed to record member join in audit log');
@@ -282,13 +313,19 @@ export default async function accountLifecycleRoutes(
 
   app.get('/invitations', { config: { scopes: ['accounts--all:rw'] } }, async (request, reply) => {
     const tenant = request.tenant();
-    const items = await withTenant(app.db, tenant, (tx) =>
-      tx.invitation.findMany({
+    const { items, headcount, subscription } = await withTenant(app.db, tenant, async (tx) => ({
+      items: await tx.invitation.findMany({
         where: { acceptedAt: null, expiresAt: { gt: new Date() } },
         orderBy: { createdAt: 'desc' },
         include: { invitedBy: { select: { name: true } } },
       }),
-    );
+      headcount: await tx.agentMembership.count({ where: { suspended: false } }),
+      subscription: await tx.subscription.findFirst({
+        where: { licenseId: tenant.licenseId },
+        orderBy: { createdAt: 'desc' },
+        select: { plan: true, seats: true, unitPriceCents: true },
+      }),
+    }));
 
     return reply.send({
       items: items.map((invite) => ({
@@ -302,6 +339,32 @@ export default async function accountLifecycleRoutes(
         // re-issue — and a list endpoint that handed out working links would
         // turn read access to the team page into workspace access.
       })),
+      // What these invitations will do to the bill (FR-MOD-04.4, "koltuk
+      // faturaya yansır"). It rides on this response rather than on a new
+      // endpoint because it is a fact *about these invitations*, and because
+      // the alternative — sending the invite modal to `GET /billing/*` —
+      // would make telling an admin the price of a click depend on a billing
+      // scope that `accounts--all:rw` does not imply.
+      //
+      // Nothing here is new disclosure: headcount is the roster the same page
+      // renders, the unit price is the published list price (ADR-13), and the
+      // plan behind it is already readable at `GET /billing/entitlements` by
+      // any signed-in principal.
+      seats: {
+        headcount,
+        // `null` means a trial — nothing has been bought, so there is no
+        // purchased figure to compare against and joining costs nothing yet
+        // (`ensureSeatsCoverHeadcount` returns early for exactly this case).
+        purchased: subscription?.seats ?? null,
+        // `null` on a quoted tier: enterprise is priced in a contract this
+        // deployment never sees (ADR-13), and printing a number there would
+        // be inventing one.
+        unit_price_cents:
+          pricingForPlan(subscription?.plan) === 'quoted'
+            ? null
+            : (subscription?.unitPriceCents ?? env.UNIT_PRICE_CENTS),
+        ceiling: SEAT_CEILING,
+      },
     });
   });
 

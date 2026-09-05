@@ -633,6 +633,29 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // The invite modal, which since FR-MOD-04.4 carries a seat-cost notice.
+      // The Team scan above cannot reach it — it only renders once opened — and
+      // the notice is the one part of it that arrives from the server, so its
+      // colours are the ones nobody has looked at in either theme. Read-only:
+      // no address is typed and nothing is sent.
+      test('the invite teammates dialog has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/team');
+        await scanPanel(agentPage, 'Invite teammates dialog', theme, testInfo, async () => {
+          await agentPage.getByRole('button', { name: 'Invite teammates' }).click();
+          const dialog = agentPage.getByRole('dialog', { name: 'Invite teammates' });
+          await expect(dialog).toBeVisible();
+          // Wait for the seat notice, or the scan races the response and looks
+          // at a modal it has not reached yet. Matched on the rule rather than
+          // the "N of M seats" line: the demo tenant may or may not have a
+          // subscription row by the time this runs (`billing.spec.ts` writes
+          // one), and the rule is the line that renders either way.
+          await expect(dialog.getByText(/takes a seat/)).toBeVisible();
+        });
+      });
+
       test('settings has no serious or critical violations', async ({ agentPage }, testInfo) => {
         await pinTheme(agentPage, theme);
         await agentPage.goto('/app/settings');

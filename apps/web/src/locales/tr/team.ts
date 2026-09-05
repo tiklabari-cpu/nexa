@@ -190,6 +190,24 @@ export const team: Messages = {
   'team.invite.pending.invitedBy': 'Davet eden',
   'team.invite.pending.revoke': 'İptal et',
 
+  // Bir davetin bedeli, gönderilmeden önce (FR-MOD-04.4). Koltuk davet
+  // edildiğinde değil katılındığında sayılır; iptal edilen ya da süresi geçen
+  // davet faturaya hiç girmez.
+  'team.invite.seats.trial': 'Henüz fatura kesilmiyor — bu çalışma alanı deneme sürecinde.',
+  'team.invite.seats.inUse': '{purchased} koltuğun {headcount} tanesi kullanımda.',
+  'team.invite.seats.rule':
+    'Daveti kabul eden her ekip arkadaşı bir koltuk alır; kullanıcı başına aylık {price}.',
+  'team.invite.seats.ruleQuoted':
+    'Daveti kabul eden her ekip arkadaşı sözleşmeli planınızda bir koltuk alır.',
+  'team.invite.seats.projected.one':
+    'Bu davet kabul edildiğinde çalışma alanı {projected} koltuğa çıkar.',
+  'team.invite.seats.projected.other':
+    'Bu {count} davet kabul edildiğinde çalışma alanı {projected} koltuğa çıkar.',
+  'team.invite.seats.within.one': 'Bu davet, alınmış {purchased} koltuğun içinde kalır.',
+  'team.invite.seats.within.other': 'Bu {count} davet, alınmış {purchased} koltuğun içinde kalır.',
+  'team.invite.seats.overCeiling':
+    '{ceiling} koltukluk tavanı aşar ve reddedilir. Artık istemediğiniz davetleri iptal edin ya da satışla görüşün.',
+
   // Temsilci profil paneli — AgentProfile.tsx (FR-MOD-04.3.4)
   'team.profile.openAriaLabel': '{name} — profil',
   'team.profile.title': 'Profil — {name}',

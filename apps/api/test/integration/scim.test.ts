@@ -35,7 +35,7 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { hashToken } from '../../src/lib/crypto.js';
-import { SCIM_SEAT_CEILING } from '../../src/lib/entitlements.js';
+import { SEAT_CEILING } from '../../src/lib/entitlements.js';
 import { withTenant } from '../../src/lib/tenant.js';
 import { MAX_ACTIVE_SCIM_TOKENS } from '../../src/routes/settings.js';
 import { AUDIT_ACTIONS } from '../../src/services/audit/audit-log.js';
@@ -782,7 +782,7 @@ describe('scim server core', () => {
     /**
      * Push a workspace's active headcount up by `count`, without going through
      * SCIM — the seat-ceiling tests need a workspace already sitting near
-     * {@link SCIM_SEAT_CEILING} before the request under test, and creating
+     * {@link SEAT_CEILING} before the request under test, and creating
      * that many members one directory call at a time would make the *setup*
      * the slow part of the suite rather than the assertion.
      */
@@ -1004,12 +1004,12 @@ describe('scim server core', () => {
       //
       // The rules above are deliberately unbounded — the bill following the
       // headcount is the point. This is the safety rail on top: past
-      // `SCIM_SEAT_CEILING`, a directory stops being able to grow the bill
+      // `SEAT_CEILING`, a directory stops being able to grow the bill
       // unattended, and an administrator has to confirm it instead.
 
       it('refuses to provision past the seat ceiling, and writes nothing', async () => {
         // 2 members are seeded (owner + agent); fill the rest of the ceiling.
-        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING - 2, 'filler');
+        await addActiveMembers(fx.a.licenseId, SEAT_CEILING - 2, 'filler');
 
         const res = await server.post(
           '/scim/v2/Users',
@@ -1029,7 +1029,7 @@ describe('scim server core', () => {
       it('provisions the member that brings the workspace exactly to the ceiling', async () => {
         // 2 seeded + (ceiling - 3) filler = ceiling - 1 active members; one more
         // reaches the ceiling exactly rather than crossing it.
-        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING - 3, 'filler');
+        await addActiveMembers(fx.a.licenseId, SEAT_CEILING - 3, 'filler');
 
         const res = await server.post(
           '/scim/v2/Users',
@@ -1042,7 +1042,7 @@ describe('scim server core', () => {
       it('refuses to reinstate a member once the workspace is at the seat ceiling', async () => {
         await server.del(`/scim/v2/Users/${fx.a.agentAccountId}`, auth(scimA));
         // Deprovisioning left 1 active member (the owner); fill the rest.
-        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING - 1, 'filler');
+        await addActiveMembers(fx.a.licenseId, SEAT_CEILING - 1, 'filler');
 
         const res = await server.patch(
           `/scim/v2/Users/${fx.a.agentAccountId}`,
@@ -1059,7 +1059,7 @@ describe('scim server core', () => {
       });
 
       it('does not gate a suspension — only growth is bounded', async () => {
-        await addActiveMembers(fx.a.licenseId, SCIM_SEAT_CEILING, 'filler');
+        await addActiveMembers(fx.a.licenseId, SEAT_CEILING, 'filler');
         // Already over the ceiling from filler alone; deactivating a member
         // still shrinks headcount and must never be refused for it.
         const res = await server.patch(

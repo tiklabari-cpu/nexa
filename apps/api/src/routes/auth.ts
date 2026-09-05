@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   isScope,
   normalizeWidgetAppearance,
+  RTM_PATHS,
   servesRegion,
   type WidgetFormField,
   type Region,
@@ -1646,6 +1647,16 @@ export default async function authRoutes(
       expires_in: expiresIn,
       customer_id: customerId,
       organization_id: match.organization_id,
+      // Where the widget dials for its socket (FR-MOD-11.6). It cannot derive
+      // this: the gateway is a separate process on its own origin, and nothing
+      // in `apiBaseUrl` says where. Handed over at mint alongside the appearance
+      // and the forms, for the same reason — the widget makes no second fetch,
+      // and the token this response carries is the credential the socket logs
+      // in with, so the address and the credential arrive together or not at
+      // all. The path comes from `RTM_PATHS`, not a string written twice: a
+      // client-side copy would be a second definition free to drift from the
+      // gateway's own routing.
+      rtm_url: `${env.RTM_BASE_URL}${RTM_PATHS.customer}`,
       widget,
       pre_chat_form: forms.pre_chat,
       post_chat_form: forms.post_chat,

@@ -11,6 +11,7 @@
 import type { WidgetFormField, WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
+import { WidgetSocket } from './socket.js';
 import {
   createTranslator,
   isRtlLocale,
@@ -34,6 +35,25 @@ const POLL_INTERVAL_MS = 4_000;
  * minute late — which is the right side of that trade for a nudge.
  */
 const CLOSED_POLL_INTERVAL_MS = 30_000;
+/**
+ * The cadence while the RTM socket is live (FR-MOD-11.6).
+ *
+ * The socket carries messages, so the four-second poll has nothing left to do
+ * for liveness and stops. It does not stop *entirely*, and that is a decision
+ * rather than an oversight: three things the visitor sees arrive only on this
+ * request and have no push behind them — a proactive campaign owed to them
+ * (FR-MOD-03.3.2, delivered and stamped inside the poll itself by
+ * `campaign-delivery.ts`), the agent's "…is typing" line (FR-MOD-02.9, a
+ * short-lived Redis flag the poll reads back, addressed to agents on the bus and
+ * never to the visitor), and `online` / `queue_position`. Cutting the request
+ * off would trade a latency win on messages for three features that silently
+ * stop working.
+ *
+ * So the socket demotes the poll to a heartbeat rather than replacing it. The
+ * overlap costs nothing: every event is applied by id (`applyIncomingEvent`), so
+ * a message arriving on both paths is rendered once.
+ */
+const SOCKET_POLL_INTERVAL_MS = 30_000;
 /** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
 const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
 /**
@@ -275,6 +295,20 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
     renderedCount = state.events.length;
     ui.transcript.scrollTop = ui.transcript.scrollHeight;
+  }
+
+  /**
+   * Rebuild the transcript from scratch.
+   *
+   * `renderEvents` only appends, which is right for the common case and wrong
+   * whenever `state.events` changed anywhere but at its end — a poll replacing
+   * it wholesale, a failed send retracting its bubble, or a socket push
+   * replacing an optimistic bubble with the real message.
+   */
+  function rerenderTranscript(): void {
+    renderedCount = 0;
+    ui.transcript.replaceChildren();
+    renderEvents();
   }
 
   /**
@@ -866,6 +900,8 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.chatId = snapshot.chat?.id ?? null;
       state.queuePosition = snapshot.chat?.queue_position ?? null;
       state.events = snapshot.events;
+      pendingBubbleIds = [];
+      noteTranscriptCursor();
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
       // Never overwrite a campaign already waiting to be seen — the server
@@ -890,6 +926,11 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderCard();
       syncUnread();
       startPolling();
+      // After the poll, never instead of it (FR-MOD-11.6): the socket is an
+      // optimisation over a path that has to work on its own, and the mint that
+      // just returned is what carries both the gateway's address and the
+      // credential it logs in with.
+      openSocket();
     } catch (error) {
       state.error = t('error.connect');
       renderStatus();
@@ -968,6 +1009,19 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.chip.append(name, remove);
   }
 
+  /**
+   * Ids of optimistic bubbles currently standing in `state.events`, oldest
+   * first.
+   *
+   * Needed since the socket (FR-MOD-11.6): the server echoes the visitor's own
+   * message back to them as an `incoming_event`, and with a live socket that
+   * echo can beat the HTTP response that `send` reconciles against. Without a
+   * record of which bubbles are placeholders, the visitor briefly sees their
+   * message twice. Kept in step with `state.events` — anything that replaces
+   * the transcript wholesale empties this too.
+   */
+  let pendingBubbleIds: string[] = [];
+
   async function send(): Promise<void> {
     const text = ui.input.value.trim();
     const attachment = state.pendingAttachment;
@@ -1000,6 +1054,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       attachment_url: attachment?.fileUrl ?? null,
     };
     state.events.push(optimistic);
+    pendingBubbleIds.push(optimistic.id);
     renderEvents();
     state.pendingAttachment = null;
     renderChip();
@@ -1032,9 +1087,8 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.pendingAttachment = attachment;
       renderChip();
       state.events = state.events.filter((e) => e.id !== optimistic.id);
-      renderedCount = 0;
-      ui.transcript.replaceChildren();
-      renderEvents();
+      pendingBubbleIds = pendingBubbleIds.filter((id) => id !== optimistic.id);
+      rerenderTranscript();
       renderStatus();
       console.warn('nexa widget: send failed', error);
     } finally {
@@ -1078,6 +1132,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       // Replace wholesale: the server's view is authoritative and includes the
       // real ids for anything sent optimistically.
       state.events = snapshot.events;
+      pendingBubbleIds = [];
+      // Where the socket resumes from if it has to reconnect (FR-MOD-11.6). Set
+      // from the poll as well as from pushes, because the two take turns: a
+      // socket that comes up after this poll must not replay what is already on
+      // screen.
+      noteTranscriptCursor();
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
       // Same rule as `mint`: a campaign already waiting to be seen is not
@@ -1085,9 +1145,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       if (snapshot.campaign && !state.campaign) {
         state.campaign = { id: snapshot.campaign.id, message: snapshot.campaign.message };
       }
-      renderedCount = 0;
-      ui.transcript.replaceChildren();
-      renderEvents();
+      rerenderTranscript();
       renderStatus();
       renderHeader();
       renderTyping();
@@ -1102,13 +1160,128 @@ export function mount(doc: Document = document, win: Window = window): void {
     }
   }
 
+  // --- Realtime (FR-MOD-11.6) ----------------------------------------------
+
   /**
-   * Polling rather than a socket, deliberately.
+   * The socket, once the server has told us where the gateway is.
    *
-   * The RTM gateway exists and the widget could use it, but a customer-side
-   * socket is one more thing to keep alive across sleeping laptops and flaky
-   * mobile networks for a conversation that lasts minutes. Four-second polling
-   * is indistinguishable to the visitor and cannot silently die.
+   * Null on a deployment that publishes no `rtm_url`, which is a supported
+   * state: the widget then behaves exactly as it did before this existed.
+   */
+  let socket: WidgetSocket | null = null;
+  /** Drives the poll's cadence — see `SOCKET_POLL_INTERVAL_MS`. */
+  let socketLive = false;
+
+  /** Hand the socket the newest real event id, so a reconnect resumes from it. */
+  function noteTranscriptCursor(): void {
+    const chatId = state.chatId;
+    if (!socket || !chatId) return;
+    for (let i = state.events.length - 1; i >= 0; i -= 1) {
+      const event = state.events[i];
+      if (event) {
+        socket.noteEvent(chatId, event.id);
+        return;
+      }
+    }
+  }
+
+  /**
+   * One event from the gateway — a live push, or a replay after a gap.
+   *
+   * Idempotent by id, which is what makes running a socket and a poll at the
+   * same time safe. The window is not hypothetical: the poll fires on its own
+   * schedule, a reconnect replays from a cursor that may predate what the poll
+   * already fetched, and the visitor's own message comes back to them over both
+   * paths. All three land here, and none of them can render twice.
+   */
+  function applyIncomingEvent(chatId: string, event: WidgetEvent): void {
+    // Any chat the gateway addresses to this socket belongs to this visitor —
+    // the fan-out matches on the customer id inside their signed token and
+    // nothing else. So an unknown chat id while we hold none is this visitor's
+    // conversation, adopted here because the send that started it may not have
+    // returned yet. A *different* id while we hold one is an older conversation
+    // of theirs, and its messages do not belong in this transcript.
+    if (!state.chatId) {
+      // …unless the conversation just ended. `closed` with no chat id is
+      // precisely the state `endChat` leaves behind, and an event still in
+      // flight when the visitor pressed "End chat" would otherwise resurrect
+      // the conversation they closed.
+      if (state.closed) return;
+      state.chatId = chatId;
+    } else if (state.chatId !== chatId) {
+      return;
+    }
+
+    if (state.events.some((e) => e.id === event.id)) return;
+
+    // The visitor's own message, coming back from the server while the
+    // optimistic bubble that stands for it is still on screen. Swap rather than
+    // append: two identical bubbles read as a double send.
+    const placeholder = event.author_type === 'customer' ? pendingBubbleIds.shift() : undefined;
+    if (placeholder) {
+      state.events = state.events.filter((e) => e.id !== placeholder);
+      state.events.push(event);
+      rerenderTranscript();
+    } else {
+      state.events.push(event);
+      renderEvents();
+    }
+
+    // A reply that lands with the panel shut is exactly what the badge is for
+    // (FR-MOD-11.1) — and now it can land without a poll having fetched it.
+    syncUnread();
+  }
+
+  /** The conversation ended — the socket learned it before the next poll would. */
+  function applyChatClosed(chatId: string): void {
+    if (state.chatId !== chatId) return;
+    state.chatId = null;
+    state.queuePosition = null;
+    noteChatClosed(chatId);
+    renderHeader();
+    renderStatus();
+    renderPostChat();
+    renderRating();
+    renderClosed();
+  }
+
+  function openSocket(): void {
+    if (socket) return;
+    const url = api.rtmUrl;
+    // No gateway published, or no organization to open one for. Both leave the
+    // widget on the polling path it has always had rather than failing.
+    if (!url || !config.organizationId) return;
+
+    socket = new WidgetSocket({
+      url,
+      organizationId: config.organizationId,
+      getToken: () => api.token,
+      onEvent: applyIncomingEvent,
+      onChatClosed: applyChatClosed,
+      // Truncated replay or a conversation gained while away: the poll owns the
+      // full transcript, so ask it rather than reconstructing one here.
+      onResync: () => void refresh(),
+      onStatusChange: (live) => {
+        socketLive = live;
+        // Move to the other cadence now rather than at the end of the current
+        // interval — a socket that just died must not leave the visitor waiting
+        // out a 30-second heartbeat before the fast poll resumes.
+        repollAtOpenState();
+      },
+    });
+    noteTranscriptCursor();
+    socket.connect();
+  }
+
+  /**
+   * Polling, still — but no longer as the only way a message arrives.
+   *
+   * A socket (FR-MOD-11.6) carries messages when it can. It often cannot: a
+   * corporate proxy that drops WebSocket upgrades, a Content-Security-Policy on
+   * the embedding site, a browser tab suspended on a sleeping laptop. So the
+   * poll never goes away — it is the floor, and the socket is the optimisation
+   * on top of it. `SOCKET_POLL_INTERVAL_MS` explains why it drops to a
+   * heartbeat rather than stopping.
    *
    * Kept running while the panel is closed, not just while it is open
    * (FR-MOD-03.3.2): a campaign owed to this visitor is delivered on this same
@@ -1120,11 +1293,13 @@ export function mount(doc: Document = document, win: Window = window): void {
    * adds load.
    *
    * A self-rescheduling timeout rather than an interval, because the cadence
-   * changes with the panel: `setInterval` would hold whichever period it was
-   * created with for the life of the widget.
+   * changes with the panel and with the socket: `setInterval` would hold
+   * whichever period it was created with for the life of the widget.
    */
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let polling = false;
+  /** The delay the pending timer was armed with — see `repollAtOpenState`. */
+  let armedDelay: number | null = null;
 
   function startPolling(): void {
     if (polling) return;
@@ -1134,19 +1309,44 @@ export function mount(doc: Document = document, win: Window = window): void {
 
   function schedulePoll(): void {
     if (pollTimer !== null) clearTimeout(pollTimer);
-    pollTimer = setTimeout(
-      () => {
-        pollTimer = null;
-        if (!doc.hidden) void refresh();
-        schedulePoll();
-      },
-      state.open ? POLL_INTERVAL_MS : CLOSED_POLL_INTERVAL_MS,
-    );
+    const delay = pollDelay();
+    armedDelay = delay;
+    pollTimer = setTimeout(() => {
+      pollTimer = null;
+      armedDelay = null;
+      if (!doc.hidden) void refresh();
+      schedulePoll();
+    }, delay);
   }
 
-  /** The panel opened or closed — move to the other cadence now, not in 30 s. */
+  /**
+   * How long until the next poll.
+   *
+   * The four-second cadence exists for one thing only — noticing a reply inside
+   * an open conversation. A live socket does that in milliseconds, so with one
+   * up the poll falls back to the same heartbeat a closed panel uses, and the
+   * requests it saves are the overwhelming majority of them.
+   */
+  function pollDelay(): number {
+    if (!state.open) return CLOSED_POLL_INTERVAL_MS;
+    return socketLive ? SOCKET_POLL_INTERVAL_MS : POLL_INTERVAL_MS;
+  }
+
+  /**
+   * The cadence may have changed — the panel opened or closed, or the socket
+   * came up or went down. Move to the new one now rather than at the end of an
+   * interval that no longer applies.
+   *
+   * Only when it *has* changed, though. Rescheduling restarts the countdown, so
+   * a caller that fires repeatedly without changing the answer pushes the next
+   * poll further away every time — and since FR-MOD-11.6 there are two callers,
+   * one of them a socket that can come and go on a flaky network. The two
+   * cadences it toggles between while the panel is shut are the same 30 s, so
+   * without this guard a socket reconnecting every twenty seconds would starve
+   * the poll that carries the proactive card and the unread badge indefinitely.
+   */
   function repollAtOpenState(): void {
-    if (polling) schedulePoll();
+    if (polling && pollDelay() !== armedDelay) schedulePoll();
   }
 
   // --- Wiring --------------------------------------------------------------

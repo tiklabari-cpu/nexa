@@ -392,6 +392,110 @@ test.describe('campaign card', () => {
   });
 });
 
+test.describe('realtime connection', () => {
+  /**
+   * FR-MOD-11.6: the widget holds an RTM connection, and an agent's reply
+   * arrives on it rather than on the next poll.
+   *
+   * The measurement problem here is the whole test. "The reply showed up
+   * quickly" proves nothing on its own — the poll used to run every four
+   * seconds, so a lucky sample looks identical to a working socket. Two things
+   * are asserted instead, and neither can be satisfied by polling:
+   *
+   *   1. **A WebSocket is opened**, observed by the browser rather than
+   *      inferred, and its URL is the gateway's customer path.
+   *   2. **The poll is then made impossible.** Every `GET /customer/chat` after
+   *      the widget has connected is aborted at the network layer, so the only
+   *      route a message has left is the socket. The reply still has to appear.
+   *
+   * Only a real browser can show this: jsdom has no WebSocket to a real
+   * gateway, and the integration suites drive each end without the other.
+   */
+  test('an agent reply arrives over the socket, with polling cut off (FR-MOD-11.6)', async ({
+    browser,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const site = tenantSubdomain(`rtm-${stamp}`);
+    const question = `Does this fit a 29er — ${stamp}`;
+    const answer = `Yes, and we have two in stock — ${stamp}`;
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    // Every socket the page opens, as the browser sees it. Registered before
+    // navigation, because the widget dials as soon as its token is minted.
+    const socketUrls: string[] = [];
+    visitor.on('websocket', (ws) => socketUrls.push(ws.url()));
+
+    try {
+      await openWidget(visitor, organizationId, { host: site.origin });
+
+      // The connection itself, not a proxy for it.
+      await expect
+        .poll(() => socketUrls.some((url) => url.includes('/v1/customer/rtm/ws')), {
+          timeout: 20_000,
+        })
+        .toBe(true);
+      expect(socketUrls.join(' ')).toContain(`organization_id=${organizationId}`);
+
+      // From here the widget cannot poll. `…/customer/chat/events` (the send)
+      // and the token mint are untouched — only the transcript read that the
+      // reply would otherwise ride in on.
+      await visitor.route(
+        (url) => url.pathname.endsWith('/customer/chat'),
+        (route) => route.abort(),
+      );
+
+      await visitorSends(visitor, question);
+
+      // The agent answers over the API, so the stopwatch starts at the moment
+      // the server accepted the reply rather than at a click in another tab.
+      //
+      // Polled rather than read once: `visitorSends` is satisfied by the
+      // optimistic bubble, which is on screen before the request that creates
+      // the chat has returned.
+      let chatId: string | undefined;
+      await expect
+        .poll(
+          async () => {
+            const chats = await request.get(`${API_BASE}/chats?view=all&limit=50`, {
+              headers: auth,
+            });
+            if (!chats.ok()) return undefined;
+            const { items } = (await chats.json()) as {
+              items: Array<{ id: string; last_event?: { text?: string | null } | null }>;
+            };
+            chatId = items.find((c) => c.last_event?.text?.includes(question))?.id;
+            return chatId;
+          },
+          { timeout: 20_000, message: `no chat carrying "${question}"` },
+        )
+        .toBeTruthy();
+
+      const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
+        headers: auth,
+        data: { type: 'message', text: answer },
+      });
+      expect(sent.ok(), `agent reply failed: ${sent.status()} ${await sent.text()}`).toBe(true);
+      const sentAt = Date.now();
+
+      const transcript = widgetFrame(visitor).getByRole('log', { name: 'Conversation' });
+      // Four seconds was the poll's *worst* case and the only cadence the
+      // visitor ever had; the socket has to beat it with room to spare, and
+      // with the poll aborted there is nothing else that could deliver this.
+      await expect(transcript).toContainText(answer, { timeout: 4_000 });
+      expect(Date.now() - sentAt).toBeLessThan(4_000);
+
+      await visitor.screenshot({ path: 'kanit/11.6-widget-rtm.png', fullPage: true });
+    } finally {
+      await visitorContext.close();
+    }
+  });
+});
+
 test.describe('unread badge', () => {
   /**
    * FR-MOD-11.1: a reply that lands while the panel is shut has to reach the

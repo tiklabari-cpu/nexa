@@ -12043,6 +12043,21 @@ export interface operations {
             /** Format: uuid */
             organization_id: string;
             /**
+             * @description The realtime gateway's customer endpoint (FR-MOD-11.6), e.g.
+             *     `wss://rtm.example.com/v1/customer/rtm/ws`. The widget opens
+             *     a socket here with `?organization_id=…` and logs in with the
+             *     `token` above; while it is live an agent's reply arrives as
+             *     an `incoming_event` push instead of on the next poll.
+             *
+             *     Supplied by the server because the widget cannot derive it —
+             *     the gateway is a separate process on its own origin. A
+             *     client that does not recognise this field, or a deployment
+             *     that does not publish a reachable gateway, keeps polling;
+             *     the socket is an optimisation over that path, never a
+             *     precondition for it.
+             */
+            rtm_url?: string;
+            /**
              * @description The workspace's pre-chat form (FR-MOD-08.7.7) — the fields
              *     the widget asks before the conversation starts. Empty when
              *     none are configured; the answers ride the first message as

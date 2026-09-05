@@ -43,9 +43,33 @@ export interface WidgetState {
 
 export class WidgetApi {
   #token: string | null = null;
+  #rtmUrl: string | null = null;
   #appearance: WidgetAppearance | null = null;
   #preChatForm: WidgetFormField[] = [];
   #postChatForm: WidgetFormField[] = [];
+
+  /**
+   * The credential the socket logs in with (FR-MOD-11.6), or null before the
+   * first mint.
+   *
+   * Exposed rather than passed to the socket once, because it is replaced: a
+   * customer token is short-lived and `#request` re-mints on the first 401. A
+   * socket handed a copy at construction would keep presenting a token that had
+   * already been retired — read it at each connection attempt instead.
+   */
+  get token(): string | null {
+    return this.#token;
+  }
+
+  /**
+   * Where the realtime gateway takes customer sockets (FR-MOD-11.6), from the
+   * last token mint, or null when the server did not name one. Null is a
+   * supported answer, not a fault: the widget then stays on the polling path it
+   * has always had.
+   */
+  get rtmUrl(): string | null {
+    return this.#rtmUrl;
+  }
 
   /**
    * The workspace's widget appearance from the last token mint (FR-MOD-11.7), or
@@ -114,15 +138,17 @@ export class WidgetApi {
     });
     if (!response.ok) throw new WidgetApiError(await describe(response));
 
-    const { token, customer_id, widget, pre_chat_form, post_chat_form } =
+    const { token, customer_id, rtm_url, widget, pre_chat_form, post_chat_form } =
       (await response.json()) as {
         token: string;
         customer_id: string;
+        rtm_url?: string;
         widget?: WidgetAppearance;
         pre_chat_form?: WidgetFormField[];
         post_chat_form?: WidgetFormField[];
       };
     this.#token = token;
+    this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
     if (widget) this.#appearance = widget;
     this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];

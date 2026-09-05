@@ -58,7 +58,7 @@ COPY --from=build --chown=nginx:nginx /repo/apps/widget/dist /usr/share/nginx/ht
 # /etc/nginx/conf.d — see apps/web/Dockerfile for why nginx's own `$uri` and
 # friends survive that pass untouched.
 COPY apps/widget/nginx.conf /etc/nginx/templates/default.conf.template
-ENV CSP_CONNECT_EXTRA="http://localhost:4000"
+ENV CSP_CONNECT_EXTRA="http://localhost:4000 ws://localhost:4001"
 
 EXPOSE 8080
 # `loader.js` is the one file every embed depends on being reachable; a

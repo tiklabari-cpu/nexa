@@ -180,7 +180,23 @@ export function TeamPage(): ReactElement {
         <ErrorNotice message={t('team.page.loadError')} />
       ) : (
         <>
-          <div className="mb-6 flex justify-end">
+          <div className="mb-6 flex justify-end gap-2">
+            {/* "Copy invite link" (FR-MOD-04.3.1): a second header action, its
+                own modal instance reusing the same trigger contract as the
+                rail's quick-create items. It opens this exact form at its one
+                link-generating step rather than minting a workspace-wide link
+                — see `#### K04.3.1` in PLAN.md for why that trade was made. */}
+            <InviteTeammates
+              trigger={(open) => (
+                <button
+                  type="button"
+                  onClick={open}
+                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-content-secondary hover:bg-surface-2"
+                >
+                  {t('team.invite.copyLink')}
+                </button>
+              )}
+            />
             <InviteTeammates />
           </div>
 

@@ -113,6 +113,57 @@ test.describe('quick create from the shell (FR-MOD-01.1.5 · FR-MOD-04.1)', () =
   });
 });
 
+test.describe('header "Copy invite link" action (FR-MOD-04.3.1)', () => {
+  test('opens the invite modal on its own, before any invite is sent, and its own inner button copies the accept link', async ({
+    agentPage,
+    request,
+  }) => {
+    const email = 'e2e-copy-invite-link@nexa.test';
+    let invitationId: string | undefined;
+
+    try {
+      await agentPage.goto('/app/team');
+      await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
+
+      // The audited gap: this used to only exist *inside* the modal, after a
+      // POST — never as an independent header action reachable on its own.
+      await agentPage.getByRole('button', { name: 'Copy invite link' }).click();
+      const dialog = agentPage.getByRole('dialog', { name: 'Invite teammates' });
+      await expect(dialog).toBeVisible();
+
+      await agentPage.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+      await dialog.getByLabel('Email addresses').fill(email);
+      const sent = agentPage.waitForResponse(
+        (response) =>
+          response.url().endsWith('/invitations') && response.request().method() === 'POST',
+      );
+      await dialog.getByRole('button', { name: /^Invite/ }).click();
+      const sentResponse = await sent;
+      expect(sentResponse.ok(), `invite failed: ${sentResponse.status()}`).toBe(true);
+      const { items } = (await sentResponse.json()) as {
+        items: Array<{ id: string; accept_url: string }>;
+      };
+      invitationId = items[0]?.id;
+
+      await dialog.getByRole('button', { name: 'Copy invite link' }).click();
+      const link = await agentPage.evaluate(() => navigator.clipboard.readText());
+      const token = new URL(link).searchParams.get('token');
+      expect(token, 'copied link carried no token').toBeTruthy();
+      await agentPage.screenshot({ path: 'kanit/04.3.1-copy-invite-link.png', fullPage: true });
+
+      await dialog.getByRole('button', { name: 'Done' }).click();
+      await expect(dialog).toBeHidden();
+    } finally {
+      if (invitationId) {
+        const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+        await request
+          .delete(`${API_BASE}/invitations/${invitationId}`, { headers: auth })
+          .catch(() => {});
+      }
+    }
+  });
+});
+
 test.describe('Team — module navigation (FR-MOD-04.1)', () => {
   test('each tab is a deep-linkable route, and the AI agents / Teams tabs carry their own sections', async ({
     agentPage,

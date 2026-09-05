@@ -416,14 +416,25 @@ async function buildSubscriptionView(
 // ===========================================================================
 
 /**
- * Below this many cases in the window, an SLA breach count is read with a
- * caveat rather than at face value — a single slow reply can be the whole
- * story in a two-case window. Mirrors the reasoning
- * {@link DEFAULT_MINIMUM_SAMPLE_CHATS} documents for the staffing forecast; a
- * separate number because the two guard different quantities (every case in
- * the window, not chats specifically).
+ * Below this many cases, a count built from them is read with a caveat
+ * rather than at face value — a single slow reply (or a single automated
+ * resolution) can be the whole story in a two-case window. Mirrors the
+ * reasoning {@link DEFAULT_MINIMUM_SAMPLE_CHATS} documents for the staffing
+ * forecast; a separate number because the two guard different quantities
+ * (every case in the window, not chats specifically).
+ *
+ * Shared by three signals that turn out to need the same bar (FR-MOD-07.3.2
+ * · FR-MOD-11.5), on two different denominators:
+ *   - The SLA breach count and the "Total cases" card both read every case
+ *     in the window (`totalChats + tickets`) — the same quantity, so they
+ *     share one computed flag ({@link buildOverviewReport}'s
+ *     `lowSampleCases`).
+ *   - The manual/assisted/automated split reads `closed` instead, because
+ *     the split only partitions the closed cases — a window with 200 open
+ *     chats and 5 closed ones has a case count nowhere near thin but a
+ *     split too small to trust (`lowSplitConfidence`).
  */
-const SLA_MINIMUM_SAMPLE_CASES = 20;
+const MINIMUM_SAMPLE_CASES = 20;
 
 /**
  * The Overview report for one window (FR-MOD-07.3). Shared by `GET
@@ -501,6 +512,17 @@ export async function buildOverviewReport(
   const manual = Number(totals.manual);
   const closed = Number(totals.closed_chats);
 
+  // A case count too thin to read a share or a breach rate from — see
+  // MINIMUM_SAMPLE_CASES. Shared between the SLA card and the "Total cases"
+  // card: both are counting the exact same quantity (every case in the
+  // window), computed once so the two can never disagree.
+  const lowSampleCases = totalChats + tickets < MINIMUM_SAMPLE_CASES;
+  // The manual/assisted/automated split's own confidence signal (FR-MOD-
+  // 07.3.2's KK) — bound to `closed`, not to `totalChats + tickets`: the
+  // split only exists over the closed cases, so its reliability depends on
+  // how many of those there are, not on how many cases the window holds.
+  const lowSplitConfidence = closed < MINIMUM_SAMPLE_CASES;
+
   // The baseline window carries the same headline figures the delta badges
   // compare against (FR-MOD-07.3.1) — no by-agent or by-tag depth, since
   // nothing on a KPI card needs it. The comparable figures ride along rather
@@ -516,6 +538,10 @@ export async function buildOverviewReport(
         // left for the client to add up, so every surface that quotes "total
         // cases" quotes the same number.
         total_cases: totalChats + tickets,
+        // Too few cases in the window to read `total_cases` at face value —
+        // the same flag `sla.low_confidence` carries, because both read the
+        // exact same count (see MINIMUM_SAMPLE_CASES).
+        low_confidence: lowSampleCases,
         closed,
         // PRD 07.3.2's three-way split of closed cases. Sent as three counts
         // (not left for the client to derive) so every surface agrees, and by
@@ -530,6 +556,10 @@ export async function buildOverviewReport(
         manual_rate: resolutionRate(manual, closed),
         assisted_rate: resolutionRate(assisted, closed),
         automated_rate: resolutionRate(automated, closed),
+        // Too few *closed* cases for the three shares above to mean much —
+        // independent from `low_confidence`: a busy window can hold plenty of
+        // cases and still have closed only a handful of them.
+        split_low_confidence: lowSplitConfidence,
         queued_now: queued,
         achieved_goals: achievedGoals,
       },
@@ -569,8 +599,10 @@ export async function buildOverviewReport(
         active: slaIsActive,
         breaches: slaBreaches,
         // A count from a handful of cases is not a trend — see
-        // SLA_MINIMUM_SAMPLE_CASES.
-        low_confidence: totalChats + tickets < SLA_MINIMUM_SAMPLE_CASES,
+        // MINIMUM_SAMPLE_CASES. The same flag as `totals.low_confidence`,
+        // computed once above (`lowSampleCases`) since both read the exact
+        // same quantity.
+        low_confidence: lowSampleCases,
       },
     },
     from,

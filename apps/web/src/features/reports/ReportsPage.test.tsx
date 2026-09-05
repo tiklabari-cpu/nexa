@@ -62,6 +62,7 @@ const OVERVIEW = {
     chats: 0,
     tickets: 0,
     total_cases: 0,
+    low_confidence: false,
     closed: 0,
     manual: 0,
     assisted: 0,
@@ -69,6 +70,7 @@ const OVERVIEW = {
     manual_rate: null,
     assisted_rate: null,
     automated_rate: null,
+    split_low_confidence: false,
     queued_now: 0,
     achieved_goals: 0,
   },
@@ -156,6 +158,7 @@ const RICH_OVERVIEW = {
     chats: 240,
     tickets: 12,
     total_cases: 252,
+    low_confidence: false,
     closed: 200,
     manual: 40,
     assisted: 60,
@@ -163,6 +166,7 @@ const RICH_OVERVIEW = {
     manual_rate: 0.2,
     assisted_rate: 0.3,
     automated_rate: 0.5,
+    split_low_confidence: false,
     queued_now: 3,
     achieved_goals: 0,
   },
@@ -415,6 +419,54 @@ describe('ReportsPage — Overview "SLA breaches" KPI card (FR-MOD-11.5 · 11.5-
     expect(
       within(kpi('SLA breaches')).getByText('Set targets in Settings → SLA to track this'),
     ).toBeInTheDocument();
+  });
+});
+
+describe('ReportsPage — Overview low-confidence warning on Total cases + the resolution split (FR-MOD-07.3.2)', () => {
+  it('shows the usual hints once the window holds enough cases and enough closed cases', async () => {
+    mockOverviewRich();
+    renderReports(<ReportsPage />);
+    await screen.findByText('In queue now');
+
+    expect(within(kpi('Total cases')).getByText('240 chats + 12 tickets')).toBeInTheDocument();
+    expect(within(kpi('Manual')).getByText('20% of closed')).toBeInTheDocument();
+    expect(within(kpi('Assisted')).getByText('30% of closed')).toBeInTheDocument();
+    expect(within(kpi('Automated')).getByText('50% of closed')).toBeInTheDocument();
+  });
+
+  it('replaces the Total cases hint with the case count once the window is thin, leaving the split alone', async () => {
+    mockOverviewRich({
+      totals: { ...RICH_OVERVIEW.totals, total_cases: 3, low_confidence: true },
+    });
+    renderReports(<ReportsPage />);
+    await screen.findByText('In queue now');
+
+    expect(
+      within(kpi('Total cases')).getByText(
+        'Only 3 cases in this range — not enough to read much into this',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(kpi('Total cases')).queryByText('240 chats + 12 tickets'),
+    ).not.toBeInTheDocument();
+    // Independent signal: a thin `total_cases` says nothing about `closed`.
+    expect(within(kpi('Manual')).getByText('20% of closed')).toBeInTheDocument();
+  });
+
+  it("replaces the resolution cards' share hint with the closed count once the split sample is thin, leaving Total cases alone", async () => {
+    mockOverviewRich({
+      totals: { ...RICH_OVERVIEW.totals, closed: 3, split_low_confidence: true },
+    });
+    renderReports(<ReportsPage />);
+    await screen.findByText('In queue now');
+
+    const warning = 'Only 3 closed cases in this range — shares may not be reliable';
+    expect(within(kpi('Manual')).getByText(warning)).toBeInTheDocument();
+    expect(within(kpi('Assisted')).getByText(warning)).toBeInTheDocument();
+    expect(within(kpi('Automated')).getByText(warning)).toBeInTheDocument();
+    expect(within(kpi('Manual')).queryByText('20% of closed')).not.toBeInTheDocument();
+    // Independent signal: a thin `closed` says nothing about `total_cases`.
+    expect(within(kpi('Total cases')).getByText('240 chats + 12 tickets')).toBeInTheDocument();
   });
 });
 

@@ -114,6 +114,10 @@ export const reports: Messages = {
   'reports.overview.kpi.conversations': 'Conversations',
   'reports.overview.kpi.totalCases': 'Total cases',
   'reports.overview.kpi.totalCasesHint': '{chats} chats + {tickets} tickets',
+  'reports.overview.kpi.totalCasesLowConfidence.one':
+    'Only {count} case in this range — not enough to read much into this',
+  'reports.overview.kpi.totalCasesLowConfidence.other':
+    'Only {count} cases in this range — not enough to read much into this',
   'reports.overview.kpi.queuedNow': 'In queue now',
   'reports.overview.queue.waiting': 'Waiting for an agent',
   'reports.overview.queue.empty': 'Nobody waiting',
@@ -121,6 +125,10 @@ export const reports: Messages = {
   'reports.overview.resolution.title': 'Resolution',
   'reports.overview.resolution.description':
     'How closed conversations were handled (PRD §7.3.2). Manual, assisted and automated add up to every closed case.',
+  'reports.overview.resolution.lowConfidence.one':
+    'Only {count} closed case in this range — shares may not be reliable',
+  'reports.overview.resolution.lowConfidence.other':
+    'Only {count} closed cases in this range — shares may not be reliable',
   'reports.overview.chats.title': 'Chats',
   'reports.overview.chats.description':
     'How fast the AI clears conversations and how long they run (PRD §7.3.3).',

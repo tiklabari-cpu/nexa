@@ -41,6 +41,22 @@ export const billing: Messages = {
   'billing.managePlan.title': 'Manage plan',
   'billing.managePlan.description':
     'Billing is mocked — nothing is charged. Changes save as you make them.',
+
+  // Plan tier — PlanSelector
+  'billing.managePlan.plan.label': 'Plan tier',
+  'billing.managePlan.plan.loading': 'Loading plans…',
+  'billing.managePlan.plan.loadError': 'Could not load the plan catalogue.',
+  'billing.managePlan.plan.genericError': 'Could not change the plan. Try again.',
+  'billing.managePlan.plan.overQuotaReason':
+    'The {plan} plan includes {included} AI resolutions — below the {used} already used this period.',
+  'billing.managePlan.plan.confirmListed':
+    'Switch to the {plan} plan for {price} / {cycle}? This takes effect immediately.',
+  'billing.managePlan.plan.confirmQuoted':
+    "Switch to the {plan} plan? Its price is set in your contract, so today's charges stay the same until that changes. This takes effect immediately.",
+  'billing.managePlan.plan.confirmButton': 'Confirm plan change',
+  'billing.managePlan.plan.confirming': 'Switching…',
+  'billing.managePlan.plan.cancelButton': 'Cancel',
+
   'billing.managePlan.cycleLabel': 'Billing cycle',
   'billing.managePlan.monthly': 'Monthly',
   'billing.managePlan.annual': 'Annual',

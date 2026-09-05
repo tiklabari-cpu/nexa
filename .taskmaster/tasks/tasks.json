@@ -9032,7 +9032,7 @@
         "description": "Denetim iki fatura kalemini KISMI buldu. 10.1.1: API tarafi eksiksiz ve testli (PATCH /billing/subscription plan kabul ediyor, bilinmeyen plani reddediyor, downgrade guard`i gercek) ama konsolun mutasyonu `plan` ALANINI HIC GONDERMIYOR — \"Change plan\" urunun icinden imkansiz. 10.2: trial cekirdegi eksiksiz ve testli; denetimin curutme turunda dusurdugu kalan pay belgede kesik, once o pay PRD KK`sina karsi yeniden turetilmeli.",
         "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## (a) Bu isi doguran gerekce\n\ntm 184.4 (M-TRACE-d · `cf9ad43`) PLAN.md damgalarini `prd-uyum-denetimi.md`ye (2026-08-30, 12 denetci +\n12 curutucu ajan) karsi yeniden okudu ve Faz-0`in 28 `Must` satirini `✅`ten `◐`ye indirdi; §F.00`in\nmekanik kurali geregi (\"bir faz ancak `Must` kapsaminda 0 ◐ ve 0 ⬜ kaldiginda kapanir\") Faz-0 kapisi\n`❌ ACIK`a dondu. tm 185 o 28 kalemi tek tek triyaj etti: 3 kalem denetimden SONRA kapanmisti (damga `✅`e\ngeri alindi), kalan 25 kalem is gorevine donusturuldu. Bu gorev o gorevlerden biridir.\n\nKapanis kosulu tek: **PRD kabul kriteri (KK)**. \"Kod var + test yesil\" YETMEZ — GL-3/GL-4/GL-8`in hatasi\ntam olarak buydu ve M-TRACE ailesi (tm 184.1-184.3) bu kapiyi teshis etti. Kanit blogu PLAN.md`nin\n`## K. Kanit Gecmisi` bolumundedir (`#### K<kod>`), tablo hucresinde DEGIL (CONVENTIONS §1.2).\n\n## (b) Kapsanan PLAN satirlari\n\n| PLAN satir (2026-09-04) | Kod | Kanit blogu | Alt-gorev |\n| --- | --- | --- | --- |\n| 283 | 10.1.1 | `#### K10.1.1` | 194.1 |\n| 287 | 10.2 | `#### K10.2` | 194.2 |\n\n## (c) Ana dosyalar\n\n- `apps/web/src/features/billing/BillingPage.tsx` — `change` mutasyonu (:140-142, gövde tipi\n  `{ billing_cycle?: string; seats?: number }`), `ManagePlan` bileseni (:424+).\n- `apps/api/src/services/billing/subscription-service.ts:191-201` — downgrade guard`i (gercek, testli).\n- `apps/api/src/plugins/license-gate.ts` — read-only kapisi; `allowWhenReadOnly` yalniz\n  `routes/reports.ts:1803/1919/1968` (billing yazma) ve `routes/mcp.ts:74` uzerinde.\n- `apps/api/src/services/auth/lifecycle-service.ts:23` (`TRIAL_DAYS = 14`) ·\n  `services/billing/metering.ts:227` (`trialState`) · `AppShell.tsx:141-163` (`TrialBanner`).\n\n## (d) Kapsam SINIRI\n\n- YALNIZ iki satir. `10.1.4`/`10.1.5`/`10.3` DISARIDA (v1 ya da teslim edilmis).\n- **GERCEK ODEME YOK** (MASTER-PROMPT siniri): kart, saglayici, para hareketi yok. Odeme yolu mock.\n\n## Kapanista yapilacak PLAN.md guncellemesi\n\nBu ailenin TUM alt-gorevleri bittiginde ilgili `Must` satirinin damgasi `◐ → K<kod>` yerine\n`✅ → K<kod>` olur (PLAN.md §3, satir no `grep -n` ile bulunur — 2026-09-04 itibariyle gecerli satir\nnumaralari asagida yazili, dosya degistikce kayar). Tek bir alt-gorev bir satiri tek basina kapatiyorsa\no satiri o alt-gorev cevirir. Kanit tablo hucresine YAZILMAZ; `#### K<kod>` blogunun sonuna madde\nolarak eklenir: `- ✅ <ne yapildi> — `<dosya>` · test `<dosya>` (n) · tm <id>`.\nFaz-0 `Must` sayaci (PLAN.md:18 kapi tablosu) her kapanan satirda guncellenir.",
         "testStrategy": "Aile ancak iki alt-gorev de DoD kapisindan gectiginde done. 194.2 sonucu \"eksik yok\" cikarsa satir `✅`e cevrilir ve gerekce kanit blogunda yazili olur; \"eksik var\" cikarsa ayni alt-gorev eksigi kapatir.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -9042,9 +9042,10 @@
             "description": "PRD KK: \"Plan tier gecisi; downgrade kisitlari (kullanim>plan)\". Sunucu ikisini de yapiyor ve testli; konsol `plan` alanini hic gondermiyor — denetimin D2 deseni (\"API`de var, konsolda yok\").",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `BillingPage.tsx:140-142`: `mutationFn: (body: { billing_cycle?: string; seats?: number }) =>\n  api.patch(\"/billing/subscription\", body)` — **`plan` alani yok**.\n- `ManagePlan` bileseni yalniz `billing_cycle` (:472/:481) ve `seats` (:504/:519) gonderiyor.\n- Sunucu: `PATCH /billing/subscription` plani kabul ediyor, bilinmeyen plani reddediyor, downgrade\n  guard`i `subscription-service.ts:191-201`te GERCEK (yeni planin kotasi bu ayki kullanimin\n  altindaysa red).\n\n## Yapilacak\n\n1. `ManagePlan`e plan tier secici ekle. Plan listesi **sunucudan** gelmeli (`grep`le bak: plan\n   katalogu bir uctan mi geliyor yoksa sabit mi?) — istemciye gomulu bir plan listesi sunucu\n   katalogundan sessizce ayrisir ve kullaniciya var olmayan bir plan sunar.\n2. **Downgrade reddi kullaniciya anlatilir.** Sunucunun 4xx cumlesi hangi kotanin asildigini soyluyor;\n   onu ALAN ALTINDA goster, genel bir \"islem basarisiz\"la degistirme. Mumkunse secenegi ONCEDEN\n   pasif goster (mevcut kullanim > plan kotasi) + sebebini yaz — sonucu kesin 4xx olan bir buton tuzaktir\n   (tm 181.3`un kaydettigi ayni karar).\n3. Onay adimi: plan degisimi faturayi degistirir, geri alinmasi kolay degildir. Onay metni yeni tutari\n   ve gecerlilik anini soylemeli.\n4. Mevcut `seats`/`billing_cycle` yollari BOZULMAZ; mutasyon govdesi genisler, degismez.\n\n## Bilinen tuzaklar\n\n- Read-only (trial bitti) durumda billing yazma yollari ACIK kalmali — `allowWhenReadOnly` bu yuzden\n  var. Yeni bir uc eklersen ayni `config`i vermeyi unutma, yoksa suresi bitmis musteri ODEYEMEZ.\n- `onSuccess` tam abonelik gorunumu donduruyor ve sayfayi ondan guncelliyor (`setQueryData`) —\n  plan degisiminden sonra kullanim/kota kartlari da tazelenmeli.\n- `apps/web` vitest `--maxWorkers=4`.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `BillingPage.test.tsx`: plan secilip onaylandiginda PATCH govdesi `plan` ALANINI tasiyor.\n   Baslik `(FR-MOD-10.1.1)` etiketi tasir.\n2. Sunucu downgrade reddi (msw 4xx) alan altinda sunucunun cumlesiyle gorunuyor; genel hata metni DEGIL.\n3. Kullanim kotanin ustundeyken ilgili plan secenegi pasif ve sebebi yazili.\n4. Integration (regresyon): `PATCH /billing/subscription` plan degisimi + downgrade guard`i HALA dogru.\n5. e2e: konsoldan plan degistirilir -> sayfa yeni plani gosterir.\nDoD: `typecheck` · `lint` · `format:check` · `build` · web (`--maxWorkers=4`) · api integration ·\nilgili e2e — hepsi exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "194"
+            "parentId": "194",
+            "updatedAt": "2026-09-05T17:30:25.324Z"
           },
           {
             "id": 2,
@@ -9057,7 +9058,7 @@
             "parentId": "194"
           }
         ],
-        "updatedAt": "2026-09-04T20:28:29.304Z"
+        "updatedAt": "2026-09-05T17:30:25.324Z"
       },
       {
         "id": "195",
@@ -9410,7 +9411,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-05T17:28:23.762Z",
+      "lastModified": "2026-09-05T17:30:25.325Z",
       "taskCount": 204,
       "completedCount": 193,
       "tags": [

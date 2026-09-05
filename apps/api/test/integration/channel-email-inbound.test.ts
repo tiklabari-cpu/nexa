@@ -3,9 +3,9 @@
  *
  * Three properties carry this suite, each silent when broken:
  *
- *  - Routing: a message to `<org>@inbound…` becomes a ticket on *that* org's
- *    licence and no other. Proved across the A/B fixtures, not trusted to a
- *    WHERE clause.
+ *  - Routing: a message to `<org>@inbound…`, or to a labelled
+ *    `<org>+support@inbound…`, becomes a ticket on *that* org's licence and no
+ *    other. Proved across the A/B fixtures, not trusted to a WHERE clause.
  *  - No duplicate customer: a sender already known by email is reused. A second
  *    record would split one person's history — and the match must not reach
  *    across tenants, so the same address in another org is a different person.
@@ -236,6 +236,116 @@ describe('inbound email → ticket', () => {
 
     expect(response.json()).toEqual({ status: 'ignored', reason: 'spam' });
     expect(await owner.ticket.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+  });
+
+  // --- More than one address ------------------------------------------------
+
+  describe('more than one forwarding address (FR-MOD-08.5.3)', () => {
+    it('forwards two of one workspace’s addresses into two tickets, each naming its own', async () => {
+      const support = await owner.inboundEmailAddress.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          label: 'support',
+          localPart: `${fx.a.organizationId}+support`,
+        },
+        select: { id: true },
+      });
+      const billing = await owner.inboundEmailAddress.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          label: 'billing',
+          localPart: `${fx.a.organizationId}+billing`,
+        },
+        select: { id: true },
+      });
+
+      const first = await inbound({
+        to: `${fx.a.organizationId}+support@${DOMAIN}`,
+        from: 'one@shopper.example',
+        subject: 'Where is my order?',
+      });
+      const second = await inbound({
+        to: `${fx.a.organizationId}+billing@${DOMAIN}`,
+        from: 'two@shopper.example',
+        subject: 'Wrong invoice',
+      });
+
+      expect(first.json().status).toBe('created');
+      expect(second.json().status).toBe('created');
+      expect(first.json().ticket_id).not.toBe(second.json().ticket_id);
+
+      const supportTicket = await owner.ticket.findUniqueOrThrow({
+        where: { id: first.json().ticket_id },
+      });
+      const billingTicket = await owner.ticket.findUniqueOrThrow({
+        where: { id: second.json().ticket_id },
+      });
+      expect(supportTicket.inboundAddressId).toBe(support.id);
+      expect(billingTicket.inboundAddressId).toBe(billing.id);
+    });
+
+    it('still accepts the address every workspace has always had, and records it', async () => {
+      const response = await inbound({
+        to: addressFor(fx.a.organizationId),
+        from: 'legacy@shopper.example',
+        subject: 'Same as ever',
+      });
+
+      expect(response.json().status).toBe('created');
+      const ticket = await owner.ticket.findUniqueOrThrow({
+        where: { id: response.json().ticket_id },
+      });
+      // The default address materialises its row on first use, so even a
+      // workspace that predates the table gets its mail attributed.
+      const defaultAddress = await owner.inboundEmailAddress.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId, label: null },
+      });
+      expect(ticket.inboundAddressId).toBe(defaultAddress.id);
+      expect(defaultAddress.localPart).toBe(fx.a.organizationId);
+    });
+
+    it('does not deliver one workspace’s labelled address into another’s tickets', async () => {
+      // B defines `support`; a message to *A's* support address must not reach it.
+      await owner.inboundEmailAddress.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          label: 'support',
+          localPart: `${fx.b.organizationId}+support`,
+        },
+      });
+
+      const response = await inbound({
+        to: `${fx.b.organizationId}+support@${DOMAIN}`,
+        from: 'writer@shopper.example',
+        subject: 'For B only',
+      });
+
+      expect(response.json().status).toBe('created');
+      expect(await owner.ticket.count({ where: { licenseId: fx.b.licenseId } })).toBe(1);
+      expect(await owner.ticket.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+    });
+
+    it('refuses a label nobody defined — an address that was never opened accepts nothing', async () => {
+      const response = await inbound({
+        to: `${fx.a.organizationId}+nobody@${DOMAIN}`,
+        from: 'someone@shopper.example',
+        subject: 'Anyone home?',
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it('does not let a bare `+` collapse into the default address', async () => {
+      const response = await inbound({
+        to: `${fx.a.organizationId}+@${DOMAIN}`,
+        from: 'someone@shopper.example',
+        subject: 'Hi',
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(await owner.ticket.count()).toBe(0);
+    });
   });
 
   // --- Unroutable -----------------------------------------------------------

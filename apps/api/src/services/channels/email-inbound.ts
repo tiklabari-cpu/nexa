@@ -2,9 +2,10 @@
  * Inbound email → ticket (FR-MOD-08.5.3).
  *
  * The asynchronous entry point into the inbox: a workspace forwards its support
- * mail to `<organization_id>@<inbound-domain>`, a provider parses each message
- * and calls the webhook, and this turns it into a ticket on the same core the
- * agent-facing routes write to (`TicketService`, Dilim 11).
+ * mail to one of its addresses — `<organization_id>@<inbound-domain>`, or a
+ * labelled `<organization_id>+support@<inbound-domain>` — a provider parses each
+ * message and calls the webhook, and this turns it into a ticket on the same
+ * core the agent-facing routes write to (`TicketService`, Dilim 11).
  *
  * Two rules the tests pin down, because both are easy to get wrong and silent
  * when wrong:
@@ -31,6 +32,12 @@ export interface InboundEmail {
   subject: string;
   /** The provider's spam verdict. Honoured only when the workspace filter is on. */
   spam: boolean;
+  /**
+   * The forwarding address the message arrived at, so the ticket records which
+   * mailbox it came in through. Null only when the address could not be
+   * materialised, never as a routing decision.
+   */
+  addressId: string | null;
 }
 
 export type InboundResult =
@@ -54,23 +61,53 @@ export function parseSender(raw: string): { email: string; name: string | null }
   return { email, name: rawName ? rawName : null };
 }
 
+const ORG_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** A recipient address broken into the two halves routing cares about. */
+export interface Recipient {
+  /** The whole local part, lower-cased: `<org>` or `<org>+<label>`. */
+  localPart: string;
+  /** The organization id in front of the label. */
+  organizationId: string;
+  /** The part after the `+`, or null for the workspace's default address. */
+  label: string | null;
+}
+
 /**
- * The organization id carried by a forwarding address, or `null`.
+ * The recipient a forwarding address names, or `null` when it names none.
  *
- * The address is `<organization_id>@<domain>`; the local part is the routing
- * key. The domain is not checked — the id is what maps to a workspace, and a
- * provider may rewrite the domain (subdomains, plus a display name) on the way
- * in. A `to` header with a display name or several recipients is tolerated by
- * pulling the address out and taking the first one.
+ * The local part is the routing key: `<organization_id>` for the address every
+ * workspace has always had, and `<organization_id>+<label>` for one it defined
+ * (FR-MOD-08.5.3). `+` rather than a free local part because that is ordinary
+ * mail sub-addressing — a provider already delivers `a+b@d` to the mailbox `a`,
+ * so a catch-all forward configured before labels existed keeps working — and
+ * because keeping the organization id in front is what makes two workspaces
+ * unable to claim the same address.
+ *
+ * The domain is not checked: the local part is what maps to a workspace, and a
+ * provider may rewrite the domain (subdomains, a display name) on the way in. A
+ * `to` header with a display name or several recipients is tolerated by pulling
+ * the address out and taking the first one.
+ *
+ * Parsing stops here. Whether a labelled address actually exists is a question
+ * for the database, not for a regular expression.
  */
-export function recipientOrganizationId(to: string): string | null {
+export function parseRecipient(to: string): Recipient | null {
   const first = to.split(',')[0] ?? '';
   const angle = /<([^>]+)>/.exec(first);
   const address = (angle ? (angle[1] ?? '') : first).trim();
   const localPart = address.split('@')[0]?.trim().toLowerCase();
   if (!localPart) return null;
-  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-  return uuid.test(localPart) ? localPart : null;
+
+  const plus = localPart.indexOf('+');
+  const organizationId = plus === -1 ? localPart : localPart.slice(0, plus);
+  const label = plus === -1 ? null : localPart.slice(plus + 1);
+  if (!ORG_UUID_RE.test(organizationId)) return null;
+  // A trailing `+` names no label; treat it as unroutable rather than as the
+  // default address, so `<org>+@domain` cannot quietly become `<org>@domain`.
+  if (label !== null && label.length === 0) return null;
+
+  return { localPart, organizationId, label };
 }
 
 export async function ingestInboundEmail(
@@ -126,6 +163,7 @@ export async function ingestInboundEmail(
     // triage rules see (FR-MOD-08.9.5).
     subject: maskedSubject,
     customerId,
+    inboundAddressId: email.addressId,
   });
   return { status: 'created', ticket_id: ticket.id };
 }

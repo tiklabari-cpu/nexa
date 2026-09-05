@@ -798,7 +798,15 @@ describe('module parity matrix — what is still owed', () => {
       // configuration on the console's Team profile panel, behind
       // `agents--all:rw`. The phone reads the roster it does not administer it,
       // so there is nothing here to re-scope.
-      contractEndpoints: 198,
+      // 198 -> 201 with the three e-mail forwarding-address routes (F0-SETGAP-a,
+      // tm 193.1): `/channels/email/addresses`, `.../{addressId}` and
+      // `.../{addressId}/test`. Defining which mailboxes a workspace accepts
+      // support mail at is Owner/Admin channel configuration behind
+      // `channels--all`, in the Settings module this app has never had
+      // (`OUT_OF_SCOPE` below). The phone reads the tickets that arrive; it does
+      // not administer the addresses they arrive through, so nothing here
+      // re-scopes.
+      contractEndpoints: 201,
       scopeBoundaries: 1,
     });
   });

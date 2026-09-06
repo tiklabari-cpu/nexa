@@ -143,7 +143,42 @@ export interface AppCatalogEntry {
  * only a floor the tests pin. Data apps carry `dataLabel`/`dataFields` (what
  * they show in-chat); channel apps do not (they carry no marketplace
  * connection at all).
+ *
+ * "Full" is not only a count. The PRD row names fifteen integrations by hand
+ * ({@link PRD_NAMED_INTEGRATIONS}), and a directory that clears 100 cards while
+ * missing one of them is not the list the row describes — so the test suite
+ * looks each of the fifteen up the way a user would, through
+ * {@link filterAppCatalog}.
  */
+/**
+ * The integrations FR-MOD-09.2 names in the requirement row itself, verbatim.
+ *
+ * The row's headline is a count ("v1: 15–20; v2: 100+") but its body is a list,
+ * and the count alone cannot tell you the list is satisfied: a hundred CRM
+ * cards would clear the floor and still not be the directory the row describes.
+ * These fifteen are therefore pinned separately, and looked up through the same
+ * search the console uses — a card nobody can find by the name the requirement
+ * uses is not in the directory as far as a user is concerned, which is why
+ * `magento` is named "Adobe Commerce" and keeps "Magento" in its description.
+ */
+export const PRD_NAMED_INTEGRATIONS = [
+  'Messenger',
+  'Twilio',
+  'WhatsApp',
+  'HubSpot',
+  'Mailchimp',
+  'Shopify',
+  'Slack',
+  'Adobe Commerce',
+  'BigCommerce',
+  'Google Calendar',
+  'Instagram',
+  'Medusa',
+  'Salesforce',
+  'Segment',
+  'Stripe',
+] as const;
+
 export const APP_CATALOG: readonly AppCatalogEntry[] = [
   {
     id: 'hubspot',
@@ -284,13 +319,18 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
   },
   {
     id: 'magento',
-    name: 'Magento',
+    // Named as the product is named today. Adobe renamed Magento Commerce to
+    // Adobe Commerce, and the PRD's directory lists it under the new name — so
+    // the card carries it, while the old one stays in the description (search
+    // matches name *and* description) and in the `magento` id, which existing
+    // installations are keyed by and must not move.
+    name: 'Adobe Commerce',
     category: 'ecommerce',
     provider: 'api_key',
     icon: '🧱',
-    description: 'See a Magento shopper’s orders and customer group.',
+    description: 'See an Adobe Commerce (Magento) shopper’s orders and customer group.',
     scopes: ['orders.read', 'customers.read'],
-    dataLabel: 'Magento',
+    dataLabel: 'Adobe Commerce',
     dataFields: [
       { label: 'Orders', options: ['0', '2', '6'] },
       { label: 'Customer group', options: ['Guest', 'General', 'Wholesale', 'VIP'] },
@@ -1178,6 +1218,23 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     dataFields: [
       { label: 'Orders', options: ['0', '1', '3'] },
       { label: 'Lifetime value', options: ['$0', '$310', '$1,150'] },
+    ],
+  },
+  {
+    id: 'medusa',
+    name: 'Medusa',
+    category: 'ecommerce',
+    // Medusa has no hosted consent screen to send anyone to: a store is reached
+    // with an admin API key the operator issues themselves.
+    provider: 'api_key',
+    icon: '🪄',
+    description: 'Pull a Medusa storefront customer’s orders and region into the conversation.',
+    scopes: ['orders.read', 'customers.read'],
+    dataLabel: 'Medusa',
+    dataFields: [
+      { label: 'Orders', options: ['0', '1', '2', '5'] },
+      { label: 'Lifetime value', options: ['$0', '$70', '$260', '$880'] },
+      { label: 'Region', options: ['EU', 'UK', 'US', 'APAC'] },
     ],
   },
   {

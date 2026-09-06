@@ -2,7 +2,7 @@
  * Marketplace grid geometry (FR-EK-B.1 / NFR-P4).
  *
  * `VirtualList` windows a *flat* list of uniform rows, but the marketplace is a
- * multi-column card grid: 102 catalogue cards painted straight into a CSS
+ * multi-column card grid: 103 catalogue cards painted straight into a CSS
  * `auto-fill` grid put every one of them in the DOM, which is exactly what P4
  * ("only the visible row is in the DOM") forbids. Windowing a grid means
  * deciding what a "row" is, so that decision lives here, in two pure functions

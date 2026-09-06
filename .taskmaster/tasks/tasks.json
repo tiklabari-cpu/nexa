@@ -9342,9 +9342,10 @@
             "description": "Denetim 09.2 icin \"Iki gercek bosluk\" diyor; metin kaynaginda `…` ile kesik ve tam hali belgede YOK. Bu alt-gorev kalan payi PRD satirindan yeniden turetir, koda karsi dogrular, ya kapatir ya da gerekceyle `◐` birakir. `✅` UYDURULMAZ.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Neden ayri bir alt-gorev\n\nEmsal tm 185`in `194.2`si (`FR-MOD-10.2`): kesik gerekce, KK`ya karsi yeniden turetme, ihlal\nbulunamayinca `✅` uydurmama.\n\n## Yapilacak\n\n1. PRD satiri (`urun-gereksinim-dokumani-PRD.md`:665) uc parcaya ayrilir ve her biri koda karsi\n   dogrulanir: (i) **kart sayisi** (v1: 15-20, v2: **100+**), (ii) **her biri OAuth/API key**,\n   (iii) **kanal-tipli olanlar Channels`ta da yonetilir**.\n2. tm 187 turunda ZATEN dogrulanmis olanlar (yalniz regresyon kontrolu): katalog **104 kart**\n   (`packages/types/src/apps.ts`, `grep -c \"provider:\"`) · `isChannelApp` capraz-bagi **gercek** ·\n   (ii)`nin api_key yarisi -> 202.1.\n3. Supheli kalan: **bagli bir kartin gercekten bir sey yapip yapmadigi.** Katalog kartlarinin\n   `dataFields` alanlari sabit secenek listeleridir (ornek `zapier` :313-317). Bagli bir HubSpot/\n   Shopify karti Details panelinde gercek veri mi gosteriyor, yoksa bu sabit listeden mi? PRD`nin\n   `09.2` KK`si veri icerigini istemiyor, ama \"her biri\" ifadesi baglanan kartin **bagli** olmasini\n   istiyor — bulguyu yaz, kapsam disi ise gerekcesiyle kapsam disi yaz.\n4. Ihlal bulunursa: kucukse bu pencerede kapat, buyukse yeni gorev ac ve `◐` birak. Ihlal yoksa\n   damgayi `✅`e cevir ve **neyin arandigini** `#### K09.2-b`ye yaz.\n\n## Bilinen tuzaklar\n\n- Denetim metni KESIK; olcut PRD KK sutunu + kod.\n- `09.2`nin bir de v1 satiri var (`PLAN.md:664`, `◐ → K09.2`) — o v1 payidir, bu gorevin kapsaminda\n  DEGIL (v1 triyaji tm 186`da yapildi; satir `Must` olmadigi icin kapi bloklamiyor). Dokunma.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. PRD satirinin uc parcasinin HER BIRI icin bir satirlik bulgu (var / yok / kismi) + dosya:satir kaniti.\n   Kapsanmayan parca = 0, **sayilarak** kanitlanir.\n2. Katalog kart sayisi komutla olculur ve 100+ oldugu yazilir.\n3. Yeni ihlal bulunduysa kapatildi ya da yeni gorev acildi; `#### K09.2-b`ye madde eklendi (silme yok).\n4. Kod degistiyse TAM DoD kapisi; degismediyse `typecheck`/`lint`/`build`/`audit:req-coverage` exit 0.\n5. `grep -n \"| 09.2 \" PLAN.md` §5.0 satirinda `◐` kalmadiysa bu kalem kapanabilir.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "202"
+            "parentId": "202",
+            "updatedAt": "2026-09-06T15:59:52.608Z"
           },
           {
             "id": 3,
@@ -9357,7 +9358,7 @@
             "parentId": "202"
           }
         ],
-        "updatedAt": "2026-09-06T15:58:19.000Z"
+        "updatedAt": "2026-09-06T15:59:52.608Z"
       },
       {
         "id": "203",
@@ -9428,7 +9429,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T15:58:19.003Z",
+      "lastModified": "2026-09-06T15:59:52.609Z",
       "taskCount": 204,
       "completedCount": 201,
       "tags": [

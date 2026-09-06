@@ -349,6 +349,34 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
       (await server.post('/settings/apps/telegram/oauth/start', {}, auth(adminToken))).statusCode,
     ).toBe(400);
     expect(await owner.appInstallation.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+
+    // And not just this one: *every* channel card is turned away by *both*
+    // paths, whichever provider it declares. That is what makes a channel
+    // card's `provider` inert rather than a second, quieter connection method —
+    // the criterion's "OAuth/API key" is about the cards the marketplace itself
+    // connects, and a channel's own setup lives in Settings → Channels.
+    expect(channels.length).toBeGreaterThan(1);
+    for (const card of channels) {
+      expect((await connectWithKey(adminToken, card.id)).status).toBe(400);
+      expect(
+        (await server.post(`/settings/apps/${card.id}/oauth/start`, {}, auth(adminToken)))
+          .statusCode,
+      ).toBe(400);
+      expect(
+        (
+          await server.post(
+            `/settings/apps/${card.id}/oauth/callback`,
+            { state: 'anything', code: 'mock-auth-code' },
+            auth(adminToken),
+          )
+        ).statusCode,
+      ).toBe(400);
+      // The list keeps saying so, rather than the refusal being the only place
+      // a caller can learn it: the card offers no connection of its own.
+      expect(card.installed).toBe(false);
+      expect(card.installation).toBeNull();
+    }
+    expect(await owner.appInstallation.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
   });
 
   it('rejects a key outside the bounds the console validates against (FR-MOD-09.2)', async () => {

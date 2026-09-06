@@ -3,7 +3,7 @@ import type { Messages } from '../merge.js';
 /**
  * Apps marketplace + Developer portal (I18N-k, tm 133.11).
  *
- * `APP_CATALOG` (`packages/types/src/apps.ts`, 102 cards) is DATA, not chrome — a
+ * `APP_CATALOG` (`packages/types/src/apps.ts`, 103 cards) is DATA, not chrome — a
  * card's `name`/`description` comes from the server response and is never run
  * through `t()`, the same call `channelsFor()` (I18N-c) and ticket status/priority
  * (I18N-f) made for other server-shaped catalogues. Only the screen furniture

@@ -91,7 +91,7 @@ const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3';
 
 /**
  * Cards per request. The contract caps `limit` at 100; 50 keeps the first paint
- * off the whole catalogue while making the chain short (102 cards → 3 pages).
+ * off the whole catalogue while making the chain short (103 cards → 3 pages).
  */
 const PAGE_SIZE = 50;
 

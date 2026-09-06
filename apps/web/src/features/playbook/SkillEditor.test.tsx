@@ -74,11 +74,24 @@ beforeEach(() => {
   api.get.mockResolvedValue({ items: [] });
 });
 
+/**
+ * Steps are collapsed summaries until asked for (FR-MOD-06.2.4), so a test that
+ * wants a parameter opens its step first. The disclosure's accessible name is
+ * the step's own description — the most useful name the control can have.
+ */
+async function openStep(
+  user: ReturnType<typeof userEvent.setup>,
+  description: RegExp,
+): Promise<void> {
+  await user.click(screen.getByRole('button', { name: description }));
+}
+
 describe('SkillEditor — required transfer target', () => {
   it('blocks the save and shows an error when the hand-over team is cleared', async () => {
     const user = userEvent.setup();
     renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Support' }]));
 
+    await openStep(user, /Hand over to Support/);
     const team = screen.getByLabelText('Team');
     await user.clear(team);
 
@@ -92,6 +105,7 @@ describe('SkillEditor — required transfer target', () => {
     const user = userEvent.setup();
     renderEditor(makeSkill([{ type: 'transfer_to_team', group: 'Support' }]));
 
+    await openStep(user, /Hand over to Support/);
     const team = screen.getByLabelText('Team');
     await user.clear(team);
     await user.type(team, 'Billing');
@@ -191,6 +205,211 @@ describe('SkillEditor — keyboard reorder', () => {
   it('offers no reorder controls without edit permission', () => {
     renderEditor(makeSkill(steps), false);
     expect(screen.queryByRole('button', { name: 'Move step 1 down' })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * Authoring the step list, not just ordering it (FR-MOD-06.2.4).
+ *
+ * The first test is the one that closes the requirement: before it, "New skill"
+ * created a skill with `steps: []` and nothing in the editor could ever give it
+ * one — every parameter but the hand-over team was read-only, and there was no
+ * add, no delete and no way to change a step's type. So the assertion is not
+ * that a control exists but that a step authored here reaches the `PATCH` body.
+ */
+describe('SkillEditor — step authoring (FR-MOD-06.2.4)', () => {
+  async function addStepOfType(
+    user: ReturnType<typeof userEvent.setup>,
+    type: string,
+  ): Promise<void> {
+    await user.selectOptions(screen.getByLabelText('Step type to add'), type);
+    await user.click(screen.getByRole('button', { name: 'Add step' }));
+  }
+
+  it('gives a skill with no steps one, and saves it', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([]));
+
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0);
+
+    await addStepOfType(user, 'tag');
+
+    // A new step is blank, so it opens on its own: leaving it collapsed would
+    // show a refusal with the form that answers it folded away.
+    const tag = screen.getByLabelText('Tag');
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    expect(screen.getByText('Name the tag to apply.')).toBeInTheDocument();
+
+    await user.type(tag, 'shipping');
+
+    const save = screen.getByRole('button', { name: 'Save changes' });
+    expect(save).toBeEnabled();
+    await user.click(save);
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({ steps: [{ type: 'tag', tag: 'shipping' }] }),
+    );
+  });
+
+  /*
+   * The six types are covered by two tests rather than one. `userEvent` types a
+   * character at a time, and one test that fills in all six ran ~2.5 s alone —
+   * long enough to cross vitest's 5 s timeout under the CPU contention of a
+   * parallel workspace run, which is a flake this file would have introduced.
+   */
+  it('authors the two gathering steps with their own parameters', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([]));
+
+    await addStepOfType(user, 'detect_intent');
+    await user.type(screen.getByLabelText('Intent'), 'delivery');
+    // A phrase with a space in it on purpose: a textarea rendered from
+    // `formatPhrases(parsePhrases(text))` trims the trailing space away before
+    // the next character arrives, and "my order" comes back "myorder".
+    await user.type(screen.getByLabelText('Phrases'), 'my order');
+
+    await addStepOfType(user, 'request_info');
+    await user.type(screen.getByLabelText('Information to collect'), 'order_no');
+    await user.type(screen.getByLabelText('Question to ask'), 'Which one?');
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({
+        steps: [
+          { type: 'detect_intent', intent: 'delivery', phrases: ['my order'] },
+          { type: 'request_info', field: 'order_no', prompt: 'Which one?' },
+        ],
+      }),
+    );
+  });
+
+  it('authors the four acting steps with their own parameters', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([]));
+
+    await addStepOfType(user, 'tag');
+    await user.type(screen.getByLabelText('Tag'), 'ship');
+
+    // `summarize` is the one type with nothing to fill in, and says so rather
+    // than opening onto an empty box.
+    await addStepOfType(user, 'summarize');
+    expect(screen.getByText('This step takes no settings.')).toBeInTheDocument();
+
+    await addStepOfType(user, 'send_message');
+    await user.type(screen.getByLabelText('Reply text'), 'On it.');
+
+    await addStepOfType(user, 'transfer_to_team');
+    await user.type(screen.getByLabelText('Team'), 'Support');
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({
+        steps: [
+          { type: 'tag', tag: 'ship' },
+          { type: 'summarize' },
+          { type: 'send_message', source: 'text', text: 'On it.' },
+          { type: 'transfer_to_team', group: 'Support' },
+        ],
+      }),
+    );
+  });
+
+  it('drops the old type’s parameters when a step is retyped', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([{ type: 'send_message', source: 'text', text: 'On it.' }]));
+
+    await openStep(user, /Reply “On it/);
+    await user.selectOptions(screen.getByLabelText('Step type'), 'tag');
+
+    // The reply box is gone with the type that owned it, and the step now asks
+    // for what a tag needs — not a form that edits fields the engine ignores.
+    expect(screen.queryByLabelText('Reply text')).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Tag'), 'shipping');
+
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    // `text`/`source` must be absent, not blank: the server reads the
+    // discriminant, and stored leftovers are fields nobody meant to keep.
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({ steps: [{ type: 'tag', tag: 'shipping' }] }),
+    );
+  });
+
+  it('switching a message to a knowledge answer drops the fixed text', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([{ type: 'send_message', source: 'text', text: 'On it.' }]));
+
+    await openStep(user, /Reply “On it/);
+    await user.selectOptions(screen.getByLabelText('Reply with'), 'knowledge');
+
+    expect(screen.queryByLabelText('Reply text')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({ steps: [{ type: 'send_message', source: 'knowledge' }] }),
+    );
+  });
+
+  it('deletes a step and saves what is left', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([{ type: 'tag', tag: 'shipping' }, { type: 'summarize' }]));
+
+    await user.click(screen.getByRole('button', { name: 'Delete step 1' }));
+
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Save changes' }));
+
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({ steps: [{ type: 'summarize' }] }),
+    );
+  });
+
+  it('keeps a step open, with its parameters, across a reorder', async () => {
+    const user = userEvent.setup();
+    renderEditor(
+      makeSkill([
+        { type: 'tag', tag: 'shipping' },
+        { type: 'transfer_to_team', group: 'Support' },
+      ]),
+    );
+
+    await openStep(user, /Hand over to Support/);
+    await user.click(screen.getByRole('button', { name: 'Move step 2 up' }));
+
+    // Rows key by identity rather than position, so the open step travels with
+    // its form — the whole reason a step carries a client id.
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]!).getByLabelText('Team')).toHaveValue('Support');
+  });
+
+  /**
+   * The trap an accordion adds to a drag list: with the row itself draggable,
+   * selecting text inside an open step's input starts a drag instead of a
+   * selection. Only the handle may be draggable.
+   */
+  it('makes the handle draggable, not the whole row', () => {
+    renderEditor(makeSkill([{ type: 'summarize' }]));
+
+    const row = screen.getAllByRole('listitem')[0]!;
+    expect(row).not.toHaveAttribute('draggable');
+    expect(row.querySelector('[draggable="true"]')).not.toBeNull();
+  });
+
+  it('offers no authoring controls without edit permission', () => {
+    renderEditor(makeSkill([{ type: 'tag', tag: 'shipping' }]), false);
+
+    expect(screen.queryByRole('button', { name: 'Add step' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Delete step 1' })).not.toBeInTheDocument();
+    // Nothing is draggable either — the handle is an edit affordance too.
+    expect(screen.getAllByRole('listitem')[0]!.querySelector('[draggable="true"]')).toBeNull();
   });
 });
 

@@ -16,7 +16,8 @@
  * assumes a specific row count is on screen, only that the *first* row of
  * whatever is showing is deterministic.
  */
-import { expect, test } from './fixtures.js';
+import { request as newApiContext, type APIRequestContext } from '@playwright/test';
+import { ACME_OWNER, API_BASE, expect, ownerAccessTokenFor, test } from './fixtures.js';
 
 test.describe('playbook — browse templates', () => {
   test('a template card opens a pre-filled skill editor', async ({ agentPage }) => {
@@ -109,5 +110,111 @@ test.describe('playbook — browse templates', () => {
     await expect(agentPage.getByRole('region', { name: 'Where is my order?' })).toBeVisible();
 
     await agentPage.screenshot({ path: 'kanit/32-recommended-try-this.png', fullPage: true });
+  });
+});
+
+/**
+ * Authoring a skill's steps from the editor (FR-MOD-06.2.4).
+ *
+ * The flow below was *impossible* until this task: "New skill" mints a skill
+ * with `steps: []` (`playbook.ts`'s `POST /skills`), and the editor could add
+ * no step, delete none and retype none — only `transfer_to_team`'s team was
+ * editable at all. So a skill that did not start life as a template could never
+ * gain a single step, and the ordered-steps surface the PRD counts was reachable
+ * only through the gallery.
+ *
+ * It is driven end to end rather than in jsdom because the claim is about what
+ * *persists*: the unit tests can prove the right `PATCH` body leaves the
+ * browser, but only a reload proves the steps came back in the order they were
+ * put in, through the real API and a real database.
+ */
+test.describe('playbook — step authoring', () => {
+  /** Unique per run: the list is filtered by this name after the reload. */
+  const SKILL_NAME = `E2E authored steps ${Date.now().toString().slice(-6)}`;
+
+  let apiCtx: APIRequestContext;
+  let skillId: string | null = null;
+
+  test.beforeAll(async () => {
+    apiCtx = await newApiContext.newContext({
+      extraHTTPHeaders: { 'user-agent': 'nexa-e2e-playbook-steps' },
+    });
+  });
+
+  test.afterAll(async () => {
+    // The seeded workspace is shared by every spec in this suite, and a skill
+    // left behind is a row that later runs have to scroll past — the template
+    // tests above already look for "the first card" in a list this one would
+    // grow. So the skill this test authors is removed again.
+    if (skillId) {
+      const token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
+      await apiCtx
+        .delete(`${API_BASE}/skills/${skillId}`, {
+          headers: { authorization: `Bearer ${token}` },
+        })
+        .catch(() => {});
+    }
+    await apiCtx.dispose();
+  });
+
+  test('adds, orders and saves steps on a skill that had none (FR-MOD-06.2.4)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook');
+
+    // Catch the id on the way past, so teardown can remove the row again.
+    const [created] = await Promise.all([
+      agentPage.waitForResponse(
+        (response) => response.request().method() === 'POST' && response.url().endsWith('/skills'),
+      ),
+      agentPage.getByRole('button', { name: 'New skill', exact: true }).click(),
+    ]);
+    skillId = ((await created.json()) as { id: string }).id;
+
+    // Born with nothing to run — the state this whole test exists to get out of.
+    await expect(agentPage.getByText(/No steps yet/)).toBeVisible();
+
+    const name = agentPage.getByLabel('Name');
+    await name.fill(SKILL_NAME);
+
+    // Two steps, authored from the six-type vocabulary, each opening onto its
+    // own parameters. Scoped to the step list: a step's fields share labels
+    // with the app shell, where "Team" is also a nav destination.
+    const stepList = agentPage.getByRole('list', { name: 'Steps' });
+
+    await agentPage.getByLabel('Step type to add').selectOption('tag');
+    await agentPage.getByRole('button', { name: 'Add step' }).click();
+    await stepList.getByLabel('Tag', { exact: true }).fill('shipping');
+
+    await agentPage.getByLabel('Step type to add').selectOption('transfer_to_team');
+    await agentPage.getByRole('button', { name: 'Add step' }).click();
+    await stepList.getByLabel('Team', { exact: true }).fill('Support');
+
+    // Order is behaviour: a hand-over before the tag means the tag never runs.
+    // The keyboard alternative to drag does the reordering (NFR-A11Y4).
+    await agentPage.getByRole('button', { name: 'Move step 2 up' }).click();
+
+    await agentPage.screenshot({ path: 'kanit/06.2.4-step-authoring.png', fullPage: true });
+
+    const [saved] = await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' && response.url().includes('/skills/'),
+      ),
+      agentPage.getByRole('button', { name: 'Save changes' }).click(),
+    ]);
+    expect(saved.ok(), `save failed: ${saved.status()} ${await saved.text()}`).toBe(true);
+
+    // Reload, find it again by name, and read the steps back out of the API's
+    // answer rather than out of the editor's memory.
+    await agentPage.reload();
+    await agentPage.getByPlaceholder('Search skills…').fill(SKILL_NAME);
+    await agentPage.getByRole('button', { name: SKILL_NAME }).click();
+
+    const editor = agentPage.getByRole('region', { name: SKILL_NAME });
+    const steps = editor.getByRole('list', { name: 'Steps' }).getByRole('listitem');
+    await expect(steps).toHaveCount(2);
+    await expect(steps.nth(0)).toContainText('Hand over to Support');
+    await expect(steps.nth(1)).toContainText('Tag the conversation');
   });
 });

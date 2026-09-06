@@ -5643,6 +5643,13 @@ export interface paths {
      *
      *     `csat.score` is `null`, never `0`, for an agent nobody rated in the
      *     window — the same rule the Reviews report's `score` follows.
+     *
+     *     `totals` is the license's own split over the requested window and
+     *     `previous_period` the same split over the benchmark window (FR-MOD-07.7
+     *     "benchmark karşılaştırma") — the pair a client renders the comparison
+     *     from. Neither is derived from `agents`: that table is capped at 20 rows
+     *     and covers assigned threads only, so summing it would quote a smaller
+     *     workspace than the baseline it is held against.
      */
     get: operations['getReportsTeamPerformance'];
     put?: never;
@@ -10362,6 +10369,22 @@ export interface components {
         to: string;
       };
       /**
+       * @description The license's resolution split over the REQUESTED window — the
+       *     current-window counterpart of `previous_period`, measured by the
+       *     same helper over the same license scope, so the two are comparable
+       *     figure by figure. It is deliberately not the sum of `agents`: that
+       *     table is capped at 20 rows and holds only assigned threads, so
+       *     adding it up would understate the workspace and make the benchmark
+       *     read as a fall that never happened.
+       */
+      totals: {
+        chats: number;
+        closed: number;
+        manual: number;
+        assisted: number;
+        automated: number;
+      };
+      /**
        * @description The license's resolution split in the benchmark window — not a
        *     baseline copy of the agent table. Which agents `agents` holds is
        *     derived from the window (the `LIMIT 20` over agents with a thread
@@ -10369,6 +10392,7 @@ export interface components {
        *     row-by-row comparison would silently pair an agent with someone
        *     else, or with a blank where they did not make the earlier cut. A
        *     per-agent history is a different report, not this one's baseline.
+       *     Compared against `totals`, never against a row of `agents`.
        */
       previous_period: components['schemas']['BenchmarkWindow'] & {
         chats: number;

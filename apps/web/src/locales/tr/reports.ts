@@ -319,6 +319,9 @@ export const reports: Messages = {
   'reports.teamPerformance.emptyTitle': 'Bu aralıkta temsilci etkinliği yok',
   'reports.teamPerformance.emptyDescription':
     'Sohbetler temsilcilere atandığında temsilci başına performansları burada görünür.',
+  'reports.teamPerformance.totals.title': 'Çalışma alanı toplamları',
+  'reports.teamPerformance.totals.description':
+    'Bu aralıkta çalışma alanının tamamı, bir önceki aralıkla karşılaştırmalı. Aşağıdaki tablonun toplamı değildir; o tablo yalnız ilk 20 temsilciyi gösterir.',
   'reports.teamPerformance.caption':
     'Temsilci başına sohbetler, çözüm dağılımı, yanıt süresi ve CSAT',
   'reports.teamPerformance.avgFirstResponseColumn': 'Ort. ilk yanıt',

@@ -247,8 +247,18 @@ export interface AgentPerformanceRow {
  * API's `teamPerformanceByAgent`). Same agent set, order and `LIMIT 20` as
  * `ReportsBreakdown.by_agent`.
  */
+/**
+ * The Team performance report (FR-MOD-07.7, v2). `totals` is the license's own
+ * resolution split over the window and `previous_period` the same split over
+ * the benchmark window — the pair the tab renders its vs-previous comparison
+ * from. Neither is the sum of `agents`: that table is capped at 20 rows and
+ * covers assigned threads only, so adding it up would hold a smaller number
+ * against a whole-license baseline.
+ */
 interface ReportsTeamPerformance {
   range: { from: string; to: string };
+  totals: SplitRow;
+  previous_period: SplitRow;
   agents: AgentPerformanceRow[];
 }
 
@@ -2016,6 +2026,13 @@ function SalesTab(props: TabProps): ReactElement {
  * first-response time and CSAT. Same agent set, order and `LIMIT 20` as
  * `ReportsBreakdown.by_agent` — an agent needs a thread *created* in the
  * window to appear here at all.
+ *
+ * The workspace split above the table carries the benchmark (FR-MOD-07.7 KK,
+ * "benchmark karşılaştırma"). It is deliberately license-wide rather than
+ * per-agent: which agents the table holds is derived from the window, so a
+ * row-by-row "vs previous" would pair an agent with whoever happened to take
+ * their place in the baseline. The API states the same reasoning where it
+ * builds the two blocks.
  */
 function TeamPerformanceTab(props: TabProps): ReactElement {
   const t = useTranslate();
@@ -2033,22 +2050,60 @@ function TeamPerformanceTab(props: TabProps): ReactElement {
     return <CardSkeleton rows={4} />;
   }
 
+  const prev = data.previous_period;
+
   return (
-    <Section
-      title={t('reports.tabs.teamPerformance')}
-      description={t('reports.teamPerformance.description')}
-    >
-      <Card>
-        {data.agents.length === 0 ? (
-          <EmptyState
-            title={t('reports.teamPerformance.emptyTitle')}
-            description={t('reports.teamPerformance.emptyDescription')}
+    <>
+      <Section
+        title={t('reports.teamPerformance.totals.title')}
+        description={t('reports.teamPerformance.totals.description')}
+      >
+        <KpiGrid>
+          <Kpi
+            label={t('reports.common.resolution.chats')}
+            value={formatCount(data.totals.chats)}
+            delta={<CountDelta current={data.totals.chats} previous={prev.chats} />}
           />
-        ) : (
-          <TeamPerformanceTable rows={data.agents} />
-        )}
-      </Card>
-    </Section>
+          <Kpi
+            label={t('reports.common.closed')}
+            value={formatCount(data.totals.closed)}
+            delta={<CountDelta current={data.totals.closed} previous={prev.closed} />}
+            tone="good"
+          />
+          <Kpi
+            label={t('reports.common.resolution.manual')}
+            value={formatCount(data.totals.manual)}
+            delta={<CountDelta current={data.totals.manual} previous={prev.manual} />}
+          />
+          <Kpi
+            label={t('reports.common.resolution.assisted')}
+            value={formatCount(data.totals.assisted)}
+            delta={<CountDelta current={data.totals.assisted} previous={prev.assisted} />}
+          />
+          <Kpi
+            label={t('reports.common.resolution.automated')}
+            value={formatCount(data.totals.automated)}
+            delta={<CountDelta current={data.totals.automated} previous={prev.automated} />}
+          />
+        </KpiGrid>
+      </Section>
+
+      <Section
+        title={t('reports.tabs.teamPerformance')}
+        description={t('reports.teamPerformance.description')}
+      >
+        <Card>
+          {data.agents.length === 0 ? (
+            <EmptyState
+              title={t('reports.teamPerformance.emptyTitle')}
+              description={t('reports.teamPerformance.emptyDescription')}
+            />
+          ) : (
+            <TeamPerformanceTable rows={data.agents} />
+          )}
+        </Card>
+      </Section>
+    </>
   );
 }
 

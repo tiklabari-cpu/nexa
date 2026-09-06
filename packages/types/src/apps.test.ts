@@ -6,6 +6,7 @@ import {
   APP_CATALOG,
   APP_CATEGORIES,
   APP_PROVIDERS,
+  PRD_NAMED_INTEGRATIONS,
   appApiKeyLastFour,
   appApiKeyProblem,
   appChatData,
@@ -48,6 +49,30 @@ describe('app catalogue', () => {
     const providers = new Set(APP_CATALOG.map((entry) => entry.provider));
     expect(providers.has('oauth')).toBe(true);
     expect(providers.has('api_key')).toBe(true);
+  });
+
+  // FR-MOD-09.2's other half of "full": the row names fifteen integrations by
+  // hand, and the 100+ floor above cannot tell you they are all there. Looked
+  // up the way the console looks one up — free-text search over name and
+  // description — because a card nobody can find by the requirement's own name
+  // is not in the directory as far as a user is concerned (FR-MOD-09.2).
+  it('carries every integration the requirement names, findable by that name', () => {
+    const missing = PRD_NAMED_INTEGRATIONS.filter(
+      (name) => filterAppCatalog(APP_CATALOG, { query: name }).length === 0,
+    );
+    expect(missing).toEqual([]);
+    // Channel-typed and data cards both: the row's list crosses the partition,
+    // so a "full" directory that dropped either side would still fail here.
+    expect(filterAppCatalog(APP_CATALOG, { query: 'WhatsApp' })[0]?.channel).toBe('whatsapp');
+    expect(filterAppCatalog(APP_CATALOG, { query: 'Medusa' })[0]?.channel).toBeUndefined();
+    // Adobe renamed Magento; both names reach the one card, and its id — what
+    // an installation row is keyed by — did not move with the rename.
+    expect(filterAppCatalog(APP_CATALOG, { query: 'magento' }).map((e) => e.id)).toEqual([
+      'magento',
+    ]);
+    expect(filterAppCatalog(APP_CATALOG, { query: 'adobe commerce' }).map((e) => e.id)).toEqual([
+      'magento',
+    ]);
   });
 
   // KK 09.2: "kanal-tipli olanlar Channels'ta da yönetilir" — the cross-link.

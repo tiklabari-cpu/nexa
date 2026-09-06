@@ -13,6 +13,68 @@
 
 ## Task log (newest-first)
 
+## GRAFİK ONARIMI — otonom döngü "hazır task kalmadı" deyip durdu; tm 205–210 açıldı — done — 2026-09-07 UTC
+
+- **Teşhis — dört olasılığın üçü ELENDİ, sebep dördüncüsü bile değildi.** `run-loop.sh`'ın seçilebilir
+  görev bulamamasının nedeni **(a) blocked/deferred statü DEĞİL** (`tasks.json`'da 204 üst görevin
+  **204'ü** ve 539 alt-görevin **539'u** `done`; başka hiçbir statü yok — sayılarak), **(b) bağımlılık
+  döngüsü DEĞİL** (`task-master validate_dependencies` → "Dependencies validated successfully"),
+  **(c) var olmayan id'ye bağımlılık DEĞİL** ve **(d) aktarılmamış bir bağımlılık DEĞİL** (script ile
+  sayıldı: 0 dangling üst-seviye bağımlılık, 0 dangling alt-görev bağımlılığı — kardeş-numarası kuralı
+  çözülerek). **Gerçek sebep:** backlog **gerçekten tükenmişti** — aktarılan her şey bitmişti. Grafik
+  sağlamdı; eksik olan **iş**ti.
+- **Kök neden — PLAN'da yazılı, grafikte yok.** Faz-0'ın §F.00 kapısı (PLAN satır 20) `48 ✅ · 3 ◐ · 0 ⬜`
+  diyor ve o **3 ◐** hâlâ açık: `02.3.5` (satır 293) · `02.8` (satır 297) · `03.2.3` (satır 307).
+  Sayılarak doğrulandı — `Must (MVP)` satırları **50 ✅ · 3 ◐**, üçü tam olarak bunlar. Üçünün de kalan
+  payı `## K.` bloklarında **açıkça yazılı ama hiçbiri Task Master'a aktarılmamıştı**: `K02.3.5`
+  _"composer'dan doğrudan erişim AYRI BIR KALEM (CONVENTIONS §5), **iş açılmadı** — damganın ◐ kalmasının
+  TEK nedeni bu"_ (tm 189.5) · `K02.8` _"'Denetim kaydı' (KK'nin dördüncü maddesi) hâlâ karşılanmıyor …
+  bu turun kapsamı dışında bırakıldı"_ (tm 189.8) · `K03.2.3` _"Kapsam dışı bırakılan tek KK maddesi:
+  'custom kolonlar' … bu görev bunu hiç ele almadı"_ (tm 190.2). Aynı şekilde **üç kapanış turu** da
+  ismen söz verilmiş ama hiç açılmamıştı: PLAN satır ~77 (Faz-0) ve ~99 (Faz-1) _"Kapanış turu, … `◐`'den
+  çıktıktan sonra **ayrıca açılır**"_, Faz-2 için HANDOFF'un tm 204.2 maddesi _"bir kapanış turu **ayrı
+  görev olarak açılabilir**"_. Yani her pencere kendi kalan payını dürüstçe PLAN'a yazdı, ama **hiçbiri
+  onu bir sonraki pencerenin seçebileceği yere koymadı** — döngü tam olarak buradan aç kaldı.
+- **Onarım — 6 yeni görev (tm 205–210), kod YAZILMADI.**
+  - **tm 205 · tm 206 · tm 207** — `F0-LASTGAP-a/-b/-c`, Faz-0'ın son üç `Must ◐`'si:
+    composer'dan `#tag` seçimi (`FR-MOD-02.3.5`) · sohbet yaşam-döngüsü **denetim kaydı**
+    (`FR-MOD-02.8` — `audit-log.ts` kataloğunda `chat.taken_over` dışında chat eylemi yok, `deactivate`/
+    `resume` hiç `writeAuditEntry` çağırmıyor; bu turda yeniden doğrulandı) · Contacts tablosunda
+    **custom kolonlar** (`FR-MOD-03.2.3`). Üçü de `priority: critical` · `dependencies: []` — bu pencere
+    panelin sağlık taramasındaki bulgudan doğdu, `critical` işin nereden geldiğinin izidir
+    (CONVENTIONS §4.1'in "düzeltmeye gönder" carve-out'u; planlama görevleri değiller).
+  - **tm 208 `GL-13` · tm 209 `GL-14` · tm 210 `GL-15`** — Faz-0 / Faz-1 / Faz-2'nin resmi §F.00 kapanış
+    turları (§F.1'in 10 maddesi koda karşı). Bunlar **planlanmış** iş olduğu için K7 önceliği aldı
+    (`high` · `high` · `low`), `critical` DEĞİL. Bağımlılıklar gerçek ve gerekçeleri `details`'te:
+    `208 ← [205,206,207]` (§F.00 mekanik: Must'ta 0 ◐ olmadan kapanış turu kendi kapısını karşılamaz),
+    `209 ← [208]`, `210 ← [209]` (§G'nin kendi `GL-3 → GL-4` zinciri + üç fazın aynı kod tabanını
+    paylaşması; ters sırada aynı süpürme üç kez tekrarlanırdı).
+  - Her görevin `details`'i **kendi kendine yeter**: doğuran gerekçe + kanıt satırı, dokunulacak dosyalar
+    (yolları bu turda tek tek doğrulandı), contract-first sıra, bilinen tuzaklar ve kapsam SINIRI.
+- **Doğrulama:** `task-master validate_dependencies` → **"Dependencies validated successfully"**;
+  `next_task` → **tm 205**. `metadata.taskCount` 204 → **210**, `completedCount` 204. Çalışma ağacında
+  tek değişiklik `.taskmaster/tasks/tasks.json` (+ bu HANDOFF maddesi). **PLAN.md damgalarına
+  DOKUNULMADI** — bir damgayı çevirmek onu hak eden görevin işidir.
+- **İki araç tuzağı (bir sonraki pencere bilsin):** (1) **MCP `add_task` `priority: "critical"`'i sessizce
+  `medium`'a çeviriyor** — kendi şeması yalnız `high|medium|low` kabul ediyor ve reddetmek yerine
+  normalize ediyor. `run-loop.sh`'ın `pick_next` adım 2'si tam olarak bu alanı okuduğu için düzeltme
+  görevi sıradan backlog'un arkasına düşerdi; üçü de `tasks.json`'da elle `critical`'e çekildi. (2)
+  `add_task` **`metadata.taskCount`'u güncellemiyor** (204'te kalmıştı) — elle tazelendi. Ayrıca tm 210
+  eklenirken `EPERM: operation not permitted, rename … tasks.json.tmp.NNNNN` alındı (Windows dosya
+  kilidi); `tasks.json` **bozulmadı**, iş yedek alınıp node scriptiyle tamamlandı, artık tmp dosyası yok.
+- **Sonraki pencereye not:** (1) Döngü **tm 205** ile devam eder, sonra 206 → 207 → 208 → 209 → 210.
+  (2) **Sahipsiz komşu boşluk kayda geçti:** `K02.3.5`'te yazılı ama hiçbir göreve bağlı olmayan bir
+  boşluk var — `apps/widget/src/widget.ts` mesaj metnini `span.textContent = marked` (~satır 1549) ile
+  bastığı için bir ajan `**kalın**` yazınca müşteri tarafında yıldızlar harfiyen görünüyor (tm 189.5'in
+  zengin metni yalnız `apps/web`'i kapsıyordu). Bu, tm 208'in (`GL-13`) **karar maddesi** olarak yazıldı:
+  kapat · ayrı kalem aç · ya da gerekçeli `⛔`; sessizce geçilmeyecek. (3) **Faz-1'in sayacı bu turda
+  doğrulandı:** `Must (v1)` satırları **20 ✅ · 0 ◐** — tm 186'nın kapanış listesinde ismen geçmeyen iki
+  kalem (`06.2.1` satır 624, `06.3.2` satır 630) de `✅`. Yani v1'in kapısı sayı olarak karşılanıyor,
+  eksik olan yalnız resmi tur (tm 209). (4) **GL numarası düzeltildi:** HANDOFF'un tm 204.2 maddesi
+  "GL-10?" diyordu ama **GL-10 zaten kullanılmış** (Faz-4, tm 143) — GL-11 = Faz-5 (tm 158), GL-12 =
+  Faz-6 (tm 168). Bu yüzden yeni turlar **GL-13/14/15**. (5) Faz 3/4/5/6 `✅ KAPALI` ve bu turda
+  okunmadı/açılmadı.
+
 ## 204.2 — V2-GOALPRED-b · GoalBuilder yeni yüklemleri sunsun + Reports sayımı (FR-MOD-13.3) — done — 2026-09-07 UTC
 
 - **Yapıldı:** `GoalBuilder.tsx`'e dört yüklemli bir tür seçici (fieldset + radio pill'ler: Page reached · Sale completed · Lead captured · Chat resolved) — `url_contains` metin alanı yalnız ilk tür seçiliyken render edilir/zorunludur, diğer üçünde seçimin kendisi tüm tanımdır. İstemci doğrulaması sunucuyla **aynı eşikte**: flag türlerinde `url_contains` validator'ı no-op'a düşer, yani sunucunun kabul edeceği hiçbir tanım istemcide reddedilmiyor. Saf mantık `goals.ts`'e taşındı: `buildGoalDefinition(type, url)` + `describeGoalTriggers(definition)` (savunmacı — `{}`/`null`/bozuk satır boş dizi döner, fırlamaz). `GoalsPage.tsx`'in kart listesi artık ham `definition.url_contains ?? '—'` yerine bu okunabilir açıklamaları basıyor; eski `goals.page.whenUrlContains` kaldırıldı, `goals.page.trigger.*` + `goals.builder.type.*` eklendi (en+tr). **Reports "Achieved goals" için kod değişikliği gerekmedi** — `achievedGoalCount`/`goalFunnelCounts` zaten `definition`'a bakmadan `goal_achievements` satırı sayıyor; bu yalnız yeni bir `chat_resolved`-türü hedefle **doğrulandı** (regresyon testi).

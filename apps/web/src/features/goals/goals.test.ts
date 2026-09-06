@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { Goal, GoalFunnel } from '@nexa/types';
-import { GOAL_TABS, filterGoals, funnelStages, goalCounts, isGoalFilter } from './goals.js';
+import {
+  GOAL_TABS,
+  buildGoalDefinition,
+  describeGoalTriggers,
+  filterGoals,
+  funnelStages,
+  goalCounts,
+  isGoalFilter,
+} from './goals.js';
 
 function goal(active: boolean, over: Partial<Goal> = {}): Goal {
   return {
@@ -62,6 +70,57 @@ describe('goalCounts', () => {
 
   it('is all-zero for an empty list', () => {
     expect(goalCounts([])).toEqual({ all: 0, active: 0, inactive: 0 });
+  });
+});
+
+describe('buildGoalDefinition (FR-MOD-13.3)', () => {
+  it('trims the URL needle for the url_contains type', () => {
+    expect(buildGoalDefinition('url_contains', '  /thank-you  ')).toEqual({
+      url_contains: '/thank-you',
+    });
+  });
+
+  it('sets exactly the chosen flag for the three funnel predicates, nothing else', () => {
+    expect(buildGoalDefinition('sale_completed', '')).toEqual({ sale_completed: true });
+    expect(buildGoalDefinition('lead_captured', '')).toEqual({ lead_captured: true });
+    expect(buildGoalDefinition('chat_resolved', '')).toEqual({ chat_resolved: true });
+  });
+});
+
+describe('describeGoalTriggers (FR-MOD-13.3)', () => {
+  it('describes a URL goal with its needle', () => {
+    expect(describeGoalTriggers({ url_contains: '/thank-you' })).toEqual([
+      { key: 'goals.page.trigger.urlContains', params: { value: '/thank-you' } },
+    ]);
+  });
+
+  it('describes each of the three flag predicates', () => {
+    expect(describeGoalTriggers({ sale_completed: true })).toEqual([
+      { key: 'goals.page.trigger.saleCompleted' },
+    ]);
+    expect(describeGoalTriggers({ lead_captured: true })).toEqual([
+      { key: 'goals.page.trigger.leadCaptured' },
+    ]);
+    expect(describeGoalTriggers({ chat_resolved: true })).toEqual([
+      { key: 'goals.page.trigger.chatResolved' },
+    ]);
+  });
+
+  it('lists every predicate a hand-combined definition sets, url first', () => {
+    expect(describeGoalTriggers({ url_contains: '/vip', sale_completed: true })).toEqual([
+      { key: 'goals.page.trigger.urlContains', params: { value: '/vip' } },
+      { key: 'goals.page.trigger.saleCompleted' },
+    ]);
+  });
+
+  it('is defensive rather than throwing on a malformed or empty definition', () => {
+    expect(describeGoalTriggers({})).toEqual([]);
+    expect(describeGoalTriggers(null)).toEqual([]);
+    expect(describeGoalTriggers(undefined)).toEqual([]);
+    expect(describeGoalTriggers('not an object')).toEqual([]);
+    expect(describeGoalTriggers({ url_contains: '   ' })).toEqual([]);
+    expect(describeGoalTriggers({ url_contains: 42 })).toEqual([]);
+    expect(describeGoalTriggers({ sale_completed: 'yes' })).toEqual([]);
   });
 });
 

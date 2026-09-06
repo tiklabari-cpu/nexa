@@ -112,6 +112,31 @@ describe('GoalsPage', () => {
     expect(screen.queryByRole('button', { name: 'Turn on' })).not.toBeInTheDocument();
   });
 
+  /**
+   * 204.1 gave a goal three more predicates than `url_contains`; the list has
+   * to describe whichever one a definition actually carries, and never throw
+   * on a shape it does not recognise (FR-MOD-13.3).
+   */
+  it('describes each goal by the predicate its definition actually sets (FR-MOD-13.3)', async () => {
+    mockGets({
+      items: [
+        goal(true, 'Signed up', { definition: { url_contains: '/thank-you' } }),
+        goal(true, 'Bought something', { definition: { sale_completed: true } }),
+        goal(true, 'Became a lead', { definition: { lead_captured: true } }),
+        goal(true, 'Got helped', { definition: { chat_resolved: true } }),
+        goal(true, 'Hand-edited row', { definition: {} }),
+      ],
+      total: 5,
+    });
+    renderPage();
+
+    expect(await screen.findByText('Page contains /thank-you')).toBeInTheDocument();
+    expect(screen.getByText('Sale completed')).toBeInTheDocument();
+    expect(screen.getByText('Lead captured')).toBeInTheDocument();
+    expect(screen.getByText('Chat resolved')).toBeInTheDocument();
+    expect(screen.getByText('No trigger defined')).toBeInTheDocument();
+  });
+
   it('shows a meaningful empty state, not a blank rectangle', async () => {
     mockGets({ items: [], total: 0 }, { ...FUNNEL, by_goal: [] });
     renderPage();
@@ -178,6 +203,57 @@ describe('GoalsPage', () => {
       expect(api.post).toHaveBeenCalledWith('/goals', {
         name: 'Signed up',
         definition: { url_contains: '/thank-you' },
+      });
+    });
+
+    /**
+     * 204.1 taught the matcher three funnel predicates besides the page URL;
+     * this is the form actually offering them. Picking one of the three flags
+     * hides the URL field entirely — there is nothing left to type in, the
+     * choice itself is the whole definition — and the same server threshold
+     * ("a goal needs something to match on") stays satisfied without it.
+     */
+    describe('choosing a funnel trigger type (FR-MOD-13.3)', () => {
+      it.each([
+        ['Sale completed', { sale_completed: true }],
+        ['Lead captured', { lead_captured: true }],
+        ['Chat resolved', { chat_resolved: true }],
+      ] as const)(
+        'creates a goal triggered by "%s" with no URL field',
+        async (label, definition) => {
+          api.post.mockResolvedValue(goal(true, 'Converted'));
+          renderPage();
+          await userEvent.click(await screen.findByRole('button', { name: 'New goal' }));
+
+          await userEvent.type(screen.getByLabelText('Name'), 'Converted');
+          await userEvent.click(screen.getByRole('radio', { name: label }));
+          expect(screen.queryByLabelText(/Trigger/)).not.toBeInTheDocument();
+
+          const submit = screen.getByRole('button', { name: 'Create goal' });
+          expect(submit).not.toBeDisabled();
+          await userEvent.click(submit);
+
+          expect(api.post).toHaveBeenCalledWith('/goals', { name: 'Converted', definition });
+        },
+      );
+
+      it('switching back to "Page reached" brings the URL field and its requirement back', async () => {
+        renderPage();
+        await userEvent.click(await screen.findByRole('button', { name: 'New goal' }));
+
+        await userEvent.click(screen.getByRole('radio', { name: 'Sale completed' }));
+        expect(screen.queryByLabelText(/Trigger/)).not.toBeInTheDocument();
+
+        await userEvent.click(screen.getByRole('radio', { name: 'Page reached' }));
+        const triggerInput = screen.getByLabelText(/Trigger/);
+        expect(triggerInput).toBeInTheDocument();
+
+        await userEvent.type(screen.getByLabelText('Name'), 'Signed up');
+        const submit = screen.getByRole('button', { name: 'Create goal' });
+        expect(submit).toBeDisabled();
+
+        await userEvent.type(triggerInput, '/thank-you');
+        expect(submit).not.toBeDisabled();
       });
     });
   });

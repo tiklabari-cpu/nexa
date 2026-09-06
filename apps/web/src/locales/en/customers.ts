@@ -254,7 +254,6 @@ export const customers: Messages = {
     'Create a goal to track when a visitor reaches a page that counts as a conversion.',
   'goals.page.empty.readDescription':
     'Goals track when a visitor reaches a page that counts as a conversion.',
-  'goals.page.whenUrlContains': 'When URL contains',
   'goals.page.created': 'Created {date}',
   'goals.page.turnOff': 'Turn off',
   'goals.page.turnOn': 'Turn on',
@@ -265,11 +264,23 @@ export const customers: Messages = {
   'goals.tab.active': 'Active',
   'goals.tab.inactive': 'Inactive',
 
+  // Goal trigger descriptions — GoalsPage.tsx (GoalCard), read off a saved definition.
+  'goals.page.trigger.urlContains': 'Page contains {value}',
+  'goals.page.trigger.saleCompleted': 'Sale completed',
+  'goals.page.trigger.leadCaptured': 'Lead captured',
+  'goals.page.trigger.chatResolved': 'Chat resolved',
+  'goals.page.trigger.none': 'No trigger defined',
+
   // Goal builder — GoalBuilder.tsx
   'goals.builder.title': 'New goal',
   'goals.builder.description': 'Define a page a visitor reaching it counts as a conversion.',
   'goals.builder.nameLabel': 'Name',
   'goals.builder.nameRequired': 'Give the goal a name.',
+  'goals.builder.typeLegend': 'When has a visitor converted?',
+  'goals.builder.type.urlContains': 'Page reached',
+  'goals.builder.type.saleCompleted': 'Sale completed',
+  'goals.builder.type.leadCaptured': 'Lead captured',
+  'goals.builder.type.chatResolved': 'Chat resolved',
   'goals.builder.triggerLabel': 'Trigger — page URL contains',
   'goals.builder.triggerHint':
     'e.g. /thank-you — a visitor reaching a matching page has converted.',

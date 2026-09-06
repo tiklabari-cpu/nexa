@@ -22,7 +22,7 @@ import { useTranslate } from '../../lib/i18n.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { GoalBuilder } from './GoalBuilder.js';
 import { GoalsFunnel } from './GoalsFunnel.js';
-import { GOAL_TABS, filterGoals, goalCounts } from './goals.js';
+import { GOAL_TABS, describeGoalTriggers, filterGoals, goalCounts } from './goals.js';
 import type { Goal, GoalFilter } from '@nexa/types';
 
 /** `GOAL_TABS[].label` is English-only (see goals.ts). */
@@ -177,6 +177,7 @@ function GoalCard({
   onToggle: () => void;
 }): ReactElement {
   const t = useTranslate();
+  const triggers = describeGoalTriggers(goal.definition);
   return (
     <div className="rounded-lg border border-border bg-surface p-4 shadow-xs">
       <div className="flex items-start justify-between gap-4">
@@ -189,10 +190,9 @@ function GoalCard({
             />
           </div>
           <p className="mt-1 truncate text-xs text-content-secondary">
-            {t('goals.page.whenUrlContains')}{' '}
-            <code className="rounded-sm bg-inset px-1 py-0.5 text-2xs">
-              {goal.definition.url_contains ?? '—'}
-            </code>
+            {triggers.length === 0
+              ? t('goals.page.trigger.none')
+              : triggers.map((trigger) => t(trigger.key, trigger.params)).join(' · ')}
           </p>
           <p className="mt-0.5 text-2xs text-content-tertiary">
             {t('goals.page.created', { date: formatDate(goal.created_at) ?? '' })}

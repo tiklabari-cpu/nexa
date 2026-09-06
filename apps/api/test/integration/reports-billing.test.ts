@@ -2624,9 +2624,13 @@ describe('reports and billing', () => {
    */
   describe('Goals report (13.3-f)', () => {
     /** Define a conversion target in a license. */
-    async function defineGoal(name: string, licenseId = fx.a.licenseId): Promise<string> {
+    async function defineGoal(
+      name: string,
+      licenseId = fx.a.licenseId,
+      definition: object = {},
+    ): Promise<string> {
       const goal = await owner.goal.create({
-        data: { licenseId, name },
+        data: { licenseId, name, definition },
         select: { id: true },
       });
       return goal.id;
@@ -2801,6 +2805,32 @@ describe('reports and billing', () => {
       expect(overview.json().totals.achieved_goals).toBe(total);
       // And the funnel still counts only the one who came through it.
       expect(goals.json().funnel.conversions).toBe(1);
+    });
+
+    /**
+     * 204.1 gave a goal three predicates besides `url_contains` — a tracked
+     * sale, a captured lead, a resolved chat — and 204.2 is what lets an admin
+     * define one through the screen. Neither counter here reads `definition`
+     * at all: both are a plain count of `goal_achievements` rows, so a goal
+     * reached by one of the new predicates has to show up exactly like a
+     * `url_contains` one, on both surfaces the PRD names (FR-MOD-13.3).
+     */
+    it('counts a conversion whichever predicate reached it, not only url_contains (FR-MOD-13.3)', async () => {
+      const goalId = await defineGoal('Resolved chat', fx.a.licenseId, { chat_resolved: true });
+      await visitor({ chatted: true, goalId, name: 'Got helped' });
+
+      const [goals, overview] = await Promise.all([
+        server.get('/reports/goals', auth),
+        server.get('/reports/overview', auth),
+      ]);
+
+      expect(goals.json().by_goal).toContainEqual({
+        goal_id: goalId,
+        name: 'Resolved chat',
+        conversions: 1,
+      });
+      expect(goals.json().funnel.conversions).toBe(1);
+      expect(overview.json().totals.achieved_goals).toBe(1);
     });
 
     it('drops a conversion before the window into the previous period, not the current one', async () => {

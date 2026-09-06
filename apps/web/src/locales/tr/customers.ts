@@ -245,7 +245,6 @@ export const customers: Messages = {
     'Bir ziyaretçinin dönüşüm sayılan bir sayfaya ulaştığında bunu izlemek için bir hedef oluşturun.',
   'goals.page.empty.readDescription':
     'Hedefler, bir ziyaretçinin dönüşüm sayılan bir sayfaya ulaştığı anı izler.',
-  'goals.page.whenUrlContains': 'URL şunu içerdiğinde',
   'goals.page.created': '{date} tarihinde oluşturuldu',
   'goals.page.turnOff': 'Kapat',
   'goals.page.turnOn': 'Aç',
@@ -256,12 +255,24 @@ export const customers: Messages = {
   'goals.tab.active': 'Etkin',
   'goals.tab.inactive': 'Pasif',
 
+  // Hedef tetikleyici açıklamaları — GoalsPage.tsx (GoalCard), kayıtlı tanımdan okunur.
+  'goals.page.trigger.urlContains': 'Sayfa şunu içeriyor: {value}',
+  'goals.page.trigger.saleCompleted': 'Satış tamamlandı',
+  'goals.page.trigger.leadCaptured': 'Lead yakalandı',
+  'goals.page.trigger.chatResolved': 'Sohbet çözüldü',
+  'goals.page.trigger.none': 'Tetikleyici tanımlanmamış',
+
   // Goal builder — GoalBuilder.tsx
   'goals.builder.title': 'Yeni hedef',
   'goals.builder.description':
     'Bir ziyaretçinin ulaşmasının dönüşüm sayılacağı bir sayfa tanımlayın.',
   'goals.builder.nameLabel': 'Ad',
   'goals.builder.nameRequired': 'Hedefe bir ad verin.',
+  'goals.builder.typeLegend': 'Ziyaretçi ne zaman dönüşüm sağlamış sayılır?',
+  'goals.builder.type.urlContains': 'Sayfaya ulaşıldı',
+  'goals.builder.type.saleCompleted': 'Satış tamamlandı',
+  'goals.builder.type.leadCaptured': 'Lead yakalandı',
+  'goals.builder.type.chatResolved': 'Sohbet çözüldü',
   'goals.builder.triggerLabel': 'Tetikleyici — sayfa URL’si şunu içerir',
   'goals.builder.triggerHint':
     'ör. /thank-you — eşleşen bir sayfaya ulaşan ziyaretçi dönüşüm sayılır.',

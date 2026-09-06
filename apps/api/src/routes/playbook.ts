@@ -23,6 +23,11 @@ import {
   type KnowledgeBulkColumnIndex,
 } from '../services/ai/knowledge-bulk-row.js';
 import {
+  isKnowledgeFileParseError,
+  parseKnowledgeFile,
+  titleFromFilename,
+} from '../services/ai/knowledge-file-parse.js';
+import {
   BulkWebsiteCrawler,
   checkWebsiteUrl,
   type BulkCrawlLimits,
@@ -64,9 +69,18 @@ const previewBody = z.object({
 const ANSWER_LENGTHS = ['short', 'medium', 'long'] as const;
 
 /**
- * A website source is crawled from a URL; every other type indexes the text the
- * admin pasted. So exactly one of `source_url` (website) or `content` (the rest)
- * is required — enforced here rather than left for the handler to re-check.
+ * A website source is crawled from a URL; an `article` or a `faq` indexes the
+ * text the admin pasted. So exactly one of `source_url` (website) or `content`
+ * (the rest) is required — enforced here rather than left for the handler to
+ * re-check.
+ *
+ * `file` is the type this endpoint refuses. It used to be accepted with pasted
+ * `content` like any other, which made "File" a label rather than a fact: an
+ * admin could type into a box and have the source appear in the Files tab. A
+ * file source now comes from `POST /knowledge-sources/file`, where there are
+ * bytes to check, a type allow-list to check them against and a budget to
+ * measure them by — none of which a pasted string has. Refusing it here is the
+ * other half of that: one way in, not two, so the tab means what it says.
  */
 const createSourceBody = z
   .object({
@@ -77,7 +91,13 @@ const createSourceBody = z
     type: z.enum(['website', 'file', 'article', 'faq']).default('article'),
   })
   .superRefine((body, ctx) => {
-    if (body.type === 'website') {
+    if (body.type === 'file') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['type'],
+        message: 'a file source must be uploaded through POST /knowledge-sources/file',
+      });
+    } else if (body.type === 'website') {
       if (!body.source_url) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -93,6 +113,54 @@ const createSourceBody = z
       });
     }
   });
+
+/**
+ * The upload body (FR-MOD-06.3.2, "File").
+ *
+ * **Base64 in a JSON body, not multipart.** The repo already made this call
+ * once, for `/knowledge-sources/bulk`: the file's bytes travel inside the JSON
+ * envelope so parsing stays on the server, behind budgets a caller cannot get
+ * around, and there is one body-parsing surface with one error shape rather
+ * than two. Multipart would add a dependency, a second parser with its own
+ * limits and its own failure modes, and a second convention inside one panel.
+ *
+ * **Base64 rather than the plain JSON string `bulk` uses**, because the two
+ * carry different things. A bulk import is a *document* the admin assembled;
+ * an upload is a *file* the admin picked, and the bytes have to reach the
+ * server undecoded for the server to be able to say whether they are text at
+ * all. A JSON string has already been decoded by the browser: a UTF-16 export
+ * or a PDF renamed `.txt` would arrive as replacement characters that look
+ * like perfectly valid text, and the byte budget would be measuring characters
+ * rather than bytes. The cost is a third more bytes on the wire, which is what
+ * the route's own `bodyLimit` is sized for.
+ */
+const uploadSourceBody = z.object({
+  ai_agent_id: uuid,
+  /** Optional: the file's own name is the title when the admin does not type one. */
+  name: z.string().trim().min(1).max(200).optional(),
+  filename: z.string().trim().min(1).max(255),
+  content_type: z.string().trim().min(1).max(255),
+  // No length cap: `KNOWLEDGE_FILE_LIMITS.maxBytes` is the single authority on
+  // size, and a second one here would give one rule two different messages.
+  data: z.string().min(1),
+});
+
+/**
+ * The transport ceiling for the upload route only, so the 1 MiB `bodyLimit`
+ * every other route inherits stays where `server.ts` put it.
+ *
+ * Sized above `KNOWLEDGE_FILE_MAX_BYTES` rather than equal to it, for the same
+ * reason `BULK_BODY_LIMIT` is: base64 costs a third more bytes, and a ceiling
+ * that sat at the content limit would refuse a legal file with an opaque
+ * body-too-large before the handler ran, instead of with the typed error that
+ * names the limit. Auth is an `onRequest` hook and body parsing is not, so only
+ * an authenticated principal holding the write scope can make the process
+ * buffer this much.
+ */
+const KNOWLEDGE_FILE_BODY_LIMIT = 4_194_304; // 4 MiB
+
+/** Strict base64: the alphabet, correct padding, and a length that is a whole number of quartets. */
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 
 /**
  * The bulk import budget (NFR-S8).
@@ -573,6 +641,97 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         // Indexed in the same transaction: a source that exists but is not
         // searchable looks ready and answers nothing.
         const chunks = await knowledge.index(tx, tenant, source.id, content);
+
+        return { source, chunks };
+      });
+
+      return reply.status(201).send({
+        id: created.source.id,
+        ai_agent_id: created.source.aiAgentId,
+        name: created.source.name,
+        type: created.source.type,
+        status: created.chunks > 0 ? 'ready' : 'empty',
+        source_url: created.source.sourceUrl,
+        chunk_count: created.chunks,
+        updated_at: created.source.updatedAt.toISOString(),
+      });
+    },
+  );
+
+  /**
+   * File upload — the only way a `file` source is created.
+   *
+   * The order of operations is the whole design, and it is the same order the
+   * `website` path uses: **judge the bytes before opening a transaction, and
+   * write nothing until they have passed.** Decoding, the type allow-list, the
+   * UTF-8 check and both budgets all run first, so a refused upload leaves no
+   * row, no chunk and no half-created source — and none of that work holds a
+   * database connection open.
+   *
+   * Nothing here writes to disk. There is no object store, no temporary file
+   * and no path built from anything the caller sent: the bytes exist as a
+   * `Buffer` for the length of the request and what is kept is the text they
+   * parsed to. The filename is a *title* and nothing else.
+   *
+   * Chunk, embed and index happen in the same transaction as the insert, for
+   * the reason the endpoint above states: a source that exists but is not
+   * searchable looks ready and answers nothing.
+   */
+  app.post(
+    '/knowledge-sources/file',
+    { config: { scopes: WRITE, aiInference: true }, bodyLimit: KNOWLEDGE_FILE_BODY_LIMIT },
+    async (request, reply) => {
+      const body = parse(uploadSourceBody, request.body);
+      const tenant = request.tenant();
+      const principal = request.requirePrincipal();
+
+      // `Buffer.from(x, 'base64')` never fails — it skips characters outside
+      // the alphabet and returns whatever it could make of the rest. So a
+      // payload that is not base64 has to be refused before decoding, or a
+      // corrupted upload would arrive as plausible-looking bytes.
+      const encoded = body.data.replace(/\s+/g, '');
+      if (encoded.length % 4 !== 0 || !BASE64.test(encoded)) {
+        throw ApiError.validation('data: expected base64-encoded file bytes.');
+      }
+
+      let parsed;
+      try {
+        parsed = parseKnowledgeFile({
+          contentType: body.content_type,
+          bytes: Buffer.from(encoded, 'base64'),
+        });
+      } catch (error) {
+        if (isKnowledgeFileParseError(error)) throw ApiError.validation(`file: ${error.message}`);
+        throw error;
+      }
+
+      const title = body.name ?? titleFromFilename(body.filename);
+      if (title === '') throw ApiError.validation('filename: a file needs a usable name.');
+
+      const created = await request.withTenant(async (tx) => {
+        const agent = await tx.aiAgent.findFirst({
+          where: { id: body.ai_agent_id },
+          select: { id: true },
+        });
+        if (!agent) throw ApiError.validation('That AI agent does not exist.');
+
+        const source = await tx.knowledgeSource.create({
+          data: {
+            aiAgentId: body.ai_agent_id,
+            licenseId: tenant.licenseId,
+            type: 'file',
+            name: title,
+            content: parsed.text,
+            // A file has no URL. Storing the filename here would put a name
+            // into a column every reader treats as a fetchable address.
+            sourceUrl: null,
+            status: 'indexing',
+            addedBy: principal.kind === 'agent' ? principal.accountId : null,
+            updatedAt: new Date(),
+          },
+        });
+
+        const chunks = await knowledge.index(tx, tenant, source.id, parsed.text);
 
         return { source, chunks };
       });

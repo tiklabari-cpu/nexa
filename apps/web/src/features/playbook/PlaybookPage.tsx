@@ -10,7 +10,8 @@
  * page reads from, so an empty agent cannot be switched on to say nothing.
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useState, type ReactElement } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
+import { KNOWLEDGE_FILE_MAX_BYTES } from '@nexa/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { VirtualList } from '../../components/VirtualList.js';
@@ -28,6 +29,12 @@ import { ProfileForm } from './ProfileForm.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
+import {
+  KNOWLEDGE_FILE_ACCEPT,
+  readKnowledgeFile,
+  type KnowledgeFileAccepted,
+  type KnowledgeFileRejectionReason,
+} from './knowledge-file-upload.js';
 import { RecommendedSkills } from './RecommendedSkills.js';
 import { KbArticleList } from './KbArticleList.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
@@ -693,6 +700,19 @@ const KNOWLEDGE_TAB_LABEL_KEYS: Record<KnowledgeTab, string> = {
   faq: 'playbook.knowledge.tabFaq',
 };
 
+/**
+ * A precheck rejection, translated by its stable `reason` — the same split
+ * `BulkImportForm` uses. `knowledge-file-upload.ts` keeps its own English
+ * `.message` because its unit test pins those sentences; the UI never shows
+ * them.
+ */
+const KNOWLEDGE_FILE_REJECTION_KEYS: Record<KnowledgeFileRejectionReason, string> = {
+  invalid_type: 'playbook.knowledge.rejectInvalidType',
+  empty_file: 'playbook.knowledge.rejectEmptyFile',
+  too_large: 'playbook.knowledge.rejectTooLarge',
+  unreadable: 'playbook.knowledge.rejectUnreadable',
+};
+
 const KNOWLEDGE_TYPE_LABEL_KEYS: Record<KnowledgeType, string> = {
   website: 'playbook.knowledge.typeWebsite',
   file: 'playbook.knowledge.typeFile',
@@ -712,6 +732,8 @@ function KnowledgePanel({
   const queryClient = useQueryClient();
   const [sourceType, setSourceType] = useState<KnowledgeType>('article');
   const [subtab, setSubtab] = useState<KnowledgeTab>('all');
+  const [upload, setUpload] = useState<KnowledgeFileAccepted | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const sources = useQuery({
     queryKey: ['playbook', 'knowledge'],
@@ -720,8 +742,11 @@ function KnowledgePanel({
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['playbook'] });
 
-  // A website is crawled from a URL; everything else indexes pasted content.
+  // Three shapes, not two. A website is crawled from a URL, a file carries
+  // bytes, and an article or a FAQ indexes pasted content — which is why `file`
+  // has its own endpoint rather than a fourth branch on the create body.
   const isWebsite = sourceType === 'website';
+  const isFile = sourceType === 'file';
 
   const create = useMutation({
     mutationFn: (body: { name: string; type: KnowledgeType; sourceUrl: string; content: string }) =>
@@ -734,6 +759,20 @@ function KnowledgePanel({
     onSuccess: invalidate,
   });
 
+  const uploadFile = useMutation({
+    mutationFn: (body: { name: string; file: KnowledgeFileAccepted }) =>
+      api.post<KnowledgeSource>('/knowledge-sources/file', {
+        ai_agent_id: aiAgentId,
+        // Omitted rather than sent blank: the server's default is the file's
+        // own name, and an empty string would be a worse title than that.
+        ...(body.name === '' ? {} : { name: body.name }),
+        filename: body.file.filename,
+        content_type: body.file.contentType,
+        data: body.file.data,
+      }),
+    onSuccess: invalidate,
+  });
+
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/knowledge-sources/${id}`),
     onSuccess: invalidate,
@@ -742,24 +781,62 @@ function KnowledgePanel({
   const form = useForm({
     initial: { name: '', sourceUrl: '', content: '' },
     validators: {
-      name: required(t('playbook.knowledge.formTitleRequiredError')),
+      // A file names itself, so a title is optional there and required
+      // everywhere else — the same rule the endpoint applies, rather than a
+      // stricter one that would block a valid upload.
+      name: isFile ? undefined : required(t('playbook.knowledge.formTitleRequiredError')),
       sourceUrl: isWebsite ? required(t('playbook.knowledge.formUrlRequiredError')) : undefined,
-      content: isWebsite ? undefined : required(t('playbook.knowledge.formContentRequiredError')),
+      content:
+        isWebsite || isFile
+          ? undefined
+          : required(t('playbook.knowledge.formContentRequiredError')),
     },
     onSubmit: async (values, { setSubmitError, reset }) => {
       try {
-        await create.mutateAsync({
-          name: values.name.trim(),
-          type: sourceType,
-          sourceUrl: values.sourceUrl.trim(),
-          content: values.content.trim(),
-        });
+        if (isFile) {
+          // Unreachable from the UI (Add source stays disabled until a file is
+          // read), but the mutation must not be callable without one.
+          if (!upload) return;
+          await uploadFile.mutateAsync({ name: values.name.trim(), file: upload });
+          clearUpload();
+        } else {
+          await create.mutateAsync({
+            name: values.name.trim(),
+            type: sourceType,
+            sourceUrl: values.sourceUrl.trim(),
+            content: values.content.trim(),
+          });
+        }
         reset();
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
+
+  function clearUpload(): void {
+    setUpload(null);
+    setUploadError(null);
+  }
+
+  async function handleFileChange(event: ChangeEvent<HTMLInputElement>): Promise<void> {
+    const file = event.target.files?.[0];
+    // Reset so picking the same file again still fires onChange.
+    event.target.value = '';
+    clearUpload();
+    if (!file) return;
+
+    const result = await readKnowledgeFile(file);
+    if (!result.ok) {
+      setUploadError(
+        t(KNOWLEDGE_FILE_REJECTION_KEYS[result.reason], {
+          size: Math.round(KNOWLEDGE_FILE_MAX_BYTES / (1024 * 1024)),
+        }),
+      );
+      return;
+    }
+    setUpload(result);
+  }
   const nameError = form.errorFor('name');
   const sourceUrlError = form.errorFor('sourceUrl');
   const contentError = form.errorFor('content');
@@ -811,7 +888,13 @@ function KnowledgePanel({
                 <select
                   id="source-type"
                   value={sourceType}
-                  onChange={(event) => setSourceType(event.target.value as KnowledgeType)}
+                  onChange={(event) => {
+                    // A file chosen for one type is not a file chosen for
+                    // another — dropping it keeps the form from uploading
+                    // something the admin has stopped looking at.
+                    clearUpload();
+                    setSourceType(event.target.value as KnowledgeType);
+                  }}
                   className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm text-content outline-none"
                 >
                   {KNOWLEDGE_TYPES.map((knowledgeType) => (
@@ -843,6 +926,39 @@ function KnowledgePanel({
                 </span>
                 <FieldError id="source-url-error" message={sourceUrlError} />
               </label>
+            ) : isFile ? (
+              /* Sibling label, not a wrapper — the same reason the Type select
+                 above uses one: the help text and the "ready to upload" line
+                 would otherwise fold into the input's accessible name, and the
+                 control would stop being findable by the word "File" alone. */
+              <div className="flex flex-col gap-1">
+                <label
+                  htmlFor="source-file"
+                  className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+                >
+                  {t('playbook.knowledge.formFile')}
+                </label>
+                <input
+                  id="source-file"
+                  type="file"
+                  accept={KNOWLEDGE_FILE_ACCEPT}
+                  onChange={(event) => void handleFileChange(event)}
+                  aria-invalid={uploadError ? true : undefined}
+                  aria-describedby={uploadError ? 'source-file-error' : 'source-file-help'}
+                  className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none file:mr-2 file:rounded file:border-0 file:bg-subtle file:px-2 file:py-1 file:text-xs file:text-content"
+                />
+                <span id="source-file-help" className="text-2xs text-content-tertiary">
+                  {t('playbook.knowledge.formFileHelp', {
+                    size: Math.round(KNOWLEDGE_FILE_MAX_BYTES / (1024 * 1024)),
+                  })}
+                </span>
+                {upload && (
+                  <span role="status" className="text-2xs text-content-secondary">
+                    {t('playbook.knowledge.formFileChosen', { name: upload.filename })}
+                  </span>
+                )}
+                <FieldError id="source-file-error" message={uploadError} />
+              </div>
             ) : (
               <label htmlFor="source-content" className="flex flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -866,7 +982,7 @@ function KnowledgePanel({
             <div className="flex items-center gap-3">
               <button
                 type="submit"
-                disabled={!form.canSubmit}
+                disabled={!form.canSubmit || (isFile && !upload)}
                 className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
               >
                 {form.isSubmitting

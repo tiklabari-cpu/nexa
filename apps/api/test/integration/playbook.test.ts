@@ -5,8 +5,10 @@
  * `ai-agent-profile.test.ts` (persona round-trip, merge, validation,
  * cross-tenant 404), and every `/knowledge-sources*` endpoint is covered end
  * to end across `knowledge-bulk.test.ts`, `knowledge-bulk-website.test.ts`,
- * `knowledge-crawl.test.ts` (create/list/website crawl/bulk import) and
- * `audit-log.test.ts` (delete + audit trail) — none of that is repeated here.
+ * `knowledge-crawl.test.ts` (create/list/website crawl/bulk import),
+ * `knowledge-file.test.ts` (upload/parse/index + the paste path's refusal of
+ * `type: file`) and `audit-log.test.ts` (delete + audit trail) — none of that
+ * is repeated here.
  * `ai-skills.test.ts` exercises the skill *engine* through real customer
  * messages, never the HTTP route.
  *

@@ -811,7 +811,13 @@ describe('module parity matrix — what is still owed', () => {
       // spending behind `billing_manage`, in the Billing surface this app has
       // never had (`OUT_OF_SCOPE` below). The phone shows conversations; it does
       // not spend the workspace's money, so nothing here re-scopes.
-      contractEndpoints: 202,
+      // 202 -> 203 with `/knowledge-sources/file` (V1-KNOWLEDGE-a, tm 198.1).
+      // Uploading a file into the AI agent's knowledge base — Owner/Admin
+      // authoring behind `agents-bot--all:rw`, in the Playbook surface the phone
+      // reads but does not author (`13.7-n` paid off the read side only). A
+      // phone has no filesystem picker this app exposes, so nothing here
+      // re-scopes.
+      contractEndpoints: 203,
       scopeBoundaries: 1,
     });
   });

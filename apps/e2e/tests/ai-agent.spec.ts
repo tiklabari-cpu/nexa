@@ -93,6 +93,77 @@ test.describe('AI Agent (MOD-06)', () => {
   });
 
   /**
+   * The other half of MOD-06.3.2's "File": an upload that is a real file.
+   *
+   * Only a browser can prove this one. The bytes have to leave a file picker,
+   * be read by the page, survive base64 and arrive at an endpoint that decides
+   * whether they are text — a chain jsdom can imitate but not run. The
+   * assertion at the end is the acceptance criterion rather than the UI: the
+   * source is filed under Files and reports chunks, which means it was parsed
+   * and indexed, not merely stored.
+   */
+  test('uploads a markdown file into an indexed knowledge source (FR-MOD-06.3.2)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook');
+    await agentPage
+      .getByRole('tablist', { name: 'AI Agent' })
+      .getByRole('tab', { name: 'Knowledge' })
+      .click();
+
+    // Exact match so the "Type" select is not confused with the "Knowledge
+    // types" sub-tab strip.
+    await agentPage.getByLabel('Type', { exact: true }).selectOption('file');
+
+    // A unique name per run: the seed is idempotent rather than truncating, so
+    // reruns must add distinct sources instead of colliding on one title.
+    const run = Date.now();
+    const fileName = `zephyr-warranty-${run}.md`;
+    await agentPage.setInputFiles('#source-file', {
+      name: fileName,
+      mimeType: 'text/markdown',
+      buffer: Buffer.from(
+        `# Warranty
+
+The **flugelbrace${run}** warranty covers cracked welds for ten years.
+`,
+        'utf8',
+      ),
+    });
+
+    // No title typed — the file names itself, which is the endpoint's default.
+    await agentPage.getByRole('button', { name: 'Add source' }).click();
+
+    // It lands in the list under Files, with chunks: parsed and indexed, not
+    // just uploaded.
+    await agentPage.getByRole('tab', { name: /Files/ }).click();
+    const row = agentPage.getByText(fileName);
+    await expect(row).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/06.3.2-knowledge-file.png', fullPage: true });
+  });
+
+  test('refuses a file kind the knowledge base cannot parse (FR-MOD-06.3.2)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook');
+    await agentPage
+      .getByRole('tablist', { name: 'AI Agent' })
+      .getByRole('tab', { name: 'Knowledge' })
+      .click();
+    await agentPage.getByLabel('Type', { exact: true }).selectOption('file');
+
+    await agentPage.setInputFiles('#source-file', {
+      name: 'manual.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from('%PDF-1.4 not a knowledge source', 'utf8'),
+    });
+
+    await expect(agentPage.getByText(/Choose a \.txt, \.md or \.csv file/)).toBeVisible();
+    await expect(agentPage.getByRole('button', { name: 'Add source' })).toBeDisabled();
+  });
+
+  /**
    * The editor's top bar (FR-MOD-06.2.1): the run log, and the warning before
    * walking away from unsaved work.
    *

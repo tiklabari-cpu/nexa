@@ -7227,6 +7227,15 @@ export interface components {
       chunk_count: number;
       /** Format: date-time */
       updated_at?: string;
+      /**
+       * @description The account name of whoever added this source, resolved server-side
+       *     from the soft `added_by` reference — never a raw account id. Null
+       *     for a source with no known author (bot/seed-created, or the
+       *     authoring account was later deleted). Not present on
+       *     `/copilot/knowledge`, which predates this field and keeps its own
+       *     knowledge base separate (FR-MOD-12.2).
+       */
+      added_by_name?: string | null;
     };
     /**
      * @description One CSV data row's verdict. `line` is the row's 1-based position among
@@ -7269,6 +7278,14 @@ export interface components {
        *     reach; the precise reason is in the server log instead.
        */
       error: string | null;
+      /**
+       * @description The account name of whoever ran this import, resolved the same way
+       *     `KnowledgeSource.added_by_name` is — never a raw account id. Null
+       *     for a skipped row and for every row of a dry run, mirroring `id`
+       *     and `chunk_count`: it names the source that was actually created,
+       *     not the row that asked for one.
+       */
+      added_by_name: string | null;
     };
     KnowledgeBulkResult: {
       /** @description Rows written (or */

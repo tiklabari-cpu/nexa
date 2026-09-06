@@ -231,6 +231,7 @@ interface BulkRowReport {
   status: 'imported' | 'skipped';
   id: string | null;
   chunk_count: number | null;
+  added_by_name: string | null;
   error: string | null;
 }
 
@@ -571,19 +572,20 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
   // --- Knowledge -------------------------------------------------------------
 
   app.get('/knowledge-sources', { config: { scopes: READ } }, async (request, reply) => {
-    const sources = await request.withTenant((tx) =>
-      tx.knowledgeSource.findMany({
+    const items = await request.withTenant(async (tx) => {
+      const sources = await tx.knowledgeSource.findMany({
         // The customer-facing AI agent's sources only. Copilot keeps its own base
         // (FR-MOD-12.2) on a `kind: 'copilot'` agent, reachable through
         // `/copilot/knowledge` — the two must never show each other's sources.
         where: { aiAgent: { kind: 'ai_agent' } },
         orderBy: { updatedAt: 'desc' },
         include: { _count: { select: { chunks: true } } },
-      }),
-    );
-
-    return reply.send({
-      items: sources.map((s) => ({
+      });
+      const nameByAddedBy = await creatorNamesByIds(
+        tx,
+        sources.map((s) => s.addedBy),
+      );
+      return sources.map((s) => ({
         id: s.id,
         ai_agent_id: s.aiAgentId,
         name: s.name,
@@ -592,8 +594,11 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         source_url: s.sourceUrl,
         chunk_count: s._count.chunks,
         updated_at: s.updatedAt.toISOString(),
-      })),
+        added_by_name: s.addedBy ? (nameByAddedBy.get(s.addedBy) ?? null) : null,
+      }));
     });
+
+    return reply.send({ items });
   });
 
   // Indexing embeds the source text — a model call over workspace content.
@@ -624,6 +629,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         });
         if (!agent) throw ApiError.validation('That AI agent does not exist.');
 
+        const addedBy = principal.kind === 'agent' ? principal.accountId : null;
         const source = await tx.knowledgeSource.create({
           data: {
             aiAgentId: body.ai_agent_id,
@@ -633,7 +639,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             content,
             sourceUrl,
             status: 'indexing',
-            addedBy: principal.kind === 'agent' ? principal.accountId : null,
+            addedBy,
             updatedAt: new Date(),
           },
         });
@@ -642,7 +648,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         // searchable looks ready and answers nothing.
         const chunks = await knowledge.index(tx, tenant, source.id, content);
 
-        return { source, chunks };
+        return { source, chunks, addedByName: await creatorName(tx, addedBy) };
       });
 
       return reply.status(201).send({
@@ -654,6 +660,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         source_url: created.source.sourceUrl,
         chunk_count: created.chunks,
         updated_at: created.source.updatedAt.toISOString(),
+        added_by_name: created.addedByName,
       });
     },
   );
@@ -715,6 +722,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         });
         if (!agent) throw ApiError.validation('That AI agent does not exist.');
 
+        const addedBy = principal.kind === 'agent' ? principal.accountId : null;
         const source = await tx.knowledgeSource.create({
           data: {
             aiAgentId: body.ai_agent_id,
@@ -726,14 +734,14 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             // into a column every reader treats as a fetchable address.
             sourceUrl: null,
             status: 'indexing',
-            addedBy: principal.kind === 'agent' ? principal.accountId : null,
+            addedBy,
             updatedAt: new Date(),
           },
         });
 
         const chunks = await knowledge.index(tx, tenant, source.id, parsed.text);
 
-        return { source, chunks };
+        return { source, chunks, addedByName: await creatorName(tx, addedBy) };
       });
 
       return reply.status(201).send({
@@ -745,6 +753,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         source_url: created.source.sourceUrl,
         chunk_count: created.chunks,
         updated_at: created.source.updatedAt.toISOString(),
+        added_by_name: created.addedByName,
       });
     },
   );
@@ -808,12 +817,17 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       // is not visible, so this resolves "does not exist" and "belongs to
       // someone else" into the same answer — and it runs before a single row is
       // written, so a refused import writes nothing at all.
-      await request.withTenant(async (tx) => {
+      //
+      // The whole file is one request from one principal, so the name every
+      // created row will carry is resolved once here, not per row.
+      const addedBy = principal.kind === 'agent' ? principal.accountId : null;
+      const addedByName = await request.withTenant(async (tx) => {
         const agent = await tx.aiAgent.findFirst({
           where: { id: body.ai_agent_id },
           select: { id: true },
         });
         if (!agent) throw ApiError.validation('That AI agent does not exist.');
+        return creatorName(tx, addedBy);
       });
 
       // Every row is validated before any row is acted on. How many of them ask
@@ -855,7 +869,16 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         type: string | null,
         error: string,
       ): void => {
-        results.push({ line, name, type, status: 'skipped', id: null, chunk_count: null, error });
+        results.push({
+          line,
+          name,
+          type,
+          status: 'skipped',
+          id: null,
+          chunk_count: null,
+          added_by_name: null,
+          error,
+        });
         failed += 1;
       };
 
@@ -925,6 +948,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             status: 'imported',
             id: null,
             chunk_count: null,
+            added_by_name: null,
             error: null,
           });
           imported += 1;
@@ -942,7 +966,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
                 content,
                 sourceUrl,
                 status: 'indexing',
-                addedBy: principal.kind === 'agent' ? principal.accountId : null,
+                addedBy,
                 updatedAt: new Date(),
               },
             });
@@ -961,6 +985,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             status: 'imported',
             id: created.source.id,
             chunk_count: created.chunks,
+            added_by_name: addedByName,
             error: null,
           });
           imported += 1;

@@ -21,6 +21,7 @@ function row(overrides: Partial<KnowledgeBulkRowResult> = {}): KnowledgeBulkRowR
     status: 'imported',
     id: 'src-1',
     chunk_count: 3,
+    added_by_name: 'Owner a',
     error: null,
     ...overrides,
   };
@@ -44,6 +45,7 @@ describe('BulkImportResults', () => {
         status: 'skipped',
         id: null,
         chunk_count: null,
+        added_by_name: null,
         error: 'type: must be one of website, file, article, faq.',
       }),
     ];

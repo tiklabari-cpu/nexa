@@ -3,8 +3,9 @@
  *
  * Billing is mocked (ADR-13): no external provider issues invoices, so Nexa
  * *derives* them from the things that are real — the subscription, the
- * per-period usage records, and any API packages bought in the period (09.3) —
- * rather than persisting a parallel invoice table that could drift from them.
+ * per-period usage records, and any capacity bought in the period (API packages
+ * for 09.3, AI-resolution packs for 10.1.4) — rather than persisting a parallel
+ * invoice table that could drift from them.
  * One invoice per billing period the workspace has touched, plus the current
  * (open) one; its seat + overage total is the same arithmetic the subscription
  * view quotes, so the two can never disagree on those two lines.
@@ -116,7 +117,7 @@ export async function buildInvoices(
   tenant: TenantContext,
   env: Env,
 ): Promise<Invoice[]> {
-  const [subscription, trial, records, purchases, activeUsers] = await Promise.all([
+  const [subscription, trial, records, purchases, aiPurchases, activeUsers] = await Promise.all([
     tx.subscription.findFirst({
       where: { licenseId: tenant.licenseId },
       orderBy: { createdAt: 'desc' },
@@ -124,6 +125,7 @@ export async function buildInvoices(
     trialState(tx, tenant),
     tx.usageRecord.findMany({ where: { licenseId: tenant.licenseId } }),
     tx.apiPackagePurchase.findMany({ where: { licenseId: tenant.licenseId } }),
+    tx.aiPackagePurchase.findMany({ where: { licenseId: tenant.licenseId } }),
     tx.agentMembership.count({ where: { suspended: false } }),
   ]);
 
@@ -140,13 +142,19 @@ export async function buildInvoices(
   // the open invoice always exists. A Set de-duplicates the current period if
   // a usage record or purchase already wrote it.
   const periods = [
-    ...new Set([now, ...records.map((r) => r.period), ...purchases.map((p) => p.period)]),
+    ...new Set([
+      now,
+      ...records.map((r) => r.period),
+      ...purchases.map((p) => p.period),
+      ...aiPurchases.map((p) => p.period),
+    ]),
   ].sort((a, b) => b.localeCompare(a));
 
   return periods.map((period) => {
     const ai = records.find((r) => r.metric === 'ai_resolutions' && r.period === period);
     const api = records.find((r) => r.metric === 'api_calls' && r.period === period);
     const packagesBought = purchases.filter((p) => p.period === period);
+    const aiPacksBought = aiPurchases.filter((p) => p.period === period);
 
     const status: InvoiceStatus = trialing ? 'trial' : period < now ? 'paid' : 'open';
 
@@ -197,6 +205,25 @@ export async function buildInvoices(
       const name = findApiPackage(purchase.packageId)?.name ?? purchase.packageId;
       lineItems.push({
         description: `API package — ${name} (${Number(purchase.apiCalls)} calls)`,
+        amount_cents: purchase.priceCents,
+      });
+    }
+
+    // AI-resolution packs bought in the period (FR-MOD-10.1.4), each its own
+    // line. The resolutions and the price come off the receipt, never
+    // recomputed from today's pack size or overage rate — the same reasoning as
+    // the API package above, and the reason the row stores both.
+    //
+    // Listed separately from the "AI resolutions overage" line rather than
+    // netted against it, because they are two different events: a pack is
+    // capacity bought up front, the overage line is what was spent past *all*
+    // the capacity there was. Netting would hide the purchase from the statement
+    // that is supposed to explain the charge.
+    for (const purchase of aiPacksBought) {
+      lineItems.push({
+        description: `AI resolution packs — ${purchase.packs} pack${
+          purchase.packs === 1 ? '' : 's'
+        } (${purchase.resolutions} resolutions)`,
         amount_cents: purchase.priceCents,
       });
     }

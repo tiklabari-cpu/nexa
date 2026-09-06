@@ -67,6 +67,13 @@ interface ApiPackagePurchaseOpt {
   purchased_at: string;
 }
 
+interface AiPackageTermsOpt {
+  resolutions_per_pack: number;
+  unit_price_cents: number;
+  pack_price_cents: number;
+  max_packs: number;
+}
+
 interface UsageOpts {
   used?: number;
   included?: number;
@@ -89,6 +96,10 @@ interface UsageOpts {
   apiPackages?: ApiPackageOpt[];
   /** This workspace's API-package purchase history (FR-MOD-09.3). */
   apiPackagePurchases?: ApiPackagePurchaseOpt[];
+  /** The AI overage pack terms the stepper is built from (FR-MOD-10.1.4). */
+  aiPackageTerms?: AiPackageTermsOpt;
+  /** Make `/billing/ai-packages` fail, to prove the meter survives without it. */
+  aiPackageTermsFail?: boolean;
   /** The plan tier this workspace is on (FR-MOD-10.1.1). */
   plan?: string;
   /** The plan catalogue `/billing/entitlements` serves — defaults to the real one. */
@@ -123,6 +134,19 @@ const DEFAULT_API_PACKAGES: ApiPackageOpt[] = [
   { id: 'pro', name: 'Pro', api_calls: 500_000, price_cents: 14999 },
   { id: 'pro-plus', name: 'Pro+', api_calls: 1_000_000, price_cents: 24999 },
 ];
+
+/**
+ * The real terms `GET /billing/ai-packages` serves at the default configuration
+ * (`AI_RESOLUTION_PACK_SIZE` = 50, `AI_OVERAGE_CENTS` = 50,
+ * `AI_PACKAGE_MAX_PACKS` = 20) — so the stepper is tested against the numbers
+ * production actually sends.
+ */
+const DEFAULT_AI_PACK_TERMS: AiPackageTermsOpt = {
+  resolutions_per_pack: 50,
+  unit_price_cents: 50,
+  pack_price_cents: 2500,
+  max_packs: 20,
+};
 
 const DEFAULT_INVOICE: InvoiceOpt = {
   number: 'NEXA-202607',
@@ -213,6 +237,13 @@ function mockBilling(opts: UsageOpts): void {
     if (path === '/billing/api-packages') {
       return Promise.resolve({ items: opts.apiPackages ?? DEFAULT_API_PACKAGES });
     }
+    if (path === '/billing/ai-packages') {
+      return opts.aiPackageTermsFail === true
+        ? Promise.reject(new Error('terms unavailable'))
+        : Promise.resolve({
+            package: opts.aiPackageTerms ?? DEFAULT_AI_PACK_TERMS,
+          });
+    }
     if (path === '/billing/api-packages/purchases') {
       return Promise.resolve({ items: opts.apiPackagePurchases ?? [] });
     }
@@ -284,6 +315,173 @@ describe('BillingPage — AI resolutions meter', () => {
     // 10 over at $0.50 each = $5.00, and the counter is honestly past 100%.
     expect(screen.getByTestId('overage-charge')).toHaveTextContent('$5.00');
     expect(screen.getByTestId('quota-percent')).toHaveTextContent('(105% used)');
+  });
+});
+
+/**
+ * The half of the meter the audit found missing: the pack was a price display,
+ * not something you could buy. The PRD's §10.1.4 title says "stepper", so what
+ * is asserted here is a quantity control with real bounds, a total visible
+ * *before* the money is spent, and a purchase that moves the counter above it.
+ */
+describe('BillingPage — buying AI overage packs (FR-MOD-10.1.4)', () => {
+  /** The result the endpoint returns for `packs` packs at the default rate. */
+  const purchaseResult = (packs: number) => ({
+    purchase: {
+      id: 'p1',
+      packs,
+      resolutions: packs * 50,
+      price_cents: packs * 2500,
+      period: '202607',
+      purchased_at: '2026-07-15T00:00:00.000Z',
+    },
+    usage: {},
+    replayed: false,
+  });
+
+  it('starts at one pack and quotes its total before anything is bought', async () => {
+    mockBilling({ used: 100, included: 200 });
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByTestId('ai-pack-count')).toHaveTextContent('1');
+    // 50 resolutions for $25.00 — the amount is on screen before the button is
+    // ever pressed, which is the whole point of quoting it here.
+    expect(screen.getByTestId('ai-pack-total')).toHaveTextContent('50 resolutions for $25.00');
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('recomputes the total as the stepper moves', async () => {
+    mockBilling({ used: 100, included: 200 });
+    renderBilling(<BillingPage />);
+
+    const add = await screen.findByRole('button', { name: 'One pack more' });
+    await userEvent.click(add);
+    await userEvent.click(add);
+
+    expect(screen.getByTestId('ai-pack-count')).toHaveTextContent('3');
+    expect(screen.getByTestId('ai-pack-total')).toHaveTextContent('150 resolutions for $75.00');
+  });
+
+  it('will not step below one pack — there is nothing smaller on sale', async () => {
+    mockBilling({ used: 100, included: 200 });
+    renderBilling(<BillingPage />);
+
+    const remove = await screen.findByRole('button', { name: 'One pack fewer' });
+    expect(remove).toBeDisabled();
+    expect(screen.getByTestId('ai-pack-count')).toHaveTextContent('1');
+  });
+
+  it('stops at the ceiling the server publishes, rather than offering a quantity it would refuse', async () => {
+    mockBilling({
+      used: 100,
+      included: 200,
+      aiPackageTerms: { ...DEFAULT_AI_PACK_TERMS, max_packs: 3 },
+    });
+    renderBilling(<BillingPage />);
+
+    const add = await screen.findByRole('button', { name: 'One pack more' });
+    await userEvent.click(add);
+    await userEvent.click(add);
+    expect(screen.getByTestId('ai-pack-count')).toHaveTextContent('3');
+    // Disabled at the ceiling rather than left live to produce a 400 — the same
+    // discipline the seats stepper uses at `min_seats`.
+    expect(add).toBeDisabled();
+    expect(screen.getByTestId('ai-pack-total')).toHaveTextContent('150 resolutions for $75.00');
+  });
+
+  it('buys the chosen number of packs and re-reads the counter afterwards', async () => {
+    mockBilling({ used: 180, included: 200 });
+    api.post.mockResolvedValue(purchaseResult(2));
+    renderBilling(<BillingPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'One pack more' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Buy packs' }));
+
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const [path, body] = api.post.mock.calls[0]!;
+    expect(path).toBe('/billing/ai-packages');
+    expect(body.packs).toBe(2);
+    // The counter and the 80% warning are the server's, so the page asks again
+    // rather than patching them from the reply.
+    expect(await screen.findByTestId('ai-pack-bought')).toHaveTextContent(
+      '100 resolutions added to this period',
+    );
+    const usageReads = api.get.mock.calls.filter((c) => c[0] === '/billing/usage');
+    expect(usageReads.length).toBeGreaterThan(1);
+  });
+
+  it('never sends a price — the amount is the server’s to compute', async () => {
+    mockBilling({ used: 180, included: 200 });
+    api.post.mockResolvedValue(purchaseResult(1));
+    renderBilling(<BillingPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Buy packs' }));
+
+    const body = api.post.mock.calls[0]![1] as Record<string, unknown>;
+    expect(Object.keys(body).sort()).toEqual(['idempotency_key', 'packs']);
+  });
+
+  it('carries one idempotency key per attempt: kept on failure, rotated after a sale', async () => {
+    mockBilling({ used: 180, included: 200 });
+    api.post.mockRejectedValueOnce(new Error('boom'));
+    renderBilling(<BillingPage />);
+
+    const button = await screen.findByRole('button', { name: 'Buy packs' });
+    await userEvent.click(button);
+    await screen.findByText(/allowance is unchanged/i);
+
+    // The retry is the *same* attempt — reusing the key is what stops a
+    // half-completed purchase from being charged twice.
+    api.post.mockResolvedValue(purchaseResult(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Buy packs' }));
+    await screen.findByTestId('ai-pack-bought');
+
+    const keys = api.post.mock.calls.map(
+      (c) => (c[1] as { idempotency_key: string }).idempotency_key,
+    );
+    expect(keys).toHaveLength(2);
+    expect(keys[0]).toBe(keys[1]);
+
+    // And the next deliberate purchase is a new attempt, or the server would
+    // replay the last one and quietly sell nothing.
+    await userEvent.click(screen.getByRole('button', { name: 'Buy packs' }));
+    const third = (api.post.mock.calls[2]![1] as { idempotency_key: string }).idempotency_key;
+    expect(third).not.toBe(keys[0]);
+  });
+
+  it('shows a banner and leaves the allowance alone when the purchase fails', async () => {
+    mockBilling({ used: 180, included: 200 });
+    api.post.mockRejectedValue(new Error('boom'));
+    renderBilling(<BillingPage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Buy packs' }));
+
+    expect(await screen.findByText(/could not buy the packs/i)).toBeInTheDocument();
+    expect(screen.queryByTestId('ai-pack-bought')).not.toBeInTheDocument();
+    // The counter never moved — the failure is reported, not absorbed.
+    expect(screen.getByTestId('ai-counter')).toHaveTextContent('180');
+  });
+
+  it('keeps the buy button enabled while the workspace is read-only', async () => {
+    // Buying capacity is one of the ways an expired trial comes back, so the
+    // decision is the server's (09.3-d) — the client must not pre-empt it.
+    mockBilling({ used: 210, included: 200, access: 'read_only' });
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByRole('button', { name: 'Buy packs' })).toBeEnabled();
+  });
+
+  it('keeps the counter and the warning working when the pack terms cannot be read', async () => {
+    // A broken purchase surface must not take the meter down with it: the
+    // counter and the proactive warning are what the KK is actually about.
+    mockBilling({ used: 180, included: 200, aiPackageTermsFail: true });
+    renderBilling(<BillingPage />);
+
+    expect(await screen.findByTestId('ai-counter')).toHaveTextContent('180');
+    expect(screen.getByTestId('quota-warning')).toBeInTheDocument();
+    expect(screen.getByTestId('overage-package')).toHaveTextContent('$25.00');
+    expect(await screen.findByTestId('ai-pack-terms-error')).toBeInTheDocument();
+    expect(screen.queryByTestId('ai-pack-count')).not.toBeInTheDocument();
   });
 });
 

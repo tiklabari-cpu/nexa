@@ -531,6 +531,8 @@ paths:
     $ref: "./paths/reports.yaml#/apiPackages"
   /billing/api-packages/purchases:
     $ref: "./paths/reports.yaml#/apiPackagePurchases"
+  /billing/ai-packages:
+    $ref: "./paths/reports.yaml#/aiPackages"
   /billing/entitlements:
     $ref: "./paths/reports.yaml#/entitlements"
 
@@ -4129,6 +4131,77 @@ components:
       properties:
         purchase: { $ref: "#/components/schemas/ApiPackagePurchase" }
         usage: { $ref: "#/components/schemas/UsageSummary" }
+
+    AiResolutionPackage:
+      type: object
+      description: |
+        The AI-resolution overage pack on sale, and the terms a purchase must
+        respect (FR-MOD-10.1.4, PRD §10.1.4's "aşım paketi").
+
+        Not a catalogue of tiers like `ApiPackage`: the PRD sells AI overage as
+        one pack bought in a quantity, which is why a purchase carries a count
+        and the meter carries a stepper. `max_packs` is the ceiling the server
+        enforces on one purchase — published so a client's stepper stops where
+        the endpoint does instead of offering a quantity that 400s.
+
+        The price is derived from the same per-resolution rate
+        `UsageSummary.ai_resolutions.overage_unit_price_cents` quotes and the
+        invoice bills overage at, so a pack can never be sold at a price the
+        meter does not show (ADR-09 — one source).
+      required: [resolutions_per_pack, unit_price_cents, pack_price_cents, max_packs]
+      properties:
+        resolutions_per_pack:
+          type: integer
+          description: Resolutions one pack adds to this period's allowance.
+        unit_price_cents:
+          type: integer
+          description: Price of one resolution beyond the allowance.
+        pack_price_cents:
+          type: integer
+          description: "`resolutions_per_pack` × `unit_price_cents`."
+        max_packs:
+          type: integer
+          description: The most packs one purchase may buy.
+
+    AiPackagePurchase:
+      type: object
+      description: |
+        One recorded AI-pack purchase (FR-MOD-10.1.4). `resolutions` and
+        `price_cents` are what was actually sold, stored on the row rather than
+        recomputed, so a later change to the pack size or the overage rate never
+        rewrites what a workspace was charged.
+      required: [id, packs, resolutions, price_cents, period, purchased_at]
+      properties:
+        id: { type: string, format: uuid }
+        packs: { type: integer }
+        resolutions: { type: integer, description: Resolutions this purchase added. }
+        price_cents: { type: integer }
+        period: { type: string, description: "The `yyyymm` period the quota was added to." }
+        purchased_at: { type: string, format: date-time }
+
+    AiPackagePurchaseResult:
+      type: object
+      description: |
+        What a purchase produced: the receipt, the period's usage as it stands
+        after the resolutions were credited, and whether this request was the
+        one that bought them (FR-MOD-10.1.4).
+
+        `usage` is returned rather than left to a follow-up `GET /billing/usage`
+        because the whole point of the purchase is the raised allowance — a
+        client that has to ask again can render the old counter in between. It
+        is read inside the same transaction that credited the quota.
+
+        `replayed` is `true` when the `idempotency_key` had already been spent:
+        the receipt is the earlier sale's, nothing was charged and no quota was
+        added. A client that double-submits therefore gets a success carrying
+        the truth, not a second purchase and not an error it has to interpret.
+      required: [purchase, usage, replayed]
+      properties:
+        purchase: { $ref: "#/components/schemas/AiPackagePurchase" }
+        usage: { $ref: "#/components/schemas/UsageSummary" }
+        replayed:
+          type: boolean
+          description: True when this request replayed an earlier purchase and charged nothing.
 
     PaymentMethodInput:
       type: object

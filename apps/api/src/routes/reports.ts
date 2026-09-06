@@ -9,6 +9,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
   ACCESS_REVIEW_SECTIONS,
+  AI_PACKAGE_MAX_PACKS,
   API_PACKAGE_CATALOG,
   hasAnyScope,
   isWorkScheduleProblem,
@@ -115,6 +116,11 @@ import {
   purchaseApiPackage,
   serialiseApiPackagePurchase,
 } from '../services/billing/api-package-service.js';
+import {
+  aiPackageTerms,
+  purchaseAiPackage,
+  serialiseAiPackagePurchase,
+} from '../services/billing/ai-package-service.js';
 
 const BILLING_WRITE_SCOPES = ['billing_manage', 'billing_admin'];
 
@@ -139,6 +145,28 @@ const paymentMethodBody = z.object({
  */
 const purchaseApiPackageBody = z.object({
   package_id: z.string().trim().min(1).max(64),
+});
+
+/**
+ * How many AI-resolution packs to buy, and which attempt this is
+ * (FR-MOD-10.1.4).
+ *
+ * There is deliberately no price field. Zod strips unknown keys, so a body
+ * carrying `price_cents` is not rejected — it is simply never read, and the
+ * amount is computed from the configured overage rate in
+ * `ai-package-service.ts`. That is the stronger guarantee: a rejection can be
+ * worked around by dropping the field, whereas a value that has no way in
+ * cannot be smuggled.
+ *
+ * `packs` is bounded here as well as by a CHECK on the table, because the
+ * ceiling is a product rule about a money write and the caller deserves a 400
+ * naming it rather than a constraint violation. `idempotency_key` is a UUID so
+ * that "unique per attempt" is the format's problem — a caller that sends a
+ * constant string would otherwise lock itself out of ever buying twice.
+ */
+const purchaseAiPackageBody = z.object({
+  packs: z.number().int().min(1).max(AI_PACKAGE_MAX_PACKS),
+  idempotency_key: z.string().uuid(),
 });
 
 const updateSubscriptionBody = z
@@ -2052,6 +2080,64 @@ export default async function reportRoutes(
       );
 
       return reply.send({ items: purchases.map(serialiseApiPackagePurchase) });
+    },
+  );
+
+  // The AI-resolution overage pack and its purchase terms (FR-MOD-10.1.4).
+  // Global like the API catalogue, but derived from configuration rather than a
+  // code constant, which is why a client reads it instead of knowing it: the
+  // stepper's ceiling has to be the one this endpoint's own validator enforces.
+  app.get('/billing/ai-packages', { config: { scopes: BILLING_READ_SCOPES } }, async (_, reply) =>
+    reply.send({ package: aiPackageTerms(usageConfig(env)) }),
+  );
+
+  // Buy some (FR-MOD-10.1.4 — the PRD's "stepper"). Payment is mocked (ADR-13);
+  // the quota is real and lands in this period's AI allowance, and the price
+  // lands on the invoice as its own line.
+  app.post(
+    '/billing/ai-packages',
+    // `allowWhenReadOnly` for the same reason as the API package below it: a
+    // workspace that has run out of AI resolutions is exactly the one that needs
+    // to buy more, and the trial gate must not be what stops it. `reports_read`
+    // still cannot get in — reading the price is not spending.
+    { config: { scopes: BILLING_WRITE_SCOPES, minimumRole: 'admin', allowWhenReadOnly: true } },
+    async (request, reply) => {
+      const body = parse(purchaseAiPackageBody, request.body);
+      const tenant = request.tenant();
+
+      const result = await request.withTenant(async (tx) => {
+        const { purchase, replayed } = await purchaseAiPackage(
+          tx,
+          tenant,
+          { packs: body.packs, idempotencyKey: body.idempotency_key },
+          usageConfig(env),
+        );
+        // Only a sale is audited. A replay bought nothing, and logging it as a
+        // purchase would put money in the trail that was never charged — the
+        // one thing this log exists to be exact about.
+        if (!replayed) {
+          await writeAuditEntry(tx, request.auditContext(), {
+            action: 'billing.ai_package_purchased',
+            target: `ai_package_purchase:${purchase.id}`,
+            metadata: {
+              packs: purchase.packs,
+              resolutions: purchase.resolutions,
+              price_cents: purchase.priceCents,
+              period: purchase.period,
+            },
+          });
+        }
+        // Usage read back inside the same transaction, so the caller sees the
+        // allowance this purchase produced rather than whatever a second, later
+        // request would have found.
+        return {
+          purchase: serialiseAiPackagePurchase(purchase),
+          usage: await usageSummary(tx, tenant, usageConfig(env)),
+          replayed,
+        };
+      });
+
+      return reply.send(result);
     },
   );
 

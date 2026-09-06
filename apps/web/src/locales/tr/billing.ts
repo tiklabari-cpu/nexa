@@ -89,6 +89,21 @@ export const billing: Messages = {
   'billing.aiMeter.overagePackageDetail':
     'Dahil olan {included} sınırının ötesinde, AI çözümleri her biri {price} olarak faturalandırılır — {unit}’lik paketler halinde satılır (paket başına {packPrice}).',
   'billing.aiMeter.periodLabel': 'Bu dönem',
+  // Buying overage packs — BuyOveragePacks (FR-MOD-10.1.4)
+  'billing.aiMeter.buyPacksLabel': 'Aşım paketi satın al',
+  'billing.aiMeter.removePack': 'Bir paket azalt',
+  'billing.aiMeter.addPack': 'Bir paket artır',
+  'billing.aiMeter.packTotal': '{amount} karşılığında {resolutions} çözüm',
+  'billing.aiMeter.buyPacks': 'Paketleri satın al',
+  'billing.aiMeter.buying': 'Satın alınıyor…',
+  'billing.aiMeter.buyPacksNotice':
+    'Bu dönemin sınırına anında eklenir ve bu dönemin faturasında ayrı bir kalem olarak görünür. Karttan çekim yapılmaz (sahte faturalama).',
+  'billing.aiMeter.bought': 'Satın alındı — bu döneme {resolutions} çözüm eklendi.',
+  'billing.aiMeter.buyErrorTitle': 'Paketler satın alınamadı.',
+  'billing.aiMeter.buyErrorDescription':
+    'Satın alma gerçekleşmedi — sınırınız değişmedi. Yeniden deneyin.',
+  'billing.aiMeter.packTermsError':
+    'Aşım paketi koşulları yüklenemedi — satın alma kullanılamıyor.',
 
   // API calls
   'billing.apiCalls.title': 'API çağrıları',

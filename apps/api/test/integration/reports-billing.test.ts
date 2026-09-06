@@ -8,7 +8,13 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { API_PACKAGE_CATALOG, generateShortId, type TransferReason } from '@nexa/types';
+import {
+  AI_PACKAGE_MAX_PACKS,
+  AI_RESOLUTION_PACK_SIZE,
+  API_PACKAGE_CATALOG,
+  generateShortId,
+  type TransferReason,
+} from '@nexa/types';
 import {
   grantToken,
   ownerClient,
@@ -21,8 +27,13 @@ import { clearRateLimits, startTestServer, type TestServer } from '../helpers/se
 import { REPORT_GROUPS } from '../../src/routes/reports-export.js';
 import { REPORT_MAX_RANGE_DAYS } from '../../src/routes/reports.js';
 import { withTenant } from '../../src/lib/tenant.js';
-import { currentPeriod, recordApiCall } from '../../src/services/billing/metering.js';
+import {
+  currentPeriod,
+  recordAiResolution,
+  recordApiCall,
+} from '../../src/services/billing/metering.js';
 import { purchaseApiPackage } from '../../src/services/billing/api-package-service.js';
+import { purchaseAiPackage } from '../../src/services/billing/ai-package-service.js';
 
 describe('reports and billing', () => {
   let owner: PrismaClient;
@@ -5253,6 +5264,580 @@ describe('reports and billing', () => {
       // or touch one on its way through.
       expect(response.statusCode).toBe(200);
       expect(await owner.paymentMethod.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+    });
+  });
+
+  // =========================================================================
+  // FR-MOD-10.1.4 — the AI-resolution overage pack, made purchasable. The
+  // counter, the 80% warning and the up-front price were already there; what
+  // was missing is the PRD's "stepper": the pack was a price display, not
+  // something a workspace could buy. Most of what is asserted here is that the
+  // sale and the meter share ONE counter (ADR-09) and that a double submit
+  // cannot buy twice.
+  describe('AI resolution packs — buying capacity from the meter (FR-MOD-10.1.4)', () => {
+    const env = testEnv();
+    const meterConfig = {
+      aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
+      aiOverageCents: env.AI_OVERAGE_CENTS,
+    };
+    /** 50 × $0.50 = $25.00, the pack price the meter already quotes. */
+    const PACK_PRICE_CENTS = AI_RESOLUTION_PACK_SIZE * env.AI_OVERAGE_CENTS;
+
+    const context = () => ({ licenseId: fx.a.licenseId, organizationId: fx.a.organizationId });
+
+    let keySeed = 0;
+    /** A fresh idempotency key — a *new* purchase attempt. */
+    const freshKey = (): string => {
+      keySeed += 1;
+      return `00000000-0000-4000-8000-${String(keySeed).padStart(12, '0')}`;
+    };
+
+    /** This period's ai_resolutions row, read past RLS so assertions are exact. */
+    const aiUsageRow = (licenseId = fx.a.licenseId) =>
+      owner.usageRecord.findFirst({
+        where: { licenseId, metric: 'ai_resolutions', period: currentPeriod() },
+      });
+
+    /** The allowance as the meter would report it — "no row" means the plan's. */
+    const includedNow = async (licenseId = fx.a.licenseId): Promise<number> => {
+      const row = await aiUsageRow(licenseId);
+      return row === null ? env.AI_RESOLUTIONS_INCLUDED : Number(row.included);
+    };
+
+    const buyOverHttp = (
+      body: Record<string, unknown>,
+      headers: { authorization: string } = auth,
+    ) => server.post('/billing/ai-packages', body, headers);
+
+    /** A token with a read scope only — it may see the price, not spend money. */
+    const readerToken = () =>
+      grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+
+    // --- The terms (the stepper's bounds come from here) ---------------------
+
+    it('publishes the pack, its price and the ceiling one purchase may buy', async () => {
+      const response = await server.get('/billing/ai-packages', auth);
+      expect(response.statusCode).toBe(200);
+      expect(response.json().package).toEqual({
+        resolutions_per_pack: AI_RESOLUTION_PACK_SIZE,
+        unit_price_cents: env.AI_OVERAGE_CENTS,
+        pack_price_cents: PACK_PRICE_CENTS,
+        max_packs: AI_PACKAGE_MAX_PACKS,
+      });
+    });
+
+    it('quotes the same per-resolution price the meter does — one price, not two', async () => {
+      // The pack is priced from `overage_unit_price_cents`, so a workspace can
+      // never be sold capacity at a rate the counter above it does not show.
+      const terms = (await server.get('/billing/ai-packages', auth)).json().package;
+      const usage = (await server.get('/billing/usage', auth)).json();
+      expect(terms.unit_price_cents).toBe(usage.ai_resolutions.overage_unit_price_cents);
+      expect(terms.resolutions_per_pack).toBe(usage.ai_resolutions.overage_unit);
+    });
+
+    it('is readable with reports_read alone, but refused to a token with no billing shape', async () => {
+      const reader = await readerToken();
+      expect(
+        (await server.get('/billing/ai-packages', { authorization: `Bearer ${reader}` }))
+          .statusCode,
+      ).toBe(200);
+
+      const weak = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--all:ro'],
+      });
+      expect(
+        (await server.get('/billing/ai-packages', { authorization: `Bearer ${weak}` })).statusCode,
+      ).toBe(403);
+    });
+
+    // --- Negatives -----------------------------------------------------------
+
+    it('refuses reports_read — reading the price list is not permission to spend', async () => {
+      const response = await buyOverHttp(
+        { packs: 1, idempotency_key: freshKey() },
+        { authorization: `Bearer ${await readerToken()}` },
+      );
+      expect(response.statusCode).toBe(403);
+      expect(await owner.aiPackagePurchase.count()).toBe(0);
+      expect(await includedNow()).toBe(env.AI_RESOLUTIONS_INCLUDED);
+    });
+
+    it('rejects a pack count outside 1…max, having sold nothing', async () => {
+      for (const packs of [0, -1, 1.5, AI_PACKAGE_MAX_PACKS + 1]) {
+        const response = await buyOverHttp({ packs, idempotency_key: freshKey() });
+        expect(response.statusCode, `packs=${packs}`).toBe(400);
+      }
+      expect(await owner.aiPackagePurchase.count()).toBe(0);
+      // The rollback matters: the receipt and the credit are one transaction, so
+      // a rejected quantity must leave the allowance exactly as it was.
+      expect(await includedNow()).toBe(env.AI_RESOLUTIONS_INCLUDED);
+    });
+
+    it('keeps the table’s ceiling and the code’s in step', async () => {
+      // `AI_PACKAGE_MAX_PACKS` bounds the request; a CHECK constraint bounds the
+      // row, and the constraint spells its number out (a migration cannot import
+      // a constant). Raising one without the other turns a 400 into a 500, so
+      // the two are pinned against each other here rather than by hope.
+      const row = (packs: number) => ({
+        licenseId: fx.a.licenseId,
+        idempotencyKey: freshKey(),
+        packs,
+        resolutions: packs * AI_RESOLUTION_PACK_SIZE,
+        priceCents: packs * PACK_PRICE_CENTS,
+        period: currentPeriod(),
+      });
+      await expect(
+        owner.aiPackagePurchase.create({ data: row(AI_PACKAGE_MAX_PACKS) }),
+      ).resolves.toBeTruthy();
+      await expect(
+        owner.aiPackagePurchase.create({ data: row(AI_PACKAGE_MAX_PACKS + 1) }),
+      ).rejects.toThrow(/ai_package_purchases_packs_check/);
+      await expect(owner.aiPackagePurchase.create({ data: row(0) })).rejects.toThrow(
+        /ai_package_purchases_packs_check/,
+      );
+    });
+
+    it('rejects a missing or malformed idempotency key rather than guessing one', async () => {
+      expect((await buyOverHttp({ packs: 1 })).statusCode).toBe(400);
+      expect((await buyOverHttp({ packs: 1, idempotency_key: 'not-a-uuid' })).statusCode).toBe(400);
+      expect((await buyOverHttp({ packs: 1, idempotency_key: '' })).statusCode).toBe(400);
+      expect(await owner.aiPackagePurchase.count()).toBe(0);
+    });
+
+    // --- The price is the server's ------------------------------------------
+
+    it('ignores a price named in the body — the amount is computed, never accepted', async () => {
+      const response = await buyOverHttp({
+        packs: 2,
+        idempotency_key: freshKey(),
+        // Every shape a client might try to name its own price with.
+        price_cents: 1,
+        pack_price_cents: 1,
+        unit_price_cents: 1,
+        amount_cents: 1,
+      });
+      expect(response.statusCode).toBe(200);
+      // Charged the real price, not the one it asked for.
+      expect(response.json().purchase.price_cents).toBe(2 * PACK_PRICE_CENTS);
+      const row = await owner.aiPackagePurchase.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(row.priceCents).toBe(2 * PACK_PRICE_CENTS);
+    });
+
+    it('prices a purchase from the configured rate, per pack', async () => {
+      const response = await buyOverHttp({ packs: 3, idempotency_key: freshKey() });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().purchase).toMatchObject({
+        packs: 3,
+        resolutions: 3 * AI_RESOLUTION_PACK_SIZE,
+        price_cents: 3 * PACK_PRICE_CENTS,
+        period: currentPeriod(),
+      });
+      expect(response.json().replayed).toBe(false);
+    });
+
+    // --- Idempotency ---------------------------------------------------------
+
+    it('credits the quota once when the same request arrives twice', async () => {
+      const key = freshKey();
+      const first = await buyOverHttp({ packs: 2, idempotency_key: key });
+      const second = await buyOverHttp({ packs: 2, idempotency_key: key });
+
+      expect(first.statusCode).toBe(200);
+      expect(second.statusCode).toBe(200);
+      expect(first.json().replayed).toBe(false);
+      expect(second.json().replayed).toBe(true);
+      // The same sale, reported twice — not two sales.
+      expect(second.json().purchase.id).toBe(first.json().purchase.id);
+      expect(await owner.aiPackagePurchase.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+      expect(await includedNow()).toBe(env.AI_RESOLUTIONS_INCLUDED + 2 * AI_RESOLUTION_PACK_SIZE);
+    });
+
+    it('credits once even when the two requests overlap', async () => {
+      // The double-click the button cannot prevent: two requests in flight at
+      // the same instant. `ON CONFLICT DO NOTHING` is what serialises them, not
+      // a check-then-insert the second request would race past.
+      const key = freshKey();
+      const [a, b] = await Promise.all([
+        buyOverHttp({ packs: 1, idempotency_key: key }),
+        buyOverHttp({ packs: 1, idempotency_key: key }),
+      ]);
+
+      expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+      // Exactly one of the two did the buying.
+      expect([a.json().replayed, b.json().replayed].sort()).toEqual([false, true]);
+      expect(a.json().purchase.id).toBe(b.json().purchase.id);
+      expect(await owner.aiPackagePurchase.count({ where: { licenseId: fx.a.licenseId } })).toBe(1);
+      expect(await includedNow()).toBe(env.AI_RESOLUTIONS_INCLUDED + AI_RESOLUTION_PACK_SIZE);
+    });
+
+    it('audits the sale once — a replay spent nothing, so it logs nothing', async () => {
+      const key = freshKey();
+      await buyOverHttp({ packs: 1, idempotency_key: key });
+      await buyOverHttp({ packs: 1, idempotency_key: key });
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'billing.ai_package_purchased' },
+      });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.metadata).toMatchObject({
+        packs: 1,
+        resolutions: AI_RESOLUTION_PACK_SIZE,
+        price_cents: PACK_PRICE_CENTS,
+        period: currentPeriod(),
+      });
+      // The purchase row carries no actor; this entry is the only record of who.
+      expect(entries[0]!.actorId).toBe(fx.a.ownerAccountId);
+    });
+
+    it('lets a different key buy again — idempotency is per attempt, not a lock', async () => {
+      await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+      await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+      expect(await owner.aiPackagePurchase.count({ where: { licenseId: fx.a.licenseId } })).toBe(2);
+      expect(await includedNow()).toBe(env.AI_RESOLUTIONS_INCLUDED + 2 * AI_RESOLUTION_PACK_SIZE);
+    });
+
+    it('does not let one workspace’s key block another’s purchase', async () => {
+      // Keys are client-chosen, so scoping the uniqueness to the license is what
+      // stops a guessed key from being a denial-of-purchase on a stranger.
+      const key = freshKey();
+      await buyOverHttp({ packs: 1, idempotency_key: key });
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['billing_manage'],
+      });
+      const theirs = await buyOverHttp(
+        { packs: 1, idempotency_key: key },
+        { authorization: `Bearer ${theirToken}` },
+      );
+      expect(theirs.statusCode).toBe(200);
+      expect(theirs.json().replayed).toBe(false);
+      expect(await includedNow(fx.b.licenseId)).toBe(
+        env.AI_RESOLUTIONS_INCLUDED + AI_RESOLUTION_PACK_SIZE,
+      );
+    });
+
+    // --- One counter, shared with the meter ----------------------------------
+
+    const buy = (packs = 1) =>
+      withTenant(appRole, context(), (tx) =>
+        purchaseAiPackage(tx, context(), { packs, idempotencyKey: freshKey() }, meterConfig),
+      );
+
+    const meter = () =>
+      withTenant(appRole, context(), (tx) =>
+        recordAiResolution(tx, context(), meterConfig.aiOverageCents, meterConfig.aiIncluded),
+      );
+
+    /** Both writes landed, neither lost. */
+    async function expectSettled(resolutions: number, packs: number): Promise<void> {
+      const row = await aiUsageRow();
+      expect(Number(row!.included)).toBe(
+        env.AI_RESOLUTIONS_INCLUDED + packs * AI_RESOLUTION_PACK_SIZE,
+      );
+      expect(Number(row!.quantity)).toBe(resolutions);
+    }
+
+    it('keeps the plan allowance when the purchase lands before the period’s first resolution', async () => {
+      // No row exists yet, so the purchase inserts it. Seeding `included` with
+      // the pack alone would take the plan's own 200 resolutions away from
+      // anyone who buys early — a purchase that lowers your quota.
+      await buy();
+      for (let i = 0; i < 4; i += 1) await meter();
+      await expectSettled(4, 1);
+    });
+
+    it('adds to the allowance the meter already stamped', async () => {
+      for (let i = 0; i < 4; i += 1) await meter();
+      await buy();
+      await expectSettled(4, 1);
+    });
+
+    it('loses nothing when the purchase and a burst of resolutions overlap', async () => {
+      const resolutions = 10;
+      await Promise.all([buy(), ...Array.from({ length: resolutions }, meter)]);
+      await expectSettled(resolutions, 1);
+    });
+
+    it('stacks two purchases instead of overwriting the first', async () => {
+      // The `EXCLUDED.included` trap: `included = usage_records.included + quota`
+      // composes; `included = EXCLUDED.included` would set both purchases to
+      // "allowance + this one" and quietly refund the earlier sale.
+      await buy(1);
+      await buy(2);
+      const row = await aiUsageRow();
+      expect(Number(row!.included)).toBe(env.AI_RESOLUTIONS_INCLUDED + 3 * AI_RESOLUTION_PACK_SIZE);
+      expect(await owner.aiPackagePurchase.count({ where: { licenseId: fx.a.licenseId } })).toBe(2);
+    });
+
+    it('invents no second counter — the sale writes one usage row and nothing else', async () => {
+      await buyOverHttp({ packs: 2, idempotency_key: freshKey() });
+      const rows = await owner.usageRecord.findMany({
+        where: { licenseId: fx.a.licenseId, metric: 'ai_resolutions' },
+      });
+      // ADR-09: the allowance a purchase raises is the same row the meter
+      // increments and the invoice reads. A second row (or a second metric)
+      // would be a parallel counter to disagree with.
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.period).toBe(currentPeriod());
+      expect(Number(rows[0]!.quantity)).toBe(0);
+    });
+
+    // --- What the endpoint reports back --------------------------------------
+
+    it('raises the quota and shrinks the overage the usage endpoint reports', async () => {
+      // Start the period over its allowance, so there is a real overage charge
+      // for the purchase to reduce.
+      await owner.usageRecord.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          metric: 'ai_resolutions',
+          period: currentPeriod(),
+          quantity: BigInt(env.AI_RESOLUTIONS_INCLUDED + 10),
+          included: BigInt(env.AI_RESOLUTIONS_INCLUDED),
+          overageUnit: AI_RESOLUTION_PACK_SIZE,
+          overageUnitPriceCents: env.AI_OVERAGE_CENTS,
+        },
+      });
+      const before = (await server.get('/billing/usage', auth)).json();
+      expect(before.ai_resolutions.overage).toBe(10);
+      expect(before.ai_resolutions.overage_cents).toBe(10 * env.AI_OVERAGE_CENTS);
+
+      const response = await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+      expect(response.statusCode).toBe(200);
+
+      const after = (await server.get('/billing/usage', auth)).json();
+      expect(after.ai_resolutions.included).toBe(
+        before.ai_resolutions.included + AI_RESOLUTION_PACK_SIZE,
+      );
+      // Ten resolutions over the plan; a 50-resolution pack puts the workspace
+      // back inside its allowance, so the charge is gone rather than reduced.
+      expect(after.ai_resolutions.overage).toBe(0);
+      expect(after.ai_resolutions.overage_cents).toBe(0);
+      // And the reply's own copy already said so, without a second read.
+      expect(response.json().usage.ai_resolutions.overage_cents).toBe(0);
+    });
+
+    it('answers with the usage the purchase produced, not the usage before it', async () => {
+      const response = await buyOverHttp({ packs: 4, idempotency_key: freshKey() });
+      const { usage } = response.json();
+      expect(usage.ai_resolutions.included).toBe(
+        env.AI_RESOLUTIONS_INCLUDED + 4 * AI_RESOLUTION_PACK_SIZE,
+      );
+      expect(usage.period).toBe(currentPeriod());
+    });
+
+    it('records the sale immutably — quota and price as they were sold', async () => {
+      await buyOverHttp({ packs: 2, idempotency_key: freshKey() });
+      const row = await owner.aiPackagePurchase.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId },
+      });
+      expect(row.packs).toBe(2);
+      expect(row.resolutions).toBe(2 * AI_RESOLUTION_PACK_SIZE);
+      expect(row.priceCents).toBe(2 * PACK_PRICE_CENTS);
+      expect(row.period).toBe(currentPeriod());
+    });
+
+    // --- Cross-tenant --------------------------------------------------------
+
+    it('credits the quota to the buyer alone — nobody else’s allowance moves', async () => {
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['billing_manage'],
+      });
+      const theirsBefore = (
+        await server.get('/billing/usage', { authorization: `Bearer ${theirToken}` })
+      ).json();
+
+      expect((await buyOverHttp({ packs: 5, idempotency_key: freshKey() })).statusCode).toBe(200);
+
+      const theirsAfter = (
+        await server.get('/billing/usage', { authorization: `Bearer ${theirToken}` })
+      ).json();
+      expect(theirsAfter.ai_resolutions.included).toBe(theirsBefore.ai_resolutions.included);
+      expect(theirsAfter.ai_resolutions.included).toBe(env.AI_RESOLUTIONS_INCLUDED);
+      expect(await owner.aiPackagePurchase.count({ where: { licenseId: fx.b.licenseId } })).toBe(0);
+      expect(await includedNow()).toBe(env.AI_RESOLUTIONS_INCLUDED + 5 * AI_RESOLUTION_PACK_SIZE);
+    });
+
+    // --- Read-only, and the mock ---------------------------------------------
+
+    it('stays buyable once the trial is read-only — running out is why you buy', async () => {
+      await owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { trialEndsAt: new Date(Date.now() - 86_400_000) },
+      });
+      const response = await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+      expect(response.statusCode).toBe(200);
+      expect(await includedNow()).toBe(env.AI_RESOLUTIONS_INCLUDED + AI_RESOLUTION_PACK_SIZE);
+    });
+
+    it('charges no card and requires none on file (ADR-13)', async () => {
+      expect(await owner.paymentMethod.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+      const response = await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+      expect(response.statusCode).toBe(200);
+      expect(await owner.paymentMethod.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+    });
+
+    // --- The money side: the invoice -----------------------------------------
+
+    describe('the purchase on the invoice (FR-MOD-10.1.4 · FR-MOD-10.3)', () => {
+      const period = currentPeriod();
+
+      async function activate(): Promise<void> {
+        await owner.license.update({
+          where: { id: fx.a.licenseId },
+          data: { status: 'active', trialEndsAt: null },
+        });
+        await owner.subscription.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            status: 'active',
+            seats: 2,
+            unitPriceCents: 9900,
+            aiResolutionsIncluded: 200,
+          },
+        });
+      }
+
+      const openInvoice = async (): Promise<{
+        status: string;
+        total_cents: number;
+        subtotal_cents: number;
+        line_items: { description: string; amount_cents: number }[];
+      }> => {
+        const invoices = (await server.get('/billing/invoices', auth)).json().invoices;
+        return invoices.find((i: { period: string }) => i.period === period);
+      };
+
+      it('shows the purchase as its own line, summed into the total', async () => {
+        await activate();
+        expect((await buyOverHttp({ packs: 2, idempotency_key: freshKey() })).statusCode).toBe(200);
+
+        const open = await openInvoice();
+        const line = open.line_items.find((l) => l.description.includes('AI resolution pack'));
+        expect(line).toEqual({
+          description: `AI resolution packs — 2 packs (${2 * AI_RESOLUTION_PACK_SIZE} resolutions)`,
+          amount_cents: 2 * PACK_PRICE_CENTS,
+        });
+        expect(open.total_cents).toBe(2 * 9900 + 2 * PACK_PRICE_CENTS);
+        expect(open.subtotal_cents).toBe(open.total_cents);
+        expect(open.line_items.reduce((sum, l) => sum + l.amount_cents, 0)).toBe(open.total_cents);
+      });
+
+      it('leaves the invoice exactly as before when nothing was bought (regression)', async () => {
+        await activate();
+        const open = await openInvoice();
+        expect(open.line_items).toHaveLength(1);
+        expect(open.line_items.some((l) => l.description.includes('AI resolution pack'))).toBe(
+          false,
+        );
+        expect(open.total_cents).toBe(2 * 9900);
+      });
+
+      it('says "1 pack", not "1 packs"', async () => {
+        await activate();
+        await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+        const open = await openInvoice();
+        expect(
+          open.line_items.some((l) =>
+            l.description.startsWith(
+              `AI resolution packs — 1 pack (${AI_RESOLUTION_PACK_SIZE} resolutions)`,
+            ),
+          ),
+        ).toBe(true);
+      });
+
+      it('lists the pack separately from the overage it pre-bought', async () => {
+        await activate();
+        // 20 resolutions past the allowance, then one pack bought. The pack is
+        // capacity; the overage line is what was spent past all the capacity
+        // there was. Netting them would hide the purchase from the statement.
+        await owner.usageRecord.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            metric: 'ai_resolutions',
+            period,
+            quantity: BigInt(env.AI_RESOLUTIONS_INCLUDED + 70),
+            included: BigInt(env.AI_RESOLUTIONS_INCLUDED),
+            overageUnit: AI_RESOLUTION_PACK_SIZE,
+            overageUnitPriceCents: env.AI_OVERAGE_CENTS,
+          },
+        });
+        await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+
+        const open = await openInvoice();
+        const overage = open.line_items.find((l) => l.description.includes('overage'));
+        const pack = open.line_items.find((l) => l.description.includes('AI resolution pack'));
+        // 70 over, 50 of them now covered by the pack → 20 still metered.
+        expect(overage).toEqual({
+          description: `AI resolutions overage — 20 beyond ${env.AI_RESOLUTIONS_INCLUDED + AI_RESOLUTION_PACK_SIZE}`,
+          amount_cents: 20 * env.AI_OVERAGE_CENTS,
+        });
+        expect(pack?.amount_cents).toBe(PACK_PRICE_CENTS);
+      });
+
+      it('carries the line onto the injection-safe CSV download', async () => {
+        await activate();
+        await buyOverHttp({ packs: 1, idempotency_key: freshKey() });
+
+        const response = await server.get(`/billing/invoices/${period}/download`, auth);
+        const rows = response.body.split('\r\n').filter((l: string) => l !== '');
+        expect(rows).toContain(
+          `AI resolution packs — 1 pack (${AI_RESOLUTION_PACK_SIZE} resolutions),${PACK_PRICE_CENTS}`,
+        );
+      });
+
+      it('is a real charge even while the plan itself is free during the trial', async () => {
+        // The fixture licence is trialing — the trial gate never blocks buying
+        // capacity, so the purchase still happens and is a deliberate spend the
+        // plan-free line does not cover.
+        expect((await buyOverHttp({ packs: 1, idempotency_key: freshKey() })).statusCode).toBe(200);
+
+        const open = await openInvoice();
+        expect(open.status).toBe('trial');
+        const line = open.line_items.find((l) => l.description.includes('AI resolution pack'));
+        expect(line?.amount_cents).toBe(PACK_PRICE_CENTS);
+        expect(open.total_cents).toBe(PACK_PRICE_CENTS);
+      });
+
+      it('never puts another tenant’s purchase on this invoice', async () => {
+        await activate();
+        const theirToken = await grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes: ['billing_manage'],
+        });
+        expect(
+          (
+            await buyOverHttp(
+              { packs: 3, idempotency_key: freshKey() },
+              { authorization: `Bearer ${theirToken}` },
+            )
+          ).statusCode,
+        ).toBe(200);
+
+        const open = await openInvoice();
+        expect(open.line_items.some((l) => l.description.includes('AI resolution pack'))).toBe(
+          false,
+        );
+        expect(open.total_cents).toBe(2 * 9900);
+      });
     });
   });
 });

@@ -806,7 +806,12 @@ describe('module parity matrix — what is still owed', () => {
       // (`OUT_OF_SCOPE` below). The phone reads the tickets that arrive; it does
       // not administer the addresses they arrive through, so nothing here
       // re-scopes.
-      contractEndpoints: 201,
+      // 201 -> 202 with `/billing/ai-packages` (V1-AIMETER, tm 200). Buying AI
+      // resolution overage capacity from the meter's stepper — Owner/Admin
+      // spending behind `billing_manage`, in the Billing surface this app has
+      // never had (`OUT_OF_SCOPE` below). The phone shows conversations; it does
+      // not spend the workspace's money, so nothing here re-scopes.
+      contractEndpoints: 202,
       scopeBoundaries: 1,
     });
   });

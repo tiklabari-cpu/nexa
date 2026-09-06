@@ -94,6 +94,21 @@ export const billing: Messages = {
   'billing.aiMeter.overagePackageDetail':
     'Beyond the included {included}, AI resolutions bill at {price} each — sold in packs of {unit} ({packPrice} per pack).',
   'billing.aiMeter.periodLabel': 'This period',
+  // Buying overage packs — BuyOveragePacks (FR-MOD-10.1.4)
+  'billing.aiMeter.buyPacksLabel': 'Buy overage packs',
+  'billing.aiMeter.removePack': 'One pack fewer',
+  'billing.aiMeter.addPack': 'One pack more',
+  'billing.aiMeter.packTotal': '{resolutions} resolutions for {amount}',
+  'billing.aiMeter.buyPacks': 'Buy packs',
+  'billing.aiMeter.buying': 'Buying…',
+  'billing.aiMeter.buyPacksNotice':
+    'Added to this period’s allowance straight away and itemised on this period’s invoice. No card is charged (mock billing).',
+  'billing.aiMeter.bought': 'Bought — {resolutions} resolutions added to this period.',
+  'billing.aiMeter.buyErrorTitle': 'Could not buy the packs.',
+  'billing.aiMeter.buyErrorDescription':
+    'The purchase did not go through — your allowance is unchanged. Try again.',
+  'billing.aiMeter.packTermsError':
+    'Could not load the overage pack terms — buying is unavailable.',
 
   // API calls
   'billing.apiCalls.title': 'API calls',

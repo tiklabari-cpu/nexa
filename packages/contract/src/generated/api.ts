@@ -6154,6 +6154,62 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/billing/ai-packages': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * The AI-resolution overage pack on sale
+     * @description What one AI-resolution overage pack contains and costs, and the most a
+     *     single purchase may buy (FR-MOD-10.1.4). The terms are global — the same
+     *     pack for every workspace, never repriced per tenant — but the price comes
+     *     from deployment configuration, so this is read rather than hardcoded by a
+     *     client.
+     *
+     *     Billing is mocked (ADR-13): the price here is what a purchase *would*
+     *     cost, and buying a pack charges no card.
+     */
+    get: operations['getAiPackage'];
+    put?: never;
+    /**
+     * Buy AI-resolution overage packs
+     * @description Buys `packs` packs and credits their resolutions to the current period's
+     *     allowance (FR-MOD-10.1.4), returning the receipt together with usage as it
+     *     stands *after* the purchase.
+     *
+     *     **The price is the server's.** It is `packs × resolutions_per_pack ×` the
+     *     per-resolution overage rate, computed here; a price named in the body is
+     *     not read. What a client controls is how many packs, bounded by
+     *     `max_packs` — anything outside `1…max_packs` is a 400 and sells nothing.
+     *
+     *     **`idempotency_key` makes a repeated request safe.** Two requests carrying
+     *     the same key buy once: the second gets the first one's receipt with
+     *     `replayed: true`, no second charge and no second credit. The key is scoped
+     *     to the workspace and must be fresh for each *intended* purchase — reusing
+     *     one deliberately is how a retry is expressed, not how a second pack is
+     *     bought.
+     *
+     *     Payment is mocked (ADR-13): no card is charged, no payment method has to
+     *     be on file and no external provider is called. The quota it buys is real.
+     *
+     *     A pack is a one-off top-up, not a subscription. Nothing renews, and the
+     *     resolutions land in the period they were bought into rather than carrying
+     *     over — `period` on the receipt says which one.
+     *
+     *     Writable while the workspace is read-only, like the subscription PATCH:
+     *     buying capacity is one of the ways an expired trial comes back. It still
+     *     takes a billing scope — `reports_read` may see the price, not spend money.
+     */
+    post: operations['purchaseAiPackage'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/billing/entitlements': {
     parameters: {
       query?: never;
@@ -9495,6 +9551,70 @@ export interface components {
     ApiPackagePurchaseResult: {
       purchase: components['schemas']['ApiPackagePurchase'];
       usage: components['schemas']['UsageSummary'];
+    };
+    /**
+     * @description The AI-resolution overage pack on sale, and the terms a purchase must
+     *     respect (FR-MOD-10.1.4, PRD §10.1.4's "aşım paketi").
+     *
+     *     Not a catalogue of tiers like `ApiPackage`: the PRD sells AI overage as
+     *     one pack bought in a quantity, which is why a purchase carries a count
+     *     and the meter carries a stepper. `max_packs` is the ceiling the server
+     *     enforces on one purchase — published so a client's stepper stops where
+     *     the endpoint does instead of offering a quantity that 400s.
+     *
+     *     The price is derived from the same per-resolution rate
+     *     `UsageSummary.ai_resolutions.overage_unit_price_cents` quotes and the
+     *     invoice bills overage at, so a pack can never be sold at a price the
+     *     meter does not show (ADR-09 — one source).
+     */
+    AiResolutionPackage: {
+      /** @description Resolutions one pack adds to this period's allowance. */
+      resolutions_per_pack: number;
+      /** @description Price of one resolution beyond the allowance. */
+      unit_price_cents: number;
+      /** @description `resolutions_per_pack` × `unit_price_cents`. */
+      pack_price_cents: number;
+      /** @description The most packs one purchase may buy. */
+      max_packs: number;
+    };
+    /**
+     * @description One recorded AI-pack purchase (FR-MOD-10.1.4). `resolutions` and
+     *     `price_cents` are what was actually sold, stored on the row rather than
+     *     recomputed, so a later change to the pack size or the overage rate never
+     *     rewrites what a workspace was charged.
+     */
+    AiPackagePurchase: {
+      /** Format: uuid */
+      id: string;
+      packs: number;
+      /** @description Resolutions this purchase added. */
+      resolutions: number;
+      price_cents: number;
+      /** @description The `yyyymm` period the quota was added to. */
+      period: string;
+      /** Format: date-time */
+      purchased_at: string;
+    };
+    /**
+     * @description What a purchase produced: the receipt, the period's usage as it stands
+     *     after the resolutions were credited, and whether this request was the
+     *     one that bought them (FR-MOD-10.1.4).
+     *
+     *     `usage` is returned rather than left to a follow-up `GET /billing/usage`
+     *     because the whole point of the purchase is the raised allowance — a
+     *     client that has to ask again can render the old counter in between. It
+     *     is read inside the same transaction that credited the quota.
+     *
+     *     `replayed` is `true` when the `idempotency_key` had already been spent:
+     *     the receipt is the earlier sale's, nothing was charged and no quota was
+     *     added. A client that double-submits therefore gets a success carrying
+     *     the truth, not a second purchase and not an error it has to interpret.
+     */
+    AiPackagePurchaseResult: {
+      purchase: components['schemas']['AiPackagePurchase'];
+      usage: components['schemas']['UsageSummary'];
+      /** @description True when this request replayed an earlier purchase and charged nothing. */
+      replayed: boolean;
     };
     /**
      * @description The masked fields a processor returns after tokenising a card. There is
@@ -20401,6 +20521,68 @@ export interface operations {
           };
         };
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getAiPackage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The pack and its purchase terms */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            package: components['schemas']['AiResolutionPackage'];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  purchaseAiPackage: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description How many packs to buy, at most `max_packs`. */
+          packs: number;
+          /**
+           * Format: uuid
+           * @description A UUID identifying this purchase *attempt*. Repeat it to retry
+           *     safely; generate a new one to buy again.
+           */
+          idempotency_key: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The recorded purchase, and the period's usage after it */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AiPackagePurchaseResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];

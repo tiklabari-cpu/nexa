@@ -143,6 +143,7 @@ model License {
   subscriptions          Subscription[]
   usageRecords           UsageRecord[]
   apiPackagePurchases    ApiPackagePurchase[]
+  aiPackagePurchases     AiPackagePurchase[]
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
   auditChainHead         AuditChainHead?
@@ -2010,6 +2011,38 @@ model ApiPackagePurchase {
 
   @@index([licenseId, period])
   @@map("api_package_purchases")
+}
+
+/// One sale of AI-resolution overage packs (FR-MOD-10.1.4). The pack size lives
+/// in code (`AI_RESOLUTION_PACK_SIZE`), so the row records how many packs were
+/// bought *and* the resolutions they added — the second is redundant only until
+/// the pack size changes, at which point it is the only honest record of what
+/// was sold.
+model AiPackagePurchase {
+  id String @id @default(uuid()) @db.Uuid
+
+  licenseId BigInt @map("license_id")
+
+  /// Caller-supplied key that makes a repeated purchase request a no-op. Unique
+  /// per license, so a double-submitted buy credits quota once.
+  idempotencyKey String @map("idempotency_key")
+
+  packs Int
+
+  /// Resolutions this purchase added, as the pack size stood at sale time.
+  resolutions Int
+
+  priceCents Int @map("price_cents")
+
+  /// `yyyymm` — the `usage_records` period the quota was added to.
+  period      String   @db.Char(6)
+  purchasedAt DateTime @default(now()) @map("purchased_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, idempotencyKey])
+  @@index([licenseId, period])
+  @@map("ai_package_purchases")
 }
 
 // ===========================================================================

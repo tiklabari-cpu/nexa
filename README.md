@@ -296,28 +296,38 @@ stack's `minio` on 9000/9001.
 
 ## Background jobs
 
-`apps/api` runs six sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
+`apps/api` runs seven sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
 default: on outside tests). A Redis lock (`SET NX`, one key per job) keeps two running
 instances from double-running the same pass; `GET /health` reports each job's interval,
 enabled flag, and last run's time/status.
 
-| Job                  | Default interval | What it does                                         |
-| -------------------- | ---------------- | ---------------------------------------------------- |
-| `chat_timeout`       | 60 s             | Closes idle chats (FR-MOD-08.7.3)                    |
-| `sla`                | 60 s             | Marks first-response SLA breaches (11.5-d)           |
-| `siem`               | 5 min            | Exports the SIEM audit sink (NFR-C6 · C6-d)          |
-| `scheduled_reports`  | 60 s             | Delivers due scheduled reports (07.9)                |
-| `retention`          | 1 h              | Hard-deletes data past its retention window (NFR-C8) |
-| `webhook_redelivery` | 60 s             | Retries failed outbound webhooks (08.8.4 · NFR-S7)   |
+| Job                  | Default interval | What it does                                                                     |
+| -------------------- | ---------------- | -------------------------------------------------------------------------------- |
+| `chat_timeout`       | 60 s             | Closes idle chats (FR-MOD-08.7.3)                                                |
+| `sla`                | 60 s             | Marks first-response SLA breaches (11.5-d)                                       |
+| `siem`               | 5 min            | Exports the SIEM audit sink (NFR-C6 · C6-d)                                      |
+| `scheduled_reports`  | 60 s             | Delivers due scheduled reports (07.9)                                            |
+| `retention`          | 1 h              | Hard-deletes data past its retention window (NFR-C8)                             |
+| `webhook_redelivery` | 60 s             | Retries failed outbound webhooks (08.8.4 · NFR-S7)                               |
+| `knowledge_refresh`  | 1 h              | Re-crawls a `website` knowledge source past its freshness window (FR-MOD-06.3.3) |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
 `.env.example` for every key. To turn a background sweep off entirely and drive it from
 outside the app instead (a host cron, a managed job runner), set `SCHEDULER_ENABLED=false`;
-the first five each keep their own `pnpm --filter @nexa/api <job>:run` CLI script, which is
+every job but one keeps its own `pnpm --filter @nexa/api <job>:run` CLI script, which is
 what that outside trigger calls. Webhook redelivery has no CLI equivalent — it is not a pass
 an operator would ever want to force, and a hand-run one would race the scheduled one for the
 same rows.
+
+`knowledge_refresh` (FR-MOD-06.3.3) is the freshness sweep: a `website` knowledge source opts
+in with a `refresh_after_days` window (set on the source, in the Playbook UI or via
+`PATCH /knowledge-sources/:sourceId`), and once its `next_refresh_at` is due, this job re-crawls
+it through the exact same SSRF-guarded path the row's own "Reindex" action uses. A source that
+has never opted in (`refresh_after_days: null`, every source's default) is never selected. A
+refused or failed crawl leaves the source's `content` and chunks exactly as they were — the
+stale answer is kept rather than replaced with nothing — and records why in
+`last_refresh_error`, cleared on the next successful pass.
 
 `retention` stays off even when the scheduler is otherwise on: `RETENTION_ENABLED=false`
 by default. It is the one sweep here that deletes, and unlike the CLI's `--apply` flag — an

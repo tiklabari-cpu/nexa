@@ -1106,6 +1106,34 @@ components:
             authoring account was later deleted). Not present on
             `/copilot/knowledge`, which predates this field and keeps its own
             knowledge base separate (FR-MOD-12.2).
+        refresh_after_days:
+          type: integer
+          nullable: true
+          description: |
+            How often, in days, this source should be automatically re-crawled
+            (FR-MOD-06.3.3). Only meaningful for a `website` source — always
+            null for the other three types, since there is nothing to re-fetch.
+            Null means automatic refresh is off, which is every source's
+            behaviour before this field existed.
+        next_refresh_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: |
+            When the freshness sweep will next attempt this source. Null
+            whenever `refresh_after_days` is null. Recomputed from `now` every
+            time the source is actually refreshed — an edit, a manual reindex,
+            or the sweep itself — so it is a forecast, not a deadline the sweep
+            must hit exactly.
+        last_refresh_error:
+          type: string
+          nullable: true
+          description: |
+            Why the most recent refresh attempt failed, if it did — set by the
+            freshness sweep, cleared on its next success. A failed refresh
+            never changes `content` or `chunk_count`: the stale answer is kept
+            rather than replaced with none, so this field is a status to read,
+            not a sign that anything was lost.
 
     KnowledgeBulkRowResult:
       type: object

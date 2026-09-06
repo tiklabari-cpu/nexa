@@ -241,6 +241,15 @@ export const playbook: Messages = {
   'playbook.knowledge.editTitle': 'Edit {name}',
   'playbook.knowledge.editDescription': 'Changing the text re-indexes the source.',
   'playbook.knowledge.editUrlHelp': 'Saving a new address crawls it again.',
+  'playbook.knowledge.editRefreshLabel': 'Automatic refresh',
+  'playbook.knowledge.editRefreshNever': 'Never',
+  'playbook.knowledge.editRefreshEveryDays.one': 'Every {count} day',
+  'playbook.knowledge.editRefreshEveryDays.other': 'Every {count} days',
+  'playbook.knowledge.editRefreshHelp':
+    'Re-crawls this address on this schedule. A failed attempt keeps the current answer rather than replacing it with none.',
+  'playbook.knowledge.editRefreshNextAt': 'Next automatic refresh: {date}',
+  'playbook.knowledge.editRefreshFailed': 'Last automatic refresh failed: {reason}',
+  'playbook.knowledge.refreshFailedRow': 'Could not refresh automatically',
   'playbook.knowledge.editContentHelp':
     'Leave empty to keep the current text. Anything you enter replaces it.',
   'playbook.knowledge.editFileNote':

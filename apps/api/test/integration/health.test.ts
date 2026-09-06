@@ -101,6 +101,7 @@ describe('GET /health — scheduler (admin caller)', () => {
         'scheduled_reports',
         'retention',
         'webhook_redelivery',
+        'knowledge_refresh',
       ]);
       // Registered but never ticked — `SCHEDULER_ENABLED` defaults to off
       // under `NODE_ENV=test` (env.ts), same as every other suite's server.
@@ -125,6 +126,7 @@ describe('GET /health — scheduler (admin caller)', () => {
         'siem',
         'scheduled_reports',
         'webhook_redelivery',
+        'knowledge_refresh',
       ]) {
         expect(byName[name]).toMatchObject({ enabled: true, last_status: null });
       }

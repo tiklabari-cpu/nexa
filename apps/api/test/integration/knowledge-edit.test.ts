@@ -35,6 +35,9 @@ interface SourceView {
   chunk_count: number;
   updated_at: string;
   added_by_name: string | null;
+  refresh_after_days: number | null;
+  next_refresh_at: string | null;
+  last_refresh_error: string | null;
 }
 
 /** Distinctive enough that a nearest-neighbour hit on it cannot be a coincidence. */
@@ -96,7 +99,15 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
   async function stored(id: string) {
     return owner.knowledgeSource.findUniqueOrThrow({
       where: { id },
-      select: { name: true, content: true, sourceUrl: true, updatedAt: true },
+      select: {
+        name: true,
+        content: true,
+        sourceUrl: true,
+        updatedAt: true,
+        refreshAfterDays: true,
+        nextRefreshAt: true,
+        lastRefreshError: true,
+      },
     });
   }
 
@@ -291,6 +302,104 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
       expect(after.updatedAt.toISOString()).toBe(before.updatedAt.toISOString());
       expect(await chunkCount(source.id)).toBe(chunksBefore);
     });
+
+    // --- refresh_after_days — scheduling the freshness sweep (tm 198.4) ------
+
+    describe('refresh_after_days (FR-MOD-06.3.3)', () => {
+      it('schedules a website source and restarts the countdown from now', async () => {
+        const source = await createWebsite();
+        const before = Date.now();
+
+        const response = await server.patch(
+          `/knowledge-sources/${source.id}`,
+          { refresh_after_days: 30 },
+          await auth('a'),
+        );
+
+        expect(response.statusCode).toBe(200);
+        const updated = response.json() as SourceView;
+        expect(updated.refresh_after_days).toBe(30);
+        expect(updated.next_refresh_at).not.toBeNull();
+        const scheduledAt = new Date(updated.next_refresh_at ?? '').getTime();
+        // ~30 days from "now" — bounded loosely so the assertion is about the
+        // window, not the test's own wall-clock jitter.
+        expect(scheduledAt).toBeGreaterThan(before + 29 * 24 * 60 * 60 * 1000);
+        expect(scheduledAt).toBeLessThan(before + 31 * 24 * 60 * 60 * 1000);
+      });
+
+      it('turns automatic refresh back off with an explicit null', async () => {
+        const source = await createWebsite();
+        await server.patch(
+          `/knowledge-sources/${source.id}`,
+          { refresh_after_days: 7 },
+          await auth('a'),
+        );
+
+        const response = await server.patch(
+          `/knowledge-sources/${source.id}`,
+          { refresh_after_days: null },
+          await auth('a'),
+        );
+
+        expect(response.statusCode).toBe(200);
+        const updated = response.json() as SourceView;
+        expect(updated.refresh_after_days).toBeNull();
+        expect(updated.next_refresh_at).toBeNull();
+      });
+
+      it('refuses a window outside 1-365 days', async () => {
+        const source = await createWebsite();
+        for (const value of [0, 366, -1]) {
+          const response = await server.patch(
+            `/knowledge-sources/${source.id}`,
+            { refresh_after_days: value },
+            await auth('a'),
+          );
+          expect(response.statusCode).toBe(400);
+        }
+        expect((await stored(source.id)).refreshAfterDays).toBeNull();
+      });
+
+      it('refuses a schedule for a type with nothing to re-crawl', async () => {
+        const article = await createArticle();
+
+        const response = await server.patch(
+          `/knowledge-sources/${article.id}`,
+          { refresh_after_days: 30 },
+          await auth('a'),
+        );
+
+        expect(response.statusCode).toBe(400);
+        expect((await stored(article.id)).refreshAfterDays).toBeNull();
+      });
+
+      it('restarts the schedule from now when a crawl replaces the content, even without touching refresh_after_days', async () => {
+        const source = await createWebsite();
+        await server.patch(
+          `/knowledge-sources/${source.id}`,
+          { refresh_after_days: 14 },
+          await auth('a'),
+        );
+        const scheduledBeforeCrawl = (await stored(source.id)).nextRefreshAt;
+
+        // A little later, so a recomputed timestamp is measurably different
+        // from the one the first PATCH set.
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        const response = await server.patch(
+          `/knowledge-sources/${source.id}`,
+          { source_url: 'https://help.example.com/warranty' },
+          await auth('a'),
+        );
+
+        expect(response.statusCode).toBe(200);
+        const after = await stored(source.id);
+        expect(after.refreshAfterDays).toBe(14);
+        expect(after.nextRefreshAt).not.toBeNull();
+        expect(after.nextRefreshAt?.getTime()).toBeGreaterThan(
+          scheduledBeforeCrawl?.getTime() ?? 0,
+        );
+      });
+    });
   });
 
   // === POST …/reindex — refresh, and the guard that runs again ===============
@@ -393,6 +502,33 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
       expect(response.statusCode).toBe(200);
       expect((response.json() as SourceView).chunk_count).toBeGreaterThan(0);
       expect(await retrievedTexts('a', 'How are refunds paid back?')).toContain(OLD_TEXT);
+    });
+
+    it('restarts a configured freshness schedule from now (FR-MOD-06.3.3, tm 198.4)', async () => {
+      const source = await createWebsite();
+      await server.patch(
+        `/knowledge-sources/${source.id}`,
+        { refresh_after_days: 30 },
+        await auth('a'),
+      );
+      // Backdate it, the way an overdue source would actually look — a fresh
+      // PATCH's own `next_refresh_at` is already in the future.
+      await owner.knowledgeSource.update({
+        where: { id: source.id },
+        data: { nextRefreshAt: new Date(Date.now() - 60_000), lastRefreshError: 'stale attempt' },
+      });
+
+      const response = await server.post(
+        `/knowledge-sources/${source.id}/reindex`,
+        undefined,
+        await auth('a'),
+      );
+
+      expect(response.statusCode).toBe(200);
+      const refreshed = response.json() as SourceView;
+      expect(refreshed.refresh_after_days).toBe(30);
+      expect(refreshed.last_refresh_error).toBeNull();
+      expect(new Date(refreshed.next_refresh_at ?? '').getTime()).toBeGreaterThan(Date.now());
     });
   });
 

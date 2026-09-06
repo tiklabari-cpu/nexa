@@ -1532,14 +1532,28 @@ model KnowledgeSource {
   content   String?
   status    String   @default("ready")
   addedBy   String?  @map("added_by")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// Freshness window in days for a `website` source (FR-MOD-06.3.3, tm 198.4).
+  /// NULL means "never automatically" — every source's behaviour before this
+  /// field existed, and every source an admin has not opted in.
+  refreshAfterDays Int? @map("refresh_after_days")
+  /// When the freshness sweep should next attempt this source. Recomputed from
+  /// `refreshAfterDays` every time the source is actually refreshed — an edit,
+  /// a manual reindex, or the sweep itself — never read as a hard deadline.
+  nextRefreshAt DateTime? @map("next_refresh_at") @db.Timestamptz(6)
+  /// Why the most recent refresh attempt failed, if it did. Cleared on the next
+  /// success. A failed refresh never touches `content` or the source's chunks
+  /// (services/ai/knowledge-refresh.ts), so this is a status to read, not a
+  /// sign that anything was lost.
+  lastRefreshError String?  @map("last_refresh_error")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   aiAgent AiAgent          @relation(fields: [aiAgentId], references: [id], onDelete: Cascade)
   chunks  KnowledgeChunk[]
 
   @@index([aiAgentId, type])
   @@index([licenseId])
+  @@index([type, nextRefreshAt])
   @@map("knowledge_sources")
 }
 

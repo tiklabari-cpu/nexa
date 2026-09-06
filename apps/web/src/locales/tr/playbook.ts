@@ -238,6 +238,15 @@ export const playbook: Messages = {
   'playbook.knowledge.editTitle': '{name} kaynağını düzenle',
   'playbook.knowledge.editDescription': 'Metin değişirse kaynak yeniden dizinlenir.',
   'playbook.knowledge.editUrlHelp': 'Yeni adresi kaydettiğinizde sayfa yeniden taranır.',
+  'playbook.knowledge.editRefreshLabel': 'Otomatik yenileme',
+  'playbook.knowledge.editRefreshNever': 'Asla',
+  'playbook.knowledge.editRefreshEveryDays.one': '{count} günde bir',
+  'playbook.knowledge.editRefreshEveryDays.other': '{count} günde bir',
+  'playbook.knowledge.editRefreshHelp':
+    'Bu adres bu sıklıkla yeniden taranır. Başarısız bir deneme mevcut yanıtı korur, boşaltmaz.',
+  'playbook.knowledge.editRefreshNextAt': 'Sıradaki otomatik yenileme: {date}',
+  'playbook.knowledge.editRefreshFailed': 'Son otomatik yenileme başarısız oldu: {reason}',
+  'playbook.knowledge.refreshFailedRow': 'Otomatik yenilenemedi',
   'playbook.knowledge.editContentHelp':
     'Mevcut metni korumak için boş bırakın. Yazdığınız her şey onun yerine geçer.',
   'playbook.knowledge.editFileNote':

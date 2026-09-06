@@ -225,6 +225,9 @@ describe('Playbook knowledge — Added by (FR-MOD-06.3.3)', () => {
       chunk_count: 3,
       updated_at: '2026-01-15T10:00:00.000Z',
       added_by_name: null,
+      refresh_after_days: null,
+      next_refresh_at: null,
+      last_refresh_error: null,
       ...overrides,
     };
   }

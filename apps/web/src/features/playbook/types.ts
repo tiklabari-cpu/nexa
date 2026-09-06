@@ -81,6 +81,12 @@ export interface KnowledgeSource {
   chunk_count: number;
   updated_at: string;
   added_by_name: string | null;
+  /** Days between automatic re-crawls. Null (every source's default) means never. Website only. */
+  refresh_after_days: number | null;
+  /** When the freshness sweep will next attempt this source. Null whenever `refresh_after_days` is null. */
+  next_refresh_at: string | null;
+  /** Why the last refresh attempt failed, if it did. Cleared on the next success. */
+  last_refresh_error: string | null;
 }
 
 /** One CSV data row's verdict from a bulk import (FR-MOD-06.3.2). */

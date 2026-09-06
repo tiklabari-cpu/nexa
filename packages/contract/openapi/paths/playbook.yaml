@@ -590,6 +590,13 @@ knowledgeSource:
       A new `source_url` is crawled through the same SSRF guard `POST
       /knowledge-sources` uses (NFR-S7), before the transaction opens — a
       refused URL leaves the source exactly as it was.
+
+      **`refresh_after_days` (FR-MOD-06.3.3, tm 198.4) schedules automatic
+      re-crawls of a `website` source** — refused, like `source_url`, for
+      every other type, since there is nothing to re-fetch. Setting it (or
+      changing it) restarts the countdown from now; setting it to `null` turns
+      automatic refresh back off. It never touches `content` or `chunk_count`
+      by itself — only the freshness sweep or a real crawl does that.
     requestBody:
       required: true
       content:
@@ -609,6 +616,14 @@ knowledgeSource:
                 minLength: 1
                 maxLength: 2048
                 description: "Only for website sources; refused for the rest. Re-crawled on change."
+              refresh_after_days:
+                type: integer
+                minimum: 1
+                maximum: 365
+                nullable: true
+                description: |
+                  Only for website sources; refused for the rest. Null turns
+                  automatic refresh off.
     responses:
       "200":
         description: Updated, and re-indexed if the text changed
@@ -672,6 +687,11 @@ knowledgeSourceReindex:
       `assertPublicHttpUrlResolved`, where the webhook sender uses it; the crawl
       in this build is a deterministic in-process stub that opens no socket, so
       there is no resolved address to pin.)
+
+      A successful reindex also restarts `next_refresh_at`'s countdown from
+      now, using whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
+      tm 198.4) — the freshness sweep and this endpoint are the same refresh,
+      whichever triggered it.
     responses:
       "200":
         description: Re-fetched and re-indexed

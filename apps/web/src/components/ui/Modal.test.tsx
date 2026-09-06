@@ -121,6 +121,23 @@ describe('Modal', () => {
     expect(last).toHaveFocus();
   });
 
+  it('dock="right" is still a labelled, Escape-closing dialog (FR-MOD-13.2)', async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <Modal onClose={onClose} title="Visitor" dock="right">
+        <p>Body</p>
+      </Modal>,
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'Visitor' });
+    expect(dialog).toHaveAttribute('aria-modal', 'true');
+    expect(dialog).toHaveFocus();
+
+    await user.keyboard('{Escape}');
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps focus pinned to the panel when it has no focusable content', async () => {
     const user = userEvent.setup();
     render(

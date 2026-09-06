@@ -735,6 +735,27 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      /**
+       * The 360° panel (FR-MOD-13.2), opened in place from a Traffic row — not
+       * reachable from the base board scan above, the same reason the campaign
+       * builder needed its own scan just below. `?tab=chatting` reaches
+       * `ensureActiveChat`'s chat deterministically rather than depending on
+       * whichever visitor a concurrently-running spec happens to have left on
+       * the board.
+       */
+      test('the traffic visitor panel has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/customers/real-time?tab=chatting');
+        await scanPanel(agentPage, 'Traffic visitor panel', theme, testInfo, async () => {
+          const table = agentPage.getByRole('table', { name: 'Live visitors' });
+          await expect(table).toBeVisible();
+          await table.getByRole('button', { name: 'View profile' }).first().click();
+          await expect(agentPage.getByRole('dialog')).toBeVisible();
+        });
+      });
+
       test('customers campaigns has no serious or critical violations', async ({
         agentPage,
       }, testInfo) => {

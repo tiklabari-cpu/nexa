@@ -27,7 +27,7 @@ export interface RowActionContext {
   canEditCustomer: boolean;
 }
 
-export type RowActionId = 'start_chat' | 'supervise' | 'assign_to_me' | 'edit';
+export type RowActionId = 'start_chat' | 'supervise' | 'assign_to_me' | 'view_profile' | 'edit';
 
 export interface RowAction {
   id: RowActionId;
@@ -49,6 +49,12 @@ export function visitorRowActions(
     { id: 'supervise', label: 'Supervise chat', enabled: inConversation && ctx.canChatRead },
     // Take the conversation over.
     { id: 'assign_to_me', label: 'Assign chat to me', enabled: inConversation && ctx.canChatWrite },
+    // Opens the 360° panel in place (FR-MOD-13.2). Unlike the actions above,
+    // this never depends on visitor state or caller scope — it always renders;
+    // the panel itself is what withholds PII when the caller lacks
+    // `canEditCustomer` (see `VisitorPanel.tsx`), rather than the button
+    // disappearing and giving no way to see even the non-PII fields.
+    { id: 'view_profile', label: 'View profile', enabled: true },
     // Edit the contact behind the row, whatever they are doing.
     { id: 'edit', label: 'Edit contact', enabled: ctx.canEditCustomer },
   ];

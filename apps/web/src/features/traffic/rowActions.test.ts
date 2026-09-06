@@ -12,21 +12,26 @@ function enabledFor(activity: TrafficActivity, chatId: string | null): RowAction
 }
 
 describe('visitorRowActions', () => {
-  it('always offers the same four actions, in a stable order', () => {
+  it('always offers the same five actions, in a stable order', () => {
     const ids = visitorRowActions({ activity: 'browsing', chat_id: null }, FULL).map((a) => a.id);
-    expect(ids).toEqual(['start_chat', 'supervise', 'assign_to_me', 'edit']);
+    expect(ids).toEqual(['start_chat', 'supervise', 'assign_to_me', 'view_profile', 'edit']);
   });
 
   describe('by visitor state', () => {
-    it('offers only Start chat (and Edit) to a browsing visitor', () => {
+    it('offers only Start chat (and View profile / Edit) to a browsing visitor', () => {
       // Nobody to supervise or take over — there is no conversation yet.
-      expect(enabledFor('browsing', null)).toEqual(['start_chat', 'edit']);
+      expect(enabledFor('browsing', null)).toEqual(['start_chat', 'view_profile', 'edit']);
     });
 
     it.each<[TrafficActivity]>([['queued'], ['waiting'], ['chatting']])(
       'offers Supervise and Assign — not Start — to a %s visitor',
       (activity) => {
-        expect(enabledFor(activity, 'CHAT12345678')).toEqual(['supervise', 'assign_to_me', 'edit']);
+        expect(enabledFor(activity, 'CHAT12345678')).toEqual([
+          'supervise',
+          'assign_to_me',
+          'view_profile',
+          'edit',
+        ]);
       },
     );
   });
@@ -53,6 +58,16 @@ describe('visitorRowActions', () => {
       const ctx: RowActionContext = { ...FULL, canEditCustomer: false };
       const actions = visitorRowActions({ activity: 'browsing', chat_id: null }, ctx);
       expect(actions.find((a) => a.id === 'edit')?.enabled).toBe(false);
+    });
+
+    it('View profile stays enabled with no scopes at all — the panel withholds PII itself (FR-MOD-13.2)', () => {
+      const ctx: RowActionContext = {
+        canChatWrite: false,
+        canChatRead: false,
+        canEditCustomer: false,
+      };
+      const actions = visitorRowActions({ activity: 'browsing', chat_id: null }, ctx);
+      expect(actions.find((a) => a.id === 'view_profile')?.enabled).toBe(true);
     });
   });
 });

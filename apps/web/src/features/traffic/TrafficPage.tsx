@@ -44,6 +44,7 @@ import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { canReadChannels } from '../inbox/views.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
 import { TrafficFilters } from './TrafficFilters.js';
+import { VisitorPanel } from './VisitorPanel.js';
 import {
   buildTrafficParams,
   conditionsFromSearchParams,
@@ -199,6 +200,7 @@ const ROW_ACTION_LABEL_KEY: Record<RowActionId, string> = {
   start_chat: 'traffic.action.startChat',
   supervise: 'traffic.action.superviseChat',
   assign_to_me: 'traffic.action.assignToMe',
+  view_profile: 'traffic.action.viewProfile',
   edit: 'traffic.action.editContact',
 };
 
@@ -245,6 +247,10 @@ export function TrafficPage(): ReactElement {
   const [conditions, setConditions] = useState<TrafficCondition[]>(() =>
     conditionsFromSearchParams(searchParams),
   );
+
+  // The 360° panel (FR-MOD-13.2), opened in place rather than by navigating
+  // away — unlike `edit` below, this never leaves the board.
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null);
 
   function selectTab(next: TrafficTab): void {
     const params = new URLSearchParams(searchParams);
@@ -406,6 +412,9 @@ export function TrafficPage(): ReactElement {
           navigate(`/app/inbox?chat=${visitor.chat_id}`);
         }
         break;
+      case 'view_profile':
+        setSelectedCustomerId(visitor.customer_id);
+        break;
       case 'edit':
         navigate(`/app/customers?customer=${visitor.customer_id}`);
         break;
@@ -550,6 +559,15 @@ export function TrafficPage(): ReactElement {
             />
           )}
         </Card>
+      )}
+
+      {selectedCustomerId && (
+        <VisitorPanel
+          customerId={selectedCustomerId}
+          canViewPii={ctx.canEditCustomer}
+          stillOnBoard={items.some((visitor) => visitor.customer_id === selectedCustomerId)}
+          onClose={() => setSelectedCustomerId(null)}
+        />
       )}
     </Page>
   );

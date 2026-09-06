@@ -60,15 +60,18 @@ function trafficPage(
   return { items, total: items.length, ...(next != null ? { next_page_id: next } : {}) };
 }
 
-function renderPage(initialEntries: string[] = ['/']): ReturnType<typeof render> {
+function renderPage(
+  initialEntries: string[] = ['/'],
+): ReturnType<typeof render> & { queryClient: QueryClient } {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const result = render(
     <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
         <TrafficPage />
       </QueryClientProvider>
     </MemoryRouter>,
   );
+  return Object.assign(result, { queryClient });
 }
 
 beforeEach(() => {
@@ -337,6 +340,103 @@ describe('TrafficPage status tabs', () => {
     expect(await screen.findByRole('button', { name: 'Supervise chat' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Assign chat to me' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Edit contact' })).toBeDisabled();
+  });
+});
+
+/**
+ * The visitor 360° panel (203.1, FR-MOD-13.2), opened in place from
+ * "View profile" — the panel's own content (identity/visits/came
+ * from/groups/PII gate) is covered in `VisitorPanel.test.tsx`; these tests are
+ * about the row → panel wiring `TrafficPage` itself owns.
+ */
+describe('visitor 360° panel (FR-MOD-13.2)', () => {
+  function mockGet(
+    traffic: { items: TrafficVisitor[]; total: number },
+    customerDetail: unknown,
+  ): void {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(url.startsWith('/customers/') ? customerDetail : traffic),
+    );
+  }
+
+  it('opens the panel in place from "View profile" — no navigation to /app/customers (regression)', async () => {
+    const user = userEvent.setup();
+    mockGet(
+      { items: [visitor({ customer_id: 'a', name: 'Alex Moreau' })], total: 1 },
+      { id: 'a', name: 'Alex Moreau', email: null, visits_count: 1, groups: [], visits: [] },
+    );
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'View profile' }));
+
+    expect(await screen.findByRole('dialog', { name: 'Alex Moreau' })).toBeInTheDocument();
+    expect(window.location.pathname).not.toMatch(/\/app\/customers/);
+  });
+
+  it('withholds PII in the panel for a caller without the customers write scope', async () => {
+    const user = userEvent.setup();
+    scopes.current = ['chats--all:ro', 'customers:ro'];
+    mockGet(
+      { items: [visitor({ customer_id: 'a', name: 'Alex Moreau' })], total: 1 },
+      {
+        id: 'a',
+        name: 'Alex Moreau',
+        email: 'alex@example.com',
+        visits_count: 1,
+        groups: [],
+        visits: [],
+      },
+    );
+    renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'View profile' }));
+
+    // Scoped to the dialog: the row itself still names the visitor (its own
+    // display is not gated), so the assertion is on what the *panel* keeps
+    // withheld, not on the name being absent from the page altogether.
+    const dialog = await screen.findByRole('dialog', { name: 'Visitor' });
+    expect(within(dialog).queryByText('Alex Moreau')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('alex@example.com')).not.toBeInTheDocument();
+  });
+
+  it('stays open across a live refresh, and says so honestly once the visitor drops off the board', async () => {
+    const user = userEvent.setup();
+    mockGet(
+      { items: [visitor({ customer_id: 'a', name: 'Alex Moreau' })], total: 1 },
+      { id: 'a', name: 'Alex Moreau', email: null, visits_count: 1, groups: [], visits: [] },
+    );
+    const page = renderPage();
+
+    await user.click(await screen.findByRole('button', { name: 'View profile' }));
+    expect(await screen.findByRole('dialog', { name: 'Alex Moreau' })).toBeInTheDocument();
+    expect(screen.queryByText('This visitor is no longer online.')).not.toBeInTheDocument();
+
+    // Whatever refreshes the board next — the 8s poll in production, another
+    // agent's action here — folds in a fresh, visitor-less response; the
+    // still-open panel must say so rather than silently going blank.
+    api.get.mockResolvedValue({ items: [], total: 0 });
+    await page.queryClient.invalidateQueries({ queryKey: ['traffic'] });
+
+    expect(await screen.findByText('This visitor is no longer online.')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Alex Moreau' })).toBeInTheDocument();
+  });
+
+  it('Escape closes the panel and returns focus to the row action that opened it', async () => {
+    const user = userEvent.setup();
+    mockGet(
+      { items: [visitor({ customer_id: 'a', name: 'Alex Moreau' })], total: 1 },
+      { id: 'a', name: 'Alex Moreau', email: null, visits_count: 1, groups: [], visits: [] },
+    );
+    renderPage();
+
+    const trigger = await screen.findByRole('button', { name: 'View profile' });
+    await user.click(trigger);
+    await screen.findByRole('dialog', { name: 'Alex Moreau' });
+
+    await user.keyboard('{Escape}');
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
   });
 });
 

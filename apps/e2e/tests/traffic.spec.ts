@@ -242,6 +242,34 @@ test.describe('real-time traffic', () => {
       await expect(row).toContainText('Supervised', { timeout: 20_000 });
       await agentPage.screenshot({ path: 'kanit/13.2-k-traffic-supervised.png', fullPage: true });
 
+      // --- 6b. "View profile" opens the 360° panel in place (203.1) ---------
+      // Unlike "Edit contact" below, this must not navigate away from the
+      // board — the whole point of the in-place panel is that a live list
+      // never has to be abandoned to look someone up.
+      await row.getByRole('button', { name: 'View profile' }).click();
+      const panel = agentPage.getByRole('dialog', { name: visitorName });
+      await expect(panel).toBeVisible();
+      await expect(agentPage).toHaveURL(/\/app\/customers\/real-time/);
+
+      await expect(panel.locator('dt:text-is("Visits") + dd')).toHaveText(/[1-9]/);
+      await expect(panel.getByRole('heading', { name: 'Groups' })).toBeVisible();
+      await expect(panel.getByText('Not routed to a team yet.')).toHaveCount(0);
+      // Came from (13.2-l), read in place — the same fact "Edit contact"
+      // proves below, but without leaving the board to see it.
+      const panelCameFrom = panel.getByText(`Came from ${REFERRING_SITE}/`);
+      await expect(panelCameFrom).toBeVisible();
+      await expect(panelCameFrom.locator('a')).toHaveCount(0);
+
+      await agentPage.screenshot({
+        path: 'kanit/203.1-traffic-visitor-panel.png',
+        fullPage: true,
+      });
+
+      // Esc closes it and returns focus to the row action that opened it.
+      await agentPage.keyboard.press('Escape');
+      await expect(panel).toHaveCount(0);
+      await expect(row.getByRole('button', { name: 'View profile' })).toBeFocused();
+
       // --- 7. "Edit contact" deep-links into the 360° panel -----------------
       await row.getByRole('button', { name: 'Edit contact' }).click();
       await expect(agentPage).toHaveURL(/\/app\/customers/);

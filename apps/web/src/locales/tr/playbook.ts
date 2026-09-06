@@ -231,6 +231,7 @@ export const playbook: Messages = {
   'playbook.editor.compiling': 'Derleniyor…',
   'playbook.editor.save': 'Değişiklikleri kaydet',
   'playbook.editor.saving': 'Kaydediliyor…',
+  'playbook.editor.nameRequired': 'Kaydetmeden önce beceriye bir ad verin.',
   'playbook.editor.fixIssues.one': 'Kaydetmeden önce {count} adımı düzeltin.',
   'playbook.editor.fixIssues.other': 'Kaydetmeden önce {count} adımı düzeltin.',
   'playbook.editor.unrecognised.one': '{count} satır adım üretmedi',

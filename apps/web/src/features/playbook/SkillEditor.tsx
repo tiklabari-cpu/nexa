@@ -168,10 +168,14 @@ export function SkillEditor({
     instruction !== (skill.instruction ?? '') ||
     JSON.stringify(steps) !== JSON.stringify(skill.steps);
 
+  // The server rejects a blank name (`z.string().trim().min(1)`) — the client
+  // gate must match that threshold exactly, not be stricter (FR-MOD-06.2.2).
+  const nameMissing = isBlank(name);
+
   // A step with a missing required parameter (most often a hand-over with no
   // team) would be stored and then skipped in silence in front of a customer —
   // so a save is refused until every step is runnable (FR-MOD-06.2.4).
-  const canSave = dirty && issues.length === 0 && !save.isPending;
+  const canSave = dirty && !nameMissing && issues.length === 0 && !save.isPending;
 
   function reorder(from: number, to: number): void {
     if (!canEdit) return;
@@ -240,6 +244,12 @@ export function SkillEditor({
               >
                 {save.isPending ? t('playbook.editor.saving') : t('playbook.editor.save')}
               </button>
+
+              {nameMissing && (
+                <span role="alert" className="text-2xs text-warning">
+                  {t('playbook.editor.nameRequired')}
+                </span>
+              )}
 
               {issues.length > 0 && (
                 <span role="alert" className="text-2xs text-warning">

@@ -17,6 +17,7 @@ function skill(overrides: Partial<Skill> & { id: string }): Skill {
     active: true,
     runs_count: 0,
     updated_at: '2026-08-01T00:00:00.000Z',
+    created_by_name: null,
     ...overrides,
   };
 }

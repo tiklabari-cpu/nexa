@@ -9412,10 +9412,10 @@
             "description": "Saf cekirdege (`goal-matching.ts`) URL disi yuklemler eklenir ve bunlarin olustugu anlar `GoalService.evaluate`e baglanir. Bugun `evaluate` yalniz `pageUrls` aliyor ve yalniz sayfa goruntuleme yolundan cagriliyor — satis ve cozum baska anlarda olusur.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `goal-matching.ts` — `urlNeedle(definition)` yalniz `definition.url_contains`i okuyor;\n  `hasGoalTrigger` = `urlNeedle(...) !== null`; `matchesGoal` yalniz sayfa listesine bakiyor.\n- `goal-service.ts:150-156` — `evaluate(tx, tenant, customerId, pageUrls, now)`; `pageUrls` bos ise\n  hemen `0` donuyor, yani sayfa goruntuleme disi hicbir olay hedef kaydedemez.\n- Sonuc: PRD`nin \"satis/lead/cozum\" hunisi **ifade edilemiyor**.\n\n## Yapilacak\n\n1. **Kontrat once:** `GoalDefinition` semasi genisletilir (ornek `sale` · `lead` · `resolution`\n   yuklemleri). Alan adlari `campaign-matching.ts`in bicimini izler; uydurma isim uretme.\n2. `goal-matching.ts`: her yuklem icin saf bir okuyucu + `matchesGoal`a ek. **VE semantigi korunur**\n   (set edilen her yuklem tutmali; hicbiri set edilmemisse kimse ulasamaz). `hasGoalTrigger` artik\n   \"en az bir kullanilabilir yuklem var mi\" sorusunu tum yuklem kumesi uzerinden cevaplar.\n3. `evaluate`in imzasi genisletilir: sayfa listesinin yani sira olayin **turu** ve baglami\n   (siparis/lead/kapanan sohbet) gecilir. `pageUrls.length === 0` erken cikisi yalniz sayfa-yuklemli\n   hedefler icin gecerli kalmali — aksi halde satis hedefi asla degerlendirilmez (**en olasi hata budur**).\n4. Tetikleme noktalari baglanir: `tracked_sales` siparis girisi · lead isaretlenmesi · sohbet kapanisi.\n   Her biri `evaluate`i **commit sonrasi** cagirir (G1`in `dispatchAgentReply` karari emsal).\n5. Idempotency ve kampanya bagi AYNEN korunur (`skipDuplicates`, `written.count > 0` kosulu).\n\n## Bilinen tuzaklar\n\n- `definition` serbest `jsonb`: okunamayan tanim HATA degil, bos sonuctur. Bir bozuk satir obur\n  hedeflerin kaydini durdurmamali (dosyanin mevcut gerekcesi).\n- Migration gerekiyorsa CONVENTIONS §6.3: genislet -> tasi -> daralt; `NOT NULL` + `DEFAULT`siz YASAK.\n- Yeni OpenAPI **yolu** eklersen `apps/mobile` parite sayaci kirilir (yalniz sema genisletmek guvenli).",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `goal-matching.test.ts`: her yeni yuklem icin pozitif + negatif; VE semantigi (iki yuklem set,\n   biri tutmuyor -> eslesme yok); bos tanim kimseyi eslestirmiyor.\n2. Bozuk/elle duzenlenmis `definition` jsonb`si **firlatmiyor** ve ayni calisma alanindaki gecerli\n   hedefin kaydini engellemiyor (izolasyon testi).\n3. Integration: siparis girisi -> satis hedefi kaydediliyor; sohbet kapanisi -> cozum hedefi;\n   lead isaretlenmesi -> lead hedefi. **Sayfa goruntuleme olmadan** da kaydediliyor (erken-cikis tuzagi).\n4. Idempotency: ayni musteri + ayni hedef ikinci kez -> yeni satir YOK, sayi sabit.\n5. `campaign_sends.converted` yalniz gercekten yeni satir yazildiginda isaretleniyor (regresyon).\n6. Mevcut `url_contains` testleri **degismeden** yesil (regresyon).\n7. Test basliklari `(FR-MOD-13.3)` etiketi tasir. TAM DoD kapisi + kontrat/migration ayaklari.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "204",
-            "updatedAt": "2026-09-06T20:31:37.363Z"
+            "updatedAt": "2026-09-06T21:48:03.519Z"
           },
           {
             "id": 2,
@@ -9428,12 +9428,12 @@
             "parentId": "204"
           }
         ],
-        "updatedAt": "2026-09-06T20:31:37.363Z"
+        "updatedAt": "2026-09-06T21:48:03.519Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T20:31:37.364Z",
+      "lastModified": "2026-09-06T21:48:03.522Z",
       "taskCount": 204,
       "completedCount": 203,
       "tags": [

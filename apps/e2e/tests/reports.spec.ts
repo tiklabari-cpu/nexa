@@ -209,7 +209,7 @@ test.describe('reports overview', () => {
    * performance report (07.7-c)") — this only proves both tabs open and render
    * their region.
    */
-  test('opens the Sales and Team performance tabs, each a permission-gated report group (07.7-j)', async ({
+  test('opens the Sales and Team performance tabs, each a permission-gated report group (FR-MOD-07.7 · 07.7-j)', async ({
     agentPage,
   }) => {
     await agentPage.goto('/app/reports');
@@ -228,6 +228,16 @@ test.describe('reports overview', () => {
       'true',
     );
     await expect(agentPage.getByRole('region', { name: 'Team performance' })).toBeVisible();
+
+    // Benchmark comparison on the group the PRD names, not only on Overview:
+    // the workspace split above the agent table holds the window against the
+    // previous one. Deliberately license-wide — the agent table is derived
+    // from the window, so a row-by-row comparison would pair an agent with
+    // whoever took their place in the baseline. Both badge wordings ("No
+    // change vs previous" / "↑ n vs previous") end the same way.
+    const totals = agentPage.getByRole('region', { name: 'Workspace totals' });
+    await expect(totals).toBeVisible();
+    await expect(totals.getByText(/vs previous/).first()).toBeVisible();
 
     await agentPage.screenshot({
       path: 'kanit/25-reports-sales-team-performance.png',

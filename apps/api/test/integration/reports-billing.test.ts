@@ -2338,6 +2338,25 @@ describe('reports and billing', () => {
     it('reports an empty window as an empty list, not an error', async () => {
       const report = (await server.get('/reports/team-performance', auth)).json();
       expect(report.agents).toEqual([]);
+      // Still a comparable pair, both sides zero — an empty window is a
+      // measurement, not a missing block.
+      expect(report.totals).toEqual({ chats: 0, closed: 0, manual: 0, assisted: 0, automated: 0 });
+    });
+
+    it('counts the whole license in `totals`, not just the rows of the agent table (FR-MOD-07.7)', async () => {
+      // The benchmark's current-window half. It must not be the sum of
+      // `agents`: that table is capped at 20 and holds assigned threads only,
+      // so a workspace with unassigned traffic would be compared against a
+      // baseline measured a different way and shown a drop that never happened.
+      await conversation({ agentReplies: true, customerName: 'Assigned' });
+      const unassigned = await conversation({ agentReplies: false, customerName: 'Bot only' });
+      await owner.thread.updateMany({ where: { chatId: unassigned }, data: { assigneeId: null } });
+
+      const report = (await server.get('/reports/team-performance', auth)).json();
+
+      expect(report.agents).toHaveLength(1);
+      expect(report.agents[0].chats).toBe(1);
+      expect(report.totals).toEqual({ chats: 2, closed: 2, manual: 1, assisted: 0, automated: 1 });
     });
 
     it('never counts another tenant’s agent', async () => {
@@ -4117,6 +4136,7 @@ describe('reports and billing', () => {
         // license's own split.
         const earlier = await conversation({ agentReplies: true, customerName: 'Earlier' });
         await backdateChat(earlier, new Date(Date.now() - 15 * 86_400_000));
+        await conversation({ agentReplies: true, customerName: 'Now' });
 
         const to = new Date();
         const from = new Date(to.getTime() - 10 * 86_400_000);
@@ -4129,6 +4149,15 @@ describe('reports and billing', () => {
 
         expect(team.previous_period).toMatchObject({ chats: 1, closed: 1, manual: 1 });
         expect(team.previous_period).not.toHaveProperty('agents');
+        // The comparison the PRD asks for needs both halves. `totals` measures
+        // the requested window with the same helper and the same keys, so the
+        // two blocks line up figure for figure.
+        expect(team.totals).toEqual({ chats: 1, closed: 1, manual: 1, assisted: 0, automated: 0 });
+        expect(Object.keys(team.totals).sort()).toEqual(
+          Object.keys(team.previous_period)
+            .filter((key) => key !== 'baseline' && key !== 'range')
+            .sort(),
+        );
       });
 
       it('moves the Chat topics trend window, not just the label', async () => {

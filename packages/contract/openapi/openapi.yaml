@@ -4972,7 +4972,7 @@ components:
         one `ReportsBreakdown.by_agent` uses): an agent needs at least one
         thread *created* in the window to appear here, even if a rating or
         transfer landed inside the window on an older thread of theirs.
-      required: [range, previous_period, agents]
+      required: [range, previous_period, totals, agents]
       properties:
         range:
           type: object
@@ -4980,6 +4980,23 @@ components:
           properties:
             from: { type: string, format: date-time }
             to: { type: string, format: date-time }
+        totals:
+          type: object
+          description: |
+            The license's resolution split over the REQUESTED window — the
+            current-window counterpart of `previous_period`, measured by the
+            same helper over the same license scope, so the two are comparable
+            figure by figure. It is deliberately not the sum of `agents`: that
+            table is capped at 20 rows and holds only assigned threads, so
+            adding it up would understate the workspace and make the benchmark
+            read as a fall that never happened.
+          required: [chats, closed, manual, assisted, automated]
+          properties:
+            chats: { type: integer }
+            closed: { type: integer }
+            manual: { type: integer }
+            assisted: { type: integer }
+            automated: { type: integer }
         previous_period:
           description: |
             The license's resolution split in the benchmark window — not a
@@ -4989,6 +5006,7 @@ components:
             row-by-row comparison would silently pair an agent with someone
             else, or with a blank where they did not make the earlier cut. A
             per-agent history is a different report, not this one's baseline.
+            Compared against `totals`, never against a row of `agents`.
           allOf:
             - $ref: "#/components/schemas/BenchmarkWindow"
             - type: object

@@ -261,6 +261,13 @@ teamPerformance:
 
       `csat.score` is `null`, never `0`, for an agent nobody rated in the
       window — the same rule the Reviews report's `score` follows.
+
+      `totals` is the license's own split over the requested window and
+      `previous_period` the same split over the benchmark window (FR-MOD-07.7
+      "benchmark karşılaştırma") — the pair a client renders the comparison
+      from. Neither is derived from `agents`: that table is capped at 20 rows
+      and covers assigned threads only, so summing it would quote a smaller
+      workspace than the baseline it is held against.
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"

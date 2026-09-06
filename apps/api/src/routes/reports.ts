@@ -1095,9 +1095,20 @@ export async function buildTeamPerformanceReport(
   // else — or against a blank where they did not make the earlier cut. The
   // license's own split is the quantity both windows really share; a per-agent
   // history is a different report (a trend per agent), not this one's baseline.
+  //
+  // Which is why `totals` is here at all: the baseline block alone is a figure
+  // with nothing to hold it against, and a client cannot render "benchmark
+  // karşılaştırma" (FR-MOD-07.7 KK) from it. `splitBenchmark` measures the
+  // requested window exactly as it measures the baseline one, so the pair is
+  // comparable by construction. Summing `agents` instead would compare a
+  // 20-row, assigned-threads-only slice against a whole-license baseline and
+  // report a drop that never happened.
+  const totals = await splitBenchmark(tx, licenseId, { from, to });
+
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
+      totals,
       agents,
     },
     from,

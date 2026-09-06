@@ -330,6 +330,9 @@ export const reports: Messages = {
   'reports.teamPerformance.emptyTitle': 'No agent activity in this window',
   'reports.teamPerformance.emptyDescription':
     'Once conversations are assigned to agents, their per-agent performance shows up here.',
+  'reports.teamPerformance.totals.title': 'Workspace totals',
+  'reports.teamPerformance.totals.description':
+    'The whole workspace over this window, compared with the previous one. Not the sum of the table below, which shows the top 20 agents only.',
   'reports.teamPerformance.caption': 'Per-agent chats, resolution split, response time and CSAT',
   'reports.teamPerformance.avgFirstResponseColumn': 'Avg first response',
 };

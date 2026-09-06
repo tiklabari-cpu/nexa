@@ -13,8 +13,11 @@
  *      (quoting, the spreadsheet formula-injection guard, PDF byte offsets) is
  *      worth testing without a server.
  *
- * Benchmark comparison remains out of scope for v1 (PLAN §4.4.8, PRD 07.7 marks
- * it v2).
+ * Benchmark comparison (the third KK) landed with the v2 payload and is not
+ * here: the figures are measured in `services/reports/report-csv.ts`
+ * (`groupBenchmark`, one branch per group) and appended to an export by
+ * `benchmarkCsvRows` only when the caller asks with `?baseline=`. This module
+ * stays the catalogue and the serialisers.
  */
 import { hasAnyScope, type Scope } from '@nexa/types';
 

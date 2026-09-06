@@ -1567,6 +1567,11 @@ const SALES_BASE = {
 
 const TEAM_PERFORMANCE_BASE = {
   range: OVERVIEW.range,
+  // The benchmark pair: the license's split in the window and in the baseline
+  // window. Both zero by default, so a test that only cares about the agent
+  // table renders the comparison without asserting on it.
+  totals: { chats: 0, closed: 0, manual: 0, assisted: 0, automated: 0 },
+  previous_period: { chats: 0, closed: 0, manual: 0, assisted: 0, automated: 0 },
   agents: [] as AgentPerformanceRowFixture[],
 };
 
@@ -1746,6 +1751,55 @@ describe('ReportsPage — Sales + Team performance tabs, permission-gated visibi
     // 0%/0s for "nobody rated" / "nothing closed with a first response".
     expect(within(row).getAllByText('—')).toHaveLength(2);
     expect(within(row).queryByText('0%')).not.toBeInTheDocument();
+  });
+
+  it('shows the workspace split against the previous window on Team performance (FR-MOD-07.7)', async () => {
+    mockGroupsSalesTeam({
+      teamPerformance: {
+        totals: { chats: 40, closed: 30, manual: 12, assisted: 8, automated: 10 },
+        previous_period: { chats: 25, closed: 30, manual: 20, assisted: 4, automated: 6 },
+        agents: [
+          {
+            agent_id: 'agent-3',
+            name: 'Ada Lovelace',
+            chats: 10,
+            closed: 8,
+            manual: 1,
+            assisted: 2,
+            automated: 5,
+            avg_first_response_seconds: 125,
+            avg_duration_seconds: 400,
+            csat: { good: 4, bad: 1, responses: 5, score: 0.8 },
+            transfers: 1,
+          },
+        ],
+      },
+    });
+    renderReports(<ReportsPage />);
+    await openTeamPerformanceTab();
+
+    // Scoped to the totals section: the agent table underneath heads its
+    // columns with the very same words, so an unscoped query would match both.
+    const totals = screen.getByRole('region', { name: 'Workspace totals' });
+    const totalsKpi = (label: string): HTMLElement => {
+      const card = within(totals).getByText(label).parentElement;
+      if (!card) throw new Error(`KPI "${label}" has no enclosing card`);
+      return card;
+    };
+
+    // Up, flat and down all render — the badge is a comparison, not a
+    // decoration that only appears when the number grew.
+    expect(within(totalsKpi('Chats')).getByText('40')).toBeInTheDocument();
+    expect(within(totalsKpi('Chats')).getByText(/↑ 15 vs previous/)).toBeInTheDocument();
+    expect(within(totalsKpi('Closed')).getByText('No change vs previous')).toBeInTheDocument();
+    expect(within(totalsKpi('Manual')).getByText(/↓ 8 vs previous/)).toBeInTheDocument();
+    expect(within(totalsKpi('Assisted')).getByText(/↑ 4 vs previous/)).toBeInTheDocument();
+    expect(within(totalsKpi('Automated')).getByText(/↑ 4 vs previous/)).toBeInTheDocument();
+
+    // The workspace figure is the report's own, never the agent table's: the
+    // table is capped at 20 rows, so summing it would compare a slice of the
+    // workspace against a whole-workspace baseline.
+    expect(within(totalsKpi('Chats')).queryByText('10')).not.toBeInTheDocument();
   });
 
   it('shows a meaningful empty state, not an empty table, when no agent has activity', async () => {

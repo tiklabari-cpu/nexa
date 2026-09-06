@@ -1794,9 +1794,12 @@ export async function splitBenchmark(
 }
 
 /**
- * The AI Agent report's comparable figures for a baseline window — the three
- * counters the tab shows deltas on, plus the rate they are read against, from
- * the same license-scoped helpers the requested window uses.
+ * The AI Agent report's comparable figures for a baseline window — its three
+ * counters plus the rate they are read against, from the same license-scoped
+ * helpers the requested window uses. Carried by `GET /reports/ai-agent`'s
+ * `previous_period` and by the group's export block; the AI Agent *tab*
+ * (FR-MOD-07.4, a different requirement row) does not render deltas off them
+ * yet.
  */
 export async function aiAgentBenchmark(
   tx: TenantClient,

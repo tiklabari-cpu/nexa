@@ -5049,11 +5049,11 @@ components:
       type: object
       description: |
         The Sales report (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the
-        same tracked-sales skeleton as the Reviews report's `ecommerce` block,
-        as a report of its own. No sales/order source exists yet, so
-        `configured` is `false` and every figure `null` — an honest "not set
-        up" state, never a fabricated zero, until FR-MOD-13.5's Sales tracker
-        wires a real source.
+        same tracked-sales data as the Reviews report's `ecommerce` block, as a
+        report of its own, plus `conversions`. `configured` is `true` and every
+        figure real once a workspace has turned FR-MOD-13.5's Sales tracker on;
+        an honest "not set up" state — `configured: false`, every figure
+        `null`, never a fabricated zero — while it is off or never configured.
       required:
         [
           range,
@@ -5073,9 +5073,11 @@ components:
             to: { type: string, format: date-time }
         previous_period:
           description: |
-            The benchmark window, as honest as the report itself: with no sales
-            source there is nothing to have been better or worse than, so every
-            figure is `null` here too. Zeros would let a surface render a
+            The benchmark window, as honest as the report itself: real figures
+            over the baseline window once the Sales tracker is configured, so a
+            "vs previous" comparison is possible. Otherwise every figure is
+            `null` here too — with no sales source there is nothing to have
+            been better or worse than, and zeros would let a surface render a
             "0 → 0, no change" badge that reads as a measurement.
           allOf:
             - $ref: "#/components/schemas/BenchmarkWindow"
@@ -5089,7 +5091,7 @@ components:
                 conversions: { type: integer, nullable: true }
         configured:
           type: boolean
-          description: Whether a sales-tracking source is wired. Always false in v1.
+          description: Whether a sales-tracking source is wired and turned on.
         tracked_sales:
           type: integer
           nullable: true
@@ -5105,7 +5107,7 @@ components:
         conversions:
           type: integer
           nullable: true
-          description: Conversions attributed to supported conversations. Null until configured.
+          description: Goal achievements in the window (FR-MOD-13.3). Null until configured.
 
     StaffingForecast:
       type: object

@@ -60,6 +60,7 @@ import {
   reviewsBenchmark,
   roundOrNull,
   salesBenchmark,
+  salesReportFigures,
   satisfactionByDay,
   satisfactionCounts,
   satisfactionScore,
@@ -861,11 +862,11 @@ interface EcommerceBlock {
  * sales" and "Attributed revenue" under Reviews → Ecommerce. No screen adds,
  * compares or substitutes one for the other.
  *
- * Related and deliberately still unwired: the v2 `sales` report group
- * ({@link buildSalesReport}) is a fixed `configured: false` skeleton, so it can
- * read "not set up" while this block shows figures for the same window. That is
- * 07.7-d's own dependency on 13.5, not a disagreement about the data — both
- * would read from `tracked_sales` once it is connected.
+ * Related and now wired the same way: the v2 `sales` report group
+ * ({@link buildSalesReport}) reads this same `tracked_sales` data through
+ * {@link salesReportFigures}, so the two can never quote different figures for
+ * the same license and window — only that group also carries `conversions`,
+ * which this block deliberately does not.
  */
 async function trackedSalesBlock(
   tx: TenantClient,
@@ -993,17 +994,14 @@ export async function buildLeadsReport(
 
 /**
  * The Sales report for one window (FR-MOD-07.7, v2 payload; FR-MOD-13.5
- * dependency) — the honest "not set up" state: `configured` is `false` and
- * every figure `null`, never a fabricated zero.
- *
- * 13.5 has since landed `tracked_sales` and wired it into the Reviews tab's
- * `ecommerce` block ({@link trackedSalesBlock}), so the data this group needs
- * now exists. This report group stays unwired on purpose: it is 07.7's own
- * separate Sales tab, with a `conversions` figure the Reviews block does not
- * carry, and filling it in is that line item's work rather than a side effect
- * of 13.5-d. `tx`/`licenseId` stay in the signature — unused today, matching
- * every other builder here — so it can be filled in without moving the call
- * site or the `GET /reports/sales` contract.
+ * dependency). {@link salesReportFigures} runs the same `trackedSalesSummary`
+ * aggregate the Reviews tab's `ecommerce` block reads ({@link
+ * trackedSalesBlock}) — one query, not a second one that could drift from it
+ * — plus `conversions`, the figure that block does not carry (see its own
+ * docstring for why that is a different number from the Goals funnel's).
+ * Sales tracker off, or never configured, still returns the honest "not set
+ * up" skeleton — `configured: false` and every figure `null`, never a
+ * fabricated zero.
  */
 export async function buildSalesReport(
   tx: TenantClient,
@@ -1012,19 +1010,17 @@ export async function buildSalesReport(
   to: Date,
   baseline: BenchmarkBaseline = DEFAULT_BENCHMARK_BASELINE,
 ): Promise<Record<string, unknown>> {
+  const figures = await salesReportFigures(tx, licenseId, from, to);
+
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
-      configured: false,
-      tracked_sales: null,
-      attributed_revenue_cents: null,
-      currency: null,
-      conversions: null,
+      ...figures,
     },
     from,
     to,
     baseline,
-    () => Promise.resolve(salesBenchmark()),
+    (window) => salesBenchmark(tx, licenseId, window),
   );
 }
 

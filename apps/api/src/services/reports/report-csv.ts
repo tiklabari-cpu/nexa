@@ -624,6 +624,53 @@ export async function trackedSalesSummary(
   };
 }
 
+/** The Sales report group's own shape (FR-MOD-07.7) — {@link TrackedSalesSummary} plus `conversions`. */
+export interface SalesReportFigures {
+  configured: boolean;
+  tracked_sales: number | null;
+  attributed_revenue_cents: number | null;
+  currency: string | null;
+  conversions: number | null;
+}
+
+/**
+ * The Sales report group's figures for one window (FR-MOD-07.7 · FR-MOD-13.5
+ * dependency). Same "configured" gate and the same {@link trackedSalesSummary}
+ * aggregate the Reviews tab's `ecommerce` block reads (`trackedSalesBlock` in
+ * `routes/reports.ts`) — reusing that one query rather than a second read path
+ * is what keeps the two surfaces from ever quoting different figures for the
+ * same license and window. `conversions` is this group's own addition: the
+ * funnel's converted stage ({@link achievedGoalCount}), gated behind the same
+ * switch as the rest of the block, all-null skeleton and all, because an
+ * unconfigured Sales tab has nothing to report at all — see that function's
+ * docstring for why this is a different number from the Goals funnel's own
+ * `conversions`.
+ *
+ * Shared by the report body ({@link buildSalesReport} in `routes/reports.ts`)
+ * and its benchmark ({@link salesBenchmark}), so a window's figures and its
+ * "vs previous" comparison can never disagree about whether tracking was on.
+ */
+export async function salesReportFigures(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<SalesReportFigures> {
+  const settings = await tx.salesTrackerSettings.findFirst();
+  if (!settings?.enabled) {
+    return {
+      configured: false,
+      tracked_sales: null,
+      attributed_revenue_cents: null,
+      currency: null,
+      conversions: null,
+    };
+  }
+  const summary = await trackedSalesSummary(tx, licenseId, from, to);
+  const conversions = await achievedGoalCount(tx, licenseId, from, to);
+  return { configured: true, ...summary, currency: settings.currency, conversions };
+}
+
 interface DaySplit {
   date: string;
   chats: number;
@@ -1423,7 +1470,7 @@ function groupBenchmark(
     case 'leads':
       return leadsBenchmark(tx, licenseId, window);
     case 'sales':
-      return Promise.resolve(salesBenchmark());
+      return salesBenchmark(tx, licenseId, window);
     case 'goals':
       return goalsBenchmark(tx, licenseId, window);
     case 'topics':
@@ -1814,19 +1861,19 @@ export async function leadsBenchmark(
 }
 
 /**
- * The Sales report's baseline figures — `null`, like the report's own. With no
- * sales source there is nothing to have been better or worse than; emitting
+ * The Sales report's baseline figures — real, once tracking is configured, by
+ * the same {@link salesReportFigures} the report itself calls, just over the
+ * baseline window. The honest all-null skeleton otherwise: with no sales
+ * source there is nothing to have been better or worse than, and emitting
  * zeros would let a surface render a "0 → 0, no change" badge that reads as a
  * measurement.
  */
-export function salesBenchmark(): Record<string, unknown> {
-  return {
-    configured: false,
-    tracked_sales: null,
-    attributed_revenue_cents: null,
-    currency: null,
-    conversions: null,
-  };
+export async function salesBenchmark(
+  tx: TenantClient,
+  licenseId: bigint,
+  window: { from: Date; to: Date },
+): Promise<Record<string, unknown>> {
+  return { ...(await salesReportFigures(tx, licenseId, window.from, window.to)) };
 }
 
 /**

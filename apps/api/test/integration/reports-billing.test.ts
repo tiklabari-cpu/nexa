@@ -2377,7 +2377,62 @@ describe('reports and billing', () => {
     });
   });
 
-  describe('Sales report (07.7-d)', () => {
+  describe('Sales report (FR-MOD-07.7 · 07.7-d)', () => {
+    /** Switch sales tracking on (or off) for a license, as the settings screen would. */
+    async function configureTracking(options: {
+      licenseId: bigint;
+      enabled: boolean;
+      currency?: string;
+    }): Promise<void> {
+      await owner.salesTrackerSettings.create({
+        data: {
+          licenseId: options.licenseId,
+          enabled: options.enabled,
+          currency: options.currency ?? 'USD',
+          attributionWindowDays: 7,
+        },
+      });
+    }
+
+    let orderSeq = 0;
+
+    /** Record one order the way the ingest endpoint (13.5-c) would have left it. */
+    async function sale(options: {
+      licenseId: bigint;
+      amountCents: number;
+      currency?: string;
+      createdAt?: Date;
+    }): Promise<void> {
+      orderSeq += 1;
+      await owner.trackedSale.create({
+        data: {
+          licenseId: options.licenseId,
+          externalOrderId: `sales-report-order-${orderSeq}`,
+          amountCents: options.amountCents,
+          currency: options.currency ?? 'USD',
+          attributed: true,
+          createdAt: options.createdAt ?? justNow(),
+        },
+      });
+    }
+
+    /** Record a visitor reaching a goal (FR-MOD-13.3) — this group's own `conversions`. */
+    async function achieveGoal(licenseId: bigint, when: Date = justNow()): Promise<void> {
+      const organizationId =
+        licenseId === fx.a.licenseId ? fx.a.organizationId : fx.b.organizationId;
+      const goal = await owner.goal.create({
+        data: { licenseId, name: 'Signed up' },
+        select: { id: true },
+      });
+      const customer = await owner.customer.create({
+        data: { organizationId, name: 'Converted visitor' },
+        select: { id: true },
+      });
+      await owner.goalAchievement.create({
+        data: { licenseId, goalId: goal.id, customerId: customer.id, achievedAt: when },
+      });
+    }
+
     it('returns the honest not-configured skeleton — every figure null, not zero', async () => {
       const report = (await server.get('/reports/sales', auth)).json();
       expect(report.configured).toBe(false);
@@ -2385,6 +2440,21 @@ describe('reports and billing', () => {
       expect(report.attributed_revenue_cents).toBeNull();
       expect(report.currency).toBeNull();
       expect(report.conversions).toBeNull();
+    });
+
+    it('keeps the not-configured skeleton while tracking is off, even with orders and goals already on the table', async () => {
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: false });
+      await sale({ licenseId: fx.a.licenseId, amountCents: 9_900 });
+      await achieveGoal(fx.a.licenseId);
+
+      const report = (await server.get('/reports/sales', auth)).json();
+      expect(report).toMatchObject({
+        configured: false,
+        tracked_sales: null,
+        attributed_revenue_cents: null,
+        currency: null,
+        conversions: null,
+      });
     });
 
     it('stays configured:false for another tenant too — nothing to leak', async () => {
@@ -2399,6 +2469,80 @@ describe('reports and billing', () => {
       ).json();
       expect(theirs.configured).toBe(false);
       expect(theirs.tracked_sales).toBeNull();
+    });
+
+    it('reports real tracked sales, revenue and conversions once tracking is on, matching the Reviews ecommerce block exactly', async () => {
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true, currency: 'EUR' });
+      await sale({ licenseId: fx.a.licenseId, amountCents: 12_500, currency: 'EUR' });
+      await sale({ licenseId: fx.a.licenseId, amountCents: 7_499, currency: 'EUR' });
+      await achieveGoal(fx.a.licenseId);
+      await achieveGoal(fx.a.licenseId);
+
+      const [sales, reviews] = await Promise.all([
+        server.get('/reports/sales', auth).then((response) => response.json()),
+        server.get('/reports/reviews', auth).then((response) => response.json()),
+      ]);
+
+      expect(sales.configured).toBe(true);
+      expect(sales.tracked_sales).toBe(2);
+      expect(sales.attributed_revenue_cents).toBe(19_999);
+      expect(sales.currency).toBe('EUR');
+      expect(sales.conversions).toBe(2);
+
+      // The Sales report and the Reviews `ecommerce` block read the same
+      // `tracked_sales` data through one shared query — this is the property
+      // that keeps them from ever quoting different figures for the same
+      // license and window (the whole point of this line item).
+      expect(sales.configured).toBe(reviews.ecommerce.configured);
+      expect(sales.tracked_sales).toBe(reviews.ecommerce.tracked_sales);
+      expect(sales.attributed_revenue_cents).toBe(reviews.ecommerce.attributed_revenue_cents);
+      expect(sales.currency).toBe(reviews.ecommerce.currency);
+    });
+
+    it('does not let a repeated achievement of the same goal by the same customer inflate conversions', async () => {
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true });
+      const goal = await owner.goal.create({
+        data: { licenseId: fx.a.licenseId, name: 'Signed up' },
+        select: { id: true },
+      });
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Repeat visitor' },
+        select: { id: true },
+      });
+      // `goal_achievements` carries UNIQUE(goal_id, customer_id) (13.3-b), so a
+      // second row for the same pair is what the matcher itself refuses to
+      // write — this asserts the report reads that guarantee, not re-derives it.
+      await owner.goalAchievement.create({
+        data: { licenseId: fx.a.licenseId, goalId: goal.id, customerId: customer.id },
+      });
+
+      const report = (await server.get('/reports/sales', auth)).json();
+      expect(report.conversions).toBe(1);
+    });
+
+    it("keeps another tenant's tracked sales out of this tenant's Sales report", async () => {
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true });
+      await configureTracking({ licenseId: fx.b.licenseId, enabled: true });
+      await sale({ licenseId: fx.a.licenseId, amountCents: 5_000 });
+      await sale({ licenseId: fx.b.licenseId, amountCents: 999_999 });
+      await sale({ licenseId: fx.b.licenseId, amountCents: 999_999 });
+
+      const theirToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+
+      const ours = (await server.get('/reports/sales', auth)).json();
+      const theirs = (
+        await server.get('/reports/sales', { authorization: `Bearer ${theirToken}` })
+      ).json();
+
+      expect(ours.tracked_sales).toBe(1);
+      expect(ours.attributed_revenue_cents).toBe(5_000);
+      expect(theirs.tracked_sales).toBe(2);
+      expect(theirs.attributed_revenue_cents).toBe(1_999_998);
     });
 
     it('rejects a backwards date range', async () => {
@@ -3775,6 +3919,62 @@ describe('reports and billing', () => {
         expect(sales.previous_period.attributed_revenue_cents).toBeNull();
         expect(sales.previous_period.currency).toBeNull();
         expect(sales.previous_period.conversions).toBeNull();
+      });
+
+      it('reports real Sales benchmark figures once tracking is on, not the null skeleton (FR-MOD-07.7)', async () => {
+        await owner.salesTrackerSettings.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            enabled: true,
+            currency: 'USD',
+            attributionWindowDays: 7,
+          },
+        });
+        // Inside the baseline window, outside the requested one — the two
+        // must not blur into each other.
+        const baselineWhen = new Date(Date.now() - 15 * 86_400_000);
+        await owner.trackedSale.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            externalOrderId: 'benchmark-order-1',
+            amountCents: 4_200,
+            currency: 'USD',
+            attributed: true,
+            createdAt: baselineWhen,
+          },
+        });
+        const goal = await owner.goal.create({
+          data: { licenseId: fx.a.licenseId, name: 'Signed up' },
+          select: { id: true },
+        });
+        const customer = await owner.customer.create({
+          data: { organizationId: fx.a.organizationId, name: 'Baseline visitor' },
+          select: { id: true },
+        });
+        await owner.goalAchievement.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            goalId: goal.id,
+            customerId: customer.id,
+            achievedAt: baselineWhen,
+          },
+        });
+
+        const to = new Date();
+        const from = new Date(to.getTime() - 10 * 86_400_000);
+        const range = `from=${from.toISOString()}&to=${to.toISOString()}`;
+
+        const sales = (
+          await server.get(`/reports/sales?${range}&baseline=previous_period`, auth)
+        ).json();
+        expect(sales.previous_period.configured).toBe(true);
+        expect(sales.previous_period.tracked_sales).toBe(1);
+        expect(sales.previous_period.attributed_revenue_cents).toBe(4_200);
+        expect(sales.previous_period.currency).toBe('USD');
+        expect(sales.previous_period.conversions).toBe(1);
+        // The requested window itself saw none of this.
+        expect(sales.tracked_sales).toBe(0);
+        expect(sales.conversions).toBe(0);
       });
     });
 

@@ -14,7 +14,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
-import type { Skill } from './types.js';
+import type { KnowledgeSource, Skill } from './types.js';
 
 const { api } = vi.hoisted(() => ({ api: { get: vi.fn(), post: vi.fn() } }));
 
@@ -202,5 +202,62 @@ describe('Playbook knowledge — File source (FR-MOD-06.3.2)', () => {
     expect(await screen.findByText(/Choose a \.txt, \.md or \.csv file/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add source' })).toBeDisabled();
     expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The Knowledge panel's "Added by" column (FR-MOD-06.3.3).
+ *
+ * `GET /knowledge-sources` never returned `added_by_name`, so the row had
+ * nothing to read from — same shape of gap as the skill row's owner column
+ * (FR-MOD-05.5) above, asserted the same way: against the rendered row, not
+ * just the payload.
+ */
+describe('Playbook knowledge — Added by (FR-MOD-06.3.3)', () => {
+  function baseSource(overrides: Partial<KnowledgeSource> = {}): KnowledgeSource {
+    return {
+      id: 'src-1',
+      ai_agent_id: 'agent-1',
+      name: 'Return policy',
+      type: 'faq',
+      status: 'ready',
+      source_url: null,
+      chunk_count: 3,
+      updated_at: '2026-01-15T10:00:00.000Z',
+      added_by_name: null,
+      ...overrides,
+    };
+  }
+
+  function mockKnowledgeList(items: KnowledgeSource[]): void {
+    api.get.mockImplementation((path: string) => {
+      if (path === '/skills') return Promise.resolve({ items: [] });
+      if (path === '/ai-agents') return Promise.resolve({ items: [] });
+      if (path === '/knowledge-sources') return Promise.resolve({ items });
+      return Promise.reject(new Error(`unexpected ${path}`));
+    });
+  }
+
+  it('shows the account name that added a source', async () => {
+    mockKnowledgeList([baseSource({ added_by_name: 'Ada Lovelace' })]);
+    renderPage();
+
+    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Knowledge' }));
+    const row = (await screen.findByText('Return policy')).closest('li');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('Ada Lovelace');
+  });
+
+  it('reads "—", never a raw account id, for a source nobody resolves to', async () => {
+    mockKnowledgeList([baseSource({ added_by_name: null })]);
+    renderPage();
+
+    await userEvent.setup().click(await screen.findByRole('tab', { name: 'Knowledge' }));
+    const row = (await screen.findByText('Return policy')).closest('li');
+    expect(row).not.toBeNull();
+    expect(row!.textContent).toContain('—');
+    expect(row!.textContent).not.toMatch(
+      /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    );
   });
 });

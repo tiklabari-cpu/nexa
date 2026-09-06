@@ -1094,6 +1094,16 @@ components:
           { type: string, nullable: true, description: The crawled URL, for website sources. }
         chunk_count: { type: integer }
         updated_at: { type: string, format: date-time }
+        added_by_name:
+          type: string
+          nullable: true
+          description: |
+            The account name of whoever added this source, resolved server-side
+            from the soft `added_by` reference — never a raw account id. Null
+            for a source with no known author (bot/seed-created, or the
+            authoring account was later deleted). Not present on
+            `/copilot/knowledge`, which predates this field and keeps its own
+            knowledge base separate (FR-MOD-12.2).
 
     KnowledgeBulkRowResult:
       type: object
@@ -1101,7 +1111,7 @@ components:
         One CSV data row's verdict. `line` is the row's 1-based position among
         data rows, not a physical line in the file — a quoted cell may span
         several lines, which makes a file line number ambiguous.
-      required: [line, name, type, status, id, chunk_count, error]
+      required: [line, name, type, status, id, chunk_count, error, added_by_name]
       properties:
         line: { type: integer, minimum: 1 }
         name:
@@ -1144,6 +1154,15 @@ components:
             a host, an address or a network. Told apart across 200 rows, a
             precise reason would be a free scan of everything the server can
             reach; the precise reason is in the server log instead.
+        added_by_name:
+          type: string
+          nullable: true
+          description: |
+            The account name of whoever ran this import, resolved the same way
+            `KnowledgeSource.added_by_name` is — never a raw account id. Null
+            for a skipped row and for every row of a dry run, mirroring `id`
+            and `chunk_count`: it names the source that was actually created,
+            not the row that asked for one.
 
     KnowledgeBulkResult:
       type: object

@@ -43,6 +43,7 @@ function bulkRows(imported: number, failed: number): KnowledgeBulkRowResult[] {
       status: 'imported' as const,
       id: `src-${i}`,
       chunk_count: 1,
+      added_by_name: 'Owner a',
       error: null,
     })),
     ...Array.from({ length: failed }, (_, i) => ({
@@ -52,6 +53,7 @@ function bulkRows(imported: number, failed: number): KnowledgeBulkRowResult[] {
       status: 'skipped' as const,
       id: null,
       chunk_count: null,
+      added_by_name: null,
       error: 'type: must be one of website, file, article, faq.',
     })),
   ];

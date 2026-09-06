@@ -1056,7 +1056,7 @@ function KnowledgePanel({
                       ? t(KNOWLEDGE_TYPE_LABEL_KEYS[source.type as KnowledgeType])
                       : source.type}{' '}
                     · {t('playbook.knowledge.chunkCount', { count: source.chunk_count })} ·{' '}
-                    {formatDate(source.updated_at)}
+                    {formatDate(source.updated_at)} · {source.added_by_name ?? '—'}
                     {source.source_url ? ` · ${source.source_url}` : ''}
                   </p>
                 </div>

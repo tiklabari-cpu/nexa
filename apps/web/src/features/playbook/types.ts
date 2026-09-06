@@ -80,6 +80,7 @@ export interface KnowledgeSource {
   source_url: string | null;
   chunk_count: number;
   updated_at: string;
+  added_by_name: string | null;
 }
 
 /** One CSV data row's verdict from a bulk import (FR-MOD-06.3.2). */
@@ -90,6 +91,7 @@ export interface KnowledgeBulkRowResult {
   status: 'imported' | 'skipped';
   id: string | null;
   chunk_count: number | null;
+  added_by_name: string | null;
   error: string | null;
 }
 

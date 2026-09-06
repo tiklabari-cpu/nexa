@@ -17,6 +17,7 @@ function source(type: string, id = type): KnowledgeSource {
     source_url: null,
     chunk_count: 1,
     updated_at: '2026-01-01T00:00:00.000Z',
+    added_by_name: null,
   };
 }
 

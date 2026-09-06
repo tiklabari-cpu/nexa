@@ -402,8 +402,8 @@ function csvToText(body: string): string {
  */
 export function titleFromFilename(filename: string, maxLength = 200): string {
   const base = filename.split(/[\\/]/).pop() ?? '';
-  // eslint-disable-next-line no-control-regex
   const clean = base
+    // eslint-disable-next-line no-control-regex -- stripping control chars is the point.
     .replace(/[\u0000-\u001f\u007f]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();

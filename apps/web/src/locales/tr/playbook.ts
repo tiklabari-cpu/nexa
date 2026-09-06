@@ -406,6 +406,7 @@ export const playbook: Messages = {
   'playbook.profile.save': 'Profili kaydet',
   'playbook.profile.saving': 'Kaydediliyor…',
   'playbook.profile.previewTitle': 'Önizleme',
+  'playbook.profile.sampleReply': 'Örnek yanıt',
   'playbook.profile.unnamedAssistant': 'Adsız asistan',
   'playbook.profile.aiAssistant': 'AI asistanı',
   'playbook.profile.online': 'Çevrimiçi',

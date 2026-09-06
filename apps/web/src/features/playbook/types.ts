@@ -1,3 +1,7 @@
+import type { AnswerLength } from '@nexa/types';
+
+export type { AnswerLength };
+
 export interface SkillStep {
   type:
     'detect_intent' | 'request_info' | 'tag' | 'summarize' | 'send_message' | 'transfer_to_team';
@@ -23,8 +27,6 @@ export interface Skill {
   updated_at: string;
   created_by_name: string | null;
 }
-
-export type AnswerLength = 'short' | 'medium' | 'long';
 
 export interface AiAgent {
   id: string;

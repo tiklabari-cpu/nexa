@@ -7,6 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readPersona, shapeAnswer } from '@nexa/types';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { AiAgent } from './types.js';
@@ -18,7 +19,7 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   return { ...actual, useApiClient: () => api };
 });
 
-const { ProfileForm } = await import('./ProfileForm.js');
+const { ProfileForm, PERSONA_PREVIEW_PASSAGES } = await import('./ProfileForm.js');
 
 const AGENT: AiAgent = {
   id: 'agent-1',
@@ -109,6 +110,36 @@ describe('ProfileForm', () => {
     // The preview still renders so a viewer sees the current persona.
     const previews = screen.getAllByText('Ada');
     expect(previews.length).toBeGreaterThan(0);
+  });
+});
+
+describe('PersonaPreview shapes a sample reply with the same helper as the engine (FR-MOD-06.4)', () => {
+  it('shows exactly what shapeAnswer(readPersona(...)) produces for the current fields', () => {
+    // Not a second, hand-rolled approximation of the rule: the same functions
+    // the engine calls (`skill-engine.ts`), given the same persona shape, must
+    // produce the exact string this component renders.
+    renderForm({ ...AGENT, tone: 'friendly', languages: ['en'], answer_length: 'short' });
+
+    const persona = readPersona({ tone: 'friendly', languages: ['en'], answerLength: 'short' });
+    const expected = shapeAnswer(PERSONA_PREVIEW_PASSAGES, persona, { language: 'en' }).text;
+
+    expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+
+  it('grows the sample reply when answer length changes from short to long', async () => {
+    const user = userEvent.setup();
+    renderForm({ ...AGENT, tone: null, languages: ['en'], answer_length: 'short' });
+
+    const shortPersona = readPersona({ languages: ['en'], answerLength: 'short' });
+    const shortReply = shapeAnswer(PERSONA_PREVIEW_PASSAGES, shortPersona, { language: 'en' }).text;
+    expect(screen.getByText(shortReply)).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Answer length'), 'long');
+
+    const longPersona = readPersona({ languages: ['en'], answerLength: 'long' });
+    const longReply = shapeAnswer(PERSONA_PREVIEW_PASSAGES, longPersona, { language: 'en' }).text;
+    expect(screen.getByText(longReply)).toBeInTheDocument();
+    expect(longReply.length).toBeGreaterThan(shortReply.length);
   });
 });
 

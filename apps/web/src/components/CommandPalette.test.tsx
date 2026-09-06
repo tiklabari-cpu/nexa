@@ -8,13 +8,14 @@
  * which the API's own suites own.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { defaultScopesForRole } from '@nexa/types';
 import { CommandPalette } from './CommandPalette.js';
 import { useAuth } from '../lib/auth-store.js';
+import { useLeaveGuard } from '../lib/dirty-guard.js';
 
 /** Surfaces the current location so navigation can be asserted. */
 function LocationProbe(): React.ReactElement {
@@ -173,6 +174,32 @@ describe('command palette', () => {
     expect(screen.getByText('Reports module')).toBeInTheDocument();
     // The palette closes behind the jump rather than lingering over the target.
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  /**
+   * The palette is the third way out of a screen holding unsaved work, after
+   * the nav rail and the browser itself (FR-MOD-06.2.1). It is also the fastest
+   * — two keystrokes and the module is gone — so a guard that skipped it would
+   * leave the quickest route to the loss unguarded.
+   */
+  it('asks before jumping away from unsaved work, and stays put when declined', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderPalette(defaultScopesForRole('admin'));
+
+    // A module on screen is holding half-typed work.
+    const { unmount } = renderHook(() => useLeaveGuard(true, 'Discard your half-typed skill?'));
+
+    await openPalette(user);
+    await user.type(screen.getByRole('combobox', { name: 'Search or jump to' }), 'report');
+    await user.keyboard('{Enter}');
+
+    expect(confirm).toHaveBeenCalledWith('Discard your half-typed skill?');
+    expect(screen.queryByText('Reports module')).toBeNull();
+    expect(screen.getByText('Inbox module')).toBeInTheDocument();
+
+    confirm.mockRestore();
+    unmount();
   });
 
   it('matches a module by keyword, not only its label', async () => {

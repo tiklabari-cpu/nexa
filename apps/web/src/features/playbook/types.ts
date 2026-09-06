@@ -44,6 +44,23 @@ export interface SkillLogEntry {
   ok: boolean;
 }
 
+/**
+ * One recorded execution of a skill (`GET /skills/:skillId/runs`).
+ *
+ * `status` is whether the run completed; `outcome` is what it decided to do to
+ * the chat — the two answer different questions, and a run can succeed while
+ * deciding to do nothing. `outcome` is null for runs recorded before the log
+ * gained one, so the UI must render a status-only row rather than a blank.
+ */
+export interface SkillRun {
+  id: string;
+  chat_id: string | null;
+  status: 'succeeded' | 'failed' | 'aborted';
+  outcome: 'answered' | 'handed_off' | 'skipped' | null;
+  ran_at: string;
+  log: SkillLogEntry[];
+}
+
 export interface SkillPreview {
   outcome: 'answered' | 'handed_off' | 'skipped';
   reply: string | null;

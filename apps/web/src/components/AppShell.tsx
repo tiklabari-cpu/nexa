@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, type ReactElement } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
+import { confirmLeave } from '../lib/dirty-guard.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { useNavPinned } from '../lib/nav-store.js';
 import { THEMES, THEME_NAMES, useTheme, type Theme } from '../lib/theme.js';
@@ -331,6 +332,13 @@ function RailButton({ item, pinned }: { item: NavDestination; pinned: boolean })
       to={item.to}
       aria-label={accessibleLabel}
       title={accessibleLabel}
+      // The rail is where unsaved work is most often thrown away: the screen
+      // that holds it cannot see this click, so the click asks on its behalf
+      // (`lib/dirty-guard.tsx`). With nothing dirty this is a no-op — no
+      // dialog, no delay (FR-MOD-06.2.1).
+      onClick={(event) => {
+        if (!confirmLeave()) event.preventDefault();
+      }}
       className={({ isActive }) =>
         `${shared} ${isActive ? 'bg-white/10 text-white' : 'text-white/50 hover:bg-white/5 hover:text-white'}`
       }

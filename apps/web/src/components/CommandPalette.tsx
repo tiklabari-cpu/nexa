@@ -48,6 +48,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ApiClientError, errorMessageKey } from '../lib/api-client.js';
 import { useApiClient, useAuth, type CurrentAgent } from '../lib/auth-store.js';
+import { confirmLeave } from '../lib/dirty-guard.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
 import { Banner } from './ui/index.js';
 import { EmptyState } from './EmptyState.js';
@@ -295,6 +296,11 @@ export function CommandPalette(): ReactElement | null {
         label,
         icon: dest.icon,
         run: () => {
+          // The palette is the third way out of a screen holding unsaved work,
+          // after the nav rail and the browser itself (`lib/dirty-guard.tsx`).
+          // A guard that covers two of three is the same silent loss, reached
+          // by keyboard.
+          if (!confirmLeave()) return;
           navigate(dest.to);
           close();
         },
@@ -311,6 +317,7 @@ export function CommandPalette(): ReactElement | null {
           sub: customer.email ?? customer.phone ?? undefined,
           icon: '◫',
           run: () => {
+            if (!confirmLeave()) return;
             navigate(`/app/customers?customer=${customer.id}`);
             close();
           },
@@ -326,6 +333,7 @@ export function CommandPalette(): ReactElement | null {
           sub: chat.last_event?.text ?? chat.id,
           icon: '▤',
           run: () => {
+            if (!confirmLeave()) return;
             navigate(`/app/inbox?chat=${chat.id}`);
             close();
           },
@@ -341,6 +349,7 @@ export function CommandPalette(): ReactElement | null {
           sub: `#${ticket.id}${ticket.customer_name ? ` · ${ticket.customer_name}` : ''}`,
           icon: '▦',
           run: () => {
+            if (!confirmLeave()) return;
             navigate(`/app/inbox?ticket=${ticket.id}`);
             close();
           },

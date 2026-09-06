@@ -230,8 +230,27 @@ export const playbook: Messages = {
   'playbook.knowledge.noneInTab': 'No {type} sources yet.',
   'playbook.knowledge.indexed': 'Indexed',
   'playbook.knowledge.empty': 'Empty',
-  'playbook.knowledge.deleteLabel': 'Delete {name}',
   'playbook.knowledge.delete': 'Delete',
+
+  // Row actions — the “…” menu, and the two dialogs behind it
+  // (KnowledgeSourceActions.tsx).
+  'playbook.knowledge.actionsLabel': 'Actions for {name}',
+  'playbook.knowledge.edit': 'Edit',
+  'playbook.knowledge.reindex': 'Reindex',
+  'playbook.knowledge.reindexing': 'Reindexing…',
+  'playbook.knowledge.editTitle': 'Edit {name}',
+  'playbook.knowledge.editDescription': 'Changing the text re-indexes the source.',
+  'playbook.knowledge.editUrlHelp': 'Saving a new address crawls it again.',
+  'playbook.knowledge.editContentHelp':
+    'Leave empty to keep the current text. Anything you enter replaces it.',
+  'playbook.knowledge.editFileNote':
+    'A file’s text comes from the file you uploaded, so only the title can be changed here. To replace the text, add the new file as a source.',
+  'playbook.knowledge.saveChanges': 'Save changes',
+  'playbook.knowledge.saving': 'Saving…',
+  'playbook.knowledge.deleteTitle': 'Delete {name}?',
+  'playbook.knowledge.deleteDescription':
+    'Everything indexed from this source is removed with it, and the AI stops answering from it. This cannot be undone.',
+  'playbook.knowledge.deleteConfirm': 'Delete source',
 
   // Skill editor (SkillEditor.tsx)
   'playbook.editor.name': 'Name',

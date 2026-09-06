@@ -817,7 +817,13 @@ describe('module parity matrix — what is still owed', () => {
       // reads but does not author (`13.7-n` paid off the read side only). A
       // phone has no filesystem picker this app exposes, so nothing here
       // re-scopes.
-      contractEndpoints: 203,
+      // 203 -> 204 with `/knowledge-sources/{sourceId}/reindex` (V1-KNOWLEDGE-c,
+      // tm 198.3). Refreshing a knowledge source from its origin — Owner/Admin
+      // authoring behind `agents-bot--all:rw`, in the same Playbook surface the
+      // phone reads but does not author. The sibling `PATCH` on
+      // `/knowledge-sources/{sourceId}` added an operation, not a path, so it
+      // does not move this count.
+      contractEndpoints: 204,
       scopeBoundaries: 1,
     });
   });

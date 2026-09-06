@@ -307,6 +307,8 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSourcesFile"
   /knowledge-sources/{sourceId}:
     $ref: "./paths/playbook.yaml#/knowledgeSource"
+  /knowledge-sources/{sourceId}/reindex:
+    $ref: "./paths/playbook.yaml#/knowledgeSourceReindex"
 
   /copilot/knowledge:
     $ref: "./paths/copilot.yaml#/knowledge"

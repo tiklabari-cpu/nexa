@@ -146,6 +146,31 @@ const uploadSourceBody = z.object({
 });
 
 /**
+ * Editing an existing source (FR-MOD-06.3.3).
+ *
+ * The shape mirrors `createSourceBody`'s split, because the same fact decides
+ * both: a source's text comes from exactly one place, and only that place is
+ * editable. `name` is a title and belongs to every type. `content` belongs to
+ * `article` and `faq` — the types whose text was typed. `source_url` belongs to
+ * `website`, whose text is the crawl. `file` takes neither, since its text is
+ * the bytes that were uploaded; accepting a pasted `content` for it would undo
+ * exactly what `createSourceBody` refuses `type: file` to protect.
+ *
+ * Which type the source *is* is a database fact, not a body field, so the
+ * per-type check cannot live in the schema — it runs in the handler against the
+ * loaded row. What lives here is the part that needs no row: the field is
+ * refused when it is present and wrong, never dropped, so an admin who sends
+ * the wrong one is told rather than left believing an edit landed.
+ */
+const updateSourceBody = z
+  .object({
+    name: z.string().trim().min(1).max(200).optional(),
+    content: z.string().trim().min(1).max(100_000).optional(),
+    source_url: z.string().trim().min(1).max(2048).optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
  * The transport ceiling for the upload route only, so the 1 MiB `bodyLimit`
  * every other route inherits stays where `server.ts` put it.
  *
@@ -651,17 +676,9 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         return { source, chunks, addedByName: await creatorName(tx, addedBy) };
       });
 
-      return reply.status(201).send({
-        id: created.source.id,
-        ai_agent_id: created.source.aiAgentId,
-        name: created.source.name,
-        type: created.source.type,
-        status: created.chunks > 0 ? 'ready' : 'empty',
-        source_url: created.source.sourceUrl,
-        chunk_count: created.chunks,
-        updated_at: created.source.updatedAt.toISOString(),
-        added_by_name: created.addedByName,
-      });
+      return reply
+        .status(201)
+        .send(serialiseIndexedSource(created.source, created.chunks, created.addedByName));
     },
   );
 
@@ -744,17 +761,9 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         return { source, chunks, addedByName: await creatorName(tx, addedBy) };
       });
 
-      return reply.status(201).send({
-        id: created.source.id,
-        ai_agent_id: created.source.aiAgentId,
-        name: created.source.name,
-        type: created.source.type,
-        status: created.chunks > 0 ? 'ready' : 'empty',
-        source_url: created.source.sourceUrl,
-        chunk_count: created.chunks,
-        updated_at: created.source.updatedAt.toISOString(),
-        added_by_name: created.addedByName,
-      });
+      return reply
+        .status(201)
+        .send(serialiseIndexedSource(created.source, created.chunks, created.addedByName));
     },
   );
 
@@ -1003,6 +1012,171 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
     },
   );
 
+  /**
+   * Edit a source (FR-MOD-06.3.3).
+   *
+   * Two orderings carry it, and both are the ones the create paths already
+   * settled on.
+   *
+   * **The row is read before the body is judged**, because which field an edit
+   * may carry is decided by the source's type and the type is not in the
+   * request. A `content` sent for a `website`, or a `source_url` sent for a
+   * `file`, is refused rather than dropped: Zod strips unknown keys, so a field
+   * that is *known but wrong* would otherwise be the one silent failure mode
+   * here — an admin pressing Save on a box whose value never leaves.
+   *
+   * **A new URL is crawled before the write transaction opens**, exactly as in
+   * `POST /knowledge-sources`: the SSRF guard refuses a private target with a
+   * 400 before any fetcher sees it, and the fetch does not hold a row open. A
+   * refused edit leaves the source, its text and its chunks untouched.
+   *
+   * Changed text is re-indexed inside the same transaction as the update. A
+   * rename is not — the name is joined at retrieval time, so no chunk carries
+   * it and there is nothing to rebuild.
+   */
+  app.patch<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId',
+    { config: { scopes: WRITE, aiInference: true } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const body = parse(updateSourceBody, request.body);
+      const tenant = request.tenant();
+
+      const existing = await request.withTenant(async (tx) =>
+        tx.knowledgeSource.findFirst({
+          where: { id, aiAgent: { kind: 'ai_agent' } },
+          select: { id: true, type: true, addedBy: true },
+        }),
+      );
+      // Under RLS a foreign source is simply not visible, so "does not exist"
+      // and "belongs to another workspace" resolve to the same answer — 404,
+      // never 403, which would confirm the id exists somewhere.
+      if (!existing) throw ApiError.notFound('Knowledge source not found.');
+
+      const isWebsite = existing.type === 'website';
+      if (body.content !== undefined && (isWebsite || existing.type === 'file')) {
+        throw ApiError.validation(
+          `content: a ${existing.type} source's text comes from ${
+            isWebsite ? 'its crawl' : 'the file that was uploaded'
+          }, not from this field.`,
+        );
+      }
+      if (body.source_url !== undefined && !isWebsite) {
+        throw ApiError.validation('source_url: only a website source has a URL.');
+      }
+
+      // Crawled outside the transaction, and refused before it: a private or
+      // non-http target never reaches the fetcher and never touches the row.
+      let text: string | null = body.content ?? null;
+      let sourceUrl: string | null = null;
+      if (body.source_url !== undefined) {
+        const url = assertPublicHttpUrl(body.source_url);
+        text = (await crawl(url)).text;
+        sourceUrl = url.toString();
+      }
+
+      const updated = await request.withTenant(async (tx) => {
+        const { count } = await tx.knowledgeSource.updateMany({
+          where: { id },
+          data: {
+            ...(body.name === undefined ? {} : { name: body.name }),
+            ...(text === null ? {} : { content: text }),
+            ...(sourceUrl === null ? {} : { sourceUrl }),
+            updatedAt: new Date(),
+          },
+        });
+        // The row was there a moment ago; if it is gone now it was deleted
+        // between the two statements, which is the same answer as never having
+        // existed.
+        if (count === 0) throw ApiError.notFound('Knowledge source not found.');
+
+        // Re-chunked and re-embedded in the same transaction as the update, so
+        // the source can never be readable as edited while still answering from
+        // the text it replaced. Untouched text needs no rebuild — chunks hold
+        // the content, not the title.
+        const chunks =
+          text === null
+            ? await tx.knowledgeChunk.count({ where: { sourceId: id } })
+            : await knowledge.index(tx, tenant, id, text);
+
+        const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
+        return { source, chunks, addedByName: await creatorName(tx, existing.addedBy) };
+      });
+
+      return reply.send(
+        serialiseIndexedSource(updated.source, updated.chunks, updated.addedByName),
+      );
+    },
+  );
+
+  /**
+   * Reindex a source (FR-MOD-06.3.3) — refresh it from wherever its text came
+   * from, without changing what it is.
+   *
+   * For a `website` that means crawling the stored URL again, and **the SSRF
+   * guard runs again on it** (NFR-S7). "It was validated when it was added" is
+   * the one assumption that must not be made here: the row is not the request
+   * that created it. It can have been written before a guard existed, by a
+   * later importer, or straight into the database — and this endpoint turns any
+   * value sitting in that column into an outbound request the server makes from
+   * inside the network. So the stored value is treated as untrusted input, like
+   * the one the create path took from the body.
+   *
+   * A refusal leaves everything as it was: the old text and the old chunks
+   * survive, so a blocked refresh keeps a stale answer rather than replacing it
+   * with none.
+   *
+   * For every other type there is nothing to fetch, and the text already held
+   * is chunked and embedded again — which is what makes a source that indexed
+   * to nothing recoverable without retyping it.
+   */
+  app.post<{ Params: { sourceId: string } }>(
+    '/knowledge-sources/:sourceId/reindex',
+    { config: { scopes: WRITE, aiInference: true } },
+    async (request, reply) => {
+      const id = parse(uuid, request.params.sourceId);
+      const tenant = request.tenant();
+
+      const existing = await request.withTenant(async (tx) =>
+        tx.knowledgeSource.findFirst({
+          where: { id, aiAgent: { kind: 'ai_agent' } },
+          select: { id: true, type: true, sourceUrl: true, content: true, addedBy: true },
+        }),
+      );
+      if (!existing) throw ApiError.notFound('Knowledge source not found.');
+
+      // A source stored with no text reindexes to zero chunks and reports
+      // `empty` — the honest answer, and one the admin can act on, rather than
+      // an error that leaves them nothing to do.
+      let text = existing.content ?? '';
+      if (existing.type === 'website') {
+        if (!existing.sourceUrl) {
+          throw ApiError.validation('This website source has no URL to crawl.');
+        }
+        // Re-checked, not trusted from creation — and outside the transaction,
+        // so a refusal costs no row lock and writes nothing.
+        const url = assertPublicHttpUrl(existing.sourceUrl);
+        text = (await crawl(url)).text;
+      }
+
+      const refreshed = await request.withTenant(async (tx) => {
+        const { count } = await tx.knowledgeSource.updateMany({
+          where: { id },
+          data: { content: text, updatedAt: new Date() },
+        });
+        if (count === 0) throw ApiError.notFound('Knowledge source not found.');
+
+        const chunks = await knowledge.index(tx, tenant, id, text);
+        const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
+        return { source, chunks, addedByName: await creatorName(tx, existing.addedBy) };
+      });
+
+      return reply.send(
+        serialiseIndexedSource(refreshed.source, refreshed.chunks, refreshed.addedByName),
+      );
+    },
+  );
+
   app.delete<{ Params: { sourceId: string } }>(
     '/knowledge-sources/:sourceId',
     { config: { scopes: WRITE } },
@@ -1027,6 +1201,43 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       return reply.status(204).send();
     },
   );
+}
+
+/**
+ * One shape for a knowledge source that was just indexed, so the four endpoints
+ * that index one — create, upload, edit and reindex — cannot drift apart.
+ *
+ * They already had: `added_by_name` reached three of these replies one release
+ * after the column started being written, so the table showed an author for a
+ * source added one way and a dash for the same source added another. Four
+ * copies of nine lines is how that happens.
+ *
+ * `status` is recomputed from the chunk count rather than read off the row,
+ * because the row was loaded before `index()` ran and still says `indexing`.
+ */
+function serialiseIndexedSource(
+  source: {
+    id: string;
+    aiAgentId: string;
+    name: string;
+    type: string;
+    sourceUrl: string | null;
+    updatedAt: Date;
+  },
+  chunks: number,
+  addedByName: string | null,
+): Record<string, unknown> {
+  return {
+    id: source.id,
+    ai_agent_id: source.aiAgentId,
+    name: source.name,
+    type: source.type,
+    status: chunks > 0 ? 'ready' : 'empty',
+    source_url: source.sourceUrl,
+    chunk_count: chunks,
+    updated_at: source.updatedAt.toISOString(),
+    added_by_name: addedByName,
+  };
 }
 
 /** One shape for an AI agent, so a read and the reply after a PATCH never drift. */

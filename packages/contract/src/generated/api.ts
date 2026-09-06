@@ -2538,6 +2538,80 @@ export interface paths {
     delete: operations['deleteKnowledgeSource'];
     options?: never;
     head?: never;
+    /**
+     * Rename a source, or change what it says
+     * @description Edits the source itself (FR-MOD-06.3.3). At least one field is required;
+     *     an empty body is a 400 rather than a silent no-op.
+     *
+     *     **What may be edited follows from where the source's text came from.**
+     *     `name` is a title and is editable for every type. `content` is editable
+     *     only for `article` and `faq` — the two types whose text the admin typed.
+     *     A `website` is edited through `source_url`, because its text is the crawl
+     *     and not something to hand-write over; a `file`'s text is the bytes that
+     *     were uploaded, so it takes neither, and re-uploading is
+     *     `POST /knowledge-sources/file` (a new source) rather than a pasted string
+     *     that would make "File" a label again. Sending a field a type does not own
+     *     is refused, not ignored.
+     *
+     *     **Changed text is re-indexed in the same transaction as the update.**
+     *     Leaving the old chunks would make the edit cosmetic: the source would read
+     *     as changed in the table and keep answering customers from the text the
+     *     admin believes they replaced. This is the same reasoning that makes a
+     *     delete cascade to its chunks.
+     *
+     *     A new `source_url` is crawled through the same SSRF guard `POST
+     *     /knowledge-sources` uses (NFR-S7), before the transaction opens — a
+     *     refused URL leaves the source exactly as it was.
+     */
+    patch: operations['updateKnowledgeSource'];
+    trace?: never;
+  };
+  '/knowledge-sources/{sourceId}/reindex': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Refresh a source from where its text came from
+     * @description Re-fetches and re-indexes an existing source (FR-MOD-06.3.3, "reindex").
+     *     No body: what is refreshed is the source as stored.
+     *
+     *     **A separate endpoint from `PATCH`, not a flag on it, because the two ask
+     *     different questions.** A PATCH says *this source is now something else*;
+     *     a reindex says *this source is unchanged — go and get it again*. For a
+     *     `website` that difference is the whole point: nothing about the row
+     *     changes, but the site behind it has, and without this the source stays
+     *     stale until someone deletes and re-adds it. It is a POST rather than a
+     *     PUT/PATCH because it is an action with an outbound effect, not the
+     *     assignment of a state a caller could have named.
+     *
+     *     For a `website` the stored URL is crawled again. For every other type the
+     *     text already held is chunked and embedded again — which is what makes a
+     *     source that indexed to nothing (an empty crawl, a chunker change)
+     *     recoverable without retyping it.
+     *
+     *     **The SSRF guard runs again on the stored URL** (NFR-S7). "It was checked
+     *     when it was added" is exactly the assumption to refuse: the row is not the
+     *     request that created it, and a stored `source_url` naming a private,
+     *     loopback, link-local or non-http target must be refused here, before any
+     *     fetch. A refused reindex is a 400 that leaves the source, its text and its
+     *     chunks untouched — the stale answer is kept rather than replaced by
+     *     nothing. (The DNS half of the guard — a public *name* that resolves to a
+     *     private address — belongs with a real fetcher and lives in
+     *     `assertPublicHttpUrlResolved`, where the webhook sender uses it; the crawl
+     *     in this build is a deterministic in-process stub that opens no socket, so
+     *     there is no resolved address to pin.)
+     */
+    post: operations['reindexKnowledgeSource'];
+    delete?: never;
+    options?: never;
+    head?: never;
     patch?: never;
     trace?: never;
   };
@@ -15012,6 +15086,70 @@ export interface operations {
         };
         content?: never;
       };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateKnowledgeSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          /** @description Only for article and faq sources; refused for website and file. */
+          content?: string;
+          /** @description Only for website sources; refused for the rest. Re-crawled on change. */
+          source_url?: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated, and re-indexed if the text changed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  reindexKnowledgeSource: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        sourceId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Re-fetched and re-indexed */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['KnowledgeSource'];
+        };
+      };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];

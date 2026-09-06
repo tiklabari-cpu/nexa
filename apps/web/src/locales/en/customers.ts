@@ -163,7 +163,17 @@ export const customers: Messages = {
   'traffic.action.startChat': 'Start chat',
   'traffic.action.superviseChat': 'Supervise chat',
   'traffic.action.assignToMe': 'Assign chat to me',
+  'traffic.action.viewProfile': 'View profile',
   'traffic.action.editContact': 'Edit contact',
+
+  // Visitor 360° panel — VisitorPanel.tsx, opened in place from the row
+  // (FR-MOD-13.2). Identity + visit count + came from + groups land in 203.1;
+  // visited pages and pre-chat form answers are 203.2's addition to the same
+  // panel.
+  'traffic.panel.hiddenName': 'Visitor',
+  'traffic.panel.piiHidden':
+    'Contact details are hidden. Ask an admin for customer edit access to view them.',
+  'traffic.panel.offBoard': 'This visitor is no longer online.',
 
   // Traffic filter panel — TrafficFilters.tsx (field labels/options/errors stay
   // in traffic-filters.ts, English-only — see the file's own note)

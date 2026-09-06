@@ -46,6 +46,15 @@ interface ModalProps {
   className?: string;
   /** Vertically centre (default) or pin near the top for long, list-like content. */
   align?: 'center' | 'top';
+  /**
+   * `'center'` (default) is the one dialog overlay every other caller uses.
+   * `'right'` is a full-height slide-over docked to the edge instead — the
+   * shape the Traffic 360° panel needs (FR-MOD-13.2): a record opened
+   * alongside a live list rather than a centred interruption of it. `align`
+   * is meaningless in this mode (there is no vertical position to choose)
+   * and is ignored.
+   */
+  dock?: 'center' | 'right';
 }
 
 export function Modal({
@@ -56,6 +65,7 @@ export function Modal({
   children,
   className,
   align = 'center',
+  dock = 'center',
 }: ModalProps): ReactElement {
   const panelRef = useRef<HTMLDivElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
@@ -113,8 +123,10 @@ export function Modal({
   return (
     <div
       className={cn(
-        'fixed inset-0 z-50 flex justify-center bg-black/40 p-6',
-        align === 'top' ? 'items-start pt-[12vh]' : 'items-center',
+        'fixed inset-0 z-50 flex bg-black/40',
+        dock === 'right'
+          ? 'justify-end'
+          : cn('justify-center p-6', align === 'top' ? 'items-start pt-[12vh]' : 'items-center'),
       )}
       // A mousedown on the backdrop dismisses; stopped on the panel so a drag
       // ending outside is not counted as a dismiss.
@@ -129,7 +141,9 @@ export function Modal({
         tabIndex={-1}
         onMouseDown={(event) => event.stopPropagation()}
         className={cn(
-          'w-full max-w-md rounded-lg border border-border bg-surface p-5 shadow-md outline-none',
+          dock === 'right'
+            ? 'h-full w-full max-w-md overflow-y-auto border-l border-border bg-surface p-5 shadow-md outline-none'
+            : 'w-full max-w-md rounded-lg border border-border bg-surface p-5 shadow-md outline-none',
           className,
         )}
       >

@@ -154,7 +154,14 @@ export const customers: Messages = {
   'traffic.action.startChat': 'Sohbet başlat',
   'traffic.action.superviseChat': 'Sohbeti gözetle',
   'traffic.action.assignToMe': 'Sohbeti bana ata',
+  'traffic.action.viewProfile': 'Profili görüntüle',
   'traffic.action.editContact': 'Kişiyi düzenle',
+
+  // Ziyaretçi 360° paneli — VisitorPanel.tsx, satırdan yerinde açılır (FR-MOD-13.2).
+  'traffic.panel.hiddenName': 'Ziyaretçi',
+  'traffic.panel.piiHidden':
+    'İletişim bilgileri gizli. Görmek için bir yöneticiden müşteri düzenleme yetkisi isteyin.',
+  'traffic.panel.offBoard': 'Bu ziyaretçi artık çevrimiçi değil.',
 
   // Traffic filter panel — TrafficFilters.tsx (field labels/options/errors stay
   // in traffic-filters.ts, English-only — see the file's own note)

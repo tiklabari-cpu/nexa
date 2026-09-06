@@ -91,4 +91,75 @@ test.describe('AI Agent (MOD-06)', () => {
 
     await agentPage.screenshot({ path: 'kanit/33-knowledge-website.png', fullPage: true });
   });
+
+  /**
+   * The editor's top bar (FR-MOD-06.2.1): the run log, and the warning before
+   * walking away from unsaved work.
+   *
+   * The warning is the half that cannot be proven anywhere else. Its two paths
+   * out — the browser's `beforeunload` and the app's own nav rail — are separate
+   * mechanisms, and only a real browser can show that clicking another module
+   * raises a dialog and that declining it leaves you where you were. jsdom can
+   * assert the router did not move; it cannot assert a browser dialog existed.
+   */
+  test('opens the run log, and warns before leaving unsaved edits (FR-MOD-06.2.1)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/playbook');
+    await agentPage.getByRole('button', { name: /Where is my order/ }).click();
+
+    // Run log: the endpoint has answered this since the engine shipped; until
+    // now nothing on the web asked it. Which runs exist depends on what else
+    // the suite has driven through the agent, so this asserts the panel opened
+    // and loaded — the empty and populated shapes are pinned in the unit tests.
+    const runLog = agentPage.getByRole('button', { name: /^\d+ runs?$/ });
+    await expect(runLog).toHaveAttribute('aria-expanded', 'false');
+    await runLog.click();
+    const panel = agentPage.getByRole('region', { name: 'Run log' });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByText('Could not load the run log.')).toHaveCount(0);
+
+    await agentPage.screenshot({ path: 'kanit/06.2.1-skill-run-log.png', fullPage: true });
+
+    // Now make it dirty. The instruction is edited rather than the name because
+    // other specs find this skill by name; the steps are untouched, so the
+    // engine behaves identically for anything running in parallel.
+    const instruction = agentPage.getByLabel('Instruction');
+    const original = await instruction.inputValue();
+    await instruction.fill(`${original}
+Edited at ${Date.now()}, not saved.`);
+
+    // Leaving is refused. Playwright dismisses dialogs by default, which is
+    // exactly the "no, I want to stay" answer.
+    const messages: string[] = [];
+    agentPage.on('dialog', (dialog) => {
+      messages.push(dialog.message());
+      void dialog.dismiss();
+    });
+
+    await agentPage.getByRole('link', { name: 'Reports' }).click();
+    await expect
+      .poll(() => messages.length, { message: 'the rail click should have asked first' })
+      .toBe(1);
+    expect(messages.join(' ')).toContain('unsaved changes');
+    await expect(agentPage).toHaveURL(/\/app\/playbook/);
+    await expect(instruction).toBeVisible();
+
+    // Saved, the same click goes straight through with nothing to ask about.
+    const save = agentPage.getByRole('button', { name: 'Save changes' });
+    await save.click();
+    await expect(save).toBeDisabled();
+
+    await agentPage.getByRole('link', { name: 'Reports' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/reports/);
+    expect(messages).toHaveLength(1);
+
+    // Put the fixture back the way it was found.
+    await agentPage.goto('/app/playbook');
+    await agentPage.getByRole('button', { name: /Where is my order/ }).click();
+    await agentPage.getByLabel('Instruction').fill(original);
+    const saveAgain = agentPage.getByRole('button', { name: 'Save changes' });
+    await saveAgain.click();
+    await expect(saveAgain).toBeDisabled();
+  });
 });

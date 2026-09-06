@@ -846,6 +846,11 @@ test.describe('WCAG 2.1 AA (axe)', () => {
             skillId = skill.id;
             owedSkillIds.push(skill.id);
             await expect(agentPage.getByRole('region', { name: skill.name })).toBeVisible();
+            // The top bar's run log is a disclosure, so its panel is not in the
+            // tree until it is opened — scanned closed, the empty state and the
+            // expanded button would never be looked at (FR-MOD-06.2.1).
+            await agentPage.getByRole('button', { name: /^\d+ runs?$/ }).click();
+            await expect(agentPage.getByRole('region', { name: 'Run log' })).toBeVisible();
           });
         } finally {
           if (skillId) {

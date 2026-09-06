@@ -5,7 +5,14 @@
  */
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { confirmDiscard, useCloseGuard, DISCARD_MESSAGE } from './dirty-guard.js';
+import {
+  confirmDiscard,
+  confirmLeave,
+  shouldWarnOnLeave,
+  useCloseGuard,
+  useLeaveGuard,
+  DISCARD_MESSAGE,
+} from './dirty-guard.js';
 
 describe('confirmDiscard', () => {
   it('lets a clean form through without ever asking', () => {
@@ -52,5 +59,91 @@ describe('useCloseGuard', () => {
     );
     act(() => result.current());
     expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Leaving a screen, rather than closing a modal (FR-MOD-06.2.1).
+ *
+ * `beforeunload` cannot be judged in jsdom — no browser dialog is raised and
+ * nothing reports whether one would have been — so the decision lives in a pure
+ * helper that is tested directly, and the listener is tested for the only thing
+ * jsdom can actually observe: that dispatching the event finds a handler that
+ * cancels it.
+ */
+describe('shouldWarnOnLeave', () => {
+  it('warns while there are unsaved edits', () => {
+    expect(shouldWarnOnLeave(true, false)).toBe(true);
+  });
+
+  it('stays quiet when nothing has been changed', () => {
+    expect(shouldWarnOnLeave(false, false)).toBe(false);
+  });
+
+  it('stays quiet mid-save — the work is already on its way to the server', () => {
+    expect(shouldWarnOnLeave(true, true)).toBe(false);
+  });
+
+  it('stays quiet after the save lands, when the form is clean again', () => {
+    expect(shouldWarnOnLeave(false, false)).toBe(false);
+  });
+});
+
+describe('useLeaveGuard + confirmLeave', () => {
+  it('lets navigation through without asking while no screen is dirty', () => {
+    const confirm = vi.fn(() => false);
+    expect(confirmLeave(confirm)).toBe(true);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
+  it('asks with the registering screen’s own wording, and blocks when declined', () => {
+    const confirm = vi.fn(() => false);
+    renderHook(() => useLeaveGuard(true, 'Lose this skill’s edits?'));
+
+    expect(confirmLeave(confirm)).toBe(false);
+    expect(confirm).toHaveBeenCalledWith('Lose this skill’s edits?');
+  });
+
+  it('lets navigation through when the discard is confirmed', () => {
+    renderHook(() => useLeaveGuard(true, DISCARD_MESSAGE));
+    expect(confirmLeave(() => true)).toBe(true);
+  });
+
+  it('stops asking once the screen unmounts', () => {
+    const confirm = vi.fn(() => false);
+    const { unmount } = renderHook(() => useLeaveGuard(true, DISCARD_MESSAGE));
+    expect(confirmLeave(confirm)).toBe(false);
+
+    unmount();
+    expect(confirmLeave(confirm)).toBe(true);
+    expect(confirm).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops asking as soon as the screen stops being dirty', () => {
+    const confirm = vi.fn(() => false);
+    const { rerender } = renderHook(
+      ({ active }: { active: boolean }) => useLeaveGuard(active, DISCARD_MESSAGE),
+      { initialProps: { active: true } },
+    );
+    expect(confirmLeave(confirm)).toBe(false);
+
+    rerender({ active: false });
+    expect(confirmLeave(confirm)).toBe(true);
+  });
+
+  it('cancels a browser reload while dirty, and stops once clean', () => {
+    const { rerender } = renderHook(
+      ({ active }: { active: boolean }) => useLeaveGuard(active, DISCARD_MESSAGE),
+      { initialProps: { active: true } },
+    );
+
+    const dirtyEvent = new Event('beforeunload', { cancelable: true });
+    act(() => void window.dispatchEvent(dirtyEvent));
+    expect(dirtyEvent.defaultPrevented).toBe(true);
+
+    rerender({ active: false });
+    const cleanEvent = new Event('beforeunload', { cancelable: true });
+    act(() => void window.dispatchEvent(cleanEvent));
+    expect(cleanEvent.defaultPrevented).toBe(false);
   });
 });

@@ -17,11 +17,13 @@ import { VirtualList } from '../../components/VirtualList.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { confirmLeave } from '../../lib/dirty-guard.js';
 import { formatDate } from '../../lib/format.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { describeStep, type AiAgent, type KnowledgeSource, type Skill } from './types.js';
 import { SkillEditor } from './SkillEditor.js';
+import { useSkillActiveToggle } from './useSkillActiveToggle.js';
 import { ProfileForm } from './ProfileForm.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
@@ -140,11 +142,9 @@ export function PlaybookPage(): ReactElement {
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['playbook'] });
 
-  const toggleSkill = useMutation({
-    mutationFn: ({ id, active }: { id: string; active: boolean }) =>
-      api.patch<Skill>(`/skills/${id}`, { active }),
-    onSuccess: invalidate,
-  });
+  // Shared with the editor's top bar so the two on/off switches are one
+  // control with one behaviour (`useSkillActiveToggle`).
+  const toggleSkill = useSkillActiveToggle();
 
   const toggleAgent = useMutation({
     mutationFn: ({ id, active }: { id: string; active: boolean }) =>
@@ -559,7 +559,13 @@ export function PlaybookPage(): ReactElement {
                                 >
                                   <button
                                     type="button"
-                                    onClick={() => setSelectedId(skill.id)}
+                                    // Opening another skill replaces the editor,
+                                    // which is a way of leaving unsaved work
+                                    // behind just as final as walking to another
+                                    // module — so it asks the same question.
+                                    onClick={() => {
+                                      if (confirmLeave()) setSelectedId(skill.id);
+                                    }}
                                     className="min-w-0 flex-1 text-left"
                                   >
                                     <span className="block truncate text-sm font-medium">

@@ -19,11 +19,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { defaultScopesForRole } from '@nexa/types';
 import { AppShell } from './AppShell.js';
 import { readBrandId, useAuth, useBrandStore } from '../lib/auth-store.js';
+import { useLeaveGuard } from '../lib/dirty-guard.js';
 import { useNavStore } from '../lib/nav-store.js';
 import { installFakeWebSocket } from '../test/fake-socket.js';
 
@@ -837,5 +839,74 @@ describe('nav pin (FR-MOD-01.1.1 · 01.5)', () => {
       'false',
     );
     expect(localStorage.getItem(PIN_KEY_A2)).toBeNull();
+  });
+});
+
+/**
+ * Leaving a module that holds unsaved work (FR-MOD-06.2.1).
+ *
+ * The rail is where that work is most often thrown away, and it is the one
+ * click the screen holding the work cannot see. `beforeunload` covers the tab
+ * close; without this, clicking another module stays silent — the larger of the
+ * two losses, unguarded. Tested here rather than in the editor because it is the
+ * *router* that must not navigate.
+ */
+describe('leaving a module with unsaved changes (FR-MOD-06.2.1)', () => {
+  function GuardedModule(): ReactElement {
+    useLeaveGuard(true, 'Discard your half-typed skill?');
+    return <p>Inbox module</p>;
+  }
+
+  function renderGuardedShell() {
+    return render(
+      <QueryClientProvider
+        client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      >
+        <MemoryRouter initialEntries={['/app/inbox']}>
+          <Routes>
+            <Route path="/app" element={<AppShell />}>
+              <Route path="inbox" element={<GuardedModule />} />
+              <Route path="reports" element={<p>Reports module</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('asks before navigating away, and stays put when the answer is no', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderGuardedShell();
+
+    await user.click(screen.getByRole('link', { name: 'Reports' }));
+
+    expect(confirm).toHaveBeenCalledWith('Discard your half-typed skill?');
+    expect(screen.getByText('Inbox module')).toBeInTheDocument();
+    expect(screen.queryByText('Reports module')).not.toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it('navigates once the discard is confirmed', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
+    renderGuardedShell();
+
+    await user.click(screen.getByRole('link', { name: 'Reports' }));
+
+    expect(await screen.findByText('Reports module')).toBeInTheDocument();
+    confirm.mockRestore();
+  });
+
+  it('never asks when no module is holding unsaved work', async () => {
+    const user = userEvent.setup();
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    renderShell('/app/inbox');
+
+    await user.click(screen.getByRole('link', { name: 'Reports' }));
+
+    expect(confirm).not.toHaveBeenCalled();
+    expect(await screen.findByText('Reports module')).toBeInTheDocument();
+    confirm.mockRestore();
   });
 });

@@ -1,19 +1,32 @@
 /**
- * Skill editor: instruction → compiled steps → preview.
+ * Skill editor: a top bar, then instruction → compiled steps → preview.
  *
  * The three sit on one screen because they are one decision. An admin writing
  * automation needs to see what their words became and what those steps do to a
  * real message, before a customer is the one who finds out.
+ *
+ * The top bar carries what the PRD counts along it (FR-MOD-06.2.1): the run
+ * log, the on/off switch, and Save. The run log is there because the question
+ * "why did the customer get that?" is asked *about the skill you are looking
+ * at* — the endpoint has always answered it, but nothing on the web ever asked.
+ * The switch is there because going back to the list to flip a skill you just
+ * finished editing is a detour with no reason. And leaving with unsaved edits
+ * now asks first, on both paths out: the browser's and the app's own nav.
  */
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo, useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { Card } from '../../components/Page.js';
-import { StatusDot } from '../../components/StatusDot.js';
+import { EmptyState } from '../../components/EmptyState.js';
+import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useLeaveGuard, shouldWarnOnLeave } from '../../lib/dirty-guard.js';
+import { formatDateTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
-import type { Skill, SkillPreview, SkillStep } from './types.js';
+import type { Skill, SkillPreview, SkillRun, SkillStep } from './types.js';
 import { moveStep, stepIssues } from './step-reorder.js';
+import { useSkillActiveToggle } from './useSkillActiveToggle.js';
 
 /**
  * Step wording, translated (NFR-I18N2).
@@ -91,6 +104,9 @@ function issueMessageText(step: SkillStep, t: TFunction): string | null {
   }
 }
 
+/** Ties the run-log disclosure button to the panel it expands (NFR-A11Y). */
+const RUN_LOG_ID = 'skill-run-log';
+
 /**
  * Steps carry a stable client id so the reorderable list keys by identity, not
  * position — which is what lets the browser keep keyboard focus on a row as it
@@ -122,6 +138,7 @@ export function SkillEditor({
   const [sample, setSample] = useState('Where is my order?');
   const [announcement, setAnnouncement] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [runLogOpen, setRunLogOpen] = useState(false);
 
   const steps = useMemo(() => entries.map((entry) => entry.step), [entries]);
   // Gating (count, index) comes from the shared, tested `stepIssues` — the
@@ -158,15 +175,51 @@ export function SkillEditor({
       }),
   });
 
+  // What a save would send, and what is already on the server — compared as
+  // one value so "is there anything to lose?" has a single answer.
+  const draft = useMemo(
+    () => JSON.stringify({ name, instruction, steps }),
+    [name, instruction, steps],
+  );
+  const [savedDraft, setSavedDraft] = useState<string | null>(null);
+
   const save = useMutation({
     mutationFn: () => api.patch<Skill>(`/skills/${skill.id}`, { name, instruction, steps }),
-    onSuccess: onSaved,
+    onSuccess: () => {
+      // Remember what we just sent. `onSaved` only *starts* the parent's
+      // refetch; until it lands the `skill` prop still describes the old row,
+      // and without this the editor would count itself dirty — and warn about
+      // discarding — for a skill that was saved a moment ago.
+      setSavedDraft(draft);
+      onSaved();
+    },
   });
 
-  const dirty =
-    name !== skill.name ||
-    instruction !== (skill.instruction ?? '') ||
-    JSON.stringify(steps) !== JSON.stringify(skill.steps);
+  const persisted = JSON.stringify({
+    name: skill.name,
+    instruction: skill.instruction ?? '',
+    steps: skill.steps,
+  });
+  const dirty = draft !== (savedDraft ?? persisted);
+
+  // Turning the skill on/off from here runs the *same* mutation the list row
+  // runs — see `useSkillActiveToggle` for why that is one definition.
+  const toggleActive = useSkillActiveToggle();
+
+  // Recent runs are fetched only once the log is opened: an editor that pulls
+  // an audit trail nobody asked for on every skill click is an invisible
+  // request storm. `staleTime` keeps reopening it from refetching each time.
+  const runs = useQuery({
+    queryKey: ['playbook', 'skill-runs', skill.id],
+    queryFn: () => api.get<{ items: SkillRun[] }>(`/skills/${skill.id}/runs`),
+    enabled: runLogOpen,
+    staleTime: 30_000,
+  });
+
+  // Both ways out of a screen with unsaved work — the browser's (reload, tab
+  // close) and the app's own nav — ask first. Not while saving: those changes
+  // are already on their way.
+  useLeaveGuard(shouldWarnOnLeave(dirty, save.isPending), t('playbook.editor.discardConfirm'));
 
   // The server rejects a blank name (`z.string().trim().min(1)`) — the client
   // gate must match that threshold exactly, not be stricter (FR-MOD-06.2.2).
@@ -196,6 +249,95 @@ export function SkillEditor({
   return (
     <div className="flex flex-col gap-4">
       <Card>
+        {/* Top bar (FR-MOD-06.2.1): run log · on/off · Save. */}
+        <div className="border-b border-border">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-2.5">
+            <button
+              type="button"
+              aria-expanded={runLogOpen}
+              aria-controls={RUN_LOG_ID}
+              onClick={() => setRunLogOpen((open) => !open)}
+              className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+            >
+              {t('playbook.skills.runsCount', { count: skill.runs_count })}{' '}
+              <span aria-hidden="true">{runLogOpen ? '▴' : '▾'}</span>
+            </button>
+
+            <StatusDot
+              tone={skill.active ? 'success' : 'neutral'}
+              label={skill.active ? t('playbook.skills.on') : t('playbook.skills.off')}
+            />
+
+            {canEdit && (
+              <button
+                type="button"
+                disabled={toggleActive.isPending}
+                onClick={() => toggleActive.mutate({ id: skill.id, active: !skill.active })}
+                className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
+              >
+                {skill.active ? t('playbook.skills.disable') : t('playbook.skills.enable')}
+              </button>
+            )}
+
+            <span className="flex-1" />
+
+            {canEdit && (
+              <>
+                <button
+                  type="button"
+                  disabled={!instruction.trim() || compile.isPending}
+                  onClick={() => compile.mutate()}
+                  className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
+                >
+                  {compile.isPending
+                    ? t('playbook.editor.compiling')
+                    : t('playbook.editor.compile')}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={!canSave}
+                  onClick={() => save.mutate()}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {save.isPending ? t('playbook.editor.saving') : t('playbook.editor.save')}
+                </button>
+              </>
+            )}
+          </div>
+
+          {canEdit &&
+            (nameMissing || issues.length > 0 || save.isError || toggleActive.isError) && (
+              <div className="flex flex-wrap items-center gap-3 px-4 pb-2.5">
+                {nameMissing && (
+                  <span role="alert" className="text-2xs text-warning">
+                    {t('playbook.editor.nameRequired')}
+                  </span>
+                )}
+
+                {issues.length > 0 && (
+                  <span role="alert" className="text-2xs text-warning">
+                    {t('playbook.editor.fixIssues', { count: issues.length })}
+                  </span>
+                )}
+
+                {save.isError && (
+                  <span role="alert" className="text-2xs text-danger">
+                    {t(errorMessageKey(save.error))}
+                  </span>
+                )}
+
+                {toggleActive.isError && (
+                  <span role="alert" className="text-2xs text-danger">
+                    {t(errorMessageKey(toggleActive.error))}
+                  </span>
+                )}
+              </div>
+            )}
+        </div>
+
+        {runLogOpen && <RunLog query={runs} />}
+
         <div className="flex flex-col gap-3 p-4">
           <label htmlFor="skill-name" className="flex flex-col gap-1">
             <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
@@ -224,46 +366,6 @@ export function SkillEditor({
               className="resize-y rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none placeholder:text-content-tertiary disabled:opacity-60"
             />
           </label>
-
-          {canEdit && (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                disabled={!instruction.trim() || compile.isPending}
-                onClick={() => compile.mutate()}
-                className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2 disabled:opacity-50"
-              >
-                {compile.isPending ? t('playbook.editor.compiling') : t('playbook.editor.compile')}
-              </button>
-
-              <button
-                type="button"
-                disabled={!canSave}
-                onClick={() => save.mutate()}
-                className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-              >
-                {save.isPending ? t('playbook.editor.saving') : t('playbook.editor.save')}
-              </button>
-
-              {nameMissing && (
-                <span role="alert" className="text-2xs text-warning">
-                  {t('playbook.editor.nameRequired')}
-                </span>
-              )}
-
-              {issues.length > 0 && (
-                <span role="alert" className="text-2xs text-warning">
-                  {t('playbook.editor.fixIssues', { count: issues.length })}
-                </span>
-              )}
-
-              {save.isError && (
-                <span role="alert" className="text-2xs text-danger">
-                  {t(errorMessageKey(save.error))}
-                </span>
-              )}
-            </div>
-          )}
 
           {unrecognised.length > 0 && (
             <div role="status" className="rounded-md border border-border bg-inset p-3">
@@ -428,6 +530,101 @@ export function SkillEditor({
       </Card>
     </div>
   );
+}
+
+/**
+ * What the skill actually did, the last twenty-five times it ran — the audit an
+ * admin reads when a customer got an answer nobody expected (FR-MOD-06.2.1).
+ *
+ * Each of loading, failed, empty and populated renders something that says
+ * which it is. A skill that has never run is a normal state, not a blank
+ * rectangle (design-brief §1.5), and it is the state every newly created skill
+ * is in — so it is the one an admin is most likely to open first.
+ */
+function RunLog({
+  query,
+}: {
+  query: UseQueryResult<{ items: SkillRun[] }, unknown>;
+}): ReactElement {
+  const t = useTranslate();
+
+  return (
+    <div id={RUN_LOG_ID} role="region" aria-label={t('playbook.editor.runLogTitle')}>
+      {query.isPending && (
+        <p role="status" className="px-4 py-3 text-2xs text-content-tertiary">
+          {t('playbook.editor.runLogLoading')}
+        </p>
+      )}
+
+      {query.isError && (
+        <p role="alert" className="px-4 py-3 text-2xs text-danger">
+          {t('playbook.editor.runLogError')}
+        </p>
+      )}
+
+      {query.data &&
+        (query.data.items.length === 0 ? (
+          <EmptyState
+            title={t('playbook.editor.runLogEmptyTitle')}
+            description={t('playbook.editor.runLogEmptyDescription')}
+          />
+        ) : (
+          <ol className="divide-y divide-border border-b border-border">
+            {query.data.items.map((run) => (
+              <li key={run.id} className="flex flex-wrap items-center gap-2 px-4 py-2">
+                <span className="text-2xs text-content-tertiary">
+                  {formatDateTime(run.ran_at) ?? run.ran_at}
+                </span>
+                <StatusDot tone={runTone(run)} label={runLabel(run, t)} />
+                {run.chat_id && (
+                  // The conversation that set it off. It may since have been
+                  // archived — the inbox opens it read-only rather than 404ing,
+                  // which is why this is a plain deep link and not a guard.
+                  <Link
+                    to={`/app/inbox?chat=${run.chat_id}`}
+                    className="text-2xs text-content-brand underline underline-offset-2"
+                  >
+                    {t('playbook.editor.runLogOpenChat')}
+                  </Link>
+                )}
+              </li>
+            ))}
+          </ol>
+        ))}
+    </div>
+  );
+}
+
+/**
+ * What the run decided, if it recorded one; otherwise whether it finished.
+ * `status` and `outcome` answer different questions — a run can succeed and
+ * still decide to do nothing — so a failed run is always reported as failed,
+ * whatever outcome it managed to write first.
+ */
+function runLabel(run: SkillRun, t: TFunction): string {
+  if (run.status !== 'succeeded') {
+    return run.status === 'failed'
+      ? t('playbook.editor.runFailed')
+      : t('playbook.editor.runAborted');
+  }
+  switch (run.outcome) {
+    case 'answered':
+      return t('playbook.editor.runAnswered');
+    case 'handed_off':
+      return t('playbook.editor.runHandedOff');
+    case 'skipped':
+      return t('playbook.editor.runSkipped');
+    default:
+      return t('playbook.editor.runSucceeded');
+  }
+}
+
+function runTone(run: SkillRun): StatusTone {
+  if (run.status === 'failed') return 'danger';
+  if (run.status === 'aborted') return 'warning';
+  if (run.outcome === 'handed_off') return 'info';
+  if (run.outcome === 'skipped') return 'neutral';
+  return 'success';
 }
 
 function PreviewResult({ result }: { result: SkillPreview }): ReactElement {

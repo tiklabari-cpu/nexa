@@ -28,6 +28,10 @@ import {
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import { visitedPagesOf } from '../campaigns/campaign-matching.js';
+import {
+  createGoalConversionRecorder,
+  type GoalConversionRecorder,
+} from '../goals/goal-triggers.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
@@ -153,6 +157,19 @@ export class ChatService {
      * closes and transfers chats, it just tells nobody outside the building.
      */
     private readonly automations?: WorkspaceEventDispatcher,
+    /**
+     * Records the goals a visitor has reached once a conversation is archived
+     * (FR-MOD-13.3 — the "resolution" funnel).
+     *
+     * Unlike the four collaborators above this one is **not** optional: it has
+     * a default, built from the same `db` handle, so a close records a
+     * conversion wherever it happens — including from a construction site
+     * written after this one. Conversion tracking is a domain write rather than
+     * an outward-facing side effect (`routing` is defaulted for the same
+     * reason), and a silently unwired trigger is precisely how this funnel came
+     * to be missing in the first place. Injectable so a test can watch it.
+     */
+    private readonly goals: GoalConversionRecorder = createGoalConversionRecorder(db),
   ) {}
 
   /**
@@ -613,6 +630,7 @@ export class ChatService {
 
     await this.#publishDeactivation(tenant, chatId, result, actorOf(principal));
     await this.#emitDeactivation(tenant, chatId, result);
+    await this.#recordConversions(tenant, result);
     await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
   }
@@ -660,8 +678,24 @@ export class ChatService {
     // same subscribers hear about it — the alternative is an automation that
     // works during office hours and silently stops overnight.
     await this.#emitDeactivation(tenant, chatId, result);
+    // A chat the sweep archived is as resolved as one an agent archived, so a
+    // resolution goal fires either way — otherwise the funnel would report only
+    // the conversations somebody happened to close by hand.
+    await this.#recordConversions(tenant, result);
     await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
+  }
+
+  /**
+   * Did archiving this conversation take the visitor to a goal (FR-MOD-13.3)?
+   *
+   * After the close commits, never inside it, because the fact the matcher
+   * reads *is* the close: an evaluation run inside the transaction would look
+   * at a chat that is still open and conclude nothing had happened. The
+   * recorder swallows its own failures, so this cannot fail a close.
+   */
+  async #recordConversions(tenant: TenantContext, result: CloseResult): Promise<void> {
+    await this.goals.record(tenant, result.audience.customerId);
   }
 
   /**

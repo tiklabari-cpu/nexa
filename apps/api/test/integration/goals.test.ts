@@ -16,7 +16,12 @@ import { clearRateLimits, startTestServer, type TestServer } from '../helpers/se
 interface Goal {
   id: string;
   name: string;
-  definition: { url_contains?: string };
+  definition: {
+    url_contains?: string;
+    sale_completed?: boolean;
+    lead_captured?: boolean;
+    chat_resolved?: boolean;
+  };
   active: boolean;
   created_at: string;
 }
@@ -74,6 +79,23 @@ describe('goals', () => {
     expect(response.statusCode).toBe(400);
   });
 
+  it('rejects a definition whose every funnel predicate is switched off (FR-MOD-13.3)', async () => {
+    // What an untouched form sends. Every key is present and none of them is
+    // required, which is the same target nobody can reach as `{}` — a goal must
+    // not be definable by an absence.
+    const response = await create(writeToken, {
+      name: 'Nothing ticked',
+      definition: {
+        url_contains: '',
+        sale_completed: false,
+        lead_captured: false,
+        chat_resolved: false,
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    expect(await owner.goal.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+  });
+
   it('rejects a blank name', async () => {
     const response = await create(writeToken, {
       name: '   ',
@@ -103,6 +125,28 @@ describe('goals', () => {
   });
 
   // --- The acceptance criterion: a goal can be defined and edited ------------
+
+  it('defines each of the funnel kinds the requirement names (FR-MOD-13.3)', async () => {
+    // The PRD row names a sale / lead / resolution funnel. Each of these is a
+    // goal with no URL at all, so before the predicates existed every one of
+    // them was refused as "nothing to match on" — the funnel could be described
+    // in the requirement and not written down in the product.
+    for (const [name, definition] of [
+      ['Purchase', { sale_completed: true }],
+      ['Lead captured', { lead_captured: true }],
+      ['Question answered', { chat_resolved: true }],
+      // And a compound one: the page *and* the sale, which is the shape the AND
+      // semantics exist for.
+      ['Checkout purchase', { url_contains: '/checkout', sale_completed: true }],
+    ] as const) {
+      const response = await create(writeToken, { name, definition });
+      expect(response.statusCode).toBe(201);
+      expect((response.json() as Goal).definition).toEqual(definition);
+    }
+
+    const stored = await list(writeToken);
+    expect(stored).toHaveLength(4);
+  });
 
   it('creates a goal, lists it, and toggles it inactive', async () => {
     const created = await create(writeToken, {

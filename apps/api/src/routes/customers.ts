@@ -13,6 +13,7 @@ import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
+import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 
 /**
  * Not `z.coerce.boolean()`: that is `Boolean(value)`, and `Boolean('false')` is
@@ -84,6 +85,10 @@ const customFieldsBody = z.object({
 export default async function customerDirectoryRoutes(app: FastifyInstance): Promise<void> {
   const customers = new CustomerService();
   const customFields = new CustomFieldService();
+  // Recording an e-mail here is one of the two ways somebody becomes a lead —
+  // the other is the widget's pre-chat form — so a lead goal (FR-MOD-13.3) has
+  // to be evaluated from this side too.
+  const goals = createGoalConversionRecorder(app.db, { logger: app.log });
 
   app.get(
     '/customers',
@@ -143,10 +148,10 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
       const body = parse(updateBody, request.body);
       const tenant = request.tenant();
 
-      const updated = await request.withTenant(async (tx) => {
+      const { updated, becameLead } = await request.withTenant(async (tx) => {
         const existing = await tx.customer.findFirst({
           where: { id: customerId },
-          select: { id: true },
+          select: { id: true, isLead: true },
         });
         if (!existing) throw ApiError.notFound('Customer not found.');
 
@@ -164,8 +169,18 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
           },
         });
 
-        return customers.get(tx, tenant, customerId);
+        return {
+          updated: await customers.get(tx, tenant, customerId),
+          // The transition, not the state: `isLead` never goes back to false, so
+          // re-evaluating on every later edit would ask a question already
+          // answered.
+          becameLead: Boolean(body.email) && !existing.isLead,
+        };
       });
+
+      // After the transaction commits — the matcher reads `is_lead` back, so it
+      // has to see the write that set it (FR-MOD-13.3).
+      if (becameLead) await goals.record(tenant, customerId);
 
       return reply.send(updated);
     },

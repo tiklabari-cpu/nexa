@@ -405,13 +405,27 @@ export interface Campaign {
 
 /**
  * A goal's trigger predicate (FR-MOD-13.3) — same vocabulary as
- * {@link CampaignConditions}. `url_contains` is the one condition v1 ships;
- * the shape stays an open object so geo/event conditions slot in later
- * without a contract change.
+ * {@link CampaignConditions}.
+ *
+ * Every predicate that is *set* must hold (AND), and a definition with nothing
+ * set is a target nobody reaches — never "everyone converts".
+ *
+ * The set is exactly the funnel the PRD row names — the page a visitor
+ * reached, plus **sale / lead / resolution** — and deliberately no more: this
+ * is a conversion vocabulary, not a general rule engine. The three non-URL
+ * predicates are flags rather than filters because each names a fact about the
+ * visitor that either happened or did not; `false` and absent both mean "do
+ * not require it", so a goal cannot be defined by an absence.
  */
 export interface GoalDefinition {
   /** Case-insensitive substring the visitor's current page URL must contain. */
   url_contains?: string;
+  /** Require a tracked sale for this visitor (FR-MOD-13.5). */
+  sale_completed?: boolean;
+  /** Require the visitor to have been captured as a lead (they gave an e-mail). */
+  lead_captured?: boolean;
+  /** Require a conversation with this visitor to have been archived. */
+  chat_resolved?: boolean;
 }
 
 /** A tracked conversion target (FR-MOD-13.3). */

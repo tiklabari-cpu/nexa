@@ -31,11 +31,10 @@ import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
-import { visitorPageUrls } from '../services/campaigns/campaign-matching.js';
 import { deliverPendingCampaign } from '../services/campaigns/campaign-delivery.js';
 import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.js';
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
-import { GoalService } from '../services/goals/goal-service.js';
+import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -225,7 +224,10 @@ export default async function customerRoutes(
   );
   const customerDirectory = new CustomerService();
   const customFields = new CustomFieldService();
-  const goals = new GoalService();
+  // Every moment a visitor can convert on this route — a page view, an e-mail
+  // that makes them a lead, a reported sale — goes through the one recorder
+  // (FR-MOD-13.3). The chat core holds its own for the close path.
+  const goals = createGoalConversionRecorder(app.db, { logger: app.log });
   const ai = new AiResponder(chats, publisher);
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
 
@@ -505,16 +507,32 @@ export default async function customerRoutes(
 
       // Pre-chat details, if the visitor gave them.
       if (body.name || body.email) {
-        await request.withTenant((tx) =>
-          tx.customer.update({
+        // Whether this write is what *made* them a lead, read in the same
+        // transaction that does it. A lead goal (FR-MOD-13.3) fires on the
+        // transition, not on the state: `isLead` stays true for ever after, and
+        // re-evaluating on every subsequent message that carries the same
+        // pre-chat details would spend the visitor's write budget re-deciding a
+        // question already answered — the same "only when something genuinely
+        // new happened" rule `evaluate` applies to `campaign_sends.converted`.
+        const becameLead = await request.withTenant(async (tx) => {
+          const before = await tx.customer.findFirst({
+            where: { id: principal.customerId },
+            select: { isLead: true },
+          });
+          await tx.customer.update({
             where: { id: principal.customerId },
             data: {
               ...(body.name ? { name: body.name } : {}),
               ...(body.email ? { email: body.email, isLead: true } : {}),
               lastActivityAt: new Date(),
             },
-          }),
-        );
+          });
+          return Boolean(body.email) && before?.isLead === false;
+        });
+
+        // After the transaction commits: `evaluate` reads `is_lead` back, so it
+        // has to see the write that set it.
+        if (becameLead) await goals.record(tenant, principal.customerId);
       }
 
       // Pre-chat form answers (FR-MOD-08.7.7): validated against their contact
@@ -576,20 +594,7 @@ export default async function customerRoutes(
           // browsing context that 13.2 records — and the achievement is written
           // with its own campaign-send update inside `evaluate`, which is the
           // pair that must be all-or-nothing.
-          await request.withTenant(async (tx) => {
-            const visit = await tx.visit.findFirst({
-              where: { customerId: principal.customerId, licenseId: tenant.licenseId },
-              orderBy: { startedAt: 'desc' },
-              select: { pages: true },
-            });
-            return goals.evaluate(
-              tx,
-              tenant,
-              principal.customerId,
-              visitorPageUrls(visit?.pages),
-              new Date(),
-            );
-          });
+          await goals.record(tenant, principal.customerId);
         } catch (error) {
           request.log.warn(
             { err: error },
@@ -942,6 +947,13 @@ export default async function customerRoutes(
 
           return created;
         });
+
+        // A sale is a conversion (FR-MOD-13.3 — the "sale" funnel), evaluated
+        // after the row commits so the matcher can see it. Only on the 201
+        // path: the two replay branches around it report an order that was
+        // already recorded, and whatever goal it reached was reached then —
+        // the same reason the audit entry above is written only for a new sale.
+        await goals.record(tenant, principal.customerId);
 
         return reply.status(201).send(serialiseSale(sale));
       } catch (error) {

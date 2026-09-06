@@ -15,6 +15,15 @@
  * answer, changes who owns the conversation.
  */
 import { matchIntent, validateSteps, type SendMessageStep, type SkillStep } from '@nexa/ai-mock';
+import {
+  ANSWER_BUDGETS,
+  DEFAULT_ANSWER_PASSAGES,
+  personaLanguageVerdict,
+  readPersona,
+  shapeAnswer,
+  type Persona,
+  type PersonaLanguage,
+} from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { KnowledgeService, RETRIEVAL_THRESHOLD } from './knowledge-service.js';
 
@@ -70,7 +79,17 @@ export class SkillEngine {
     const skills = await tx.skill.findMany({
       where: { active: true, kind: 'ai_agent', aiAgent: { active: true } },
       orderBy: { updatedAt: 'desc' },
-      select: { id: true, name: true, steps: true, aiAgentId: true },
+      select: {
+        id: true,
+        name: true,
+        steps: true,
+        aiAgentId: true,
+        // The persona travels with the skill because it belongs to the agent
+        // that owns it: two agents in one workspace answer in two voices, so
+        // "which persona applies" is only decidable once a skill has been
+        // picked (FR-MOD-06.4).
+        aiAgent: { select: { tone: true, languages: true, persona: true } },
+      },
     });
 
     for (const skill of skills) {
@@ -85,13 +104,27 @@ export class SkillEngine {
       const gate = this.#intentGate(parsed.steps, input.message);
       if (!gate.matched) continue;
 
-      const result = await this.#execute(tx, tenant, {
-        skill: { id: skill.id, name: skill.name, aiAgentId: skill.aiAgentId },
-        steps: parsed.steps,
-        message: input.message,
-        history: input.history ?? [],
-        gateLog: gate.log,
-      });
+      const persona = readPersona(skill.aiAgent);
+      const language = personaLanguageVerdict(input.message, persona);
+      const identity = { id: skill.id, name: skill.name, aiAgentId: skill.aiAgentId };
+
+      // The persona names the languages this assistant speaks. A message
+      // confidently in another one is the case the setting exists for, and the
+      // honest answer is not a reply in the wrong language — there is no
+      // translation here, only knowledge in whatever language the admin loaded.
+      // Declining leaves the outcome `skipped`, so routing proceeds exactly as
+      // it would with no AI and a human picks the conversation up.
+      const result = language.unsupported
+        ? declined(identity, gate.log, language.detected)
+        : await this.#execute(tx, tenant, {
+            skill: identity,
+            steps: parsed.steps,
+            message: input.message,
+            history: input.history ?? [],
+            gateLog: gate.log,
+            persona,
+            answerIn: language.answerIn,
+          });
 
       await this.#record(tx, tenant, skill.id, input.chatId, result);
       return result;
@@ -128,12 +161,31 @@ export class SkillEngine {
       };
     }
 
+    // The preview loads the same persona the live path would, for the same
+    // reason the preview shares this method at all: a preview that shows an
+    // unshaped answer promises something the product does not do.
+    const agent = input.aiAgentId
+      ? await tx.aiAgent.findFirst({
+          where: { id: input.aiAgentId },
+          select: { tone: true, languages: true, persona: true },
+        })
+      : null;
+    const persona = readPersona(agent);
+    const language = personaLanguageVerdict(input.message, persona);
+    const identity = { id: 'preview', name: 'Preview', aiAgentId: input.aiAgentId ?? null };
+
+    if (language.unsupported) {
+      return { ...declined(identity, gate.log, language.detected), errors: [] };
+    }
+
     const result = await this.#execute(tx, tenant, {
-      skill: { id: 'preview', name: 'Preview', aiAgentId: input.aiAgentId ?? null },
+      skill: identity,
       steps: parsed.steps,
       message: input.message,
       history: [],
       gateLog: gate.log,
+      persona,
+      answerIn: language.answerIn,
     });
 
     return { ...result, errors: [] };
@@ -173,6 +225,8 @@ export class SkillEngine {
       message: string;
       history: string[];
       gateLog: SkillRunLogEntry[];
+      persona: Persona;
+      answerIn: PersonaLanguage | null;
     },
   ): Promise<SkillRunResult> {
     const log = [...input.gateLog];
@@ -222,7 +276,12 @@ export class SkillEngine {
           break;
 
         case 'send_message': {
-          const outcome = await this.#sendMessage(tx, tenant, step, input);
+          const outcome = await this.#sendMessage(tx, tenant, step, {
+            message: input.message,
+            skill: input.skill,
+            persona: input.persona,
+            answerIn: input.answerIn,
+          });
           if (outcome.text) reply = outcome.text;
           log.push({ step: 'send_message', detail: outcome.detail, ok: outcome.text !== null });
           break;
@@ -255,15 +314,28 @@ export class SkillEngine {
     tx: TenantClient,
     tenant: TenantContext,
     step: SendMessageStep,
-    input: { message: string; skill: { aiAgentId: string | null } },
+    input: {
+      message: string;
+      skill: { aiAgentId: string | null };
+      persona: Persona;
+      answerIn: PersonaLanguage | null;
+    },
   ): Promise<{ text: string | null; detail: string }> {
     if (step.source === 'text') {
+      // Deliberately unshaped (FR-MOD-06.4 · `#### K06.4`). A fixed reply is
+      // wording an admin typed by hand and asked to be sent; trimming it to an
+      // answer-length budget or prefixing it with a tone would rewrite their
+      // words behind their back. The persona shapes what the assistant
+      // *composes* — the passages retrieval found — never what a human wrote.
       return { text: step.text ?? null, detail: 'sent the fixed reply' };
     }
 
+    const passages = this.#passageBudget(input.persona);
     const hits = await this.knowledge.retrieve(tx, tenant, input.message, {
       ...(input.skill.aiAgentId ? { aiAgentId: input.skill.aiAgentId } : {}),
-      limit: 2,
+      // Never below the two this always fetched, so an unset persona issues the
+      // identical query; a `long` answer is the only thing that widens it.
+      limit: Math.max(2, passages),
     });
 
     if (hits.length === 0) {
@@ -277,10 +349,30 @@ export class SkillEngine {
     }
 
     const best = hits[0]!;
+    const shaped = shapeAnswer(
+      hits.map((hit) => hit.text),
+      input.persona,
+      { language: input.answerIn },
+    );
+    const cited = hits.slice(0, Math.min(passages, hits.length));
+
     return {
-      text: best.text,
-      detail: `answered from "${best.sourceName}" (${best.score})`,
+      text: shaped.text,
+      detail: [
+        `answered from "${best.sourceName}" (${best.score})`,
+        cited.length > 1 ? `+ ${cited.length - 1} more passage(s)` : '',
+        shaped.notes.length > 0 ? `persona: ${shaped.notes.join('; ')}` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
     };
+  }
+
+  /** How many retrieved passages this persona's answer length pays for. */
+  #passageBudget(persona: Persona): number {
+    return persona.answerLength
+      ? ANSWER_BUDGETS[persona.answerLength].passages
+      : DEFAULT_ANSWER_PASSAGES;
   }
 
   async #record(
@@ -310,6 +402,36 @@ export class SkillEngine {
     // transaction so it cannot drift from the run log beside it.
     await tx.skill.update({ where: { id: skillId }, data: { runsCount: { increment: 1 } } });
   }
+}
+
+/**
+ * The run where the persona declined to answer, because the customer wrote in a
+ * language it does not speak (FR-MOD-06.4).
+ *
+ * `ok: true` on the log entry, and so a *succeeded* run: nothing failed. The
+ * skill was asked a question outside the persona's declared languages and did
+ * the one correct thing with it — nothing — which is a decision, not a fault,
+ * and an admin reading the run log needs it to read that way. The outcome is
+ * `skipped`, which is the engine's existing word for "a human owns this now".
+ */
+function declined(
+  skill: { id: string; name: string },
+  gateLog: SkillRunLogEntry[],
+  detected: string | null,
+): SkillRunResult {
+  return {
+    ...NOTHING_RAN,
+    skillId: skill.id,
+    skillName: skill.name,
+    log: [
+      ...gateLog,
+      {
+        step: 'persona',
+        detail: `left for a human — the message is in ${detected ?? 'another language'}, which this persona does not speak`,
+        ok: true,
+      },
+    ],
+  };
 }
 
 /**

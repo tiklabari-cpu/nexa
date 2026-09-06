@@ -303,6 +303,8 @@ paths:
     $ref: "./paths/playbook.yaml#/knowledgeSources"
   /knowledge-sources/bulk:
     $ref: "./paths/playbook.yaml#/knowledgeSourcesBulk"
+  /knowledge-sources/file:
+    $ref: "./paths/playbook.yaml#/knowledgeSourcesFile"
   /knowledge-sources/{sourceId}:
     $ref: "./paths/playbook.yaml#/knowledgeSource"
 

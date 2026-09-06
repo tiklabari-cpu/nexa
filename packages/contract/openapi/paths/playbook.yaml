@@ -340,8 +340,14 @@ knowledgeSources:
       after a background job an admin cannot see.
 
       A `website` source is crawled from `source_url` (the fetch is guarded
-      against private/internal targets — SSRF, NFR-S7); every other type indexes
-      the `content` supplied. Exactly one of the two is required, per `type`.
+      against private/internal targets — SSRF, NFR-S7); an `article` or a `faq`
+      indexes the `content` supplied. Exactly one of the two is required, per
+      `type`.
+
+      `type: file` is refused here with a 400. A file source carries bytes to
+      check, a type to check them against and a budget to measure them by, none
+      of which a pasted string has — so it is created through
+      `POST /knowledge-sources/file` and nowhere else.
     requestBody:
       required: true
       content:
@@ -452,6 +458,99 @@ knowledgeSourcesBulk:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeBulkResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+knowledgeSourcesFile:
+  post:
+    tags: [Playbook]
+    operationId: uploadKnowledgeSourceFile
+    summary: Upload a file as a knowledge source
+    description: |
+      The only way a `file` source is created (FR-MOD-06.3.2, "File").
+      `POST /knowledge-sources` refuses `type: file` and points here, because a
+      file source that could also be typed into a box would make "File" a label
+      rather than a fact: there would be nothing to check the type of, nothing
+      to measure and nothing to parse.
+
+      **The bytes travel base64-encoded inside the JSON body, not as
+      multipart.** That follows `/knowledge-sources/bulk`, where the file's text
+      is a JSON string for the same reason — parsing stays on the server, behind
+      budgets a caller cannot bypass, with one body-parsing surface and one
+      error shape. Base64 rather than a plain string because a file must arrive
+      *undecoded*: a JSON string has already been decoded by the browser, so a
+      UTF-16 export or a PDF renamed `.txt` would turn up as replacement
+      characters that read as valid text, and the byte budget would be counting
+      characters instead of bytes.
+
+      **`content_type` chooses the parser; `filename` never does.** Only
+      `text/plain`, `text/markdown` and `text/csv` are accepted — text formats a
+      pure function can turn into indexable text with no dependency, no
+      subprocess and no network. PDF and the Office formats are absent
+      deliberately: each is a parser with a CVE history reachable from an
+      admin-supplied byte string. Anything else is a 400.
+
+      A declared type is only a claim, so it is not where binary is stopped: the
+      bytes must decode as strict UTF-8 and carry no control characters beyond
+      tab, newline and carriage return. A `.png` declared `text/plain` is
+      refused by that check, not by the allow-list.
+
+      `filename` is used as the source's title when `name` is omitted, and for
+      nothing else — never as a path, and nothing here writes to disk. Two
+      budgets bound the request (2 MiB of decoded bytes, 100000 characters of
+      parsed text); exceeding either refuses the upload rather than indexing a
+      prefix of it, because a knowledge base holding half a policy answers
+      confidently from the half it kept.
+
+      On success the file is chunked, embedded and indexed inside the same
+      transaction as the insert, so a source that exists is a source that can
+      answer.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ai_agent_id, filename, content_type, data]
+            properties:
+              ai_agent_id:
+                type: string
+                format: uuid
+                description: The agent this source belongs to. Verified before anything is written.
+              name:
+                type: string
+                minLength: 1
+                maxLength: 200
+                description: The source's title. Defaults to the file's own name, stripped of any directory segments.
+              filename:
+                type: string
+                minLength: 1
+                maxLength: 255
+                description: The file's name, used as a title and never as a path.
+              content_type:
+                type: string
+                enum: [text/plain, text/markdown, text/csv]
+                description: |
+                  The media type the bytes are parsed as. A `; charset=...`
+                  parameter is accepted and ignored. Anything outside this list
+                  is refused with a 400.
+              data:
+                type: string
+                format: byte
+                minLength: 1
+                description: |
+                  The file's bytes, base64-encoded. Capped at 2 MiB decoded;
+                  the parsed text is separately capped at 100000 characters,
+                  the same ceiling `POST /knowledge-sources` puts on pasted
+                  content.
+    responses:
+      "201":
+        description: Uploaded, parsed and indexed
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/KnowledgeSource" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

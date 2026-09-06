@@ -27,7 +27,7 @@
  * silently returning nothing — a bad selector, an axe that never injected —
  * would read exactly like a clean pass.
  *
- * **Both themes, since tm 117.** The twenty-eight panel surfaces (or states of
+ * **Both themes, since tm 117.** The twenty-nine panel surfaces (or states of
  * one — a modal, a selected tab, a freshly opened editor) are scanned once
  * dark and once light. Until tm 117 the light ramp was unreachable —
  * `index.html` hard-coded `data-theme="dark"` — so half of `tokens.css` and
@@ -807,6 +807,37 @@ test.describe('WCAG 2.1 AA (axe)', () => {
             agentPage.getByRole('heading', { name: 'AI Agent', level: 1 }),
           ).toBeVisible();
           await expect(agentPage.getByRole('region', { name: 'Recommended skills' })).toBeVisible();
+        });
+      });
+
+      /**
+       * The Knowledge tab, in its File state (FR-MOD-06.3.2).
+       *
+       * Not reachable from the scan above — Playbook opens on Skills, so the
+       * add-source form, the type sub-tabs and the bulk-import panel have never
+       * been in a scanned tree. The File branch in particular is a control axe
+       * has opinions about: an `<input type="file">` whose label is a sibling,
+       * whose help text and "ready to upload" line are wired through
+       * `aria-describedby`, and whose field error appears in place. Scanned with
+       * a file chosen, since that status line does not exist until one is.
+       */
+      test('the knowledge upload form has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/playbook');
+        await scanPanel(agentPage, 'Knowledge upload', theme, testInfo, async () => {
+          await agentPage
+            .getByRole('tablist', { name: 'AI Agent' })
+            .getByRole('tab', { name: 'Knowledge' })
+            .click();
+          await agentPage.getByLabel('Type', { exact: true }).selectOption('file');
+          await agentPage.setInputFiles('#source-file', {
+            name: 'a11y-sample.txt',
+            mimeType: 'text/plain',
+            buffer: Buffer.from('Returns are accepted within 30 days.', 'utf8'),
+          });
+          await expect(agentPage.getByText('Ready to upload: a11y-sample.txt')).toBeVisible();
         });
       });
 

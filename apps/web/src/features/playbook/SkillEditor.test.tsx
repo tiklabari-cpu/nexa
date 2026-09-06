@@ -89,6 +89,52 @@ describe('SkillEditor — required transfer target', () => {
   });
 });
 
+describe('SkillEditor — required name (FR-MOD-06.2.2)', () => {
+  it('blocks the save and shows a reason when the name is cleared', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([]));
+
+    const name = screen.getByLabelText('Name');
+    await user.clear(name);
+
+    expect(screen.getByText('Give the skill a name before saving.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('rejects a name of only whitespace, matching the server’s trim threshold', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([]));
+
+    const name = screen.getByLabelText('Name');
+    await user.clear(name);
+    await user.type(name, '   ');
+
+    expect(screen.getByText('Give the skill a name before saving.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+  });
+
+  it('re-enables the save once a non-blank name is restored, even with surrounding whitespace', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([]));
+
+    const name = screen.getByLabelText('Name');
+    await user.clear(name);
+    await user.type(name, '  a  ');
+
+    // The client must not be stricter than the server: `z.string().trim().min(1)`
+    // accepts a name that is non-blank only after trimming.
+    expect(screen.queryByText('Give the skill a name before saving.')).not.toBeInTheDocument();
+    const save = screen.getByRole('button', { name: 'Save changes' });
+    expect(save).toBeEnabled();
+
+    await user.click(save);
+    expect(api.patch).toHaveBeenCalledWith(
+      '/skills/skill-1',
+      expect.objectContaining({ name: '  a  ' }),
+    );
+  });
+});
+
 describe('SkillEditor — keyboard reorder', () => {
   const steps: SkillStep[] = [
     { type: 'tag', tag: 'shipping' },

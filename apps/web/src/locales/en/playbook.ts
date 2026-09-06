@@ -234,6 +234,7 @@ export const playbook: Messages = {
   'playbook.editor.compiling': 'Compiling…',
   'playbook.editor.save': 'Save changes',
   'playbook.editor.saving': 'Saving…',
+  'playbook.editor.nameRequired': 'Give the skill a name before saving.',
   'playbook.editor.fixIssues.one': 'Fix {count} step before saving.',
   'playbook.editor.fixIssues.other': 'Fix {count} steps before saving.',
   'playbook.editor.unrecognised.one': '{count} line produced no step',

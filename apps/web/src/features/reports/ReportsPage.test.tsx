@@ -1551,6 +1551,13 @@ interface AgentPerformanceRowFixture {
 
 const SALES_BASE = {
   range: OVERVIEW.range,
+  previous_period: {
+    configured: false,
+    tracked_sales: null as number | null,
+    attributed_revenue_cents: null as number | null,
+    currency: null as string | null,
+    conversions: null as number | null,
+  },
   configured: false,
   tracked_sales: null as number | null,
   attributed_revenue_cents: null as number | null,
@@ -1645,7 +1652,7 @@ describe('ReportsPage — Sales + Team performance tabs, permission-gated visibi
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
-  it('shows the Sales KPIs once a source is configured', async () => {
+  it('shows the Sales KPIs with a vs-previous delta once a source is configured', async () => {
     mockGroupsSalesTeam({
       sales: {
         configured: true,
@@ -1653,14 +1660,26 @@ describe('ReportsPage — Sales + Team performance tabs, permission-gated visibi
         attributed_revenue_cents: 12_345,
         currency: 'USD',
         conversions: 9,
+        previous_period: {
+          configured: true,
+          tracked_sales: 30,
+          attributed_revenue_cents: 10_000,
+          currency: 'USD',
+          conversions: 5,
+        },
       },
     });
     renderReports(<ReportsPage />);
     await openSalesTab();
 
     expect(within(kpi('Tracked sales')).getByText('42')).toBeInTheDocument();
+    expect(within(kpi('Tracked sales')).getByText(/↑ 12 vs previous/)).toBeInTheDocument();
     expect(within(kpi('Attributed revenue')).getByText('$123.45')).toBeInTheDocument();
+    expect(
+      within(kpi('Attributed revenue')).getByText(/↑ \$23.45 vs previous/),
+    ).toBeInTheDocument();
     expect(within(kpi('Conversions')).getByText('9')).toBeInTheDocument();
+    expect(within(kpi('Conversions')).getByText(/↑ 4 vs previous/)).toBeInTheDocument();
   });
 
   it('renders the Team performance agent table with chats/closed/automated/assisted/manual/avg first response/CSAT', async () => {

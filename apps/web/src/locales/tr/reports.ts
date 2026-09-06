@@ -309,7 +309,7 @@ export const reports: Messages = {
   'reports.sales.description': 'Desteklenen sohbetlere atfedilen satışlar.',
   'reports.sales.kpi.conversions': 'Dönüşümler',
   'reports.sales.emptyDescription':
-    'Desteklenen sohbetlere gelir atfetmek için bir satış kaynağı bağlayın. Satış izleyici (FR-MOD-13.5) henüz kullanılamıyor.',
+    'Desteklenen sohbetlere gelir atfetmek için Satış izleyiciyi (FR-MOD-13.5) kullanarak bir satış kaynağı bağlayın.',
 
   // Team performance (FR-MOD-07.7, v2)
   'reports.teamPerformance.error':

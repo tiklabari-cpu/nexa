@@ -1055,6 +1055,11 @@ function KnowledgePanel({
                     {formatDate(source.updated_at)} · {source.added_by_name ?? '—'}
                     {source.source_url ? ` · ${source.source_url}` : ''}
                   </p>
+                  {source.last_refresh_error && (
+                    <p className="truncate text-2xs text-danger">
+                      {t('playbook.knowledge.refreshFailedRow')}
+                    </p>
+                  )}
                 </div>
                 <StatusDot
                   tone={source.chunk_count > 0 ? 'success' : 'warning'}

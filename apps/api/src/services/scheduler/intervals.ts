@@ -18,7 +18,8 @@ import type { Env } from '../../config/env.js';
  *
  * The first five are the sweeps that had no scheduler at all (§D113/K1); the
  * sixth carries a failed webhook delivery past the request that triggered it
- * (M-SCHED-e).
+ * (M-SCHED-e); the seventh re-crawls a `website` knowledge source past its
+ * freshness window (FR-MOD-06.3.3, tm 198.4).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -27,6 +28,7 @@ export const SCHEDULER_JOB_NAMES = [
   'scheduled_reports',
   'retention',
   'webhook_redelivery',
+  'knowledge_refresh',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -45,6 +47,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_SCHEDULED_REPORTS_MS'
   | 'SCHEDULE_RETENTION_MS'
   | 'SCHEDULE_WEBHOOK_REDELIVERY_MS'
+  | 'SCHEDULE_KNOWLEDGE_REFRESH_MS'
 >;
 
 /**
@@ -62,6 +65,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     scheduled_reports: env.SCHEDULE_SCHEDULED_REPORTS_MS,
     retention: env.SCHEDULE_RETENTION_MS,
     webhook_redelivery: env.SCHEDULE_WEBHOOK_REDELIVERY_MS,
+    knowledge_refresh: env.SCHEDULE_KNOWLEDGE_REFRESH_MS,
   };
 }
 

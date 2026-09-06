@@ -466,9 +466,10 @@ describe('a four-process fleet sharing one Postgres and one Redis', () => {
  * would still look correct. Two processes have two event loops and two Redis
  * connections, and the only thing ordering them is Redis itself.
  *
- * Retention, SIEM and scheduled reports are parked at an interval nothing in
- * this file can reach: they write to disk, send mail and delete rows, and the
- * question here is who was allowed to run, not what a sweep does.
+ * Retention, SIEM, scheduled reports and the knowledge freshness sweep are
+ * parked at an interval nothing in this file can reach: they write to disk,
+ * send mail, delete rows or crawl, and the question here is who was allowed
+ * to run, not what a sweep does.
  */
 describe('two API processes sharing one Redis leader lock', () => {
   const TICK_MS = '1500';
@@ -536,6 +537,7 @@ describe('two API processes sharing one Redis leader lock', () => {
       SCHEDULE_SIEM_MS: NEVER_MS,
       SCHEDULE_SCHEDULED_REPORTS_MS: NEVER_MS,
       SCHEDULE_RETENTION_MS: NEVER_MS,
+      SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
     };
 
     const [portOne, portTwo] = (await reserveFreePorts(2)) as [number, number];

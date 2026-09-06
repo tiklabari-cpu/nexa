@@ -26,9 +26,19 @@ import { ErrorNotice } from '../../components/Page.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
+import { formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Dropdown } from '../../components/ui/Dropdown.js';
 import type { KnowledgeSource } from './types.js';
+
+/**
+ * The freshness window a `website` source may opt into (FR-MOD-06.3.3,
+ * tm 198.4) — a fixed set of presets rather than a free-form number input,
+ * so the choice reads the same everywhere it appears. `''` is "never", the
+ * value every source already has and the one that turns automatic refresh
+ * back off.
+ */
+const REFRESH_OPTIONS = ['', '7', '30', '90'] as const;
 
 /**
  * Which field of a source is editable, decided by where its text came from —
@@ -161,10 +171,15 @@ function EditSourceModal({
   const body = editableBodyFor(source.type);
 
   const save = useMutation({
-    mutationFn: (patch: Record<string, string>) =>
+    mutationFn: (patch: Record<string, string | number | null>) =>
       api.patch<KnowledgeSource>(`/knowledge-sources/${source.id}`, patch),
     onSuccess: onSaved,
   });
+
+  // '' stands for "never" throughout this form — the one string value that
+  // is not itself a day count, matching the API's own null.
+  const initialRefreshAfterDays =
+    source.refresh_after_days !== null ? String(source.refresh_after_days) : '';
 
   const form = useForm({
     initial: {
@@ -174,6 +189,7 @@ function EditSourceModal({
       // count, not the article. So content edits start from an empty box and
       // are a deliberate replacement, which is what the field says.
       content: '',
+      refreshAfterDays: initialRefreshAfterDays,
     },
     validators: {
       name: required(t('playbook.knowledge.formTitleRequiredError')),
@@ -185,12 +201,16 @@ function EditSourceModal({
       // re-index — a model call spent to rebuild identical vectors — and an
       // empty patch is a 400, so a Save that changed nothing closes quietly
       // rather than reporting an error the admin cannot act on.
-      const patch: Record<string, string> = {};
+      const patch: Record<string, string | number | null> = {};
       const name = values.name.trim();
       if (name !== source.name) patch['name'] = name;
       if (body === 'source_url') {
         const url = values.sourceUrl.trim();
         if (url !== (source.source_url ?? '')) patch['source_url'] = url;
+        if (values.refreshAfterDays !== initialRefreshAfterDays) {
+          patch['refresh_after_days'] =
+            values.refreshAfterDays === '' ? null : Number(values.refreshAfterDays);
+        }
       }
       if (body === 'content') {
         const content = values.content.trim();
@@ -260,6 +280,50 @@ function EditSourceModal({
               {t('playbook.knowledge.editUrlHelp')}
             </span>
             <FieldError id="edit-source-url-error" message={urlError} />
+          </div>
+        )}
+
+        {/* Automatic refresh (FR-MOD-06.3.3, tm 198.4) — only a website has a
+            URL to re-crawl, so this asks the same question the field above
+            does: nothing to schedule for the other three types. */}
+        {body === 'source_url' && (
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="edit-source-refresh"
+              className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+            >
+              {t('playbook.knowledge.editRefreshLabel')}
+            </label>
+            <select
+              id="edit-source-refresh"
+              value={form.values.refreshAfterDays}
+              onChange={(event) => form.setValue('refreshAfterDays', event.target.value)}
+              aria-describedby="edit-source-refresh-help"
+              className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+            >
+              {REFRESH_OPTIONS.map((value) => (
+                <option key={value || 'never'} value={value}>
+                  {value === ''
+                    ? t('playbook.knowledge.editRefreshNever')
+                    : t('playbook.knowledge.editRefreshEveryDays', { count: Number(value) })}
+                </option>
+              ))}
+            </select>
+            <span id="edit-source-refresh-help" className="text-2xs text-content-tertiary">
+              {t('playbook.knowledge.editRefreshHelp')}
+            </span>
+            {source.next_refresh_at && (
+              <span className="text-2xs text-content-tertiary">
+                {t('playbook.knowledge.editRefreshNextAt', {
+                  date: formatDate(source.next_refresh_at) ?? '',
+                })}
+              </span>
+            )}
+            {source.last_refresh_error && (
+              <span role="alert" className="text-2xs text-danger">
+                {t('playbook.knowledge.editRefreshFailed', { reason: source.last_refresh_error })}
+              </span>
+            )}
           </div>
         )}
 

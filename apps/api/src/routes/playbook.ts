@@ -34,6 +34,7 @@ import {
   type BulkCrawlRefusal,
 } from '../services/ai/knowledge-bulk-crawl.js';
 import { crawl } from '../services/ai/web-crawler.js';
+import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 import type { TenantClient } from '../lib/tenant.js';
 
@@ -161,12 +162,19 @@ const uploadSourceBody = z.object({
  * loaded row. What lives here is the part that needs no row: the field is
  * refused when it is present and wrong, never dropped, so an admin who sends
  * the wrong one is told rather than left believing an edit landed.
+ *
+ * `refresh_after_days` (FR-MOD-06.3.3, tm 198.4) follows the same rule as
+ * `source_url`: only a `website` source has anything to re-crawl, so it is
+ * refused rather than ignored for the other three types. `null` is a legal
+ * value — it turns automatic refresh back off — so the field is nullable, not
+ * merely optional.
  */
 const updateSourceBody = z
   .object({
     name: z.string().trim().min(1).max(200).optional(),
     content: z.string().trim().min(1).max(100_000).optional(),
     source_url: z.string().trim().min(1).max(2048).optional(),
+    refresh_after_days: z.number().int().min(1).max(365).nullable().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -620,6 +628,9 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         chunk_count: s._count.chunks,
         updated_at: s.updatedAt.toISOString(),
         added_by_name: s.addedBy ? (nameByAddedBy.get(s.addedBy) ?? null) : null,
+        refresh_after_days: s.refreshAfterDays,
+        next_refresh_at: s.nextRefreshAt ? s.nextRefreshAt.toISOString() : null,
+        last_refresh_error: s.lastRefreshError,
       }));
     });
 
@@ -1045,7 +1056,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       const existing = await request.withTenant(async (tx) =>
         tx.knowledgeSource.findFirst({
           where: { id, aiAgent: { kind: 'ai_agent' } },
-          select: { id: true, type: true, addedBy: true },
+          select: { id: true, type: true, addedBy: true, refreshAfterDays: true },
         }),
       );
       // Under RLS a foreign source is simply not visible, so "does not exist"
@@ -1064,6 +1075,11 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       if (body.source_url !== undefined && !isWebsite) {
         throw ApiError.validation('source_url: only a website source has a URL.');
       }
+      if (body.refresh_after_days !== undefined && !isWebsite) {
+        throw ApiError.validation(
+          'refresh_after_days: only a website source can be scheduled for automatic refresh.',
+        );
+      }
 
       // Crawled outside the transaction, and refused before it: a private or
       // non-http target never reaches the fetcher and never touches the row.
@@ -1075,6 +1091,15 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         sourceUrl = url.toString();
       }
 
+      // A schedule change or a fresh crawl both restart the countdown, from
+      // now — the source is, in either case, as fresh as it has just been
+      // made. Renaming alone touches neither.
+      const now = new Date();
+      const refreshAfterDaysChanged = body.refresh_after_days !== undefined;
+      const effectiveRefreshAfterDays: number | null =
+        body.refresh_after_days !== undefined ? body.refresh_after_days : existing.refreshAfterDays;
+      const recomputeSchedule = refreshAfterDaysChanged || sourceUrl !== null;
+
       const updated = await request.withTenant(async (tx) => {
         const { count } = await tx.knowledgeSource.updateMany({
           where: { id },
@@ -1082,7 +1107,11 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             ...(body.name === undefined ? {} : { name: body.name }),
             ...(text === null ? {} : { content: text }),
             ...(sourceUrl === null ? {} : { sourceUrl }),
-            updatedAt: new Date(),
+            ...(refreshAfterDaysChanged ? { refreshAfterDays: body.refresh_after_days } : {}),
+            ...(recomputeSchedule
+              ? { nextRefreshAt: computeNextRefreshAt(effectiveRefreshAfterDays, now) }
+              : {}),
+            updatedAt: now,
           },
         });
         // The row was there a moment ago; if it is gone now it was deleted
@@ -1129,6 +1158,11 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
    * For every other type there is nothing to fetch, and the text already held
    * is chunked and embedded again — which is what makes a source that indexed
    * to nothing recoverable without retyping it.
+   *
+   * On success this also restarts `next_refresh_at`'s countdown, using
+   * whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
+   * tm 198.4) — a manual reindex and the freshness sweep are the same
+   * refresh, whichever triggered it, so both push the schedule out from now.
    */
   app.post<{ Params: { sourceId: string } }>(
     '/knowledge-sources/:sourceId/reindex',
@@ -1140,29 +1174,34 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       const existing = await request.withTenant(async (tx) =>
         tx.knowledgeSource.findFirst({
           where: { id, aiAgent: { kind: 'ai_agent' } },
-          select: { id: true, type: true, sourceUrl: true, content: true, addedBy: true },
+          select: {
+            id: true,
+            type: true,
+            sourceUrl: true,
+            content: true,
+            addedBy: true,
+            refreshAfterDays: true,
+          },
         }),
       );
       if (!existing) throw ApiError.notFound('Knowledge source not found.');
 
-      // A source stored with no text reindexes to zero chunks and reports
-      // `empty` — the honest answer, and one the admin can act on, rather than
-      // an error that leaves them nothing to do.
-      let text = existing.content ?? '';
-      if (existing.type === 'website') {
-        if (!existing.sourceUrl) {
-          throw ApiError.validation('This website source has no URL to crawl.');
-        }
-        // Re-checked, not trusted from creation — and outside the transaction,
-        // so a refusal costs no row lock and writes nothing.
-        const url = assertPublicHttpUrl(existing.sourceUrl);
-        text = (await crawl(url)).text;
-      }
+      // Re-checked, not trusted from creation — and outside the transaction,
+      // so a refusal costs no row lock and writes nothing. Same crawl path
+      // the freshness sweep uses (`knowledge-refresh.ts`), so there is one
+      // SSRF gate for "refresh this source", not two.
+      const text = await fetchRefreshedText(existing);
+      const now = new Date();
 
       const refreshed = await request.withTenant(async (tx) => {
         const { count } = await tx.knowledgeSource.updateMany({
           where: { id },
-          data: { content: text, updatedAt: new Date() },
+          data: {
+            content: text,
+            updatedAt: now,
+            lastRefreshError: null,
+            nextRefreshAt: computeNextRefreshAt(existing.refreshAfterDays, now),
+          },
         });
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
@@ -1223,6 +1262,9 @@ function serialiseIndexedSource(
     type: string;
     sourceUrl: string | null;
     updatedAt: Date;
+    refreshAfterDays: number | null;
+    nextRefreshAt: Date | null;
+    lastRefreshError: string | null;
   },
   chunks: number,
   addedByName: string | null,
@@ -1237,6 +1279,9 @@ function serialiseIndexedSource(
     chunk_count: chunks,
     updated_at: source.updatedAt.toISOString(),
     added_by_name: addedByName,
+    refresh_after_days: source.refreshAfterDays,
+    next_refresh_at: source.nextRefreshAt ? source.nextRefreshAt.toISOString() : null,
+    last_refresh_error: source.lastRefreshError,
   };
 }
 

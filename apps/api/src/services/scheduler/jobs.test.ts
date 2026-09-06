@@ -51,6 +51,7 @@ describe('buildSchedulerJobs', () => {
       'scheduled_reports',
       'retention',
       'webhook_redelivery',
+      'knowledge_refresh',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -65,6 +66,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_SCHEDULED_REPORTS_MS: '44000',
       SCHEDULE_RETENTION_MS: '55000',
       SCHEDULE_WEBHOOK_REDELIVERY_MS: '66000',
+      SCHEDULE_KNOWLEDGE_REFRESH_MS: '77000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -76,6 +78,7 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('scheduled_reports')).toBe(44_000);
     expect(intervalOf('retention')).toBe(55_000);
     expect(intervalOf('webhook_redelivery')).toBe(66_000);
+    expect(intervalOf('knowledge_refresh')).toBe(77_000);
   });
 
   it('registers retention disabled unless RETENTION_ENABLED is set — no other job is gated', () => {
@@ -164,6 +167,14 @@ describe('buildSchedulerJobs', () => {
         exhausted: 0,
         skipped: 0,
       });
+    });
+
+    it('knowledge_refresh finds nothing due and reports zero tenants', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'knowledge_refresh',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({ tenants: 0, checked: 0, refreshed: 0, failed: 0 });
     });
   });
 });

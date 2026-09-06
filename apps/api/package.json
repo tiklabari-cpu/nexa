@@ -25,7 +25,8 @@
     "chat-timeout:run": "tsx src/services/chat/chat-timeout-run.ts",
     "scheduled-reports:run": "tsx src/services/reports/scheduled-reports-run.ts",
     "siem:run": "tsx src/services/audit/siem-run.ts",
-    "sla:run": "tsx src/services/sla/sla-run.ts"
+    "sla:run": "tsx src/services/sla/sla-run.ts",
+    "knowledge-refresh:run": "tsx src/services/ai/knowledge-refresh-run.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

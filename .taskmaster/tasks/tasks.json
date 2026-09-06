@@ -9214,12 +9214,13 @@
             "description": "PRD KK`sinin son maddesi ismen \"**gecerlilik tarihi + otomatik yeniden crawl** (Nexa)\". Bugun bir website kaynagi bir kez crawl ediliyor ve sonsuza kadar oyle kaliyor; ne bir tazelik esigi ne de zamanlanmis bir yenileme var.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n`KnowledgeSource` semasinda tazelik/gecerlilik alani yok; `apps/api/src/services/scheduler/jobs.ts`\nicinde bilgi kaynagi tazeleyen bir is yok.\n\n## Yapilacak\n\n1. Migration: kaynak basina bir tazelik penceresi (ornegin `refreshAfterDays` / `nextRefreshAt`).\n   Varsayilan, mevcut kaynaklari DAVRANIS DEGISTIRMEDEN birakmali (NULL = otomatik yenileme yok).\n2. Zamanlanmis is: suresi gecen `website` kaynaklarini 198.3`un yeniden-crawl YOLUNU cagirarak\n   tazeler. Ikinci bir crawl yolu YAZMA — iki yol iki farkli SSRF kapisi demektir.\n3. Web: kaynak satirinda/duzenleme formunda tazelik penceresi secilebilir; \"son tazelenme\" gorunur.\n\n## Bilinen tuzaklar\n\n- **Basarisiz tazeleme kaynagi BOZMAMALI.** Site dusmusse ya da SSRF kapisi reddediyorsa eski\n  icerik KALIR ve durum \"tazelenemedi\" olur; kaynagi bosaltmak sessiz veri kaybidir.\n- Is kiracilar arasinda dolasir: her kaynak KENDI kiracisinin baglaminda islenir (RLS).\n- `website` disindaki turlerde otomatik tazeleme ANLAMSIZ (kaynak metni disarida degil) — alan\n  yalniz `website` icin anlamli, digerlerinde kabul edilmez ya da yok sayilir; hangisi oldugunu\n  sozlesmede sabitle.\n- Migration eklendigi icin `pnpm -w db:check-drift` exit 0 sart; shadow DB tuzagi icin kayitli not.\n\n## Kapsam SINIRI\n\nYalniz otomatik tazeleme. Elle yeniden-indeksleme 198.3`te; ikisi ayni servis yolunu paylasir.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `apps/api` entegrasyon: suresi gecmis bir website kaynagi is calisinca yeniden crawl edilir ve\n   `chunk_count`/icerik guncellenir; suresi GECMEMIS kaynak DOKUNULMADAN kalir.\n2. Basarisizlik testi: crawl 400/hata verirse ESKI icerik ve chunk`lar korunur, durum alani\n   \"tazelenemedi\"yi gosterir (veri kaybi YOK iddiasi).\n3. Cok kiracili test: iki kiracinin kaynaklari ayni kosuda tazelenir ve birbirinin verisini gormez.\n4. `pnpm -w db:check-drift` exit 0; migration geri alinabilir/ileri uygulanabilir.\n5. Test basliklari `(FR-MOD-06.3.3)` etiketi tasir; `pnpm audit:req-coverage` exit 0.\n6. TAM DoD kapisi. Bu alt-gorev bittiginde `06.3.3` satiri `✅`e cevrilir (ailenin son parcasi).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "198"
+            "parentId": "198",
+            "updatedAt": "2026-09-06T09:07:17.884Z"
           }
         ],
-        "updatedAt": "2026-09-06T08:59:24.769Z"
+        "updatedAt": "2026-09-06T09:07:17.884Z"
       },
       {
         "id": "199",
@@ -9421,7 +9422,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T08:59:24.769Z",
+      "lastModified": "2026-09-06T09:07:17.885Z",
       "taskCount": 204,
       "completedCount": 198,
       "tags": [

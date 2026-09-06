@@ -44,6 +44,9 @@ function source(overrides: Partial<KnowledgeSource> = {}): KnowledgeSource {
     chunk_count: 3,
     updated_at: '2026-01-15T10:00:00.000Z',
     added_by_name: 'Ada Lovelace',
+    refresh_after_days: null,
+    next_refresh_at: null,
+    last_refresh_error: null,
     ...overrides,
   };
 }
@@ -205,6 +208,86 @@ describe('knowledge source row actions (FR-MOD-06.3.3)', () => {
         source_url: 'https://help.example.com/new',
       }),
     );
+  });
+
+  it('schedules automatic refresh for a website source (FR-MOD-06.3.3, tm 198.4)', async () => {
+    api.patch.mockResolvedValue(source({ type: 'website' }));
+    const user = userEvent.setup();
+    await openKnowledge(user, [
+      source({ type: 'website', source_url: 'https://help.example.com/old' }),
+    ]);
+    await openMenu(user);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Automatic refresh'), '30');
+    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/knowledge-sources/src-1', {
+        refresh_after_days: 30,
+      }),
+    );
+  });
+
+  it('turns automatic refresh back off with an explicit null', async () => {
+    api.patch.mockResolvedValue(source({ type: 'website' }));
+    const user = userEvent.setup();
+    await openKnowledge(user, [
+      source({
+        type: 'website',
+        source_url: 'https://help.example.com/old',
+        refresh_after_days: 30,
+      }),
+    ]);
+    await openMenu(user);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const dialog = await screen.findByRole('dialog');
+    await user.selectOptions(within(dialog).getByLabelText('Automatic refresh'), '');
+    await user.click(within(dialog).getByRole('button', { name: 'Save changes' }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/knowledge-sources/src-1', {
+        refresh_after_days: null,
+      }),
+    );
+  });
+
+  it('offers no freshness schedule for a type with nothing to re-crawl', async () => {
+    const user = userEvent.setup();
+    await openKnowledge(user, [source({ type: 'faq' })]);
+    await openMenu(user);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByLabelText('Automatic refresh')).toBeNull();
+  });
+
+  it('shows why the last automatic refresh failed', async () => {
+    const user = userEvent.setup();
+    await openKnowledge(user, [
+      source({
+        type: 'website',
+        source_url: 'https://help.example.com/old',
+        last_refresh_error: 'That address points at a private or internal host.',
+      }),
+    ]);
+    await openMenu(user);
+    await user.click(screen.getByRole('button', { name: 'Edit' }));
+
+    const dialog = await screen.findByRole('dialog');
+    const alert = within(dialog).getByRole('alert');
+    expect(alert.textContent).toContain('That address points at a private or internal host.');
+  });
+
+  it('flags a row whose last automatic refresh failed, without opening the dialog', async () => {
+    const user = userEvent.setup();
+    await openKnowledge(user, [
+      source({ type: 'website', last_refresh_error: 'That address points at a private host.' }),
+    ]);
+
+    expect(await screen.findByText('Could not refresh automatically')).toBeTruthy();
   });
 
   it('leaves a file source with a title and an explanation, not an editable body', async () => {

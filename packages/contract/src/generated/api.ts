@@ -2562,6 +2562,13 @@ export interface paths {
      *     A new `source_url` is crawled through the same SSRF guard `POST
      *     /knowledge-sources` uses (NFR-S7), before the transaction opens — a
      *     refused URL leaves the source exactly as it was.
+     *
+     *     **`refresh_after_days` (FR-MOD-06.3.3, tm 198.4) schedules automatic
+     *     re-crawls of a `website` source** — refused, like `source_url`, for
+     *     every other type, since there is nothing to re-fetch. Setting it (or
+     *     changing it) restarts the countdown from now; setting it to `null` turns
+     *     automatic refresh back off. It never touches `content` or `chunk_count`
+     *     by itself — only the freshness sweep or a real crawl does that.
      */
     patch: operations['updateKnowledgeSource'];
     trace?: never;
@@ -2607,6 +2614,11 @@ export interface paths {
      *     `assertPublicHttpUrlResolved`, where the webhook sender uses it; the crawl
      *     in this build is a deterministic in-process stub that opens no socket, so
      *     there is no resolved address to pin.)
+     *
+     *     A successful reindex also restarts `next_refresh_at`'s countdown from
+     *     now, using whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
+     *     tm 198.4) — the freshness sweep and this endpoint are the same refresh,
+     *     whichever triggered it.
      */
     post: operations['reindexKnowledgeSource'];
     delete?: never;
@@ -7310,6 +7322,31 @@ export interface components {
        *     knowledge base separate (FR-MOD-12.2).
        */
       added_by_name?: string | null;
+      /**
+       * @description How often, in days, this source should be automatically re-crawled
+       *     (FR-MOD-06.3.3). Only meaningful for a `website` source — always
+       *     null for the other three types, since there is nothing to re-fetch.
+       *     Null means automatic refresh is off, which is every source's
+       *     behaviour before this field existed.
+       */
+      refresh_after_days?: number | null;
+      /**
+       * Format: date-time
+       * @description When the freshness sweep will next attempt this source. Null
+       *     whenever `refresh_after_days` is null. Recomputed from `now` every
+       *     time the source is actually refreshed — an edit, a manual reindex,
+       *     or the sweep itself — so it is a forecast, not a deadline the sweep
+       *     must hit exactly.
+       */
+      next_refresh_at?: string | null;
+      /**
+       * @description Why the most recent refresh attempt failed, if it did — set by the
+       *     freshness sweep, cleared on its next success. A failed refresh
+       *     never changes `content` or `chunk_count`: the stale answer is kept
+       *     rather than replaced with none, so this field is a status to read,
+       *     not a sign that anything was lost.
+       */
+      last_refresh_error?: string | null;
     };
     /**
      * @description One CSV data row's verdict. `line` is the row's 1-based position among
@@ -15109,6 +15146,11 @@ export interface operations {
           content?: string;
           /** @description Only for website sources; refused for the rest. Re-crawled on change. */
           source_url?: string;
+          /**
+           * @description Only for website sources; refused for the rest. Null turns
+           *     automatic refresh off.
+           */
+          refresh_after_days?: number | null;
         };
       };
     };

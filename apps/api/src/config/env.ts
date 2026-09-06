@@ -533,6 +533,12 @@ export const envSchema = z.object({
   SCHEDULE_RETENTION_MS: z.coerce.number().int().positive().default(3_600_000),
   SCHEDULE_WEBHOOK_REDELIVERY_MS: z.coerce.number().int().positive().default(60_000),
   /**
+   * The knowledge-source freshness sweep (FR-MOD-06.3.3, tm 198.4). Hourly by
+   * default, like retention: the windows it acts on are day-granularity, so
+   * there is nothing to gain from checking more often.
+   */
+  SCHEDULE_KNOWLEDGE_REFRESH_MS: z.coerce.number().int().positive().default(3_600_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

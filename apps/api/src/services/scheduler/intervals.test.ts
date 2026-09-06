@@ -31,7 +31,7 @@ describe('the job list', () => {
     );
   });
 
-  it('names the five sweeps that had no scheduler, plus webhook redelivery', () => {
+  it('names the five sweeps that had no scheduler, plus webhook redelivery and the knowledge freshness sweep', () => {
     // §D113/K1's list, in one place, because a job renamed here and nowhere else
     // would leave two instances holding different locks for the same sweep.
     expect([...SCHEDULER_JOB_NAMES]).toEqual([
@@ -41,12 +41,13 @@ describe('the job list', () => {
       'scheduled_reports',
       'retention',
       'webhook_redelivery',
+      'knowledge_refresh',
     ]);
   });
 });
 
 describe('intervals', () => {
-  it('defaults to a minute for the ones a person can feel, and an hour for retention', () => {
+  it('defaults to a minute for the ones a person can feel, and an hour for retention and knowledge refresh', () => {
     expect(jobIntervals(parseEnv(BASE))).toEqual({
       chat_timeout: 60_000,
       sla: 60_000,
@@ -54,6 +55,7 @@ describe('intervals', () => {
       scheduled_reports: 60_000,
       retention: 3_600_000,
       webhook_redelivery: 60_000,
+      knowledge_refresh: 3_600_000,
     });
   });
 

@@ -15,14 +15,18 @@
  * has no operator, so `RETENTION_ENABLED` stands in for that confirmation —
  * unset, the job is registered (`/health` lists it) but its `run` is never
  * called, exactly the shape `JobDefinition.enabled` documents. Every other
- * job here runs for real: none of the other four is irreversible in the way
- * retention is (`chat-timeout-run.ts`, `sla-run.ts` and `siem-run.ts` take no
- * `--apply` either), and `scheduled-reports:run`'s dry-run exists only for an
- * operator eyeballing the CLI's output — the sweeper it calls under
- * `--apply` is the same `ScheduledReportSweeper.run` used here.
+ * job here runs for real: none of the other five is irreversible in the way
+ * retention is (`chat-timeout-run.ts`, `sla-run.ts`, `siem-run.ts` and
+ * `knowledge-refresh-run.ts` take no `--apply` either — a refused refresh
+ * leaves the source untouched by construction, not by a flag), and
+ * `scheduled-reports:run`'s dry-run exists only for an operator eyeballing the
+ * CLI's output — the sweeper it calls under `--apply` is the same
+ * `ScheduledReportSweeper.run` used here. `webhook_redelivery` has no CLI
+ * script at all (see README.md).
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
+import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
 import { ChatService } from '../chat/chat-service.js';
@@ -192,6 +196,21 @@ export function buildSchedulerJobs({
             requeued: report.totals.requeued,
             exhausted: report.totals.exhausted,
             skipped: report.totals.skipped,
+          },
+        };
+      },
+    },
+    {
+      name: 'knowledge_refresh',
+      intervalMs: intervals.knowledge_refresh,
+      async run() {
+        const report = await new KnowledgeRefreshSweeper(db).run();
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            checked: report.totals.checked,
+            refreshed: report.totals.refreshed,
+            failed: report.totals.failed,
           },
         };
       },

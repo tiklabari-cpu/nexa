@@ -30,6 +30,7 @@ import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
 import { ChatService } from '../chat/chat-service.js';
+import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
 import type { Mailer } from '../mail/mailer.js';
 import { ScheduledReportSweeper } from '../reports/scheduled-report-sweeper.js';
@@ -67,6 +68,15 @@ export interface SchedulerJobsOptions {
    *  (PLAN A4), so a test server's `NullMailer` keeps a sweep from leaving
    *  files behind exactly as it keeps requests from doing so. */
   mailer: Mailer;
+  /**
+   * Fans a sweep-driven lifecycle event out to Zapier/Make subscriptions
+   * (FR-MOD-09.4). Optional: without one the sweeps behave exactly as they did,
+   * they simply announce nothing outside the building. Wired by the server
+   * plugin so a chat the timeout sweep archives reaches the same zap as one an
+   * agent archived — an automation that quietly stopped overnight would be
+   * worse than one that never existed.
+   */
+  automations?: WorkspaceEventDispatcher;
 }
 
 /**
@@ -78,6 +88,7 @@ export function buildSchedulerJobs({
   readDb = db,
   env,
   mailer,
+  automations,
 }: SchedulerJobsOptions): JobDefinition[] {
   const intervals = jobIntervals(env);
 
@@ -91,6 +102,8 @@ export function buildSchedulerJobs({
     undefined,
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
     mailer,
+    undefined,
+    automations,
   );
 
   return [

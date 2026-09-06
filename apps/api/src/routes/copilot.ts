@@ -15,6 +15,7 @@ import { hasAnyScope, isShortId } from '@nexa/types';
 import { ENHANCE_MODES, enhanceText, summariseConversation } from '@nexa/ai-mock';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { scopesOf } from '../services/auth/principal.js';
@@ -106,7 +107,14 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function copilotRoutes(
   app: FastifyInstance,
-  { env }: { env: Env },
+  {
+    env,
+    automations,
+  }: {
+    env: Env;
+    /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
+    automations?: WorkspaceEventDispatcher;
+  },
 ): Promise<void> {
   const knowledge = new KnowledgeService();
   const copilot = new CopilotService(knowledge);
@@ -119,6 +127,9 @@ export default async function copilotRoutes(
       aiOverageCents: env.AI_OVERAGE_CENTS,
       aiIncluded: env.AI_RESOLUTIONS_INCLUDED,
     },
+    undefined,
+    undefined,
+    automations,
   );
 
   // --- Knowledge (12.2) ------------------------------------------------------

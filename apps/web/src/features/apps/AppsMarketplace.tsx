@@ -61,6 +61,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { formatDateTime } from '../../lib/format.js';
 import { FieldError, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { chunkIntoRows, columnsForWidth } from './app-grid.js';
@@ -448,6 +449,29 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
               >
                 {app.installation.external_account}
               </code>
+            )}
+            {/* An automation card reports what this workspace actually wired up
+                (FR-MOD-09.4): the number of triggers registered against it and
+                when one last fired. Read from the server, never from the
+                catalogue — which is what these two figures used to be. */}
+            {app.installation?.automation && (
+              <p
+                data-testid={`app-${app.id}-automation`}
+                className="truncate text-2xs text-content-tertiary"
+              >
+                {t('apps.marketplace.card.automation', {
+                  triggers: String(app.installation.automation.triggers),
+                  // Translated here rather than taken from the server's own
+                  // bucket (`formatLastRun`): that one shapes the *in-chat*
+                  // value, which is catalogue-shaped data and deliberately
+                  // untranslated like every other card's fields. The console is
+                  // chrome, so it gets the locale's date and the locale's word
+                  // for "never".
+                  lastRun:
+                    formatDateTime(app.installation.automation.last_run_at) ??
+                    t('apps.marketplace.card.automationNeverRun'),
+                })}
+              </p>
             )}
             <button
               type="button"

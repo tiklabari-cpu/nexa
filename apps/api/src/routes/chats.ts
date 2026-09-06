@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { EVENT_RECIPIENTS, EVENT_TYPES, TRANSFER_REASONS, isShortId } from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskCardNumbers } from '../lib/cc-mask.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { ChannelService } from '../services/channels/channel-service.js';
@@ -91,7 +92,18 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function chatRoutes(
   app: FastifyInstance,
-  { env, mailer, push }: { env: Env; mailer: Mailer; push: PushProvider },
+  {
+    env,
+    mailer,
+    push,
+    automations,
+  }: {
+    env: Env;
+    mailer: Mailer;
+    push: PushProvider;
+    /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
+    automations?: WorkspaceEventDispatcher;
+  },
 ): Promise<void> {
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
   const channels = new ChannelService();
@@ -111,6 +123,7 @@ export default async function chatRoutes(
       dispatchAgentReply: (tenant, chatId, text) =>
         channels.dispatchAgentReply(app.db, tenant, chatId, text, app.log),
     },
+    automations,
   );
   const supervisions = new SupervisionService();
 

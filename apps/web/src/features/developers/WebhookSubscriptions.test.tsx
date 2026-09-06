@@ -75,12 +75,29 @@ const registeredWebhook = {
   type: 'license' as const,
   enabled: true,
   created_at: '2026-08-01T00:00:00.000Z',
+  app_id: null as string | null,
 };
 
-function mockList(items: (typeof registeredWebhook)[]): void {
+/**
+ * A connected automation card (FR-MOD-09.4). Only cards that come back with
+ * live `automation` figures may own a subscription, so this is exactly the
+ * shape the form filters on.
+ */
+const connectedZapier = {
+  id: 'zapier',
+  name: 'Zapier',
+  installed: true,
+  installation: { automation: { triggers: 1, last_run_at: null } },
+};
+
+function mockList(
+  items: (typeof registeredWebhook)[],
+  automationApps: (typeof connectedZapier)[] = [],
+): void {
   api.get.mockImplementation((path: string) => {
     if (path === '/webhooks') return Promise.resolve({ items });
     if (path === '/integrations/manifest') return Promise.resolve(manifest);
+    if (path.startsWith('/settings/apps')) return Promise.resolve({ items: automationApps });
     return Promise.reject(new Error(`unexpected GET ${path}`));
   });
 }
@@ -247,5 +264,103 @@ describe('WebhookSubscriptions localisation (NFR-I18N2)', () => {
     expect(await screen.findByText('Henüz webhook aboneliği yok')).toBeInTheDocument();
     expect(screen.getByText('Olay')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Abone ol' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The Zapier/Make leg (FR-MOD-09.4). A subscription may name the automation
+ * card it belongs to, and the option only exists for a card this workspace has
+ * actually connected — the server refuses any other, so offering one here would
+ * produce a 400 the person cannot act on.
+ */
+describe('WebhookSubscriptions — automation card (FR-MOD-09.4)', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+    api.post.mockReset();
+    api.delete.mockReset();
+  });
+
+  it('offers no automation field when no automation card is connected', async () => {
+    mockList([]);
+    renderComponent('webhooks');
+
+    await screen.findByLabelText('URL');
+    expect(screen.queryByLabelText('Automation app')).not.toBeInTheDocument();
+  });
+
+  it('sends the chosen card with the subscription', async () => {
+    mockList([], [connectedZapier]);
+    api.post.mockResolvedValue({
+      ...registeredWebhook,
+      app_id: 'zapier',
+      secret: 'whsec_mock-secret-value',
+    });
+    renderComponent('webhooks');
+
+    await fillSubscribeForm(registeredWebhook.url);
+    await userEvent.selectOptions(await screen.findByLabelText('Automation app'), 'zapier');
+    await userEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/webhooks', {
+        url: registeredWebhook.url,
+        action: 'chat_started',
+        app_id: 'zapier',
+      }),
+    );
+  });
+
+  it('leaves app_id out entirely when the card is left unselected', async () => {
+    mockList([], [connectedZapier]);
+    api.post.mockResolvedValue({ ...registeredWebhook, secret: 'whsec_mock-secret-value' });
+    renderComponent('webhooks');
+
+    await fillSubscribeForm(registeredWebhook.url);
+    await userEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith('/webhooks', {
+        url: registeredWebhook.url,
+        action: 'chat_started',
+      }),
+    );
+  });
+
+  // The two `app_id` refusals are the server's, and they belong under the field
+  // they are about — not under URL, which is where every other 400 lands.
+  it('pins the server’s app_id refusal under the automation field', async () => {
+    mockList([], [connectedZapier]);
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message: 'app_id: connect Zapier in the app marketplace first.',
+        requestId: 'req_test',
+      }),
+    );
+    renderComponent('webhooks');
+
+    await fillSubscribeForm(registeredWebhook.url);
+    await userEvent.selectOptions(await screen.findByLabelText('Automation app'), 'zapier');
+    await userEvent.click(screen.getByRole('button', { name: 'Subscribe' }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText('app_id: connect Zapier in the app marketplace first.'),
+      ).toBeInTheDocument(),
+    );
+    // Regex, not an exact match: the rendered `FieldError` sits inside the same
+    // `<label>`, so its text joins the field's accessible name.
+    expect(screen.getByLabelText(/Automation app/)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('URL')).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('names the owning card on the subscription row', async () => {
+    mockList([{ ...registeredWebhook, app_id: 'zapier' }], [connectedZapier]);
+    renderComponent('webhooks');
+
+    const row = await screen.findByTestId(`webhook-${registeredWebhook.id}`);
+    // The card's display name, not its catalogue id.
+    await waitFor(() => expect(within(row).getByText('via Zapier')).toBeInTheDocument());
   });
 });

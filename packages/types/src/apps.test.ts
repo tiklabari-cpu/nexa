@@ -9,12 +9,16 @@ import {
   PRD_NAMED_INTEGRATIONS,
   appApiKeyLastFour,
   appApiKeyProblem,
+  appAutomationChatData,
   appChatData,
+  automationApps,
   channelApps,
   connectableApps,
   filterAppCatalog,
   findApp,
+  formatLastRun,
   isAppId,
+  isAutomationApp,
   isChannelApp,
   maskApiKey,
   paginateApps,
@@ -34,10 +38,25 @@ describe('app catalogue', () => {
         // A channel app is set up in Channels, not connected here — no in-chat data.
         expect(entry.dataFields).toBeUndefined();
         expect(entry.dataLabel).toBeUndefined();
+      } else if (isAutomationApp(entry)) {
+        // An automation card's figures are read from the workspace, never drawn
+        // from a list (FR-MOD-09.4) — so every one of its fields declares a
+        // `source` and carries NO options. An option list here is the defect
+        // this item closed: a constant that reads like a measurement.
+        expect(entry.dataFields?.length ?? 0).toBeGreaterThan(0);
+        for (const field of entry.dataFields ?? []) {
+          expect(field.source).toBeDefined();
+          expect(field.options).toHaveLength(0);
+        }
       } else {
         // A connected data app must surface at least one field, or it shows nothing.
         expect(entry.dataFields?.length ?? 0).toBeGreaterThan(0);
-        for (const field of entry.dataFields ?? []) expect(field.options.length).toBeGreaterThan(0);
+        for (const field of entry.dataFields ?? []) {
+          expect(field.options.length).toBeGreaterThan(0);
+          // Only an automation card computes a value; a mock card must not
+          // claim to, or `appChatData` would blank it.
+          expect(field.source).toBeUndefined();
+        }
       }
     }
   });
@@ -281,5 +300,89 @@ describe('API key rule — shared by the form and the endpoint (FR-MOD-09.2)', (
     // the key's — two keys of different lengths mask identically.
     expect(maskApiKey(`${'x'.repeat(200)}9c41`)).toBe('••••9c41');
     expect(maskApiKey(`  ${minimal}kkkk  `)).toBe('••••kkkk');
+  });
+});
+
+/**
+ * The automation cards' figures (FR-MOD-09.4). The audit's finding was that
+ * Zapier and Make "showed" an active-zap count and a last-run time that were
+ * fixed `options` lists — a card that looked like it was reporting and was not.
+ * These tests pin the replacement in both directions: the real reader produces
+ * the workspace's own numbers, and the mock reader cannot produce a number at
+ * all for these cards, so the old shape cannot come back unnoticed.
+ */
+describe('automation cards read the workspace, not a list of options (FR-MOD-09.4)', () => {
+  const zapier = findApp('zapier')!;
+  const make = findApp('make')!;
+
+  it('marks exactly the two automation platforms', () => {
+    expect(
+      automationApps()
+        .map((entry) => entry.id)
+        .sort(),
+    ).toEqual(['make', 'zapier']);
+    expect(isAutomationApp(zapier)).toBe(true);
+    expect(isAutomationApp(make)).toBe(true);
+    expect(isAutomationApp(findApp('hubspot')!)).toBe(false);
+  });
+
+  it('shows the registered trigger count and the last run it actually made', () => {
+    const now = new Date('2026-03-10T12:00:00.000Z');
+    const none = appAutomationChatData(zapier, { triggers: 0, last_run_at: null }, now);
+    expect(none.fields).toEqual([
+      { label: 'Active zaps', value: '0' },
+      { label: 'Last zap run', value: 'Never run' },
+    ]);
+
+    const live = appAutomationChatData(
+      zapier,
+      { triggers: 3, last_run_at: '2026-03-10T09:30:00.000Z' },
+      now,
+    );
+    expect(live.fields).toEqual([
+      { label: 'Active zaps', value: '3' },
+      { label: 'Last zap run', value: 'Today' },
+    ]);
+
+    // Make's labels differ; the values come from the same two sources.
+    expect(appAutomationChatData(make, { triggers: 1, last_run_at: null }, now).fields).toEqual([
+      { label: 'Active scenarios', value: '1' },
+      { label: 'Last run', value: 'Never run' },
+    ]);
+  });
+
+  // A card with triggers wired but nothing delivered yet is not the same card
+  // as one with no triggers — the two figures are independent.
+  it('separates "nothing wired" from "wired but never fired"', () => {
+    const now = new Date('2026-03-10T12:00:00.000Z');
+    const wired = appAutomationChatData(zapier, { triggers: 2, last_run_at: null }, now);
+    expect(wired.fields[0]?.value).toBe('2');
+    expect(wired.fields[1]?.value).toBe('Never run');
+  });
+
+  it('buckets the age of the last run against a supplied clock', () => {
+    const now = new Date('2026-03-10T00:30:00.000Z');
+    expect(formatLastRun(null, now)).toBe('Never run');
+    expect(formatLastRun('not-a-date', now)).toBe('Never run');
+    expect(formatLastRun('2026-03-10T00:29:00.000Z', now)).toBe('Today');
+    // A run three hours ago crossed midnight: a reader calls that yesterday,
+    // which is why the bucket compares calendar days and not elapsed hours.
+    expect(formatLastRun('2026-03-09T21:30:00.000Z', now)).toBe('Yesterday');
+    expect(formatLastRun('2026-03-07T12:00:00.000Z', now)).toBe('3 days ago');
+    expect(formatLastRun('2026-02-28T12:00:00.000Z', now)).toBe('1 weeks ago');
+    expect(formatLastRun('2026-01-01T12:00:00.000Z', now)).toBe('Over a month ago');
+    // A clock skew that puts the run in the future reads as "Today" rather than
+    // a negative age.
+    expect(formatLastRun('2026-03-11T00:00:00.000Z', now)).toBe('Today');
+  });
+
+  // The loud failure mode: the mock reader has nothing to draw from for these
+  // cards, so routing one through it shows em-dashes instead of a believable
+  // number. That is the property that makes the split safe.
+  it('yields no figure at all when read through the customer-data mock', () => {
+    for (const seed of ['ada@example.com', 'grace@example.com']) {
+      expect(appChatData(zapier, seed).fields.map((f) => f.value)).toEqual(['—', '—']);
+      expect(appChatData(make, seed).fields.map((f) => f.value)).toEqual(['—', '—']);
+    }
   });
 });

@@ -1874,7 +1874,7 @@ components:
         A registered outbound webhook (FR-MOD-08.8.4). The signing secret is
         deliberately absent — it is returned only once, by the register call
         (see `WebhookRegistration`).
-      required: [id, url, action, type, enabled, created_at]
+      required: [id, url, action, type, enabled, created_at, app_id]
       properties:
         id: { type: string, format: uuid }
         url:
@@ -1890,6 +1890,16 @@ components:
           type: boolean
           description: Whether deliveries currently fire for this webhook.
         created_at: { type: string, format: date-time }
+        app_id:
+          description: |
+            The automation card this subscription belongs to (FR-MOD-09.4) —
+            `zapier` or `make` — or null for a hand-registered webhook. A
+            subscription with an `app_id` exists only while that card is
+            connected: registering one requires the connection, and
+            disconnecting the card removes it.
+          oneOf:
+            - type: string
+            - type: "null"
 
     WebhookRegistration:
       description: |
@@ -3490,7 +3500,8 @@ components:
         fields is meaningful: an OAuth install carries the account label the
         grant returned and a null `api_key_last_four`; an API-key install
         carries the masked key in both, because a pasted key names no account.
-      required: [app_id, status, external_account, scopes, connected_at, api_key_last_four]
+      required:
+        [app_id, status, external_account, scopes, connected_at, api_key_last_four, automation]
       properties:
         app_id: { type: string }
         status: { type: string, enum: [connected] }
@@ -3515,6 +3526,28 @@ components:
             - type: string
               minLength: 4
               maxLength: 4
+            - type: "null"
+        automation:
+          description: |
+            Live figures for an automation card (FR-MOD-09.4) — Zapier and Make
+            — and null for every other kind of app. `triggers` counts the
+            enabled webhook subscriptions attached to this card; `last_run_at`
+            is the newest **successful** delivery made through one of them, or
+            null when none has been. The two are independent: a card can have
+            triggers wired and nothing to report yet.
+          oneOf:
+            - $ref: "#/components/schemas/AppAutomationStats"
+            - type: "null"
+
+    AppAutomationStats:
+      type: object
+      required: [triggers, last_run_at]
+      properties:
+        triggers: { type: integer, minimum: 0 }
+        last_run_at:
+          oneOf:
+            - type: string
+              format: date-time
             - type: "null"
 
     AppListItem:

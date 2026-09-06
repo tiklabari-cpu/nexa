@@ -18,6 +18,7 @@ import {
   TICKET_SORT_KEYS,
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
+import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 
@@ -89,7 +90,15 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   return result.data;
 }
 
-export default async function ticketRoutes(app: FastifyInstance): Promise<void> {
+export default async function ticketRoutes(
+  app: FastifyInstance,
+  {
+    automations,
+  }: {
+    /** Fans a committed ticket creation out to Zapier/Make subscriptions (FR-MOD-09.4). */
+    automations?: WorkspaceEventDispatcher;
+  } = {},
+): Promise<void> {
   const tickets = new TicketService();
   const customFields = new CustomFieldService();
 
@@ -131,6 +140,19 @@ export default async function ticketRoutes(app: FastifyInstance): Promise<void> 
         ...(body.status !== undefined ? { status: body.status } : {}),
       }),
     );
+
+    // After the transaction, never inside it (FR-MOD-09.4): the delivery is an
+    // HTTP call to somebody else's server, and the ticket is already committed
+    // — a receiver having a bad minute must not roll it back. `emit` swallows
+    // its own failures, so nothing here can turn a created ticket into a 500.
+    await automations?.emit(tenant, 'ticket_created', {
+      ticket_id: ticket.id,
+      subject: ticket.subject,
+      status: ticket.status,
+      priority: ticket.priority,
+      customer_id: ticket.customer_id,
+      created_at: ticket.created_at,
+    });
 
     return reply.code(201).send(ticket);
   });

@@ -27,6 +27,7 @@ import {
   type TransferReason,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
+import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
@@ -143,6 +144,14 @@ export class ChatService {
      * so a Website chat is unaffected either way.
      */
     private readonly channels?: ChannelDispatcher,
+    /**
+     * Fans a committed lifecycle event out to whatever subscribed to it
+     * (FR-MOD-09.4 — a Zapier zap or a Make scenario, over the webhook stack
+     * `08.8.4` already built). Optional on exactly the terms `publisher`,
+     * `mailer` and `channels` are: a service built without one still starts,
+     * closes and transfers chats, it just tells nobody outside the building.
+     */
+    private readonly automations?: WorkspaceEventDispatcher,
   ) {}
 
   /**
@@ -275,6 +284,15 @@ export class ChatService {
       await this.publisher?.publish(tenant, 'incoming_chat', this.#audienceFor(result.raw), {
         requester_id: actorOf(principal),
         chat: result.chat,
+      });
+      // Only a chat that was actually created (FR-MOD-09.4): `start` is
+      // idempotent on an existing active chat, and a subscriber that received
+      // `chat_started` twice for one conversation would open two tickets.
+      await this.automations?.emit(tenant, 'chat_started', {
+        chat_id: result.chat.id,
+        customer_id: result.raw.customerId,
+        active: true,
+        created_at: result.raw.createdAt.toISOString(),
       });
     }
 
@@ -487,6 +505,23 @@ export class ChatService {
       await this.channels.dispatchAgentReply(tenant, result.event.chat_id, result.event.text);
     }
 
+    // FR-MOD-09.4. Only what the customer side of the conversation can see: an
+    // internal note is addressed to `agents`, and forwarding one to a zap would
+    // put a private remark about a customer into a third-party system the same
+    // customer's ticket may well be visible in. The same rule the channel
+    // dispatch above applies, for a stronger reason.
+    if (result.recipients === 'all') {
+      await this.automations?.emit(tenant, 'event_created', {
+        event_id: result.event.id,
+        chat_id: result.event.chat_id,
+        thread_id: result.event.thread_id,
+        type: result.event.type,
+        text: result.event.text,
+        author_type: result.event.author_type,
+        created_at: result.event.created_at,
+      });
+    }
+
     return { event: result.event, replayed: false };
   }
 
@@ -576,6 +611,7 @@ export class ChatService {
     });
 
     await this.#publishDeactivation(tenant, chatId, result, actorOf(principal));
+    await this.#emitDeactivation(tenant, chatId, result);
     await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
   }
@@ -619,6 +655,10 @@ export class ChatService {
 
     if (!result) return null;
     await this.#publishDeactivation(tenant, chatId, result, null);
+    // A chat the sweep archived is as closed as one an agent archived, so the
+    // same subscribers hear about it — the alternative is an automation that
+    // works during office hours and silently stops overnight.
+    await this.#emitDeactivation(tenant, chatId, result);
     await this.#emailTranscript(tenant, chatId, result.threadId);
     return result.detail;
   }
@@ -736,6 +776,27 @@ export class ChatService {
       chat_id: chatId,
       thread_id: result.detail.thread?.id ?? null,
       requester_id: requesterId,
+    });
+  }
+
+  /**
+   * Tell the outside world a conversation ended (FR-MOD-09.4). Shared by the
+   * agent-driven close and the timeout sweep so the two cannot drift into
+   * disagreeing about whether a closed chat is worth announcing.
+   *
+   * The body matches the manifest's `chat_deactivated` sample
+   * (`INTEGRATION_TRIGGERS`), which is what an integrator built their zap
+   * against.
+   */
+  async #emitDeactivation(
+    tenant: TenantContext,
+    chatId: string,
+    result: CloseResult,
+  ): Promise<void> {
+    await this.automations?.emit(tenant, 'chat_deactivated', {
+      chat_id: chatId,
+      active: false,
+      created_at: result.detail.created_at,
     });
   }
 
@@ -1058,6 +1119,13 @@ export class ChatService {
         group_ids: target.groupId !== undefined ? [Number(target.groupId)] : [],
         agent_ids: target.agentId !== undefined ? [target.agentId] : [],
       },
+    });
+
+    await this.automations?.emit(tenant, 'chat_transferred', {
+      chat_id: chatId,
+      group_id: target.groupId !== undefined ? Number(target.groupId) : null,
+      agent_id: target.agentId ?? null,
+      reason: target.reason,
     });
 
     // FR-MOD-08.6.3 — a hand-off that lands a chat on a new agent while someone

@@ -9353,12 +9353,13 @@
             "description": "Zapier ve Make bugun yalnizca iki katalog karti; gosterdikleri \"Active zaps\" / \"Last run\" degerleri sabit `dataFields` secenekleri. PRD KK \"700+ Zapier; partner/creator portali\" diyor — portal ayagi gercek (OAuth 2.1 client kaydi, scope tavani, secret rotasyonu, developer portali), eksik olan otomasyon ayagi: bir calisma alani olayindan zap/senaryoya giden yol.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n`packages/types/src/apps.ts:304-332` — `zapier` (`provider: \"oauth\"`) ve `make` (`provider: \"api_key\"`)\nkartlarinin `dataFields`i sabit secenek listeleridir (_\"Active zaps: 0/1/3/7\"_,\n_\"Last run: Success/Failed/Never run\"_). Kod tabaninda bu iki kartin adini bagimsiz bir tetikleme\nyoluna baglayan hicbir sey yok.\n\n## Yapilacak\n\n1. **Mevcut webhook altyapisini KULLAN** (`08.8.4`, zaten `✅`: HMAC-SHA256 + timestamp/nonce + 3x\n   retry + SSRF korumasi). Yeni bir teslim mekanizmasi YAZMA — Zapier/Make baglantisi, o altyapiya\n   kayitli bir aboneligin uzerine oturur.\n2. Bagli bir Zapier/Make karti icin: hangi calisma alani olaylarinin tetikleyecegi (en az sohbet\n   baslama/bitis ve ticket olusturma) ve hedefin nasil kaydedildigi. Baglanti YOKKEN hicbir sey\n   tetiklenmez (negatif kapi).\n3. Kart `dataFields`i sabit secenek yerine **gercek** sayilari okusun: kac tetikleme kayitli, en son\n   ne zaman kostu. Sabit liste kalirsa kalem kapanmaz — denetimin bulgusu tam olarak budur.\n4. Dis servis MOCK: gercek `hooks.zapier.com`a istek ATILMAZ; test bir mock alici kullanir\n   (`channels-adapters.test.ts`in mock saglayici deseni emsal).\n5. `700+` sayisi bir **pazarlama iddiasidir**, kod hedefi degil: PRD`nin olculebilir payi\n   \"partner/creator portali\" + tetikleme yoludur. Bu yorumu gorevin kapanis notuna yaz.\n\n## Bilinen tuzaklar\n\n- **SSRF korumasi mevcut webhook yolunda yasiyor**; yeni bir cikis yolu acarsan o korumayi\n  atlatmis olursun. Bu, guvenlik akil yurutmesi gerektiren bir yerdir.\n- Saglayici hatasi **yutulup log`lanir**, cagiran akisi bozmaz (G1`in `dispatchAgentReply` karari emsal).\n- Kart `provider` degerleri farkli (`zapier` oauth, `make` api_key) — 202.1`in acikligi ikisini de\n  kapsamali, yoksa `make` baglanamaz.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. Integration: bagli bir Zapier karti varken bir sohbet baslatildiginda mock alici **bir** tetikleme\n   aliyor; imza dogrulaniyor (HMAC-SHA256 + timestamp).\n2. Kart bagli DEGILKEN ayni olay hicbir tetikleme uretmiyor (negatif).\n3. Saglayici 500 dondugunde cagiran akis (sohbet baslatma) BASARILI kaliyor; hata log`lanmis.\n4. Kartin gosterdigi sayilar gercek kayittan geliyor: sifir tetiklemeyle \"0\", bir tetiklemeden sonra \"1\".\n5. `make` (api_key) karti da ayni yolu kullanabiliyor.\n6. Test basliklari `(FR-MOD-09.4)` etiketi tasir. TAM DoD kapisi.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "202"
+            "parentId": "202",
+            "updatedAt": "2026-09-06T16:47:12.717Z"
           }
         ],
-        "updatedAt": "2026-09-06T16:45:48.313Z"
+        "updatedAt": "2026-09-06T16:47:12.717Z"
       },
       {
         "id": "203",
@@ -9429,7 +9430,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T16:45:48.316Z",
+      "lastModified": "2026-09-06T16:47:12.718Z",
       "taskCount": 204,
       "completedCount": 201,
       "tags": [

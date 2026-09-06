@@ -56,6 +56,32 @@ const connected = {
     scopes: ['contacts.read', 'deals.read'],
     connected_at: '2026-07-27T00:00:00.000Z',
     api_key_last_four: null,
+    // Not an automation card, so it has no figures to report (FR-MOD-09.4).
+    automation: null,
+  },
+};
+
+// An automation card (FR-MOD-09.4): what it shows is what this workspace has
+// actually wired up, so the two figures come down the wire rather than being
+// picked from the catalogue.
+const automationCard = {
+  id: 'zapier',
+  name: 'Zapier',
+  category: 'productivity',
+  provider: 'oauth',
+  icon: '⚡',
+  description: 'Trigger zaps from workspace events.',
+  scopes: ['zaps.trigger'],
+  channel: null,
+  installed: true,
+  installation: {
+    app_id: 'zapier',
+    status: 'connected',
+    external_account: 'nexa+1@zapier.example',
+    scopes: ['zaps.trigger'],
+    connected_at: '2026-09-06T00:00:00.000Z',
+    api_key_last_four: null,
+    automation: { triggers: 2, last_run_at: '2026-09-06T09:30:00.000Z' },
   },
 };
 
@@ -568,5 +594,58 @@ describe('AppsMarketplace localisation (NFR-I18N2)', () => {
     expect(await screen.findByText('Bağlı değil')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Mağaza' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Bağlan' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The automation cards' figures (FR-MOD-09.4). The audit's finding was that
+ * Zapier and Make displayed an active-zap count and a last-run time that were
+ * fixed catalogue options. These pin that the card now renders what the server
+ * measured — including the "wired but never fired" case, which a card that
+ * merely printed a number could not distinguish.
+ */
+describe('AppsMarketplace — automation cards (FR-MOD-09.4)', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+    api.post.mockReset();
+    api.delete.mockReset();
+  });
+
+  it('shows the trigger count and last run the server reported', async () => {
+    api.get.mockResolvedValue({ items: [automationCard] });
+    renderComponent(<AppsMarketplace />);
+
+    const line = await screen.findByTestId('app-zapier-automation');
+    expect(line).toHaveTextContent('2 trigger(s)');
+    // The timestamp is formatted by the locale, so assert on the year rather
+    // than a full rendering that would change with `Intl`'s output.
+    expect(line).toHaveTextContent(/last run .*2026/);
+  });
+
+  it('says a card has never run rather than inventing a time', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        {
+          ...automationCard,
+          installation: {
+            ...automationCard.installation,
+            automation: { triggers: 0, last_run_at: null },
+          },
+        },
+      ],
+    });
+    renderComponent(<AppsMarketplace />);
+
+    expect(await screen.findByTestId('app-zapier-automation')).toHaveTextContent(
+      '0 trigger(s) · last run never',
+    );
+  });
+
+  it('shows no automation line on a card that is not an automation platform', async () => {
+    api.get.mockResolvedValue({ items: [connected] });
+    renderComponent(<AppsMarketplace />);
+
+    await screen.findByText('HubSpot');
+    expect(screen.queryByTestId('app-hubspot-automation')).toBeNull();
   });
 });

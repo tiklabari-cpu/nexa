@@ -164,8 +164,14 @@ test.describe('apps marketplace', () => {
     await agentPage.goto('/app/apps');
     const search = agentPage.getByRole('searchbox', { name: 'Search apps' });
     await search.fill('zendesk');
+    // Wait for the *filtered* grid, not merely for a visible card: the search is
+    // debounced, so the unfiltered list is still on screen for a moment and a
+    // click landing on it is lost when the filtered response re-renders the row
+    // (observed twice under load before this wait was added).
+    await expect(agentPage.getByRole('list', { name: 'Apps' }).getByRole('listitem')).toHaveCount(
+      1,
+    );
     const card = agentPage.getByTestId('app-zendesk');
-    await expect(card).toBeVisible();
     await expect(card.getByText('Not connected')).toBeVisible();
 
     await card.getByRole('button', { name: 'Connect' }).click();
@@ -200,6 +206,75 @@ test.describe('apps marketplace', () => {
     // fixture the next run did not ask for.
     await card.getByRole('button', { name: 'Disconnect' }).click();
     await expect(card.getByText('Not connected')).toBeVisible();
+  });
+
+  /**
+   * The automation leg, in a browser (FR-MOD-09.4).
+   *
+   * The finding this closes was that Zapier's "Active zaps" and "Last zap run"
+   * were fixed catalogue options — a card that looked like it was reporting and
+   * was not. Neither the integration suite (which reads the endpoint) nor the
+   * web unit suite (which renders a mocked response) can answer whether the
+   * figure an admin actually sees moves when they wire a trigger up. This runs
+   * the whole loop against the real server: connect the card, register a
+   * trigger against it from the developer portal, watch the card's own number
+   * go 0 → 1, then disconnect and watch the trigger go with it.
+   */
+  test('shows an automation card’s real trigger count, and drops it on disconnect (FR-MOD-09.4)', async ({
+    agentPage,
+  }) => {
+    const hookUrl = `https://hooks.e2e.example/zap-${Date.now()}`;
+
+    // The search is debounced, and the grid re-renders when its result lands —
+    // so wait for the *filtered* list rather than clicking a card that is about
+    // to be replaced by the same card from the next response.
+    const showOnlyZapier = async (): Promise<void> => {
+      await agentPage.getByRole('searchbox', { name: 'Search apps' }).fill('zapier');
+      await expect(agentPage.getByRole('list', { name: 'Apps' }).getByRole('listitem')).toHaveCount(
+        1,
+      );
+    };
+
+    await agentPage.goto('/app/apps');
+    await showOnlyZapier();
+    const card = agentPage.getByTestId('app-zapier');
+    await card.getByRole('button', { name: 'Connect' }).click();
+    await agentPage.getByRole('dialog').getByRole('button', { name: 'Authorize' }).click();
+
+    // Connected with nothing wired: the honest zero, and no run to report. The
+    // old card would have picked one of '0'/'1'/'3'/'7' from a list here.
+    const figures = agentPage.getByTestId('app-zapier-automation');
+    await expect(figures).toHaveText('0 trigger(s) · last run never');
+
+    // Wire one up, naming the card — the option only exists because the card is
+    // connected (the server refuses any other).
+    await agentPage.goto('/app/developers');
+    await agentPage.getByRole('tab', { name: 'Webhooks' }).click();
+    await agentPage.getByLabel('URL').fill(hookUrl);
+    await agentPage.getByLabel('Event').selectOption('chat_started');
+    await agentPage.getByLabel(/Automation app/).selectOption('zapier');
+    await agentPage.getByRole('button', { name: 'Subscribe' }).click();
+    await agentPage
+      .getByRole('dialog', { name: 'Webhook subscribed' })
+      .getByRole('button', { name: 'Done' })
+      .click();
+    // The row says which card owns it.
+    await expect(agentPage.locator('li').filter({ hasText: hookUrl })).toContainText('via Zapier');
+
+    // And the card's own figure moved, read back from the server.
+    await agentPage.goto('/app/apps');
+    await showOnlyZapier();
+    await expect(figures).toHaveText('1 trigger(s) · last run never');
+    await agentPage.screenshot({ path: 'kanit/09.4-apps-automation.png', fullPage: true });
+
+    // Disconnecting takes the trigger with it — the negative gate, in a browser.
+    // This also restores the shared seed workspace to how it was found.
+    await card.getByRole('button', { name: 'Disconnect' }).click();
+    await expect(card.getByText('Not connected')).toBeVisible();
+
+    await agentPage.goto('/app/developers');
+    await agentPage.getByRole('tab', { name: 'Webhooks' }).click();
+    await expect(agentPage.locator('li').filter({ hasText: hookUrl })).toHaveCount(0);
   });
 
   test('sends a channel-typed app to Channels instead of offering Connect', async ({

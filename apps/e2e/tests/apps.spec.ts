@@ -13,6 +13,13 @@
  * its first card and its last card are facts about the running server rather
  * than constants copied in here, so growing the catalogue again cannot quietly
  * turn these assertions into nothing.
+ *
+ * The other half of 09.2's criterion — "Her biri OAuth/API key" — is also only
+ * answerable here: the integration suite proves the endpoint stores a hash, and
+ * the web unit suite proves the form posts to it against a mock. Whether an
+ * admin can actually connect an API-key card in a browser, and whether the key
+ * they typed stays off the screen afterwards, is a question about the two
+ * together.
  */
 import type { APIRequestContext } from '@playwright/test';
 import { API_BASE, expect, ownerAccessToken, test } from './fixtures.js';
@@ -146,6 +153,53 @@ test.describe('apps marketplace', () => {
     await expect(agentPage.getByTestId('app-hubspot')).toHaveCount(0);
     await expect(cards.filter({ hasNotText: 'Payments' })).toHaveCount(0);
     expect(await cards.count()).toBeGreaterThan(0);
+  });
+
+  test('connects an api_key card with a pasted key, showing only its last four (FR-MOD-09.2)', async ({
+    agentPage,
+  }) => {
+    // A real key-shaped string, unmistakable if it ever surfaces.
+    const apiKey = 'zd-live-e2e-never-shown-2f9c41';
+
+    await agentPage.goto('/app/apps');
+    const search = agentPage.getByRole('searchbox', { name: 'Search apps' });
+    await search.fill('zendesk');
+    const card = agentPage.getByTestId('app-zendesk');
+    await expect(card).toBeVisible();
+    await expect(card.getByText('Not connected')).toBeVisible();
+
+    await card.getByRole('button', { name: 'Connect' }).click();
+
+    // The API-key step, not the OAuth consent step: a field to paste into, and
+    // no permission list to agree to — nothing is being granted here.
+    const dialog = agentPage.getByRole('dialog');
+    await expect(dialog.getByRole('button', { name: 'Authorize' })).toHaveCount(0);
+    const submit = dialog.getByRole('button', { name: 'Connect app' });
+    // Submit is refused until the key clears the bound the endpoint enforces.
+    await expect(submit).toBeDisabled();
+
+    await dialog.getByLabel('API key').fill(apiKey);
+    await expect(submit).toBeEnabled();
+    await submit.click();
+
+    // The card flips to Connected and names the key by its last four characters
+    // — the whole of what the product is allowed to show about it. "Not
+    // connected" contains "Connected" as a substring, so the absent negative is
+    // what makes the positive mean anything (channels.spec.ts' idiom).
+    await expect(card.getByText('Not connected')).toHaveCount(0);
+    await expect(card.getByText('Connected')).toBeVisible();
+    await expect(card.getByText('••••9c41')).toBeVisible();
+    // And the key itself is nowhere on the page it was just typed into.
+    await expect(agentPage.getByText(apiKey)).toHaveCount(0);
+    expect(await agentPage.content()).not.toContain(apiKey);
+
+    await agentPage.screenshot({ path: 'kanit/09.2-apps-api-key.png', fullPage: true });
+
+    // Put the shared seed back the way it was found: this suite runs against the
+    // one seeded database, and a workspace left with Zendesk connected is a
+    // fixture the next run did not ask for.
+    await card.getByRole('button', { name: 'Disconnect' }).click();
+    await expect(card.getByText('Not connected')).toBeVisible();
   });
 
   test('sends a channel-typed app to Channels instead of offering Connect', async ({

@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { CHANNEL_TYPES } from './domain.js';
 import {
+  APP_API_KEY_MAX_LENGTH,
+  APP_API_KEY_MIN_LENGTH,
   APP_CATALOG,
   APP_CATEGORIES,
   APP_PROVIDERS,
+  appApiKeyLastFour,
+  appApiKeyProblem,
   appChatData,
   channelApps,
   connectableApps,
@@ -11,6 +15,7 @@ import {
   findApp,
   isAppId,
   isChannelApp,
+  maskApiKey,
   paginateApps,
 } from './apps.js';
 
@@ -218,5 +223,38 @@ describe('paginateApps', () => {
     const result = paginateApps(payments, { limit: 1 })!;
     expect(result.page).toHaveLength(1);
     expect(result.total).toBe(payments.length);
+  });
+});
+
+// The rule the console's form and `POST /settings/apps/{id}/connect` both apply.
+// It lives here precisely so there is one of it: a validator that is stricter
+// than its own endpoint silently blocks keys the server would have taken.
+describe('API key rule — shared by the form and the endpoint (FR-MOD-09.2)', () => {
+  const minimal = 'k'.repeat(APP_API_KEY_MIN_LENGTH);
+
+  it('accepts a key inside the bounds and names what is wrong outside them', () => {
+    expect(appApiKeyProblem(minimal)).toBeNull();
+    expect(appApiKeyProblem('k'.repeat(APP_API_KEY_MAX_LENGTH))).toBeNull();
+
+    expect(appApiKeyProblem('')).toBe('required');
+    expect(appApiKeyProblem('   ')).toBe('required');
+    expect(appApiKeyProblem('k'.repeat(APP_API_KEY_MIN_LENGTH - 1))).toBe('too_short');
+    expect(appApiKeyProblem('k'.repeat(APP_API_KEY_MAX_LENGTH + 1))).toBe('too_long');
+  });
+
+  it('measures the trimmed value, because that is what is stored', () => {
+    // Pasting a key with a trailing newline is not an error, and padding a
+    // short one with spaces does not make it long enough.
+    expect(appApiKeyProblem(`  ${minimal}\n`)).toBeNull();
+    expect(appApiKeyProblem(`   ${'k'.repeat(APP_API_KEY_MIN_LENGTH - 1)}   `)).toBe('too_short');
+  });
+
+  it('shows four characters and no more', () => {
+    expect(appApiKeyLastFour('zd-live-never-logged-2f9c41')).toBe('9c41');
+    expect(maskApiKey('zd-live-never-logged-2f9c41')).toBe('••••9c41');
+    // The mask is derived from the tail alone, so its length says nothing about
+    // the key's — two keys of different lengths mask identically.
+    expect(maskApiKey(`${'x'.repeat(200)}9c41`)).toBe('••••9c41');
+    expect(maskApiKey(`  ${minimal}kkkk  `)).toBe('••••kkkk');
   });
 });

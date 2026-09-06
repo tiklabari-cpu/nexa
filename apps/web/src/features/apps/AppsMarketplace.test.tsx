@@ -1,8 +1,8 @@
 /**
- * Apps marketplace (FR-MOD-09.1): the card reads its status from `/settings/apps`
- * (never a hard-coded "Connected"), and "Connect" runs the consent → OAuth flow
- * — the permission step is shown before anything is connected, and authorizing
- * runs start → callback and flips the card to Connected.
+ * Apps marketplace (FR-MOD-09.1 / 09.2): the card reads its status from
+ * `/settings/apps` (never a hard-coded "Connected"), and "Connect" opens the step
+ * that matches the card's own `provider` — the OAuth consent screen, or the API
+ * key form. Authorizing (or submitting a key) flips the card to Connected.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -55,6 +55,35 @@ const connected = {
     external_account: 'nexa+1@hubspot.example',
     scopes: ['contacts.read', 'deals.read'],
     connected_at: '2026-07-27T00:00:00.000Z',
+    api_key_last_four: null,
+  },
+};
+
+// An api_key card (09.2): connected by pasting a key, not by an OAuth grant.
+const keyApp = {
+  id: 'zendesk',
+  name: 'Zendesk',
+  category: 'support',
+  provider: 'api_key',
+  icon: '🎫',
+  description: 'See the customer’s open Zendesk tickets while you chat.',
+  scopes: ['tickets.read'],
+  channel: null,
+  installed: false,
+  installation: null,
+};
+
+const keyAppConnected = {
+  ...keyApp,
+  installed: true,
+  installation: {
+    app_id: 'zendesk',
+    status: 'connected',
+    // A pasted key names no account, so the label is the masked key itself.
+    external_account: '••••9c41',
+    scopes: ['tickets.read'],
+    connected_at: '2026-09-06T00:00:00.000Z',
+    api_key_last_four: '9c41',
   },
 };
 
@@ -149,6 +178,85 @@ describe('AppsMarketplace', () => {
     // No marketplace connect for a channel — it is set up in Channels.
     expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
     expect(screen.getByText('In Channels')).toBeInTheDocument();
+  });
+
+  // KK 09.2 "Her biri OAuth/API key" — the second way in.
+  it('asks for a key on an api_key card instead of showing a consent step (FR-MOD-09.2)', async () => {
+    let installed = false;
+    api.get.mockImplementation(() =>
+      Promise.resolve({ items: [installed ? keyAppConnected : keyApp], total: 1 }),
+    );
+    api.post.mockImplementation(() => {
+      installed = true;
+      return Promise.resolve(keyAppConnected);
+    });
+
+    renderComponent(<AppsMarketplace />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+
+    // A key is handed over, not granted: no permission list and no Authorize.
+    expect(await screen.findByLabelText('API key')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Authorize' })).toBeNull();
+    expect(screen.queryByText('tickets.read')).toBeNull();
+    expect(api.post).not.toHaveBeenCalled();
+
+    await userEvent.type(screen.getByLabelText('API key'), 'zd-live-never-logged-2f9c41');
+    await userEvent.click(screen.getByRole('button', { name: 'Connect app' }));
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Disconnect' })).toBeInTheDocument(),
+    );
+    expect(api.post).toHaveBeenCalledWith('/settings/apps/zendesk/connect', {
+      api_key: 'zd-live-never-logged-2f9c41',
+    });
+    // The OAuth pair is never touched for this card — the two paths are separate
+    // on the client too, not only in the service that refuses the wrong one.
+    expect(api.post).toHaveBeenCalledTimes(1);
+    // What the connected card shows about the key is its last four characters.
+    expect(screen.getByText('••••9c41')).toBeInTheDocument();
+  });
+
+  it('blocks submit exactly where the endpoint would refuse the key (FR-MOD-09.2)', async () => {
+    api.get.mockResolvedValue({ items: [keyApp], total: 1 });
+    renderComponent(<AppsMarketplace />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+
+    const field = await screen.findByLabelText('API key');
+    const submit = screen.getByRole('button', { name: 'Connect app' });
+    // Empty: nothing to send.
+    expect(submit).toBeDisabled();
+
+    // One character under `APP_API_KEY_MIN_LENGTH`, and the error says so once
+    // the field has been left.
+    await userEvent.type(field, 'k'.repeat(15));
+    await userEvent.tab();
+    expect(await screen.findByRole('alert')).toHaveTextContent('Enter at least 16 characters.');
+    expect(submit).toBeDisabled();
+
+    // …and exactly at the bound the form accepts it, because a client stricter
+    // than its own endpoint would refuse keys the server would have taken.
+    await userEvent.type(field, 'k');
+    await waitFor(() => expect(submit).toBeEnabled());
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('reports a refused key without closing the form (FR-MOD-09.2)', async () => {
+    api.get.mockResolvedValue({ items: [keyApp], total: 1 });
+    api.post.mockRejectedValue(new Error('400'));
+
+    renderComponent(<AppsMarketplace />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Connect' }));
+    await userEvent.type(await screen.findByLabelText('API key'), 'k'.repeat(20));
+    await userEvent.click(screen.getByRole('button', { name: 'Connect app' }));
+
+    // The key stays in the field so it can be corrected rather than re-pasted.
+    await waitFor(() =>
+      expect(
+        screen.getByText('Could not connect the app. Check the key and try again.'),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByLabelText('API key')).toHaveValue('k'.repeat(20));
   });
 
   // 09.2-v2-f: search + category filter, empty/skeleton states.

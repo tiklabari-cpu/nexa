@@ -1,12 +1,24 @@
 /**
- * Apps marketplace — FR-MOD-09.1.
+ * Apps marketplace — FR-MOD-09.1 / 09.2.
  *
- * A grid of third-party integrations. A card is connected through the (mock)
- * OAuth flow: "Connect" opens a consent dialog listing the permissions the app
- * asks for, and "Authorize" runs the handshake (start → callback) and flips the
- * card to Connected (KK "Kart → izin/OAuth akışı"). A connected card shows the
- * account it linked and offers to disconnect. What a connected app *does* — its
- * data in a conversation — shows up in the Details pane, not here.
+ * A grid of third-party integrations. How a card is connected depends on what it
+ * says it wants (KK 09.2 "Her biri OAuth/API key"), and the two are genuinely
+ * different dialogs rather than one with a different label:
+ *
+ *   - `provider: 'oauth'` — "Connect" opens a consent dialog listing the
+ *     permissions the app asks for, and "Authorize" runs the (mock) handshake
+ *     (start → callback), which is the whole of KK 09.1 "Kart → izin/OAuth
+ *     akışı".
+ *   - `provider: 'api_key'` — there is no consent screen to show, because
+ *     nothing is being granted: the admin pastes a key the provider already
+ *     issued them. So the dialog is a form, validated against the same bounds
+ *     the endpoint enforces (`appApiKeyProblem`), and the key is posted to
+ *     `/settings/apps/{id}/connect`.
+ *
+ * Either way the card flips to Connected. A connected card shows what it linked
+ * — the granted account for OAuth, the masked key for an API key — and offers to
+ * disconnect. What a connected app *does* — its data in a conversation — shows
+ * up in the Details pane, not here.
  *
  * The list drives itself entirely from `/settings/apps`: the status is read, not
  * decided here, so a card can never claim to be connected when it is not.
@@ -34,7 +46,10 @@ import {
 import { Link } from 'react-router-dom';
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  APP_API_KEY_MAX_LENGTH,
+  APP_API_KEY_MIN_LENGTH,
   APP_CATEGORIES,
+  appApiKeyProblem,
   type AppCategory,
   type AppListItem,
   type AppListResponse,
@@ -46,6 +61,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { VirtualList } from '../../components/VirtualList.js';
 import { Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { FieldError, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { chunkIntoRows, columnsForWidth } from './app-grid.js';
 
@@ -359,12 +375,13 @@ function ChannelAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEl
 function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactElement {
   const api = useApiClient();
   const queryClient = useQueryClient();
-  const [consenting, setConsenting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
 
   const invalidate = (): Promise<void> => queryClient.invalidateQueries({ queryKey: APPS_KEY });
 
   // The (mock) OAuth handshake: start returns a signed state, the callback
   // exchanges it — plus the code the provider "returns" — for a connection.
+  // Only ever run for an `oauth` card; the server refuses the other kind here.
   const connect = useMutation({
     mutationFn: async () => {
       const start = await api.post<AppOAuthStart>(`/settings/apps/${app.id}/oauth/start`);
@@ -374,7 +391,19 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
       });
     },
     onSuccess: async () => {
-      setConsenting(false);
+      setConnecting(false);
+      await invalidate();
+    },
+  });
+
+  // The API-key path: one request, carrying the key the admin pasted. The key
+  // lives in the form's state and this call, and nowhere else — it is never put
+  // in the query cache, because the response deliberately does not contain it.
+  const connectWithKey = useMutation({
+    mutationFn: (apiKey: string) =>
+      api.post<AppListItem>(`/settings/apps/${app.id}/connect`, { api_key: apiKey }),
+    onSuccess: async () => {
+      setConnecting(false);
       await invalidate();
     },
   });
@@ -434,7 +463,7 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
         ) : (
           <button
             type="button"
-            onClick={() => setConsenting(true)}
+            onClick={() => setConnecting(true)}
             className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
           >
             {t('apps.marketplace.card.connect')}
@@ -442,16 +471,28 @@ function DataAppCard({ app, t }: { app: AppListItem; t: TFunction }): ReactEleme
         )}
       </div>
 
-      {consenting && (
-        <ConsentDialog
-          app={app}
-          t={t}
-          pending={connect.isPending}
-          failed={connect.isError}
-          onAuthorize={() => connect.mutate()}
-          onCancel={() => setConsenting(false)}
-        />
-      )}
+      {/* Which dialog opens is the card's own `provider`, not a guess: the
+          server refuses the mismatched path, so offering the wrong one would
+          only produce a 400 the person cannot act on. */}
+      {connecting &&
+        (app.provider === 'api_key' ? (
+          <ApiKeyDialog
+            app={app}
+            t={t}
+            failed={connectWithKey.isError}
+            onSubmit={(apiKey) => connectWithKey.mutateAsync(apiKey)}
+            onCancel={() => setConnecting(false)}
+          />
+        ) : (
+          <ConsentDialog
+            app={app}
+            t={t}
+            pending={connect.isPending}
+            failed={connect.isError}
+            onAuthorize={() => connect.mutate()}
+            onCancel={() => setConnecting(false)}
+          />
+        ))}
     </Card>
   );
 }
@@ -514,6 +555,114 @@ function ConsentDialog({
             : t('apps.marketplace.consent.authorize')}
         </button>
       </div>
+    </Modal>
+  );
+}
+
+/**
+ * The API-key step (09.2). Not a consent screen: nothing is being granted here,
+ * so there are no permissions to agree to — the admin already holds a key the
+ * provider issued and is handing it over.
+ *
+ * The field validates against `appApiKeyProblem`, the same rule
+ * `POST /settings/apps/{id}/connect` applies, so Submit is disabled exactly when
+ * the server would refuse. A validator written to a stricter local guess would
+ * silently block keys the endpoint accepts, which is the failure the shared rule
+ * exists to prevent.
+ *
+ * `type="password"` because the value is a live credential and this dialog opens
+ * in whatever room the admin is in; the browser's own reveal control is the way
+ * back if they need to check a paste.
+ */
+function ApiKeyDialog({
+  app,
+  t,
+  failed,
+  onSubmit,
+  onCancel,
+}: {
+  app: AppListItem;
+  t: TFunction;
+  failed: boolean;
+  onSubmit: (apiKey: string) => Promise<unknown>;
+  onCancel: () => void;
+}): ReactElement {
+  const form = useForm({
+    initial: { apiKey: '' },
+    validators: {
+      apiKey: (value: string) => {
+        const problem = appApiKeyProblem(value);
+        if (problem === 'required') return t('apps.marketplace.apiKey.requiredError');
+        if (problem === 'too_short') {
+          return t('apps.marketplace.apiKey.tooShortError', {
+            min: String(APP_API_KEY_MIN_LENGTH),
+          });
+        }
+        if (problem === 'too_long') {
+          return t('apps.marketplace.apiKey.tooLongError', { max: String(APP_API_KEY_MAX_LENGTH) });
+        }
+        return null;
+      },
+    },
+    onSubmit: async (values) => {
+      // Trimmed here as well as on the server: what is validated and what is
+      // sent have to be the same string, or the bounds mean two things.
+      await onSubmit(values.apiKey.trim());
+    },
+  });
+  const keyError = form.errorFor('apiKey');
+
+  return (
+    <Modal
+      onClose={onCancel}
+      title={t('apps.marketplace.apiKey.title', { name: app.name })}
+      description={t('apps.marketplace.apiKey.description')}
+      className="w-[26rem]"
+    >
+      <form onSubmit={form.handleSubmit} noValidate className="mt-1 flex flex-col gap-1">
+        {/* The hint sits outside the label on purpose: text inside it becomes
+            part of the field's accessible name. */}
+        <label
+          htmlFor={`app-api-key-${app.id}`}
+          className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+        >
+          {t('apps.marketplace.apiKey.label')}
+        </label>
+        <input
+          id={`app-api-key-${app.id}`}
+          type="password"
+          autoComplete="off"
+          value={form.values.apiKey}
+          onChange={(event) => form.setValue('apiKey', event.target.value)}
+          onBlur={() => form.blur('apiKey')}
+          aria-invalid={keyError ? true : undefined}
+          aria-describedby={keyError ? `app-api-key-${app.id}-error` : undefined}
+          className="rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-sm outline-none placeholder:text-content-tertiary"
+        />
+        <FieldError id={`app-api-key-${app.id}-error`} message={keyError} />
+        <p className="text-2xs text-content-tertiary">{t('apps.marketplace.apiKey.hint')}</p>
+
+        {failed && <ErrorNotice message={t('apps.marketplace.apiKey.error')} />}
+
+        <div className="mt-4 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-surface-2"
+          >
+            {t('apps.common.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+          >
+            {form.isSubmitting
+              ? t('apps.marketplace.consent.connecting')
+              : t('apps.marketplace.apiKey.submit')}
+          </button>
+        </div>
+      </form>
     </Modal>
   );
 }

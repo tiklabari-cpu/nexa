@@ -1,11 +1,24 @@
-# Apps marketplace — FR-MOD-09.1.
+# Apps marketplace — FR-MOD-09.1 / 09.2.
 #
-# A directory of third-party integrations. A card is connected through a
-# (mocked) OAuth flow: start returns an authorize URL and a state, the callback
-# exchanges that state for a connected installation. Once connected, the app's
-# data is read into a conversation through GET /chats/{chatId}/apps. Managed on
-# the workspace-admin scopes (`access_rules:ro`/`:rw`) — connecting a third-party
-# app is an admin act; the in-chat read is on the chat scope an agent already has.
+# A directory of third-party integrations. There are two ways in, and a card
+# names which one applies (`provider`), because the acceptance criterion asks
+# for both ("Her biri OAuth/API key"):
+#
+#   * `provider: oauth` — the (mocked) OAuth flow. `oauth/start` returns an
+#     authorize URL and a state, `oauth/callback` exchanges that state for a
+#     connected installation.
+#   * `provider: api_key` — `connect`, which takes the key the admin pastes,
+#     stores only its hash plus the last four characters, and returns the same
+#     connected card.
+#
+# The two are mutually exclusive, and each refuses the other's card with a 400.
+# A path that connected either way would leave `provider` a decoration rather
+# than a contract, which is exactly the gap 09.2 was reopened on.
+#
+# Once connected, the app's data is read into a conversation through
+# GET /chats/{chatId}/apps. Managed on the workspace-admin scopes
+# (`access_rules:ro`/`:rw`) — connecting a third-party app is an admin act; the
+# in-chat read is on the chat scope an agent already has.
 
 apps:
   get:
@@ -61,12 +74,17 @@ appOAuthStart:
       Returns an authorize URL to send the user to and an opaque `state` to hand
       back on the callback. The flow is mocked (MASTER-PROMPT §5) — no real
       provider is contacted.
+
+      Only for a `provider: oauth` card. An `api_key` card is refused with a 400
+      (use `POST /settings/apps/{appId}/connect`), as is a channel-typed one
+      (set up in Settings → Channels).
     responses:
       "200":
         description: Where to send the user, and the state to echo back
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/AppOAuthStart" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
@@ -86,6 +104,10 @@ appOAuthCallback:
       Exchanges the `state` from the start call, plus the authorization `code`
       the (mock) provider returned, for a connected installation. A state that
       is tampered with, expired, or for another app is refused.
+
+      Only for a `provider: oauth` card — an `api_key` card is refused with a
+      400 even with a well-formed state, so the two connection paths cannot
+      stand in for one another.
     requestBody:
       required: true
       content:
@@ -96,6 +118,59 @@ appOAuthCallback:
             properties:
               state: { type: string, minLength: 1 }
               code: { type: string, minLength: 1 }
+    responses:
+      "200":
+        description: The now-connected app
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AppListItem" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+appConnect:
+  parameters:
+    - name: appId
+      in: path
+      required: true
+      schema: { type: string }
+  post:
+    tags: [Apps]
+    operationId: connectAppWithApiKey
+    summary: Connect an API-key app with its key
+    description: |
+      The second half of the 09.2 acceptance criterion ("Her biri OAuth/API
+      key"): a `provider: api_key` card is connected by pasting the key the
+      provider issued, not by an OAuth round trip.
+
+      The key is **never stored in clear text and never returned**. The server
+      keeps a SHA-256 hash of it (the personal-access-token pattern) plus the
+      last four characters, which is all the response and the card ever show —
+      enough to tell two keys apart, not enough to use one.
+
+      Refused with a 400 for a `provider: oauth` card (start the OAuth flow
+      instead) and for a channel-typed card (set up in Settings → Channels).
+      Re-connecting an already-connected app replaces the stored key, so
+      rotating one is the same call.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [api_key]
+            properties:
+              api_key:
+                type: string
+                minLength: 16
+                maxLength: 512
+                description: |
+                  The key issued by the provider. Bounds match
+                  `APP_API_KEY_MIN_LENGTH`/`APP_API_KEY_MAX_LENGTH` in
+                  @nexa/types, which the console's form validates against, so
+                  the client never refuses a key the server would accept.
     responses:
       "200":
         description: The now-connected app

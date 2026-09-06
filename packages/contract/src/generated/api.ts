@@ -4400,6 +4400,10 @@ export interface paths {
      * @description Returns an authorize URL to send the user to and an opaque `state` to hand
      *     back on the callback. The flow is mocked (MASTER-PROMPT §5) — no real
      *     provider is contacted.
+     *
+     *     Only for a `provider: oauth` card. An `api_key` card is refused with a 400
+     *     (use `POST /settings/apps/{appId}/connect`), as is a channel-typed one
+     *     (set up in Settings → Channels).
      */
     post: operations['startAppOAuth'];
     delete?: never;
@@ -4424,8 +4428,46 @@ export interface paths {
      * @description Exchanges the `state` from the start call, plus the authorization `code`
      *     the (mock) provider returned, for a connected installation. A state that
      *     is tampered with, expired, or for another app is refused.
+     *
+     *     Only for a `provider: oauth` card — an `api_key` card is refused with a
+     *     400 even with a well-formed state, so the two connection paths cannot
+     *     stand in for one another.
      */
     post: operations['completeAppOAuth'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/apps/{appId}/connect': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Connect an API-key app with its key
+     * @description The second half of the 09.2 acceptance criterion ("Her biri OAuth/API
+     *     key"): a `provider: api_key` card is connected by pasting the key the
+     *     provider issued, not by an OAuth round trip.
+     *
+     *     The key is **never stored in clear text and never returned**. The server
+     *     keeps a SHA-256 hash of it (the personal-access-token pattern) plus the
+     *     last four characters, which is all the response and the card ever show —
+     *     enough to tell two keys apart, not enough to use one.
+     *
+     *     Refused with a 400 for a `provider: oauth` card (start the OAuth flow
+     *     instead) and for a channel-typed card (set up in Settings → Channels).
+     *     Re-connecting an already-connected app replaces the stored key, so
+     *     rotating one is the same call.
+     */
+    post: operations['connectAppWithApiKey'];
     delete?: never;
     options?: never;
     head?: never;
@@ -9181,17 +9223,34 @@ export interface components {
         [key: string]: string | null;
       };
     };
-    /** @description A connected marketplace app (FR-MOD-09.1), as stored for a workspace. */
+    /**
+     * @description A connected marketplace app (FR-MOD-09.1 / 09.2), as stored for a
+     *     workspace. How it was connected shows in which of the two identity
+     *     fields is meaningful: an OAuth install carries the account label the
+     *     grant returned and a null `api_key_last_four`; an API-key install
+     *     carries the masked key in both, because a pasted key names no account.
+     */
     AppInstallation: {
       app_id: string;
       /** @enum {string} */
       status: 'connected';
-      /** @description The account label the (mock) OAuth grant returned. */
+      /**
+       * @description The account label the (mock) OAuth grant returned, or the masked key
+       *     (`••••abcd`) for an API-key install — what the card shows to say
+       *     *which* connection this is.
+       */
       external_account: string;
       /** @description Permissions granted — the app's requested scopes. */
       scopes: string[];
       /** Format: date-time */
       connected_at: string;
+      /**
+       * @description The last four characters of the stored API key, or null for an OAuth
+       *     install. The key itself is held only as a hash and is never returned
+       *     by any endpoint — this is the whole of what a client may learn about
+       *     it, so a rotated key is recognisable without being usable.
+       */
+      api_key_last_four: string | null;
     };
     /**
      * @description A marketplace card (FR-MOD-09.1 / 09.2) joined with whether this
@@ -18042,6 +18101,7 @@ export interface operations {
           'application/json': components['schemas']['AppOAuthStart'];
         };
       };
+      400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
@@ -18062,6 +18122,45 @@ export interface operations {
         'application/json': {
           state: string;
           code: string;
+        };
+      };
+    };
+    responses: {
+      /** @description The now-connected app */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['AppListItem'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  connectAppWithApiKey: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        appId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description The key issued by the provider. Bounds match
+           *     `APP_API_KEY_MIN_LENGTH`/`APP_API_KEY_MAX_LENGTH` in
+           *     @nexa/types, which the console's form validates against, so
+           *     the client never refuses a key the server would accept.
+           */
+          api_key: string;
         };
       };
     };

@@ -9146,10 +9146,10 @@
             "description": "PRD satiri ust barin icerigini sayiyor: \"Run log (N run ▾) + Skill active toggle + … + Save changes\", KK ise \"Dirty/saving/saved; kaydedilmemiste cikis uyarisi; run log denetim\". Bugun ust barda yalniz Compile + Save var. Run log ucu (`GET /skills/:skillId/runs`) VAR ve testli ama webde TEK TUKETICISI YOK; active toggle yalniz liste satirinda; kaydedilmemiste cikis uyarisi hic yok.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- **Run log paneli YOK.** `apps/api/src/routes/playbook.ts:447` `GET /skills/:skillId/runs`\n  calisiyor ve `apps/web`de tek cagiran yok. Run log yalniz mobilde salt-okunur gosteriliyor.\n- **Active toggle editorde YOK.** Liste satirinda canli toggle var (`PlaybookPage.tsx`), editorde\n  yok — admin bir skill`i acip duzenledikten sonra acmak icin listeye geri donmek zorunda.\n- **Kaydedilmemiste cikis uyarisi YOK.** `SkillEditor.tsx`te `beforeunload` ya da rota-birakma\n  engeli gecen tek satir yok; `dirty` (:166) hesaplaniyor ama yalniz `canSave`i besliyor.\n\n## Yapilacak\n\n1. **Run log paneli.** Ust barda \"N run ▾\" — acilinca son kosular: zaman, sonuc\n   (`answered`/`handed_off`/`skipped`), tetikleyen sohbete baglanti. Ucun donen alanlarini\n   `playbook.ts:447-480`ten oku, YENI UC ACMA. Bos durum (\"bu skill hic kosmadi\") ayrica render\n   edilir — bos dikdortgen birakma (EK-B.1 deseni).\n2. **Active toggle.** Ayni `PATCH /skills/:skillId` ile; listedeki toggle`in davranisiyla BIREBIR\n   ayni olmali (ayni iyimser guncelleme, ayni hata geri alma). Iki farkli davranis ayni urunde iki\n   toggle demektir. `readiness` kapisi (bilgi + aktif skill sarti, `dafda3c`) burada da gecerli:\n   liste hangi kosulda toggle`i blokluyorsa editor de bloklar.\n3. **Kaydedilmemiste cikis uyarisi.** `dirty === true` iken sayfadan/rotadan ayrilma uyarisi.\n   Tarayici `beforeunload` + uygulama ici rota degisimi AYRI iki yol — ikisi de kapatilir, yoksa\n   uyari yalniz sekme kapatmada cikar ve asil kayip (baska module tiklama) sessizce olur.\n\n## Bilinen tuzaklar\n\n- `beforeunload` jsdom`da guvenilir test edilmez; uyari mantigini SAF bir yardimciya ayir\n  (`shouldWarnOnLeave(dirty, saving)`) ve onu test et, dinleyicinin kaydini ayrica iddia et.\n- Run log bir polling kaynagi ekliyorsa `staleTime` ver; her acilista yeniden cekme editorun altinda\n  gorunmez bir istek firtinasi yaratir.\n- Kosu satirindaki sohbet baglantisi arsivlenmis bir sohbete gidebilir — 404 degil, arsiv gorunumu.\n- `apps/web` vitest CPU yuku altinda `userEvent` testlerinde 5000 ms timeout verir; `--maxWorkers=4`.\n\n## Kapsam SINIRI\n\nYalniz ust bar. Adim listesi 197.3`un isi. `…` (fazla) menusunun ICERIGI (kopyala/sil) PRD`de\nsayilmamis — acma; acarsan `#### K06.2.1` blogunda gerekcesini yaz.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `SkillEditor.test.tsx`: (a) Run log acilir ve uctan gelen kosulari listeler; (b) hic kosu yoksa\n   anlamli bos durum gorunur (bos dikdortgen DEGIL); (c) active toggle `PATCH` gonderir ve hata\n   donunce eski haline geri doner.\n2. Saf yardimci testi: `dirty && !saving` -> uyar, `!dirty` -> uyarma, kaydettikten sonra -> uyarma.\n3. Rota degisiminde uyari: uygulama ici gezinme dirty iken engellenir/onaylatilir (jsdom`da router\n   seviyesinde test edilir, `beforeunload` ile karistirilmaz).\n4. `apps/e2e`: bir skill acilir, degistirilir, kaydedilmeden baska modules gidilmeye calisilir ->\n   uyari cikar; kaydedilince uyari cikmaz.\n5. Test basliklari `(FR-MOD-06.2.1)` etiketi tasir; `pnpm audit:req-coverage` exit 0.\n6. TAM DoD kapisi (CONVENTIONS §1, parcalama §1.3) + hedefli e2e.\n7. `grep -n \"| 06.2.1 \" PLAN.md` durum-damgali satirinda `◐` kalmamis olmali.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "197",
-            "updatedAt": "2026-09-06T01:00:20.718Z"
+            "updatedAt": "2026-09-06T01:53:38.922Z"
           },
           {
             "id": 3,
@@ -9162,7 +9162,7 @@
             "parentId": "197"
           }
         ],
-        "updatedAt": "2026-09-06T01:00:20.718Z"
+        "updatedAt": "2026-09-06T01:53:38.922Z"
       },
       {
         "id": "198",
@@ -9417,7 +9417,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T01:00:20.719Z",
+      "lastModified": "2026-09-06T01:53:38.926Z",
       "taskCount": 204,
       "completedCount": 196,
       "tags": [

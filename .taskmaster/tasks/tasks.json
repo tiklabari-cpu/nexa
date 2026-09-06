@@ -9181,10 +9181,10 @@
             "description": "PRD KK: \"Gecersiz URL/tur reddi; crawl/parse; RAG indeksleme; bulk/CSV import\". `website` icin crawl+parse var, `file` icin PARSE YOK: `POST /knowledge-sources` `type: \"file\"` aldiginda yaptigi tek sey `content = body.content ?? \"\"` (playbook.ts:523). Yani \"File\" bugun \"metni yapistir, adina dosya de\" demek.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- `playbook.ts:521-531`: yalniz `body.type === \"website\"` dalinda gercek bir alma/ayristirma var\n  (`assertPublicHttpUrl` -> `crawl`). `file` dali yok; `content` dogrudan govdeden geliyor.\n- Multipart/yukleme yolu repoda YOK; `type` enum`u (`playbook.ts:76`) `file`i kabul ediyor ama\n  onu digerlerinden ayiran hicbir davranis yok.\n\n## Yapilacak\n\n1. Sozlesme once: dosya yukleme yolu (multipart ya da acikca belgelenen base64 govde — hangisi\n   secilirse `#### K06.3.2` blogunda GEREKCESI yazilir). Yeni bir OpenAPI YOLU aciliyorsa\n   `apps/mobile` uc-sayisi parite testinin sayaci ELLE bumplanir (kayitli tuzak).\n2. Deterministik bir parser dikisi: `web-crawler.ts`in `htmlToText` deseni gibi, disari cikmayan\n   ve testte sabit sonuc veren bir `parseUploadedFile`. Desteklenen turler ACIKCA sinirli\n   (ornegin `text/plain` + `text/markdown` + `text/csv`); desteklenmeyen tur 400 ile REDDEDILIR\n   (\"gecersiz tur reddi\" KK maddesi budur).\n3. Butceler: bulk import`un zaten tasidigi satir/karakter/bayt butcelerinin ayni sinifi\n   (`knowledge-bulk-row.ts`) burada da uygulanir. Butcesiz yukleme bir bellek-tuketimi yuzeyidir.\n4. Chunk+embed+index AYNI islemde kalir (mevcut davranis) — kaynak var ama aranamaz olmasi\n   \"hazir gorunup hicbir sey cevaplamamak\" demektir (dosyanin kendi gerekcesi).\n\n## Bilinen tuzaklar\n\n- **Bu bir GUVENLIK yuzeyi.** Yukleme = kullanici kontrollu bayt. Butce, tur beyaz listesi ve\n  dosya adinin hicbir yerde yol olarak kullanilmamasi sart. Sunucuda diske YAZMA gerekmiyorsa yazma.\n- Bulk CSV yolu (`/knowledge-sources/bulk`) ZATEN var ve v2 payiydi; onu yeniden yazma, yalniz\n  paylasilan butce/parse yardimcilarini ortak kullan.\n- Docker kapaliyken entegrasyon testleri ASILIR (0 bayt cikti, 10+ dk) — once `docker info`\n  (CONVENTIONS §1.4).\n\n## Kapsam SINIRI\n\nYalniz `file` turu. `website`/`article`/`faq` davranisi DEGISMEZ; bulk CSV kapsam disi.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `apps/api` entegrasyon testi: desteklenen bir dosya yuklenir -> kaynak `ready` + `chunk_count > 0`;\n   ayni icerik `GET /knowledge-sources` uzerinden aranabilir (retrieval iddiasi).\n2. Negatif testler (hepsi 400, kaynak OLUSMAZ): desteklenmeyen tur · butceyi asan boyut ·\n   bos icerik. Her biri ayri iddia.\n3. Kiracilar-arasi negatif test: baska kiracinin ai_agent`ina dosya yuklenemez.\n4. Saf parser birim testi: sabit girdi -> sabit metin (deterministik, dis cagri yok).\n5. Sozlesme: `pnpm -w contract:generate` sonrasi `git status --short packages/contract/src/generated`\n   BOS; yeni yol acildiysa `apps/mobile` parite sayaci yorumla birlikte guncellenmis.\n6. Test basliklari `(FR-MOD-06.3.2)` etiketi tasir; `pnpm audit:req-coverage` exit 0.\n7. TAM DoD kapisi (CONVENTIONS §1, parcalama §1.3).\n8. `grep -n \"| 06.3.2 \" PLAN.md` durum-damgali satirinda `◐` kalmamis olmali.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "198",
-            "updatedAt": "2026-09-06T04:04:59.877Z"
+            "updatedAt": "2026-09-06T05:08:04.178Z"
           },
           {
             "id": 2,
@@ -9217,7 +9217,7 @@
             "parentId": "198"
           }
         ],
-        "updatedAt": "2026-09-06T04:04:59.877Z"
+        "updatedAt": "2026-09-06T05:08:04.178Z"
       },
       {
         "id": "199",
@@ -9419,7 +9419,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T04:04:59.879Z",
+      "lastModified": "2026-09-06T05:08:04.182Z",
       "taskCount": 204,
       "completedCount": 198,
       "tags": [

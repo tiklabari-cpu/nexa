@@ -9238,10 +9238,10 @@
             "description": "Persona uc alani (`tone`, `languages`, `persona.answerLength`) `skill-engine.ts`in urettigi cevaba deterministik ve olculebilir bicimde etki etsin. Bugun etkisi SIFIR.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Yapilacak\n\n1. Persona`yi `AiResponder` uzerinden motora tasi (mevcut opsiyonel-bagimlilik deseni:\n   `publisher?`/`mailer?`/`channels?` — ayni sozlesme).\n2. Etkiyi SAF bir yardimciya ayir (ornegin `applyPersona(text, persona)`) ve orada test et:\n   - `answerLength`: `short`/`medium`/`long` icin uzunluk butcesi (cumle/karakter) — kesme\n     kelimeyi ortadan bolmez.\n   - `languages`: destelenmeyen bir dilde gelen soru icin davranis ACIKCA tanimli olsun\n     (ornegin varsayilan dile dus ya da devret) — sessizce yok sayma.\n   - `tone`: normalize edilmis, sinirli bir kume uzerinden (serbest metin dogrudan mantiga girmez).\n3. Persona TANIMSIZ ise bugunku davranis BIREBIR korunur — mevcut testler degismeden yesil kalmali.\n\n## Bilinen tuzaklar\n\n- Determinizm: `inference.ts` deterministik stub`dir; rastgelelik EKLEME.\n- Sabit `step.text` cevaplarinda (source: text) personanin uzunluk kirpmasi admin`in yazdigi\n  metni bozabilir. Hangi kaynaga uygulandigini KARARLASTIR ve `#### K06.4` blogunda yaz.\n- Copilot (`kind: copilot`) bu yoldan ETKILENMEMELI — ayri yuzey, ayri persona.\n- Docker kapaliyken entegrasyon testleri asilir — once `docker info`.\n\n## Kapsam SINIRI\n\nYalniz backend etkisi. Widget/e2e kaniti 199.2.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. Saf birim testi: ayni girdi + `answerLength: short` -> kisa cevap; `long` -> uzun cevap;\n   ikisi de DETERMINISTIK (ayni girdi ayni cikti, iki kez calistirilarak iddia edilir).\n2. `languages` testi: destelenmeyen dil icin tanimlanan davranis fiilen olur (iddia, \"yok sayilir\" degil).\n3. Regresyon: persona NULL/bos iken motorun ciktisi degisiklikten ONCEKIYLE ayni — mevcut\n   `skill-engine` testleri degistirilmeden yesil.\n4. Copilot izolasyonu: copilot yolu persona uygulanmadan calisir (ayri iddia).\n5. Test basliklari `(FR-MOD-06.4)` etiketi tasir; `pnpm audit:req-coverage` exit 0.\n6. TAM DoD kapisi (CONVENTIONS §1, parcalama §1.3).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "199",
-            "updatedAt": "2026-09-06T10:45:07.549Z"
+            "updatedAt": "2026-09-06T11:41:28.154Z"
           },
           {
             "id": 2,
@@ -9254,7 +9254,7 @@
             "parentId": "199"
           }
         ],
-        "updatedAt": "2026-09-06T10:45:07.549Z"
+        "updatedAt": "2026-09-06T11:41:28.154Z"
       },
       {
         "id": "200",
@@ -9423,7 +9423,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T10:45:07.550Z",
+      "lastModified": "2026-09-06T11:41:28.157Z",
       "taskCount": 204,
       "completedCount": 199,
       "tags": [

@@ -409,6 +409,7 @@ export const playbook: Messages = {
   'playbook.profile.save': 'Save profile',
   'playbook.profile.saving': 'Saving…',
   'playbook.profile.previewTitle': 'Preview',
+  'playbook.profile.sampleReply': 'Sample reply',
   'playbook.profile.unnamedAssistant': 'Unnamed assistant',
   'playbook.profile.aiAssistant': 'AI assistant',
   'playbook.profile.online': 'Online',

@@ -10,13 +10,20 @@
  */
 import { useMutation } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
+import {
+  ANSWER_LENGTHS,
+  isPersonaLanguage,
+  readPersona,
+  shapeAnswer,
+  type AnswerLength,
+} from '@nexa/types';
 import { Card } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
-import type { AiAgent, AnswerLength } from './types.js';
+import type { AiAgent } from './types.js';
 
 const LANGUAGE_OPTIONS: [string, string][] = [
   ['en', 'English'],
@@ -31,7 +38,20 @@ const ANSWER_LENGTH_LABEL_KEYS: Record<AnswerLength, string> = {
   medium: 'playbook.profile.lengthMedium',
   long: 'playbook.profile.lengthLong',
 };
-const ANSWER_LENGTHS: AnswerLength[] = ['short', 'medium', 'long'];
+
+/**
+ * What the preview shapes, so an admin sees genuine tone/answer-length
+ * behaviour rather than a label describing it. Shaped by the same
+ * `shapeAnswer` the engine runs (`packages/types/src/persona.ts`, `#### K06.4`)
+ * — a preview computing its own approximation of these rules is worse than no
+ * preview. Three passages, mirroring the seed's own "Delivery and returns"
+ * knowledge base in shape, without depending on a workspace actually having one.
+ */
+export const PERSONA_PREVIEW_PASSAGES = [
+  'Standard delivery takes 3 to 5 working days. Tracking is emailed the moment a parcel is dispatched.',
+  'Returns are accepted within 30 days if the item is unused and in its original packaging.',
+  'Refunds are issued to the original payment method within 5 working days of receipt.',
+];
 
 export function ProfileForm({
   agent,
@@ -252,6 +272,17 @@ function PersonaPreview({
   const t = useTranslate();
   const trimmed = name.trim();
   const initial = (trimmed || '?').charAt(0).toUpperCase();
+
+  // Same helper, same input shape the engine reads off the row (`skill-engine.ts`
+  // `readPersona(skill.aiAgent)`), so the reply below is what this persona would
+  // actually produce — not a second, hand-rolled approximation of the rule.
+  const persona = readPersona({ tone, languages, answerLength: answerLength || null });
+  // No live customer message to detect a language from here, so this falls back
+  // to the first language the persona declares — the same fallback
+  // `personaLanguageVerdict` uses when a message is too short to read.
+  const answerLanguage = persona.languages.find(isPersonaLanguage) ?? null;
+  const sample = shapeAnswer(PERSONA_PREVIEW_PASSAGES, persona, { language: answerLanguage });
+
   return (
     <Card>
       <div className="p-4">
@@ -297,6 +328,12 @@ function PersonaPreview({
             </dd>
           </div>
         </dl>
+        <div className="mt-3 rounded-lg border border-dashed border-border p-3">
+          <p className="mb-1 text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('playbook.profile.sampleReply')}
+          </p>
+          <p className="text-2xs text-content-secondary">{sample.text}</p>
+        </div>
       </div>
     </Card>
   );

@@ -1,6 +1,6 @@
 /**
- * Billing checkout + invoices + payment method + API packages —
- * FR-MOD-10.1.1–.3, .6, 10.3 and 09.3.
+ * Billing checkout + invoices + payment method + bought capacity —
+ * FR-MOD-10.1.1–.3, .4, .6, 10.3 and 09.3.
  *
  * The demo workspace is on a trial, so nothing is billed now; what this proves
  * is that the levers work end to end — the plan tier picker, the cycle toggle
@@ -217,6 +217,95 @@ test.describe('billing checkout', () => {
     // invoice cannot be in one image.
     await openInvoice.scrollIntoViewIfNeeded();
     await agentPage.screenshot({ path: 'kanit/09.3-api-package-invoice.png', fullPage: true });
+  });
+
+  /**
+   * FR-MOD-10.1.4 — buying AI-resolution overage capacity from the meter, end
+   * to end.
+   *
+   * The claim the lower suites cannot make on their own. Integration tests prove
+   * the purchase credits `usage_records.included` once per idempotency key and
+   * reaches the invoice; component tests prove the stepper computes its total
+   * and posts what it shows. Neither proves the sentence the PRD's §10.1.4 title
+   * actually promises — that the *meter* is where a workspace buys its way out
+   * of a limit — because that spans a stepper in one section and a counter and
+   * an invoice re-read after it.
+   *
+   * Deltas, not seeded absolutes: this test cannot put itself back (a sale is a
+   * permanent record, deliberately), so a run that follows another still proves
+   * the causal claim instead of failing on an allowance a previous purchase
+   * already raised.
+   */
+  test('buys AI overage packs from the meter: the allowance rises and the invoice itemises it (FR-MOD-10.1.4)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/billing');
+    await expect(agentPage.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
+
+    // The pack, as the meter sells it (`AI_RESOLUTION_PACK_SIZE` × AI_OVERAGE_CENTS).
+    const PACK_RESOLUTIONS = 50;
+    const PACK_PRICE_CENTS = 2500;
+    const PACKS = 2;
+
+    const meter = agentPage.getByRole('region', { name: 'AI resolutions' });
+    // The pack card states the allowance in a sentence ("Beyond the included
+    // 200, …"), so a purchase either moves that figure or has not credited
+    // anything.
+    const allowance = meter.getByTestId('overage-package');
+    const count = meter.getByTestId('ai-pack-count');
+    const total = meter.getByTestId('ai-pack-total');
+    const invoices = agentPage.getByRole('region', { name: 'Invoices' });
+    // Newest first, so the first row is the current period — the one a purchase
+    // made now lands in.
+    const openInvoice = invoices.getByTestId('invoice-row').first();
+    const openTotal = openInvoice.getByTestId('invoice-total');
+
+    await expect(allowance).toBeVisible();
+    await expect(openTotal).toBeVisible();
+    const includedBefore = await readIncluded(allowance);
+    const totalBefore = await readCents(openTotal);
+
+    // The stepper opens at one pack and quotes what that costs before anything
+    // is spent — the "no surprise on the invoice" promise, applied to the
+    // purchase itself.
+    await expect(count).toHaveText('1');
+    await expect(meter.getByRole('button', { name: 'One pack fewer' })).toBeDisabled();
+    await expect(total).toContainText(/25[.,]00/);
+
+    await meter.getByRole('button', { name: 'One pack more' }).click();
+    await expect(count).toHaveText(String(PACKS));
+    // Two packs: 100 resolutions for $50.00, recomputed on the way up.
+    await expect(total).toContainText(/100/);
+    await expect(total).toContainText(/50[.,]00/);
+
+    await meter.getByRole('button', { name: 'Buy packs' }).click();
+
+    // (1) The purchase is confirmed on the meter itself.
+    await expect(meter.getByTestId('ai-pack-bought')).toContainText(
+      String(PACKS * PACK_RESOLUTIONS),
+    );
+
+    // (2) The allowance is genuinely larger — by the packs bought, exactly.
+    //     Polled rather than asserted once: the buy invalidates the usage query,
+    //     so the figure arrives on a refetch.
+    await expect
+      .poll(() => readIncluded(allowance))
+      .toBe(includedBefore + PACKS * PACK_RESOLUTIONS);
+    await agentPage.screenshot({ path: 'kanit/10.1.4-ai-pack-purchased.png', fullPage: true });
+
+    // (3) The open invoice carries it as its own line item and its total moved
+    //     by the price — the money side of the same event, not a second opinion.
+    //     The description is server-rendered, so its digits are unformatted.
+    await expect(openInvoice).toContainText(
+      `AI resolution packs — ${PACKS} packs (${PACKS * PACK_RESOLUTIONS} resolutions)`,
+    );
+    await expect.poll(() => readCents(openTotal)).toBe(totalBefore + PACKS * PACK_PRICE_CENTS);
+
+    // Its own frame: the page scrolls inside the shell, so `fullPage` captures
+    // the scroll position rather than the whole document — the meter and the
+    // invoice cannot be in one image.
+    await openInvoice.scrollIntoViewIfNeeded();
+    await agentPage.screenshot({ path: 'kanit/10.1.4-ai-pack-invoice.png', fullPage: true });
   });
 
   /**

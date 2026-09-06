@@ -255,6 +255,10 @@ export const AUDIT_ACTIONS = [
   'billing.subscription_updated',
   'billing.payment_method_updated',
   'billing.api_package_purchased',
+  // AI-resolution overage packs (FR-MOD-10.1.4). Written only for a sale, never
+  // for an idempotent replay — the trail is the answer to "who spent this", and
+  // a replay spent nothing.
+  'billing.ai_package_purchased',
   // Outbound webhooks (FR-MOD-08.8.4 / NFR-S7) — the platform's highest-risk
   // egress surface, and the "webhook değişimi" NFR-S12 names by hand. The entry
   // records the host and the subscription, never the full URL or the signing

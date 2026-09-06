@@ -25,6 +25,7 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { formatCount, formatDate, formatMoney } from '../../lib/format.js';
 import { cardLast4, compose, FieldError, required, useForm } from '../../lib/form.js';
+import { newAttemptKey } from './attempt-key.js';
 
 interface UsageSummary {
   period: string;
@@ -104,6 +105,38 @@ interface PaymentMethod {
   exp_year: number;
   holder_name: string;
   updated_at: string;
+}
+
+/**
+ * The AI-resolution overage pack on sale, and the bounds a purchase must
+ * respect (FR-MOD-10.1.4).
+ *
+ * Read from `/billing/ai-packages` rather than derived from the usage summary's
+ * `overage_unit`/`overage_unit_price_cents`, even though the first two fields
+ * repeat them. `max_packs` is a rule the endpoint enforces, and a stepper whose
+ * ceiling was hardcoded here would keep offering a quantity the server has since
+ * stopped accepting — an enabled control that is certain to 400.
+ */
+interface AiPackageTerms {
+  resolutions_per_pack: number;
+  unit_price_cents: number;
+  pack_price_cents: number;
+  max_packs: number;
+}
+
+/** The receipt plus the period's usage after the resolutions were credited. */
+interface AiPackagePurchaseResult {
+  purchase: {
+    id: string;
+    packs: number;
+    resolutions: number;
+    price_cents: number;
+    period: string;
+    purchased_at: string;
+  };
+  usage: UsageSummary;
+  /** True when this request replayed an earlier purchase and charged nothing. */
+  replayed: boolean;
 }
 
 /** A catalogue entry a workspace can buy (FR-MOD-09.3). */
@@ -331,29 +364,33 @@ export function BillingPage(): ReactElement {
             overage: the price of extra usage is visible before you reach the
             limit, not discovered on the bill. */}
         <Card>
-          <div
-            data-testid="overage-package"
-            className="flex flex-wrap items-baseline justify-between gap-2 p-4"
-          >
-            <div className="min-w-0">
-              <p className="text-sm font-medium">{t('billing.aiMeter.overagePackageTitle')}</p>
-              <p className="mt-0.5 text-sm text-content-secondary">
-                {t('billing.aiMeter.overagePackageDetail', {
-                  included: formatCount(ai.included) ?? '',
-                  price: formatMoney(ai.overage_unit_price_cents) ?? '',
-                  unit: formatCount(ai.overage_unit) ?? '',
-                  packPrice: formatMoney(packPriceCents) ?? '',
-                })}
-              </p>
+          <div className="p-4">
+            <div
+              data-testid="overage-package"
+              className="flex flex-wrap items-baseline justify-between gap-2"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{t('billing.aiMeter.overagePackageTitle')}</p>
+                <p className="mt-0.5 text-sm text-content-secondary">
+                  {t('billing.aiMeter.overagePackageDetail', {
+                    included: formatCount(ai.included) ?? '',
+                    price: formatMoney(ai.overage_unit_price_cents) ?? '',
+                    unit: formatCount(ai.overage_unit) ?? '',
+                    packPrice: formatMoney(packPriceCents) ?? '',
+                  })}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+                  {t('billing.aiMeter.periodLabel')}
+                </p>
+                <p data-testid="overage-charge" className="tabular text-lg font-semibold">
+                  {formatMoney(ai.overage_cents)}
+                </p>
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
-                {t('billing.aiMeter.periodLabel')}
-              </p>
-              <p data-testid="overage-charge" className="tabular text-lg font-semibold">
-                {formatMoney(ai.overage_cents)}
-              </p>
-            </div>
+
+            <BuyOveragePacks />
           </div>
         </Card>
       </Section>
@@ -434,6 +471,155 @@ function QuotaBar({ fraction, warning }: { fraction: number; warning: boolean })
         className={`h-full rounded-full ${warning ? 'bg-warning' : 'bg-brand-500'}`}
         style={{ width: `${Math.min(100, Math.max(1, percent))}%` }}
       />
+    </div>
+  );
+}
+
+/**
+ * The stepper the PRD's §10.1.4 title asks for: AI-resolution overage packs as
+ * something a workspace can *buy*, not only a price to read.
+ *
+ * Sits inside the meter rather than in a section of its own, because the number
+ * it answers ("am I about to run out?") is the counter directly above it. The
+ * quantity and its total are both visible before the button is pressed — a
+ * purchase whose amount only appears on the invoice is the surprise this whole
+ * screen exists to prevent.
+ *
+ * Three decisions worth stating.
+ *
+ * **The bounds are the server's.** `max_packs` and the pack price come from
+ * `GET /billing/ai-packages`; nothing here computes money. If the terms cannot
+ * be read, the stepper is not rendered at all — the meter above keeps working,
+ * because a broken purchase surface must not take the counter and the 80%
+ * warning down with it.
+ *
+ * **The buy button is never disabled for a read-only workspace.** Like the
+ * subscription PATCH and the payment-method PUT, this write is
+ * `allowWhenReadOnly` on the backend (09.3-d's reasoning): buying capacity is
+ * one of the ways an expired trial comes back, and a client that greys the
+ * button out takes that exit away.
+ *
+ * **A double click cannot buy twice.** The button is disabled while the request
+ * is in flight, but that is only the easy half — a second tab, or a click that
+ * lands as the first response does, is not stopped by any client state. The
+ * request therefore carries an idempotency key (`attempt-key.ts`) that the
+ * server buys once per; it is rotated on success and deliberately *kept* on
+ * failure, so a retry is a retry and the next deliberate purchase is a new one.
+ */
+function BuyOveragePacks(): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+  const [packs, setPacks] = useState(1);
+  const [attemptKey, setAttemptKey] = useState(newAttemptKey);
+
+  const terms = useQuery({
+    queryKey: ['billing', 'ai-package'],
+    queryFn: () => api.get<{ package: AiPackageTerms }>('/billing/ai-packages'),
+  });
+
+  const buy = useMutation({
+    mutationFn: (body: { packs: number; idempotency_key: string }) =>
+      api.post<AiPackagePurchaseResult>('/billing/ai-packages', body),
+    onSuccess: async () => {
+      // The purchase landed, so the next click is a *new* purchase and needs a
+      // key of its own. Rotating here and nowhere else is what keeps a retry
+      // after a failure idempotent.
+      setAttemptKey(newAttemptKey());
+      // The reply carries `UsageSummary`, not the full `Usage` this page reads
+      // (no `quota_warning`/`period_label`), so the counter and the 80% warning
+      // are refetched rather than patched from it — the warning is a server
+      // decision and must not be re-derived here. The invoice moved too.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['billing', 'usage'] }),
+        queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] }),
+      ]);
+    },
+  });
+
+  if (terms.isPending || terms.error) {
+    return (
+      <div className="mt-3">
+        {terms.error && (
+          <p role="alert" data-testid="ai-pack-terms-error" className="text-2xs text-danger">
+            {t('billing.aiMeter.packTermsError')}
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  const { max_packs: maxPacks, pack_price_cents: packPriceCents } = terms.data.package;
+  const totalCents = packs * packPriceCents;
+
+  return (
+    <div className="mt-4 border-t border-border pt-4">
+      {buy.isError && (
+        <Banner tone="danger" role="alert" title={t('billing.aiMeter.buyErrorTitle')}>
+          {t('billing.aiMeter.buyErrorDescription')}
+        </Banner>
+      )}
+
+      <p className="mb-2 text-xs font-medium text-content-secondary">
+        {t('billing.aiMeter.buyPacksLabel')}
+      </p>
+
+      <div className="flex flex-wrap items-center gap-3">
+        {/* Same shape as the seats stepper (FR-MOD-10.1.3) so the two read as
+            one control, and clamped at both ends rather than letting the
+            request fail: one pack is the smallest thing on sale, and `maxPacks`
+            is what the endpoint accepts. */}
+        <button
+          type="button"
+          aria-label={t('billing.aiMeter.removePack')}
+          disabled={packs <= 1 || buy.isPending}
+          onClick={() => setPacks((n) => Math.max(1, n - 1))}
+          className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
+        >
+          −
+        </button>
+        <span data-testid="ai-pack-count" className="tabular w-8 text-center text-lg font-semibold">
+          {packs}
+        </span>
+        <button
+          type="button"
+          aria-label={t('billing.aiMeter.addPack')}
+          disabled={packs >= maxPacks || buy.isPending}
+          onClick={() => setPacks((n) => Math.min(maxPacks, n + 1))}
+          className="h-8 w-8 rounded-md border border-border text-lg leading-none text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-40"
+        >
+          +
+        </button>
+
+        {/* The amount, before the button — announced on change, because the
+            figure that decides whether to press it must not be something only a
+            sighted user re-reads. */}
+        <p role="status" data-testid="ai-pack-total" className="text-sm text-content-secondary">
+          {t('billing.aiMeter.packTotal', {
+            resolutions: formatCount(packs * terms.data.package.resolutions_per_pack) ?? '',
+            amount: formatMoney(totalCents) ?? '',
+          })}
+        </p>
+
+        <button
+          type="button"
+          disabled={buy.isPending}
+          onClick={() => buy.mutate({ packs, idempotency_key: attemptKey })}
+          className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+        >
+          {buy.isPending ? t('billing.aiMeter.buying') : t('billing.aiMeter.buyPacks')}
+        </button>
+      </div>
+
+      <p className="mt-2 text-2xs text-content-tertiary">{t('billing.aiMeter.buyPacksNotice')}</p>
+
+      {buy.isSuccess && (
+        <p role="status" data-testid="ai-pack-bought" className="mt-2 text-2xs text-success">
+          {t('billing.aiMeter.bought', {
+            resolutions: formatCount(buy.data.purchase.resolutions) ?? '',
+          })}
+        </p>
+      )}
     </div>
   );
 }

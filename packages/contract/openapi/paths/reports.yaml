@@ -1157,6 +1157,93 @@ apiPackagePurchases:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+aiPackages:
+  get:
+    tags: [Billing]
+    operationId: getAiPackage
+    summary: The AI-resolution overage pack on sale
+    description: |
+      What one AI-resolution overage pack contains and costs, and the most a
+      single purchase may buy (FR-MOD-10.1.4). The terms are global — the same
+      pack for every workspace, never repriced per tenant — but the price comes
+      from deployment configuration, so this is read rather than hardcoded by a
+      client.
+
+      Billing is mocked (ADR-13): the price here is what a purchase *would*
+      cost, and buying a pack charges no card.
+    responses:
+      "200":
+        description: The pack and its purchase terms
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [package]
+              properties:
+                package: { $ref: "../openapi.yaml#/components/schemas/AiResolutionPackage" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  post:
+    tags: [Billing]
+    operationId: purchaseAiPackage
+    summary: Buy AI-resolution overage packs
+    description: |
+      Buys `packs` packs and credits their resolutions to the current period's
+      allowance (FR-MOD-10.1.4), returning the receipt together with usage as it
+      stands *after* the purchase.
+
+      **The price is the server's.** It is `packs × resolutions_per_pack ×` the
+      per-resolution overage rate, computed here; a price named in the body is
+      not read. What a client controls is how many packs, bounded by
+      `max_packs` — anything outside `1…max_packs` is a 400 and sells nothing.
+
+      **`idempotency_key` makes a repeated request safe.** Two requests carrying
+      the same key buy once: the second gets the first one's receipt with
+      `replayed: true`, no second charge and no second credit. The key is scoped
+      to the workspace and must be fresh for each *intended* purchase — reusing
+      one deliberately is how a retry is expressed, not how a second pack is
+      bought.
+
+      Payment is mocked (ADR-13): no card is charged, no payment method has to
+      be on file and no external provider is called. The quota it buys is real.
+
+      A pack is a one-off top-up, not a subscription. Nothing renews, and the
+      resolutions land in the period they were bought into rather than carrying
+      over — `period` on the receipt says which one.
+
+      Writable while the workspace is read-only, like the subscription PATCH:
+      buying capacity is one of the ways an expired trial comes back. It still
+      takes a billing scope — `reports_read` may see the price, not spend money.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [packs, idempotency_key]
+            properties:
+              packs:
+                type: integer
+                minimum: 1
+                description: How many packs to buy, at most `max_packs`.
+              idempotency_key:
+                type: string
+                format: uuid
+                description: |
+                  A UUID identifying this purchase *attempt*. Repeat it to retry
+                  safely; generate a new one to buy again.
+    responses:
+      "200":
+        description: The recorded purchase, and the period's usage after it
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/AiPackagePurchaseResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 entitlements:
   get:
     tags: [Billing]

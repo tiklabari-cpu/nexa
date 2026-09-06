@@ -8,6 +8,7 @@
  * invoice is the wrong one to discover was drifting.
  */
 import { Prisma } from '@prisma/client';
+import { AI_RESOLUTION_PACK_SIZE } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 export type LicenseAccess = 'active' | 'trialing' | 'read_only';
@@ -43,8 +44,14 @@ const isBillableLicense = (licenseId: bigint): Prisma.Sql => Prisma.sql`EXISTS (
  * few over its allowance pays for those few, not for a whole pack it did not
  * use. Named here so the value the meter shows and the value a usage record is
  * stamped with can never disagree.
+ *
+ * Re-exported from `@nexa/types` rather than declared, since 10.1.4 made the
+ * pack *purchasable* (`ai-package-service.ts`): the sale and the meter have to
+ * agree on how big a pack is, and a second literal `50` here is exactly how
+ * they would stop agreeing. The name stays because every usage record and every
+ * caller already speaks it.
  */
-export const AI_RESOLUTION_OVERAGE_UNIT = 50;
+export const AI_RESOLUTION_OVERAGE_UNIT = AI_RESOLUTION_PACK_SIZE;
 
 /**
  * API-call overage is sold by the block (FR-MOD-10.1.5, the PRD's "$29.50 per

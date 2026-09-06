@@ -570,9 +570,21 @@ export function PlaybookPage(): ReactElement {
                                         count: skill.steps.length,
                                       })}{' '}
                                       ·{' '}
-                                      {t('playbook.skills.runsCount', { count: skill.runs_count })}
+                                      {t('playbook.skills.runsCount', { count: skill.runs_count })}{' '}
+                                      · {formatDate(skill.updated_at)} ·{' '}
+                                      {skill.created_by_name ?? '—'}
                                     </span>
                                   </button>
+
+                                  {skill.ai_agent_id && (
+                                    <span
+                                      className="shrink-0 rounded-sm border border-border px-1.5 py-0.5 text-2xs font-medium text-content-tertiary"
+                                      title={t('playbook.skills.aiAgentBadge')}
+                                    >
+                                      {agentNameById.get(skill.ai_agent_id) ??
+                                        t('playbook.skills.filterOwnerUnknown')}
+                                    </span>
+                                  )}
 
                                   <StatusDot
                                     tone={skill.active ? 'success' : 'neutral'}

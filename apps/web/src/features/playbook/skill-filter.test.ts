@@ -26,6 +26,7 @@ function makeSkill(overrides: Partial<Skill>): Skill {
     active: false,
     runs_count: 0,
     updated_at: '2026-07-26T00:00:00.000Z',
+    created_by_name: null,
     ...overrides,
   };
 }

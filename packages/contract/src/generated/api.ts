@@ -7052,6 +7052,12 @@ export interface components {
       runs_count: number;
       /** Format: date-time */
       updated_at?: string;
+      /**
+       * @description The account name of whoever created this skill, resolved server-side
+       *     from the soft `created_by` reference. Null for a system/seed skill
+       *     with no author, or if the authoring account was later deleted.
+       */
+      created_by_name: string | null;
     };
     SkillPreview: {
       /**

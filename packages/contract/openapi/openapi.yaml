@@ -1005,7 +1005,7 @@ components:
 
     Skill:
       type: object
-      required: [id, name, kind, steps, active, runs_count]
+      required: [id, name, kind, steps, active, runs_count, created_by_name]
       properties:
         id: { type: string, format: uuid }
         ai_agent_id: { type: string, format: uuid, nullable: true }
@@ -1018,6 +1018,13 @@ components:
         active: { type: boolean }
         runs_count: { type: integer }
         updated_at: { type: string, format: date-time }
+        created_by_name:
+          type: string
+          nullable: true
+          description: |
+            The account name of whoever created this skill, resolved server-side
+            from the soft `created_by` reference. Null for a system/seed skill
+            with no author, or if the authoring account was later deleted.
 
     SkillPreview:
       type: object

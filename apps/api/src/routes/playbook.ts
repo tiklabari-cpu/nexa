@@ -30,6 +30,7 @@ import {
 } from '../services/ai/knowledge-bulk-crawl.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
+import type { TenantClient } from '../lib/tenant.js';
 
 const READ = ['agents-bot--all:ro', 'agents-bot--all:rw'];
 const WRITE = ['agents-bot--all:rw'];
@@ -283,16 +284,26 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
   // --- Skills ----------------------------------------------------------------
 
   app.get('/skills', { config: { scopes: READ } }, async (request, reply) => {
-    const skills = await request.withTenant((tx) =>
+    const items = await request.withTenant(async (tx) => {
       // AI-agent skills only. Copilot owns a `kind: 'copilot'` skill purely to
       // anchor its assist runs (FR-MOD-12) — it is not something an admin wrote
       // and must not appear in the Playbook list beside the real ones.
-      tx.skill.findMany({
+      const skills = await tx.skill.findMany({
         where: { kind: 'ai_agent' },
         orderBy: [{ active: 'desc' }, { updatedAt: 'desc' }],
-      }),
-    );
-    return reply.send({ items: skills.map(serialiseSkill) });
+      });
+      const nameByCreatedBy = await creatorNamesByIds(
+        tx,
+        skills.map((skill) => skill.createdBy),
+      );
+      return skills.map((skill) =>
+        serialiseSkill(
+          skill,
+          skill.createdBy ? (nameByCreatedBy.get(skill.createdBy) ?? null) : null,
+        ),
+      );
+    });
+    return reply.send({ items });
   });
 
   app.post('/skills', { config: { scopes: WRITE } }, async (request, reply) => {
@@ -302,7 +313,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
 
     const steps = body.steps ? requireValidSteps(body.steps) : [];
 
-    const created = await request.withTenant(async (tx) => {
+    const { created, createdByName } = await request.withTenant(async (tx) => {
       if (body.ai_agent_id) {
         const agent = await tx.aiAgent.findFirst({
           where: { id: body.ai_agent_id },
@@ -311,7 +322,8 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
         if (!agent) throw ApiError.validation('That AI agent does not exist.');
       }
 
-      return tx.skill.create({
+      const createdBy = principal.kind === 'agent' ? principal.accountId : null;
+      const created = await tx.skill.create({
         data: {
           licenseId: tenant.licenseId,
           name: body.name,
@@ -321,13 +333,15 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
           steps: steps as object,
           // Never live on creation.
           active: false,
-          createdBy: principal.kind === 'agent' ? principal.accountId : null,
+          createdBy,
           updatedAt: new Date(),
         },
       });
+
+      return { created, createdByName: await creatorName(tx, createdBy) };
     });
 
-    return reply.status(201).send(serialiseSkill(created));
+    return reply.status(201).send(serialiseSkill(created, createdByName));
   });
 
   app.get<{ Params: { skillId: string } }>(
@@ -335,9 +349,12 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
     { config: { scopes: READ } },
     async (request, reply) => {
       const id = parse(uuid, request.params.skillId);
-      const skill = await request.withTenant((tx) => tx.skill.findFirst({ where: { id } }));
-      if (!skill) throw ApiError.notFound('Skill not found.');
-      return reply.send(serialiseSkill(skill));
+      const result = await request.withTenant(async (tx) => {
+        const skill = await tx.skill.findFirst({ where: { id } });
+        if (!skill) throw ApiError.notFound('Skill not found.');
+        return { skill, createdByName: await creatorName(tx, skill.createdBy) };
+      });
+      return reply.send(serialiseSkill(result.skill, result.createdByName));
     },
   );
 
@@ -349,7 +366,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
       const body = parse(updateSkillBody, request.body);
       const steps = body.steps ? requireValidSteps(body.steps) : undefined;
 
-      const updated = await request.withTenant(async (tx) => {
+      const result = await request.withTenant(async (tx) => {
         const existing = await tx.skill.findFirst({ where: { id } });
         if (!existing) throw ApiError.notFound('Skill not found.');
 
@@ -360,7 +377,7 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
           throw new ApiError('not_allowed', 'A skill needs at least one step before it can run.');
         }
 
-        return tx.skill.update({
+        const updated = await tx.skill.update({
           where: { id },
           data: {
             ...(body.name !== undefined ? { name: body.name } : {}),
@@ -370,9 +387,11 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
             updatedAt: new Date(),
           },
         });
+
+        return { updated, createdByName: await creatorName(tx, updated.createdBy) };
       });
 
-      return reply.send(serialiseSkill(updated));
+      return reply.send(serialiseSkill(result.updated, result.createdByName));
     },
   );
 
@@ -856,17 +875,46 @@ function serialiseAgent(agent: {
   };
 }
 
-function serialiseSkill(skill: {
-  id: string;
-  aiAgentId: string | null;
-  name: string;
-  kind: string;
-  instruction: string | null;
-  steps: unknown;
-  active: boolean;
-  runsCount: number;
-  updatedAt: Date;
-}) {
+/**
+ * `Skill.createdBy` is a soft reference to `accounts.id` (no FK, so deleting
+ * an account never blocks or cascades into a skill it once wrote) — the wire
+ * format never exposes the raw id, only the resolved name, since a bare UUID
+ * tells an admin nothing (FR-MOD-05.5).
+ */
+async function creatorName(tx: TenantClient, createdBy: string | null): Promise<string | null> {
+  if (!createdBy) return null;
+  const account = await tx.account.findFirst({ where: { id: createdBy }, select: { name: true } });
+  return account?.name ?? null;
+}
+
+/** Bulk form of {@link creatorName}, one query for a whole list response. */
+async function creatorNamesByIds(
+  tx: TenantClient,
+  createdByIds: (string | null)[],
+): Promise<Map<string, string>> {
+  const ids = [...new Set(createdByIds.filter((id): id is string => id !== null))];
+  if (ids.length === 0) return new Map();
+  const accounts = await tx.account.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true },
+  });
+  return new Map(accounts.map((account) => [account.id, account.name]));
+}
+
+function serialiseSkill(
+  skill: {
+    id: string;
+    aiAgentId: string | null;
+    name: string;
+    kind: string;
+    instruction: string | null;
+    steps: unknown;
+    active: boolean;
+    runsCount: number;
+    updatedAt: Date;
+  },
+  createdByName: string | null,
+) {
   return {
     id: skill.id,
     ai_agent_id: skill.aiAgentId,
@@ -877,5 +925,6 @@ function serialiseSkill(skill: {
     active: skill.active,
     runs_count: skill.runsCount,
     updated_at: skill.updatedAt.toISOString(),
+    created_by_name: createdByName,
   };
 }

@@ -114,6 +114,14 @@ describe('playbook — skills', () => {
       expect(body.ai_agent_id).toBe(aiAgentId);
     });
 
+    it("resolves the creator's soft `created_by` reference to their account name (FR-MOD-05.5)", async () => {
+      const token = await writeToken(fx.a);
+      const response = await createSkillViaApi(token);
+      expect(response.statusCode).toBe(201);
+      const body = response.json() as { created_by_name: string | null };
+      expect(body.created_by_name).toBe('Owner a');
+    });
+
     it('rejects a step list the engine could not run, naming the offending step', async () => {
       const token = await writeToken(fx.a);
       const response = await createSkillViaApi(token, {
@@ -174,6 +182,39 @@ describe('playbook — skills', () => {
       const items = (list.json() as { items: Array<{ id: string; kind: string }> }).items;
       expect(items.map((s) => s.id)).toContain(skillId);
       expect(items.every((s) => s.kind === 'ai_agent')).toBe(true);
+    });
+
+    it('carries the creator name in the list and a single read, and null for a skill nobody authored (FR-MOD-05.5)', async () => {
+      const token = await writeToken(fx.a);
+      const created = await createSkillViaApi(token);
+      const skillId = (created.json() as { id: string }).id;
+
+      // A system/seed skill has no `createdBy` — the row must read null, not
+      // a raw account id and not a thrown error.
+      const seeded = await owner.skill.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          name: 'seed skill',
+          kind: 'ai_agent',
+          steps: [],
+          active: false,
+          updatedAt: new Date(),
+        },
+        select: { id: true },
+      });
+
+      const list = await server.get('/skills', auth(token));
+      const items = (
+        list.json() as { items: Array<{ id: string; created_by_name: string | null }> }
+      ).items;
+      expect(items.find((s) => s.id === skillId)?.created_by_name).toBe('Owner a');
+      expect(items.find((s) => s.id === seeded.id)?.created_by_name).toBeNull();
+
+      const read = await server.get(`/skills/${skillId}`, auth(token));
+      expect((read.json() as { created_by_name: string | null }).created_by_name).toBe('Owner a');
+
+      const readSeeded = await server.get(`/skills/${seeded.id}`, auth(token));
+      expect((readSeeded.json() as { created_by_name: string | null }).created_by_name).toBeNull();
     });
 
     it('reads one skill back with its steps', async () => {

@@ -12,8 +12,10 @@
  * whether it is on. That is what separates it from the tabs, where an off skill
  * is a Draft whatever its kind: here you can ask for "Workspace + Off" and get
  * it. "Owner" is the AI agent a skill belongs to (its ai_agent_id); a skill
- * with none reads as Unassigned. (The skill row carries no human creator, so
- * the owning agent is the only ownership the list can honestly filter on.)
+ * with none reads as Unassigned. (The row also shows the human account that
+ * created the skill (FR-MOD-05.5, `created_by_name`), but that is a display
+ * fact, not a filter axis here — this "owner" is deliberately the owning agent.
+ * Conflating the two is a separate, tracked gap (FR-MOD-05.4), not fixed here.)
  */
 import type { Skill } from './types.js';
 

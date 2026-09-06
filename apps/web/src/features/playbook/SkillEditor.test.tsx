@@ -34,6 +34,7 @@ function makeSkill(steps: SkillStep[]): Skill {
     active: false,
     runs_count: 0,
     updated_at: '2026-01-01T00:00:00.000Z',
+    created_by_name: null,
   };
 }
 

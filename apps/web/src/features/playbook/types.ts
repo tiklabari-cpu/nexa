@@ -21,6 +21,7 @@ export interface Skill {
   active: boolean;
   runs_count: number;
   updated_at: string;
+  created_by_name: string | null;
 }
 
 export type AnswerLength = 'short' | 'medium' | 'long';

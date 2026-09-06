@@ -156,6 +156,7 @@ export const playbook: Messages = {
   'playbook.skills.filterOwnerAll': 'All owners',
   'playbook.skills.filterOwnerUnassigned': 'Unassigned',
   'playbook.skills.filterOwnerUnknown': 'Unknown agent',
+  'playbook.skills.aiAgentBadge': 'Runs through this AI agent',
   'playbook.skills.filterSort': 'Sort',
   'playbook.skills.sortNameAsc': 'Name A–Z',
   'playbook.skills.sortNameDesc': 'Name Z–A',

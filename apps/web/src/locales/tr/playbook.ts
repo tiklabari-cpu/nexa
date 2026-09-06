@@ -151,6 +151,7 @@ export const playbook: Messages = {
   'playbook.skills.filterOwnerAll': 'Tüm sahipler',
   'playbook.skills.filterOwnerUnassigned': 'Atanmamış',
   'playbook.skills.filterOwnerUnknown': 'Bilinmeyen ajan',
+  'playbook.skills.aiAgentBadge': 'Bu AI ajanı üzerinden çalışır',
   'playbook.skills.filterSort': 'Sırala',
   'playbook.skills.sortNameAsc': 'Ad A–Z',
   'playbook.skills.sortNameDesc': 'Ad Z–A',

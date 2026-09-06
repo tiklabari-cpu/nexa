@@ -9296,9 +9296,10 @@
             "description": "201.1 gercek figur donduruyor; bu alt-gorev onu kullaniciya ulastirir — `SalesTab` render eder, `buildGroupCsv`in `sales` dali ve `?format=pdf` bos olmayan tablo uretir.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n`apps/web/src/features/reports/ReportsPage.tsx:203-206` yorumu bugunku gercegi anlatiyor:\n_\"No sales/order source exists yet, so `configured` is always `false`\"_. `SalesTab` (:539) bu\nvarsayimla yazilmis. `REPORT_GROUPS`ta `{id:\"sales\"}` (`reports-export.ts:49`) ZATEN var, yani\nexport yolu aciktir — donen govde bos oldugu icin ciktisi anlamsizdir.\n\n## Yapilacak\n\n1. `ReportsSales` arayuzu 201.1`in yanitiyla hizalanir (typed client uzerinden, elle tip YAZMA).\n2. `SalesTab`: acikken KPI kartlari (tracked sales · attributed revenue · conversions) + benchmark\n   karsilastirmasi; KAPALIYKEN bugunku `salesNotConfigured` bos-durumu + Settings kisayolu KORUNUR.\n3. `buildGroupCsv`in `sales` dali: sutun basliklari `cases`/`leads` dallarinin bicimini izler.\n4. `?format=pdf` sales icin `toPdf(group.label, headers, rows)` ile bos olmayan tablo uretir.\n5. Dosya basindaki (:203-206) yorum guncellenir — bayat bir yorum bir sonraki pencereyi yaniltir.\n6. Metinler `en` + `tr` iki locale`e de eklenir (eksik anahtar testte yakalanir).\n\n## Bilinen tuzaklar\n\n- `GROUP_GATED_TABS` (:306) `sales`i zaten iceriyor — izin kapisi ikinci katman, KALDIRMA.\n- `apps/web` vitest CPU yuku altinda `userEvent` testlerinde 5000 ms timeout verir; `--maxWorkers=4`.\n- Para birimi bicimlendirmesi locale`e gore degisir; sabit `$` yazma.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `ReportsPage.test.tsx`: `configured:true` yaniti -> figurler ekranda; `configured:false` ->\n   bugunku bos-durum + Settings linki (regresyon).\n2. Export: `sales` grubu CSV`si basliklarla birlikte >=1 veri satiri; PDF yaniti\n   `content-type: application/pdf` ve bos degil.\n3. `reports_read` scope`u olmayan kullanici sekmeye ulasamaz (`GROUP_GATED_TABS` regresyonu).\n4. Test basliklari `(FR-MOD-07.7)` etiketi tasir. TAM DoD kapisi.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
-            "parentId": "201"
+            "parentId": "201",
+            "updatedAt": "2026-09-06T14:23:45.640Z"
           },
           {
             "id": 3,
@@ -9311,7 +9312,7 @@
             "parentId": "201"
           }
         ],
-        "updatedAt": "2026-09-06T13:45:48.719Z"
+        "updatedAt": "2026-09-06T14:23:45.640Z"
       },
       {
         "id": "202",
@@ -9425,7 +9426,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T13:45:48.720Z",
+      "lastModified": "2026-09-06T14:23:45.642Z",
       "taskCount": 204,
       "completedCount": 200,
       "tags": [

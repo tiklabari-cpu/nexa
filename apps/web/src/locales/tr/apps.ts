@@ -52,6 +52,17 @@ export const apps: Messages = {
   'apps.marketplace.consent.authorize': 'Yetkilendir',
   'apps.marketplace.consent.connecting': 'Bağlanıyor…',
 
+  'apps.marketplace.apiKey.title': '{name} uygulamasını bağla',
+  'apps.marketplace.apiKey.description': 'Bu uygulama bir API anahtarıyla bağlanır.',
+  'apps.marketplace.apiKey.label': 'API anahtarı',
+  'apps.marketplace.apiKey.hint':
+    'Anahtarın yalnızca son dört karakteri okunabilir biçimde saklanır. Sağlayıcıdan aldığınız anahtarı yapıştırın.',
+  'apps.marketplace.apiKey.requiredError': 'API anahtarını girin.',
+  'apps.marketplace.apiKey.tooShortError': 'En az {min} karakter girin.',
+  'apps.marketplace.apiKey.tooLongError': 'En fazla {max} karakter girin.',
+  'apps.marketplace.apiKey.error': 'Uygulama bağlanamadı. Anahtarı kontrol edip yeniden deneyin.',
+  'apps.marketplace.apiKey.submit': 'Uygulamayı bağla',
+
   'apps.developers.page.title': 'Geliştiriciler',
   'apps.developers.page.description':
     'Bu çalışma alanı adına API üzerinden işlem yapabilecek OAuth uygulamaları kaydedin.',

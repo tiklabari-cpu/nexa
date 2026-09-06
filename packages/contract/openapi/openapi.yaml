@@ -419,6 +419,8 @@ paths:
     $ref: "./paths/apps.yaml#/appOAuthStart"
   /settings/apps/{appId}/oauth/callback:
     $ref: "./paths/apps.yaml#/appOAuthCallback"
+  /settings/apps/{appId}/connect:
+    $ref: "./paths/apps.yaml#/appConnect"
   /chats/{chatId}/apps:
     $ref: "./paths/apps.yaml#/chatApps"
 
@@ -3482,19 +3484,38 @@ components:
 
     AppInstallation:
       type: object
-      description: A connected marketplace app (FR-MOD-09.1), as stored for a workspace.
-      required: [app_id, status, external_account, scopes, connected_at]
+      description: |
+        A connected marketplace app (FR-MOD-09.1 / 09.2), as stored for a
+        workspace. How it was connected shows in which of the two identity
+        fields is meaningful: an OAuth install carries the account label the
+        grant returned and a null `api_key_last_four`; an API-key install
+        carries the masked key in both, because a pasted key names no account.
+      required: [app_id, status, external_account, scopes, connected_at, api_key_last_four]
       properties:
         app_id: { type: string }
         status: { type: string, enum: [connected] }
         external_account:
           type: string
-          description: The account label the (mock) OAuth grant returned.
+          description: |
+            The account label the (mock) OAuth grant returned, or the masked key
+            (`••••abcd`) for an API-key install — what the card shows to say
+            *which* connection this is.
         scopes:
           type: array
           items: { type: string }
           description: Permissions granted — the app's requested scopes.
         connected_at: { type: string, format: date-time }
+        api_key_last_four:
+          description: |
+            The last four characters of the stored API key, or null for an OAuth
+            install. The key itself is held only as a hash and is never returned
+            by any endpoint — this is the whole of what a client may learn about
+            it, so a rotated key is recognisable without being usable.
+          oneOf:
+            - type: string
+              minLength: 4
+              maxLength: 4
+            - type: "null"
 
     AppListItem:
       type: object

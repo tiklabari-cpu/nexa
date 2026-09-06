@@ -66,6 +66,19 @@ export const apps: Messages = {
   'apps.marketplace.consent.authorize': 'Authorize',
   'apps.marketplace.consent.connecting': 'Connecting…',
 
+  // ApiKeyDialog — the `provider: api_key` step (09.2). No permission list:
+  // nothing is granted here, a key the provider already issued is handed over.
+  'apps.marketplace.apiKey.title': 'Connect {name}',
+  'apps.marketplace.apiKey.description': 'This app connects with an API key.',
+  'apps.marketplace.apiKey.label': 'API key',
+  'apps.marketplace.apiKey.hint':
+    'Only the last four characters are stored in a readable form. Paste the key from the provider.',
+  'apps.marketplace.apiKey.requiredError': 'Enter the API key.',
+  'apps.marketplace.apiKey.tooShortError': 'Enter at least {min} characters.',
+  'apps.marketplace.apiKey.tooLongError': 'Enter at most {max} characters.',
+  'apps.marketplace.apiKey.error': 'Could not connect the app. Check the key and try again.',
+  'apps.marketplace.apiKey.submit': 'Connect app',
+
   // DeveloperPortalPage shell — title/description shown both gated and open
   'apps.developers.page.title': 'Developers',
   'apps.developers.page.description':

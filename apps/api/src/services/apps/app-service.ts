@@ -1,5 +1,5 @@
 /**
- * Apps marketplace (FR-MOD-09.1).
+ * Apps marketplace (FR-MOD-09.1 / 09.2).
  *
  * The catalogue of available integrations is static — it lives in @nexa/types
  * (`APP_CATALOG`) so the grid, this service and the tests agree on which apps
@@ -12,23 +12,44 @@
  * `state` and `callback` verifies it, so a tampered or replayed state is refused
  * exactly as a real OAuth client would refuse one. The surfaced in-chat data is
  * a deterministic stub keyed off the customer (`appChatData`), never a live call.
+ *
+ * There are **two** ways to connect, because the catalogue has two kinds of card
+ * and 09.2's acceptance criterion asks for both ("Her biri OAuth/API key"):
+ * `provider: 'oauth'` goes through `oauthStart` → `oauthCallback`, and
+ * `provider: 'api_key'` goes through {@link AppService.connectWithApiKey}. Each
+ * refuses the other's card. That refusal is the point: while both kinds went
+ * down the same mock handshake, `provider` changed no behaviour at all and the
+ * API-key half of the criterion never reached a user.
+ *
+ * The pasted key is **hashed, never stored** (`hashToken`, the personal
+ * access-token treatment) alongside its last four characters. Reversible
+ * storage would be the wrong trade for a mock that never calls the provider
+ * back: nothing downstream ever needs the key again, and a hash cannot be
+ * leaked by a query, a log line or a backup.
  */
 import { Buffer } from 'node:buffer';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
+  APP_API_KEY_MAX_LENGTH,
+  APP_API_KEY_MIN_LENGTH,
   APP_CATALOG,
+  appApiKeyLastFour,
+  appApiKeyProblem,
   appChatData,
   filterAppCatalog,
   findApp,
   isChannelApp,
+  maskApiKey,
   paginateApps,
   type AppCatalogEntry,
   type AppCategory,
   type AppChatData,
   type AppListItem,
   type AppOAuthStart,
+  type AppProvider,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
+import { hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 /** A start's `state` is good for ten minutes — long enough for a consent, not to replay. */
@@ -46,6 +67,7 @@ interface InstallationRow {
   appId: string;
   externalAccount: string;
   connectedAt: Date;
+  apiKeyLastFour: string | null;
 }
 
 /** How {@link AppService.list} narrows the catalogue — the query contract, parsed. */
@@ -85,6 +107,31 @@ function requireConnectableApp(appId: string): AppCatalogEntry {
   return entry;
 }
 
+/**
+ * The catalogue entry for an id that connects *this* way (09.2).
+ *
+ * The channel check runs first and stays first: a channel-typed card is not
+ * connectable here at all, whichever provider it names, so `telegram`
+ * (`provider: 'api_key'`) has to be turned away by the same sentence as
+ * `whatsapp` rather than being let one step further because its provider
+ * happens to match the path being called.
+ *
+ * The message names the other path, because a caller on the wrong one has
+ * somewhere to go — and a 400 that only says "no" would leave the two halves of
+ * the criterion looking like one broken endpoint.
+ */
+function requireProvider(appId: string, provider: AppProvider): AppCatalogEntry {
+  const entry = requireConnectableApp(appId);
+  if (entry.provider !== provider) {
+    throw ApiError.validation(
+      provider === 'oauth'
+        ? 'This app connects with an API key — send it to /settings/apps/{appId}/connect.'
+        : 'This app connects with OAuth — start the flow at /settings/apps/{appId}/oauth/start.',
+    );
+  }
+  return entry;
+}
+
 /** A catalogue card joined with this workspace's connection, if any. */
 function toListItem(entry: AppCatalogEntry, row: InstallationRow | null): AppListItem {
   return {
@@ -104,6 +151,7 @@ function toListItem(entry: AppCatalogEntry, row: InstallationRow | null): AppLis
           external_account: row.externalAccount,
           scopes: [...entry.scopes],
           connected_at: row.connectedAt.toISOString(),
+          api_key_last_four: row.apiKeyLastFour,
         }
       : null,
   };
@@ -168,9 +216,12 @@ export class AppService {
    * Begin the (mock) OAuth flow. Returns where to send the user and a signed
    * `state` that binds the callback to this app, this licence and this moment.
    * Pure — no write happens until the app is actually connected.
+   *
+   * Refuses an `api_key` card (09.2): its key is pasted, not granted, so there
+   * is no consent screen to send anyone to.
    */
   oauthStart(tenant: TenantContext, appId: string): AppOAuthStart {
-    const entry = requireConnectableApp(appId);
+    const entry = requireProvider(appId, 'oauth');
     const payload: StatePayload = {
       a: entry.id,
       l: String(tenant.licenseId),
@@ -187,6 +238,9 @@ export class AppService {
    * licence and has not expired, then record the connection. Idempotent — a
    * second callback re-connects rather than erroring, so a retried consent is
    * safe.
+   *
+   * Refuses an `api_key` card before it looks at the state, so a state minted
+   * for one is worth nothing even if `start` ever stopped refusing them.
    */
   async oauthCallback(
     tx: TenantClient,
@@ -194,7 +248,7 @@ export class AppService {
     appId: string,
     input: { state: string; code: string },
   ): Promise<AppListItem> {
-    const entry = requireConnectableApp(appId);
+    const entry = requireProvider(appId, 'oauth');
 
     const payload = this.#verify(input.state);
     if (!payload || payload.a !== entry.id || payload.l !== String(tenant.licenseId)) {
@@ -217,6 +271,65 @@ export class AppService {
         appId: entry.id,
         status: 'connected',
         externalAccount,
+      },
+    });
+    return toListItem(entry, row);
+  }
+
+  /**
+   * Connect an `api_key` card with the key an admin pasted (09.2 KK "Her biri
+   * OAuth/API key").
+   *
+   * Three things are deliberate here:
+   *
+   *   * **Only the hash is written.** `hashToken` is the same one-way digest a
+   *     personal access token gets. The service never needs the key again — the
+   *     integration is mocked, so nothing calls the provider — which makes
+   *     "cannot be read back" a free property rather than a cost.
+   *   * **The clear key never leaves this method.** It is not returned, not put
+   *     on the installation row, and not carried into the audit entry; what the
+   *     card shows is `••••` plus four characters, derived here.
+   *   * **Re-connecting replaces the key.** The upsert makes rotating a key the
+   *     same call as connecting, and a retried submit harmless.
+   */
+  async connectWithApiKey(
+    tx: TenantClient,
+    tenant: TenantContext,
+    appId: string,
+    input: { apiKey: string },
+  ): Promise<AppListItem> {
+    const entry = requireProvider(appId, 'api_key');
+
+    const apiKey = input.apiKey.trim();
+    // Restated rather than trusted from the route: the shared rule is the one
+    // the form validates against too, so a caller that skips the console cannot
+    // store something the console would have refused.
+    const problem = appApiKeyProblem(apiKey);
+    if (problem) {
+      throw ApiError.validation(
+        problem === 'required'
+          ? 'api_key: an API key is required.'
+          : `api_key: must be between ${APP_API_KEY_MIN_LENGTH} and ${APP_API_KEY_MAX_LENGTH} characters.`,
+      );
+    }
+
+    const lastFour = appApiKeyLastFour(apiKey);
+    const row = await tx.appInstallation.upsert({
+      where: { licenseId_appId: { licenseId: tenant.licenseId, appId: entry.id } },
+      update: {
+        status: 'connected',
+        // A pasted key names no account, so the label says which key is stored.
+        externalAccount: maskApiKey(apiKey),
+        apiKeyHash: hashToken(apiKey),
+        apiKeyLastFour: lastFour,
+      },
+      create: {
+        licenseId: tenant.licenseId,
+        appId: entry.id,
+        status: 'connected',
+        externalAccount: maskApiKey(apiKey),
+        apiKeyHash: hashToken(apiKey),
+        apiKeyLastFour: lastFour,
       },
     });
     return toListItem(entry, row);

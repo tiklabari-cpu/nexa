@@ -27,9 +27,61 @@
  */
 import type { ChannelType } from './domain.js';
 
-/** How an app is connected. Both OAuth and API-key apps ship in the 09.2 list. */
+/**
+ * How an app is connected — and it is a behaviour, not a label. A `oauth` card
+ * goes through the (mock) authorize/callback pair; an `api_key` card is
+ * connected by pasting the provider's key at `POST /settings/apps/{id}/connect`.
+ * Each path refuses the other's card, so `provider` is what the two endpoints
+ * are selected by rather than a badge printed on the tile (09.2).
+ */
 export const APP_PROVIDERS = ['oauth', 'api_key'] as const;
 export type AppProvider = (typeof APP_PROVIDERS)[number];
+
+/**
+ * The bounds an API key must sit inside, shared by the endpoint's zod schema and
+ * the console's form so the client never refuses a key the server would take
+ * (and never lets one through that it would not).
+ *
+ * The floor is a sanity check, not a security claim: nothing about a
+ * sixteen-character minimum makes a third party's key strong. It exists so an
+ * obvious mis-paste — a fragment, a placeholder like `changeme` — is caught at
+ * the field rather than stored as a credential nobody can read back to check.
+ * The ceiling matches the `code` bound on the OAuth callback: a request body is
+ * not a place to put unbounded text.
+ */
+export const APP_API_KEY_MIN_LENGTH = 16;
+export const APP_API_KEY_MAX_LENGTH = 512;
+
+/** Why an API key is unacceptable, or `null` when it is fine. */
+export type AppApiKeyProblem = 'required' | 'too_short' | 'too_long';
+
+/**
+ * The one rule for what counts as an API key, so the form and the endpoint
+ * cannot drift apart. Measured on the trimmed value, because that is what the
+ * server stores — pasting a key with a trailing newline is not an error.
+ */
+export function appApiKeyProblem(value: string): AppApiKeyProblem | null {
+  const key = value.trim();
+  if (!key) return 'required';
+  if (key.length < APP_API_KEY_MIN_LENGTH) return 'too_short';
+  if (key.length > APP_API_KEY_MAX_LENGTH) return 'too_long';
+  return null;
+}
+
+/**
+ * What a stored API key is allowed to look like once it is at rest: four
+ * characters of tail, and nothing else. Used by the server to derive the
+ * display hint and by every surface that renders one, so "masked" means the
+ * same thing in the database, the response and the card.
+ */
+export function maskApiKey(key: string): string {
+  return `••••${appApiKeyLastFour(key)}`;
+}
+
+/** The last four characters of a (trimmed) key — the whole of what is shown. */
+export function appApiKeyLastFour(key: string): string {
+  return key.trim().slice(-4);
+}
 
 /** The section of the directory a card sits under. */
 export const APP_CATEGORIES = [
@@ -1577,11 +1629,21 @@ export function connectableApps(): AppCatalogEntry[] {
 export interface AppInstallation {
   app_id: string;
   status: 'connected';
-  /** The account label the (mock) OAuth grant returned. */
+  /**
+   * The account label the (mock) OAuth grant returned, or the masked key
+   * (`••••abcd`) for an API-key install — a pasted key names no account, so the
+   * field says which key is stored instead of which account was granted.
+   */
   external_account: string;
   /** Permissions granted — the app's requested scopes, all granted by the mock. */
   scopes: string[];
   connected_at: string;
+  /**
+   * The last four characters of the stored API key, or null for an OAuth
+   * install. The key itself never leaves the server — it is held as a hash — so
+   * this is the whole of what a client can learn about it.
+   */
+  api_key_last_four: string | null;
 }
 
 /** A marketplace card joined with whether this workspace has connected it. */

@@ -915,8 +915,11 @@ describe('audit log writer (NFR-S12)', () => {
       expect(JSON.stringify(entry?.metadata)).not.toContain(grant.refresh_token);
     });
 
-    it('records a marketplace app OAuth connection, never the code or account label', async () => {
-      const APP = 'zendesk';
+    it('records either way of connecting a marketplace app, never the credential (FR-MOD-09.2)', async () => {
+      // `hubspot` is a `provider: 'oauth'` card. The id matters: since 09.2 the
+      // OAuth pair refuses an `api_key` card outright, so a test that reached
+      // for one here would be measuring the refusal, not the audit entry.
+      const APP = 'hubspot';
       const started = await server.post(`/settings/apps/${APP}/oauth/start`, {}, auth(adminToken));
       expect(started.statusCode).toBe(200);
       const { state } = started.json() as { state: string };
@@ -933,6 +936,22 @@ describe('audit log writer (NFR-S12)', () => {
       expect(entry?.target).toBe(`app_installation:${APP}`);
       expect(entry?.metadata).toMatchObject({ app_id: APP, kind: 'app_installation' });
       expect(JSON.stringify(entry?.metadata)).not.toContain('mock-auth-code');
+
+      // The API-key path (09.2) is the same admin act, so it leaves the same
+      // kind of entry — and the key it carried is no more in the trail than the
+      // OAuth code was.
+      const KEY_APP = 'zendesk';
+      const keyed = await server.post(
+        `/settings/apps/${KEY_APP}/connect`,
+        { api_key: 'zd-live-never-audited-2f9c41' },
+        auth(adminToken),
+      );
+      expect(keyed.statusCode).toBe(200);
+      expect(await count('app.connected')).toBe(before + 2);
+      const keyEntry = await latest('app.connected');
+      expect(keyEntry?.target).toBe(`app_installation:${KEY_APP}`);
+      expect(keyEntry?.metadata).toMatchObject({ app_id: KEY_APP, kind: 'app_installation' });
+      expect(JSON.stringify(keyEntry?.metadata)).not.toContain('zd-live-never-audited-2f9c41');
     });
 
     it('records an inbound channel being connected, then disconnected', async () => {

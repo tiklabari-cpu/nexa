@@ -1,5 +1,5 @@
 /**
- * Apps marketplace (FR-MOD-09.1).
+ * Apps marketplace (FR-MOD-09.1 / 09.2).
  *
  * The property the feature turns on is the KK "Kart → izin/OAuth akışı;
  * bağlanınca veri sohbet içinde": a card is connected through a (mock) OAuth
@@ -7,7 +7,15 @@
  * conversation. Around that sit the guards that keep it honest — the OAuth state
  * is verified so a tampered one is refused, the admin/agent scope split holds,
  * disconnect is a real removal, and one tenant never sees or touches another's.
+ *
+ * 09.2's own criterion ("Her biri OAuth/API key") adds a second connection path
+ * and a property that only holds if the two stay apart: `provider` has to select
+ * the path, so each one refuses the other's card. The API-key half also carries
+ * a secrecy claim the OAuth half never had — the pasted key is stored as a hash
+ * and shown as four characters — and that claim is asserted against the response,
+ * the log and the row, not against the code that is supposed to produce them.
  */
+import { createHash } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
@@ -19,6 +27,7 @@ interface AppInstallation {
   external_account: string;
   scopes: string[];
   connected_at: string;
+  api_key_last_four: string | null;
 }
 
 interface AppListItem {
@@ -26,6 +35,7 @@ interface AppListItem {
   name: string;
   description: string;
   category: string;
+  provider: string;
   channel: string | null;
   installed: boolean;
   installation: AppInstallation | null;
@@ -42,7 +52,12 @@ interface AppChatData {
   fields: Array<{ label: string; value: string }>;
 }
 
+/** A `provider: 'oauth'` card — the OAuth pair's subject. */
 const APP = 'hubspot';
+/** A `provider: 'api_key'` card, and not a channel one — the connect path's subject. */
+const KEY_APP = 'zendesk';
+/** Long enough to clear `APP_API_KEY_MIN_LENGTH`, and unmistakable in a log. */
+const API_KEY = 'zd-live-never-logged-2f9c41';
 
 describe('apps marketplace (FR-MOD-09.1)', () => {
   let owner: PrismaClient;
@@ -119,6 +134,20 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     );
     expect(done.statusCode).toBe(200);
     return done.json() as AppListItem;
+  };
+
+  /** The API-key path: one POST carrying the pasted key (09.2). */
+  const connectWithKey = async (
+    token: string,
+    appId = KEY_APP,
+    apiKey = API_KEY,
+  ): Promise<{ status: number; body: unknown }> => {
+    const response = await server.post(
+      `/settings/apps/${appId}/connect`,
+      { api_key: apiKey },
+      auth(token),
+    );
+    return { status: response.statusCode, body: response.json() };
   };
 
   const openChat = async (token: string, customerId: string): Promise<string> => {
@@ -237,6 +266,174 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
       auth(adminToken),
     );
     expect(started.statusCode).toBe(404);
+  });
+
+  // --- The second half of 09.2's criterion: connecting with an API key -------
+
+  it('connects an api_key card with the pasted key and shows it installed (FR-MOD-09.2)', async () => {
+    const before = findItem(await list(adminToken), KEY_APP);
+    expect(before.provider).toBe('api_key');
+    expect(before.installed).toBe(false);
+
+    const { status, body } = await connectWithKey(adminToken);
+    expect(status).toBe(200);
+    const connected = body as AppListItem;
+    expect(connected.installed).toBe(true);
+    expect(connected.installation?.status).toBe('connected');
+    // A pasted key names no account, so what identifies the connection is the
+    // key's tail — the whole of what the product may show about it.
+    expect(connected.installation?.api_key_last_four).toBe('9c41');
+    expect(connected.installation?.external_account).toBe('••••9c41');
+
+    // And it stays connected on a fresh list, which is the KK's actual claim
+    // (the card reads Connected afterwards, not merely that a POST returned 200).
+    const after = findItem(await list(adminToken), KEY_APP);
+    expect(after.installed).toBe(true);
+    expect(after.installation?.api_key_last_four).toBe('9c41');
+
+    // Re-connecting rotates the key rather than erroring — same call, new tail.
+    const rotated = await connectWithKey(adminToken, KEY_APP, 'zd-live-rotated-key-77ab');
+    expect(rotated.status).toBe(200);
+    expect((rotated.body as AppListItem).installation?.api_key_last_four).toBe('77ab');
+    expect(
+      await owner.appInstallation.count({ where: { licenseId: fx.a.licenseId, appId: KEY_APP } }),
+    ).toBe(1);
+
+    // An OAuth card is untouched by any of it: still not connected.
+    expect(findItem(await list(adminToken), APP).installed).toBe(false);
+  });
+
+  it('keeps the two connection paths apart — neither serves the other kind of card (FR-MOD-09.2)', async () => {
+    // This is the property that makes `provider` a contract rather than a
+    // label: before it, both kinds of card went down the same mock handshake
+    // and the field changed no behaviour at all.
+
+    // An api_key card cannot be started or completed as an OAuth flow…
+    const started = await server.post(
+      `/settings/apps/${KEY_APP}/oauth/start`,
+      {},
+      auth(adminToken),
+    );
+    expect(started.statusCode).toBe(400);
+    expect((started.json() as { error: { type: string } }).error.type).toBe('validation');
+    const callback = await server.post(
+      `/settings/apps/${KEY_APP}/oauth/callback`,
+      { state: 'anything', code: 'mock-auth-code' },
+      auth(adminToken),
+    );
+    expect(callback.statusCode).toBe(400);
+
+    // …and an OAuth card cannot be connected with a key.
+    const wrongWay = await connectWithKey(adminToken, APP);
+    expect(wrongWay.status).toBe(400);
+    expect((wrongWay.body as { error: { type: string } }).error.type).toBe('validation');
+
+    // Neither refusal left anything behind.
+    expect(await owner.appInstallation.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+    const items = (await page(adminToken, '?limit=100')).items;
+    expect(items.every((item) => !item.installed)).toBe(true);
+  });
+
+  it('refuses a channel-typed api_key card here too, whichever path is used (FR-MOD-09.2)', async () => {
+    // `telegram` is `provider: 'api_key'` *and* a channel. The provider check
+    // must not let it past the channel one — a channel is set up in Settings →
+    // Channels, and that cross-link is a property the audit found real.
+    const channels = (await page(adminToken, '?category=channels&limit=100')).items;
+    const telegram = findItem(channels, 'telegram');
+    expect(telegram.provider).toBe('api_key');
+
+    const keyed = await connectWithKey(adminToken, 'telegram');
+    expect(keyed.status).toBe(400);
+    expect((keyed.body as { error: { type: string } }).error.type).toBe('validation');
+    expect(
+      (await server.post('/settings/apps/telegram/oauth/start', {}, auth(adminToken))).statusCode,
+    ).toBe(400);
+    expect(await owner.appInstallation.count({ where: { licenseId: fx.a.licenseId } })).toBe(0);
+  });
+
+  it('rejects a key outside the bounds the console validates against (FR-MOD-09.2)', async () => {
+    // A client refusing what the server would accept (or the reverse) is the
+    // drift `APP_API_KEY_MIN_LENGTH`/`MAX_LENGTH` are shared to prevent, so the
+    // endpoint is pinned at both edges rather than somewhere near them.
+    expect((await connectWithKey(adminToken, KEY_APP, '')).status).toBe(400);
+    expect((await connectWithKey(adminToken, KEY_APP, '   ')).status).toBe(400);
+    expect((await connectWithKey(adminToken, KEY_APP, 'x'.repeat(15))).status).toBe(400);
+    expect((await connectWithKey(adminToken, KEY_APP, 'x'.repeat(16))).status).toBe(200);
+    expect((await connectWithKey(adminToken, KEY_APP, 'y'.repeat(512))).status).toBe(200);
+    expect((await connectWithKey(adminToken, KEY_APP, 'y'.repeat(513))).status).toBe(400);
+
+    const missing = await server.post(`/settings/apps/${KEY_APP}/connect`, {}, auth(adminToken));
+    expect(missing.statusCode).toBe(400);
+    // A key for an app that does not exist is a 404, as everywhere else here.
+    const unknown = await server.post(
+      '/settings/apps/not-an-app/connect',
+      { api_key: API_KEY },
+      auth(adminToken),
+    );
+    expect(unknown.statusCode).toBe(404);
+  });
+
+  it('never returns, logs or stores the API key in the clear (FR-MOD-09.2 · NFR-S9)', async () => {
+    const { body } = await connectWithKey(adminToken);
+    // Not in the response that reports the connection…
+    expect(JSON.stringify(body)).not.toContain(API_KEY);
+    // …nor in any later read of the card.
+    expect(JSON.stringify(await list(adminToken))).not.toContain(API_KEY);
+
+    // In the row: a hash, the tail, and nothing that is the key.
+    const row = await owner.appInstallation.findFirstOrThrow({
+      where: { licenseId: fx.a.licenseId, appId: KEY_APP },
+    });
+    expect(row.apiKeyHash).toBe(createHash('sha256').update(API_KEY, 'utf8').digest('base64url'));
+    expect(row.apiKeyLastFour).toBe('9c41');
+    // Every column, not only the two named ones — the claim is that the key is
+    // nowhere in the row, and `external_account` is where it would land first.
+    expect(Object.values(row).map(String).join('|')).not.toContain(API_KEY);
+
+    // And not in the log, at the level nobody runs in production — which is
+    // exactly where a credential gets left behind (device-tokens' pattern).
+    class LineSink {
+      readonly lines: string[] = [];
+      write(chunk: string): boolean {
+        this.lines.push(chunk);
+        return true;
+      }
+      end(): void {}
+      on(): void {}
+      once(): void {}
+      emit(): boolean {
+        return false;
+      }
+    }
+    const sink = new LineSink();
+    const loud = await startTestServer(
+      { LOG_LEVEL: 'trace' },
+      { logStream: sink as unknown as NodeJS.WritableStream },
+    );
+    try {
+      const response = await loud.post(
+        `/settings/apps/${KEY_APP}/connect`,
+        { api_key: API_KEY },
+        auth(adminToken),
+      );
+      expect(response.statusCode).toBe(200);
+      const written = sink.lines.join('\n');
+      expect(written).not.toContain(API_KEY);
+      // Still debuggable — the route survives, only the credential is gone.
+      expect(written).toContain(`/settings/apps/${KEY_APP}/connect`);
+    } finally {
+      await loud.close();
+    }
+  });
+
+  it('records the same audit entry as the OAuth path, carrying no key (FR-MOD-09.2)', async () => {
+    expect((await connectWithKey(adminToken)).status).toBe(200);
+    const entries = await owner.auditLogEntry.findMany({
+      where: { licenseId: fx.a.licenseId, action: 'app.connected' },
+    });
+    expect(entries).toHaveLength(1);
+    expect(entries[0]?.target).toBe(`app_installation:${KEY_APP}`);
+    expect(JSON.stringify(entries[0]?.metadata)).not.toContain(API_KEY);
   });
 
   // --- Channel-typed apps: managed in Channels, not connected here (09.2) -----
@@ -406,6 +603,14 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     expect(
       (await server.post(`/settings/apps/${APP}/oauth/start`, {}, auth(readToken))).statusCode,
     ).toBe(403);
+    // The API-key path is the same admin act, so it sits behind the same scope
+    // (09.2) — a read-only admin gets no second way in.
+    const keyed = await server.post(
+      `/settings/apps/${KEY_APP}/connect`,
+      { api_key: API_KEY },
+      auth(readToken),
+    );
+    expect(keyed.statusCode).toBe(403);
   });
 
   // --- Cross-tenant isolation ------------------------------------------------
@@ -438,8 +643,16 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
       expect(items.every((item) => item.installation === null)).toBe(true);
     }
 
+    // The API-key connection is scoped the same way (09.2): A connects one, and
+    // B's catalogue still reports it unconnected and hands back no key tail.
+    expect((await connectWithKey(adminToken)).status).toBe(200);
+    const bKeyCard = findItem(await list(bToken), KEY_APP);
+    expect(bKeyCard.installed).toBe(false);
+    expect(bKeyCard.installation).toBeNull();
+
     // B cannot disconnect A's app — indistinguishable from it not existing.
     expect((await server.del(`/settings/apps/${APP}`, auth(bToken))).statusCode).toBe(404);
+    expect((await server.del(`/settings/apps/${KEY_APP}`, auth(bToken))).statusCode).toBe(404);
 
     // B cannot read app data on A's chat.
     const chatId = await openChat(adminToken, fx.a.customerId);

@@ -2220,6 +2220,14 @@ model AppInstallation {
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
+  /// SHA-256 of the API key an `api_key` app was connected with (09.2). Null for
+  /// an OAuth install. Never returned by any endpoint — `apiKeyLastFour` is the
+  /// only thing a client learns about the key.
+  apiKeyHash     String? @map("api_key_hash")
+  /// The last four characters of that key — the display hint. Set exactly when
+  /// `apiKeyHash` is (a database CHECK holds the pair together).
+  apiKeyLastFour String? @map("api_key_last_four")
+
   license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
 
   @@unique([licenseId, appId])

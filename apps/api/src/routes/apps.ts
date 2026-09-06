@@ -1,5 +1,5 @@
 /**
- * Apps marketplace (FR-MOD-09.1).
+ * Apps marketplace (FR-MOD-09.1 / 09.2).
  *
  * The catalogue and the connect/disconnect flow are managed under `/settings`,
  * on the workspace-admin scopes (`access_rules:ro`/`:rw`) — connecting a
@@ -9,9 +9,15 @@
  * The one read that is *not* an admin act is `GET /chats/{chatId}/apps`: an
  * agent working a conversation reads the connected apps' data in the Details
  * pane, so it sits on the chat scope they already hold, not the admin one.
+ *
+ * Two connect paths, one per `provider` (09.2): the OAuth pair for `oauth`
+ * cards and `POST /settings/apps/:appId/connect` for `api_key` ones. They are
+ * separate routes rather than one body with two shapes because each has to
+ * refuse the other's card — a single endpoint that accepted either would put
+ * `provider` back where 09.2 found it, describing nothing.
  */
 import type { FastifyInstance } from 'fastify';
-import { APP_CATEGORIES } from '@nexa/types';
+import { APP_API_KEY_MAX_LENGTH, APP_API_KEY_MIN_LENGTH, APP_CATEGORIES } from '@nexa/types';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -34,6 +40,16 @@ const listQuery = z.object({
 const callbackBody = z.object({
   state: z.string().trim().min(1).max(4096),
   code: z.string().trim().min(1).max(512),
+});
+
+/**
+ * The API-key connect body (09.2). The bounds come from @nexa/types rather than
+ * being written out here, because the console's form validates against the same
+ * two constants — a client that refuses a key this endpoint would take is the
+ * failure mode this shares them to avoid.
+ */
+const connectBody = z.object({
+  api_key: z.string().trim().min(APP_API_KEY_MIN_LENGTH).max(APP_API_KEY_MAX_LENGTH),
 });
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
@@ -102,6 +118,30 @@ export default async function appRoutes(
         // never reach here — `apps.oauthCallback` mints only a deterministic
         // stub account label, never a real credential. Disconnecting is
         // already recorded as `data.deleted` (`DELETE /settings/apps/:appId`).
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'app.connected',
+          target: `app_installation:${appId}`,
+          metadata: { app_id: appId, kind: 'app_installation' },
+        });
+        return result;
+      });
+      return reply.send(item);
+    },
+  );
+
+  app.post<{ Params: { appId: string } }>(
+    '/settings/apps/:appId/connect',
+    { config: { scopes: ['access_rules:rw'] } },
+    async (request, reply) => {
+      const body = parse(connectBody, request.body);
+      const tenant = request.tenant();
+      const appId = request.params.appId;
+      const item = await request.withTenant(async (tx) => {
+        const result = await apps.connectWithApiKey(tx, tenant, appId, { apiKey: body.api_key });
+        // Same entry as the OAuth path — what changed is which app is connected,
+        // not which credential was used, and the credential itself must not be
+        // in the trail at all. `api_key` is on the server's redact list
+        // (`server.ts`), so the request body does not reach the log either.
         await writeAuditEntry(tx, request.auditContext(), {
           action: 'app.connected',
           target: `app_installation:${appId}`,

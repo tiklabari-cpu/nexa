@@ -139,6 +139,11 @@ export async function buildServer({
           // (`08.5.8-b`) — a real credential, unlike the other channels' mock
           // OAuth `code`.
           'req.body.bot_token',
+          // An `api_key` marketplace card is connected by pasting the provider's
+          // key (`09.2`, POST /settings/apps/{appId}/connect). The server only
+          // ever stores its hash, which would be worth little if the clear key
+          // were sitting in the request log beside it.
+          'req.body.api_key',
           'res.headers["set-cookie"]',
           // The request line. This API puts personal data in query strings —
           // the customer search takes an address — so the URL is where PII

@@ -823,7 +823,14 @@ describe('module parity matrix — what is still owed', () => {
       // phone reads but does not author. The sibling `PATCH` on
       // `/knowledge-sources/{sourceId}` added an operation, not a path, so it
       // does not move this count.
-      contractEndpoints: 204,
+      // 204 -> 205 with `/settings/apps/{appId}/connect` (V2-APPS-a, tm 202.1).
+      // Connecting an `api_key` marketplace card by pasting the provider's key —
+      // Owner/Admin configuration behind `access_rules:rw`, in the Settings
+      // module this app has never had (`OUT_OF_SCOPE` below). It is a second
+      // path rather than a second operation because it has to refuse the OAuth
+      // cards the existing pair serves, and vice versa. The phone connects no
+      // integrations, so nothing here re-scopes.
+      contractEndpoints: 205,
       scopeBoundaries: 1,
     });
   });

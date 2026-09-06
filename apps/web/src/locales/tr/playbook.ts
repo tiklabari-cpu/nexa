@@ -253,7 +253,38 @@ export const playbook: Messages = {
   'playbook.editor.unrecognised.other': '{count} satır adım üretmedi',
   'playbook.editor.stepsTitle': 'Adımlar',
   'playbook.editor.dragHint': 'Sürükleyin, ya da yeniden sıralamak için ↑ ↓ kullanın',
-  'playbook.editor.noSteps': 'Henüz adım yok. Bir talimat yazıp derleyin.',
+  'playbook.editor.noSteps':
+    'Henüz adım yok. Aşağıdan bir tane ekleyin, ya da bir talimat yazıp derleyin.',
+
+  // Adım yazarlığı (FR-MOD-06.2.4) — ekleme, silme, tür değiştirme ve her
+  // türün kendi parametre formu.
+  'playbook.editor.addStep': 'Adım ekle',
+  'playbook.editor.addStepType': 'Eklenecek adım türü',
+  'playbook.editor.stepType': 'Adım türü',
+  'playbook.editor.deleteStep': '{index}. adımı sil',
+  'playbook.editor.noParameters': 'Bu adımın ayarı yok.',
+  'playbook.editor.typeDetectIntent': 'Niyeti algıla',
+  'playbook.editor.typeRequestInfo': 'Bilgi topla',
+  'playbook.editor.typeTag': 'Etiket ekle',
+  'playbook.editor.typeSummarize': 'Özetle',
+  'playbook.editor.typeSendMessage': 'Mesaj gönder',
+  'playbook.editor.typeTransferToTeam': 'Takıma aktar',
+  'playbook.editor.intent': 'Niyet',
+  'playbook.editor.intentPlaceholder': 'teslimat',
+  'playbook.editor.phrases': 'İfadeler',
+  'playbook.editor.phrasesHelp':
+    'Her satıra bir tane. Boş bırakılırsa yalnız niyet adına göre eşleşir.',
+  'playbook.editor.field': 'Toplanacak bilgi',
+  'playbook.editor.fieldPlaceholder': 'siparis_no',
+  'playbook.editor.prompt': 'Sorulacak soru',
+  'playbook.editor.promptPlaceholder': 'Sipariş numaranız nedir?',
+  'playbook.editor.tag': 'Etiket',
+  'playbook.editor.tagPlaceholder': 'kargo',
+  'playbook.editor.replySource': 'Şununla yanıtla',
+  'playbook.editor.sourceText': 'Yazdığınız metin',
+  'playbook.editor.sourceKnowledge': 'Bilgi tabanından bir yanıt',
+  'playbook.editor.replyText': 'Yanıt metni',
+  'playbook.editor.replyTextPlaceholder': 'Teşekkürler — hemen kontrol ediyorum.',
   'playbook.editor.team': 'Takım',
   'playbook.editor.teamPlaceholder': 'Destek',
   'playbook.editor.moveUp': '{index}. adımı yukarı taşı',
@@ -289,6 +320,8 @@ export const playbook: Messages = {
   'playbook.step.issueTag': 'Uygulanacak etiketi adlandırın.',
   'playbook.step.issueSendMessage':
     'Gönderilecek yanıtı yazın, ya da bunun yerine bilgi tabanından yanıtlayın.',
+  'playbook.step.issueSendSource':
+    'Bunun kendi yazdığınız metinle mi yoksa bilgi tabanından mı yanıtlayacağını seçin.',
 
   // Template gallery (TemplateGallery.tsx)
   'playbook.gallery.title': 'Şablonlara göz at',

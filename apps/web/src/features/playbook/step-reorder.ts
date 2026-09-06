@@ -76,6 +76,13 @@ function issueFor(step: SkillStep): string | null {
     case 'tag':
       return isBlank(step.tag) ? 'Name the tag to apply.' : null;
     case 'send_message':
+      // The server's `validateStep` requires the discriminant before it looks
+      // at anything else, so a step with neither source is invalid there and
+      // has to be invalid here too — otherwise the editor would enable Save on
+      // something the API rejects with a step number and no way to act on it.
+      if (step.source !== 'text' && step.source !== 'knowledge') {
+        return 'Choose whether this replies with your own text or from knowledge.';
+      }
       // A knowledge answer needs no text; a fixed reply cannot be empty.
       return step.source === 'text' && isBlank(step.text)
         ? 'Write the reply to send, or answer from knowledge instead.'

@@ -56,6 +56,15 @@ describe('stepIssues — required parameters', () => {
     expect(stepIssues([{ type: 'send_message', source: 'knowledge' }])).toHaveLength(0);
   });
 
+  it('flags a message step with neither source, which the server refuses too', () => {
+    // `validateStep` reads the discriminant before anything else, so a step
+    // without one is a 400 the admin cannot act on. See
+    // `step-contract-parity.test.ts` for the two gates pinned to each other.
+    const issues = stepIssues([{ type: 'send_message' }]);
+    expect(issues).toHaveLength(1);
+    expect(issues[0]?.message).toMatch(/knowledge/i);
+  });
+
   it('reports the offending index after a reorder', () => {
     const withTransfer: SkillStep[] = [...STEPS, { type: 'transfer_to_team', group: '' }];
     const reordered = moveStep(withTransfer, 3, 1);

@@ -851,6 +851,16 @@ test.describe('WCAG 2.1 AA (axe)', () => {
             // expanded button would never be looked at (FR-MOD-06.2.1).
             await agentPage.getByRole('button', { name: /^\d+ runs?$/ }).click();
             await expect(agentPage.getByRole('region', { name: 'Run log' })).toBeVisible();
+
+            // Same reason for the step list: a fresh skill has no steps, so the
+            // authoring controls, the accordion body a step opens into and the
+            // required-parameter alert are all absent from the tree unless one
+            // is added here (FR-MOD-06.2.4).
+            await agentPage.getByLabel('Step type to add').selectOption('transfer_to_team');
+            await agentPage.getByRole('button', { name: 'Add step' }).click();
+            await expect(
+              agentPage.getByRole('list', { name: 'Steps' }).getByLabel('Team', { exact: true }),
+            ).toBeVisible();
           });
         } finally {
           if (skillId) {

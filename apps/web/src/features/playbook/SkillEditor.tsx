@@ -12,6 +12,12 @@
  * The switch is there because going back to the list to flip a skill you just
  * finished editing is a detour with no reason. And leaving with unsaved edits
  * now asks first, on both paths out: the browser's and the app's own nav.
+ *
+ * The step list is authored here as well as ordered (FR-MOD-06.2.4): each step
+ * opens into the parameter form for its own type, can be added, deleted or
+ * retyped. Until it could, a skill created from "New skill" was born with
+ * `steps: []` and had no way to gain one — the whole ordered-steps surface was
+ * reachable only by starting from a template.
  */
 import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo, useState, type ReactElement } from 'react';
@@ -26,6 +32,18 @@ import { formatDateTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import type { Skill, SkillPreview, SkillRun, SkillStep } from './types.js';
 import { moveStep, stepIssues } from './step-reorder.js';
+import {
+  STEP_TYPES,
+  addStep,
+  changeStepType,
+  formatPhrases,
+  parsePhrases,
+  removeStep,
+  toEntries,
+  updateStep,
+  type StepEntry,
+  type StepType,
+} from './step-authoring.js';
 import { useSkillActiveToggle } from './useSkillActiveToggle.js';
 
 /**
@@ -94,6 +112,9 @@ function issueMessageText(step: SkillStep, t: TFunction): string | null {
     case 'tag':
       return isBlank(step.tag) ? t('playbook.step.issueTag') : null;
     case 'send_message':
+      if (step.source !== 'text' && step.source !== 'knowledge') {
+        return t('playbook.step.issueSendSource');
+      }
       return step.source === 'text' && isBlank(step.text)
         ? t('playbook.step.issueSendMessage')
         : null;
@@ -104,20 +125,18 @@ function issueMessageText(step: SkillStep, t: TFunction): string | null {
   }
 }
 
+/** The short name of a step type, as the add and retype controls list it. */
+const STEP_TYPE_LABEL_KEYS: Record<StepType, string> = {
+  detect_intent: 'playbook.editor.typeDetectIntent',
+  request_info: 'playbook.editor.typeRequestInfo',
+  tag: 'playbook.editor.typeTag',
+  summarize: 'playbook.editor.typeSummarize',
+  send_message: 'playbook.editor.typeSendMessage',
+  transfer_to_team: 'playbook.editor.typeTransferToTeam',
+};
+
 /** Ties the run-log disclosure button to the panel it expands (NFR-A11Y). */
 const RUN_LOG_ID = 'skill-run-log';
-
-/**
- * Steps carry a stable client id so the reorderable list keys by identity, not
- * position — which is what lets the browser keep keyboard focus on a row as it
- * moves, and lets React move the DOM node rather than rebuild it.
- */
-interface StepEntry {
-  id: string;
-  step: SkillStep;
-}
-let stepSeq = 0;
-const wrap = (step: SkillStep): StepEntry => ({ id: `step-${stepSeq++}`, step });
 
 export function SkillEditor({
   skill,
@@ -133,12 +152,19 @@ export function SkillEditor({
 
   const [name, setName] = useState(skill.name);
   const [instruction, setInstruction] = useState(skill.instruction ?? '');
-  const [entries, setEntries] = useState<StepEntry[]>(() => skill.steps.map(wrap));
+  const [entries, setEntries] = useState<StepEntry[]>(() => toEntries(skill.steps));
   const [unrecognised, setUnrecognised] = useState<string[]>([]);
   const [sample, setSample] = useState('Where is my order?');
   const [announcement, setAnnouncement] = useState('');
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [runLogOpen, setRunLogOpen] = useState(false);
+  // Which steps are expanded, by row id rather than index: a step keeps its
+  // parameter form open across a reorder, which is the whole reason the id
+  // exists. Several may be open at once — collapsing the step you just filled
+  // in because you opened the next one loses your place in a list you are
+  // reading top to bottom.
+  const [openStepIds, setOpenStepIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [newStepType, setNewStepType] = useState<StepType>('detect_intent');
 
   const steps = useMemo(() => entries.map((entry) => entry.step), [entries]);
   // Gating (count, index) comes from the shared, tested `stepIssues` — the
@@ -161,7 +187,7 @@ export function SkillEditor({
         instruction,
       }),
     onSuccess: (result) => {
-      setEntries(result.steps.map(wrap));
+      setEntries(toEntries(result.steps));
       setUnrecognised(result.unrecognised);
     },
   });
@@ -238,12 +264,38 @@ export function SkillEditor({
     setEntries((current) => moveStep(current, from, clampedTo));
   }
 
-  function setTransferTarget(index: number, group: string): void {
-    setEntries((current) =>
-      current.map((entry, i) =>
-        i === index ? { ...entry, step: { ...entry.step, group } } : entry,
-      ),
-    );
+  function editStep(index: number, patch: Partial<SkillStep>): void {
+    setEntries((current) => updateStep(current, index, patch));
+  }
+
+  /**
+   * Add a step of the chosen type and open it. Opening it is not a flourish:
+   * a new step is blank, so it is a step that blocks the save — leaving it
+   * collapsed would show a refusal with the form to fix it folded away.
+   */
+  function appendStep(): void {
+    if (!canEdit) return;
+    const next = addStep(entries, newStepType);
+    const added = next[next.length - 1];
+    setEntries(next);
+    if (added) setOpenStepIds((open) => new Set(open).add(added.id));
+  }
+
+  function deleteStep(index: number): void {
+    if (!canEdit) return;
+    setEntries((current) => removeStep(current, index));
+  }
+
+  function retypeStep(index: number, type: StepType): void {
+    setEntries((current) => changeStepType(current, index, type));
+  }
+
+  function toggleStepOpen(id: string): void {
+    setOpenStepIds((open) => {
+      const next = new Set(open);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   }
 
   return (
@@ -405,15 +457,17 @@ export function SkillEditor({
         {entries.length === 0 ? (
           <p className="px-4 py-3 text-sm text-content-secondary">{t('playbook.editor.noSteps')}</p>
         ) : (
-          <ol className="divide-y divide-border">
+          // Named so the list of steps is addressable on its own — the
+          // fields inside it share labels with the app shell ("Team" is
+          // also a nav destination).
+          <ol aria-label={t('playbook.editor.stepsTitle')} className="divide-y divide-border">
             {entries.map((entry, index) => {
               const issue = issueByIndex.get(index);
+              const open = openStepIds.has(entry.id);
+              const bodyId = `step-body-${entry.id}`;
               return (
                 <li
                   key={entry.id}
-                  draggable={canEdit}
-                  onDragStart={() => setDragIndex(index)}
-                  onDragEnd={() => setDragIndex(null)}
                   onDragOver={(event) => {
                     if (canEdit && dragIndex !== null) event.preventDefault();
                   }}
@@ -422,74 +476,158 @@ export function SkillEditor({
                     if (dragIndex !== null) reorder(dragIndex, index);
                     setDragIndex(null);
                   }}
-                  className={`flex items-start gap-3 px-4 py-2.5 ${
-                    dragIndex === index ? 'opacity-50' : ''
-                  }`}
+                  className={dragIndex === index ? 'opacity-50' : ''}
                 >
-                  {canEdit && (
-                    <span aria-hidden="true" className="mt-0.5 cursor-grab text-content-tertiary">
-                      ⠿
-                    </span>
-                  )}
-                  <span className="tabular mt-0.5 text-2xs text-content-tertiary">{index + 1}</span>
-
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm">{describeStepText(entry.step, t)}</p>
-                    <code className="text-2xs text-content-tertiary">{entry.step.type}</code>
-
-                    {entry.step.type === 'transfer_to_team' && (
-                      <label
-                        htmlFor={`transfer-${entry.id}`}
-                        className="mt-1.5 flex flex-col gap-1"
+                  <div className="flex items-start gap-3 px-4 py-2.5">
+                    {/* Only the handle is draggable, not the row: with the row
+                        itself draggable, selecting the text in an open step's
+                        input starts a drag instead of a selection. */}
+                    {canEdit && (
+                      <span
+                        draggable
+                        onDragStart={() => setDragIndex(index)}
+                        onDragEnd={() => setDragIndex(null)}
+                        aria-hidden="true"
+                        className="mt-0.5 cursor-grab text-content-tertiary"
                       >
-                        <span className="text-2xs text-content-tertiary">
-                          {t('playbook.editor.team')}
-                        </span>
-                        <input
-                          id={`transfer-${entry.id}`}
-                          value={entry.step.group ?? ''}
-                          disabled={!canEdit}
-                          onChange={(event) => setTransferTarget(index, event.target.value)}
-                          aria-invalid={issue ? true : undefined}
-                          placeholder={t('playbook.editor.teamPlaceholder')}
-                          className="w-48 rounded-md border border-border bg-inset px-2 py-1 text-sm outline-none disabled:opacity-60"
-                        />
-                      </label>
+                        ⠿
+                      </span>
                     )}
+                    <span className="tabular mt-0.5 text-2xs text-content-tertiary">
+                      {index + 1}
+                    </span>
 
-                    {issue && (
-                      <p role="alert" className="mt-1 text-2xs text-danger">
-                        {issue}
-                      </p>
+                    <div className="min-w-0 flex-1">
+                      {/* The summary is the disclosure: what the step does is
+                          the most useful name the control can have, so it is
+                          the button's own content rather than a generic label. */}
+                      <button
+                        type="button"
+                        aria-expanded={open}
+                        aria-controls={bodyId}
+                        onClick={() => toggleStepOpen(entry.id)}
+                        className="w-full text-left"
+                      >
+                        <span className="block text-sm">{describeStepText(entry.step, t)}</span>
+                        <code className="text-2xs text-content-tertiary">
+                          {entry.step.type} <span aria-hidden="true">{open ? '▴' : '▾'}</span>
+                        </code>
+                      </button>
+
+                      {/* Stays in the collapsed summary on purpose: a step that
+                          blocks the save has to be findable without opening
+                          every step to look for it. */}
+                      {issue && (
+                        <p role="alert" className="mt-1 text-2xs text-danger">
+                          {issue}
+                        </p>
+                      )}
+                    </div>
+
+                    {canEdit && (
+                      <div className="flex shrink-0 items-start gap-1">
+                        <div className="flex flex-col gap-1">
+                          <button
+                            type="button"
+                            aria-label={t('playbook.editor.moveUp', { index: index + 1 })}
+                            disabled={index === 0}
+                            onClick={() => reorder(index, index - 1)}
+                            className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
+                          >
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            aria-label={t('playbook.editor.moveDown', { index: index + 1 })}
+                            disabled={index === entries.length - 1}
+                            onClick={() => reorder(index, index + 1)}
+                            className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
+                        </div>
+                        <button
+                          type="button"
+                          aria-label={t('playbook.editor.deleteStep', { index: index + 1 })}
+                          onClick={() => deleteStep(index)}
+                          className="rounded border border-border px-1.5 py-0.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 hover:text-danger"
+                        >
+                          ✕
+                        </button>
+                      </div>
                     )}
                   </div>
 
-                  {canEdit && (
-                    <div className="flex shrink-0 flex-col gap-1">
-                      <button
-                        type="button"
-                        aria-label={t('playbook.editor.moveUp', { index: index + 1 })}
-                        disabled={index === 0}
-                        onClick={() => reorder(index, index - 1)}
-                        className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        aria-label={t('playbook.editor.moveDown', { index: index + 1 })}
-                        disabled={index === entries.length - 1}
-                        onClick={() => reorder(index, index + 1)}
-                        className="rounded border border-border px-1.5 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-30"
-                      >
-                        ↓
-                      </button>
+                  {open && (
+                    <div id={bodyId} className="flex flex-col gap-3 px-4 pb-3 pl-12">
+                      {canEdit && (
+                        <div className="flex flex-col gap-1">
+                          {/* Sibling label, not a wrapper: wrapping a <select>
+                              folds its option text into the accessible name. */}
+                          <label
+                            htmlFor={`step-type-${entry.id}`}
+                            className="text-2xs text-content-tertiary"
+                          >
+                            {t('playbook.editor.stepType')}
+                          </label>
+                          <select
+                            id={`step-type-${entry.id}`}
+                            value={entry.step.type}
+                            onChange={(event) => retypeStep(index, event.target.value as StepType)}
+                            className="w-56 rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none"
+                          >
+                            {STEP_TYPES.map((type) => (
+                              <option key={type} value={type}>
+                                {t(STEP_TYPE_LABEL_KEYS[type])}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
+
+                      <StepParameters
+                        entry={entry}
+                        canEdit={canEdit}
+                        invalid={issue !== undefined}
+                        onEdit={(patch) => editStep(index, patch)}
+                      />
                     </div>
                   )}
                 </li>
               );
             })}
           </ol>
+        )}
+
+        {/* Authoring, not just ordering (FR-MOD-06.2.4): without this a skill
+            created from "New skill" is born with no steps and could never gain
+            one, so the ordered-steps surface was unreachable for anything but a
+            template. */}
+        {canEdit && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-border px-4 py-2.5">
+            <label htmlFor="add-step-type" className="sr-only">
+              {t('playbook.editor.addStepType')}
+            </label>
+            <select
+              id="add-step-type"
+              value={newStepType}
+              onChange={(event) => setNewStepType(event.target.value as StepType)}
+              className="rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none"
+            >
+              {STEP_TYPES.map((type) => (
+                <option key={type} value={type}>
+                  {t(STEP_TYPE_LABEL_KEYS[type])}
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={appendStep}
+              className="rounded-md border border-border px-3 py-1.5 text-sm transition-colors hover:bg-surface-2"
+            >
+              {t('playbook.editor.addStep')}
+            </button>
+          </div>
         )}
       </Card>
 
@@ -529,6 +667,225 @@ export function SkillEditor({
         </div>
       </Card>
     </div>
+  );
+}
+
+/**
+ * The parameter form for one open step (FR-MOD-06.2.4).
+ *
+ * One switch, six shapes, matching `@nexa/ai-mock`'s `SkillStep` union field
+ * for field — the fields shown are exactly the ones `validateStep` reads for
+ * that type. Anything more would be a control that edits something the engine
+ * ignores; anything less would be a required parameter with no way to fill it,
+ * which is the state every type but `transfer_to_team` was in until now.
+ */
+function StepParameters({
+  entry,
+  canEdit,
+  invalid,
+  onEdit,
+}: {
+  entry: StepEntry;
+  canEdit: boolean;
+  invalid: boolean;
+  onEdit: (patch: Partial<SkillStep>) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const { step, id } = entry;
+
+  const inputClass =
+    'rounded-md border border-border bg-inset px-2 py-1 text-sm outline-none disabled:opacity-60';
+
+  switch (step.type) {
+    case 'detect_intent':
+      return (
+        <>
+          <label htmlFor={`intent-${id}`} className="flex flex-col gap-1">
+            <span className="text-2xs text-content-tertiary">{t('playbook.editor.intent')}</span>
+            <input
+              id={`intent-${id}`}
+              value={step.intent ?? ''}
+              disabled={!canEdit}
+              onChange={(event) => onEdit({ intent: event.target.value })}
+              aria-invalid={invalid ? true : undefined}
+              placeholder={t('playbook.editor.intentPlaceholder')}
+              className={`w-56 ${inputClass}`}
+            />
+          </label>
+
+          <PhrasesField
+            id={id}
+            phrases={step.phrases}
+            disabled={!canEdit}
+            onChange={(phrases) => onEdit({ phrases })}
+          />
+        </>
+      );
+
+    case 'request_info':
+      return (
+        <>
+          <label htmlFor={`field-${id}`} className="flex flex-col gap-1">
+            <span className="text-2xs text-content-tertiary">{t('playbook.editor.field')}</span>
+            <input
+              id={`field-${id}`}
+              value={step.field ?? ''}
+              disabled={!canEdit}
+              onChange={(event) => onEdit({ field: event.target.value })}
+              aria-invalid={invalid ? true : undefined}
+              placeholder={t('playbook.editor.fieldPlaceholder')}
+              className={`w-56 ${inputClass}`}
+            />
+          </label>
+
+          <label htmlFor={`prompt-${id}`} className="flex flex-col gap-1">
+            <span className="text-2xs text-content-tertiary">{t('playbook.editor.prompt')}</span>
+            <input
+              id={`prompt-${id}`}
+              value={step.prompt ?? ''}
+              disabled={!canEdit}
+              onChange={(event) => onEdit({ prompt: event.target.value })}
+              placeholder={t('playbook.editor.promptPlaceholder')}
+              className={inputClass}
+            />
+          </label>
+        </>
+      );
+
+    case 'tag':
+      return (
+        <label htmlFor={`tag-${id}`} className="flex flex-col gap-1">
+          <span className="text-2xs text-content-tertiary">{t('playbook.editor.tag')}</span>
+          <input
+            id={`tag-${id}`}
+            value={step.tag ?? ''}
+            disabled={!canEdit}
+            onChange={(event) => onEdit({ tag: event.target.value })}
+            aria-invalid={invalid ? true : undefined}
+            placeholder={t('playbook.editor.tagPlaceholder')}
+            className={`w-56 ${inputClass}`}
+          />
+        </label>
+      );
+
+    case 'summarize':
+      return <p className="text-2xs text-content-tertiary">{t('playbook.editor.noParameters')}</p>;
+
+    case 'send_message':
+      return (
+        <>
+          <div className="flex flex-col gap-1">
+            <label htmlFor={`source-${id}`} className="text-2xs text-content-tertiary">
+              {t('playbook.editor.replySource')}
+            </label>
+            <select
+              id={`source-${id}`}
+              value={step.source ?? ''}
+              disabled={!canEdit}
+              onChange={(event) =>
+                // Switching to a knowledge answer drops the fixed text rather
+                // than keeping it out of sight: the engine would never send it,
+                // and a save would store a reply nobody wrote on purpose.
+                onEdit(
+                  event.target.value === 'knowledge'
+                    ? { source: 'knowledge', text: undefined }
+                    : { source: 'text', text: step.text ?? '' },
+                )
+              }
+              className="w-56 rounded-md border border-border bg-inset px-2 py-1 text-sm text-content outline-none disabled:opacity-60"
+            >
+              <option value="text">{t('playbook.editor.sourceText')}</option>
+              <option value="knowledge">{t('playbook.editor.sourceKnowledge')}</option>
+            </select>
+          </div>
+
+          {step.source !== 'knowledge' && (
+            <label htmlFor={`text-${id}`} className="flex flex-col gap-1">
+              <span className="text-2xs text-content-tertiary">
+                {t('playbook.editor.replyText')}
+              </span>
+              <textarea
+                id={`text-${id}`}
+                value={step.text ?? ''}
+                disabled={!canEdit}
+                rows={3}
+                onChange={(event) => onEdit({ text: event.target.value })}
+                aria-invalid={invalid ? true : undefined}
+                placeholder={t('playbook.editor.replyTextPlaceholder')}
+                className={`resize-y ${inputClass}`}
+              />
+            </label>
+          )}
+        </>
+      );
+
+    case 'transfer_to_team':
+      return (
+        <label htmlFor={`transfer-${id}`} className="flex flex-col gap-1">
+          <span className="text-2xs text-content-tertiary">{t('playbook.editor.team')}</span>
+          <input
+            id={`transfer-${id}`}
+            value={step.group ?? ''}
+            disabled={!canEdit}
+            onChange={(event) => onEdit({ group: event.target.value })}
+            aria-invalid={invalid ? true : undefined}
+            placeholder={t('playbook.editor.teamPlaceholder')}
+            className={`w-48 ${inputClass}`}
+          />
+        </label>
+      );
+
+    default:
+      return <p className="text-2xs text-content-tertiary">{t('playbook.editor.noParameters')}</p>;
+  }
+}
+
+/**
+ * The phrase list of a `detect_intent` step: one per line.
+ *
+ * The textarea keeps the text; the step keeps the parsed list. That split is
+ * not tidiness — a textarea whose value is `formatPhrases(parsePhrases(text))`
+ * cannot be typed into at all, because the parse trims the trailing space away
+ * before the next character arrives and "where is my order" comes out
+ * "whereismyorder".
+ */
+function PhrasesField({
+  id,
+  phrases,
+  disabled,
+  onChange,
+}: {
+  id: string;
+  phrases: string[] | undefined;
+  disabled: boolean;
+  onChange: (phrases: string[] | undefined) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const [text, setText] = useState(() => formatPhrases(phrases));
+
+  return (
+    <>
+      <label htmlFor={`phrases-${id}`} className="flex flex-col gap-1">
+        <span className="text-2xs text-content-tertiary">{t('playbook.editor.phrases')}</span>
+        <textarea
+          id={`phrases-${id}`}
+          value={text}
+          disabled={disabled}
+          rows={3}
+          aria-describedby={`phrases-help-${id}`}
+          onChange={(event) => {
+            setText(event.target.value);
+            onChange(parsePhrases(event.target.value));
+          }}
+          className="resize-y rounded-md border border-border bg-inset px-2 py-1 text-sm outline-none disabled:opacity-60"
+        />
+      </label>
+      {/* Outside the label on purpose: a hint inside one becomes part of the
+          field's accessible name. */}
+      <p id={`phrases-help-${id}`} className="-mt-2 text-2xs text-content-tertiary">
+        {t('playbook.editor.phrasesHelp')}
+      </p>
+    </>
   );
 }
 

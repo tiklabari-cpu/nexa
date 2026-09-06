@@ -86,6 +86,13 @@ export interface CustomFieldValue {
   type: CustomFieldType;
   required: boolean;
   value: string | null;
+  /**
+   * Carried through from the definition so a reader can tell a pre-chat form
+   * answer apart from a plain CRM field without a second lookup (FR-MOD-13.2,
+   * the Traffic visitor 360° panel). `null` on a `ticket` field, which never
+   * carries a placement.
+   */
+  form_placement: FormPlacement | null;
 }
 
 /** Why a raw value was rejected: it was blank on a required field, or ill-typed. */

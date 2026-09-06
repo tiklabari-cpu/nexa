@@ -214,6 +214,169 @@ describe('VisitorPanel — PII gate (FR-MOD-13.2)', () => {
   });
 });
 
+describe('VisitorPanel — visited pages (FR-MOD-13.2)', () => {
+  it('groups pages under each visit, in the order the API returned them', async () => {
+    renderPanel({
+      customer: baseCustomer({
+        visits: [
+          {
+            id: 'v-recent',
+            came_from: null,
+            pages: [{ url: 'https://shop.example/cart' }],
+            os: null,
+            browser: null,
+            started_at: '2026-07-21T09:00:00.000Z',
+            ended_at: null,
+          },
+          {
+            id: 'v-older',
+            came_from: null,
+            pages: [
+              { url: 'https://shop.example/bikes' },
+              { url: 'https://shop.example/bikes/brakes' },
+            ],
+            os: null,
+            browser: null,
+            started_at: '2026-07-20T10:00:00.000Z',
+            ended_at: null,
+          },
+        ],
+      }),
+    });
+
+    expect(await screen.findByText('https://shop.example/cart')).toBeInTheDocument();
+    const older = screen.getByText('https://shop.example/bikes');
+    const olderNext = screen.getByText('https://shop.example/bikes/brakes');
+    // Grouped under the same visit — siblings in the same list — and in the
+    // order the API returned them within that visit.
+    expect(older.parentElement).toBe(olderNext.parentElement);
+    const orderedText = Array.from(older.parentElement?.children ?? []).map((el) => el.textContent);
+    expect(orderedText).toEqual([
+      'https://shop.example/bikes',
+      'https://shop.example/bikes/brakes',
+    ]);
+  });
+
+  it('carries the full URL in the title attribute for a truncated page entry', async () => {
+    const longUrl = 'https://shop.example/' + 'a'.repeat(200);
+    renderPanel({
+      customer: baseCustomer({
+        visits: [
+          {
+            id: 'v1',
+            came_from: null,
+            pages: [{ url: longUrl }],
+            os: null,
+            browser: null,
+            started_at: '2026-07-20T10:00:00.000Z',
+            ended_at: null,
+          },
+        ],
+      }),
+    });
+
+    const entry = await screen.findByTitle(longUrl);
+    expect(entry).toHaveClass('truncate');
+    expect(entry).toHaveTextContent(longUrl);
+  });
+
+  it('shows an honest empty state when the visitor has no visits at all', async () => {
+    renderPanel({ customer: baseCustomer({ visits: [] }) });
+
+    expect(await screen.findByText('Visited pages')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'No visits recorded. Pages are captured when someone messages from the widget.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows an honest empty state for a visit that recorded no page views', async () => {
+    renderPanel({
+      customer: baseCustomer({
+        visits: [
+          {
+            id: 'v1',
+            came_from: null,
+            pages: [],
+            os: null,
+            browser: null,
+            started_at: '2026-07-20T10:00:00.000Z',
+            ended_at: null,
+          },
+        ],
+      }),
+    });
+
+    expect(await screen.findByText('No pages recorded for this visit.')).toBeInTheDocument();
+  });
+});
+
+describe('VisitorPanel — pre-chat form answers (FR-MOD-13.2)', () => {
+  it('shows an answered pre-chat field by its label', async () => {
+    renderPanel({
+      customer: baseCustomer({
+        custom_fields: [
+          {
+            definition_id: 'df1',
+            label: 'Order number',
+            type: 'text',
+            required: false,
+            value: 'ORD-42',
+            form_placement: 'pre_chat',
+          },
+        ],
+      }),
+    });
+
+    expect(await screen.findByText('Pre-chat form')).toBeInTheDocument();
+    expect(screen.getByText('Order number')).toBeInTheDocument();
+    expect(screen.getByText('ORD-42')).toBeInTheDocument();
+  });
+
+  it('omits the section entirely when there is nothing to show', async () => {
+    renderPanel({
+      customer: baseCustomer({
+        custom_fields: [
+          // A CRM-only field — never asked in the widget.
+          {
+            definition_id: 'df1',
+            label: 'Internal note',
+            type: 'text',
+            required: false,
+            value: 'flagged',
+            form_placement: null,
+          },
+          // A post-chat field — asked, but not before the conversation started.
+          {
+            definition_id: 'df2',
+            label: 'CSAT comment',
+            type: 'text',
+            required: false,
+            value: 'great',
+            form_placement: 'post_chat',
+          },
+          // A pre-chat field that was asked but left blank.
+          {
+            definition_id: 'df3',
+            label: 'Company',
+            type: 'text',
+            required: false,
+            value: null,
+            form_placement: 'pre_chat',
+          },
+        ],
+      }),
+    });
+
+    await screen.findByText('Visits');
+    expect(screen.queryByText('Pre-chat form')).not.toBeInTheDocument();
+    expect(screen.queryByText('Internal note')).not.toBeInTheDocument();
+    expect(screen.queryByText('CSAT comment')).not.toBeInTheDocument();
+    expect(screen.queryByText('Company')).not.toBeInTheDocument();
+  });
+});
+
 describe('VisitorPanel — live board honesty (FR-MOD-13.2)', () => {
   it('says the visitor is no longer online when they have dropped off the board, without hiding what already loaded', async () => {
     renderPanel({ stillOnBoard: false, customer: baseCustomer({ name: 'Robin Lee' }) });

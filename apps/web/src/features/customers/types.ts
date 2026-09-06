@@ -21,7 +21,8 @@ export interface CustomerSummary {
 export interface Visit {
   id: string;
   came_from: string | null;
-  pages: Array<{ url?: string; at?: string }>;
+  /** Sanitised server-side (`visitedPagesOf`) — a malformed entry is dropped, never returned. */
+  pages: Array<{ url: string; at?: string }>;
   os: string | null;
   browser: string | null;
   started_at: string;

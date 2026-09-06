@@ -3477,6 +3477,15 @@ components:
           type: string
           nullable: true
           description: The stored value in canonical form, or null when unset.
+        form_placement:
+          type: string
+          enum: [pre_chat, post_chat]
+          nullable: true
+          description: |
+            Carried through from the definition (FR-MOD-13.2): lets a reader —
+            the Traffic visitor 360° panel — tell a pre-chat form answer apart
+            from a plain CRM field without a second lookup. Always null on a
+            `ticket` field.
 
     CustomFieldValuesInput:
       type: object

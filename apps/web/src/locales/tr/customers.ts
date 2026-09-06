@@ -162,6 +162,8 @@ export const customers: Messages = {
   'traffic.panel.piiHidden':
     'İletişim bilgileri gizli. Görmek için bir yöneticiden müşteri düzenleme yetkisi isteyin.',
   'traffic.panel.offBoard': 'Bu ziyaretçi artık çevrimiçi değil.',
+  'traffic.panel.preChatForm': 'Sohbet öncesi form',
+  'traffic.panel.noPagesForVisit': 'Bu ziyaret için kayıtlı sayfa yok.',
 
   // Traffic filter panel — TrafficFilters.tsx (field labels/options/errors stay
   // in traffic-filters.ts, English-only — see the file's own note)

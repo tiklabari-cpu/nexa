@@ -92,6 +92,7 @@ export async function readCustomFieldValues(
     type: definition.type as CustomFieldType,
     required: definition.required,
     value: stored.get(definition.id) ?? null,
+    form_placement: (definition.formPlacement as FormPlacement | null) ?? null,
   }));
 }
 

@@ -6,6 +6,7 @@ import {
   hasTrigger,
   matchesConditions,
   resolveCampaignStatus,
+  visitedPagesOf,
   visitorPageUrls,
 } from './campaign-matching.js';
 
@@ -23,6 +24,38 @@ describe('visitorPageUrls', () => {
     expect(visitorPageUrls(null)).toEqual([]);
     expect(visitorPageUrls('not-an-array')).toEqual([]);
     expect(visitorPageUrls([{ url: 42 }, {}, { url: '' }, { url: '/ok' }])).toEqual(['/ok']);
+  });
+});
+
+// The single reader chat-service's Details visitor and customer-service's
+// `GET /customers/:id` visits both go through (FR-MOD-13.2) — a second,
+// independently written parser in either place would let the two panels
+// disagree on the same visit.
+describe('visitedPagesOf', () => {
+  it('keeps url and, when present, at — in order', () => {
+    expect(
+      visitedPagesOf([
+        { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
+        { url: 'https://shop.example/bikes/brakes' },
+      ]),
+    ).toEqual([
+      { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
+      { url: 'https://shop.example/bikes/brakes' },
+    ]);
+  });
+
+  it('drops an at that is not a string, keeping the entry', () => {
+    expect(visitedPagesOf([{ url: '/ok', at: 12345 }])).toEqual([{ url: '/ok' }]);
+  });
+
+  it('is defensive against a manually edited or malformed row — an unreadable entry is dropped, not an error', () => {
+    expect(visitedPagesOf(null)).toEqual([]);
+    expect(visitedPagesOf(undefined)).toEqual([]);
+    expect(visitedPagesOf('not-an-array')).toEqual([]);
+    expect(visitedPagesOf({ not: 'an array' })).toEqual([]);
+    expect(visitedPagesOf([{ url: 42 }, {}, null, 'garbage', { url: '/ok' }])).toEqual([
+      { url: '/ok' },
+    ]);
   });
 });
 

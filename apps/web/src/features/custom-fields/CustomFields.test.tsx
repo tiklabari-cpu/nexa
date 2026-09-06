@@ -17,6 +17,7 @@ const playerId: CustomFieldValue = {
   type: 'text',
   required: true,
   value: null,
+  form_placement: null,
 };
 const balance: CustomFieldValue = {
   definition_id: 'def-2',
@@ -24,6 +25,7 @@ const balance: CustomFieldValue = {
   type: 'number',
   required: false,
   value: null,
+  form_placement: null,
 };
 
 describe('CustomFields', () => {

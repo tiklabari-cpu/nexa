@@ -27,6 +27,7 @@ import {
   type TransferReason,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
+import { visitedPagesOf } from '../campaigns/campaign-matching.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
@@ -2194,26 +2195,6 @@ function serialiseChat(chat: ChatRow): ChatDetail {
         }
       : null,
   };
-}
-
-/**
- * `pages` is a free-form JSON column. Read it defensively: a malformed entry is
- * dropped rather than allowed to break the Details panel it feeds.
- */
-function visitedPagesOf(pages: unknown): Array<{ url: string; at?: string }> {
-  if (!Array.isArray(pages)) return [];
-  const result: Array<{ url: string; at?: string }> = [];
-  for (const entry of pages) {
-    if (
-      entry &&
-      typeof entry === 'object' &&
-      typeof (entry as { url?: unknown }).url === 'string'
-    ) {
-      const { url, at } = entry as { url: string; at?: unknown };
-      result.push(typeof at === 'string' ? { url, at } : { url });
-    }
-  }
-  return result;
 }
 
 /** "Chrome on macOS" when both are known; whichever is present otherwise. */

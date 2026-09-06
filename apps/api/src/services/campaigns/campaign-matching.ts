@@ -30,6 +30,35 @@ export function visitorPageUrls(pages: unknown): string[] {
   return urls;
 }
 
+/**
+ * A visit's page views, in the shape the Inbox Details panel and the Traffic
+ * visitor 360° panel both render (`{ url, at? }`). The single reader for
+ * `pages` both surfaces go through (chat-service's Details visitor, customer-
+ * service's `GET /customers/:id` visits) — a second, independently written
+ * parser here would let the two panels drift apart on the same underlying
+ * visit (FR-MOD-13.2).
+ *
+ * `pages` is free-form JSON (a manually edited row is possible), so this is
+ * defensive the same way `visitorPageUrls` is: a malformed entry is dropped
+ * rather than allowed to break the panel reading it — an unreadable entry is
+ * an empty result, not an error.
+ */
+export function visitedPagesOf(pages: unknown): Array<{ url: string; at?: string }> {
+  if (!Array.isArray(pages)) return [];
+  const result: Array<{ url: string; at?: string }> = [];
+  for (const entry of pages) {
+    if (
+      entry &&
+      typeof entry === 'object' &&
+      typeof (entry as { url?: unknown }).url === 'string'
+    ) {
+      const { url, at } = entry as { url: string; at?: unknown };
+      result.push(typeof at === 'string' ? { url, at } : { url });
+    }
+  }
+  return result;
+}
+
 /** True when the trigger has at least one usable condition to match on. */
 export function hasTrigger(conditions: CampaignConditions): boolean {
   return Boolean(conditions.url_contains && conditions.url_contains.trim());

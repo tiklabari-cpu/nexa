@@ -174,6 +174,8 @@ export const customers: Messages = {
   'traffic.panel.piiHidden':
     'Contact details are hidden. Ask an admin for customer edit access to view them.',
   'traffic.panel.offBoard': 'This visitor is no longer online.',
+  'traffic.panel.preChatForm': 'Pre-chat form',
+  'traffic.panel.noPagesForVisit': 'No pages recorded for this visit.',
 
   // Traffic filter panel — TrafficFilters.tsx (field labels/options/errors stay
   // in traffic-filters.ts, English-only — see the file's own note)

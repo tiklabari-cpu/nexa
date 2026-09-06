@@ -25,7 +25,7 @@ import {
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
-import { visitorPageUrls } from '../campaigns/campaign-matching.js';
+import { visitedPagesOf, visitorPageUrls } from '../campaigns/campaign-matching.js';
 
 export type CustomerSegment = 'all' | 'leads' | 'recent' | 'banned';
 
@@ -70,7 +70,8 @@ export interface CustomerDetail extends CustomerSummary {
   visits: Array<{
     id: string;
     came_from: string | null;
-    pages: unknown;
+    /** Pages seen during the visit, in order (FR-MOD-13.2) — sanitised by `visitedPagesOf`. */
+    pages: Array<{ url: string; at?: string }>;
     os: string | null;
     browser: string | null;
     started_at: string;
@@ -184,7 +185,11 @@ export class CustomerService {
       visits: customer.visits.map((visit) => ({
         id: visit.id,
         came_from: visit.cameFrom,
-        pages: visit.pages,
+        // `pages` is free-form JSON (a manually edited row is possible) — read
+        // through the same sanitiser the Inbox Details visitor uses, so a
+        // malformed entry is an empty result here too, never a 500, and the two
+        // panels can never show different pages for the same visit.
+        pages: visitedPagesOf(visit.pages),
         os: visit.os,
         browser: visit.browser,
         started_at: visit.startedAt.toISOString(),

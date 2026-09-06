@@ -221,6 +221,7 @@ describe('CustomerDetailPanel — regression: existing cards still render', () =
             type: 'text',
             required: false,
             value: 'P-42',
+            form_placement: null,
           },
         ],
         visits: [

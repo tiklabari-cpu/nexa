@@ -790,6 +790,142 @@ describe('customers', () => {
       expect(body.visits[0]?.pages[0]?.url).toBe('https://shop.example/pricing');
     });
 
+    // --- Visited pages (FR-MOD-13.2) ------------------------------------------
+
+    it("sanitizes a visit's malformed pages jsonb instead of erroring (a manually edited row is an empty result, not a 500)", async () => {
+      await owner.visit.create({
+        data: {
+          customerId: fx.a.customerId,
+          licenseId: fx.a.licenseId,
+          // Not the `{ url, at }[]` shape the column normally holds.
+          pages: { edited: 'by hand' },
+        },
+      });
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { visits: Array<{ pages: unknown[] }> };
+      expect(body.visits[0]?.pages).toEqual([]);
+    });
+
+    it('drops an unreadable page entry but keeps the readable ones alongside it, in order', async () => {
+      await owner.visit.create({
+        data: {
+          customerId: fx.a.customerId,
+          licenseId: fx.a.licenseId,
+          pages: [
+            { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
+            { no: 'url here' },
+            'not-even-an-object',
+            { url: 'https://shop.example/bikes/brakes' },
+          ],
+        },
+      });
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      const body = response.json() as { visits: Array<{ pages: Array<{ url: string }> }> };
+      expect(body.visits[0]?.pages).toEqual([
+        { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
+        { url: 'https://shop.example/bikes/brakes' },
+      ]);
+    });
+
+    it('shows the same visited pages the Inbox Details visitor shows for the same visit — the two panels cannot diverge (FR-MOD-13.2)', async () => {
+      // Short chat ids are Crockford base32, exactly 10 chars (`isShortId`) —
+      // generated rather than hand-typed so this cannot drift into an invalid id.
+      const chatId = generateShortId();
+      await owner.chat.create({
+        data: { id: chatId, licenseId: fx.a.licenseId, customerId: fx.a.customerId },
+      });
+      await owner.visit.create({
+        data: {
+          customerId: fx.a.customerId,
+          licenseId: fx.a.licenseId,
+          pages: [
+            { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
+            { garbled: true },
+            { url: 'https://shop.example/bikes/brakes' },
+          ],
+          startedAt: new Date('2026-07-20T10:00:00.000Z'),
+        },
+      });
+      const chatsToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['customers:ro', 'chats--all:ro'],
+      });
+
+      const customerResponse = await server.get(`/customers/${fx.a.customerId}`, auth(chatsToken));
+      expect(customerResponse.statusCode).toBe(200);
+      const customerBody = customerResponse.json() as {
+        visits: Array<{ pages: Array<{ url: string; at?: string }> }>;
+      };
+
+      const chatResponse = await server.get(`/chats/${chatId}`, auth(chatsToken));
+      expect(chatResponse.statusCode).toBe(200);
+      const chatBody = chatResponse.json() as {
+        visitor: { visited_pages: Array<{ url: string; at?: string }> } | null;
+      };
+
+      const expected = [
+        { url: 'https://shop.example/bikes', at: '2026-07-20T10:00:00.000Z' },
+        { url: 'https://shop.example/bikes/brakes' },
+      ];
+      expect(customerBody.visits[0]?.pages).toEqual(expected);
+      expect(chatBody.visitor?.visited_pages).toEqual(expected);
+    });
+
+    // --- Pre-chat form answers (FR-MOD-13.2) ----------------------------------
+
+    it("carries a contact field's form_placement so a pre-chat answer can be told apart from a plain CRM field", async () => {
+      // Defining a field needs `access_rules:rw` (admin), which `writeToken`
+      // above deliberately does not carry — a separate grant, matching the
+      // custom-fields suite's own `adminToken`.
+      const adminToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['access_rules:rw', 'customers:rw'],
+      });
+      const define = (body: unknown) =>
+        server.post('/settings/custom-fields', body, auth(adminToken));
+      const preChat = await define({
+        entity: 'contact',
+        label: 'Order number',
+        type: 'text',
+        form_placement: 'pre_chat',
+      });
+      const postChat = await define({
+        entity: 'contact',
+        label: 'CSAT comment',
+        type: 'text',
+        form_placement: 'post_chat',
+      });
+      const crmOnly = await define({ entity: 'contact', label: 'Internal note', type: 'text' });
+      const preChatId = (preChat.json() as { id: string }).id;
+      const postChatId = (postChat.json() as { id: string }).id;
+      const crmOnlyId = (crmOnly.json() as { id: string }).id;
+
+      await server.put(
+        `/customers/${fx.a.customerId}/custom-fields`,
+        { values: { [preChatId]: 'ORD-42', [postChatId]: 'great', [crmOnlyId]: 'flagged' } },
+        auth(writeToken),
+      );
+
+      const response = await server.get(`/customers/${fx.a.customerId}`, auth(readToken));
+      expect(response.statusCode).toBe(200);
+      const fields = (
+        response.json() as {
+          custom_fields: Array<{ definition_id: string; form_placement: string | null }>;
+        }
+      ).custom_fields;
+      expect(fields.find((f) => f.definition_id === preChatId)?.form_placement).toBe('pre_chat');
+      expect(fields.find((f) => f.definition_id === postChatId)?.form_placement).toBe('post_chat');
+      expect(fields.find((f) => f.definition_id === crmOnlyId)?.form_placement).toBeNull();
+    });
+
     it('rejects an id that is not a uuid', async () => {
       const response = await server.get('/customers/not-a-uuid', auth(readToken));
       expect(response.statusCode).toBe(400);

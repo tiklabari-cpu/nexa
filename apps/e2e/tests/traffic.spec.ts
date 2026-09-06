@@ -111,6 +111,37 @@ test.describe('real-time traffic', () => {
       });
       expect(named.ok(), `naming failed: ${named.status()} ${await named.text()}`).toBe(true);
 
+      // --- 1b. A pre-chat form answer, for the 360° panel's own card (203.2) --
+      // The answer could equally have arrived through the widget's pre-chat
+      // form — `widget.prechat.test.ts` already proves that flow. What is
+      // untested until the panel exists is that a `pre_chat` field's value
+      // reaches it, and that a plain CRM field or an unanswered one would not.
+      // The label carries `stamp` because this is the same shared, seeded
+      // workspace as the visitor's name — a fixed label would collide with
+      // itself on the suite's next run.
+      const preChatField = await request.post(`${API_BASE}/settings/custom-fields`, {
+        headers: auth,
+        data: {
+          entity: 'contact',
+          label: `Order number ${stamp}`,
+          type: 'text',
+          form_placement: 'pre_chat',
+        },
+      });
+      expect(
+        preChatField.ok(),
+        `defining the pre-chat field failed: ${preChatField.status()}`,
+      ).toBe(true);
+      const preChatFieldId = ((await preChatField.json()) as { id: string }).id;
+      const preChatAnswer = await request.put(`${API_BASE}/customers/${customerId}/custom-fields`, {
+        headers: auth,
+        data: { values: { [preChatFieldId]: `ORD-${stamp}` } },
+      });
+      expect(
+        preChatAnswer.ok(),
+        `setting the pre-chat answer failed: ${preChatAnswer.status()}`,
+      ).toBe(true);
+
       // --- 2. Put them in the `browsing` bucket -----------------------------
       // Browsing means a live visit and no open conversation, and the widget
       // can only produce the first half: sending is what records the page. So
@@ -259,6 +290,15 @@ test.describe('real-time traffic', () => {
       const panelCameFrom = panel.getByText(`Came from ${REFERRING_SITE}/`);
       await expect(panelCameFrom).toBeVisible();
       await expect(panelCameFrom.locator('a')).toHaveCount(0);
+
+      // Pre-chat form answer and visited pages (203.2) — the PRD's remaining
+      // two fields on this same panel, read in place exactly like the ones
+      // above rather than only on the full CRM page ("Edit contact" below).
+      await expect(panel.getByRole('heading', { name: 'Pre-chat form' })).toBeVisible();
+      await expect(panel.getByText(`Order number ${stamp}`)).toBeVisible();
+      await expect(panel.getByText(`ORD-${stamp}`)).toBeVisible();
+      await expect(panel.getByRole('heading', { name: 'Visited pages' })).toBeVisible();
+      await expect(panel.getByText(/demo\.html/)).toBeVisible();
 
       await agentPage.screenshot({
         path: 'kanit/203.1-traffic-visitor-panel.png',

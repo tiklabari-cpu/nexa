@@ -9220,6 +9220,14 @@ export interface components {
       required: boolean;
       /** @description The stored value in canonical form, or null when unset. */
       value: string | null;
+      /**
+       * @description Carried through from the definition (FR-MOD-13.2): lets a reader —
+       *     the Traffic visitor 360° panel — tell a pre-chat form answer apart
+       *     from a plain CRM field without a second lookup. Always null on a
+       *     `ticket` field.
+       * @enum {string|null}
+       */
+      form_placement?: 'pre_chat' | 'post_chat' | null;
     };
     /**
      * @description A map of custom field definition id → value, where null clears a field.

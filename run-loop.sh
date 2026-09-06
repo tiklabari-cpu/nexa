@@ -62,7 +62,16 @@ COST_MAX_PCT="${LOOP_COST_MAX_PCT:-20}"
 COST_HIGH_PCT="${LOOP_COST_HIGH_PCT:-10}"
 
 pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_id":{"type":"string"},"model":{"type":"string","enum":["sonnet","opus"]},"effort":{"type":"string","enum":["max","high"]},"remaining":{"type":"integer"}},"required":["has_task"]}'
-result_schema='{"type":"object","properties":{"status":{"type":"string","enum":["done","blocked"]},"task_id":{"type":"string"},"summary":{"type":"string"}},"required":["status"]}'
+# `marked_in_progress` ZORUNLU alandır ve bunun tek amacı protokol §1'i görünür kılmak:
+# pencerenin başında task'ı 'in-progress' işaretlemek, protokolün geri besleme üretmeyen
+# TEK adımıydı — DoD kapısı bakmıyor, `git status` o noktada temiz, sonuç JSON'unda alanı
+# yoktu. Ölçüldü (2026-09-06, 13 pencerelik log taraması): opus pencereleri 7/7 damgayı
+# erken bastı, sonnet pencerelerinin 6'da 3'ü (198.4 · 201.2 · 203.1) hiç basmadan
+# `pending`'den `done`'a atladı, biri (201.1) kapanışta geriye dönük doldurdu. Üçü de
+# sessiz kaldı çünkü sonunda `done` yazıldığı sürece hiçbir yerde iz bırakmıyor.
+# Alan zorunlu olduğu için pencere kapanışta soruyu yanıtlamak ZORUNDA; döngü de yanıtı
+# okuyup uyarıyor (aşağıda `marked_from`). Dürüst `false` beklenen davranıştır — uydurma.
+result_schema='{"type":"object","properties":{"status":{"type":"string","enum":["done","blocked"]},"task_id":{"type":"string"},"summary":{"type":"string"},"marked_in_progress":{"type":"boolean"}},"required":["status","marked_in_progress"]}'
 
 log(){ echo "[$(date -u +%H:%M:%S)] $*"; }
 
@@ -214,6 +223,14 @@ Yalnız bu task'ı baştan sona tamamla, protokolü uygula, en son JSON sonucu d
     2>>"$LOG_DIR/task-$id.err" | tee -a "$logf" | pretty
 }
 status_from(){ jq -r 'select(.type=="result") | (.structured_output.status // empty)' "$1" 2>/dev/null | tail -1; }
+# "true" · "false" · "" (alan hiç gelmedi) döner.
+# `// empty` KULLANILAMAZ: jq'da `false // empty` boş döner, yani dürüst bir `false`
+# yanıtı "alan yok" ile aynı görünür ve uyarı yanlış gerekçeyle basılırdı.
+marked_from(){
+  jq -r 'select(.type=="result") | (.structured_output // {})
+         | if has("marked_in_progress") then (.marked_in_progress|tostring) else empty end' \
+    "$1" 2>/dev/null | tail -1
+}
 
 # --- Kota kapısı: bu pencereyi açmaya yetecek kota var mı? --------------------
 # Panelin bekçisi yalnız GÖREVLER ARASINDA durdurabiliyor: bir pencere açıldıktan
@@ -378,6 +395,17 @@ while true; do
     stream_task "$task_id" "$eff" "$mdl"
     status=$(status_from "$LOG_DIR/task-$task_id.jsonl"); [ -z "$status" ] && status="blocked"
   fi
+
+  # Protokol §1 denetimi. Bu satır olmasaydı alan yine okunmayan bir alan olurdu —
+  # kapatmaya çalıştığımız kusurun ta kendisi. Tur durdurulmaz, yalnız görünür kılınır:
+  # damganın eksikliği işi bozmaz, pencere ölürse iş 'pending' göründüğü için kaybolur.
+  marked=$(marked_from "$LOG_DIR/task-$task_id.jsonl")
+  case "$marked" in
+    true) ;;
+    false) log "⚠ Task $task_id: pencere kendini 'in-progress' İŞARETLEMEDİĞİNİ bildirdi (protokol §1)." ;;
+    *)     log "⚠ Task $task_id: 'marked_in_progress' yanıtı gelmedi — şema zorunlu tutuyor, pencere sonucu eksik döndü." ;;
+  esac
+  [ "$marked" = "true" ] || log "  Sonuç: bu pencere ölseydi iş yarım kaldığı hâlde 'pending' görünür, hiçbir denetim yarım saymazdı."
 
   el=$((SECONDS-start))
   if [ "$status" = "done" ]; then

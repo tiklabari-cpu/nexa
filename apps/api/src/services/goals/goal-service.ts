@@ -21,7 +21,7 @@ import type { Prisma } from '@prisma/client';
 import type { Goal, GoalDefinition, GoalFilter } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import { hasGoalTrigger, matchesGoal } from './goal-matching.js';
+import { goalRequires, hasGoalTrigger, matchesGoal, type GoalFacts } from './goal-matching.js';
 
 /** The columns a DTO needs. */
 const GOAL_SELECT = {
@@ -131,7 +131,22 @@ export class GoalService {
    * Record every goal this visitor has now reached, and return how many of them
    * are new (FR-MOD-13.3 — the funnel's conversion stage).
    *
-   * Called on the visitor's own write path, so three things decide it:
+   * Called from every moment a conversion can happen — a page view, a tracked
+   * sale, an e-mail that makes someone a lead, a conversation being archived
+   * (`goal-triggers.ts` is the one caller all four go through). It therefore
+   * takes no "which event fired": it reads what is *true of the visitor now*
+   * and asks every active goal whether that is enough. Two consequences worth
+   * stating, because both were live bugs waiting to happen:
+   *
+   * - There is **no early return on an empty `pageUrls`**. A sale goal belongs
+   *   to a visitor who may never have been on a tracked page at all, and
+   *   bailing out on "no pages" would mean it was never once evaluated.
+   * - A goal that requires a sale **and** a page keeps AND semantics across
+   *   time. Whichever fact lands second re-runs the whole evaluation and finds
+   *   the first already recorded, so the order the two arrived in cannot
+   *   decide whether the visitor converted.
+   *
+   * Three things then decide the write:
    *
    * - **Tenant.** Goals are read with an explicit `licenseId` filter on top of
    *   RLS, and the achievement carries the same id. A visitor browsing one
@@ -154,22 +169,31 @@ export class GoalService {
     pageUrls: readonly string[],
     now: Date,
   ): Promise<number> {
-    if (pageUrls.length === 0) return 0;
-
     const goals = await tx.goal.findMany({
       where: { licenseId: tenant.licenseId, active: true },
       select: { id: true, definition: true },
     });
+    if (goals.length === 0) return 0;
 
-    const matched = goals.filter((goal) => matchesGoal(goal.definition, pageUrls));
+    const facts = await this.#factsFor(
+      tx,
+      tenant,
+      customerId,
+      goals.map((goal) => goal.definition),
+    );
+    const matched = goals.filter((goal) => matchesGoal(goal.definition, pageUrls, facts));
     if (matched.length === 0) return 0;
 
-    // The conversation the visitor is in, if there is one — the funnel's middle
-    // stage, captured on the row rather than re-derived later, since the chat
-    // they converted during is not the chat they may be in a week from now.
+    // The conversation the visitor converted in, if there is one — the funnel's
+    // middle stage, captured on the row rather than re-derived later, since the
+    // chat they converted during is not the chat they may be in a week from now.
+    //
+    // Open conversations first, then the most recent one: a resolution goal is
+    // reached by definition at the moment the chat closes, so insisting on an
+    // *active* chat would file every one of those under no conversation at all.
     const chat = await tx.chat.findFirst({
-      where: { customerId, active: true },
-      orderBy: { createdAt: 'desc' },
+      where: { licenseId: tenant.licenseId, customerId },
+      orderBy: [{ active: 'desc' }, { createdAt: 'desc' }],
       select: { id: true },
     });
 
@@ -191,6 +215,58 @@ export class GoalService {
     });
 
     return written.count;
+  }
+
+  /**
+   * What is true of this visitor, for the predicates somebody actually asked
+   * about.
+   *
+   * Each read is skipped unless an active goal in this workspace names it, so
+   * the page-view path — by far the hottest caller, once per visitor message —
+   * costs exactly what it did before unless the workspace has defined a goal
+   * that needs more. NFR-P2's write budget is the reason; three unconditional
+   * lookups on every message would be spent overwhelmingly on workspaces whose
+   * only goals are URL ones.
+   *
+   * Each is an existence check, not a count: "has this ever happened" is the
+   * whole question, and `UNIQUE(goal_id, customer_id)` means a second sale or a
+   * second archived chat cannot convert the visitor twice anyway.
+   */
+  async #factsFor(
+    tx: TenantClient,
+    tenant: TenantContext,
+    customerId: string,
+    definitions: readonly unknown[],
+  ): Promise<GoalFacts> {
+    const facts: GoalFacts = {};
+
+    if (definitions.some((definition) => goalRequires(definition, 'sale_completed'))) {
+      const sale = await tx.trackedSale.findFirst({
+        where: { licenseId: tenant.licenseId, customerId },
+        select: { id: true },
+      });
+      facts.saleCompleted = sale !== null;
+    }
+
+    if (definitions.some((definition) => goalRequires(definition, 'lead_captured'))) {
+      // `customers` is organization-scoped, not license-scoped (PRD §8.4), so
+      // the id is the whole filter here — the same read the CRM does.
+      const lead = await tx.customer.findFirst({
+        where: { id: customerId, isLead: true },
+        select: { id: true },
+      });
+      facts.leadCaptured = lead !== null;
+    }
+
+    if (definitions.some((definition) => goalRequires(definition, 'chat_resolved'))) {
+      const archived = await tx.chat.findFirst({
+        where: { licenseId: tenant.licenseId, customerId, active: false },
+        select: { id: true },
+      });
+      facts.chatResolved = archived !== null;
+    }
+
+    return facts;
   }
 
   #toDto(row: GoalRow): Goal {

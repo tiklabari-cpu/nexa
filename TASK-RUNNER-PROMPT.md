@@ -46,10 +46,17 @@ başlığı 14. satırdadır — sana gereken yalnız en üstteki birkaç blok. 
 veya `Read(limit: 60)`. Daha eski bir işi arıyorsan tam metin yerine hedefli ara:
 `grep -n 'tm <id>' HANDOFF.md | head -5` → dönen satır numarası çevresini dar bir aralıkla oku.
 
-Tespit biter bitmez task'ı Task Master'da **in-progress** işaretle (CONVENTIONS §4). Bu adım
-opsiyonel DEĞİL: pencere beklenmedik şekilde ölürse (kota bitti, çökme, elle durdurma) geride
-"bu iş başlamıştı" izi kalmaz; görev `pending` göründüğü için hiçbir denetim onu yarım kalmış
-saymaz ve sessizce kaybolur. Alt-görev üzerinde çalışıyorsan alt-görevi işaretle.
+Tespit biter bitmez task'ı Task Master'da **in-progress** işaretle (CONVENTIONS §4 — "Task Master
+durum akışı"; handoff biçimi ORASI DEĞİL, §3'tür). Bu adım opsiyonel DEĞİL: pencere beklenmedik
+şekilde ölürse (kota bitti, çökme, elle durdurma) geride "bu iş başlamıştı" izi kalmaz; görev
+`pending` göründüğü için hiçbir denetim onu yarım kalmış saymaz ve sessizce kaybolur.
+Alt-görev üzerinde çalışıyorsan alt-görevi işaretle.
+
+⚠ **Bu adımı yapıp yapmadığın §3'te SORULACAK** — sonuç JSON'unun `marked_in_progress` alanı
+zorunludur. Alan tam olarak bu adımın atlanabildiği ölçüldüğü için var (2026-09-06 log taraması:
+13 pencerenin 3'ü işaretlemeden `pending`'den `done`'a atladı, hepsi sessiz kaldı). Kapanışta
+atladığını fark edersen **geriye dönük damgalama** — o damga artık kimseye sinyal vermez, yalnız
+kaydı bozar; `false` de ve devam et. Dürüst `false` beklenen davranıştır.
 
 ## 2) İşi baştan sona bitir — TEK sürekli akış (build → doğrulama → düzeltme → kapanış)
 
@@ -129,12 +136,15 @@ dalını çalıştırarak kapat — ama MUTLAKA kapat.
   5. Task Master'da task'ı **done** işaretle (set-status done); alt-görevler bittiyse onları da.
   6. `git status` ile son kontrol: çalışma alanı temiz olmalı. Değilse kalan değişikliği ya
      commit'le ya da neden bırakıldığını HANDOFF'a yaz.
-  7. Son çıktı olarak JSON döndür: `{"status":"done","task_id":"<id>","summary":"<1 cümle>"}`.
+  7. Son çıktı olarak JSON döndür:
+     `{"status":"done","task_id":"<id>","summary":"<1 cümle>","marked_in_progress":<true|false>}`.
+     `marked_in_progress` = §1'de task'ı gerçekten `in-progress` işaretledin mi. Zorunlu alan.
 - **Kapı hâlâ KIRMIZI ise (düzeltemedin):**
   1. Bozuk kodu main'e MERGE ETME. İstersen WIP'i task dalına commit et.
   2. `HANDOFF.md`'ye BLOCKED notu: hangi adım, son hata mesajı, denenen çözümler.
   3. Task Master durumunu done YAPMA (blocked/review bırak).
-  4. Son çıktı: `{"status":"blocked","task_id":"<id>","summary":"<neden bloke>"}`.
+  4. Son çıktı:
+     `{"status":"blocked","task_id":"<id>","summary":"<neden bloke>","marked_in_progress":<true|false>}`.
 
 ## Kurallar
 

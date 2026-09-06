@@ -19,8 +19,20 @@ const listQuery = z.object({
 
 // `.strict()` so a typo in a definition key (`url_contain`) is a 400, not a
 // silently-ignored rule that leaves a goal nobody can ever reach.
+//
+// The three flags are the funnel kinds the PRD row names — sale / lead /
+// resolution (FR-MOD-13.3) — and they are booleans rather than filters because
+// each is a fact that either happened to the visitor or did not. `false` is
+// accepted and means the same as absent ("do not require it"), so a form that
+// sends every key with the unticked ones false is valid; the matcher only ever
+// treats a literal `true` as a requirement.
 const definitionSchema = z
-  .object({ url_contains: z.string().trim().max(2048).optional() })
+  .object({
+    url_contains: z.string().trim().max(2048).optional(),
+    sale_completed: z.boolean().optional(),
+    lead_captured: z.boolean().optional(),
+    chat_resolved: z.boolean().optional(),
+  })
   .strict();
 
 const createBody = z.object({

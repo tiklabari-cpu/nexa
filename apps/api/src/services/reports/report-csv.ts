@@ -1704,18 +1704,19 @@ async function groupCsvTable(
       };
     }
     case 'sales': {
-      // Same "not configured" contract as the JSON report (buildSalesReport) —
-      // no sales source exists yet (FR-MOD-13.5), so this is the honest empty
-      // skeleton rather than a query the license has no data for. `csvField`
-      // renders every `null` as an empty cell.
+      // Same figures the JSON report reads ({@link salesReportFigures}), so
+      // this can never disagree with what the tab shows — real values once
+      // FR-MOD-13.5's tracker is on, the honest all-null skeleton otherwise.
+      // `csvField` renders every `null` as an empty cell.
+      const figures = await salesReportFigures(tx, licenseId, from, to);
       return {
         headers: ['metric', 'value'],
         rows: [
-          ['configured', 'false'],
-          ['tracked_sales', null],
-          ['attributed_revenue_cents', null],
-          ['currency', null],
-          ['conversions', null],
+          ['configured', String(figures.configured)],
+          ['tracked_sales', figures.tracked_sales],
+          ['attributed_revenue_cents', figures.attributed_revenue_cents],
+          ['currency', figures.currency],
+          ['conversions', figures.conversions],
         ],
       };
     }

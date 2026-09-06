@@ -2562,6 +2562,33 @@ describe('reports and billing', () => {
       });
       expect(response.statusCode).toBe(403);
     });
+
+    it('exports the same real figures as the JSON report once tracking is on — CSV rows and a non-empty PDF (FR-MOD-07.7)', async () => {
+      await configureTracking({ licenseId: fx.a.licenseId, enabled: true, currency: 'EUR' });
+      await sale({ licenseId: fx.a.licenseId, amountCents: 12_500, currency: 'EUR' });
+      await achieveGoal(fx.a.licenseId);
+
+      const csv = await server.get('/reports/export?group=sales', auth);
+      expect(csv.statusCode).toBe(200);
+      const rows = csv.body.split('\r\n').filter((line) => line !== '');
+      expect(rows[0]).toBe('metric,value');
+      // Not the honest-empty skeleton this describe's other export test proves —
+      // a table with a data-bearing row per figure, matching the JSON body.
+      expect(rows.slice(1)).toEqual([
+        'configured,true',
+        'tracked_sales,1',
+        'attributed_revenue_cents,12500',
+        'currency,EUR',
+        'conversions,1',
+      ]);
+
+      const pdf = await server.get('/reports/export?group=sales&format=pdf', auth);
+      expect(pdf.statusCode).toBe(200);
+      expect(pdf.headers['content-type']).toBe('application/pdf');
+      const bytes = Buffer.from(pdf.rawPayload);
+      expect(bytes.toString('latin1').startsWith('%PDF-1.7\n')).toBe(true);
+      expect(bytes.length).toBeGreaterThan(0);
+    });
   });
 
   // =========================================================================

@@ -205,12 +205,21 @@ interface ReportsLeads {
 
 /**
  * The Sales report (FR-MOD-07.7, v2; FR-MOD-13.5 dependency): the same
- * tracked-sales skeleton as the Reviews report's `ecommerce` block, as a
- * report of its own. No sales/order source exists yet, so `configured` is
- * always `false` and every figure `null` in v1 (see the API's `buildSalesReport`).
+ * tracked-sales data as the Reviews report's `ecommerce` block, as a report of
+ * its own, plus `conversions`. `configured` is `true` and every figure real
+ * once a workspace has turned FR-MOD-13.5's Sales tracker on; the honest "not
+ * set up" skeleton — `configured: false`, every figure `null` — while it is
+ * off or never configured (see the API's `buildSalesReport`).
  */
 interface ReportsSales {
   range: { from: string; to: string };
+  previous_period: {
+    configured: boolean;
+    tracked_sales: number | null;
+    attributed_revenue_cents: number | null;
+    currency: string | null;
+    conversions: number | null;
+  };
   configured: boolean;
   tracked_sales: number | null;
   attributed_revenue_cents: number | null;
@@ -1941,11 +1950,13 @@ function LeadsDailyTable({ rows }: { rows: ReportsLeads['by_day'] }): ReactEleme
 }
 
 /**
- * Sales (FR-MOD-07.7, v2; FR-MOD-13.5 dependency): the honest "not configured"
- * skeleton until the Sales tracker wires a real source — same contract as the
- * Reviews tab's Ecommerce section, as a report of its own. `configured` is
- * always `false` in v1, so this always renders the empty state below; no
- * figure here is ever a fabricated 0 (FR-EK-B.1, null ≠ 0).
+ * Sales (FR-MOD-07.7, v2; FR-MOD-13.5 dependency): real tracked-sales KPIs
+ * plus a vs-previous benchmark once the Sales tracker is on — same contract
+ * as the Reviews tab's Ecommerce section, as a report of its own. `configured`
+ * reflects the tracker's on/off switch, not the window, so `data` and
+ * `data.previous_period` always agree on it; the honest "not set up" empty
+ * state renders while it is off, no figure here ever a fabricated 0
+ * (FR-EK-B.1, null ≠ 0).
  */
 function SalesTab(props: TabProps): ReactElement {
   const t = useTranslate();
@@ -1959,6 +1970,8 @@ function SalesTab(props: TabProps): ReactElement {
     return <CardSkeleton rows={3} />;
   }
 
+  const prev = data.previous_period;
+
   return (
     <Section title={t('reports.tabs.sales')} description={t('reports.sales.description')}>
       <Card>
@@ -1967,12 +1980,24 @@ function SalesTab(props: TabProps): ReactElement {
             <Kpi
               label={t('reports.common.kpi.trackedSales')}
               value={formatCount(data.tracked_sales)}
+              delta={<CountDelta current={data.tracked_sales} previous={prev.tracked_sales} />}
             />
             <Kpi
               label={t('reports.common.kpi.attributedRevenue')}
               value={formatMoney(data.attributed_revenue_cents, data.currency ?? undefined) ?? '—'}
+              delta={
+                <Delta
+                  current={data.attributed_revenue_cents}
+                  previous={prev.attributed_revenue_cents}
+                  format={(value) => formatMoney(value, data.currency ?? undefined)}
+                />
+              }
             />
-            <Kpi label={t('reports.sales.kpi.conversions')} value={formatCount(data.conversions)} />
+            <Kpi
+              label={t('reports.sales.kpi.conversions')}
+              value={formatCount(data.conversions)}
+              delta={<CountDelta current={data.conversions} previous={prev.conversions} />}
+            />
           </KpiGrid>
         ) : (
           <EmptyState

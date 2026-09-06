@@ -320,7 +320,7 @@ export const reports: Messages = {
   'reports.sales.description': 'Sales attributed to supported conversations.',
   'reports.sales.kpi.conversions': 'Conversions',
   'reports.sales.emptyDescription':
-    'Connect a sales source to attribute revenue to supported conversations. The Sales tracker (FR-MOD-13.5) is not available yet.',
+    'Connect a sales source to attribute revenue to supported conversations, using the Sales tracker (FR-MOD-13.5).',
 
   // Team performance (FR-MOD-07.7, v2)
   'reports.teamPerformance.error':

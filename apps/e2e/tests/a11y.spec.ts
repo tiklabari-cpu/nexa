@@ -27,7 +27,7 @@
  * silently returning nothing — a bad selector, an axe that never injected —
  * would read exactly like a clean pass.
  *
- * **Both themes, since tm 117.** The twenty-nine panel surfaces (or states of
+ * **Both themes, since tm 117.** The thirty panel surfaces (or states of
  * one — a modal, a selected tab, a freshly opened editor) are scanned once
  * dark and once light. Until tm 117 the light ramp was unreachable —
  * `index.html` hard-coded `data-theme="dark"` — so half of `tokens.css` and
@@ -839,6 +839,49 @@ test.describe('WCAG 2.1 AA (axe)', () => {
           });
           await expect(agentPage.getByText('Ready to upload: a11y-sample.txt')).toBeVisible();
         });
+      });
+
+      /**
+       * The knowledge source row's `…` menu and its edit dialog
+       * (FR-MOD-06.3.3).
+       *
+       * The scan above reaches the row but not what the row opens, and both are
+       * new controls of the kinds axe has the most to say about: a
+       * `<details>`-based menu announced as a button with an expanded state, and
+       * a modal whose fields carry sibling labels and help text wired through
+       * `aria-describedby`. A source is created first so the list is never empty
+       * — a scan of a panel with no rows would pass by having nothing to look
+       * at — and removed again afterwards, since the seeded workspace is shared.
+       */
+      test('the knowledge edit dialog has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/playbook');
+        const title = `A11y source ${theme} ${Date.now().toString().slice(-6)}`;
+        await scanPanel(agentPage, 'Knowledge edit dialog', theme, testInfo, async () => {
+          await agentPage
+            .getByRole('tablist', { name: 'AI Agent' })
+            .getByRole('tab', { name: 'Knowledge' })
+            .click();
+          await agentPage.getByLabel('Title').fill(title);
+          await agentPage.getByLabel('Content').fill('Returns are accepted within 30 days.');
+          await agentPage.getByRole('button', { name: 'Add source' }).click();
+
+          const actions = agentPage.getByRole('button', { name: `Actions for ${title}` });
+          await expect(actions).toBeVisible();
+          await actions.click();
+          await agentPage.getByRole('button', { name: 'Edit' }).click();
+          await expect(agentPage.getByRole('dialog')).toBeVisible();
+        });
+
+        // Put the shared workspace back: cancel out of the dialog, then delete
+        // through the same confirmation an admin would use.
+        await agentPage.getByRole('dialog').getByRole('button', { name: 'Cancel' }).click();
+        await agentPage.getByRole('button', { name: `Actions for ${title}` }).click();
+        await agentPage.getByRole('button', { name: 'Delete', exact: true }).click();
+        await agentPage.getByRole('dialog').getByRole('button', { name: 'Delete source' }).click();
+        await expect(agentPage.getByRole('button', { name: `Actions for ${title}` })).toBeHidden();
       });
 
       // Not reachable from the scan above — the editor only renders once a

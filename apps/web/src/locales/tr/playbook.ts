@@ -227,8 +227,27 @@ export const playbook: Messages = {
   'playbook.knowledge.noneInTab': 'Henüz {type} kaynağı yok.',
   'playbook.knowledge.indexed': 'Dizinlendi',
   'playbook.knowledge.empty': 'Boş',
-  'playbook.knowledge.deleteLabel': '{name} kaynağını sil',
   'playbook.knowledge.delete': 'Sil',
+
+  // Satır aksiyonları — “…” menüsü ve arkasındaki iki diyalog
+  // (KnowledgeSourceActions.tsx).
+  'playbook.knowledge.actionsLabel': '{name} için işlemler',
+  'playbook.knowledge.edit': 'Düzenle',
+  'playbook.knowledge.reindex': 'Yeniden dizinle',
+  'playbook.knowledge.reindexing': 'Yeniden dizinleniyor…',
+  'playbook.knowledge.editTitle': '{name} kaynağını düzenle',
+  'playbook.knowledge.editDescription': 'Metin değişirse kaynak yeniden dizinlenir.',
+  'playbook.knowledge.editUrlHelp': 'Yeni adresi kaydettiğinizde sayfa yeniden taranır.',
+  'playbook.knowledge.editContentHelp':
+    'Mevcut metni korumak için boş bırakın. Yazdığınız her şey onun yerine geçer.',
+  'playbook.knowledge.editFileNote':
+    'Bir dosya kaynağının metni yüklediğiniz dosyadan gelir; burada yalnız başlığı değiştirilebilir. Metni değiştirmek için yeni dosyayı kaynak olarak ekleyin.',
+  'playbook.knowledge.saveChanges': 'Değişiklikleri kaydet',
+  'playbook.knowledge.saving': 'Kaydediliyor…',
+  'playbook.knowledge.deleteTitle': '{name} silinsin mi?',
+  'playbook.knowledge.deleteDescription':
+    'Bu kaynaktan dizinlenen her şey onunla birlikte silinir ve yapay zekâ artık buradan cevap veremez. Geri alınamaz.',
+  'playbook.knowledge.deleteConfirm': 'Kaynağı sil',
 
   // Skill editor (SkillEditor.tsx)
   'playbook.editor.name': 'Ad',

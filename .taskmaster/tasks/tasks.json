@@ -9203,9 +9203,10 @@
             "description": "PRD KK: \"… menu; silme onayi; kaynak retrieval`da kullanilir; ...\". Bugun satirda menu YOK (ciplak bir Sil butonu), silme ONAYSIZ (`onClick={() => remove.mutate(source.id)}`, PlaybookPage.tsx:940) ve DUZENLEME ucu HIC YOK — `PATCH /knowledge-sources/:id` repoda mevcut degil (yalniz GET · POST · POST bulk · DELETE var).",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n- **Silme onayi yok.** `PlaybookPage.tsx:936-947` — tek tikla, geri alinamaz, onaysiz silme.\n  Kaynak silinince chunk`lar cascade siliniyor (playbook.ts:811) — yani yanlis tik veri kaybi.\n- **Duzenleme yok.** `playbook.ts`te `/knowledge-sources` altinda `PATCH`/`PUT` yok.\n- **Yeniden indeksle/crawl yok.** Bir website kaynagi bir kez crawl ediliyor; site degisince\n  kaynak bayat kaliyor ve urunun icinden tazelenemiyor.\n- **Aksiyon menusu yok** — PRD \"…\" menusunu ismen istiyor.\n\n## Yapilacak\n\n1. `PATCH /knowledge-sources/:sourceId` — en azindan `name` ve (article/faq icin) `content`.\n   Icerik degisirse chunk`lar YENIDEN indekslenir; eskisi birakilirsa kaynak duzenlenmis gorunur\n   ama eski metinden cevaplar (silme yorumundaki ayni tuzak).\n2. `POST /knowledge-sources/:sourceId/reindex` (ya da PATCH ile ayni islem — sozlesmede sec ve\n   `#### K06.3.3` blogunda gerekcelendir): `website` icin SSRF kapisindan gecen yeni bir crawl,\n   digerleri icin mevcut metnin yeniden indekslenmesi. Crawl islem DISINDA kalir (mevcut desen).\n3. Web: satirdaki ciplak butonlar bir `…` menusune toplanir; **silme onay adimi** eklenir\n   (depoda kullanilan `Modal`/onay deseni; yeni bir onay primitifi UYDURMA).\n\n## Bilinen tuzaklar\n\n- **Yeniden crawl bir SSRF yuzeyidir.** Kayitli `source_url` bile olsa yeniden alinirken\n  `assertPublicHttpUrl` TEKRAR calistirilir — DNS yeniden baglama (rebinding) tam da bu yuzden\n  `ssrf.test.ts`te test ediliyor. \"Zaten dogrulanmisti\" varsayimi bu kalemdeki tek kritik hatadir.\n- Onay diyalogu `window.confirm` OLMAMALI (test edilemez + tasarim sistemi disi).\n- Kiracilar-arasi: `PATCH`/`reindex` baska kiracinin kaynagini 404 vermeli, 403 degil (mevcut desen).\n- Docker kapaliyken entegrasyon testleri asilir — once `docker info`.\n\n## Kapsam SINIRI\n\nGecerlilik tarihi + OTOMATIK yeniden crawl 198.4`un isi; burada yalniz ELLE tetiklenen yol.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. `apps/api` entegrasyon: `PATCH` adi degistirir; icerik degisince `chunk_count` yeniden hesaplanir\n   ve ESKI metin artik retrieval`da BULUNMAZ (pozitif + negatif iddia).\n2. `reindex`: website kaynagi icin yeni crawl calisir; **ozel/ic hedefe donusturulmus bir URL**\n   (DNS rebinding senaryosu dahil) 400 ile reddedilir ve kaynak ESKI haliyle kalir.\n3. Kiracilar-arasi negatif test: her iki uc icin de 404.\n4. `apps/web` birim testi: Sil -> onay diyalogu acilir; iptal edilince `DELETE` GONDERILMEZ;\n   onaylaninca gonderilir. `window.confirm` kullanilmadigi da iddia edilir.\n5. `apps/e2e`: kaynak duzenle -> yeniden indeksle -> sil (onaylayarak) akisi ucdan uca.\n6. Test basliklari `(FR-MOD-06.3.3)` etiketi tasir; `pnpm audit:req-coverage` exit 0.\n7. TAM DoD kapisi + `contract:generate` senkron (+ yeni yol acildiysa mobil parite sayaci).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
-            "parentId": "198"
+            "parentId": "198",
+            "updatedAt": "2026-09-06T08:03:44.628Z"
           },
           {
             "id": 4,
@@ -9218,7 +9219,7 @@
             "parentId": "198"
           }
         ],
-        "updatedAt": "2026-09-06T08:02:19.557Z"
+        "updatedAt": "2026-09-06T08:03:44.628Z"
       },
       {
         "id": "199",
@@ -9420,7 +9421,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T08:02:19.558Z",
+      "lastModified": "2026-09-06T08:03:44.629Z",
       "taskCount": 204,
       "completedCount": 198,
       "tags": [

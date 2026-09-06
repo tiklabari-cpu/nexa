@@ -29,6 +29,7 @@ import { ProfileForm } from './ProfileForm.js';
 import { AiPerformance } from './AiPerformance.js';
 import { TemplateGallery } from './TemplateGallery.js';
 import { BulkImportForm } from './BulkImportForm.js';
+import { KnowledgeSourceActions } from './KnowledgeSourceActions.js';
 import {
   KNOWLEDGE_FILE_ACCEPT,
   readKnowledgeFile,
@@ -773,11 +774,6 @@ function KnowledgePanel({
     onSuccess: invalidate,
   });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => api.delete(`/knowledge-sources/${id}`),
-    onSuccess: invalidate,
-  });
-
   const form = useForm({
     initial: { name: '', sourceUrl: '', content: '' },
     validators: {
@@ -1068,16 +1064,7 @@ function KnowledgePanel({
                       : t('playbook.knowledge.empty')
                   }
                 />
-                {canEdit && (
-                  <button
-                    type="button"
-                    aria-label={t('playbook.knowledge.deleteLabel', { name: source.name })}
-                    onClick={() => remove.mutate(source.id)}
-                    className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-                  >
-                    {t('playbook.knowledge.delete')}
-                  </button>
-                )}
+                {canEdit && <KnowledgeSourceActions source={source} onChanged={invalidate} />}
               </li>
             ))}
           </ul>

@@ -7995,6 +7995,14 @@ export interface components {
       enabled: boolean;
       /** Format: date-time */
       created_at: string;
+      /**
+       * @description The automation card this subscription belongs to (FR-MOD-09.4) —
+       *     `zapier` or `make` — or null for a hand-registered webhook. A
+       *     subscription with an `app_id` exists only while that card is
+       *     connected: registering one requires the connection, and
+       *     disconnecting the card removes it.
+       */
+      app_id: string | null;
     };
     /**
      * @description The register response. Carries the signing `secret` in addition to the
@@ -9251,6 +9259,19 @@ export interface components {
        *     it, so a rotated key is recognisable without being usable.
        */
       api_key_last_four: string | null;
+      /**
+       * @description Live figures for an automation card (FR-MOD-09.4) — Zapier and Make
+       *     — and null for every other kind of app. `triggers` counts the
+       *     enabled webhook subscriptions attached to this card; `last_run_at`
+       *     is the newest **successful** delivery made through one of them, or
+       *     null when none has been. The two are independent: a card can have
+       *     triggers wired and nothing to report yet.
+       */
+      automation: components['schemas']['AppAutomationStats'] | null;
+    };
+    AppAutomationStats: {
+      triggers: number;
+      last_run_at: string | null;
     };
     /**
      * @description A marketplace card (FR-MOD-09.1 / 09.2) joined with whether this
@@ -18706,6 +18727,23 @@ export interface operations {
            * @enum {string}
            */
           type?: 'license' | 'bot';
+          /**
+           * @description Attach this subscription to a connected automation card
+           *     (FR-MOD-09.4) — `zapier` or `make`. This is the Zapier REST
+           *     Hooks leg: a zap's catch hook is registered here like any
+           *     other subscriber, and the card then reports how many triggers
+           *     it owns and when one last fired.
+           *
+           *     Two refusals, both 400: the id must name an automation card
+           *     (no other kind of app may own a subscription), and that card
+           *     must already be connected in this workspace. Disconnecting it
+           *     removes every subscription registered this way, so a
+           *     workspace event cannot reach an integration nobody agreed to.
+           *
+           *     Omit it for an ordinary webhook — the default, and what every
+           *     subscription registered before 09.4 is.
+           */
+          app_id?: string;
         };
       };
     };

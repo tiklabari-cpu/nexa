@@ -70,6 +70,24 @@ webhooks:
                 description: |
                   `license` for a workspace integration, `bot` for one scoped to
                   a single bot client. Defaults to `license`.
+              app_id:
+                type: string
+                maxLength: 64
+                description: |
+                  Attach this subscription to a connected automation card
+                  (FR-MOD-09.4) — `zapier` or `make`. This is the Zapier REST
+                  Hooks leg: a zap's catch hook is registered here like any
+                  other subscriber, and the card then reports how many triggers
+                  it owns and when one last fired.
+
+                  Two refusals, both 400: the id must name an automation card
+                  (no other kind of app may own a subscription), and that card
+                  must already be connected in this workspace. Disconnecting it
+                  removes every subscription registered this way, so a
+                  workspace event cannot reach an integration nobody agreed to.
+
+                  Omit it for an ordinary webhook — the default, and what every
+                  subscription registered before 09.4 is.
     responses:
       "201":
         description: Registered — the secret is present on this response only

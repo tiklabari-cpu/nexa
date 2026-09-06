@@ -26,6 +26,14 @@
  * storage would be the wrong trade for a mock that never calls the provider
  * back: nothing downstream ever needs the key again, and a hash cannot be
  * leaked by a query, a log line or a backup.
+ *
+ * Two cards are not mocked at all. Zapier and Make (`isAutomationApp`,
+ * FR-MOD-09.4) report what the workspace has genuinely wired up — the count of
+ * webhook subscriptions attached to the card and the last one that delivered —
+ * because for an automation platform those two numbers *are* the integration.
+ * They used to be drawn from a fixed option list like every other card's, which
+ * is the finding this closed: a card that looked like it was reporting and was
+ * not.
  */
 import { Buffer } from 'node:buffer';
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -33,14 +41,18 @@ import {
   APP_API_KEY_MAX_LENGTH,
   APP_API_KEY_MIN_LENGTH,
   APP_CATALOG,
+  NO_AUTOMATION_STATS,
   appApiKeyLastFour,
   appApiKeyProblem,
+  appAutomationChatData,
   appChatData,
   filterAppCatalog,
   findApp,
+  isAutomationApp,
   isChannelApp,
   maskApiKey,
   paginateApps,
+  type AppAutomationStats,
   type AppCatalogEntry,
   type AppCategory,
   type AppChatData,
@@ -51,6 +63,7 @@ import {
 import { ApiError } from '../../lib/api-error.js';
 import { hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { WebhookService } from '../webhooks/webhook-service.js';
 
 /** A start's `state` is good for ten minutes — long enough for a consent, not to replay. */
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -132,8 +145,21 @@ function requireProvider(appId: string, provider: AppProvider): AppCatalogEntry 
   return entry;
 }
 
-/** A catalogue card joined with this workspace's connection, if any. */
-function toListItem(entry: AppCatalogEntry, row: InstallationRow | null): AppListItem {
+/**
+ * A catalogue card joined with this workspace's connection, if any.
+ *
+ * `automation` is the one field that is not derivable from the two arguments'
+ * static halves: an automation card carries what the workspace has actually
+ * wired up (FR-MOD-09.4), and every other card carries null. A connected
+ * automation card with no stats read yet gets {@link NO_AUTOMATION_STATS} — the
+ * honest zero — rather than being left null, which would read as "this is not
+ * an automation card".
+ */
+function toListItem(
+  entry: AppCatalogEntry,
+  row: InstallationRow | null,
+  automation?: AppAutomationStats,
+): AppListItem {
   return {
     id: entry.id,
     name: entry.name,
@@ -152,6 +178,7 @@ function toListItem(entry: AppCatalogEntry, row: InstallationRow | null): AppLis
           scopes: [...entry.scopes],
           connected_at: row.connectedAt.toISOString(),
           api_key_last_four: row.apiKeyLastFour,
+          automation: isAutomationApp(entry) ? (automation ?? NO_AUTOMATION_STATS) : null,
         }
       : null,
   };
@@ -159,9 +186,31 @@ function toListItem(entry: AppCatalogEntry, row: InstallationRow | null): AppLis
 
 export class AppService {
   readonly #secret: string;
+  /**
+   * The registry an automation card's two figures are read from (FR-MOD-09.4).
+   * Reused rather than re-queried here so there is exactly one definition of
+   * what "active zaps" and "last run" mean — the same one the developer
+   * portal's subscription list is built from.
+   */
+  readonly #webhooks = new WebhookService();
 
   constructor(secret: string) {
     this.#secret = secret;
+  }
+
+  /**
+   * Live automation figures for whichever of `entries` are automation cards.
+   *
+   * Returns an empty map when none of them is, which is the overwhelmingly
+   * common case: a page of ninety CRM cards costs no extra query at all.
+   */
+  async #automationStats(
+    tx: TenantClient,
+    entries: readonly AppCatalogEntry[],
+  ): Promise<Map<string, AppAutomationStats>> {
+    const appIds = entries.filter(isAutomationApp).map((entry) => entry.id);
+    if (appIds.length === 0) return new Map();
+    return this.#webhooks.automationStats(tx, appIds);
   }
 
   /**
@@ -204,9 +253,18 @@ export class AppService {
       where: { licenseId: tenant.licenseId, appId: { in: page.page.map((entry) => entry.id) } },
     });
     const byApp = new Map(rows.map((row) => [row.appId, row]));
+    // Only for the automation cards that are actually connected on this page:
+    // an unconnected Zapier has nothing wired by definition, and reading the
+    // registry for it would be a query whose answer is already known.
+    const stats = await this.#automationStats(
+      tx,
+      page.page.filter((entry) => byApp.has(entry.id)),
+    );
 
     return {
-      items: page.page.map((entry) => toListItem(entry, byApp.get(entry.id) ?? null)),
+      items: page.page.map((entry) =>
+        toListItem(entry, byApp.get(entry.id) ?? null, stats.get(entry.id)),
+      ),
       total: page.total,
       ...(page.nextPageId !== undefined ? { nextPageId: page.nextPageId } : {}),
     };
@@ -273,7 +331,9 @@ export class AppService {
         externalAccount,
       },
     });
-    return toListItem(entry, row);
+    // Read rather than assumed zero: re-connecting a card whose subscriptions
+    // are still in place must not report it as having none.
+    return toListItem(entry, row, (await this.#automationStats(tx, [entry])).get(entry.id));
   }
 
   /**
@@ -332,15 +392,29 @@ export class AppService {
         apiKeyLastFour: lastFour,
       },
     });
-    return toListItem(entry, row);
+    // Same reason as the OAuth path: rotating Make's key leaves its scenarios
+    // wired, so the card has to keep saying so.
+    return toListItem(entry, row, (await this.#automationStats(tx, [entry])).get(entry.id));
   }
 
-  /** Disconnect an app. Returns the number of rows removed — 0 means not connected. */
+  /**
+   * Disconnect an app. Returns the number of rows removed — 0 means not connected.
+   *
+   * For an automation card this also removes its subscriptions (FR-MOD-09.4),
+   * in the same transaction. That is what makes the negative gate a property
+   * rather than a promise: after a disconnect there is no row left for the
+   * dispatcher to find, so the workspace event that used to reach the zap
+   * reaches nothing at all — and a later reconnect cannot silently resurrect a
+   * target the admin last saw months ago.
+   */
   async disconnect(tx: TenantClient, tenant: TenantContext, appId: string): Promise<number> {
-    requireConnectableApp(appId);
+    const entry = requireConnectableApp(appId);
     const { count } = await tx.appInstallation.deleteMany({
       where: { licenseId: tenant.licenseId, appId },
     });
+    if (count > 0 && isAutomationApp(entry)) {
+      await this.#webhooks.unregisterForApp(tx, entry.id);
+    }
     return count;
   }
 
@@ -360,13 +434,22 @@ export class AppService {
 
     const installed = await tx.appInstallation.findMany({ where: { licenseId: tenant.licenseId } });
     const seed = chat.customer.email ?? chat.customer.id;
-    return (
-      installed
-        .map((row) => findApp(row.appId))
-        // Only data apps surface in-chat; channel apps never reach here (they are
-        // not connectable in the marketplace), but keep the filter explicit.
-        .filter((entry): entry is AppCatalogEntry => entry !== undefined && !isChannelApp(entry))
-        .map((entry) => appChatData(entry, seed))
+    const entries = installed
+      .map((row) => findApp(row.appId))
+      // Only data apps surface in-chat; channel apps never reach here (they are
+      // not connectable in the marketplace), but keep the filter explicit.
+      .filter((entry): entry is AppCatalogEntry => entry !== undefined && !isChannelApp(entry));
+
+    // An automation card is not a data source about this customer, so its two
+    // figures come from the workspace's own registry (FR-MOD-09.4) and never
+    // from the deterministic customer stub. Routing one through `appChatData`
+    // is exactly the defect this closed — it used to answer with a plausible
+    // number drawn from a fixed list.
+    const stats = await this.#automationStats(tx, entries);
+    return entries.map((entry) =>
+      isAutomationApp(entry)
+        ? appAutomationChatData(entry, stats.get(entry.id) ?? NO_AUTOMATION_STATS)
+        : appChatData(entry, seed),
     );
   }
 

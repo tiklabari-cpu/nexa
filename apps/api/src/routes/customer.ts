@@ -22,6 +22,7 @@ import {
   typingStateKey,
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
+import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { evaluateSpam, isSpamFilterEnabled } from '../services/security/spam-filter.js';
@@ -195,10 +196,33 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function customerRoutes(
   app: FastifyInstance,
-  { env, mailer, push }: { env: Env; mailer: Mailer; push: PushProvider },
+  {
+    env,
+    mailer,
+    push,
+    automations,
+  }: {
+    env: Env;
+    mailer: Mailer;
+    push: PushProvider;
+    /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
+    automations?: WorkspaceEventDispatcher;
+  },
 ): Promise<void> {
   const publisher = new RealtimePublisher(app.redis, app.log);
-  const chats = new ChatService(app.db, app.redis, publisher);
+  // A chat the visitor opened from the widget is as much a workspace event as
+  // one an agent started, so the same emitter is wired on this side too — a zap
+  // that only fired for agent-opened chats would miss almost every one.
+  const chats = new ChatService(
+    app.db,
+    app.redis,
+    publisher,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    automations,
+  );
   const customerDirectory = new CustomerService();
   const customFields = new CustomFieldService();
   const goals = new GoalService();

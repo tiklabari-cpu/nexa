@@ -45,6 +45,8 @@ export const apps: Messages = {
   'apps.marketplace.card.connect': 'Bağlan',
   'apps.marketplace.card.disconnect': 'Bağlantıyı kes',
   'apps.marketplace.card.disconnecting': 'Bağlantı kesiliyor…',
+  'apps.marketplace.card.automation': '{triggers} tetikleyici · son çalışma {lastRun}',
+  'apps.marketplace.card.automationNeverRun': 'hiç',
 
   'apps.marketplace.consent.title': '{name} uygulamasını bağla',
   'apps.marketplace.consent.description': 'Bu uygulama aşağıdaki izinleri istiyor:',
@@ -144,6 +146,7 @@ export const apps: Messages = {
   'apps.developers.webhooks.deleteFor': '{url} için webhook’u sil',
   'apps.developers.webhooks.botScoped': 'Bot kapsamlı',
   'apps.developers.webhooks.workspaceWide': 'Çalışma alanı geneli',
+  'apps.developers.webhooks.viaApp': '{app} üzerinden',
 
   'apps.developers.webhooks.form.urlLabel': 'URL',
   'apps.developers.webhooks.form.urlRequired': 'Webhook’u alacak URL’yi girin.',
@@ -151,6 +154,8 @@ export const apps: Messages = {
   'apps.developers.webhooks.form.eventRequired': 'Bir olay seçin.',
   'apps.developers.webhooks.form.loadingEvents': 'Olaylar yükleniyor…',
   'apps.developers.webhooks.form.selectEvent': 'Bir olay seçin…',
+  'apps.developers.webhooks.form.appLabel': 'Otomasyon uygulaması',
+  'apps.developers.webhooks.form.appNone': 'Yok',
   'apps.developers.webhooks.form.subscribe': 'Abone ol',
   'apps.developers.webhooks.form.subscribing': 'Abone olunuyor…',
 

@@ -58,6 +58,11 @@ export const apps: Messages = {
   'apps.marketplace.card.connect': 'Connect',
   'apps.marketplace.card.disconnect': 'Disconnect',
   'apps.marketplace.card.disconnecting': 'Disconnecting…',
+  // The automation cards' two live figures (FR-MOD-09.4). Read from the
+  // workspace's own webhook registry, so the sentence is chrome and the
+  // numbers in it are not.
+  'apps.marketplace.card.automation': '{triggers} trigger(s) · last run {lastRun}',
+  'apps.marketplace.card.automationNeverRun': 'never',
 
   // ConsentDialog — the OAuth permission step
   'apps.marketplace.consent.title': 'Connect {name}',
@@ -168,6 +173,7 @@ export const apps: Messages = {
   'apps.developers.webhooks.deleteFor': 'Delete webhook for {url}',
   'apps.developers.webhooks.botScoped': 'Bot-scoped',
   'apps.developers.webhooks.workspaceWide': 'Workspace-wide',
+  'apps.developers.webhooks.viaApp': 'via {app}',
 
   // SubscribeForm
   'apps.developers.webhooks.form.urlLabel': 'URL',
@@ -176,6 +182,8 @@ export const apps: Messages = {
   'apps.developers.webhooks.form.eventRequired': 'Choose an event.',
   'apps.developers.webhooks.form.loadingEvents': 'Loading events…',
   'apps.developers.webhooks.form.selectEvent': 'Select an event…',
+  'apps.developers.webhooks.form.appLabel': 'Automation app',
+  'apps.developers.webhooks.form.appNone': 'None',
   'apps.developers.webhooks.form.subscribe': 'Subscribe',
   'apps.developers.webhooks.form.subscribing': 'Subscribing…',
 

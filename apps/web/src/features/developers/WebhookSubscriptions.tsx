@@ -26,7 +26,12 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { IntegrationAction, IntegrationTrigger } from '@nexa/types';
+import type {
+  AppListItem,
+  AppListResponse,
+  IntegrationAction,
+  IntegrationTrigger,
+} from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -39,6 +44,7 @@ import { useTranslate } from '../../lib/i18n.js';
 
 const WEBHOOKS_KEY = ['developers', 'webhooks'] as const;
 const MANIFEST_KEY = ['developers', 'integration-manifest'] as const;
+const AUTOMATION_APPS_KEY = ['developers', 'automation-apps'] as const;
 
 interface Webhook {
   id: string;
@@ -47,6 +53,8 @@ interface Webhook {
   type: 'license' | 'bot';
   enabled: boolean;
   created_at: string;
+  /** The automation card this subscription belongs to (FR-MOD-09.4), or null. */
+  app_id: string | null;
 }
 
 /** The register response — the signing secret, present once and only here. */
@@ -59,6 +67,27 @@ interface IntegrationManifest {
   actions: readonly IntegrationAction[];
   subscribe: { method: string; path: string };
   unsubscribe: { method: string; path: string };
+}
+
+/**
+ * The automation cards this workspace has connected (FR-MOD-09.4).
+ *
+ * Read rather than hard-coded, and *connected* rather than merely catalogued:
+ * the server refuses a subscription for a card that is not connected, so
+ * offering one here would only produce a 400 the person cannot act on. One
+ * request, narrowed to the catalogue's `productivity` section — the two
+ * automation platforms both live there — and filtered to the cards that came
+ * back with live automation figures, which is exactly the set the server will
+ * accept.
+ */
+function useConnectedAutomationApps() {
+  const api = useApiClient();
+  return useQuery({
+    queryKey: AUTOMATION_APPS_KEY,
+    queryFn: () => api.get<AppListResponse>('/settings/apps?category=productivity&limit=100'),
+    select: (data) => data.items.filter((app) => app.installation?.automation),
+    staleTime: 30_000,
+  });
 }
 
 function useIntegrationManifest() {
@@ -76,6 +105,7 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
   const api = useApiClient();
   const t = useTranslate();
   const manifest = useIntegrationManifest();
+  const automationApps = useConnectedAutomationApps();
   const [newSubscription, setNewSubscription] = useState<WebhookRegistration | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Webhook | null>(null);
 
@@ -99,6 +129,7 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
           {canEdit && (
             <SubscribeForm
               manifestTriggers={manifest.data?.triggers ?? []}
+              automationApps={automationApps.data ?? []}
               onSubscribed={setNewSubscription}
             />
           )}
@@ -151,6 +182,17 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
                         ? t('apps.developers.webhooks.botScoped')
                         : t('apps.developers.webhooks.workspaceWide')}
                     </span>
+                    {/* Which automation card owns this subscription (FR-MOD-09.4).
+                        Named from the connected-apps list so the row says
+                        "Zapier" rather than the catalogue id, and falls back to
+                        the id when that list has not arrived yet. */}
+                    {webhook.app_id && (
+                      <span className="rounded-sm bg-inset px-1.5 py-0.5">
+                        {t('apps.developers.webhooks.viaApp', {
+                          app: appName(automationApps.data, webhook.app_id),
+                        })}
+                      </span>
+                    )}
                     <span>{formatDateTime(webhook.created_at)}</span>
                   </div>
                 </li>
@@ -176,11 +218,19 @@ export function WebhookSubscriptions({ canEdit }: { canEdit: boolean }): ReactEl
   );
 }
 
+/** A connected card's display name, or its catalogue id when the list is not in yet. */
+function appName(apps: readonly AppListItem[] | undefined, appId: string): string {
+  return apps?.find((app) => app.id === appId)?.name ?? appId;
+}
+
 function SubscribeForm({
   manifestTriggers,
+  automationApps,
   onSubscribed,
 }: {
   manifestTriggers: readonly IntegrationTrigger[];
+  /** The connected automation cards a subscription may be attached to (FR-MOD-09.4). */
+  automationApps: readonly AppListItem[];
   onSubscribed: (registration: WebhookRegistration) => void;
 }): ReactElement {
   const api = useApiClient();
@@ -188,15 +238,20 @@ function SubscribeForm({
   const queryClient = useQueryClient();
 
   const subscribe = useMutation({
-    mutationFn: (body: { url: string; action: string }) =>
+    mutationFn: (body: { url: string; action: string; app_id?: string }) =>
       api.post<WebhookRegistration>('/webhooks', body),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: WEBHOOKS_KEY });
+      // The card's trigger count just changed, and it is read through a
+      // different query than this list.
+      await queryClient.invalidateQueries({ queryKey: AUTOMATION_APPS_KEY });
     },
   });
 
   const form = useForm({
-    initial: { url: '', action: '' },
+    // `app_id` is deliberately un-validated: a subscription with no automation
+    // card is the ordinary case — every webhook registered before 09.4 is one.
+    initial: { url: '', action: '', app_id: '' },
     validators: {
       url: required(t('apps.developers.webhooks.form.urlRequired')),
       action: required(t('apps.developers.webhooks.form.eventRequired')),
@@ -206,16 +261,20 @@ function SubscribeForm({
         const registration = await subscribe.mutateAsync({
           url: values.url.trim(),
           action: values.action,
+          ...(values.app_id ? { app_id: values.app_id } : {}),
         });
         reset();
         onSubscribed(registration);
       } catch (error) {
         // The server's SSRF and shape checks (`assertPublicHttpUrl`) are both
         // reported as a validation error naming the URL — pin it under the
-        // field the person was looking at rather than a generic banner.
+        // field the person was looking at rather than a generic banner. The
+        // two `app_id` refusals (not an automation card / not connected) are
+        // the exception, and the server prefixes them, so the client can tell
+        // them apart without re-deriving the rule it is not the authority on.
         if (error instanceof ApiClientError && error.type === 'validation') {
-          // i18n-ignore: server names the exact SSRF/shape rejection, see the note above.
-          setFieldError('url', error.message);
+          // i18n-ignore: server names the exact rejection, see the note above.
+          setFieldError(error.message.startsWith('app_id:') ? 'app_id' : 'url', error.message);
           return;
         }
         setSubmitError(t(errorMessageKey(error)));
@@ -225,6 +284,7 @@ function SubscribeForm({
 
   const urlError = form.errorFor('url');
   const actionError = form.errorFor('action');
+  const appError = form.errorFor('app_id');
 
   return (
     <form
@@ -276,6 +336,34 @@ function SubscribeForm({
         </select>
         <FieldError id="webhook-action-error" message={actionError} />
       </label>
+
+      {/* Only rendered when there is something to choose: a workspace with no
+          automation card connected has no reason to be shown an empty select,
+          and the field is optional in every case (FR-MOD-09.4). */}
+      {automationApps.length > 0 && (
+        <label htmlFor="webhook-app" className="flex w-52 flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('apps.developers.webhooks.form.appLabel')}
+          </span>
+          <select
+            id="webhook-app"
+            value={form.values.app_id}
+            onChange={(event) => form.setValue('app_id', event.target.value)}
+            onBlur={() => form.blur('app_id')}
+            aria-invalid={appError ? true : undefined}
+            aria-describedby={appError ? 'webhook-app-error' : undefined}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          >
+            <option value="">{t('apps.developers.webhooks.form.appNone')}</option>
+            {automationApps.map((app) => (
+              <option key={app.id} value={app.id}>
+                {app.name}
+              </option>
+            ))}
+          </select>
+          <FieldError id="webhook-app-error" message={appError} />
+        </label>
+      )}
 
       <button
         type="submit"

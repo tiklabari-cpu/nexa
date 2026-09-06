@@ -18,6 +18,7 @@ import type { Env } from '../config/env.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { buildSchedulerJobs } from '../services/scheduler/jobs.js';
 import { Scheduler } from '../services/scheduler/scheduler.js';
+import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import type { Telemetry } from '../telemetry/telemetry.js';
 
 declare module 'fastify' {
@@ -31,6 +32,12 @@ export interface SchedulerPluginOptions {
   mailer: Mailer;
   /** Omitted or null disables spans; the jobs still run and still log. */
   telemetry?: Telemetry | null;
+  /**
+   * Fans a sweep-driven lifecycle event out to Zapier/Make subscriptions
+   * (FR-MOD-09.4). Omitted, the sweeps close chats exactly as before and tell
+   * nobody outside the building.
+   */
+  automations?: WorkspaceEventDispatcher;
 }
 
 async function schedulerPlugin(
@@ -50,6 +57,7 @@ async function schedulerPlugin(
     readDb: app.dbRead,
     env: options.env,
     mailer: options.mailer,
+    ...(options.automations ? { automations: options.automations } : {}),
   })) {
     scheduler.register(job);
   }

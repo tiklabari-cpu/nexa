@@ -105,7 +105,19 @@ export type AppCategory = (typeof APP_CATEGORIES)[number];
 export interface AppDataField {
   label: string;
   options: readonly string[];
+  /**
+   * Set when the value is **read from the workspace** rather than drawn from
+   * `options` — the automation cards' two figures (FR-MOD-09.4). Such a field
+   * carries an empty `options` on purpose: there is no plausible list to pick
+   * from, because the number is a fact about this workspace's own automation
+   * registry. {@link appAutomationChatData} is what fills it in;
+   * {@link appChatData} deliberately cannot.
+   */
+  source?: AppDataFieldSource;
 }
+
+/** Where a computed field's value comes from. See {@link AppDataField.source}. */
+export type AppDataFieldSource = 'automation_triggers' | 'automation_last_run';
 
 /** A marketplace card: the static description of an integration. */
 export interface AppCatalogEntry {
@@ -126,6 +138,15 @@ export interface AppCatalogEntry {
    * absent. Every other (data) app has them.
    */
   channel?: ChannelType;
+  /**
+   * Set on an automation-platform card — Zapier and Make (FR-MOD-09.4). Such a
+   * card is not a data source about a customer: what it has to show is what the
+   * workspace has actually wired up, so its `dataFields` are computed
+   * (`source`) rather than drawn from a fixed list of plausible-looking
+   * options. It is also the only kind of card a webhook subscription may be
+   * attached to (`POST /webhooks` `app_id`).
+   */
+  automation?: true;
   /** Header the connected app's data sits under, in-chat. Data apps only. */
   dataLabel?: string;
   /** The fields that data is made of. Data apps only. */
@@ -402,10 +423,11 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     description:
       'Trigger zaps from workspace events — register a Zapier app through the Nexa partner portal.',
     scopes: ['zaps.trigger', 'zaps.read'],
+    automation: true,
     dataLabel: 'Zapier',
     dataFields: [
-      { label: 'Active zaps', options: ['0', '1', '3', '7'] },
-      { label: 'Last zap run', options: ['—', 'Today', 'Yesterday', 'Last week'] },
+      { label: 'Active zaps', options: [], source: 'automation_triggers' },
+      { label: 'Last zap run', options: [], source: 'automation_last_run' },
     ],
   },
   {
@@ -417,10 +439,11 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     description:
       'Run Make scenarios against this workspace — register a Make app through the Nexa partner portal.',
     scopes: ['scenarios.trigger', 'scenarios.read'],
+    automation: true,
     dataLabel: 'Make',
     dataFields: [
-      { label: 'Active scenarios', options: ['0', '2', '5', '9'] },
-      { label: 'Last run', options: ['—', 'Success', 'Failed', 'Never run'] },
+      { label: 'Active scenarios', options: [], source: 'automation_triggers' },
+      { label: 'Last run', options: [], source: 'automation_last_run' },
     ],
   },
   {
@@ -1682,6 +1705,67 @@ export function connectableApps(): AppCatalogEntry[] {
   return APP_CATALOG.filter((entry) => !isChannelApp(entry));
 }
 
+/**
+ * True when an app is an automation platform — Zapier or Make (FR-MOD-09.4).
+ *
+ * The predicate exists so the rule "a webhook subscription may only be attached
+ * to an automation card" has one definition that the server, the console and
+ * the tests all read, rather than a list of two ids repeated in three places.
+ */
+export function isAutomationApp(
+  entry: AppCatalogEntry,
+): entry is AppCatalogEntry & { automation: true } {
+  return entry.automation === true;
+}
+
+/** The automation-platform cards — what `POST /webhooks` will accept an `app_id` for. */
+export function automationApps(): AppCatalogEntry[] {
+  return APP_CATALOG.filter(isAutomationApp);
+}
+
+/**
+ * What an automation card actually has to show: how many triggers this
+ * workspace has wired up, and when one last fired (FR-MOD-09.4).
+ *
+ * Both are facts about the workspace's own webhook registry — the count of
+ * enabled subscriptions attached to the card, and the newest *successful*
+ * delivery made through one of them. `last_run_at` is null when none has ever
+ * been delivered, which is a different statement from "zero triggers": a card
+ * can have three zaps wired and nothing to report yet.
+ */
+export interface AppAutomationStats {
+  triggers: number;
+  last_run_at: string | null;
+}
+
+/** A card with no automation wired yet — the honest zero, not an absence. */
+export const NO_AUTOMATION_STATS: AppAutomationStats = { triggers: 0, last_run_at: null };
+
+/**
+ * How long ago an automation last ran, in the vocabulary the card shows.
+ *
+ * Deliberately coarse: the figure answers "is this thing alive?", and a card
+ * that reads "Today" survives a page cached for a minute, where a
+ * to-the-second age would be wrong the moment it rendered. `now` is a
+ * parameter so the bucket is a pure function of two timestamps and can be
+ * tested without freezing the clock.
+ */
+export function formatLastRun(lastRunAt: string | null, now: Date = new Date()): string {
+  if (!lastRunAt) return 'Never run';
+  const then = new Date(lastRunAt);
+  if (Number.isNaN(then.getTime())) return 'Never run';
+  // Whole days between the two calendar dates, in UTC — so "yesterday" means a
+  // different day rather than "more than 24 hours", which is what a reader
+  // means by it.
+  const dayOf = (d: Date): number => Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const days = Math.round((dayOf(now) - dayOf(then)) / 86_400_000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days / 7)} weeks ago`;
+  return 'Over a month ago';
+}
+
 /** A connected integration, as stored for a workspace. */
 export interface AppInstallation {
   app_id: string;
@@ -1701,6 +1785,14 @@ export interface AppInstallation {
    * this is the whole of what a client can learn about it.
    */
   api_key_last_four: string | null;
+  /**
+   * Live automation figures for an {@link isAutomationApp} card (FR-MOD-09.4),
+   * null for every other kind. Present on the card itself so a connected Zapier
+   * says what it is actually doing without the reader having to open the
+   * developer portal — and so the two figures can never be a plausible-looking
+   * constant, which is exactly what they used to be.
+   */
+  automation: AppAutomationStats | null;
 }
 
 /** A marketplace card joined with whether this workspace has connected it. */
@@ -1782,6 +1874,43 @@ export function appChatData(entry: AppCatalogEntry, seed: string): AppChatData {
     fields: fields.map((field) => ({
       label: field.label,
       value: field.options[hash32(`${seed}:${field.label}`) % field.options.length] ?? '—',
+    })),
+  };
+}
+
+/**
+ * The data an **automation** card shows (FR-MOD-09.4) — the same shape
+ * {@link appChatData} produces, but every value read from `stats` rather than
+ * invented.
+ *
+ * This function exists instead of a branch inside `appChatData` because the two
+ * take different inputs: the mock needs a customer to be deterministic in, and
+ * an automation figure is not about a customer at all — it is the workspace's
+ * own. Keeping them apart is what makes the failure mode loud: a caller that
+ * routes a Zapier card through `appChatData` gets em-dashes (its `options` are
+ * empty by design), not a number that looks plausible and is a lie. That is the
+ * defect this whole item is about, so it is pinned by a test in both
+ * directions.
+ */
+export function appAutomationChatData(
+  entry: AppCatalogEntry,
+  stats: AppAutomationStats,
+  now: Date = new Date(),
+): AppChatData {
+  const fields = entry.dataFields ?? [];
+  return {
+    app_id: entry.id,
+    app_name: entry.name,
+    icon: entry.icon,
+    data_label: entry.dataLabel ?? entry.name,
+    fields: fields.map((field) => ({
+      label: field.label,
+      value:
+        field.source === 'automation_triggers'
+          ? String(stats.triggers)
+          : field.source === 'automation_last_run'
+            ? formatLastRun(stats.last_run_at, now)
+            : '—',
     })),
   };
 }

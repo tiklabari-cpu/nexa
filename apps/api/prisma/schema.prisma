@@ -1767,10 +1767,24 @@ model Webhook {
   enabled   Boolean  @default(true)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  /// The automation card this subscription belongs to (FR-MOD-09.4) — a
+  /// catalogue id, `zapier` or `make`. Null for a hand-registered webhook, which
+  /// is what every row was before this column existed.
+  ///
+  /// Deliberately a plain text catalogue id and not a foreign key to
+  /// `app_installations`: the catalogue is static data in @nexa/types, and the
+  /// installation row is what the *connection* is. Tying the two by id lets the
+  /// gate live where it belongs — a subscription may only be created while the
+  /// card is connected, and disconnecting removes them — without a cascade that
+  /// would delete a workspace's automations as a side effect of a schema
+  /// relation nobody reads.
+  appId String? @map("app_id")
+
   license    License           @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   deliveries WebhookDelivery[]
 
   @@index([licenseId, action, enabled])
+  @@index([licenseId, appId])
   @@map("webhooks")
 }
 

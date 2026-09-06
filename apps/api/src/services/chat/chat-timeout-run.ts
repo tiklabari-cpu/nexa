@@ -23,6 +23,7 @@ loadEnvFile();
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
 import { createMailer } from '../mail/mailer.js';
+import { createWorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatService } from './chat-service.js';
 import { ChatTimeoutSweeper } from './chat-timeout.js';
 
@@ -51,6 +52,11 @@ async function main(): Promise<void> {
       undefined,
       { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
       createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+      undefined,
+      // And the same automation fan-out (FR-MOD-09.4): a chat this script
+      // archives is as closed as one an agent archived, so the zap subscribed to
+      // `chat_deactivated` hears about it either way.
+      createWorkspaceEventDispatcher(db),
     );
     const report = await new ChatTimeoutSweeper(db, chats).run();
 

@@ -38,6 +38,8 @@ import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
+import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
+import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
 import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
 import reportRoutes from './routes/reports.js';
 import scheduledReportRoutes from './routes/scheduled-reports.js';
@@ -92,6 +94,14 @@ export interface BuildServerOptions {
    * redaction happened rather than that a helper exists.
    */
   logStream?: NodeJS.WritableStream;
+  /**
+   * How an outbound webhook leaves the process (FR-MOD-09.4 / 08.8.4). Omitted,
+   * the real HTTP sender — no request is ever made unless a workspace has
+   * registered a subscription. A test passes a recorder, on exactly the terms
+   * the mailer and push provider are injected: the network is mocked
+   * (MASTER-PROMPT §5), never contacted.
+   */
+  webhookSender?: WebhookSender;
 }
 
 export async function buildServer({
@@ -105,6 +115,7 @@ export async function buildServer({
   push = createPushProvider(env.PUSH_PROVIDER, { dir: env.PUSH_DIR }),
   telemetry,
   logStream,
+  webhookSender,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -246,9 +257,18 @@ export async function buildServer({
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  // One emitter for the whole server: the caller the webhook stack never had
+  // (FR-MOD-09.4). Built here, once `database` has decorated `app.db`, and
+  // handed both to the sweeps and to every route that commits an event
+  // somebody can subscribe to — a chat the timeout sweep archives has to reach
+  // the same zap as one an agent archived.
+  const automations = createWorkspaceEventDispatcher(app.db, {
+    ...(webhookSender ? { sender: webhookSender } : {}),
+    logger: app.log,
+  });
   // After both stores it reads through, before anything request-facing: the
   // five sweeps are background work, not part of answering a request.
-  await app.register(scheduler, { env, mailer, telemetry: telemetryInstance });
+  await app.register(scheduler, { env, mailer, telemetry: telemetryInstance, automations });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
   // phase in registration order — so this is what puts the rate limiter's
@@ -296,19 +316,19 @@ export async function buildServer({
       // exception is deliberate).
       await api.register(scimRoutes, { baseUrl: `${env.API_BASE_URL}${API_PREFIX}/scim/v2` });
       await api.register(accountLifecycleRoutes, { env, mailer });
-      await api.register(chatRoutes, { env, mailer, push });
+      await api.register(chatRoutes, { env, mailer, push, automations });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
-      await api.register(customerRoutes, { env, mailer, push });
+      await api.register(customerRoutes, { env, mailer, push, automations });
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
       await api.register(goalRoutes);
-      await api.register(ticketRoutes);
+      await api.register(ticketRoutes, { automations });
       await api.register(ticketRuleRoutes);
       await api.register(ticketEmailTemplateRoutes);
       await api.register(customFieldRoutes);
-      await api.register(channelRoutes, { env });
+      await api.register(channelRoutes, { env, automations });
       await api.register(reportRoutes, { env });
       await api.register(scheduledReportRoutes);
       await api.register(homeRoutes);
@@ -332,7 +352,7 @@ export async function buildServer({
       await api.register(publicKbSitemapRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
       });
-      await api.register(copilotRoutes, { env });
+      await api.register(copilotRoutes, { env, automations });
       await api.register(commandPaletteRoutes);
       await api.register(appRoutes, { env });
       await api.register(auditLogRoutes, { env });

@@ -17,6 +17,7 @@ import { Prisma } from '@prisma/client';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
+import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { withTenant } from '../lib/tenant.js';
 import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -121,16 +122,29 @@ function secretMatches(provided: string | undefined, expected: string): boolean 
 
 export default async function channelRoutes(
   app: FastifyInstance,
-  options: { env: Env },
+  options: {
+    env: Env;
+    /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
+    automations?: WorkspaceEventDispatcher;
+  },
 ): Promise<void> {
-  const { env } = options;
+  const { env, automations } = options;
   const tickets = new TicketService();
   const channels = new ChannelService();
   const emailAddresses = new InboundEmailAddressService(env.INBOUND_EMAIL_DOMAIN);
   const publisher = new RealtimePublisher(app.redis, app.log);
   // The same chat core the widget uses — so a channel message routes, delivers
   // over realtime and counts toward AI resolution exactly like a Website chat.
-  const chats = new ChatService(app.db, app.redis, publisher);
+  const chats = new ChatService(
+    app.db,
+    app.redis,
+    publisher,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    automations,
+  );
 
   // --- Adapter channels: connect / list / disconnect (the `channels` consumer)
 

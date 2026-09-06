@@ -9331,10 +9331,10 @@
             "description": "Katalogdaki `api_key` kartlari bugun OAuth mock akisindan geciyor. PRD KK \"her biri OAuth/API key\" diyor; ikinci yol yok. api_key kartlari icin anahtar girisiyle baglanan, anahtari hash`li saklayan ayri bir dal eklenir.",
             "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> resume -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1 (parcalama §1.3, Docker onkosulu §1.4); git akisi §2; handoff bicimi §4;\ntest<->gereksinim etiketi §7 (yeni/degisen test basligina `(FR-MOD-...)` yazilir). Sinirlar `CLAUDE.md`.\nContract-first sira (MASTER-PROMPT): OpenAPI + @nexa/types -> migration -> backend + unit -> frontend +\ntyped client -> E2E. Etiket = model x efor (PLAN §5.1.1), run-loop basliktan okur.\n\n## Eksik olan (olculdu, 2026-09-04)\n\n`packages/types/src/apps.ts:31` — `APP_PROVIDERS = [\"oauth\", \"api_key\"]`, ve katalogdaki 104 kartin\ncogunda `provider: \"api_key\"`. Ama `apps/api/src/services/apps/app-service.ts`:\n- `oauthStart` (:172) her kart icin ayni `https://apps.nexa.local/oauth/<id>/authorize` URL`ini uretiyor,\n- `oauthCallback` (:187) her kart icin ayni `state`+`code` dogrulamasini uyguluyor,\nyani `provider` alani hicbir davranisi degistirmiyor — **yalnizca bir etiket**.\n\n## Yapilacak\n\n1. Kontrat once: api_key kartlari icin anahtar kabul eden bir baglanti yolu (`POST /apps/:appId/connect`\n   ya da mevcut ucun `oneOf` govdesi — hangisi mobil parite sayacini bozmuyorsa onu sec, gerekcesini yaz).\n2. `AppService`: `entry.provider === \"api_key\"` dali. `oauthStart` bu kartlar icin **reddeder**\n   (400, \"This app connects with an API key\"), `oauthCallback` de oyle — iki yol birbirinin yerine\n   gecemez, aksi halde `provider` yine anlamsiz kalir.\n3. Anahtar **hash`li** saklanir (PAT deseni: `apps/api/src/lib` altindaki mevcut hash yardimcisi).\n   `app_installations` satirina hash + son 4 hane gibi bir gosterim alani; duz metin YAZILMAZ.\n   Migration gerekiyorsa CONVENTIONS §6.3 \"genislet -> tasi -> daralt\" kurali gecerlidir.\n4. `log-redact` kapsami: anahtar log`a dusmemeli.\n5. Web: api_key karti Connect`e basildiginda anahtar formu (mock OAuth modali DEGIL) — `lib/form.tsx`\n   `useForm` deseni, alan-alti hata, gecersizken submit pasif.\n\n## Bilinen tuzaklar\n\n- **`isChannelApp` reddi korunur:** kanal-tipli kart (Messenger/Twilio/WhatsApp/Instagram/Telegram)\n  buradan da baglanamaz, Channels`a yonlendirir. Denetim bu capraz-bagi `gercek` buldu.\n- Istemci dogrulamasi sunucudan DAR olmamali (kayitli tuzak: form validator kendi ucuyla ayni esigi tasir).\n- `apps/web` vitest CPU yuku altinda `userEvent` testlerinde 5000 ms timeout verir; `--maxWorkers=4`.",
             "testStrategy": "OLCULEBILIR KAPI:\n1. Integration: `provider:\"api_key\"` bir kart anahtar ile baglaniyor; `GET /apps` `connected` gosteriyor.\n2. `oauthStart` ayni kart icin 400 donuyor; `provider:\"oauth\"` bir kart icin api_key yolu 400 donuyor\n   (iki yol birbirinin yerine GECMIYOR).\n3. **Sizinti negatifi:** anahtarin duz metni hicbir yanitta ve `log-redact` sonrasi hicbir log\n   satirinda gecmiyor; DB`de yalniz hash var.\n4. Kanal-tipli kart api_key yolundan da reddediliyor (regresyon).\n5. Capraz-kiraci: B`nin bagladigi kart A`nin listesinde gorunmuyor.\n6. Test basliklari `(FR-MOD-09.2)` etiketi tasir. TAM DoD kapisi + kontrat/migration ayaklari.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "202",
-            "updatedAt": "2026-09-06T15:06:18.204Z"
+            "updatedAt": "2026-09-06T15:58:19.000Z"
           },
           {
             "id": 2,
@@ -9357,7 +9357,7 @@
             "parentId": "202"
           }
         ],
-        "updatedAt": "2026-09-06T15:06:18.204Z"
+        "updatedAt": "2026-09-06T15:58:19.000Z"
       },
       {
         "id": "203",
@@ -9428,7 +9428,7 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-06T15:06:18.204Z",
+      "lastModified": "2026-09-06T15:58:19.003Z",
       "taskCount": 204,
       "completedCount": 201,
       "tags": [

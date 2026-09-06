@@ -5661,16 +5661,17 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Sales — tracked-sales skeleton pending the Sales tracker
-     * @description The Sales report (FR-MOD-07.7, v2 payload). Depends on FR-MOD-13.5's Sales
-     *     tracker, which has no data source wired yet: `configured` is `false` and
-     *     every figure is `null`, the same honest "not set up" contract the Reviews
-     *     report's `ecommerce` block uses. Defaults to the last 30 days.
+     * Sales — tracked-sales figures once the Sales tracker is configured
+     * @description The Sales report (FR-MOD-07.7, v2 payload). Reads FR-MOD-13.5's Sales
+     *     tracker: `configured` is `true` and the figures are real once a
+     *     workspace has turned tracking on, the same `tracked_sales` data and the
+     *     same honest "not set up" contract (`configured: false`, every figure
+     *     `null`) the Reviews report's `ecommerce` block uses when it has not.
+     *     Defaults to the last 30 days.
      *
-     *     This is a deliberate skeleton, not a partial implementation — the schema
-     *     has no order/sale model (FR-MOD-13.5 is out of scope here), so nothing is
-     *     queried. Once 13.5 lands, this is the single place the figures get filled
-     *     in; the route, its scope and its response shape do not change.
+     *     `conversions` is this group's own figure, not carried by the Reviews
+     *     block: the count of goal achievements in the window, gated behind the
+     *     same switch as the rest of the block (all-null when not configured).
      */
     get: operations['getReportsSales'];
     put?: never;
@@ -10408,11 +10409,11 @@ export interface components {
     };
     /**
      * @description The Sales report (FR-MOD-07.7, v2 payload; FR-MOD-13.5 dependency): the
-     *     same tracked-sales skeleton as the Reviews report's `ecommerce` block,
-     *     as a report of its own. No sales/order source exists yet, so
-     *     `configured` is `false` and every figure `null` — an honest "not set
-     *     up" state, never a fabricated zero, until FR-MOD-13.5's Sales tracker
-     *     wires a real source.
+     *     same tracked-sales data as the Reviews report's `ecommerce` block, as a
+     *     report of its own, plus `conversions`. `configured` is `true` and every
+     *     figure real once a workspace has turned FR-MOD-13.5's Sales tracker on;
+     *     an honest "not set up" state — `configured: false`, every figure
+     *     `null`, never a fabricated zero — while it is off or never configured.
      */
     ReportsSales: {
       range: {
@@ -10422,9 +10423,11 @@ export interface components {
         to: string;
       };
       /**
-       * @description The benchmark window, as honest as the report itself: with no sales
-       *     source there is nothing to have been better or worse than, so every
-       *     figure is `null` here too. Zeros would let a surface render a
+       * @description The benchmark window, as honest as the report itself: real figures
+       *     over the baseline window once the Sales tracker is configured, so a
+       *     "vs previous" comparison is possible. Otherwise every figure is
+       *     `null` here too — with no sales source there is nothing to have
+       *     been better or worse than, and zeros would let a surface render a
        *     "0 → 0, no change" badge that reads as a measurement.
        */
       previous_period: components['schemas']['BenchmarkWindow'] & {
@@ -10434,7 +10437,7 @@ export interface components {
         currency: string | null;
         conversions: number | null;
       };
-      /** @description Whether a sales-tracking source is wired. Always false in v1. */
+      /** @description Whether a sales-tracking source is wired and turned on. */
       configured: boolean;
       /** @description Attributed orders. Null until configured. */
       tracked_sales: number | null;
@@ -10442,7 +10445,7 @@ export interface components {
       attributed_revenue_cents: number | null;
       /** @description ISO 4217 code for the revenue figure. Null until configured. */
       currency: string | null;
-      /** @description Conversions attributed to supported conversations. Null until configured. */
+      /** @description Goal achievements in the window (FR-MOD-13.3). Null until configured. */
       conversions: number | null;
     };
     /**
@@ -20106,7 +20109,11 @@ export interface operations {
     };
     requestBody?: never;
     responses: {
-      /** @description Sales metrics for the requested window (always `configured:false` in v1) */
+      /**
+       * @description Sales metrics for the requested window — real figures once the
+       *     Sales tracker is configured, the honest `configured:false` skeleton
+       *     otherwise
+       */
       200: {
         headers: {
           [name: string]: unknown;

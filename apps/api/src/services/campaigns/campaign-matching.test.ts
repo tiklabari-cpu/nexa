@@ -195,14 +195,45 @@ describe('resolveCampaignStatus', () => {
 });
 
 describe('campaignPerformance', () => {
-  it('counts displayed / chats / conversion from the sends', () => {
+  const delivered = new Date('2026-01-01T00:00:00Z');
+
+  it('counts displayed / chats / conversion from delivered sends (FR-MOD-03.3.3)', () => {
     expect(
       campaignPerformance([
-        { engaged: false, converted: false },
-        { engaged: true, converted: false },
-        { engaged: true, converted: true },
+        { deliveredAt: delivered, engaged: false, converted: false },
+        { deliveredAt: delivered, engaged: true, converted: false },
+        { deliveredAt: delivered, engaged: true, converted: true },
       ]),
     ).toEqual({ displayed: 3, chats: 2, conversion: 1 });
+  });
+
+  it('does not count a send that has not been delivered yet as displayed (FR-MOD-03.3.1-.3)', () => {
+    expect(
+      campaignPerformance([
+        { deliveredAt: delivered, engaged: false, converted: false },
+        { deliveredAt: null, engaged: false, converted: false },
+      ]),
+    ).toEqual({ displayed: 1, chats: 0, conversion: 0 });
+  });
+
+  it('does not count an undelivered send as a conversion, even if the goal already fired (FR-MOD-03.3.1-.3)', () => {
+    // GoalService.evaluate marks every one of a customer's sends `converted`
+    // on a goal hit without checking delivery (campaign-trigger.ts's M-CAMP-e
+    // note) — a send can carry `converted: true` with `deliveredAt: null`.
+    expect(campaignPerformance([{ deliveredAt: null, engaged: false, converted: true }])).toEqual({
+      displayed: 0,
+      chats: 0,
+      conversion: 0,
+    });
+  });
+
+  it('is all zeros, not NaN/Infinity, when nothing has been delivered yet (FR-MOD-03.3.1-.3)', () => {
+    expect(
+      campaignPerformance([
+        { deliveredAt: null, engaged: false, converted: false },
+        { deliveredAt: null, engaged: false, converted: false },
+      ]),
+    ).toEqual({ displayed: 0, chats: 0, conversion: 0 });
   });
 
   it('is all zeros for a campaign that has fired at nobody', () => {

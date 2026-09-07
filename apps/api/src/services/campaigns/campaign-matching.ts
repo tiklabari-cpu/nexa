@@ -170,19 +170,45 @@ export function resolveCampaignStatus(
 }
 
 /**
- * Displayed / Chats / Conversion over a campaign's sends (FR-MOD-03.3.3).
+ * Displayed / Chats / Conversion over a campaign's sends (FR-MOD-03.3.1-.3).
  *
  * Counted from the sends every time, never cached on the campaign, so the card's
  * numbers can never drift from the rows that produced them.
+ *
+ * A `campaign_sends` row is written the instant a visitor matches — delivery
+ * only happens later, off the widget's own poll (`deliverPendingCampaign`,
+ * `campaign-delivery.ts`). Counting every row as `displayed` therefore counted
+ * visitors who never saw the message, inflating the denominator the card's
+ * conversion rate is read against; `delivered_at` (`M-CAMP-a`) exists precisely
+ * to tell the two cases apart, so `displayed` counts only sends that carry one.
+ *
+ * `conversion` is gated the same way, on purpose: `GoalService.evaluate` marks
+ * every one of a customer's sends `converted` on a goal hit without checking
+ * delivery (a separate, already-recorded write-side decision — see
+ * `campaign-trigger.ts`'s M-CAMP-e note), so an undelivered send can carry
+ * `converted: true`. Counting it here would let `conversion` exceed `displayed`
+ * and make the ratio the card reports meaningless. Gating both on the same
+ * fact keeps `conversion` a subset of `displayed` — a converted-but-undelivered
+ * send simply joins the count once its own delivery poll lands, rather than
+ * ever being subtracted or corrected after the fact.
+ *
+ * `chats` needs no such gate in practice — `markCampaignEngaged` only ever
+ * credits a send that is already delivered (`campaign-engagement.ts`) — but
+ * reading it from the same filtered pass costs nothing and keeps all three
+ * numbers answering "of the ones actually displayed" rather than two of them
+ * quietly answering a different question.
  */
 export function campaignPerformance(
-  sends: ReadonlyArray<{ engaged: boolean; converted: boolean }>,
+  sends: ReadonlyArray<{ deliveredAt: Date | null; engaged: boolean; converted: boolean }>,
 ): CampaignPerformance {
+  let displayed = 0;
   let chats = 0;
   let conversion = 0;
   for (const send of sends) {
+    if (!send.deliveredAt) continue;
+    displayed += 1;
     if (send.engaged) chats += 1;
     if (send.converted) conversion += 1;
   }
-  return { displayed: sends.length, chats, conversion };
+  return { displayed, chats, conversion };
 }

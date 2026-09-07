@@ -45,7 +45,7 @@ const LIVE_WINDOW_MINUTES = 30;
 
 /** The columns needed to build a DTO — sends included for the performance count. */
 const CAMPAIGN_INCLUDE = {
-  sends: { select: { engaged: true, converted: true } },
+  sends: { select: { deliveredAt: true, engaged: true, converted: true } },
 } satisfies Prisma.CampaignInclude;
 
 type CampaignRow = Prisma.CampaignGetPayload<{ include: typeof CAMPAIGN_INCLUDE }>;

@@ -427,8 +427,10 @@ describe('campaign triggering on arrival', () => {
     const { items } = list.json() as {
       items: { id: string; performance: { displayed: number; chats: number } }[];
     };
+    // Undelivered (line above), so the card must not count it as displayed
+    // either (FR-MOD-03.3.1-.3) — `chats: 0` is this test's actual claim.
     expect(items.find((c) => c.id === campaign.id)?.performance).toMatchObject({
-      displayed: 1,
+      displayed: 0,
       chats: 0,
     });
   });

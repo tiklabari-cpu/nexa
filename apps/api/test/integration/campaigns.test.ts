@@ -127,7 +127,10 @@ describe('campaigns', () => {
     expect(response.statusCode).toBe(201);
     const campaign = response.json() as Campaign;
     expect(campaign.status).toBe('ongoing');
-    expect(campaign.performance.displayed).toBe(1);
+    // A `campaign_sends` row exists the instant it matches, but delivery only
+    // happens off the widget's own poll (FR-MOD-03.3.1-.3) — the card must
+    // not count it as displayed yet.
+    expect(campaign.performance.displayed).toBe(0);
 
     const sends = await sendsFor(campaign.id);
     expect(sends.map((s) => s.customerId)).toEqual([shopper]);
@@ -159,7 +162,9 @@ describe('campaigns', () => {
     });
     const campaign = response.json() as Campaign;
 
-    expect(campaign.performance.displayed).toBe(1);
+    // Undelivered yet (FR-MOD-03.3.1-.3) — the send-row check below is what
+    // actually proves the tenant isolation this test is named for.
+    expect(campaign.performance.displayed).toBe(0);
     const reached = (await sendsFor(campaign.id)).map((s) => s.customerId);
     expect(reached).toEqual([mine]);
     expect(reached).not.toContain(theirs);
@@ -374,7 +379,9 @@ describe('campaigns', () => {
       auth(writeToken),
     );
     expect(activated.statusCode).toBe(200);
-    expect((activated.json() as Campaign).performance.displayed).toBe(1);
+    // Fired, not yet delivered (FR-MOD-03.3.1-.3) — the send-row check below
+    // is what proves the toggle actually fired.
+    expect((activated.json() as Campaign).performance.displayed).toBe(0);
     expect((await sendsFor(created.id)).map((s) => s.customerId)).toEqual([shopper]);
 
     // Saving an edit again must not send twice to someone already reached.
@@ -422,10 +429,11 @@ describe('campaigns', () => {
 
   // --- Performance (FR-MOD-03.3.3) -------------------------------------------
 
-  it('counts displayed / chats / conversion from the sends', async () => {
+  it('counts displayed / chats / conversion from delivered sends, not raw send rows (FR-MOD-03.3.1-.3)', async () => {
     const c1 = await seedVisitor(fx.a, 'Displayed only', 'https://shop.example/pricing');
     const c2 = await seedVisitor(fx.a, 'Engaged', 'https://shop.example/pricing');
     const c3 = await seedVisitor(fx.a, 'Converted', 'https://shop.example/pricing');
+    const c4 = await seedVisitor(fx.a, 'Never delivered', 'https://shop.example/pricing');
     const campaign = (
       await create(writeToken, {
         name: 'Pricing',
@@ -433,9 +441,24 @@ describe('campaigns', () => {
         content: { message: 'hi' },
       })
     ).json() as Campaign;
-    expect(campaign.performance).toEqual({ displayed: 3, chats: 0, conversion: 0 });
+    // Four visitors matched and each got a `campaign_sends` row, but none has
+    // been delivered yet (that only happens off the widget's own poll) — a
+    // campaign nobody has seen must read all zeros, not four displayed.
+    expect(campaign.performance).toEqual({ displayed: 0, chats: 0, conversion: 0 });
 
-    // Simulate downstream engagement/conversion on two of the three sends.
+    await owner.campaignSend.updateMany({
+      where: { campaignId: campaign.id, customerId: { in: [c1, c2, c3] } },
+      data: { deliveredAt: new Date() },
+    });
+    // c4's send stays undelivered even though the goal it converted on
+    // already fired — GoalService.evaluate marks every one of a customer's
+    // sends `converted` without checking delivery (campaign-trigger.ts's
+    // M-CAMP-e note) — and it must not inflate the count.
+    await owner.campaignSend.updateMany({
+      where: { campaignId: campaign.id, customerId: c4 },
+      data: { converted: true },
+    });
+    // Simulate downstream engagement/conversion on two of the three delivered sends.
     await owner.campaignSend.updateMany({
       where: { campaignId: campaign.id, customerId: { in: [c2, c3] } },
       data: { engaged: true },
@@ -444,10 +467,52 @@ describe('campaigns', () => {
       where: { campaignId: campaign.id, customerId: c3 },
       data: { converted: true },
     });
-    void c1;
 
     const refreshed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
     expect(refreshed?.performance).toEqual({ displayed: 3, chats: 2, conversion: 1 });
+  });
+
+  it("never counts another tenant's delivered send toward this campaign's figures", async () => {
+    const mine = await seedVisitor(fx.a, 'Mine On Pricing', 'https://shop.example/pricing');
+    const theirs = await seedVisitor(fx.b, 'Theirs On Pricing', 'https://shop.example/pricing');
+
+    const campaign = (
+      await create(writeToken, {
+        name: 'Pricing',
+        conditions: { url_contains: '/pricing' },
+        content: { message: 'hi' },
+      })
+    ).json() as Campaign;
+    // Deliver tenant A's own send, the way the widget's poll would.
+    await owner.campaignSend.updateMany({
+      where: { campaignId: campaign.id, customerId: mine },
+      data: { deliveredAt: new Date() },
+    });
+
+    // Tenant B's own campaign + send for the same page — delivered and
+    // converted — must never be visible to, or counted by, tenant A's.
+    const theirCampaign = await owner.campaign.create({
+      data: {
+        licenseId: fx.b.licenseId,
+        name: 'Theirs',
+        status: 'ongoing',
+        conditions: { url_contains: '/pricing' },
+        content: { message: 'hi' },
+      },
+      select: { id: true },
+    });
+    await owner.campaignSend.create({
+      data: {
+        licenseId: fx.b.licenseId,
+        campaignId: theirCampaign.id,
+        customerId: theirs,
+        deliveredAt: new Date(),
+        converted: true,
+      },
+    });
+
+    const refreshed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
+    expect(refreshed?.performance).toEqual({ displayed: 1, chats: 0, conversion: 0 });
   });
 
   // --- Scope split -----------------------------------------------------------

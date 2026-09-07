@@ -70,4 +70,44 @@ describe('visitorRowActions', () => {
       expect(actions.find((a) => a.id === 'view_profile')?.enabled).toBe(true);
     });
   });
+
+  describe('releasing a watch (FR-MOD-02.1.1, tm 213)', () => {
+    it('offers Stop supervising instead of Supervise once the caller is watching', () => {
+      const ids = visitorRowActions(
+        { activity: 'chatting', chat_id: 'CHAT12345678', is_supervising: true },
+        FULL,
+      ).map((a) => a.id);
+      // Same five slots — Stop supervising occupies Supervise's, not a sixth.
+      expect(ids).toEqual(['start_chat', 'unsupervise', 'assign_to_me', 'view_profile', 'edit']);
+    });
+
+    it('Stop supervising is a read, so it survives losing write, same as Supervise', () => {
+      const ctx: RowActionContext = { ...FULL, canChatWrite: false };
+      const actions = visitorRowActions(
+        { activity: 'chatting', chat_id: 'CHAT12345678', is_supervising: true },
+        ctx,
+      );
+      expect(actions.find((a) => a.id === 'unsupervise')?.enabled).toBe(true);
+    });
+
+    it('disables Stop supervising without chat read, same as Supervise', () => {
+      const ctx: RowActionContext = { ...FULL, canChatRead: false };
+      const actions = visitorRowActions(
+        { activity: 'chatting', chat_id: 'CHAT12345678', is_supervising: true },
+        ctx,
+      );
+      expect(actions.find((a) => a.id === 'unsupervise')?.enabled).toBe(false);
+    });
+
+    it('a visitor with no chat cannot be "supervising" even if the flag is stale', () => {
+      // Defensive: a chat closing (chat_id -> null) must not leave a dangling
+      // Stop supervising button with nothing left to release.
+      const ids = visitorRowActions(
+        { activity: 'browsing', chat_id: null, is_supervising: true },
+        FULL,
+      ).map((a) => a.id);
+      expect(ids).toContain('supervise');
+      expect(ids).not.toContain('unsupervise');
+    });
+  });
 });

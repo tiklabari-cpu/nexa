@@ -27,7 +27,8 @@ export interface RowActionContext {
   canEditCustomer: boolean;
 }
 
-export type RowActionId = 'start_chat' | 'supervise' | 'assign_to_me' | 'view_profile' | 'edit';
+export type RowActionId =
+  'start_chat' | 'supervise' | 'unsupervise' | 'assign_to_me' | 'view_profile' | 'edit';
 
 export interface RowAction {
   id: RowActionId;
@@ -36,17 +37,24 @@ export interface RowAction {
 }
 
 export function visitorRowActions(
-  visitor: { activity: TrafficActivity; chat_id: string | null },
+  visitor: { activity: TrafficActivity; chat_id: string | null; is_supervising?: boolean },
   ctx: RowActionContext,
 ): RowAction[] {
   // The one fact the actions turn on: is there a live conversation to act on?
   const inConversation = visitor.chat_id !== null;
+  // Whether *this* caller is the one watching — a fact the board only knows
+  // about its own clicks (no endpoint reports "who is watching"), so it never
+  // outlives the conversation it was set on.
+  const supervising = inConversation && (visitor.is_supervising ?? false);
 
   return [
     // Proactive contact — only meaningful before a conversation exists.
     { id: 'start_chat', label: 'Start chat', enabled: !inConversation && ctx.canChatWrite },
-    // Watch an ongoing conversation. A read, so it needs no write scope.
-    { id: 'supervise', label: 'Supervise chat', enabled: inConversation && ctx.canChatRead },
+    // Watch an ongoing conversation, or stop — same read scope either way, and
+    // never both at once: only one of the two occupies this slot.
+    supervising
+      ? { id: 'unsupervise', label: 'Stop supervising', enabled: ctx.canChatRead }
+      : { id: 'supervise', label: 'Supervise chat', enabled: inConversation && ctx.canChatRead },
     // Take the conversation over.
     { id: 'assign_to_me', label: 'Assign chat to me', enabled: inConversation && ctx.canChatWrite },
     // Opens the 360° panel in place (FR-MOD-13.2). Unlike the actions above,

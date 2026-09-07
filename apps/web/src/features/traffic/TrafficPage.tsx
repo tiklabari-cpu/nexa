@@ -43,6 +43,7 @@ import { usePagedQuery, type PagedResponse } from '../../lib/paged-query.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { canReadChannels } from '../inbox/views.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
+import { useSupervising } from './supervising-store.js';
 import { TrafficFilters } from './TrafficFilters.js';
 import { VisitorPanel } from './VisitorPanel.js';
 import {
@@ -199,6 +200,7 @@ export const ACTIVITY: Record<TrafficActivity, { tone: StatusTone; label: string
 const ROW_ACTION_LABEL_KEY: Record<RowActionId, string> = {
   start_chat: 'traffic.action.startChat',
   supervise: 'traffic.action.superviseChat',
+  unsupervise: 'traffic.action.stopSupervising',
   assign_to_me: 'traffic.action.assignToMe',
   view_profile: 'traffic.action.viewProfile',
   edit: 'traffic.action.editContact',
@@ -388,15 +390,45 @@ export function TrafficPage(): ReactElement {
     },
   });
 
+  // Chats *this agent* has registered as a watcher on (`supervising-store.ts`,
+  // persisted — `Supervise chat` navigates away in the same click, and coming
+  // back is often a real browser navigation, which component state and even
+  // an in-memory store both lose). Drives which of Supervise/Stop supervising
+  // a row offers — no endpoint reports "who is watching a chat", so the board
+  // only ever knows about its own clicks (see `rowActions.ts`).
+  const {
+    chatIds: supervisingChatIds,
+    add: addSupervising,
+    remove: removeSupervising,
+  } = useSupervising(agent?.account_id);
+
   // Registers the caller as a watcher (13.2-d) so the board can show
   // `supervised` for this chat; opening the transcript is what actually lets
   // them watch, so it navigates regardless of how the registration lands.
   const registerSupervision = useMutation({
     mutationFn: (chatId: string) => api.post(`/chats/${chatId}/supervise`),
-    onSuccess: invalidate,
+    onSuccess: (_result, chatId) => {
+      addSupervising(chatId);
+      invalidate();
+    },
   });
 
-  const busy = startChat.isPending || assignToMe.isPending || registerSupervision.isPending;
+  // Drops the caller's own watch (`DELETE /chats/{id}/supervise`, tm 213). The
+  // row's slot flips back to Supervise on success; it never navigates — unlike
+  // starting a watch, stopping one has no transcript to jump into.
+  const releaseSupervision = useMutation({
+    mutationFn: (chatId: string) => api.delete(`/chats/${chatId}/supervise`),
+    onSuccess: (_result, chatId) => {
+      removeSupervising(chatId);
+      invalidate();
+    },
+  });
+
+  const busy =
+    startChat.isPending ||
+    assignToMe.isPending ||
+    registerSupervision.isPending ||
+    releaseSupervision.isPending;
 
   const run = (id: RowActionId, visitor: TrafficVisitor): void => {
     switch (id) {
@@ -411,6 +443,9 @@ export function TrafficPage(): ReactElement {
           registerSupervision.mutate(visitor.chat_id);
           navigate(`/app/inbox?chat=${visitor.chat_id}`);
         }
+        break;
+      case 'unsupervise':
+        if (visitor.chat_id) releaseSupervision.mutate(visitor.chat_id);
         break;
       case 'view_profile':
         setSelectedCustomerId(visitor.customer_id);
@@ -541,7 +576,16 @@ export function TrafficPage(): ReactElement {
                   </td>
                   <td className="px-4 py-2.5">
                     <div className="flex justify-end gap-1">
-                      {visitorRowActions(visitor, ctx).map((action) => (
+                      {visitorRowActions(
+                        {
+                          activity: visitor.activity,
+                          chat_id: visitor.chat_id,
+                          is_supervising: visitor.chat_id
+                            ? supervisingChatIds.has(visitor.chat_id)
+                            : false,
+                        },
+                        ctx,
+                      ).map((action) => (
                         <button
                           key={action.id}
                           type="button"

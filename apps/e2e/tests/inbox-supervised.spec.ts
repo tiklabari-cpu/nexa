@@ -12,6 +12,13 @@
  * the registration and navigates away in the same click (`TrafficPage.tsx`, so
  * that opening the transcript is not held up by it), which makes "the row is in
  * my Supervised list" a claim about a request that may still be in flight.
+ *
+ * The second half (tm 213) walks the release surface `DELETE
+ * /chats/{chatId}/supervise` — until this task the endpoint existed on the
+ * contract and in the API but no client ever called it, so the only way to
+ * stop watching a chat was for it to close. `Stop supervising` occupies the
+ * same board row slot `Supervise chat` did (`rowActions.ts`), so the same
+ * `waitForResponse` pattern applies to the DELETE.
  */
 import { expect, test, openWidget, visitorSends } from './fixtures.js';
 
@@ -71,6 +78,28 @@ test.describe('the inbox Supervised view', () => {
       await supervisedView.click();
       await expect(row).toHaveCount(1);
       await agentPage.screenshot({ path: 'kanit/02.1.1-inbox-supervised.png', fullPage: true });
+
+      // Stop watching from the board — the row this task adds. Same
+      // "in-flight request" caveat as the registration above applies.
+      await agentPage.goto('/app/customers/real-time');
+      const released = agentPage.waitForResponse(
+        (response) =>
+          /\/chats\/[^/]+\/supervise$/.test(response.url()) &&
+          response.request().method() === 'DELETE',
+      );
+      await visitorRow.getByRole('button', { name: 'Stop supervising' }).click();
+      expect((await released).status()).toBe(204);
+
+      // The board's own row flips back to an offer to (re-)watch — the
+      // caller's release does not need a reload to be reflected here, since
+      // the click's own success invalidates the traffic query.
+      await expect(visitorRow.getByRole('button', { name: 'Supervise chat' })).toBeVisible();
+
+      // After: the conversation has left the Supervised bucket.
+      await agentPage.goto('/app/inbox');
+      await supervisedView.click();
+      await expect(row).toHaveCount(0);
+      await agentPage.screenshot({ path: 'kanit/02.1.1-inbox-unsupervised.png', fullPage: true });
     } finally {
       await visitorContext.close();
     }

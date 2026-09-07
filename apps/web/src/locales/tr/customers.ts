@@ -153,6 +153,7 @@ export const customers: Messages = {
 
   'traffic.action.startChat': 'Sohbet başlat',
   'traffic.action.superviseChat': 'Sohbeti gözetle',
+  'traffic.action.stopSupervising': 'Gözetlemeyi bırak',
   'traffic.action.assignToMe': 'Sohbeti bana ata',
   'traffic.action.viewProfile': 'Profili görüntüle',
   'traffic.action.editContact': 'Kişiyi düzenle',

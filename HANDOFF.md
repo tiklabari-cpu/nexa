@@ -13,6 +13,74 @@
 
 ## Task log (newest-first)
 
+## 208 — GL-13 · F0-KAPAT2: **Faz-0 §F.00 kapanış turu — `✅ KAPALI (yeniden)`** (§F.1 tam sürüm · §F.2 raporu) — done — 2026-09-07 UTC
+
+- **Yapıldı:** Faz-0'ın `Must` sayacı DURUM sütunundan **sayılarak** okundu → **53 ✅ · 0 ◐ · 0 ⬜**; §F.1'in 10 maddesi **koda karşı** koşuldu; üst tablo satır 20'nin `Kapanış` hücresi `❌ AÇIK (yeniden)` → **`✅ KAPALI (yeniden)`**. PLAN'a §F.00 Faz-0 ikinci kapı paragrafı + `#### KGL-13` + §D150–§D154; CONVENTIONS §1.3'ün bayat api dosya sayısı düzeltildi. **Bu tur ürün koduna DOKUNDU** (GL-11/GL-12'nin emsalinin aksine): kapı gerçekten kırmızıydı ve kırmızının bir tanesi gerçek bir kusurdu — §D152.
+- **Bulunan + düzeltilen gerçek kusur (§D152):** Team konsolunun uygunluk sütunu 30 sn bayat kalabiliyordu. `GET /agents` iki anahtar altında okunuyor (`['agents']` kabuk avatarları · `['team','agents']` Team roster'ı) ve `routing_status_set` push'u yalnız birincisini güncelliyordu; `staleTime` 30 sn ve palet PUT'unu beklemeden ateşliyor, dolayısıyla Team'e geçiş toggle ÖNCESİ roster'ı önbelleğe alıp yarım dakika sorgusuz kalabiliyordu. Push artık iki anahtarı da yerinde yazıyor **ve** yalnız Team anahtarını bayat işaretliyor (kabuk avatarlarının refetch'siz davranışı korundu). Teşhis ölçümle: `agent_presence_events` satırı duruyordu (yazma sunucuya ulaşmıştı) + elle PKCE oturumuyla `PUT → GET` sunucunun **hemen** doğru döndüğünü gösterdi. `command-palette.spec.ts` 2/4 → **4/4**.
+- **Doğrulama (exit code'larla):** `typecheck` **13/13** · `lint` **10/10** · `format:check` temiz · `build` **8/8** · `contract:generate` sonrası generated diff **boş** (205 path) · `db:check-drift` "no drift" · `audit:req-coverage` **exit 0**. Testler §1.3 gereği **parçalandı**: turbo `test --force` (api/web/e2e hariç) **107 dosya / 1.206 test** · `apps/web` **168 / 1.978** (`--maxWorkers=4`) · api `test:unit --force` **80 / 1.320** · api integration **3 shard** (43+43+43 = **129 dosya**, 1311+1079+819 = **3.209 test**) → birleşim **484 dosya / 7.710 test**; integration kapısı ayrıca rtm **8 / 107** (`contract-parity` **5/5**). **e2e tam süit: 279 testin 275'i yeşil** (22,0 dk). `make demo` elle genişletildi (`make` kurulu değil) → `docker compose -f docker-compose.full.yml up --build -d` exit 0 + `./scripts/smoke.sh` **17/17**; yığın `down` ile kaldırıldı (`-v` KULLANILMADI).
+- **Sonraki pencereye not:** Kalan 4 e2e kırmızısı ürün kusuru **değil**, süit-içi kapasite birikmesidir ve **ölçüldü** — tam koşunun sonunda demo ajan `b0e29f98…` tam olarak `concurrent_chats_limit` kadar (6) aktif thread tutuyor, iki yönlendirme testi de o ajanı bekliyor. Dördü ayrı koşulduğunda **24/24 yeşil**. Görevleşti: **tm 233**. Ayrıca **tm 234** (denetim script'lerinin iki körlüğü + `unpaged-lists` exit 1) ve **tm 235** (widget ajan mesajını düz basıyor — `#### K02.3.5`'in sahipsiz boşluğu, karara bağlandı). Faz-1 (tm 209) ve Faz-2 (tm 210) kapanış turları **bu turun işi değildi** ve dokunulmadı.
+
+---
+
+### §F.2 RAPORU — Faz-0 (MVP) kapanış turu · GL-13 · tm 208 · 2026-09-07
+
+**1) Tamamlanan kapsam (PRD kimlikleriyle).** Faz-0'ın `Must` kapsamı **53 satır, 53'ü `✅`**:
+§3.0–§3.10'daki **49** modül `Must` satırı (`00.1`–`00.3` · `01.1.3` · `01.1.6` · `01.2` · `01.3` ·
+`02.1.1` · `02.1.3` · `02.2.2` · `02.3.1` · `02.3.3`–`02.3.6` · `02.4.1–.6` · `02.6` · `02.8` ·
+`03.2.1` · `03.2.3` · `04.1` · `04.3.1` · `04.3.3` · `04.3.4` · `04.4` · `04.5` · `07.3.2` · `08.3` ·
+`08.5.1`–`.3` · `08.5.9` · `08.6.1` · `08.7.1` · `08.7.2` · `08.8.2` · `08.9.1` · `08.9.4` ·
+`10.1.1`–`.3` · `10.1.6` · `10.2` · `11.1`–`11.4` · `11.6` · `13.8`) + §7.1'in **4** `Must (MVP)`
+çapraz-kesit satırı (`EK-A.1` · `EK-A.2` · `EK-B.1` · `EK-C.1`). Genel sütun (aynı 62 satır,
+önceliğe bakmadan): **52 ✅ · 6 ◐ · 1 ⬜ · 3 gruplu-🔒**.
+
+**2) Yarım kalan işler** (hiçbiri `Must` değil, hiçbiri kapıyı bloklamaz — §F.00; **yedisinin
+yedisi de açık göreve bağlı**):
+
+| PRD | Ne eksik | Görev |
+| --- | --- | --- |
+| `00.4` | Onboarding sihirbazı dört adım, PRD beş istiyor (ek kanallar · şirket büyüklüğü) | tm 216 |
+| `01.1.1` | Logo bir menü/uygulama seçici açmıyor (pin/unpin yarısı var) | tm 217 |
+| `03.1.1` | Traffic panosu 8 sn'lik `setInterval` ile besleniyor, RTM akışıyla değil | tm 220 |
+| `06.6` ⬜ | PRD ayrı bir kural botu + `bots` tablosu istiyor; PLAN "v1 AI Agent karşılıyor" diyor — **kapsam iddiası**, triyaj gerekir | tm 211 |
+| `07.1` | Reports sol dikey kenar çubuğu + kategori grupları + Export öğesi yok | tm 223 |
+| `07.3.1` | "Share export/link"in **link** yarısı yok | tm 224 |
+| `07.3.3` | Chats kartlarının vs-önceki-dönem ayağı + iki kart (response times · satisfaction) | tm 225 |
+
+**3) Bilinçli olarak yapılmayanlar.** Üç **gruplu `🔒`** satırı, gerekçeleri kendi satırlarında ve
+2026-08-23'te (GL-10) tazelenmiş: `02.1.2`+6 (AI Agents grubu · kanal görünümleri · sıralama ·
+Reply Suggestions · Copilot özeti · Tickets grid · typing preview → v1) · `03.1.2`+3 (Traffic
+detayları → Should/v1) · `04.2`+2 (v1 Team payı). Bir gerekçeli `⛔`: `13.4` görsel Workflow
+builder (**ADR-14** — tek paradigma Skill; `workflows` tablosu şemada kalır, UI yok). §9'un 10
+kapsam-dışı maddesi **10/10 temiz** doğrulandı.
+
+**4) Sessiz borç.** `pnpm audit:silent-debt` → izlenen **1.180** kaynak dosyası; TODO / FIXME /
+XXX / HACK / `@ts-expect-error` / `@ts-ignore` / atlanan test / odaklı test **hepsi 0**. Kalan dört
+kayıt gerekçe yorumlu (2 `eslint-disable` + 2 `istanbul ignore`). Yeni sessiz borç bu turda
+**eklenmedi**. Buna karşılık üç **rapor doğruluğu** kusuru bulundu ve görevleşti (§D153 · tm 234):
+`schema-consumers`in SECURITY DEFINER körlüğü · `unpaged-lists`in yeni `UNPAGED 1`i
+(`WebhookSubscriptions.tsx:87` — gerekçe düzyazı yazılı, makine-okunur işaret yok) · iki eğik
+çizgi kısaltması (`brand-isolation.test.ts`, CONVENTIONS §7.3).
+
+**5) Sapmalar (§D).** **D150** Faz-0 yeniden kapandı (payda 53'ün gerekçesi + kapının gerçekten
+kırmızı bulunması) · **D151** e2e 275/279, dört kırmızının ölçülmüş kök nedeni ve tm 233 ·
+**D152** bulunan ve düzeltilen gerçek ürün kusuru · **D153** denetim aracı bulguları · **D154**
+sahipsiz komşu boşluğun kararı (tm 235).
+
+**6) Karar bekleyen açık sorular.**
+(a) **`06.6`'nın kapsam çelişkisi** — PRD `§8 bots` tablosunu ve LLM'siz ayrı bir kural botunu şart
+koşuyor, PLAN satırı "öne çekilen v1 AI Agent bu payı karşılıyor" diyor. Bu bir **damga işi mi kod
+işi mi** kararı tm 211'in triyajındadır; Faz-0'ın `Must` kapısını bloklamaz (`Should`).
+(b) **§7.2'nin 11 NFR `◐` satırı** (`P1`·`P2`·`P3`·`P4/P6`·`P8`·`S6`·`I18N1/2`·`C1/C2/C8`·`M4`·`M5`)
+bir **NFR kapısıdır**, faz kapısı değil; bir kısmı §D129/§D130 gibi **kayıtlı kullanıcı
+kararlarının** üzerine yazılmış damgalardır ve triyajı tm 212'nindir. Bu turda yalnız ölçüldüler:
+P3 **22.602 B / 51.200 B** (loader 1.635 B / 8.192 B) · P5 `UNPAGED 1` · S4/S5 cross-tenant
+negatifleri **88 test** yeşil · A11Y iki temada axe **blocking 0** · P1/P2/P8 §D127'nin k6 ölçümü
+(tm 161 · 2026-08-28) — **yeniden koşulmadı**, sahibi ve tarihi yazıldı.
+(c) **Sıradaki adım kullanıcınındır** (§F.3): Faz-1 (tm 209) ve Faz-2 (tm 210) kapanış turları
+kuyrukta duruyor, Faz-8'in 22 kalemi (tm 211–232) + bu turun açtığı üçü (233–235) backlog'da.
+
+---
+
 ## 207 — F0-LASTGAP-c: custom kolonlar Contacts tablosuna yansıdı, Faz-0'ın son `Must ◐`'si kapandı (FR-MOD-03.2.3) — done — 2026-09-07 UTC
 
 - **Yapıldı:** `CustomFieldDefinition`e `show_in_table` bayrağı (contact-only, migration + CHECK, `form_placement`'ın emsali); `GET /customers`in her satırı artık `table_custom_fields: CustomFieldValue[]` taşıyor — yalnız bayraklı contact tanımları, N+1 yok (sayfa başına iki toplu sorgu). `Settings → Custom fields`e "Show in Contacts table" onay kutusu + liste rozeti; `CustomersPage.tsx` bu kolonları satırlardan okuyup (`items[0]?.table_custom_fields`) dinamik başlık/hücre olarak basıyor — ayrı bir `access_rules:ro` isteği yok.

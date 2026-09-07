@@ -11,10 +11,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { useSupervisingStore } from './supervising-store.js';
 import type { TrafficVisitor } from './types.js';
 
 const { api, scopes } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
   // Mutable so a test can pin the caller's real scope set. The default is an
   // owner's, verbatim from `ADMIN_SCOPES` — write scopes only, no literal `:ro`.
   scopes: { current: ['chats--all:rw', 'customers:rw'] },
@@ -77,7 +78,14 @@ function renderPage(
 beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
+  api.delete.mockReset();
   scopes.current = ['chats--all:rw', 'customers:rw'];
+  // `supervising-store.ts` persists to `localStorage` and hydrates once per
+  // account — both must be cleared, or a watch registered in one test leaks
+  // into the next (and `accountId: null` forces the next render's hydrate to
+  // actually re-read the now-empty storage instead of a no-op skip).
+  window.localStorage.clear();
+  useSupervisingStore.setState({ accountId: null, chatIds: new Set() });
 });
 
 describe('TrafficPage status tabs', () => {
@@ -340,6 +348,112 @@ describe('TrafficPage status tabs', () => {
     expect(await screen.findByRole('button', { name: 'Supervise chat' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Assign chat to me' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Edit contact' })).toBeDisabled();
+  });
+
+  describe('releasing a watch — DELETE /chats/{id}/supervise (FR-MOD-02.1.1, tm 213)', () => {
+    it('Supervise flips to Stop supervising once registration succeeds, and Stop calls DELETE', async () => {
+      const user = userEvent.setup();
+      api.get.mockResolvedValue({
+        items: [visitor({ customer_id: 'a', activity: 'chatting', chat_id: 'chat-1' })],
+        total: 1,
+      });
+      api.post.mockResolvedValue({});
+      api.delete.mockResolvedValue(undefined);
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Supervise chat' }));
+      expect(api.post).toHaveBeenCalledWith('/chats/chat-1/supervise');
+
+      const stop = await screen.findByRole('button', { name: 'Stop supervising' });
+      expect(screen.queryByRole('button', { name: 'Supervise chat' })).not.toBeInTheDocument();
+
+      await user.click(stop);
+      expect(api.delete).toHaveBeenCalledWith('/chats/chat-1/supervise');
+      // The known trap (CONVENTIONS §5's "bilinen tuzaklar"): releasing must
+      // not itself re-issue the heartbeat POST — still exactly the one call
+      // from registering above.
+      expect(api.post).toHaveBeenCalledTimes(1);
+
+      expect(await screen.findByRole('button', { name: 'Supervise chat' })).toBeInTheDocument();
+    });
+
+    it('survives the board unmounting — Supervise itself navigates away, so a remount must still offer Stop', async () => {
+      // Regression: this used to live in `useState`, which reset to empty on
+      // every remount. `Supervise chat` navigates to the transcript in the
+      // same click (see the mutation above), so that reset fired on every
+      // single use of the feature — caught by `inbox-supervised.spec.ts`'s
+      // supervise -> navigate away -> come back -> unsupervise walk, not by a
+      // test that never unmounts the page at all.
+      const user = userEvent.setup();
+      api.get.mockResolvedValue({
+        items: [visitor({ customer_id: 'a', activity: 'chatting', chat_id: 'chat-1' })],
+        total: 1,
+      });
+      api.post.mockResolvedValue({});
+      api.delete.mockResolvedValue(undefined);
+      const first = renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Supervise chat' }));
+      await screen.findByRole('button', { name: 'Stop supervising' });
+      first.unmount();
+
+      renderPage();
+      expect(await screen.findByRole('button', { name: 'Stop supervising' })).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Stop supervising' }));
+      expect(api.delete).toHaveBeenCalledWith('/chats/chat-1/supervise');
+    });
+
+    it('does not navigate away — unlike Supervise, Stop has no transcript to jump into', async () => {
+      const user = userEvent.setup();
+      api.get.mockResolvedValue({
+        items: [visitor({ customer_id: 'a', activity: 'chatting', chat_id: 'chat-1' })],
+        total: 1,
+      });
+      api.post.mockResolvedValue({});
+      api.delete.mockResolvedValue(undefined);
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Supervise chat' }));
+      await user.click(await screen.findByRole('button', { name: 'Stop supervising' }));
+
+      expect(window.location.pathname).not.toMatch(/\/app\/inbox/);
+    });
+
+    it("a second watcher's row survives — the caller's own release does not hide it from the board", async () => {
+      // The server still reports `supervised` after the release, exactly as it
+      // would if another agent's watch is still live (`SupervisionService#release`
+      // only ever deletes the caller's own row). The board must keep showing the
+      // row rather than assuming a release always empties the state.
+      const user = userEvent.setup();
+      api.get.mockResolvedValue({
+        items: [visitor({ customer_id: 'a', activity: 'supervised', chat_id: 'chat-1' })],
+        total: 1,
+      });
+      api.post.mockResolvedValue({});
+      api.delete.mockResolvedValue(undefined);
+      renderPage();
+
+      await user.click(await screen.findByRole('button', { name: 'Supervise chat' }));
+      await user.click(await screen.findByRole('button', { name: 'Stop supervising' }));
+
+      // Still on the board, and offering to (re-)join the watch — not gone.
+      expect(await screen.findByRole('button', { name: 'Supervise chat' })).toBeInTheDocument();
+    });
+
+    it('a read-only caller may release a watch, same as registering one', async () => {
+      scopes.current = ['chats--all:ro', 'customers:ro'];
+      api.get.mockResolvedValue({
+        items: [visitor({ customer_id: 'a', activity: 'chatting', chat_id: 'chat-1' })],
+        total: 1,
+      });
+      api.post.mockResolvedValue({});
+      renderPage();
+
+      await userEvent.setup().click(await screen.findByRole('button', { name: 'Supervise chat' }));
+
+      expect(await screen.findByRole('button', { name: 'Stop supervising' })).toBeEnabled();
+    });
   });
 });
 

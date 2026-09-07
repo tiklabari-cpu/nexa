@@ -162,6 +162,7 @@ export const customers: Messages = {
 
   'traffic.action.startChat': 'Start chat',
   'traffic.action.superviseChat': 'Supervise chat',
+  'traffic.action.stopSupervising': 'Stop supervising',
   'traffic.action.assignToMe': 'Assign chat to me',
   'traffic.action.viewProfile': 'View profile',
   'traffic.action.editContact': 'Edit contact',

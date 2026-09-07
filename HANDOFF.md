@@ -13,6 +13,93 @@
 
 ## Task log (newest-first)
 
+## PANEL BULGULARI DENETLENDİ — üç triyajın kapsam dışı bıraktığı artık toplandı; **Faz-8 açıldı** (§6D · §D149 · tm 211–232) — done — 2026-09-07 UTC
+
+- **Girdi:** panelin (`Claude_Loop_Controller`) sağlık taramasında **26 açık bulgu** (245'i zaten
+  kendiliğinden `resolved`). Dağılım: **19** `tm-plan-conflict` · **4** `suspicious-done` · **1**
+  `plan-count-drift` · **1** `plan-evidence-broken` · **1** `phase-blockers` (bilgi; tm 205/206/207
+  zaten karşılıyor). Hepsi tek tek **koda karşı** okundu — denetim metnine karşı değil, çünkü
+  `prd-uyum-denetimi.md` alıntıları PLAN'ın kanıt bloklarında `…` ile **kesiktir** (tm 187'nin
+  `194.2` emsali).
+- **KÖK NEDEN — bir hata değil, bir boşluk.** tm 184.4 (2026-09-04) üç fazda **47** damga düşürdü;
+  ardından gelen üç triyaj — tm 185 (Faz-0'ın 28 `Must`'ı) · tm 186 (v1'in 11 `Must`'ı) · tm 187
+  (v2'nin 8 kalemi) — **yalnız `Must` ve v2-kalem** payını üstlendi, çünkü §F.00'ın faz kapısı
+  `Should`/`Could` saymaz. Geriye **17 `Should`/`Could` satırı + 1 `⬜` (`06.6`) + §7.2'nin 11 NFR
+  satırı** açık görevi olmadan `◐` kaldı; hiçbiri kapıyı bloklamadığı için hiçbir triyajın listesine
+  girmedi. Panel bunu 19 kez, en eskisi 3.456 taramadır bildiriyordu.
+- **EN PAHALI BULGU — mekanik süpürme kayıtlı kararların üzerinden geçmiş.** Damgayı değiştirmeden
+  önce **kayıtlı karar araması** yapılmadığı için tm 184.4 en az üç yerde daha önce verilmiş bir
+  kullanıcı/sahip kararını geri aldı: **§D129** (kullanıcı, 2026-08-24) _"45+ dile genişletme
+  YAPILMAYACAK; §7.2 `I18N1/2` satırı `✅` KALIR — `◐` YAZILMADI çünkü '`◐` + kuyrukta açık görev
+  yok' §F.00'ı bloklar"_ → satır yine `◐` yapıldı **ve tam da §D129'un uyardığı duruma girdi**;
+  **§D130** (kullanıcı, 2026-08-24) yük ayağını tm 161'e atadı, borç **ödendi**, kayıt `M4 ✅ → KM4`
+  yazdı → satır yine `◐`; **`KC1-C2-C8`** içindeki sahip kararı (2026-08-31, §7C'nin "Kapsam dışı"
+  paragrafıyla aynı) KVKK/VERBIS'i kapsam dışı ilan etmişti → satır yine `◐`. Bu yüzden `11.7`'nin
+  dil ayağı ve §7.2'nin 11 satırı **görevleşmedi**, iki triyaj görevine ayrıldı: bir kısmı kod değil
+  **damga** işidir. **Kural bu tura yazıldı:** damga değiştirmeden önce §D + `#### K` + `git log
+  --since` üçlüsüne bakılır (tm 211/212'nin görev metninde madde olarak duruyor).
+- **Koda karşı doğrulama — 17 kalem GERÇEK çıktı** (her biri dosya:satır ile): `00.4` sihirbaz dört
+  adım (`OnboardingWizard.tsx:30-32`, PRD beş istiyor) · `01.1.1` logo menü açmıyor
+  (`AppShell.tsx:198,200`) · `02.1.4` kanal satırları `<Link to="/app/settings">` ve `/chats`'te
+  kanal parametresi **yok** · `02.3.2` öneriler sabit İngilizce regex (`replySuggestions.ts`) ·
+  `03.1.1` 8 sn'lik `setInterval` (`TrafficPage.tsx:68,339`), dosyanın kendi başlığı _"just the
+  poll"_ diyor · `05.4` "owner" = `ai_agent_id` ve dosya bunu _"a separate, tracked gap"_ diye
+  yazmış · `06.5` ikinci KPI PRD'nin metriği değil · `07.1` düz yatay tablist
+  (`ReportsPage.tsx:503`) · `07.3.1` Share **link** yarısı yok · `07.3.3` üç kart benchmark'ta yok ·
+  `07.8` `insight` geçen **tek dosya yok** · `08.7.5` `renderTemplate`'in **tüketicisi yok** ·
+  `08.7.7` `FORM_PLACEMENTS` iki değer · `09.1` `listQuery` yalnız `query`+`category` · `10.3`
+  `model Invoice` **yok** · `13.1` başlık sabit · artı iki ölü-uç borcu (aşağıda).
+- **Denetimin hiç görmediği iki borç** — panelin `suspicious-done`'undan ve `audit:endpoint-ui`'den:
+  (1) **`DELETE /chats/{chatId}/supervise`** kontratta da API'de de var (`routes/chats.ts:414`),
+  **hiçbir istemci çağırmıyor** → bir temsilci gözetlemeye başlayabiliyor, **vazgeçemiyor**;
+  `audit:endpoint-ui` bunu göremiyor çünkü sayımı **yol** bazlı, metot bazlı değil. (2)
+  **`campaignPerformance`** `displayed: sends.length` döndürüyor (`campaign-matching.ts:187`) —
+  teslim edilmemiş gönderim de "gösterildi" sayılıyor, `delivered_at` (M-CAMP-a) okunmuyor,
+  **dönüşüm oranının paydası şişiyor**.
+- **Eskimiş çıkan bulgular (görev AÇILMADI, triyaja gitti):** `07.7` v1 satırı — `buildSalesReport`
+  artık `salesReportFigures(...)` çağırıyor, ikiz v2 satırı tm 201.3'te `✅` oldu, v1 güncellenmedi ·
+  `09.2` v1 satırı — aynı desen (tm 202.1/202.2 ikizi kapattı) · `08.7.7`'nin post-chat ayağı
+  §D114'ten sonra **teslim edilmiş** (`widget.postchat.test.ts`), kalan pay yalnız ticket+prospect ·
+  `05.4`'ün "sahip filtresi yok" iddiası yanlış (filtre **var**, yanlış ekseni süzüyor).
+- **ÇIKTI — §6D (FAZ 8) · 22 satır · ~36 pencere · tm 211–232:** 17 iş kalemi + 2 triyaj
+  (tm 211 FR damgaları · tm 212 §7.2'nin NFR satırları, ikisi de **kod yazmaz**) + kapanış turu
+  GL-16 (tm 232, 21 bağımlılık). `Must` yok → **kalem kuralı**, payda **21 SABİT**. Öncelik K7'ye
+  uygun: `high` 4 · `medium` 13 · `low` 4 · `critical` **KULLANILMADI**. Faz-0/1/2 kapanış turlarını
+  (tm 205–210) **bloklamaz ve beklemez** — o üç kapı `Must` sayacına bakar, Faz-8'in 21 kaleminin
+  hiçbiri `Must` değil. `validate_dependencies` → "Dependencies validated successfully"; döngünün
+  seçebileceği **24 hazır görev** var (28 pending'in 24'ü bağımlılıksız).
+- **NUMARALANDIRMA TUZAĞI (bir sonraki pencere buraya düşmesin):** faz numarası **8**'dir, 7 değil —
+  `Faz-7` **§7C**'nindir (PRD uyum düzeltmesi, tm 175–184, `M-TEAM`/`M-CAMP`/`M-STORE`/`M-UI`/
+  `M-CO`/`M-TRACE`, dilim adları `V7-1…`). Görev kodu öneki **`V8-`**, dilim adları **`F8-…`**.
+  Uyarı §6D'nin ilk paragrafında da duruyor. Ayrıca üst kapı tablosuna **eksik olan Faz-7 satırı**
+  eklendi — §7C bugüne dek kapı tablosunda hiç görünmüyordu.
+- **KENDİM KAPATTIĞIM İKİ DOKÜMAN HATASI (kod yazılmadı, damga uydurulmadı):**
+  - **`plan-count-drift`** — üst tablonun Faz-0 "Genel durum" hücresi `58 ✅ · 0 ◐` diyordu;
+    §3.0–§3.10 sayıldığında **49 ✅ · 9 ◐ · 1 ⬜ · 3 gruplu-🔒**. İki bağımsız sayaç aynı sonucu
+    verdi (bu turun betiği + panelin kontrolü, 2026-08-31'den beri aynı sayıyı bildiriyordu).
+    Yazan 58 ile bugünkü 59 arasındaki **1 fark 2026-08-23 sayımına aittir ve geriye doğru
+    çözülMEDİ** — bugünkü sayı bugünkü tablodan türetildi, eski değer `~~üstü çizili~~` korundu.
+  - **`plan-evidence-broken`** — §4.2'nin `06.3.1 ✅ → K06.3.1` satırı **var olmayan bir bloğa**
+    işaret ediyordu. Kanıt metni depoda **zaten vardı** ama `#### K06.3.1` başlığı yoktu, bu yüzden
+    bir önceki bloğun (`K06.2.5` · Preview) gövdesinde okunuyordu. Damga koda karşı doğrulandı ve
+    **hak edilmiş** çıktı (`knowledge-tabs.ts` saf partition `All = Websites ∪ Files ∪ Articles ∪
+    FAQ` + 4 test + `PlaybookPage.tsx:842`); yalnız başlık eklendi, metin ve damga değişmedi.
+- **DOĞRULAMA (bu turda koşuldu):** `pnpm -w typecheck` **exit 0** · `pnpm -w lint` **exit 0** ·
+  `pnpm -w test` (turbo, e2e hariç) **exit 0** · `pnpm audit:silent-debt` → TODO/FIXME/XXX/HACK/
+  `@ts-expect-error`/`@ts-ignore`/skip/only **0** (2 gerekçeli `eslint-disable` + 2 `istanbul ignore`) ·
+  `audit:dead-code` → api route **0/40** · web feature **0/146** · api servis 6/124 ve **altısı da**
+  `package.json` CLI girişi (`*-run.ts`) · `audit:unpaged-lists` → **UNPAGED 1**
+  (`WebhookSubscriptions.tsx:87` → tm 215) · `audit:endpoint-ui` → 205 yolun 14'ü istemcisiz
+  (12'si tasarımı gereği başsız, 2'si tm 215) · `task-master validate_dependencies` temiz.
+  **`test:e2e` bu turda KOŞULMADI** — ürün kodu değişmedi (`git diff --name-only` yalnız `PLAN.md` ·
+  `HANDOFF.md` · `.taskmaster/tasks/tasks.json`), e2e ~55 `kanit` PNG'sini yeniden yazardı.
+- **BU TUR CEVAP VERMEDİĞİ SORU:** "kodlama bitti mi?" sorusunun cevabı **hayır** — ama kalan iş
+  artık **görünür ve seçilebilir**. Faz-0'ın son üç `Must ◐`'si (tm 205–207) + üç kapanış turu
+  (tm 208–210) + Faz-8'in 21 kalemi (tm 211–231) + GL-16 (tm 232) = **28 açık pencere**. Mock →
+  gerçek sağlayıcı geçişi bunların **hiçbirinde yok** (kullanıcı kararı, §D124/c — kapsam dışı).
+
+---
+
 ## GRAFİK ONARIMI — otonom döngü "hazır task kalmadı" deyip durdu; tm 205–210 açıldı — done — 2026-09-07 UTC
 
 - **Teşhis — dört olasılığın üçü ELENDİ, sebep dördüncüsü bile değildi.** `run-loop.sh`'ın seçilebilir

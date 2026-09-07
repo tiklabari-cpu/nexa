@@ -17,13 +17,15 @@
 
 | Faz                | PRD  | Genel durum                          | **Must sayacı (§F.00 kapısı)** | Kapanış |
 | ------------------ | ---- | ------------------------------------ | ------------------------------ | :-----: |
-| **Faz 0 — MVP**    | §5.1 | 58 ✅ · 0 ◐ · 3 gruplu-🔒 (§3, **sayılarak** 2026-08-23 — §D123). **[GÜNCELLEME 2026-09-04 · tm 184.4, denetim-türevi — bkz. not altta]:** bu "58 ✅" bu turda yeniden sayılmadı; yalnız kapının kendisi olan Must sütunu sayıldı | **48 ✅ · 3 ◐ · 0 ⬜** (tm 185 triyajı; 01.2/01.3 tm 188'de, 02.1.1 tm 189.1'de, 02.1.3 tm 189.2'de, 02.2.2 tm 189.3'te, 02.3.3+02.3.6 tm 189.4'te, 02.4.1–.6 tm 189.6'da, 02.6 tm 189.7'de, 03.2.1 tm 190.1'de, 04.1 tm 191.1'de, 04.3.1 tm 191.2'de, 04.3.4 tm 191.3'te, 04.4 tm 191.4'te, 07.3.2 tm 192'de, 08.5.3 tm 193.1'de, 08.7.2 tm 193.2'de, 10.1.1 tm 194.1'de, 10.2 tm 194.2'de, 11.1 tm 195.1'de, 11.4 tm 195.2'de, 11.6 tm 195.3'te kapandı) | ❌ AÇIK (yeniden) — tm 184.4; triyaj + backlog tm 185, bkz. not altta |
+| **Faz 0 — MVP**    | §5.1 | **49 ✅ · 9 ◐ · 1 ⬜ · 3 gruplu-🔒** (§3.0–§3.10, **sayılarak** 2026-09-07 — §D149; önceki damga §D123 · 2026-08-23 idi ve bu turda **değiştirildi**, çünkü bayatlamıştı — tarihçe aşağıda). **[GÜNCELLEME 2026-09-04 · tm 184.4, denetim-türevi — bkz. not altta]:** §D123 bu sütuna "elli sekiz teslim, sıfır kısmi" yazmıştı ve O turda yeniden sayılmadı; yalnız kapının kendisi olan Must sütunu sayıldı — 184.4'ün düşürdüğü 10 satır (9 `◐` + `06.6` `⬜`) bu sütuna hiç yansımadı. **[SAYIM 2026-09-07 · §D149]:** sütun sayıldı (iki bağımsız sayaç, aynı sonuç: bu turun betiği + panelin `plan-count-drift` kontrolü, 2026-08-31'den beri aynı sayıyı bildiriyordu). Yazan elli sekiz ile bugünkü 59 (49+9+1) arasındaki **1 fark 2026-08-23 sayımına aittir ve bu turda geriye doğru çözülMEDİ** — bugünkü sayı bugünkü tablodan türetildi. Kalan `◐`/`⬜` kalemlerin backlog'u **§6D (Faz 7)** | **48 ✅ · 3 ◐ · 0 ⬜** (tm 185 triyajı; 01.2/01.3 tm 188'de, 02.1.1 tm 189.1'de, 02.1.3 tm 189.2'de, 02.2.2 tm 189.3'te, 02.3.3+02.3.6 tm 189.4'te, 02.4.1–.6 tm 189.6'da, 02.6 tm 189.7'de, 03.2.1 tm 190.1'de, 04.1 tm 191.1'de, 04.3.1 tm 191.2'de, 04.3.4 tm 191.3'te, 04.4 tm 191.4'te, 07.3.2 tm 192'de, 08.5.3 tm 193.1'de, 08.7.2 tm 193.2'de, 10.1.1 tm 194.1'de, 10.2 tm 194.2'de, 11.1 tm 195.1'de, 11.4 tm 195.2'de, 11.6 tm 195.3'te kapandı) | ❌ AÇIK (yeniden) — tm 184.4; triyaj + backlog tm 185, bkz. not altta |
 | Faz 1 — v1         | §5.2 | v1 payı teslim (Playbook+AI+omnichannel-MOCK+webhooks §1.3); Should çoğu ✅ · mobil 🔒 · 06.3.2-bulk→v2. **[GÜNCELLEME 2026-09-04 · tm 184.4 — bkz. not altta]** | **20 ✅ · 0 ◐ · 0 ⬜** (tm 186 triyajı; 05.5 tm 196'da, 06.2.2 tm 197.1'de, 06.2.4 tm 197.3'te, 10.1.4 tm 200'de, 06.3.3 tm 198.4'te, 06.4 tm 199.2'de kapandı) | ❌ AÇIK (yeniden) — tm 184.4; triyaj + backlog tm 186, bkz. not altta |
 | **Faz 2 — v2**     | §5.3 | **✅ TESLİM + KAPANDI** (plan 2026-08-01; kapanış turu 2026-08-11, GL-8 · tm 114 · §D89). Kapsam PRD'ye karşı süpürüldü → **30 kalem**, **sayılarak**: ~~0 ⬜ açık · 0 ◐ kısmi · 27 ✅ teslim~~ **[GÜNCELLEME 2026-09-04 · tm 184.4 → tm 187 → 2026-09-06 · tm 201.3 → tm 202.2 → tm 202.3 → tm 203.2 → 2026-09-07 · tm 204.2]: 0 ⬜ açık · 0 ◐ kısmi · 27 ✅ teslim** · 3 ⛔ kapsam dışı (7 faz çelişkisi PRD'den çözüldü). Kapanış ölçütü (**23 açık kalemin hepsi ✅**) o gün sayı olarak KARŞILANMIŞTI, `prd-uyum-denetimi.md`'ye (2026-08-30) karşı yeniden okununca **artık karşılanmıyor** (tm 184.4: 15 ✅ + 8 ◐ → tm 187 triyajı: **18 ✅ + 5 ◐** → tm 201.3: **19 ✅ + 4 ◐** → tm 202.2: **20 ✅ + 3 ◐** → tm 202.3: **21 ✅ + 2 ◐** → tm 203.2: **22 ✅ + 1 ◐** → tm 204.2: **23 ✅ + 0 ◐**, payda **23 SABİT** — kanıt §5.0 + `## K.`, ürün kodu değişmedi); §F.1'in 10 maddesi o gün **tam sürüm** koşulmuştu (kanıt HANDOFF §F.2). **PLAN'da 12 kalem eksikti** (§D62). Kalan iş **tam atomik** bölündü → §5.2 · `PLAN-V2-KIRILIM.md` · Task Master | v2 `Must` yok — PRD'de v2 kalemlerinin hepsi `Should`/`Could`. §F.00'ın **sayaç** kuralı yerine **kalem** kuralı: ~~23 açık kalemin hepsi ✅~~ artık **karşılanıyor** — tm 204.2 ile son `◐` (`13.3`) kapandı (tm 184.4 → tm 187 → tm 201.3: `07.7` ✅ → tm 202.2: `09.2` ✅ → tm 202.3: `09.4` ✅ → tm 203.2: `13.2` ✅ → tm 204.2: `13.3` ✅; payda 23 SABİT, kural çelişkisi çözüldü — §F.00). **Bu satırın kendisi henüz `❌ AÇIK (yeniden)` bırakıldı** — GL-8/GL-9 emsali (tm 114/126) kapanışı tek bir ilerleme penceresi değil ayrı, kapsamlı bir "kapanış turu" ile onaylıyordu (tam PRD süpürmesi + §F.1'in 10 maddesinin yeniden koşulması); tm 204.2'nin kapsamı yalnız `13.3` idi, o turu üstlenmedi | ❌ AÇIK (yeniden) — tm 184.4; triyaj + backlog tm 187 (tm 201–204, hepsi ✅), bkz. §5.0. **Payda 23/23 ✅ — bir kapanış turu ayrı görev olarak açılabilir.** |
 | **Faz 3 — Enterprise** | §5.4 | **✅ TESLİM + KAPANDI** (kırılım 2026-08-11 · §D95 + §D99; kapanış turu 2026-08-17, GL-9 · tm 126 · §D105). Kapsam PRD §5.4'e karşı süpürüldü → **15 satır**, **sayılarak**: **6 ✅ + 0 ◐** açık kalemde (53 alt-görev · ~72 pencere; `13.7` ✅ — §D111 kapandı, Faz-4 tm 128.1–128.8) · **2 ✅ v2'de karşılandı** · **4 ⛔** · **2 ⛔-süreç** · **1 faz değişikliği** (08.9.6 → Faz 2 ✅). Kırılım §6.1 · dilimler §6.2 · düz tablo §G. **13.7 mobil** buraya taşındı (§D60 · barındırma §D96) · **08.9.6** v2'ye çıktı (§D61) | Faz-3'te `Must` yok — §F.00'ın sayaç kuralı yerine **kalem** kuralı: **6 ✅ + 0 ◐** (`13.7` ✅ · §D111 kapandı — giriş yolunu Faz-4 tm 128.1–128.8 ödedi; mağaza payı `⛔-süreç` §D110). Kapanış anında (GL-9) 5 ✅ + 1 ◐ ile kapanmıştı, §D110 6 ✅ yaptı, §D111 geri aldı, tm 128 yeniden 6 ✅ yaptı — Should kalem, kapanış kararı hiç değişmedi | ✅ KAPALI |
 | **Faz 4 — Bütünleme** | §F.3 (PRD dışı faz; kalemler PRD kimlikli ya da türetilmiş NFR — §6A · §D113) | **✅ TESLİM + KAPANDI** (açılış 2026-08-17; kapanış turu 2026-08-23, GL-10 · tm 143 · §D120). Kod denetimi 17 bulgu; §6A tablosu **16 satır** (14 iş kalemi + M-SEC denetimi + GL-10 kapanış) · **62 alt-görev + 3 tek görev · ~82 pencere** · tm 128–143, hepsi `done`. Damga (**sayılarak**, öncü damga — naif glif sayımı değil; §6A tablosu, GL-10 hariç): **15 ✅ · 0 ◐ · 0 ⬜**. Konu kalem değil **dikiş** (§6A) | Faz-4'te `Must` yok — **kalem kuralı**: §6A tablosunun GL-10 dışındaki **15 satırının tamamı ✅** → **15/15 sayılarak karşılandı** | ✅ KAPALI |
 | **Faz 5 — Doğruluk** | §F.3 (PRD dışı faz; kalemler PRD kimlikli ya da türetilmiş NFR — §6B · §D124) | **✅ TESLİM + KAPANDI** (açılış 2026-08-24; kapanış turu 2026-08-30, GL-11 · tm 158 · §D143). Konusu **denetimin bulduğu yanlış**: 2026-08-23 bağımsız denetimi dokuz bulgu çıkardı ve ortak şekilleri şu — bir damga, onu hak eden koddan daha geniş bir şey iddia ediyor. **9 satır** (7 iş kalemi + M-SEC-d denetimi + GL-11 kapanış) · plan **32 alt-görev + 2 tek görev · ~44 pencere**, fiilen **36 alt-görev + 2 tek görev + 2 denetim-türevi görev (tm 171 · 172) = 40 pencere** · tm 150–158. Damga (**sayılarak**, öncü damga; tablo tur başında sekiz satırın sekizinde de bayat `⬜` taşıyordu, dört bağımsız kaynağa karşı okundu — §6B): **8 ✅ · 0 ◐ · 0 ⬜** | Faz-5’te `Must` yok — **kalem kuralı**: §6B tablosunun GL-11 dışındaki **8 satırının tamamı ✅** → **8/8 sayılarak karşılandı** | ✅ KAPALI |
 | **Faz 6 — Hazırlık** | §F.3 (PRD dışı faz; kalemler türetilmiş NFR — §6C · §D124) | **✅ TESLİM + KAPANDI** (açılış 2026-08-24; kapanış turu 2026-08-30, GL-12 · tm 168 · §D147). Konusu **canlıda ayakta kalmak**: konfigürasyon · ops dikişleri · kapasite ölçümü · dağıtım manifestleri · runbook. **Sınır (CLAUDE.md): deploy/DNS/TLS/gerçek secret YOK**; manifest yazılır, uygulanmaz (M-CONTAINER emsali) — Faz-6’nın `✅`’leri yalnız **kod ve manifest payını** iddia eder, "dağıtılmış bir sistem" iddiası yazılmaz. Mock → gerçek sağlayıcı geçişi de kapsam DIŞI (kullanıcı kararı). **10 satır** (8 iş kalemi + M-SEC-e denetimi + GL-12 kapanış) · plan **23 alt-görev + 2 tek görev · ~36 pencere**, fiilen **23 alt-görev + 2 tek görev + 2 denetim-türevi görev (tm 173 · 174) = 27 pencere** · tm 159–168. Damga (**sayılarak**, öncü damga; tablo tur başında dört satırda bayat `⬜` taşıyordu — §6C kapanış paragrafındaki dört-kaynak yöntemi): **9 ✅ · 0 ◐ · 0 ⬜** | Faz-6’da `Must` yok — **kalem kuralı**: §6C tablosunun GL-12 dışındaki **9 satırının tamamı ✅** → **9/9** | ✅ KAPALI |
+| Faz 7 — PRD uyum düzeltmesi | §F.3 (PRD dışı faz; kalemler PRD kimlikli — §7C) | **✅ TESLİM** (açılış 2026-08-31; kaynak `prd-uyum-denetimi.md`, 24 ajanlı iki-turlu adversaryal denetim — 247 maddenin 93'ü TAM, 141'i KISMİ, 13'ü YOK). **10 kalem · 40 iş kalemi** · tm 175–184, hepsi `done` (`M-TEAM` · `M-CAMP` · `M-STORE` · `M-UI` · `M-CO` · `M-TRACE`). Kapsam dışı (sahip kararı, 2026-08-31): KVKK/VERBIS + Türkiye pazarı · tanıtım sayfası/blog · GDPR sözleşme metinleri · görsel Workflow builder (ADR-14) · masaüstü uygulaması. **Bu satır §6D'den (Faz-8) ÖNCE gelir ve onunla karıştırılmamalıdır** — numaralandırma uyarısı §6D'nin başındadır | Faz-7'de `Must` yok — 40 iş kaleminin 40'ı `done` | — (resmî §F.00 kapanış turu koşulmadı; tm 184.4'ün süpürmesi bu turun çıktısıydı) |
+| **Faz 8 — Kalan Gereksinim Borçları** | §F.3 (PRD dışı faz; kalemler PRD kimlikli — §6D · §D149) | **⬜ AÇILDI 2026-09-07** (§D149). Konusu **tm 185/186/187 triyajlarının kapsam dışında bıraktığı artık**: üç triyaj da yalnız `Must` + v2-kalem payını üstlendi, geriye **17 `Should`/`Could` satırı + 1 `⬜` + §7.2'nin 11 NFR satırı** açık görevi olmadan `◐` kaldı (panelin `tm-plan-conflict` bulgusu, 19 kez). Her kalem 2026-09-07'de **koda karşı** okundu (denetim metni kaynakta `…` ile kesik — tm 187'nin `194.2` emsali): **17 gerçek** → görev, **5 FR + 11 NFR şüpheli/kayıtlı-karar** → iki triyaj görevi. **22 satır · ~36 pencere · tm 211–232** | Faz-8'de `Must` yok — **kalem kuralı**: GL-16 dışındaki **21 satırın tamamı `✅`**; payda **21 SABİT** | ⬜ AÇIK — kapanış turu GL-16 (tm 232) |
 
 **Faz-0 kapandı (2026-07-31 · GL-3 · tm 87).** Kapanışı bloklayan 6 `Must ◐` kapatıldı: 01.3, 02.4,
 13.8 (modül tablolarında D23/D24/D26'da `◐`→`✅`) + EK-A.1 / EK-A.2 / EK-B.1 (bu turda §7.1'de
@@ -3582,6 +3584,385 @@ Stripe lokal, object storage `.data/uploads`) · prodüksiyon deploy/DNS yok · 
 
 ---
 
+## 6D. FAZ 8 — Kalan Gereksinim Borçları (§F.3 turu · 2026-09-07)
+
+> **Numaralandırma uyarısı (bir sonraki pencere buraya düşmesin):** §6A/§6B/§6C sırasıyla Faz-4/5/6
+> turlarıdır, ama **Faz-7 zaten alınmıştır** — §7C (_"Faz-7 · PRD uyum düzeltmesi"_, tm 175–184,
+> `M-TEAM`/`M-CAMP`/`M-STORE`/`M-UI`/`M-CO`/`M-TRACE` aileleri, dilim adları `V7-1…`). Bu tur
+> onun **devamı değil, artığıdır**; bu yüzden §6 dizisinde `6D` ama faz numarası **8**, görev kodu
+> öneki **`V8-`**, dilim adları **`F8-…`**. `V7-` öneki §7C'nindir, kullanılmaz.
+
+**Tetikleyici:** panelin (`Claude_Loop_Controller`) sağlık taraması **26 açık bulgu** taşıyordu ve
+19'u tek bir desendeydi (`tm-plan-conflict`): _"satır `◐`, ama bu PRD kodunu kapsayan Task Master
+görevlerinin **tamamı** kapalı ve açık başka görev yok."_ Yani bu kalemler ne bitmişti ne de
+birinin işiydi — **backlog'un dışına düşmüşlerdi**. En eskisi 2026-09-04'ten beri açıktı; panel
+onları 3.456 taramada aynı sözlerle bildirmişti.
+
+**Neden düştüler.** tm 184.4 (2026-09-04) `prd-uyum-denetimi.md`'ye karşı üç fazda toplam **47**
+damga düşürdü. Triyaj turları bunların yalnız **`Must` ve v2-kalem** paylarını üstlendi: tm 185
+(Faz-0'ın 28 `Must`'ı → tm 188–195) · tm 186 (v1'in 11 `Must`'ı → tm 196–200) · tm 187 (v2'nin 8
+kalemi → tm 201–204). **Hiçbiri `Should`/`Could` satırlarına, hiçbiri §7.2'nin NFR satırlarına
+dokunmadı** — çünkü §F.00'ın faz kapısı onları saymaz, dolayısıyla hiçbiri "kapanışı bloklayan iş"
+listesine giremedi. Sonuç: kapı sayaçları temizlendi (`Faz-0 Must 48 ✅ · 3 ◐` → tm 205–207 ·
+`v1 Must 20 ✅ · 0 ◐`), ama **17 `Should`/`Could` satırı + 1 `⬜` + §7.2'nin 11 NFR satırı** hiç
+kimsenin işi olmadan `◐` kaldı. Bu bir hata değil bir **boşluk**: her triyaj kendi kapsamını doğru
+okudu, kapsam dışı kalan payı kimse toplamadı.
+
+**Faz-8'in konusu BU ARTIKTIR.** Faz-5 ürünün **doğru**, Faz-6 **hazır**, Faz-7 (§7C) **PRD'ye
+uyumlu** olmasını hedefledi; Faz-8 o üç turun **kapsam dışında bıraktığı satırları** kapatır.
+
+> **YÖNTEM (bu turun ilk kararı):** her kalem 2026-09-07'de **koda karşı yeniden okundu**, denetim
+> metnine karşı DEĞİL. Gerekçe: `prd-uyum-denetimi.md` alıntıları PLAN'daki kanıt bloklarında `…`
+> ile **kesiktir** — okunamayan bir iddia üzerine görev açmak, tm 187'nin `194.2` emsalinde
+> reddedilen şeydir. Ölçüt PRD satırı + Kabul Kriteri sütunu alındı.
+>
+> **İKİNCİ KONTROL — kayıtlı karar araması (§D denetimi).** Bu turun en pahalı bulgusu şuydu:
+> tm 184.4'ün mekanik süpürmesi **daha önce verilmiş kullanıcı/sahip kararlarının üzerinden geçti**.
+> Üç örnek ölçüldü: **§D129** (2026-08-24 · kullanıcı) _"45+ dile genişletme YAPILMAYACAK; §7.2
+> `I18N1/2` satırı `✅` KALIR — `◐` YAZILMADI çünkü '`◐` + kuyrukta açık görev yok' §F.00'ı
+> bloklar"_ → 184.4 satırı yine de `◐` yaptı, **ve tam da §D129'un uyardığı duruma soktu**;
+> **§D130** (2026-08-24 · kullanıcı) yük ayağını tm 161'e atadı, borç **ödendi** ve kayıt
+> `M4 ✅` yazdı → 184.4 `◐` yaptı; **KC1-C2-C8** içindeki sahip kararı (2026-08-31) KVKK/VERBIS'i
+> kapsam dışı ilan etmişti → satır yine `◐`. Bu yüzden `11.7`'nin dil ayağı ve §7.2'nin 11 satırı
+> **görevleşmedi, triyaja ayrıldı** (tm 211/212): bunların bir kısmı kod değil **damga** işidir.
+
+**Sonuç:** 5 kalem **şüpheli/kayıtlı-karar** çıktı → iki triyaj görevi · **17 kalem gerçek** çıktı
+→ 17 iş görevi (ikisi denetimin hiç görmediği ölü-uç borcu: panelin `suspicious-done` bulgusundan
+ve `audit:endpoint-ui` süpürmesinden) · 1 kapanış turu.
+
+**Öncelik (CONVENTIONS §4.1 · K7):** `high` = tm 211 · 212 (triyajlar — paydayı küçültebilirler,
+önce koşarlar) · 213 · 214 (ikisi de **sessiz yanlış**: biri kullanıcıyı kilitliyor, öteki metriği
+şişiriyor) · `medium` = 215–216, 218–220, 222–228, 230, 231 · `low` = 217, 221, 229, 232.
+`critical` KULLANILMADI (K7 — o seviye yalnız panelin "düzeltmeye gönder" akışına ayrılmıştır).
+
+| #   | Kod              | Kalem                                                                                                 | PRD              | Öncelik | Damga | tm  | ~Pen |
+| :-: | ---------------- | ------------------------------------------------------------------------------------------------------- | ---------------- | :-----: | :---: | :-: | :--: |
+|  1  | V8-TRIAGE-FR     | **Şüpheli FR damgası triyajı** — `06.6` · `07.7`(v1) · `09.2`(v1) · `11.7` · `13.7`; **KOD YAZILMAZ**     | çoklu            |  high   |  ⬜   | 211 |  2   |
+|  2  | V8-TRIAGE-NFR    | **§7.2'nin 11 açık NFR satırı** kayıtlı kararlara karşı okunur (§D129 · §D130 · sahip 2026-08-31)        | NFR              |  high   |  ⬜   | 212 |  2   |
+|  3  | V8-SUPERVISE-OFF | Gözetimi **bırakma** yüzeyi — `DELETE /chats/{id}/supervise` var, hiçbir istemci çağırmıyor               | FR-MOD-02.1.1    |  high   |  ⬜   | 213 |  1   |
+|  4  | V8-CAMP-DELIV    | `performance.displayed` **teslim edileni** saysın (`delivered_at`), satır sayısını değil                 | FR-MOD-03.3.1–.3 |  high   |  ⬜   | 214 |  1   |
+|  5  | V8-DEADEND       | Çağrılmayan uç süpürmesi + `audit:endpoint-ui`'nin **metot körlüğü** (yol bazlı sayıyor)                 | NFR-türetilmiş   | medium  |  ⬜   | 215 |  2   |
+|  6  | V8-ONBOARD       | Onboarding sihirbazının eksik iki adımı (ek kanallar · şirket büyüklüğü) → PRD'nin **5 adımı**           | FR-MOD-00.4      | medium  |  ⬜   | 216 |  1   |
+|  7  | V8-SHELL-MENU    | Logo → **menü/uygulama seçici** (pin/unpin yarısı zaten var)                                             | FR-MOD-01.1.1    |   low   |  ⬜   | 217 |  1   |
+|  8  | V8-INBOX-CHAN    | Kanal görünümleri **gerçek görünüm** olsun — bugün `<Link to="/app/settings">`                           | FR-MOD-02.1.4    | medium  |  ⬜   | 218 |  2   |
+|  9  | V8-INBOX-SUGG    | Reply Suggestions: sabit İngilizce regex yerine **bağlam + i18n**                                        | FR-MOD-02.3.2    | medium  |  ⬜   | 219 |  2   |
+| 10  | V8-TRAFFIC-RTM   | Traffic panosu **RTM akışına** bağlansın — bugün 8 sn'lik `setInterval`                                  | FR-MOD-03.1.1    | medium  |  ⬜   | 220 |  2   |
+| 11  | V8-SKILL-OWNER   | Playbook "sahip" filtresi **insan sahibi** süzsün (bugün `ai_agent_id`)                                  | FR-MOD-05.4      |   low   |  ⬜   | 221 |  1   |
+| 12  | V8-AIPERF-KPI    | AI Performance KPI'ları PRD'nin **dört metriğiyle** hizalansın                                           | FR-MOD-06.5      | medium  |  ⬜   | 222 |  1   |
+| 13  | V8-RPT-NAV       | Reports **sol dikey kenar çubuğu** + kategori grupları/genişleticiler + Export öğesi                     | FR-MOD-07.1      | medium  |  ⬜   | 223 |  2   |
+| 14  | V8-RPT-SHARE     | **Paylaşılabilir rapor bağlantısı** (KK'daki "Share export/link"in eksik yarısı)                         | FR-MOD-07.3.1    | medium  |  ⬜   | 224 |  2   |
+| 15  | V8-RPT-BENCH     | Chats kartlarının **vs-önceki dönem** ayağı + eksik iki kart (response times · satisfaction)             | FR-MOD-07.3.3    | medium  |  ⬜   | 225 |  2   |
+| 16  | V8-RPT-INSIGHT   | Reviews/Ratings'in **Insights** payı — repoda `insight` geçen tek dosya yok                              | FR-MOD-07.8      | medium  |  ⬜   | 226 |  2   |
+| 17  | V8-TMPL-USE      | Ticket e-posta şablonlarının **tüketicisi** — `renderTemplate`'i kimse çağırmıyor                        | FR-MOD-08.7.5    | medium  |  ⬜   | 227 |  2   |
+| 18  | V8-FORM-PLACE    | Forms builder: `ticket` + `prospect` **yerleşimi** (bugün yalnız pre/post-chat, yalnız contact)          | FR-MOD-08.7.7    | medium  |  ⬜   | 228 |  2   |
+| 19  | V8-APPS-FILTER   | Marketplace **filtre taksonomisi** — koleksiyonlar + ödeme/yerleşim filtreleri                           | FR-MOD-09.1      |   low   |  ⬜   | 229 |  2   |
+| 20  | V8-INVOICE       | **Kalıcı fatura geçmişi** — `Invoice` modeli yok, geçmiş bugünkü fiyatla türetiliyor                     | FR-MOD-10.3      | medium  |  ⬜   | 230 |  2   |
+| 21  | V8-HOME          | Home: **kişiselleştirilmiş karşılama** + Performance overview'ın PRD dörtlüsü                            | FR-MOD-13.1      | medium  |  ⬜   | 231 |  2   |
+| 22  | GL-16            | **F8-KAPAT** — Faz-8 §F.00 kapanış turu (kalem kuralı: 21 satırın 21'i)                                  | —                |   low   |  ⬜   | 232 |  2   |
+|     |                  | **19 iş kalemi + 2 triyaj + 1 kapanış**                                                                  |                  |         |       | **211–232** | **~36** |
+
+**Faz-8'de `Must` YOKTUR** — 21 satırın hepsi `Should`/`Could`/türetilmiş. §F.00'ın **sayaç**
+kuralı yerine **kalem kuralı** geçerlidir (Faz-3/4/5/6 emsali): _"GL-16 dışındaki 21 satırın
+tamamı `✅` olduğunda Faz-8 kapanır."_ Payda **21 SABİT**; tm 211/212'nin triyajı bir satırı `⛔`ye
+çevirirse payda düşmez, o satır **`⛔ sayılarak`** kapanmış sayılır ve gerekçesi kendi `#### K`
+bloğuna yazılır (tm 187'nin `08.9.3`/`08.9.5` emsali).
+
+**Faz-8'in bloklamadığı şey.** Bu faz **Faz-0/1/2 kapanış turlarını (tm 208/209/210) beklemez ve
+bloklamaz**: o üç kapı `Must` sayacına bakar, Faz-8'in 21 kaleminin hiçbiri `Must` değildir. İki
+hat paralel koşabilir. Tersi de doğru: tm 205–207 bitmeden Faz-8 başlayabilir.
+
+### 6D.1 Faz-8 atomik kırılımı (22 satır · ~36 pencere)
+
+> Her satır tek pencerelik ve **kendi bağlamını taşır** — ID'ler Task Master ile birebir, tam alan
+> detayı (dokunulacak dosyalar · contract-first sıra · bilinen tuzaklar · kapsam SINIRI) görevin
+> `details` alanındadır. Aşağıdaki özet **neden açık** + **KK** + **ölçülebilir kapanış**tır.
+
+**tm 211 · V8-TRIAGE-FR — şüpheli FR damgası triyajı (KOD YAZILMAZ)** `[OPUS-MAX]`
+
+- **Neden açık:** beş satırın `◐`si bu turda **şüpheli** çıktı, ama karar bir sayım turu ister.
+  (a) **`07.7` v1 satırı** (§4.3) — denetimin (1) numaralı boşluğu _"`buildSalesReport` sabit
+  `configured:false` iskeleti"_ **kapanmış**: `reports.ts` artık `salesReportFigures(...)` çağırıyor;
+  ikiz v2 satırı (`K07.7-b`) tm 201.3'te yedi parça sayılarak `✅` oldu, v1 satırı güncellenmedi.
+  (b) **`09.2` v1 satırı** — okunabilen boşluk (1) tm 202.1'de kapandı, okunamayan (2) tm 202.2'de;
+  202.2 ikiz v2 satırını (`K09.2-b`) `✅` yaptı, v1 bloğuna (`K09.2`) hiçbir madde yazılmadı.
+  (c) **`11.7`** — denetimin tek bulgusu **dil ayağıydı** (widget 8 locale); renk/tema/konum/mobil-
+  tam-ekran/RTL/reduced-motion **gerçek** bulundu. Dil payı **§D129'un kayıtlı kullanıcı kararına**
+  tabidir (_"45+ dile genişletme YAPILMAYACAK"_), yani bu satır bir **kod işi değil damga işidir**.
+  (d) **`06.6`** `⬜` — PRD **`§8 bots` tablosunu ve LLM'siz ayrı bir kural botunu** şart koşuyor
+  (KK: _"Kural bazlı bot; gruplara priority ile atanır"_), PLAN satırının "Nerede" hücresi ise
+  _"öne çekilen v1 AI Agent bu payı karşılıyor"_ diyor: bu bir **kapsam iddiasıdır ve PRD ile
+  çelişir**, karara bağlanmalı. (e) **`13.7`** — kalan tek pay mağaza gönderimi (`⛔-süreç`, §D110)
+  + "tam modül paritesi"nin bilinçli daraltması; damga `◐` mı `⛔ sayılarak` mı olmalı.
+- **Kapsam:** beşinin PRD satırı + KK sütunu koda karşı **madde madde** sayılır; her satır için
+  kayıtlı karar araması (§D + `#### K` + `git log --since`) **zorunludur** — bu turun dersi budur.
+  Sonuç ya `✅` ya `⛔ + gerekçe` ya "gerçek boşluk → yeni görev". **Ürün kodu/migration/test
+  YAZILMAZ.**
+- **Ölçülebilir kapanış:** beş satırın beşinde de damga + `#### K` maddesi güncel; payda kararı
+  §6D tablosuna işlendi; `pnpm -w audit:req-coverage` exit 0.
+
+**tm 212 · V8-TRIAGE-NFR — §7.2'nin 11 açık NFR satırı (KOD YAZILMAZ)** `[OPUS-MAX]`
+
+- **Neden açık:** §7.2 (NFR kapıları) **11 satırda `◐`** taşıyor — `P1` · `P2` · `P3` · `P4/P6` ·
+  `P8` · `S6` · `I18N1/2` · `C1/C2/C8` · `M4` · `M5` · `M-STORE` — ve **hiçbirinin açık görevi
+  yok**: tm 185/186/187 triyajlarının üçü de §3/§4/§5.0 tablolarına bakıyordu, §7.2'ye kimse
+  bakmadı. Üstelik en az üçünün **kayıtlı bir kararı var ve 184.4 onun üzerinden geçmiş**:
+  `I18N1/2` → **§D129** (kullanıcı, 2026-08-24: genişletme yapılmayacak, damga `✅` **kalmalı**;
+  §D129 `◐` yazmanın §F.00'ı bloklayacağını **açıkça uyarmıştı**) · `M4`/`P8` → **§D130**
+  (kullanıcı, 2026-08-24: yük ayağı tm 161'e atandı, **ödendi**; kayıt `M4 ✅ → KM4` yazıyor,
+  `P8`'in yatay ölçek payı tm 162'ye bağlanmıştı ve tm 162 `done`) · `C1/C2/C8` → `KC1-C2-C8`
+  içindeki **sahip kararı** (2026-08-31: KVKK/VERBIS + Türkiye pazarı kapsam dışı; §7C'nin
+  "Kapsam dışı" paragrafı da aynısını yazıyor) + `audit:req-coverage`ın `non-code` sınıfı
+  (_"DPA/SCC hukuki metin"_ · _"VERBIS bir tescildir"_).
+- **Kapsam:** on bir satır **sırayla** şu üç soruya karşı okunur: (1) kayıtlı bir karar var mı
+  (§D · `#### K` · §7C kapsam-dışı paragrafı)? (2) yoksa, PRD NFR maddesi koda karşı bugün ne
+  diyor? (3) kalan gerçek boşluk **görevleşecek kadar** kod işi mi, yoksa `⛔`/`non-code` mu?
+  Çıktı: her satırda damga + gerekçe. **Ürün kodu/migration/test YAZILMAZ**; gerçek boşluk
+  çıkarsa yeni görev açılır (bu görev onu yapmaz).
+- **Bilinen tuzak:** `## K` bloğundaki `◐` glifleri **tarihçedir, sayaca girmez** — satırın durumu
+  tablodadır (§6C'nin kapanış paragrafındaki kural). `KM-LOAD`'un üç `◐` maddesi bu yüzden
+  "üç yarım kalem" değildir.
+- **Ölçülebilir kapanış:** §7.2'de gerekçesiz `◐` **0**; her değişen satırın `#### K` bloğunda
+  bu turun maddesi var; `audit:req-coverage` exit 0.
+
+**tm 213 · V8-SUPERVISE-OFF — gözetimi bırakma yüzeyi** `[SONNET-XHIGH]` · FR-MOD-02.1.1
+
+- **Neden açık:** `K02.1.1`'in kendi `ⓘ` maddesi bunu yazmış ama görevleşmemiş: `DELETE
+  /chats/{chatId}/supervise` **kontratta da API'de de var** (`paths/chats.yaml` ·
+  `routes/chats.ts:414` → `supervisions.release`), **hiçbir istemci çağırmıyor** —
+  `TrafficPage.tsx:395` yalnız `POST`u yapıyor. Sonuç: bir temsilci gözetlemeye başlayabiliyor,
+  **vazgeçemiyor**; tek çıkış sohbetin kapanması. `audit:endpoint-ui` bunu **göremez** (yol bazlı
+  sayıyor, metot bazlı değil — tm 215).
+- **KK (türetilmiş, §C-A10 deseni):** başlatılabilen bir durumun **geri alınabilir** olması.
+- **Kapsam:** Traffic satır aksiyonuna (ve/veya Inbox `Supervised` görünümüne) "Stop supervising"
+  → mevcut `DELETE`i çağırır, `supervised` sayacı düşer. Yeni uç/migration **YOK**.
+- **Ölçülebilir kapanış:** web unit (aksiyon `DELETE`i çağırır + liste tazelenir) + e2e
+  (supervise → unsupervise → satır `supervised` sekmesinden düşer); DoD kapısı yeşil.
+
+**tm 214 · V8-CAMP-DELIV — `displayed` teslim edileni saysın** `[SONNET-XHIGH]` · FR-MOD-03.3.1–.3
+
+- **Neden açık:** `campaign-matching.ts:187` → `return { displayed: sends.length, chats, conversion }`.
+  `campaign_sends` satırı **teslim edilmeden de** yazılıyor (M-CAMP-a `delivered_at` sütununu tam da
+  bunun için ekledi, NULL = henüz teslim edilmedi), yani hiç gösterilmemiş bir kampanya `displayed`
+  sayılıyor ve **dönüşüm oranının paydası şişiyor**. `K03.3.1-.3` bunu "kalan" olarak yazmış, tm
+  176.4'ün kararına bırakmış, görevleşmemiş. Panel `suspicious-done` olarak bildiriyor.
+- **Kapsam:** `displayed` = `delivered_at IS NOT NULL` sayısı; `conversion` paydası aynı tanıma
+  hizalanır. Saf fonksiyon + tablo testi; migration **YOK** (sütun zaten var).
+- **Ölçülebilir kapanış:** `campaign-matching.test.ts` teslim edilmemiş satırın sayılmadığını
+  kanıtlar (regresyon: mevcut 3/2/1 senaryosu korunur) + integration.
+
+**tm 215 · V8-DEADEND — çağrılmayan uç süpürmesi + denetimin metot körlüğü** `[OPUS-XHIGH]`
+
+- **Neden açık:** `pnpm audit:endpoint-ui` "205 yol · 14'ü çağrılmıyor" diyor, ama sayımı **yol
+  bazlı**: `POST`u çağrılan bir yolun `DELETE`i çağrılmasa da "kapsanmış" görünüyor — tm 213'ün
+  bulgusu tam olarak bu kör noktadan kaçtı. Ayrıca 14 yolun ikisi gerçek yüzey borcu:
+  `/kb-categories/{categoryId}` (`routes/kb.ts:386,416` — kategori **yaratılabiliyor ve
+  listeleniyor**, yeniden adlandırılamıyor/silinemiyor) ve `/reports/access-review` (hiçbir
+  istemci). Kalan 12'si meşru sunucu-sunucu/SSR yüzeyi (SAML ACS · SCIM · MCP · e-posta inbound ·
+  public KB) — bu tur onları **gerekçesiyle** listeye yazıp susturur (§D145 emsali).
+- **Kapsam:** (1) denetim betiği **metot bazına** çekilir (yol+metot çifti); (2) çıkan yeni ölü
+  uçlar ya bağlanır ya gerekçelendirilir; (3) `WebhookSubscriptions.tsx:87`'nin `limit=100`
+  sınırı (`audit:unpaged-lists`'in tek `UNPAGED`ı) ya sayfalanır ya `paging-exempt:` alır.
+- **Ölçülebilir kapanış:** `audit:endpoint-ui` metot bazlı çalışır ve **gerekçesiz 0** döner;
+  `audit:unpaged-lists` `UNPAGED = 0`.
+
+**tm 216 · V8-ONBOARD — sihirbazın eksik iki adımı** `[SONNET-XHIGH]` · FR-MOD-00.4
+
+- **Neden açık:** `OnboardingWizard.tsx:30-32` → `'welcome' | 'website' | 'team' | 'sample'` = **4
+  adım**. PRD satırı beş şey sayıyor (_"ad, website, **ek kanallar**, **şirket büyüklüğü**, ekip
+  daveti"_) ve KK açıkça _"**5 adım** tamamlanınca Home checklist + örnek sample chat gösterilir"_
+  diyor. İki adım hiç yazılmadı.
+- **Kapsam:** iki adım + `GET/PATCH /onboarding/state`'in taşıdığı alanlar; `company_size` şirket
+  ayarına (`08.3` M-CO-a'nın `Organization` alanları) yazılır — **ikinci bir doğruluk kaynağı
+  açılmaz**; "ek kanallar" adımı Settings→Channels'a köprü kurar, kanal bağlama akışını
+  **kopyalamaz**. Home checklist aynı kaynaktan okumaya devam eder (tm 136.4).
+- **Ölçülebilir kapanış:** unit (5 adım + kaldığı adımdan devam) + integration (`onboarding/state`
+  yeni alanları taşır, cross-tenant negatif) + e2e adım sayısı.
+
+**tm 217 · V8-SHELL-MENU — logo bir menü açsın** `[SONNET-XHIGH]` · FR-MOD-01.1.1
+
+- **Neden açık:** KK _"**Menü/uygulama seçici açılır**; nav pin/unpin"_ — ikinci yarı tam ve
+  erişilebilir (`NavPinToggle`, `aria-expanded`/`aria-controls`, Enter/Space), **birincisi yok**.
+  Kabuktaki tek seçici `BrandSwitcher` (`AppShell.tsx:200`) ve o **tek lisans içindeki markaları**
+  değiştiriyor — PRD'nin sorduğu şey değil.
+- **Kapsam:** logodan açılan menü (workspace/uygulama seçimi + hesap kısayolları); mevcut
+  `BrandSwitcher` **kaldırılmaz**, menünün içine alınır. Yeni uç gerekmiyorsa açılmaz.
+- **Ölçülebilir kapanış:** unit (klavye + `aria-expanded` + Esc kapanışı) + a11y kuralı yeşil.
+
+**tm 218 · V8-INBOX-CHAN — kanal görünümleri gerçek görünüm olsun** `[OPUS-XHIGH]` · FR-MOD-02.1.4
+
+- **Neden açık:** `InboxPage.tsx:891,902` — kanal satırı `<Link to="/app/settings">`; tıklayınca
+  orta liste kanala göre **süzülmüyor**, Ayarlar'a gidiyor. `/chats` sorgu şemasında kanal
+  parametresi **hiç yok** (`paths/chats.yaml`de `channel` geçmiyor), yani süzme sunucuda da
+  mümkün değil. KK'nın _"kanal bağlı değilse channel-promo"_ yarısı karşılanmış durumda — eksik
+  olan, **bağlıyken bir görünüm olması**.
+- **Kapsam:** contract-first — `GET /chats`e `channel` filtresi → servis → `InboxPage` kanal satırı
+  görünüme dönüşür (promo davranışı **korunur**). Custom saved views'a dokunulmaz.
+- **Ölçülebilir kapanış:** integration (kanal filtresi + cross-tenant negatif) + web unit + e2e.
+
+**tm 219 · V8-INBOX-SUGG — öneriler bağlam ve dil kazansın** `[OPUS-XHIGH]` · FR-MOD-02.3.2
+
+- **Neden açık:** PRD satırının adı _"Reply Suggestions çipleri (**AI**, `Space` ile)"_; kod
+  `replySuggestions.ts`te **sabit İngilizce regex/şablon** (`GREETING`/`THANKS`/`ORDER` + iki sabit
+  "holding" cümlesi) ve i18n katmanından geçmiyor — Türkçe bir sohbette İngilizce çip öneriyor.
+  Ana KK (_"çip → composer'a düzenlenebilir metin"_) **karşılanmış ve testli**, eksik olan kaynak.
+- **Kapsam:** öneri üretimi mevcut Copilot dikişine (`/copilot/chats/{chatId}/reply`) bağlanır —
+  **ikinci bir AI yolu açılmaz**; sağlayıcı yoksa bugünkü şablonlar **i18n'lenmiş** fallback olur.
+- **Ölçülebilir kapanış:** unit (locale'e göre dil + fallback yolu) + integration + e2e.
+
+**tm 220 · V8-TRAFFIC-RTM — pano canlıya bağlansın** `[OPUS-MAX]` · FR-MOD-03.1.1
+
+- **Neden açık:** KK _"**RTM traffic akışı**; Browsing→Chatting→Invited canlı"_. Kod
+  `TrafficPage.tsx:68` `TRAFFIC_REFRESH_MS = 8_000` + `:339` `setInterval` ile ilk sayfayı yeniden
+  okuyor; dosyanın kendi başlığı _"there is no RTM push to reconcile against a loaded page here,
+  just the poll"_ diyor. Yedi sekmenin yedisi de yerinde (`traffic-tabs.ts`: all/chatting/
+  supervised/queued/waiting/invited/browsing) — **eksik olan yalnız canlılık**.
+- **Kapsam:** ADR-15 zarfıyla mevcut RTM kanalına ziyaretçi durum olayı; `mergeTrafficHead` push
+  yolunu da kabul eder, **poll yedek olarak kalır** (bağlantı kopunca sessizce bozulmasın).
+  İkinci bir RTM protokolü **AÇILMAZ** (13.7-f emsali).
+- **Ölçülebilir kapanış:** integration (olay yayınlanıyor) + web unit (push satırı günceller) +
+  e2e (ziyaretçi durum geçişi yeniden yüklemeden görünür).
+
+**tm 221 · V8-SKILL-OWNER — "sahip" insan olsun** `[SONNET-XHIGH]` · FR-MOD-05.4
+
+- **Neden açık:** KK _"Ada göre arama; tür/durum/**sahip** filtre"_. `skill-filter.ts`in "owner"ı
+  `ai_agent_id` (sahip **ajan**); satır zaten `created_by_name` taşıyor (FR-MOD-05.5) ama filtre
+  ekseni değil. Dosyanın kendi yorumu bunu **açıkça bir borç olarak yazıyor**: _"Conflating the two
+  is a separate, tracked gap (FR-MOD-05.4), not fixed here"_ — ama izleyen görev yoktu.
+- **Kapsam:** ikinci bir eksen (insan sahibi) ya da mevcut eksenin yeniden tanımlanması — karar
+  görev içinde verilir ve `#### K05.4`e yazılır. Mevcut ajan filtresi **kaybedilmez**.
+- **Ölçülebilir kapanış:** `skill-filter.test.ts` iki ekseni de kanıtlar + web unit.
+
+**tm 222 · V8-AIPERF-KPI — dört metrik PRD'ye hizalansın** `[SONNET-XHIGH]` · FR-MOD-06.5
+
+- **Neden açık:** PRD _"Resolution rate, **AI chats**, CSAT, **Transferred %**"_; kod
+  `performance.ts` → `resolution_rate` · **"AI chats resolved"** (= çözülen sohbet **sayısı**) ·
+  `csat` · `transfer_rate`. İkinci kart PRD'nin sorduğu metrik değil. KK'nın _"düşük-baz uyarısı"_
+  (`isLowBase`) ve _"AI off iken arşiv ayrımı"_ payları ayrıca doğrulanır.
+- **Kapsam:** metrik tanımı düzeltilir (sözleşme alanı adı dahil, gerekiyorsa); `AiPerformance.tsx`
+  ve mobil salt-okur yüzeyi aynı sözlüğü okur.
+- **Ölçülebilir kapanış:** `performance.test.ts` + integration (`/reports/ai-agent`) + parite testi.
+
+**tm 223 · V8-RPT-NAV — Reports kenar çubuğu** `[OPUS-XHIGH]` · FR-MOD-07.1
+
+- **Neden açık:** PRD **kenar çubuğu** (sol dikey nav, dokuz öğe: Overview/AI Agent/Metrics
+  breakdown/Chat topics/Leads/Cases/Sales/Team performance/**Export**) + KK _"**Kategoriler + grup
+  genişleticiler**"_. Kod `ReportsPage.tsx:503` düz yatay `role="tablist"`; kategori grubu/akordeon
+  yok, `Export` sayfa başlığındaki bir indirme kontrolü.
+- **Kapsam:** salt sunum katmanı — rapor grubu kataloğu (`GET /reports/groups`), izin kapısı
+  (`visibleReportGroups` · `GROUP_GATED_TABS`) ve kayıtlı görünümler **aynen korunur**.
+- **Ölçülebilir kapanış:** unit (grup genişletici + klavye + derin bağlantı) + a11y + e2e ekran görüntüsü.
+
+**tm 224 · V8-RPT-SHARE — paylaşılabilir rapor bağlantısı** `[OPUS-XHIGH]` · FR-MOD-07.3.1
+
+- **Neden açık:** KK _"Range → tüm metrik yeniden hesap; custom takvim; **Share export/link**"_ —
+  `export` yarısı tam (`/reports/export` `csv|pdf`), **`link` yarısı yok**: `features/reports/`
+  altında Share kontrolü ya da token'lı rapor URL'i üreten bir uç bulunmuyor.
+- **Kapsam:** süreli + kapsam-sınırlı paylaşım bağlantısı (PAT deseni: bir kez gösterilir, hash
+  saklanır); **kimliksiz genel erişim AÇILMAZ** — NFR-S5 IDOR sınırı görev metninde.
+- **Ölçülebilir kapanış:** integration (süre dolumu · iptal · **cross-tenant negatif ZORUNLU**) +
+  web unit + e2e.
+
+**tm 225 · V8-RPT-BENCH — Chats kartları karşılaştırmalı olsun** `[SONNET-XHIGH]` · FR-MOD-07.3.3
+
+- **Neden açık:** KK _"Dönemsel + **karşılaştırmalı**"_; üç kart (automated/hour · automated avg
+  duration · total duration) yalnız dönemsel — `withBenchmark` bu üç figürü **hiç ölçmüyor**,
+  dolayısıyla UI'da vs-previous rozeti yok. PRD ayrıca **response times** ve **satisfaction**
+  kartlarını da sayıyor.
+- **Kapsam:** üç figür benchmark bloğuna girer + eksik iki kart; `splitBenchmark`/`CountDelta`
+  deseni **aynen** kullanılır (tm 201.3 emsali), yeni rozet dili icat edilmez.
+- **Ölçülebilir kapanış:** integration (`previous_period` üç+iki figürü taşır) + web unit + CSV export satırı.
+
+**tm 226 · V8-RPT-INSIGHT — Reviews/Ratings'in Insights payı** `[OPUS-XHIGH]` · FR-MOD-07.8
+
+- **Neden açık:** PRD satırı dört şey sayıyor (_"rated good/bad; iki dönem karşılaştırma;
+  Ecommerce/Tracked sales; **Insights**"_); ilk üçü var, dördüncüsü **yok** — `apps/web/src` ve
+  `apps/api/src` genelinde `insight` geçen tek bir dosya/bileşen bulunmuyor.
+- **Kapsam:** "Insights" bu üründe ne demek, görev içinde PRD satırından türetilir ve §C'ye yazılır
+  (deterministik türetim; **LLM çağrısı açılmaz** — test edilebilirlik).
+- **Ölçülebilir kapanış:** saf türetim modülü + tablo testi + rapor grubu satırı + CSV export.
+
+**tm 227 · V8-TMPL-USE — şablonların tüketicisi** `[OPUS-XHIGH]` · FR-MOD-08.7.5
+
+- **Neden açık:** CRUD ve _"geçersiz değişken/format engeli"_ KK'sı **karşılanmış** (servis
+  `{{ group.field }}` yer tutucularını kataloğa karşı doğruluyor), ama `renderTemplate`
+  (`packages/types/src/template-variables.ts`) **repoda yalnız kendi testinden çağrılıyor**: bir
+  admin şablon yazabiliyor, o şablonla **hiçbir e-posta gönderilmiyor**. Ölü özellik.
+- **Kapsam:** mevcut ticket e-posta yolu (`08.7.4` transcript deseni) şablonu okur; sağlayıcı
+  **mock kalır** (CLAUDE.md sınırı).
+- **Ölçülebilir kapanış:** integration (şablon → gönderilen gövde; değişken çözülmüş) + negatif
+  (geçersiz değişken gönderimi engeller) + cross-tenant.
+
+**tm 228 · V8-FORM-PLACE — ticket + prospect yerleşimi** `[OPUS-XHIGH]` · FR-MOD-08.7.7
+
+- **Neden açık:** PRD _"Forms builder (**pre-chat/post-chat/ticket/prospect**; alan builder)"_ +
+  KK _"widget'ta gösterim → **contact/ticket'a** yazma"_. Kod `FORM_PLACEMENTS = ['pre_chat',
+  'post_chat']` (`packages/types/src/custom-fields.ts:32`) ve servis form alanını **contact**
+  entity'siyle sınırlıyor — `ticket` ve `prospect` formları yok, ticket'a yazma yolu yok.
+- **Kapsam:** iki yerleşim daha + ticket entity'sine yazma; migration genişlet-only, mevcut CHECK
+  kısıtı korunur. Pre/post-chat davranışı **değişmez** (regresyon testiyle sabitlenir).
+- **Ölçülebilir kapanış:** integration (dört yerleşim + ticket'a yazma + cross-tenant) + web unit + e2e.
+
+**tm 229 · V8-APPS-FILTER — marketplace filtre taksonomisi** `[SONNET-XHIGH]` · FR-MOD-09.1
+
+- **Neden açık:** KK'nın kart→OAuth→sohbet-içi-veri ayağı **tamamen karşılanmış**; eksik olan
+  PRD'nin saydığı taksonomi: **koleksiyonlar** (By Text/AI-Powered/New/Staff Picks) ve
+  **kategori/ödeme/yerleşim filtreleri**. `routes/apps.ts:33` `listQuery` yalnız `query` +
+  `category` taşıyor.
+- **Kapsam:** contract-first — katalog alanları (`@nexa/types/apps.ts`) + `listQuery` eksenleri +
+  grid kontrolleri. 100+ kart sayısı ve kanal çapraz-bağı **değişmez**.
+- **Ölçülebilir kapanış:** integration (her eksen + birleşim) + `apps.test.ts` + e2e.
+
+**tm 230 · V8-INVOICE — kalıcı fatura geçmişi** `[OPUS-MAX]` · FR-MOD-10.3
+
+- **Neden açık:** `schema.prisma`da **`Invoice` modeli hiç yok** (yalnız `PaymentMethod` ·
+  `Subscription` · `UsageRecord` · `ApiPackagePurchase`); fatura geçmişi okuma anında türetiliyor
+  ve **geçmiş dönemleri BUGÜNKÜ abonelik satırından fiyatlıyor** — plan değişince geçmiş faturalar
+  geriye dönük değişiyor. KK _"Fatura listesi/**indirme**"_.
+- **Kapsam:** `invoices` tablosu (dönem, kalemler, para birimi, tutar — **dondurulmuş**) +
+  dönem kapanışında yazan sweep; mevcut `/billing/invoices` okuma yolu tabloya döner.
+  **Ödeme/kart akışı kapsam DIŞI** (CLAUDE.md sınırı) — `ApiPackagePurchase` satır kalemi (tm 71.5)
+  korunur.
+- **Ölçülebilir kapanış:** migration + integration (plan değişimi geçmişi **değiştirmez** —
+  bu turun asıl kanıtı) + cross-tenant + indirme yolu.
+
+**tm 231 · V8-HOME — Home'un iki eksik kabul kriteri** `[SONNET-XHIGH]` · FR-MOD-13.1
+
+- **Neden açık:** üç KK'dan ikisi eksik. (1) **Kişiselleştirilmiş karşılama** yok — sayfa başlığı
+  sabit `'Home'` / `'Your workspace at a glance'` (`locales/en/home.ts:12-13`), ajanın adını
+  kullanan bir karşılama satırı hiçbir yerde üretilmiyor. (2) **Performance overview** PRD'nin
+  dörtlüsünü (Total chats / Satisfaction / Response time / Efficiency + _"Updated every Monday"_)
+  taşımıyor. Onboarding checklist payı (tm 136.4) **var**.
+- **Kapsam:** ad zaten oturum bağlamında (`AppShell` presence); yeni uç açmadan okunur. Dört figür
+  mevcut `/reports/overview` sözlüğünden gelir — **ikinci bir metrik kaynağı açılmaz**.
+- **Ölçülebilir kapanış:** web unit (ad + dört figür + boş durum) + i18n kapsam testi + e2e.
+
+**tm 232 · GL-16 · F8-KAPAT — Faz-8 §F.00 kapanış turu** `[OPUS-MAX]`
+
+- **Kapsam:** §F.1'in 10 maddesi **tam sürüm** koşulur; §6D tablosunun 21 satırı **dört bağımsız
+  kaynağa** karşı sayılır (GL-11/GL-12 yöntemi: Task Master durumu · tablo damgası · `## K` madde
+  sayısı · kanıtın adlandırdığı dosyanın diskte varlığı); damga `✅ KAPALI` ya da gerekçeli
+  `❌ AÇIK`. **`✅` UYDURULMAZ** (§F.00).
+- **Bağımlılık:** tm 211–231'in hepsi.
+
+### 6D.2 Faz-8 dilim gruplaması + kritik yol
+
+| Dilim    | Tema                                  | Kalemler                 | Kapı                                    |
+| -------- | ------------------------------------- | ------------------------ | --------------------------------------- |
+| **F8-1** | **Önce paydayı küçült** (kod yazılmaz) | tm 211 · 212             | 5 FR + 11 NFR damgası karara bağlandı    |
+| **F8-2** | Sessiz yanlışlar (kullanıcı + metrik)  | tm 213 · 214 · 215       | ölü uç 0, `displayed` doğru              |
+| **F8-3** | Reports ailesi                         | tm 223 · 224 · 225 · 226 | 07.1/07.3.1/07.3.3/07.8 `◐→✅`           |
+| **F8-4** | Inbox + Traffic canlılığı              | tm 218 · 219 · 220       | 02.1.4/02.3.2/03.1.1 `◐→✅`              |
+| **F8-5** | Settings/Forms/Apps                    | tm 227 · 228 · 229       | 08.7.5/08.7.7/09.1 `◐→✅`                |
+| **F8-6** | Kabuk + Home + Onboarding              | tm 216 · 217 · 231       | 00.4/01.1.1/13.1 `◐→✅`                  |
+| **F8-7** | Veri + filtre artıkları                | tm 221 · 222 · 230       | 05.4/06.5/10.3 `◐→✅`                    |
+| **F8-8** | Kapanış                                | tm 232 (GL-16)           | Faz-8 §F.00                              |
+
+**Kritik yol:** `F8-1 → (F8-2 ∥ F8-3 ∥ F8-4 ∥ F8-5 ∥ F8-6 ∥ F8-7) → F8-8`. Yalnız **F8-1 önce
+koşmalıdır** (paydayı değiştirebilir); kalan altı dilim birbirinden bağımsızdır ve Faz-0/1/2
+kapanış turlarıyla (tm 205–210) **paralel** koşabilir.
+
+---
+
 ## G. İş Kırılımı Dizini (Task Master aktarımı için)
 
 > Bu tablo Task Master'a aktarımın kaynağıdır; her satır bir alt-görevdir ve §3.13/§4.4'teki tam
@@ -5691,6 +6072,7 @@ görüneceği en son yerdir.
 - **D146 (e2e kapısı tam süitte BİR KEZ düştü, aynı test üç kez yeşil koştu — ürün kusuru DEĞİL, kayda geçen bir flake · tm 158 · 2026-08-30):** GL-11'in ilk tam e2e koşusu **209 geçti / 1 düştü** (13,2 dk): `apps/e2e/tests/settings.spec.ts:323` _"settings › adds and removes an IP allowlist entry"_ — ilk iddia olan `getByRole('region', {name:'IP allowlist'}).getByRole('heading', …)` 10 sn timeout'unda **bulunamadı**. **Ürün kodu bu turda hiç değişmedi**, o yüzden kök neden üç deneyle daraltıldı: (a) test **tek başına** yeşil (3,0 sn); (b) `settings.spec.ts`'in **tamamı** yeşil (20/20, 1,5 dk); (c) **tam süit yeniden** koşuldu → **210/210** (12,2 dk). Yani dört koşudan üçü yeşil, düşen koşuda **aynı dosyanın komşu testleri (163 ve 165) geçti** — sayfa render oluyordu. `IpAllowlist` bölümü `SettingsPage.tsx`'te **koşulsuz** mount ediliyor ve `<Section>` başlığını `list.error` durumunda bile basıyor, dolayısıyla "yetki/entitlement kapısı kapandı" açıklaması elenir; geriye 30+ bölümün aynı anda sorgu açtığı bir sayfada **ilk boyamanın 10 sn'yi aşması** kalıyor. Veri kirliliği de elendi: koşudan sonra `ip_allowlist_entries` **0 satır**. **Görevleşmedi** (CONVENTIONS §5 — bu tur ürün/test kodu yazmaz) ama kayıt açıldı, çünkü tm 147'nin (E2E-POLLUTION) dersi şu: bu sınıf bir kez görülüp geçilirse ikinci kez "bilinen flake" diye geçiştirilir. **GL-12 için not:** tam e2e'yi zaten koşacak; bu test yeniden düşerse artık tarihçesi var ve bir görev hak eder (öneri: ilk iddiadan önce `waitForLoadState` ya da bölüme özel bir `expect` timeout'u). · tm 158
 - **D147 (FAZ-6 KAPANDI — GL-12 kapanış turu; §F.1'in 10 maddesi tam sürüm koşuldu, ÜRÜN KODU DEĞİŞMEDİ; §D146'nın flake'i TEKRARLAMADI · tm 168 · 2026-08-30):** §6C tablosu **9 ✅ · 0 ◐ · 0 ⬜** ile kapandı ve bu, bu turun **son** faz kapanışıdır. **Sayımın hikâyesi GL-11'inkinin küçültülmüş tekrarı:** tablo tur başında dört satırda (`M-SCALE` · `M-OTEL` · `M-IAC` · `M-RUNBOOK`) bayat `⬜` taşıyordu — GL-11 aynı deseni §6B'de sekiz satırın sekizinde görmüş ve notunda bu dördünü **ismen** bırakmıştı, yani desen ikinci kez sürprizle değil **beklenerek** karşılandı. Damgalar yine dört bağımsız kaynak yeşilken çevrildi (Task Master + §7.2 + `## K` kanıt maddesi + dosyanın diskte varlığı). **İki yeni ders kayda değer.** **(1) `## K` bloğundaki `◐` glifleri tarihçedir, durum değildir** — KM-LOAD üç, KM-OTEL bir `◐` madde taşıyor ve hepsi kendi anındaki eksiği doğru yazmış, sonraki madde o eksiği kapatmış (KM-OTEL-a "M-OTEL-b bitmeden bu satır ✅ olmaz" demiş, M-OTEL-b bitirmiş). Kanıt bloğu ekleyerek büyüyen bir kayıt olduğu için (CONVENTIONS §1.2) bir maddenin glifi **yazıldığı anı** dondurur; satırın bugünkü durumu **tablodadır**. Bu ayrım §6C'ye kalıcı not olarak yazıldı, çünkü onu kaçıran bir pencere KM-LOAD'a bakıp "üç yarım kalem" diye yanlış bulgu açardı. **(2) e2e kapısının ilk denemesi düştü ve sebebi ürün değil ORTAMDI:** Playwright'ın `webServer`'ı dört zorunlu env anahtarı olmadan açıldı, çünkü kök `.env` kabuğa yüklenmemişti — DoD kapısının geri kalanı bunu hiç istemiyor (`with-test-datastores.ts` kendi ortamını kuruyor), yani kapı komutlarının **ortam gereksinimi tek biçimli değil**; `set -a; . ./.env; set +a` ile 210/210. **§D146'nın beklediği karar:** `settings.spec.ts:323` bu turda **3,2 sn'de yeşil** geçti, yani flake tekrarlamadı ve görevleşmedi; §D146'nın önerisi (bölüme özel `expect` timeout'u) uygulanmadan kayıtta bırakıldı. **Faz-6'nın `✅`'lerinin sınırı §F.00'da yazılı olduğu gibi korundu:** kod ve manifest payı iddia edilir, **gerçek bir dağıtım yapılmamıştır** — `helm template`/`kubectl --dry-run`/`kubeconform` ile doğrulandı, `kubectl apply` YOK; mock sağlayıcılar (LLM · SMTP · S3 · Stripe · push · SIEM · AV · beş kanal) kullanıcı kararıyla **mock kaldı**. §F.2'nin **proje geneli** final raporu (üçüncü sürüm) HANDOFF'ta. · tm 168
 - **D148 (02.1.2'nin `✅`'i DOĞRU çıktı; yanlış olan kanıt metniydi — bir başka ekranın borcu bu satırın üzerine yazılmıştı · panel bulgusu · 2026-09-04):** Sağlık taraması `PLAN.md:541`'i kendi kendisiyle çelişen bir satır olarak işaretledi: hücre `✅`, ama `#### K02.1.2` bloğunun son cümlesi **"Kalan (tm 179.4, aynı denetim maddesi)"** diyordu. İki okuma vardı (metin bayat / damga erken) ve **üçüncüsü doğru çıktı:** metin güncel ama **yanlış deftere** yazılmış. tm 179.4 (M-COUNT-d) Traffic panosunun sekme sayaçlarını hedefliyor (`TrafficPage.tsx:351` `countByTab(items)`, `:413` `items.length`, `:432`) — o yüzey **Engage > Traffic**, yani PRD 03.1.1'in "canlı sayacı" (PLAN.md:207), 02.1.2'nin AI Agents grubu değil. Karışıklığın mekanik sebebi kayıtlı olsun: §7C.1 dilim tablosu (PLAN.md:4203-4206) `M-COUNT`'un **dört** kaleminin dördüne birden aynı grup etiketini (`02.1.2, 02.7`) veriyor — bu grup düzeyinde bir etiket, kalem düzeyinde bir gereksinim eşlemesi değil; -d'nin gerçek gereksinimi 03.1.1. **Koda karşı doğrulandı** (dosya:satır kanıtı K02.1.2'nin son maddesinde): 02.1.2'nin iki görünümü de var, iki sayacı da sunucunun `total`'ından geliyor, `ai_solved` ADR-09 predicate'iyle birebir, integration+web+e2e testleri yerinde. **Karar:** damgaya dokunulmadı (`✅ → K02.1.2`), yalnız yanıltıcı cümle düzeltildi ve doğrulama maddesi eklendi; **yeni Task Master görevi açılmadı**, çünkü kalan iş zaten `pending` tm 179.4'tür — aynı iş için ikinci bir `critical` kayıt kuyruğu çift sayardı. **Bu turun kapsam sınırı:** yalnız bu satır; açıkta kalan ve BU TURDA DOKUNULMAYAN gerilim şu — 03.1.1'in satırı (PLAN.md:207) `✅` ve "canlı sayacı" iddia ediyor, oysa tm 179.4 tam da o sayacın yüklenmiş sayfadan türediğini söylüyor; 179.4 koştuğunda o satırın kanıtı tazelenmeli. · tm 179.4 (açık)
+- **D149 (FAZ-8 AÇILDI — üç triyajın kapsam dışında bıraktığı 33 satır toplandı; ÜRÜN KODU YAZILMADI · 2026-09-07):** Panelin (`Claude_Loop_Controller`) sağlık taraması **26 açık bulgu** taşıyordu; hepsi bu turda tek tek koda karşı okundu. **Bulguların dağılımı:** 19'u `tm-plan-conflict` (satır `◐`, bu PRD kodunu kapsayan tm görevlerinin tamamı kapalı, açık başka görev yok) · 4'ü `suspicious-done` · 1'i `plan-count-drift` · 1'i `plan-evidence-broken` · 1'i `phase-blockers` (bilgi — tm 205/206/207 zaten karşılıyor). **KÖK NEDEN (bu turun asıl bulgusu):** tm 184.4 (2026-09-04) üç fazda **47** damga düşürdü; ardından gelen üç triyaj turu — tm 185 (Faz-0'ın 28 `Must`'ı) · tm 186 (v1'in 11 `Must`'ı) · tm 187 (v2'nin 8 kalemi) — **yalnız `Must` ve v2-kalem paylarını** üstlendi, çünkü §F.00'ın faz kapısı `Should`/`Could` saymaz. Geriye **17 `Should`/`Could` satırı + 1 `⬜` (`06.6`) + §7.2'nin 11 NFR satırı = 29 satır** açık görevi olmadan `◐` kaldı; hiçbiri kapıyı bloklamadığı için hiçbir triyajın listesine girmedi. Bu bir hata değil bir **boşluk**: her triyaj kendi kapsamını doğru okudu, kapsam dışı kalan payı kimse toplamadı. **YÖNTEM:** kalemler denetim metnine değil **koda** karşı okundu — `prd-uyum-denetimi.md` alıntıları PLAN'ın kanıt bloklarında `…` ile **kesiktir**, okunamayan bir iddia üzerine görev açmak tm 187'nin `194.2` emsalinde reddedilen şeydir; ölçüt PRD satırı + Kabul Kriteri sütunu alındı. **İKİNCİ KONTROL — kayıtlı karar araması, ve bu turun en pahalı bulgusu:** tm 184.4'ün mekanik süpürmesi **daha önce verilmiş kullanıcı/sahip kararlarının üzerinden geçmiş**. Üçü ölçüldü: **§D129** (kullanıcı, 2026-08-24) _"45+ dile genişletme YAPILMAYACAK; §7.2 `I18N1/2` satırı `✅` KALIR — `◐` YAZILMADI çünkü '`◐` + kuyrukta açık görev yok' §F.00'ı bloklar"_ → 184.4 satırı yine `◐` yaptı **ve tam da §D129'un uyardığı duruma soktu**; **§D130** (kullanıcı, 2026-08-24) yük ayağını tm 161'e atadı, borç ödendi, kayıt `M4 ✅ → KM4` yazdı → 184.4 `◐` yaptı; **`KC1-C2-C8`** içindeki sahip kararı (2026-08-31, §7C'nin "Kapsam dışı" paragrafıyla aynı) KVKK/VERBIS'i kapsam dışı ilan etmişti → satır yine `◐`. Bu yüzden `11.7`'nin dil ayağı ve §7.2'nin 11 satırı **görevleşmedi**, iki triyaj görevine ayrıldı (tm 211/212): bir kısmı kod değil **damga** işidir. **ÇIKTI:** §6D (Faz 8) — **22 satır · ~36 pencere · tm 211–232**; 17 gerçek iş kalemi + 2 triyaj + 1 kapanış turu (GL-16), `Must` yok → **kalem kuralı** (GL-16 dışındaki 21 satırın tamamı `✅`, payda 21 SABİT). Faz-0/1/2 kapanış turlarını (tm 205–210) **bloklamaz ve beklemez** — o üç kapı `Must` sayacına bakar. **NUMARALANDIRMA:** faz numarası **8**'dir, 7 değil — `Faz-7` §7C'nindir (PRD uyum düzeltmesi, tm 175–184); görev kodu öneki `V8-`, dilim adları `F8-…`, çünkü `V7-` §7C'nin dilim adıdır. Üst kapı tablosuna eksik olan **Faz-7 satırı da eklendi** (§7C bugüne dek kapı tablosunda hiç görünmüyordu). **BU TURDA AYRICA DÜZELTİLEN İKİ DOKÜMAN HATASI (ürün kodu değişmedi):** (1) **`plan-count-drift`** — üst tablonun Faz-0 "Genel durum" hücresi `58 ✅ · 0 ◐` diyordu, §3.0–§3.10 sayıldığında **49 ✅ · 9 ◐ · 1 ⬜ · 3 gruplu-🔒** çıkıyor; 184.4 yalnız `Must` sütununu güncellemiş, düşürdüğü 10 satır bu sütuna hiç yansımamıştı. İki bağımsız sayaç aynı sonucu verdi (bu turun betiği + panelin kontrolü, 2026-08-31'den beri aynı sayıyı bildiriyordu); yazan 58 ile bugünkü 59 arasındaki **1 fark 2026-08-23 sayımına aittir ve geriye doğru çözülMEDİ**. (2) **`plan-evidence-broken`** — §4.2'nin `06.3.1 ✅ → K06.3.1` satırı **var olmayan bir bloğa** işaret ediyordu; kanıt metni depoda zaten vardı ama başlıksızdı, dolayısıyla bir önceki bloğun (`K06.2.5` · Preview) gövdesinde okunuyordu. Damga koda karşı doğrulandı ve **hak edilmiş** çıktı (`knowledge-tabs.ts` saf partition `All = Websites ∪ Files ∪ Articles ∪ FAQ` + `knowledge-tabs.test.ts` 4 test + `PlaybookPage.tsx:842` `filterSourcesByTab` çağrısı); yalnız `#### K06.3.1` başlığı eklendi, metin ve damga değişmedi. **DOĞRULAMA (bu turda koşuldu):** `pnpm -w typecheck` exit 0 · `pnpm -w lint` exit 0 · `pnpm -w test` (turbo, e2e hariç) exit 0 · `audit:silent-debt` TODO/FIXME/XXX/HACK/`@ts-expect-error`/skip/only **0** · `audit:dead-code` api route 0/40 · web feature 0/146 · api servis 6/124 ve **altısı da `package.json` CLI girişi** (`-run.ts`) · `audit:unpaged-lists` **UNPAGED 1** (`WebhookSubscriptions.tsx:87` → tm 215) · `audit:endpoint-ui` 205 yolun 14'ü istemcisiz (12'si tasarımı gereği başsız, 2'si tm 215). **KAPSAM:** yalnız `PLAN.md` + `.taskmaster/tasks/tasks.json` + `HANDOFF.md` — `git diff --name-only` ürün kaynağı **sıfır** dosya gösterir. → §6D · §7.2 · tm 211–232
 
 ---
 
@@ -6026,7 +6408,17 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 - ✅ Örnek girdi → AI eylem narrasyonu — `SkillEditor.tsx` `PreviewResult` (StatusDot outcome + `log` per-step narration: detect_intent/tag/**request_info (toplama)**/summarize/send_message/transfer_to_team, her biri `ok`/detail) · `POST /skills/preview` gerçek `SkillEngine.preview` (yazma yok) · tm 33 · §D53
 - ✅ tm 181.9: `summary` alanı motordan (`skill-engine.ts:249`) uçtan (`playbook.ts:441`) dönüyordu ama `PreviewResult` hiç render etmiyordu — bir sonraki temsilci için yazılan özet UI'da hiç görünmüyordu. `result.summary && <p>` bloğu `reply`/`transfer_to` ile aynı biçimde eklendi (`playbook.editor.summaryLabel`, en+tr). **Editör tarafında Preview akışının kendi testi hiç yoktu** (var olan `SkillEditor.test.tsx` yalnız reorder + zorunlu-parametre + i18n'i kapsıyordu) — üç yeni test eklendi: dört PRD eylemi bir arada (tag/özet/transfer + outcome + log narrasyonu), önizleme isteği başarısız olunca hata banner'ı, motorun döndürdüğü `errors`in geri kalan sonucu gizlemeden gösterilmesi · test `SkillEditor.test.tsx` (+3, 6→9) · tm 181.9
 
-✅ 5 alt sekme (All/Websites/Files/Articles/FAQ) `role="tablist"` — `PlaybookPage.tsx` `KnowledgePanel` (`['all', ...KNOWLEDGE_TYPES]` + sekme sayaçları + tür bazlı süzme + sekme başına boş durum) · saf partition `knowledge-tabs.ts` `filterSourcesByTab`/`countSourcesByTab` (All = Websites ∪ Files ∪ Articles ∪ FAQ) · şema `@nexa/types` `KNOWLEDGE_SOURCE_TYPES` (§8 knowledge_sources) · test `knowledge-tabs.test.ts` (4) · tm 33.3 · §D28
+#### K06.3.1 — 06.3.1 · Knowledge alt sekmeler (All/Websites/Files/Articles/FAQ)
+
+> **Başlık 2026-09-07'de eklendi (§D149), kanıt metni DEĞİŞMEDİ.** Aşağıdaki madde depoda zaten
+> vardı ama `#### K06.3.1` başlığı yoktu: tablo satırı (`PLAN.md` §4.2 · `06.3.1 ✅ → K06.3.1`)
+> var olmayan bir bloğa işaret ediyordu (panelin `plan-evidence-broken` bulgusu, 2026-09-03'ten
+> beri açık) ve madde başlıksız kaldığı için bir önceki bloğun — `K06.2.5` (Preview) — gövdesinde
+> okunuyordu. Damga koda karşı doğrulandı ve **hak edilmiş** çıktı: `knowledge-tabs.ts` saf
+> partition + 4 test + `PlaybookPage.tsx:842` `filterSourcesByTab` çağrısı yerinde. Ürün kodu
+> değişmedi, damga değişmedi — yalnız kanıt bu başlığın altına taşındı.
+
+- ✅ 5 alt sekme (All/Websites/Files/Articles/FAQ) `role="tablist"` — `PlaybookPage.tsx` `KnowledgePanel` (`['all', ...KNOWLEDGE_TYPES]` + sekme sayaçları + tür bazlı süzme + sekme başına boş durum) · saf partition `knowledge-tabs.ts` `filterSourcesByTab`/`countSourcesByTab` (All = Websites ∪ Files ∪ Articles ∪ FAQ) · şema `@nexa/types` `KNOWLEDGE_SOURCE_TYPES` (§8 knowledge_sources) · test `knowledge-tabs.test.ts` (4) · tm 33.3 · §D28
 
 #### K06.3.2 — 06.3.2 · + New source (chunk+embedding)
 
@@ -6090,6 +6482,7 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 - ✅ **M-CAMP-e** (tm 176.5) — kampanya artık **sonradan gelen ziyaretçiyi de** yakalıyor: tetikleme yalnız kaydetme anında (son 30 dk'lık canlı ziyaretçiler) değil, **`visits` yazma yolunda** da koşuyor — yeni `apps/api/src/services/campaigns/campaign-trigger.ts` (saf `selectTriggeredCampaigns` + işlemsel `fireCampaignsAtVisitor`), `routes/customer.ts`'te sayfa görüntülemesinin **kendi transaction'ı içinde**; `CustomerService.recordPageView` artık ziyaretçinin sayfa URL'lerini döndürüyor (ikinci bir `visits` okuması yok). `#fireIfRunning`'in duali: orada bir kampanya × çok ziyaretçi, burada bir ziyaretçi × çok kampanya — ikisi birlikte, çiftin hangisi ikinci geldiyse eşleşmeyi buluyor. Kontrat/migration değişmedi (195 yol sabit). **Maliyet kararı ölçüldü, varsayılmadı** (sentetik `campaigns`: 20.200 tenant / 203.018 satır, `EXPLAIN ANALYZE`, gölge DB silindi): tipik workspace (10 kampanya) **0,067 ms** · yoğun (130 kampanya, 87 çalışan) **0,159 ms** · patolojik (309 çalışan, `LIMIT 100`) **0,162 ms** (limitsiz 0,151 ms — sınır bedava) · indeks reddedilirse **10,7 ms** paralel seq scan (mevcut `campaigns(license_id, status)` indeksi ~160× kazandırıyor) · 200 ardışık okuma 3,96 ms (~0,02 ms/okuma). Yani sıcak yola eklenen **~0,07 ms = NFR-P2'nin 300 ms yazma bütçesinin ~%0,02'si** → **senkron, önbelleksiz, ziyaretin transaction'ı içinde**; önbellek bu kadar küçük bir sayıyı geri satın alamaz ve bedelini tam da bayatlamaması gereken iki şeyde (sahibin aç/kapa anahtarı + zaman penceresi) öderdi. **Idempotanslık** veritabanı garantisi: her bildirilen sayfa (reload dahil) bir değerlendirmedir, `(campaign_id, customer_id)` tekil çifti + `skipDuplicates` tekrarı no-op yapar — ölçüldü: 68 gönderim borçlu ziyaretçide ilk atış **2,4 ms**, sonraki her tekrar **0,22 ms**. Pencere `starts_at`/`ends_at`'ten yeniden hesaplanıyor (tm 176.6'yı beklemez): kapanmış kampanya yeni gelene atmaz, **başlamış `scheduled` kampanya atar** — bunu üründe fark eden başka hiçbir yol yok. **Seed düzeltildi:** `Welcome greeting` kampanyasının `url_contains: '/'` catch-all tetikleyicisi `/bikes/`'a daraltıldı (`Bike range greeting`) — tetikleme hiç koşmadığı için zararsızdı, artık **her ziyaretçiyi** dürtüyordu: tam e2e turunda 3 kırmızı üretti (traffic board ziyaretçiyi `Browsing` yerine `Invited` sayıyordu + iki kampanya kartı testi). **Süitin boş olmadığı 5 mutasyonla ölçüldü:** rota çağrısı silindi → **9 kırmızı** · saklanan `status`'e inanılıp pencere yeniden hesaplanmadı → **4 birim + 3 entegrasyon** · `skipDuplicates` kapatıldı → **önce HAYATTA KALDI** (rotanın best-effort `try/catch`'i tekil ihlalini yutuyor, dışarıdan aynı görünüyor); test güçlendirildi (tekrar sayfa görüntülemesini geri almamalı) → **1 kırmızı** · açık `license_id` filtresi silindi → **hayatta kaldı**, RLS tek başına reddediyor (176.2'nin dokuzuncu mutasyonuyla aynı bulgu; filtre ikinci kilit, izolasyon testi politikayı kanıtlıyor — koda yorum olarak yazıldı) · tekrarlanan sayfa boş liste döndürdü → **1 kırmızı**. Üç üretim dosyası da `diff -q` ile **baytına kadar** geri alındı. Değerlendirme başına **100 kampanya** ile sınırlı (sıcak yolda sınırsız okuma NFR-P2'nin dışladığı şekil; sınırı aşan workspace'in yeni kampanyaları hâlâ kaydedilirken canlı olan herkese atıyor). Bilinen borç (bu turun bilerek almadığı, ayrı kalem): `GoalService.evaluate` bir hedef tutunca ziyaretçinin **tüm** gönderimlerini `converted` işaretliyor — `delivered_at` aramıyor, yani hiç teslim edilmemiş bir gönderim de Conversion sayılabiliyor; önceden de üretilebilirdi ve `goals-achievement.test.ts` mevcut anlamı pinliyor. — `apps/api/src/services/campaigns/campaign-trigger.ts` · `apps/api/src/routes/customer.ts` · `apps/api/src/services/customers/customer-service.ts` · `apps/api/prisma/seed.ts` · test `campaign-trigger.test.ts` birim (11) + entegrasyon (14) + e2e `widget.spec.ts` "a visitor who arrives after the campaign was saved is nudged too" (`kanit/03.3.2-campaign-arrival.png`) · tm 176.5
 
 - ✅ **M-CAMP-f** (tm 176.6) — kampanya durumu artık **okuma anında yeniden değerlendiriliyor**, böylece `campaigns.status` bir önbellek olmaktan çıkıp doğruyu söylüyor. Kusur: `computeCampaignStatus` yalnız create/update yolundan çağrılıyordu ve `starts_at` geldiğinde hiçbir şey tetiklenmiyor — başlamış bir kampanya sonsuza dek `scheduled` görünüyordu (sekme filtreleri de bu değerden besleniyor). Çözüm zamanlayıcısız: `CampaignService.list` döndürdüğü her satırın durumunu `resolveCampaignStatus` ile yeniden çözüyor **ve** kolonu arkasından onarıyor (`#healStatuses`). **İki yarı da gerekli, aynı şey değil:** çözümleme rozeti düzeltir, filtrenin SQL'den belleğe alınması ise başlamış kampanyayı **Scheduled** yerine **Ongoing** sekmesine taşır — durumu SQL'de süzmek tam da yanlış etiketli satırları geri verirdi. **İdempotanslık compare-and-set ile:** her `updateMany` okuduğu bayat durumu `where`'inde taşır, dolayısıyla ikinci okuyucu 0 satır eşleştirir ve arada anahtarı çeviren sahibi **ezemez** (onun yazması satırı `where`'deki değerden kaçırır, ev işi yazma sessizce kaybeder — doğru sonuç). Durgun durumda **hiçbir şey yazılmaz**; ilk okuma onarır, sonrakiler saf okumadır. Id'ler sıralanır (iki ifade aynı kilit sırasını alsın). Cevap onarım yazmasına **bağlı değil** — DTO çözümlenen değerden kurulur. **Niyet çıkarımı (`deriveActiveIntent`) ve bedeli koda yazıldı:** ayrı bir `active` kolonu yok, `inactive` hem "kapatıldı" hem "bitti" demek; `ends_at` geçmişteyse niyet "açık" okunur — aksi halde onarım yeni bir regresyon getirirdi (bitmiş kampanyanın `ends_at`'ini uzatmak sessiz no-op olurdu, builder'ın sunduğu tek kontrol o). Bedeli: kapatılmış **ve** bitmiş bir kampanyanın penceresi uzatılırsa geri açılır; kolon eklemek bu tahmini kaldırırdı, bu task'ın ihtiyacı olmayan bir şema değişikliği. Değişmeyen şey: `inactive` asla geri açılmaz (birim testle pinlendi) — `fireCampaignsAtVisitor`'ın `status IN (ongoing, scheduled)` SQL süzgeci buna dayanıyor. Üçüncü bir kazanım: teslimat (176.2) ve tetikleme (176.5) kendi pencerelerini hesaplayan iki kopyaydı, ikisi de artık aynı `resolveCampaignStatus`'u çağırıyor — tek tanım. **Süitin boş olmadığı 6 mutasyonla ölçüldü, altısı da tahmin edileni verdi:** onarım yazması silindi → **5 kırmızı** · filtre saklanan `row.status`'e çevrildi → **1** (sekme testi) · DTO çözümlenen yerine saklanan durumu bildirdi → **4** · `update`'in niyet çıkarımı naif okumaya (`status !== 'inactive'`) döndü → **1** (uzatma testi) · compare-and-set `where`'den düşürüldü → **2** · id sıralaması kaldırıldı → **1**. Son ikisi entegrasyondan görülemez (eşzamanlılık), o yüzden sahte `TenantClient` ile yeni birim dosyası açıldı — `channel-service.test.ts` deseni. İki üretim dosyası `diff -q` ile **baytına kadar** geri alındı. Kontratta yol sayısı **195**'te sabit; yalnız iki açıklama güncellendi (`Campaign.status` artık "save time" demiyor), `contract:generate` idempotent (md5 iki koşuda aynı). Migration yok. Bilinen sınır (ayrı kalem): bitmiş bir kampanyanın `Turn on` düğmesi sessiz no-op — pencere kapalıyken `active: true` yine `inactive` hesaplar; önceden de üretilebilirdi, bu tur onu daha sık görünür kılıyor. — `apps/api/src/services/campaigns/campaign-matching.ts` · `campaign-service.ts` · `campaign-delivery.ts` · `campaign-trigger.ts` · `packages/contract/openapi/openapi.yaml` · test `campaign-service.test.ts` (3, yeni) + `campaign-matching.test.ts` (19) + entegrasyon `campaigns.test.ts` (19) · tm 176.6
+- ⓘ **`performance.displayed` borcunun sahibi artık bir görev: `tm 214` (V8-CAMP-DELIV, §6D · §D149, 2026-09-07). Satır `✅` KALIR.** M-CAMP maddelerinin içinde "kalan" olarak yazılmış ve "metrik tanımı tm 176.4'ün kararı" denmişti, ama görev **açılmamıştı**. Bu turda koda karşı doğrulandı ve **gerçek**: `apps/api/src/services/campaigns/campaign-matching.ts:187` → `return { displayed: sends.length, chats, conversion }` — `campaign_sends` satırı teslimattan ÖNCE yazıldığı için hiç gösterilmemiş bir kampanya `displayed` sayılıyor ve dönüşüm oranının paydası şişiyor; `delivered_at` (M-CAMP-a, migration `20260831100000_campaign_sends_delivered_at`) tam da bunun için eklenmişti ve okunmuyor. **BIR SONRAKI PENCEREYE:** bu satırı `◐`'ye DÜŞÜRME — 03.3.1–.3'ün kabul kriteri (alt sekmeler + builder + kart) karşılanıyor; eksik olan bir metriğin **tanımıdır** ve kendi görevinde izleniyor. · §D149
 
 #### K04.2 — 04.2 · AI Agents (team tarafı) — performance
 
@@ -7919,6 +8312,7 @@ _(Faz-7 · tm 184 — açıldı 2026-09-04. Alt-görevler kapandıkça bu bloğu
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-02.1.1` [KISMİ]: "Supervised" görünümü inbox'ta hiç yok: /chats view enum'u yalnız all/my/queued/unassigned/archived/ai/ai_solved (chats.ts:21) ve viewFilter'da supervised dalı yok (chat-service.ts:1691-1737); web VIEWS dizisinde de yok (InboxPage.tsx:59-65). Gözetleme yalnız…
 - ✅ **Denetim bulgusu kapatıldı (tm 189.1 · F0-INBOX-a):** Chats grubunun altıncı öğesi — **Supervised** — uçtan uca bağlandı. Tanım kararı ve gerekçesi: `supervised` = **çağıranın gözetlediği AKTİF sohbetler**; kaynak `rapor-1-fonksiyonel.md:339` ("'Supervised' ajanın izlediği (supervise) sohbetler"), yani `my` nasıl atanana göre anahtarlanıyorsa bu da izleyene göre anahtarlanır. Traffic panosundaki aynı kelimeyle **satırın anlamı ortak** (bir ajan bir sohbeti sahiplenmeden izliyor), ayrılan şey iki yüzeyin o satıra sorduğu soru: Traffic "şu an biri izliyor mu" diye sorar ve `SUPERVISION_LIVE_WINDOW_SECONDS` (90 sn) ile sınırlar; bu görünüm "ben neleri izliyorum" diye sorar ve **ajana** göre sınırlanır — ölçüldü: üründe o heartbeat'i atan hiçbir istemci yok (`POST /chats/{id}/supervise`'ın tek çağıranı Traffic panosunun tek-atımlık satır aksiyonu), yani 90 sn sınırı ray öğesini kendisini dolduran tıklamadan 90 sn sonra boşaltırdı. Listeyi boşaltan şey `active: true`: bir gözetim ancak sohbet yaşarken anlamlıdır, kapanınca Archive'a düşer. Sorgu kiracı sınırını RLS'e bırakır (kopya `license_id` filtresi YOK — M-CHOBS emsali). Sözleşme: `GET /chats` `view` enum'una değer eklendi (**yeni yol açılmadı**, `apps/mobile` parity sayacı bozulmadı); sayaç diğer görünümlerle aynı yerden gelir (`useViewCounts` → sunucunun `total`'ı, `refreshChatHeads` ile RTM'de canlı) — `packages/contract/openapi/paths/chats.yaml` · `apps/api/src/routes/chats.ts` · `apps/api/src/services/chat/chat-service.ts` (`viewFilter`) · `apps/web/src/features/inbox/InboxPage.tsx` (`VIEWS`/`VIEW_LABEL_KEY`/boş-durum) · `useInbox.ts` · `views.ts` · `locales/{en,tr}/inbox.ts` · test `apps/api/test/integration/chats.test.ts` (5: yalnız çağıranın gözetlediği, başkasının gözetimi sayılmaz, cross-tenant negatifi, arşivde düşme, bilinmeyen view hâlâ 400) · `apps/web/src/features/inbox/InboxPage.test.tsx` (4) · e2e `apps/e2e/tests/inbox-supervised.spec.ts` (1, `kanit/02.1.1-inbox-supervised.png`) · tm 189.1
 - ⓘ **Kalan borç (bu kalemin kapanışını engellemiyor, ayrı bir iş):** gözetimi **bırakma** yüzeyi yok — `DELETE /chats/{chatId}/supervise` ucu var ama hiçbir istemci çağırmıyor, dolayısıyla bir sohbeti izlemekten vazgeçmenin tek yolu sohbetin kapanması. tm 189.1 kapsamında değil (CONVENTIONS §5); PRD `FR-MOD-02.1.1` kabul kriteri bir bırakma kontrolü istemiyor. — tm 189.1
+- ⓘ **Bu borcun sahibi artık bir görev: `tm 213` (V8-SUPERVISE-OFF, §6D · §D149, 2026-09-07). Satır `✅` KALIR — bilerek.** Yukarıdaki `ⓘ` maddesi bu borcu 2026-09-04'te doğru biçimde "kapanışı engellemiyor, ayrı bir iş" diye yazmıştı, ama **hiçbir Task Master görevine aktarmamıştı** — §D149'un tespit ettiği desen tam olarak budur (PLAN'da yazılı, grafikte yok). Borcun kendisi bu turda koda karşı **yeniden doğrulandı ve gerçek**: `DELETE /chats/{chatId}/supervise` kontratta (`paths/chats.yaml`) ve API'de (`routes/chats.ts:414` → `supervisions.release`) var, tek istemci çağrısı `TrafficPage.tsx:395`'teki **POST**'tur; DELETE'i kimse çağırmıyor. **BIR SONRAKI PENCEREYE:** bu satırı `◐`'ye DÜŞÜRME — FR-MOD-02.1.1'in kabul kriteri (Chats grubu sekmeleri + sayıçlar, `Supervised` dâhil) tm 189.1'de uçtan uca kapandı; gözetimi bırakma **türetilmiş** bir kalemdir ve kendi görevinde izleniyor. Panelin `plan-tm-reverse` bulgusu ("#213 açık ama kapsadığı her PLAN satırı `✅`") bu üçüncü durumu tanımıyor — ne erken `✅` ne bayat görev, **beyan edilmiş ve görevleşmiş bir borç**. · §D149
 
 #### K02.1.3 — 02.1.3 · Tickets grubu (All/Unassigned/My open)
 

@@ -28,9 +28,11 @@ import {
   type ChatTimeoutReport,
 } from '../../src/services/chat/chat-timeout.js';
 import {
+  auditContextFor,
   ownerClient,
   seedDefaultBrand,
   seedFixtures,
+  testEnv,
   type Fixtures,
   type TenantFixture,
 } from '../helpers/fixtures.js';
@@ -52,7 +54,7 @@ describe('chat timeout sweep (FR-MOD-08.7.3)', () => {
 
   const ctx = (t: TenantFixture) => ({ licenseId: t.licenseId, organizationId: t.organizationId });
   const chats = () => new ChatService(appRole, NO_REDIS);
-  const sweeper = () => new ChatTimeoutSweeper(appRole, chats());
+  const sweeper = () => new ChatTimeoutSweeper(appRole, chats(), testEnv().AUDIT_CHAIN_SECRET);
 
   const nextId = (prefix: string, width: number): string => {
     seq += 1;
@@ -247,11 +249,15 @@ describe('chat timeout sweep (FR-MOD-08.7.3)', () => {
 
     // Drive the close for B's chat id, but in A's context. RLS — not a WHERE
     // clause — must keep it out of B: the chat is invisible, so nothing closes.
-    expect(await chats().deactivateByTimeout(ctx(fx.a), inB.chatId, cutoff)).toBeNull();
+    expect(
+      await chats().deactivateByTimeout(ctx(fx.a), inB.chatId, cutoff, auditContextFor(fx.a)),
+    ).toBeNull();
     expect(await chatActive(inB.chatId)).toBe(true);
 
     // A's own chat still closes through its own context.
-    expect(await chats().deactivateByTimeout(ctx(fx.a), inA.chatId, cutoff)).not.toBeNull();
+    expect(
+      await chats().deactivateByTimeout(ctx(fx.a), inA.chatId, cutoff, auditContextFor(fx.a)),
+    ).not.toBeNull();
     expect(await chatActive(inA.chatId)).toBe(false);
   });
 
@@ -262,7 +268,9 @@ describe('chat timeout sweep (FR-MOD-08.7.3)', () => {
     await seedEvent(fx.a, chat.chatId, chat.threadId, new Date(now.getTime() - 30 * 60_000));
 
     const cutoff = new Date(now.getTime() - HOUR);
-    expect(await chats().deactivateByTimeout(ctx(fx.a), chat.chatId, cutoff)).toBeNull();
+    expect(
+      await chats().deactivateByTimeout(ctx(fx.a), chat.chatId, cutoff, auditContextFor(fx.a)),
+    ).toBeNull();
     expect(await chatActive(chat.chatId)).toBe(true);
   });
 
@@ -277,6 +285,52 @@ describe('chat timeout sweep (FR-MOD-08.7.3)', () => {
 
     expect((await sweeper().run({ now })).totals.closed).toBe(1);
     expect((await sweeper().run({ now })).totals.closed).toBe(0);
+  });
+
+  // ==========================================================================
+  // Audit trail (FR-MOD-02.8 · NFR-S12)
+  // ==========================================================================
+
+  it('records the archive it drives as the system, with no person on it (FR-MOD-02.8)', async () => {
+    const now = new Date();
+    await configureTimeout(fx.a, 3600);
+    const { chatId, threadId } = await seedActiveChat(fx.a, new Date(now.getTime() - 2 * HOUR));
+
+    expect((await sweeper().run({ now })).totals.closed).toBe(1);
+
+    const entries = await owner.auditLogEntry.findMany({
+      where: { licenseId: fx.a.licenseId, action: 'chat.archived' },
+    });
+    // Exactly one, for this chat — a sweep that closed one conversation must
+    // not leave two lines saying so.
+    expect(entries).toHaveLength(1);
+    const entry = entries[0]!;
+    expect(entry.target).toBe(`chat:${chatId}`);
+    // Nobody asked for this close, so nobody is named: attributing it to the
+    // last agent who touched the chat would put a fiction in an append-only
+    // table.
+    expect(entry.actorId).toBeNull();
+    expect(entry.actorType).toBe('system');
+    // The reason is the one the transcript's own close event carries, so the
+    // two cannot disagree about *why* the conversation ended.
+    expect(entry.metadata).toEqual({ thread_id: threadId, reason: 'timeout' });
+    // No request id: there was no request, and inventing one would tie the
+    // entry to a log line that does not exist.
+    expect((entry.metadata as Record<string, unknown>)['request_id']).toBeUndefined();
+  });
+
+  it('writes no audit line for a sweep that closes nothing', async () => {
+    const now = new Date();
+    await configureTimeout(fx.a, 3600);
+    // Young enough to survive its own window.
+    await seedActiveChat(fx.a, new Date(now.getTime() - 30 * 60_000));
+
+    expect((await sweeper().run({ now })).totals.closed).toBe(0);
+    expect(
+      await owner.auditLogEntry.count({
+        where: { licenseId: fx.a.licenseId, action: 'chat.archived' },
+      }),
+    ).toBe(0);
   });
 
   // ==========================================================================

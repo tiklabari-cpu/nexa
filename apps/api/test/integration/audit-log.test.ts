@@ -29,6 +29,7 @@ import {
   TEST_PASSWORD,
   testEnv,
   type Fixtures,
+  type TenantFixture,
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -1114,6 +1115,153 @@ describe('audit log writer (NFR-S12)', () => {
   // =========================================================================
   // Targeted settings-family deletes (data.deleted, 08.9.7-d)
   // =========================================================================
+
+  // =========================================================================
+  // Conversation lifecycle — the fourth acceptance criterion of FR-MOD-02.8
+  // ("denetim kaydı"). Archiving a chat is what makes its transcript read-only
+  // and reopening is what undoes that, so both are recorded; and both are
+  // recorded only on the transition, so a trail cannot be padded by repeating
+  // a request that changed nothing.
+  // =========================================================================
+
+  describe('conversation lifecycle (FR-MOD-02.8)', () => {
+    /** A live chat with one open thread, held by the tenant's regular agent. */
+    async function seedLiveChat(t: TenantFixture): Promise<string> {
+      const chatId = generateShortId();
+      await owner.chat.create({
+        data: { id: chatId, licenseId: t.licenseId, customerId: t.customerId, active: true },
+      });
+      await owner.thread.create({
+        data: {
+          id: generateShortId(),
+          chatId,
+          licenseId: t.licenseId,
+          active: true,
+          assigneeId: t.agentAccountId,
+        },
+      });
+      return chatId;
+    }
+
+    it('records a chat being archived, with the thread but no message content', async () => {
+      const chatId = await seedLiveChat(fx.a);
+      // Something was said, so a leak would have something to leak.
+      await server.post(
+        `/chats/${chatId}/events`,
+        { type: 'message', text: 'card number 4111 1111 1111 1111' },
+        auth(adminToken),
+      );
+
+      const before = await count('chat.archived');
+      const res = await server.post(`/chats/${chatId}/deactivate`, undefined, auth(adminToken));
+      expect(res.statusCode).toBe(200);
+
+      expect(await count('chat.archived')).toBe(before + 1);
+      const entry = await latest('chat.archived');
+      expect(entry?.actorId).toBe(fx.a.ownerAccountId);
+      expect(entry?.actorType).toBe('agent');
+      expect(entry?.target).toBe(`chat:${chatId}`);
+
+      // The thread that closed, the correlation id, and nothing else: an
+      // archive records which conversation ended, never what was in it.
+      const metadata = entry?.metadata as Record<string, unknown>;
+      expect(metadata['thread_id']).toBeTruthy();
+      expect(metadata['request_id']).toBeTruthy();
+      expect(Object.keys(metadata).sort()).toEqual(['request_id', 'thread_id']);
+      expect(JSON.stringify(metadata)).not.toContain('4111');
+    });
+
+    it('records the reopening as its own entry, naming the new thread', async () => {
+      const chatId = await seedLiveChat(fx.a);
+      expect(
+        (await server.post(`/chats/${chatId}/deactivate`, undefined, auth(adminToken))).statusCode,
+      ).toBe(200);
+      const archived = await latest('chat.archived');
+
+      const before = await count('chat.reopened');
+      const res = await server.post(`/chats/${chatId}/resume`, undefined, auth(adminToken));
+      expect(res.statusCode).toBe(200);
+
+      expect(await count('chat.reopened')).toBe(before + 1);
+      const entry = await latest('chat.reopened');
+      expect(entry?.actorId).toBe(fx.a.ownerAccountId);
+      expect(entry?.actorType).toBe('agent');
+      expect(entry?.target).toBe(`chat:${chatId}`);
+      // A reopening starts a *new* thread; naming it is what tells the second
+      // archive of this chat apart from the first.
+      const reopenedThread = (entry?.metadata as Record<string, unknown>)['thread_id'];
+      expect(reopenedThread).toBeTruthy();
+      expect(reopenedThread).not.toBe(
+        (archived?.metadata as Record<string, unknown> | undefined)?.['thread_id'],
+      );
+    });
+
+    it('writes no second line when the transition does not happen', async () => {
+      const chatId = await seedLiveChat(fx.a);
+      // Reopening a chat that is already open changes nothing.
+      const beforeReopen = await count('chat.reopened');
+      expect(
+        (await server.post(`/chats/${chatId}/resume`, undefined, auth(adminToken))).statusCode,
+      ).toBe(409);
+      expect(await count('chat.reopened')).toBe(beforeReopen);
+
+      const before = await count('chat.archived');
+      expect(
+        (await server.post(`/chats/${chatId}/deactivate`, undefined, auth(adminToken))).statusCode,
+      ).toBe(200);
+      expect(await count('chat.archived')).toBe(before + 1);
+
+      // Archiving an archived chat is refused, so the trail keeps saying it
+      // happened once — the `customer.banned` discipline.
+      expect(
+        (await server.post(`/chats/${chatId}/deactivate`, undefined, auth(adminToken))).statusCode,
+      ).toBe(409);
+      expect(await count('chat.archived')).toBe(before + 1);
+    });
+
+    it("a cross-tenant archive writes to no one's log", async () => {
+      const chatId = await seedLiveChat(fx.a);
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+
+      const beforeA = await count('chat.archived', fx.a.licenseId);
+      const beforeB = await count('chat.archived', fx.b.licenseId);
+      const res = await server.post(`/chats/${chatId}/deactivate`, undefined, auth(tokenB));
+      expect(res.statusCode).toBe(404);
+      expect(await count('chat.archived', fx.a.licenseId)).toBe(beforeA);
+      expect(await count('chat.archived', fx.b.licenseId)).toBe(beforeB);
+    });
+
+    it("a reader never sees another tenant's archive", async () => {
+      const inB = await seedLiveChat(fx.b);
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['chats--all:rw'],
+      });
+      expect(
+        (await server.post(`/chats/${inB}/deactivate`, undefined, auth(tokenB))).statusCode,
+      ).toBe(200);
+      expect(await count('chat.archived', fx.b.licenseId)).toBe(1);
+
+      // A's reader asks for exactly that action and gets nothing: RLS, not a
+      // filter in the query, is what keeps B's lifecycle out of A's trail.
+      const readerA = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['audit_log--all:ro'],
+      });
+      const res = await server.get('/audit-log?action=chat.archived', auth(readerA));
+      expect(res.statusCode).toBe(200);
+      expect((res.json() as { items: unknown[] }).items).toHaveLength(0);
+    });
+  });
 
   describe('a targeted settings delete records exactly one data.deleted entry', () => {
     it('records a canned response being deleted (and not a no-op delete)', async () => {

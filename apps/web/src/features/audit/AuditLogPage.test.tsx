@@ -161,6 +161,31 @@ describe('AuditLogPage', () => {
     expect(api.get).toHaveBeenLastCalledWith('/audit-log?action=auth.login');
   });
 
+  it('offers the conversation lifecycle actions in the filter (FR-MOD-02.8)', async () => {
+    // The archive's audit entry is only half of the requirement's "denetim
+    // kaydı" if nobody can find it: the dropdown mirrors `AUDIT_ACTIONS` by
+    // hand, so a chat action written server-side and forgotten here is
+    // reachable only by editing the URL.
+    api.get.mockResolvedValueOnce(ENTRIES).mockResolvedValueOnce({
+      items: [{ ...LOGIN_ENTRY, id: 'entry-4', action: 'chat.archived' }],
+    });
+    renderPage(<AuditLogPage />);
+    await screen.findByRole('table');
+
+    const filter = screen.getByLabelText('Filter by action');
+    const group = within(filter).getByRole('group', { name: 'Conversations' });
+    expect(
+      within(group)
+        .getAllByRole('option')
+        .map((option) => (option as HTMLOptionElement).value),
+    ).toEqual(['chat.archived', 'chat.reopened', 'chat.taken_over']);
+
+    await userEvent.selectOptions(filter, 'chat.archived');
+    await waitFor(() =>
+      expect(api.get).toHaveBeenLastCalledWith('/audit-log?action=chat.archived'),
+    );
+  });
+
   it('sends a custom date range that overrides the default 30 days', async () => {
     api.get.mockResolvedValue(ENTRIES);
     renderPage(<AuditLogPage />);

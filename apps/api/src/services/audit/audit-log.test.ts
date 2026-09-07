@@ -150,4 +150,13 @@ describe('AUDIT_ACTIONS', () => {
     // "rol değişimi" is one of the four events the requirement enumerates.
     expect(AUDIT_ACTIONS).toContain('member.role_changed');
   });
+
+  it('records both ends of the conversation lifecycle (FR-MOD-02.8)', () => {
+    // The requirement's fourth acceptance criterion is a "denetim kaydı" for
+    // the archive. Both ends, because an archive that can be undone without a
+    // record is not a record of the archive either: the transcript stops being
+    // read-only and nothing says when.
+    expect(AUDIT_ACTIONS).toContain('chat.archived');
+    expect(AUDIT_ACTIONS).toContain('chat.reopened');
+  });
 });

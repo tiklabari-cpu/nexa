@@ -23,6 +23,7 @@ import { ChatService } from '../../src/services/chat/chat-service.js';
 import { FileMailer } from '../../src/services/mail/mailer.js';
 import type { AgentPrincipal } from '../../src/services/auth/principal.js';
 import {
+  auditContextFor,
   ownerClient,
   seedFixtures,
   type Fixtures,
@@ -53,6 +54,10 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     seq += 1;
     return prefix + String(seq).padStart(width - 1, '0');
   };
+
+  /** The trail entry the archive writes (FR-MOD-02.8) — asserted in `audit-log.test.ts`. */
+  const audit = (t: TenantFixture) =>
+    auditContextFor(t, { actorId: t.agentAccountId, actorType: 'agent' });
 
   const agent = (t: TenantFixture): AgentPrincipal => ({
     kind: 'agent',
@@ -197,7 +202,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
       internalNote: true,
     });
 
-    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId);
+    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
     const mails = await notifications();
     const toCustomer = mails.find((m) => m.to === 'visitor@example.test');
@@ -227,6 +232,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
       ctx(fx.a),
       chatId,
       new Date(now.getTime() - HOUR),
+      auditContextFor(fx.a),
     );
     expect(closed).not.toBeNull();
 
@@ -245,7 +251,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
       assigneeId: fx.a.agentAccountId,
     });
 
-    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId);
+    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
     const mails = await notifications();
     expect(mails).toHaveLength(1);
@@ -255,7 +261,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
   it('skips the team copy for an AI-only chat with no assignee, still mails the visitor', async () => {
     const { chatId } = await seedChat(fx.a, { assigneeId: null });
 
-    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId);
+    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
     const mails = await notifications();
     expect(mails).toHaveLength(1);
@@ -269,7 +275,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     });
 
     const { chatId } = await seedChat(fx.a, { assigneeId: fx.a.agentAccountId });
-    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId);
+    await chats().deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a));
 
     const mails = await notifications();
     expect(mails.map((m) => m.to)).toEqual(['visitor@example.test']);
@@ -293,6 +299,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
       ctx(fx.a),
       inB.chatId,
       new Date(now.getTime() - HOUR),
+      auditContextFor(fx.a),
     );
     expect(closed).toBeNull();
 

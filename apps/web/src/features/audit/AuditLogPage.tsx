@@ -167,6 +167,16 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     actions: ['webhook.created', 'webhook.deleted', 'webhook.delivery_exhausted'],
   },
   {
+    // Conversation lifecycle (FR-MOD-02.8 · FR-MOD-08.6.3). Archiving makes a
+    // transcript read-only and reopening makes it writable again; a takeover
+    // moves it out of one person's hands into another's. `chat.taken_over`
+    // joins them here rather than staying absent from the dropdown, which is
+    // what it was before this group existed — the three answer one question,
+    // and splitting them would mean asking it twice.
+    labelKey: 'audit.group.conversations',
+    actions: ['chat.archived', 'chat.reopened', 'chat.taken_over'],
+  },
+  {
     labelKey: 'audit.group.tickets',
     actions: [
       'ticket.status_changed',

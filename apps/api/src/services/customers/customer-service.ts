@@ -19,7 +19,9 @@ import {
   DEFAULT_CUSTOMER_SORT_KEY,
   sanitizeReferrer,
   type CustomerSortKey,
+  type CustomFieldType,
   type CustomFieldValue,
+  type FormPlacement,
   type SortOrder,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
@@ -59,6 +61,12 @@ export interface CustomerSummary {
   tickets_count: number;
   last_activity_at: string | null;
   created_at: string;
+  /**
+   * The contact custom fields flagged `show_in_table` (FR-MOD-03.2.3), with
+   * this customer's values — a subset of the full set `custom_fields` (below)
+   * carries on the detail response. Empty when the workspace has flagged none.
+   */
+  table_custom_fields: CustomFieldValue[];
 }
 
 export interface CustomerDetail extends CustomerSummary {
@@ -133,8 +141,17 @@ export class CustomerService {
     const page = hasMore ? rows.slice(0, options.limit) : rows;
     const last = page.at(-1);
 
+    const tableFields = await this.#tableCustomFields(
+      tx,
+      tenant,
+      page.map((row) => row.id),
+    );
+
     return {
-      items: page.map(toSummary),
+      items: page.map((row) => ({
+        ...toSummary(row),
+        table_custom_fields: tableFields.get(row.id) ?? [],
+      })),
       total,
       ...(hasMore && last ? { nextPageId: encodeCursor(sort, order, column, last) } : {}),
     };
@@ -180,6 +197,10 @@ export class CustomerService {
       ...toSummary(customer),
       banned_at: customer.bannedAt?.toISOString() ?? null,
       custom_fields: customFields,
+      // The same subset `list()` returns, derived here rather than a second
+      // query — `custom_fields` above already carries every definition's
+      // `show_in_table` flag (`readCustomFieldValues`).
+      table_custom_fields: customFields.filter((field) => field.show_in_table),
       visits_count: visitsCount,
       groups,
       visits: customer.visits.map((visit) => ({
@@ -358,6 +379,64 @@ export class CustomerService {
   }
 
   /**
+   * The `show_in_table` contact custom fields (FR-MOD-03.2.3), with each of
+   * `customerIds`' values — two queries regardless of page size, not one per
+   * customer: the definitions flagged for the table (almost always a handful,
+   * license-wide) and the stored values for this page's rows, joined in memory.
+   * A customer absent from the values result still gets an entry per
+   * definition (`value: null`), matching `readCustomFieldValues`'s own rule
+   * that a defined-but-unset field is shown empty, never omitted.
+   */
+  async #tableCustomFields(
+    tx: TenantClient,
+    tenant: TenantContext,
+    customerIds: string[],
+  ): Promise<Map<string, CustomFieldValue[]>> {
+    if (customerIds.length === 0) return new Map();
+
+    const definitions = await tx.customFieldDefinition.findMany({
+      where: { licenseId: tenant.licenseId, entity: 'contact', showInTable: true },
+      orderBy: [{ createdAt: 'asc' }],
+    });
+    if (definitions.length === 0) return new Map(customerIds.map((id) => [id, []]));
+
+    const values = await tx.customFieldValue.findMany({
+      where: {
+        licenseId: tenant.licenseId,
+        customerId: { in: customerIds },
+        definitionId: { in: definitions.map((definition) => definition.id) },
+      },
+      select: { customerId: true, definitionId: true, value: true },
+    });
+
+    const byCustomer = new Map<string, Map<string, string>>();
+    for (const row of values) {
+      if (!row.customerId) continue;
+      const forCustomer = byCustomer.get(row.customerId) ?? new Map<string, string>();
+      forCustomer.set(row.definitionId, row.value);
+      byCustomer.set(row.customerId, forCustomer);
+    }
+
+    return new Map(
+      customerIds.map((customerId) => {
+        const stored = byCustomer.get(customerId);
+        return [
+          customerId,
+          definitions.map((definition) => ({
+            definition_id: definition.id,
+            label: definition.label,
+            type: definition.type as CustomFieldType,
+            required: definition.required,
+            value: stored?.get(definition.id) ?? null,
+            form_placement: (definition.formPlacement as FormPlacement | null) ?? null,
+            show_in_table: true,
+          })),
+        ];
+      }),
+    );
+  }
+
+  /**
    * Teams this visitor's conversations have been routed to (13.2), derived
    * from `chat_access` rather than a stored field — there is no
    * `customer_groups` table (§C). Scoped to the caller's license the same way
@@ -400,7 +479,8 @@ type CustomerRow = {
   _count: { chats: number; tickets: number };
 };
 
-function toSummary(row: CustomerRow): CustomerSummary {
+/** Everything but `table_custom_fields` — every caller attaches that separately. */
+function toSummary(row: CustomerRow): Omit<CustomerSummary, 'table_custom_fields'> {
   return {
     id: row.id,
     name: row.name,

@@ -20,6 +20,7 @@ interface CustomFieldDefinition {
   label: string;
   type: 'text' | 'number' | 'boolean' | 'date';
   required: boolean;
+  show_in_table: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -193,6 +194,79 @@ describe('custom fields (tickets/contacts)', () => {
       auth(adminToken),
     );
     expect(wrong.statusCode).toBe(400);
+  });
+
+  // --- Contacts table column flag (FR-MOD-03.2.3) ----------------------------
+
+  it('creates a contact field flagged show_in_table and returns the flag', async () => {
+    const field = await createDefinition(adminToken, {
+      entity: 'contact',
+      label: 'Player ID',
+      type: 'text',
+      show_in_table: true,
+    });
+    expect(field.show_in_table).toBe(true);
+
+    const listed = await server.get('/settings/custom-fields', auth(adminToken));
+    const items = (listed.json() as { items: CustomFieldDefinition[] }).items;
+    expect(items.find((f) => f.id === field.id)?.show_in_table).toBe(true);
+  });
+
+  it('defaults show_in_table to false when omitted', async () => {
+    const field = await createDefinition(adminToken, {
+      entity: 'contact',
+      label: 'Internal note',
+      type: 'text',
+    });
+    expect(field.show_in_table).toBe(false);
+  });
+
+  it('refuses show_in_table: true on a ticket field', async () => {
+    const rejected = await define(adminToken, {
+      entity: 'ticket',
+      label: 'Balance',
+      type: 'number',
+      show_in_table: true,
+    });
+    expect(rejected.statusCode).toBe(400);
+  });
+
+  it('toggles show_in_table on an existing contact field', async () => {
+    const field = await createDefinition(adminToken, {
+      entity: 'contact',
+      label: 'Player ID',
+      type: 'text',
+    });
+    expect(field.show_in_table).toBe(false);
+
+    const patched = await server.patch(
+      `/settings/custom-fields/${field.id}`,
+      { show_in_table: true },
+      auth(adminToken),
+    );
+    expect(patched.statusCode).toBe(200);
+    expect((patched.json() as CustomFieldDefinition).show_in_table).toBe(true);
+
+    const off = await server.patch(
+      `/settings/custom-fields/${field.id}`,
+      { show_in_table: false },
+      auth(adminToken),
+    );
+    expect((off.json() as CustomFieldDefinition).show_in_table).toBe(false);
+  });
+
+  it('refuses to set show_in_table: true on a ticket field via PATCH', async () => {
+    const field = await createDefinition(adminToken, {
+      entity: 'ticket',
+      label: 'Balance',
+      type: 'number',
+    });
+    const rejected = await server.patch(
+      `/settings/custom-fields/${field.id}`,
+      { show_in_table: true },
+      auth(adminToken),
+    );
+    expect(rejected.statusCode).toBe(400);
   });
 
   // --- Definition lifecycle --------------------------------------------------

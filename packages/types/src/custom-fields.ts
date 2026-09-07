@@ -53,6 +53,12 @@ export interface CustomFieldDefinition {
    * (FR-MOD-08.7.7). Only meaningful on `contact` fields.
    */
   form_placement: FormPlacement | null;
+  /**
+   * Whether this field also renders as a row-inline column on the Contacts
+   * table (FR-MOD-03.2.3), rather than only in the Details/CRM panel. Only
+   * meaningful on `contact` fields — always false on a `ticket` field.
+   */
+  show_in_table: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -93,6 +99,12 @@ export interface CustomFieldValue {
    * carries a placement.
    */
   form_placement: FormPlacement | null;
+  /**
+   * Carried through from the definition (FR-MOD-03.2.3): whether this field
+   * also renders as a row-inline column on the Contacts table. Always false on
+   * a `ticket` field, which has no table row to hang a column value off.
+   */
+  show_in_table: boolean;
 }
 
 /** Why a raw value was rejected: it was blank on a required field, or ill-typed. */

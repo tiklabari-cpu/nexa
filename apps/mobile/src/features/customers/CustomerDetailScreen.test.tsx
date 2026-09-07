@@ -27,6 +27,7 @@ function detail(overrides: Partial<CustomerDetail> = {}): CustomerDetail {
     visits: [],
     chats: [],
     custom_fields: [],
+    table_custom_fields: [],
     ...overrides,
   };
 }

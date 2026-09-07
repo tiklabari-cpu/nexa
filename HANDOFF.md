@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 207 — F0-LASTGAP-c: custom kolonlar Contacts tablosuna yansıdı, Faz-0'ın son `Must ◐`'si kapandı (FR-MOD-03.2.3) — done — 2026-09-07 UTC
+
+- **Yapıldı:** `CustomFieldDefinition`e `show_in_table` bayrağı (contact-only, migration + CHECK, `form_placement`'ın emsali); `GET /customers`in her satırı artık `table_custom_fields: CustomFieldValue[]` taşıyor — yalnız bayraklı contact tanımları, N+1 yok (sayfa başına iki toplu sorgu). `Settings → Custom fields`e "Show in Contacts table" onay kutusu + liste rozeti; `CustomersPage.tsx` bu kolonları satırlardan okuyup (`items[0]?.table_custom_fields`) dinamik başlık/hücre olarak basıyor — ayrı bir `access_rules:ro` isteği yok.
+- **Karar:** custom kolonlar hiç sıralanabilir değil (Email/Phone'un dürüstlüğü) — `customer-grid.ts`in sıralama modeline hiç girmiyor.
+- **Doğrulama:** tam DoD kapısı yeşil — `typecheck`/`lint`/`format:check`/`build` (workspace) · `contract:generate` sonrası yalnız beklenen diff · `db:check-drift` "no drift" · `audit:req-coverage` exit 0 (`FR-MOD-03.2.3` 1→7 site). `apps/web` 168/168 dosya · `@nexa/api` unit 80/1320 + integration 3 parça 129/3209 · e2e `customers.spec.ts` 6/6 + `a11y -g customers` 10/10. Detay + kanıt `PLAN.md` `#### K03.2.3`.
+- **Sonraki pencereye not:** Faz-0'ın üç `Must ◐`'si (02.3.5/02.8/03.2.3) kapandı; kapanış turu tm 208 (`GL-13`) artık seçilebilir. Faz-0'ın genel `❌ ACIK (yeniden)` damgası bilerek dokunulmadı — o tm 208'in işi (üst tablo satır 20 artık 8 `◐` taşıyor, Faz-8 denetim sweep'inden, bu görevin kapsamı dışında).
+
 ## 206 — F0-LASTGAP-b: sohbet yaşam-döngüsü denetim kaydı, Faz-0'ın `Must ◐`'lerinden ikincisi kapandı (FR-MOD-02.8) — done — 2026-09-07 UTC
 
 - **Yapıldı:** `AUDIT_ACTIONS`'a `chat.archived` + `chat.reopened` eklendi; yazım `chat-service.ts`'in `#closeConversation`'ında (elle arşiv · müşterinin `POST /customer/chat/close`'u · zaman aşımı süpürgesi aynı satırı bırakır) ve `resume`'da, ikisi de kapanış/açılış transaction'ının **içinde** ve guard'ların **ardında** — geçiş olmayınca ikinci satır yok. `AuditLogPage.tsx`'in elle tutulan filtre listesine **Conversations** grubu (en/tr) eklendi; kontrat ve migration değişmedi.

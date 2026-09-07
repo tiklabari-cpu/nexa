@@ -16,6 +16,12 @@ export interface CustomerSummary {
   tickets_count: number;
   last_activity_at: string | null;
   created_at: string;
+  /**
+   * The contact custom fields flagged `show_in_table` (FR-MOD-03.2.3), with
+   * this customer's values — a subset of the full set `custom_fields` (below)
+   * carries on the detail response. Empty when the workspace has flagged none.
+   */
+  table_custom_fields: CustomFieldValue[];
 }
 
 export interface Visit {

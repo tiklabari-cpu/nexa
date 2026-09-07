@@ -43,6 +43,7 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
     visits: [],
     chats: [],
     custom_fields: [],
+    table_custom_fields: [],
     ...overrides,
   };
 }
@@ -222,6 +223,7 @@ describe('CustomerDetailPanel — regression: existing cards still render', () =
             required: false,
             value: 'P-42',
             form_placement: null,
+            show_in_table: false,
           },
         ],
         visits: [

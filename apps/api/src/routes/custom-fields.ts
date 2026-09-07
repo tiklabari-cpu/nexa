@@ -24,6 +24,8 @@ const createBody = z.object({
   required: z.boolean().optional(),
   /** Ask this contact field on the widget's pre-chat form (FR-MOD-08.7.7). */
   form_placement: z.enum(FORM_PLACEMENTS).nullable().optional(),
+  /** Render this contact field as a Contacts table column (FR-MOD-03.2.3). */
+  show_in_table: z.boolean().optional(),
 });
 
 const updateBody = z
@@ -31,6 +33,7 @@ const updateBody = z
     label: z.string().trim().min(1).max(120).optional(),
     required: z.boolean().optional(),
     form_placement: z.enum(FORM_PLACEMENTS).nullable().optional(),
+    show_in_table: z.boolean().optional(),
   })
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
@@ -76,6 +79,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
           type: body.type,
           ...(body.required !== undefined ? { required: body.required } : {}),
           ...(body.form_placement !== undefined ? { formPlacement: body.form_placement } : {}),
+          ...(body.show_in_table !== undefined ? { showInTable: body.show_in_table } : {}),
         }),
       );
       return reply.status(201).send(definition);
@@ -94,6 +98,7 @@ export default async function customFieldRoutes(app: FastifyInstance): Promise<v
           ...(body.label !== undefined ? { label: body.label } : {}),
           ...(body.required !== undefined ? { required: body.required } : {}),
           ...(body.form_placement !== undefined ? { formPlacement: body.form_placement } : {}),
+          ...(body.show_in_table !== undefined ? { showInTable: body.show_in_table } : {}),
         }),
       );
       return reply.send(definition);

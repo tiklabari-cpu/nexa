@@ -37,6 +37,7 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
     visits: [],
     chats: [],
     custom_fields: [],
+    table_custom_fields: [],
     ...overrides,
   };
 }
@@ -324,6 +325,7 @@ describe('VisitorPanel — pre-chat form answers (FR-MOD-13.2)', () => {
             required: false,
             value: 'ORD-42',
             form_placement: 'pre_chat',
+            show_in_table: false,
           },
         ],
       }),
@@ -346,6 +348,7 @@ describe('VisitorPanel — pre-chat form answers (FR-MOD-13.2)', () => {
             required: false,
             value: 'flagged',
             form_placement: null,
+            show_in_table: false,
           },
           // A post-chat field — asked, but not before the conversation started.
           {
@@ -355,6 +358,7 @@ describe('VisitorPanel — pre-chat form answers (FR-MOD-13.2)', () => {
             required: false,
             value: 'great',
             form_placement: 'post_chat',
+            show_in_table: false,
           },
           // A pre-chat field that was asked but left blank.
           {
@@ -364,6 +368,7 @@ describe('VisitorPanel — pre-chat form answers (FR-MOD-13.2)', () => {
             required: false,
             value: null,
             form_placement: 'pre_chat',
+            show_in_table: false,
           },
         ],
       }),

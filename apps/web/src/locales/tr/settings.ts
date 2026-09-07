@@ -175,6 +175,8 @@ export const settings: Messages = {
   'settings.customFields.entity.ticket': 'Talep',
   'settings.customFields.entity.contact': 'Kişi',
   'settings.customFields.addButton': 'Alan ekle',
+  'settings.customFields.showInTableLabel': 'Kişiler tablosunda göster',
+  'settings.customFields.showInTableBadge': 'Kişiler tablosunda',
   'settings.customFields.empty.title': 'Henüz özel alan yok',
   'settings.customFields.empty.description':
     'Ekibinizin talep ve kişilerde ihtiyaç duyduğu alanları ekleyin — bir oyuncu kimliği ya da KYC durumu gibi.',

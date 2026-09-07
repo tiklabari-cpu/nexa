@@ -13,6 +13,84 @@
 
 ## Task log (newest-first)
 
+## 209 — GL-14 · V1-KAPAT2: **Faz-1 (v1) §F.00 kapanış turu — `✅ KAPALI (yeniden)`** (§F.1 tam sürüm · §F.2 raporu) — done — 2026-09-07 UTC
+
+- **Yapıldı:** v1'in `Must` sayacı §4.1/4.2/4.3'ün DURUM sütunundan **sayılarak** okundu → **20 ✅ · 0 ◐ · 0 ⬜** (payda **20**, GL-4'ünkiyle aynı — Faz-0'ın 51→53 durumu v1'de yok); §F.1'in 10 maddesi **koda karşı** koşuldu; üst tablo satır 21'in `Kapanış` hücresi `❌ AÇIK (yeniden)` → **`✅ KAPALI (yeniden)`**. PLAN'a §F.00 v1 ikinci kapı paragrafı + `#### KGL-14` + §D155–§D157; §4.4'ün bayat `Must` listesi düzeltildi. **GL-13'ten farkı: bu tur ürün koduna DOKUNMADI** — kapı ilk koşuşta yeşildi ("verify+close, don't rebuild", GL-4'ün emsali).
+- **Bulunan iki sahipsiz v1 kapsam kalemi (§D156 · görevleşti):** PRD §5.2'nin adını koyduğu ama PRD §6'nın **satır açmadığı** iki kalem — **mesaj düzenleme (edit-after-send)** (§5.2 Güvenlik + §10.2 `v1/v2`·`Low`; kontratta PATCH yok, `editMessage` 0 eşleşme, PLAN/HANDOFF/denetimde tek kelime yok) → **tm 236**; **ticket/chat toplu eylemleri (bulk actions)** (§5.2 Ticketing satırının altı payından beşi FR satırlı, altıncısı değil; depodaki tek `bulk` `06.3.2`'nin knowledge CSV içe aktarması) → **tm 237**. Damga taşıyamadıkları için sayacı **bloklamadılar** (§F.00 damgalı satır sayar), ama "sessizce düşemez" şartı ismen kayıt + açık görevle karşılandı. Ayrıca PRD'nin kendi içinde iki faz çelişkisi kayda geçti (Instagram · 2FA — ikisi de teslim, sonuçsuz; §D157).
+- **Doğrulama (exit code'larla):** `typecheck` **13/13** · `lint` **10/10** · `format:check` temiz · `build` **8/8** · `contract:generate` sonrası generated diff **boş** (205 path) · `db:check-drift` "no drift" · `audit:req-coverage` **exit 0**. Testler §1.3 gereği **parçalandı**: turbo `test --force` (api/web/e2e hariç) **107 dosya / 1.206 test** · `apps/web` **168 / 1.978** (`--maxWorkers=4`) · api `test:unit --force` **80 / 1.320** · api integration **3 shard** (43+43+43 = **129 dosya**, 1311+1079+819 = **3.209 test**) → birleşim **484 dosya / 7.713 test**; integration kapısı ayrıca rtm **8 / 107** (`contract-parity` **5/5**). **e2e tam süit: 279 testin 275'i yeşil** (22,4 dk) — kırmızıların dördü GL-13'ünkiyle **birebir aynı dört test** ve **aynı gün ikinci kez** ayrı koşulduğunda **24/24 yeşil** (3,5 dk). `make demo` elle genişletildi (`make` kurulu değil) → `docker compose -f docker-compose.full.yml up --build -d` **exit 0** (altı servis healthy, widget dahil) + `./scripts/smoke.sh` **17/17**; yığın `down` ile kaldırıldı (`-v` **KULLANILMADI**) ve dev datastore'ların ayakta kaldığı doğrulandı.
+- **Sonraki pencereye not:** §D151'in "dördü de aynı kök nedenden" ifadesi **fazla geniş** çıktı ve tm 233'e not düşüldü: `playbook.spec.ts:68`'in imzası yönlendirici `Received: null` DEĞİL, `Use template` sayacının **11** (tam bir kategori kadar) kalmasıdır — yani arama hiç uygulanmamış. Süit-sırası bağımlılığı ortak, mekanizma ortak değil; düzeltmeyi tek bir nedene bağlayan biri ikisinden birini kaçırır. Faz-2 kapanış turu (**tm 210**) bu turun işi **değildi** ve dokunulmadı; üst tablo satır 20 ve 22'ye dokunulmadı. `.taskmaster/tasks/tasks.json`'ın diff'i büyük görünüyor (~271/241 satır) ama içerik değişikliği yalnız dörttür (tm 209 `in-progress`→`done` · tm 233'e GL-14 eki · tm 236 · tm 237): **kalanı Task Master'ın kendi yazıcısının normalizasyonudur** — alt-görev `id`'lerini `"1"` → `1` yaptı. Bunu depoda okuyan bir script yok (`scripts/`+`.github/` tarandı) ve prettier temiz; yeni iki görevin `dependencies`'i dosyanın geri kalanıyla aynı olsun diye elle string'e çevrildi.
+
+---
+
+### §F.2 RAPORU — Faz-1 (v1) kapanış turu · GL-14 · tm 209 · 2026-09-07
+
+**1) Tamamlanan kapsam (PRD kimlikleriyle).** v1'in `Must` kapsamı **20 satır, 20'si `✅`** —
+§4.1/4.2/4.3'ün `Must (v1)` satırları: `05.1` · `05.3` · `05.5` (Playbook) · `06.1` · `06.2.1`–`.5` ·
+`06.3.1`–`.3` · `06.4` (AI Agent + Knowledge/RAG, **on satır**) · `08.8.4` (Webhooks) · `02.1.2`
+(Inbox AI Agents grubu) · `04.2` (Team AI performansı) · `08.5.4`–`.6` (Messenger · Twilio SMS ·
+WhatsApp, MOCK) · `10.1.4` (AI resolutions metre + stepper). Payda **20**'dir ve GL-4'ünkiyle
+**aynıdır**: Faz-0'da olan "tabloya sonradan satır girdi" durumu (§D150, 51→53) v1'de yok.
+Yirmisi de bu turda **koda karşı** doğrulandı, damgaya güvenilmedi.
+
+**2) Yarım kalan işler** (hiçbiri `Must` değil, hiçbiri kapıyı bloklamaz — §F.00; **on dördünün
+on dördü de açık göreve bağlı**):
+
+| PRD | Ne eksik | Görev |
+| --- | --- | --- |
+| `02.1.4` | Kanal görünümleri gerçek görünüm değil — bugün `<Link to="/app/settings">` | tm 218 |
+| `02.3.2` | Reply Suggestions sabit İngilizce regex; bağlam + i18n yok | tm 219 |
+| `05.4` | Playbook "sahip" filtresi `ai_agent_id` süzüyor, insan sahibini değil | tm 221 |
+| `06.5` | AI Performance KPI'ları PRD'nin dört metriğiyle hizalı değil | tm 222 |
+| `07.7` | Rapor grupları + Export — **damga şüpheli**, triyaj gerekir | tm 211 |
+| `07.8` | Reviews/Ratings'in **Insights** payı (repoda `insight` geçen dosya yok) | tm 226 |
+| `08.7.5` | Ticket e-posta şablonlarının **tüketicisi** yok (`renderTemplate` çağrılmıyor) | tm 227 |
+| `08.7.7` | Forms builder `ticket` + `prospect` yerleşimi yok | tm 228 |
+| `09.1` | Marketplace filtre taksonomisi (koleksiyonlar + ödeme/yerleşim) | tm 229 |
+| `09.2` | Entegrasyon listesi (15–20) — **damga şüpheli**, triyaj gerekir | tm 211 |
+| `10.3` | Kalıcı fatura geçmişi yok (`Invoice` modeli yok, bugünkü fiyatla türetiliyor) | tm 230 |
+| `11.7` | Widget customization — **damga şüpheli** (§D129 dil kararı), triyaj gerekir | tm 211 |
+| `13.1` | Home: kişiselleştirilmiş karşılama + Performance overview dörtlüsü | tm 231 |
+| `13.7` | Mobil — **damga şüpheli** (Faz 3'e atandı, §D60), triyaj gerekir | tm 211 |
+
+Buna **iki kalem daha** eklenir; ikisi de bu turun bulgusudur ve yukarıdakilerden farkı, PRD §6'nın
+onlara **hiç satır açmamış** olmasıdır (dolayısıyla damgaları da yoktur): **mesaj düzenleme
+(edit-after-send)** → **tm 236** · **ticket/chat toplu eylemleri** → **tm 237** (§D156).
+
+**3) Bilinçli olarak yapılmayanlar.** `05.1` + `05.3`'ün **Workspace workflow** yarısı **ADR-14**
+ile kapsam dışıdır (_"Tek paradigma = Skill; `workflows` tablosu şemada kalır, **UI YOK**"_) — bu
+daraltma tm 186'da verilmiş bir karardır, bu turda **yeniden okundu ve korundu**; aynı ADR `13.4`
+görsel Workflow builder'ı da `⛔` yapar ve hedefini ADR-uyumlu ikameyle (`05.6-tmpl31`) onurlandırır.
+`06.3.2`'nin **bulk/CSV** yarısı bilinçli **v2 payıdır** ve tm 97.x'te teslim edilmiştir — v1'in
+kapısında aranmaz. `13.7`/`13.8-push` (mobil) `Should`'tur ve **Faz 3'e atanmıştır** (§D60); eski
+"§11.1/8" atfı yanlıştı, o madde masaüstü native app'i kapsar. §9'un 10 kapsam-dışı maddesi
+**10/10 temiz** doğrulandı.
+
+**4) Sessiz borç.** `pnpm audit:silent-debt` → izlenen **1.180** kaynak dosyası; TODO / FIXME /
+XXX / HACK / `@ts-expect-error` / `@ts-ignore` / atlanan test / odaklı test **hepsi 0**. Kalan dört
+kayıt gerekçe yorumlu (2 `eslint-disable` + 2 `istanbul ignore`) ve GL-13'ünkiyle birebir aynı.
+**Bu tur yeni borç eklemedi** — ürün koduna hiç dokunmadı. `audit:unpaged-lists`in tek `UNPAGED`i
+(`WebhookSubscriptions.tsx:87`) ve `schema-consumers`in SECURITY DEFINER körlüğü bilinen kusurlardır,
+tm 234'te görevlidir; ikisi de bu turda yeniden görüldü ve **ikinci kez raporlandı, ikinci kez
+görevleştirilMEDİ** (aynı bulguya ikinci görev açmak backlog'u kirletir).
+
+**5) Sapmalar (§D).** **D155** v1 yeniden kapandı (sayım yöntemi + payda 20'nin gerekçesi + kapının
+ilk koşuşta yeşil bulunması) · **D156** PRD §5.2'nin adını koyduğu ama §6'nın satır açmadığı iki
+kalem, karar + tm 236/237 · **D157** PRD'nin kendi içindeki iki faz çelişkisi (Instagram · 2FA) ve
+"öncelik için tek doğruluk kaynağı §6'nın `Öncelik` sütunudur" kuralının kayda geçirilmesi.
+
+**6) Karar bekleyen açık sorular.**
+(a) **`edit-after-send` ve `bulk actions` gerçekten yapılacak mı** — ikisinin de ilk adımı triyajdır
+(türetilmiş satır aç / gerekçeli `⛔` / v2'ye ata; emsal §C-A12/§C-A13). PRD §10.2 birincisini zaten
+`v1/v2` diye **hedgeliyor**, yani PRD'nin kendisi kararsız. tm 236 / tm 237.
+(b) **v1'in dört `Should` damgası şüpheli** (`07.7` · `09.2` · `11.7` · `13.7`) — bir kısmı §D129 gibi
+**kayıtlı kullanıcı kararlarının** üzerine yazılmış damgalardır; triyajı tm 211'indir ve v1'in
+`Must` kapısını bloklamaz.
+(c) **Sıradaki adım kullanıcınındır** (§F.3): Faz-2 kapanış turu (**tm 210**) kuyrukta duruyor;
+Faz-8'in 22 kalemi (tm 211–232) + GL-13'ün açtığı üçü (233–235) + bu turun açtığı ikisi (236–237)
+backlog'da.
+
+---
+
 ## 208 — GL-13 · F0-KAPAT2: **Faz-0 §F.00 kapanış turu — `✅ KAPALI (yeniden)`** (§F.1 tam sürüm · §F.2 raporu) — done — 2026-09-07 UTC
 
 - **Yapıldı:** Faz-0'ın `Must` sayacı DURUM sütunundan **sayılarak** okundu → **53 ✅ · 0 ◐ · 0 ⬜**; §F.1'in 10 maddesi **koda karşı** koşuldu; üst tablo satır 20'nin `Kapanış` hücresi `❌ AÇIK (yeniden)` → **`✅ KAPALI (yeniden)`**. PLAN'a §F.00 Faz-0 ikinci kapı paragrafı + `#### KGL-13` + §D150–§D154; CONVENTIONS §1.3'ün bayat api dosya sayısı düzeltildi. **Bu tur ürün koduna DOKUNDU** (GL-11/GL-12'nin emsalinin aksine): kapı gerçekten kırmızıydı ve kırmızının bir tanesi gerçek bir kusurdu — §D152.

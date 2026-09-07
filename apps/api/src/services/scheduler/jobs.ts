@@ -111,7 +111,7 @@ export function buildSchedulerJobs({
       name: 'chat_timeout',
       intervalMs: intervals.chat_timeout,
       async run() {
-        const report = await new ChatTimeoutSweeper(db, chats).run();
+        const report = await new ChatTimeoutSweeper(db, chats, env.AUDIT_CHAIN_SECRET).run();
         return { counts: { tenants: report.totals.tenants, closed: report.totals.closed } };
       },
     },

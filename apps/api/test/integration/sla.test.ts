@@ -33,6 +33,7 @@ import { FileMailer } from '../../src/services/mail/mailer.js';
 import type { AgentPrincipal } from '../../src/services/auth/principal.js';
 import { SlaSweeper } from '../../src/services/sla/sla-sweep.js';
 import {
+  auditContextFor,
   grantToken,
   ownerClient,
   seedFixtures,
@@ -444,7 +445,7 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
     await setPolicy(fx.a, { firstResponseMinutes: 30 });
     const { chatId, threadId } = await seedChat(fx.a, new Date(now.getTime() - 3 * HOUR));
 
-    await chats().deactivateByTimeout(ctx(fx.a), chatId, now);
+    await chats().deactivateByTimeout(ctx(fx.a), chatId, now, auditContextFor(fx.a));
 
     const rows = await breaches(fx.a);
     expect(rows.map((row) => row.target)).toEqual(['first_response']);
@@ -460,7 +461,7 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
     await setPolicy(fx.a, { resolutionMinutes: 60 });
     const { chatId, threadId } = await seedChat(fx.a, new Date(now.getTime() - 3 * HOUR));
 
-    await chats().deactivateByTimeout(ctx(fx.a), chatId, now);
+    await chats().deactivateByTimeout(ctx(fx.a), chatId, now, auditContextFor(fx.a));
 
     const rows = await breaches(fx.a);
     expect(rows).toHaveLength(1);

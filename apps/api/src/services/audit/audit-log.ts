@@ -295,6 +295,33 @@ export const AUDIT_ACTIONS = [
   // so it is recorded. The entry names the actor, the chat and the previous
   // assignee; never the transcript or any message content.
   'chat.taken_over',
+  // Conversation lifecycle (FR-MOD-02.8). Archiving a conversation is the
+  // moment its transcript becomes read-only, and reopening it is the moment it
+  // stops being — the two points at which the record of what was said starts or
+  // stops being able to change, which is why the requirement asks for a
+  // "denetim kaydı" against them by name.
+  //
+  // Every close writes one, including the close nobody asked for: the timeout
+  // sweep (FR-MOD-08.7.3) archives idle chats with no person behind it, and
+  // that entry is written as `system` with a null actor rather than attributed
+  // to the last agent who happened to touch the chat. A trail that names
+  // somebody who was not there is worse than one that says the system did it.
+  //
+  // Only a transition is recorded, so the pair cannot inflate: each caller
+  // refuses the no-op before the entry is written (archiving an archived chat
+  // and reopening a live one are both refused, and the sweep skips a chat that
+  // is already closed), and the write shares the transaction that makes the
+  // change — the `customer.banned` discipline two lines down, applied to a
+  // lifecycle instead of a moderation decision.
+  //
+  // Metadata is the thread the transition applies to, plus the sweep's reason.
+  // A chat outlives its threads — reopening starts a new one — so the thread id
+  // is what distinguishes the second archive of a chat from the first. Never
+  // the transcript, a message, or the customer: the chat id points at all of
+  // that already, and this table outlives every retention window that governs
+  // the content it would otherwise copy.
+  'chat.archived',
+  'chat.reopened',
   // Denying a visitor service (FR-MOD-08.9.2) — a moderation decision, not a
   // configuration change, so only the transition is recorded: repeating a ban
   // that already holds, or lifting one already lifted, leaves no second line.

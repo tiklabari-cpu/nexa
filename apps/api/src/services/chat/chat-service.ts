@@ -609,10 +609,20 @@ export class ChatService {
     }
   }
 
+  /**
+   * Archive a conversation (FR-MOD-02.8).
+   *
+   * `audit` is required rather than optional, on the same terms as `takeover`'s:
+   * this is the transition that makes a transcript read-only, the requirement
+   * asks for it to be recorded, and an optional context would mean a caller that
+   * forgot one closed a chat that left no trace. Every caller has one for free
+   * from `request.auditContext()`.
+   */
   async deactivate(
     tenant: TenantContext,
     principal: Principal,
     chatId: string,
+    audit: AuditContext,
   ): Promise<ChatDetail> {
     const result = await withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
@@ -625,6 +635,7 @@ export class ChatService {
         authorId: actorOf(principal),
         text: 'Chat archived',
         properties: { system_event: 'chat_deactivated' },
+        audit,
       });
     });
 
@@ -649,11 +660,18 @@ export class ChatService {
    * here is left alone, so a reply landing mid-sweep can never be archived out
    * from under the customer. Returns null when there is nothing to close —
    * already archived, or activity resumed — which keeps the sweep idempotent.
+   *
+   * `audit` names the system rather than a person (see `chat.archived` in the
+   * action catalogue): the sweeper builds it with a null actor, because nobody
+   * is behind this close and attributing it to the last agent who touched the
+   * chat would write a name into an append-only table that does not belong
+   * there.
    */
   async deactivateByTimeout(
     tenant: TenantContext,
     chatId: string,
     cutoff: Date,
+    audit: AuditContext,
   ): Promise<ChatDetail | null> {
     const result = await withTenant(this.db, tenant, async (tx) => {
       const chat = await tx.chat.findUnique({ where: { id: chatId }, include: chatInclude });
@@ -669,6 +687,7 @@ export class ChatService {
         authorId: null,
         text: 'Chat closed after inactivity',
         properties: { system_event: 'chat_deactivated', reason: 'timeout' },
+        audit,
       });
     });
 
@@ -701,17 +720,26 @@ export class ChatService {
   /**
    * The close cascade shared by `deactivate` and `deactivateByTimeout`: archive
    * the thread, deactivate the chat, mark everyone absent, record the close as a
-   * system event, count an AI resolution when no human ever replied (ADR-09),
-   * and drain the queue so the slot this frees is filled now rather than on the
-   * next arrival — otherwise a quiet period leaves customers queued behind an
-   * agent who is already free.
+   * system event, write the audit entry FR-MOD-02.8 asks for, count an AI
+   * resolution when no human ever replied (ADR-09), and drain the queue so the
+   * slot this frees is filled now rather than on the next arrival — otherwise a
+   * quiet period leaves customers queued behind an agent who is already free.
+   *
+   * The audit entry lives here rather than in the two callers so the hand-driven
+   * close and the timeout sweep cannot drift into disagreeing about whether an
+   * archive is worth recording — the same reason `#emitDeactivation` is shared.
    */
   async #closeConversation(
     tx: TenantClient,
     tenant: TenantContext,
     chat: ChatRow,
     thread: { id: string; createdAt: Date; firstResponseAt: Date | null },
-    close: { authorId: string | null; text: string; properties: Record<string, unknown> },
+    close: {
+      authorId: string | null;
+      text: string;
+      properties: Record<string, unknown>;
+      audit: AuditContext;
+    },
   ): Promise<CloseResult> {
     const closedAt = new Date();
     await tx.thread.update({
@@ -757,6 +785,25 @@ export class ChatService {
         text: close.text,
         recipients: 'all',
         properties: close.properties,
+      },
+    });
+
+    // The archive itself, in the trail (FR-MOD-02.8 · NFR-S12). Same transaction
+    // as the close, so a rollback takes the entry with it and no row ever claims
+    // an archive that did not happen; and past the guards above, so a chat that
+    // was already closed leaves no second line. The reason is read back off the
+    // system event's properties rather than passed twice, so the trail and the
+    // transcript can never disagree about *why* a conversation ended.
+    //
+    // PII-minimal: the chat, the thread that closed, and at most a one-word
+    // reason. Never a message, a transcript or the customer.
+    const closeReason = close.properties['reason'];
+    await writeAuditEntry(tx, close.audit, {
+      action: 'chat.archived',
+      target: `chat:${chat.id}`,
+      metadata: {
+        thread_id: thread.id,
+        ...(typeof closeReason === 'string' ? { reason: closeReason } : {}),
       },
     });
 
@@ -966,7 +1013,20 @@ export class ChatService {
     }
   }
 
-  async resume(tenant: TenantContext, principal: Principal, chatId: string): Promise<ChatDetail> {
+  /**
+   * Reopen an archived conversation (FR-MOD-02.8).
+   *
+   * `audit` is required for the same reason `deactivate`'s is: this is the
+   * transition that makes a read-only transcript writable again, and it is half
+   * of the record the requirement asks for — an archive nobody can see being
+   * undone is the more dangerous half to lose.
+   */
+  async resume(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    audit: AuditContext,
+  ): Promise<ChatDetail> {
     const result = await withTenant(this.db, tenant, async (tx) => {
       const visibility = await resolveVisibility(tx, principal, 'write');
       const chat = await this.#loadVisibleChat(tx, visibility, chatId);
@@ -1012,6 +1072,17 @@ export class ChatService {
           recipients: 'all',
           properties: { system_event: 'chat_resumed' },
         },
+      });
+
+      // The other half of the lifecycle record (FR-MOD-02.8 · NFR-S12), on the
+      // same terms as the archive: inside the transaction that reopens, past the
+      // guard that refuses an already-active chat, and carrying the *new*
+      // thread — the one the transcript can be written to again — since that is
+      // what separates this reopening from any earlier one of the same chat.
+      await writeAuditEntry(tx, audit, {
+        action: 'chat.reopened',
+        target: `chat:${chat.id}`,
+        metadata: { thread_id: threadId },
       });
 
       const reloaded = await tx.chat.findUniqueOrThrow({

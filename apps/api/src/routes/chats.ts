@@ -302,7 +302,12 @@ export default async function chatRoutes(
     { config: { scopes: ['chats--all:rw', 'chats--access:rw'] } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
-      const chat = await chats.deactivate(request.tenant(), request.requirePrincipal(), chatId);
+      const chat = await chats.deactivate(
+        request.tenant(),
+        request.requirePrincipal(),
+        chatId,
+        request.auditContext(),
+      );
       return reply.send(chat);
     },
   );
@@ -312,7 +317,12 @@ export default async function chatRoutes(
     { config: { scopes: ['chats--all:rw', 'chats--access:rw'] } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
-      const chat = await chats.resume(request.tenant(), request.requirePrincipal(), chatId);
+      const chat = await chats.resume(
+        request.tenant(),
+        request.requirePrincipal(),
+        chatId,
+        request.auditContext(),
+      );
       return reply.send(chat);
     },
   );

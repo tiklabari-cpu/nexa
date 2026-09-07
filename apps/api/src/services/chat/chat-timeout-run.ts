@@ -58,7 +58,7 @@ async function main(): Promise<void> {
       // `chat_deactivated` hears about it either way.
       createWorkspaceEventDispatcher(db),
     );
-    const report = await new ChatTimeoutSweeper(db, chats).run();
+    const report = await new ChatTimeoutSweeper(db, chats, env.AUDIT_CHAIN_SECRET).run();
 
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.stderr.write(

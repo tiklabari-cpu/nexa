@@ -724,7 +724,7 @@ export default async function customerRoutes(
       );
       if (!chat) throw ApiError.chatInactive('There is no open conversation.');
 
-      await chats.deactivate(request.tenant(), principal, chat.id);
+      await chats.deactivate(request.tenant(), principal, chat.id, request.auditContext());
       return reply.status(204).send();
     },
   );

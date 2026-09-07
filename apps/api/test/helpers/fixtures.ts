@@ -9,6 +9,7 @@ import { PrismaClient } from '@prisma/client';
 import { MOBILE_REDIRECT_URI } from '@nexa/types';
 import { hashPassword, hashToken } from '../../src/lib/crypto.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
+import type { AuditActorType, AuditContext } from '../../src/services/audit/audit-log.js';
 import type { TokenKind } from '../../src/services/auth/token-service.js';
 
 // The mock IdP harness (S11-c) is a fixture like any other; re-exported here so
@@ -54,6 +55,34 @@ export function testEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): Env {
     PUSH_PROVIDER: 'null',
     ...overrides,
   });
+}
+
+/**
+ * An audit context for a service called directly, without a request.
+ *
+ * `ChatService.deactivate`/`resume`/`deactivateByTimeout` take one because a
+ * lifecycle transition has to be recorded (FR-MOD-02.8); a route gets it from
+ * `request.auditContext()`, and a test driving the service in-process has no
+ * request to get it from. The chain secret is the same one `testEnv()` gives
+ * the server under test, so an entry written this way lands in the same chain
+ * as one written through HTTP.
+ *
+ * Defaults to the system actor — the shape the timeout sweep writes with — so a
+ * suite that only needs the call to compile does not have to invent a person.
+ */
+export function auditContextFor(
+  tenant: { licenseId: bigint },
+  actor: { actorId: string | null; actorType: AuditActorType } = {
+    actorId: null,
+    actorType: 'system',
+  },
+): AuditContext {
+  return {
+    licenseId: tenant.licenseId,
+    chainSecret: testEnv().AUDIT_CHAIN_SECRET,
+    actorId: actor.actorId,
+    actorType: actor.actorType,
+  };
 }
 
 /** Owner connection — bypasses RLS so fixtures can span tenants. */

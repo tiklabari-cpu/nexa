@@ -36,12 +36,15 @@ export interface DefinitionInput {
   required?: boolean;
   /** Ask this contact field on one of the widget's forms (FR-MOD-08.7.7). */
   formPlacement?: FormPlacement | null;
+  /** Render this contact field as a row-inline Contacts table column (FR-MOD-03.2.3). */
+  showInTable?: boolean;
 }
 
 export interface DefinitionPatch {
   label?: string;
   required?: boolean;
   formPlacement?: FormPlacement | null;
+  showInTable?: boolean;
 }
 
 interface DefinitionRow {
@@ -51,6 +54,7 @@ interface DefinitionRow {
   type: string;
   required: boolean;
   formPlacement: string | null;
+  showInTable: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -93,6 +97,10 @@ export async function readCustomFieldValues(
     required: definition.required,
     value: stored.get(definition.id) ?? null,
     form_placement: (definition.formPlacement as FormPlacement | null) ?? null,
+    // Carried through from the definition, same as `form_placement` above —
+    // lets a reader (the Contacts table) pick out its columns from a full
+    // custom-field list without a second lookup.
+    show_in_table: definition.showInTable,
   }));
 }
 
@@ -129,6 +137,14 @@ export class CustomFieldService {
     if (input.formPlacement && input.entity !== 'contact') {
       throw ApiError.validation('form_placement: only a contact field can be a widget form field.');
     }
+    // Same restriction as `formPlacement`, for the same reason: the Contacts
+    // table has one row per contact, so a ticket field has no row to render a
+    // column value into.
+    if (input.showInTable && input.entity !== 'contact') {
+      throw ApiError.validation(
+        'show_in_table: only a contact field can show in the Contacts table.',
+      );
+    }
 
     try {
       const created = await tx.customFieldDefinition.create({
@@ -139,6 +155,7 @@ export class CustomFieldService {
           type: input.type,
           required: input.required ?? false,
           formPlacement: input.formPlacement ?? null,
+          showInTable: input.showInTable ?? false,
         },
       });
       return toDefinitionDto(created);
@@ -181,6 +198,14 @@ export class CustomFieldService {
         );
       }
       data.formPlacement = patch.formPlacement;
+    }
+    if (patch.showInTable !== undefined) {
+      if (patch.showInTable && existing.entity !== 'contact') {
+        throw ApiError.validation(
+          'show_in_table: only a contact field can show in the Contacts table.',
+        );
+      }
+      data.showInTable = patch.showInTable;
     }
 
     try {
@@ -375,6 +400,7 @@ function toDefinitionDto(row: DefinitionRow): CustomFieldDefinition {
     type: row.type as CustomFieldType,
     required: row.required,
     form_placement: (row.formPlacement as FormPlacement | null) ?? null,
+    show_in_table: row.showInTable,
     created_at: row.createdAt.toISOString(),
     updated_at: row.updatedAt.toISOString(),
   };

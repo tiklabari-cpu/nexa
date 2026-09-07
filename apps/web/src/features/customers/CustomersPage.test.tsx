@@ -105,6 +105,7 @@ function customer(id: string, over: Partial<CustomerSummary> = {}): CustomerSumm
     tickets_count: 0,
     last_activity_at: null,
     created_at: '2026-01-01T00:00:00.000Z',
+    table_custom_fields: [],
     ...over,
   };
 }
@@ -322,6 +323,136 @@ describe('table columns (FR-MOD-03.2.3)', () => {
     expect(screen.getByText('+1 555 0100')).toBeInTheDocument();
     expect(screen.getByText('United States')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Custom columns (FR-MOD-03.2.3): a workspace's `show_in_table` contact fields
+ * render as extra row-inline columns after the seven PRD ones, sourced from
+ * `table_custom_fields` on each row — no second request, and no scope beyond
+ * `customers:ro`.
+ */
+describe('custom columns (FR-MOD-03.2.3)', () => {
+  it('renders a show_in_table field as a column, cell value beside the right customer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          customerPage(
+            [
+              customer('C1', {
+                name: 'Robin Lee',
+                table_custom_fields: [
+                  {
+                    definition_id: 'df-1',
+                    label: 'Player ID',
+                    type: 'text',
+                    required: false,
+                    value: 'P-42',
+                    form_placement: null,
+                    show_in_table: true,
+                  },
+                ],
+              }),
+            ],
+            1,
+          ),
+        ),
+      ),
+    );
+    renderPage('/app/customers');
+
+    await screen.findByText('Robin Lee');
+    expect(screen.getByRole('columnheader', { name: 'Player ID' })).toBeInTheDocument();
+    expect(screen.getByText('P-42')).toBeInTheDocument();
+  });
+
+  it('shows an em dash for a flagged field with no value on this customer', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          customerPage(
+            [
+              customer('C1', {
+                name: 'Robin Lee',
+                table_custom_fields: [
+                  {
+                    definition_id: 'df-1',
+                    label: 'Player ID',
+                    type: 'text',
+                    required: false,
+                    value: null,
+                    form_placement: null,
+                    show_in_table: true,
+                  },
+                ],
+              }),
+            ],
+            1,
+          ),
+        ),
+      ),
+    );
+    renderPage('/app/customers');
+
+    await screen.findByText('Robin Lee');
+    expect(screen.getByRole('columnheader', { name: 'Player ID' })).toBeInTheDocument();
+    // Scoped to the row: several base columns (email, phone, country) also
+    // print an em dash for this fixture, so an unscoped query would be
+    // ambiguous. The custom column is the last cell — after the seven PRD ones.
+    const row = screen.getAllByRole('row')[1]!;
+    const cells = within(row).getAllByRole('cell');
+    expect(cells.at(-1)).toHaveTextContent('—');
+  });
+
+  it('renders no extra column when the workspace has flagged no field', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.resolve(customerPage([customer('C1', { name: 'Robin Lee' })], 1))),
+    );
+    renderPage('/app/customers');
+    await screen.findByText('Robin Lee');
+
+    for (const name of ['Name', 'Email', 'Phone', 'Country', 'Last active', 'Chats', 'Tickets']) {
+      expect(screen.getByRole('columnheader', { name })).toBeInTheDocument();
+    }
+    expect(screen.getAllByRole('columnheader')).toHaveLength(7);
+  });
+
+  it('offers no sort control on a custom column, the same honesty as Email/Phone', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve(
+          customerPage(
+            [
+              customer('C1', {
+                name: 'Robin Lee',
+                table_custom_fields: [
+                  {
+                    definition_id: 'df-1',
+                    label: 'Player ID',
+                    type: 'text',
+                    required: false,
+                    value: 'P-42',
+                    form_placement: null,
+                    show_in_table: true,
+                  },
+                ],
+              }),
+            ],
+            1,
+          ),
+        ),
+      ),
+    );
+    renderPage('/app/customers');
+    await screen.findByText('Robin Lee');
+
+    const header = screen.getByRole('columnheader', { name: 'Player ID' });
+    expect(within(header).queryByRole('button')).toBeNull();
+    expect(header).not.toHaveAttribute('aria-sort');
   });
 });
 

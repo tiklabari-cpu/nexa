@@ -38,6 +38,7 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [isRequired, setIsRequired] = useState(false);
+  const [showInTable, setShowInTable] = useState(false);
 
   const list = useQuery({
     queryKey: ['settings', 'custom-fields'],
@@ -53,6 +54,7 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
       label: string;
       type: CustomFieldType;
       required: boolean;
+      show_in_table: boolean;
     }) => api.post<CustomFieldDefinition>('/settings/custom-fields', body),
     onSuccess: invalidate,
   });
@@ -74,15 +76,21 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
           label: values.label.trim(),
           type: values.type as CustomFieldType,
           required: isRequired,
+          // Only a contact field can show in the Contacts table (server-enforced,
+          // FR-MOD-03.2.3) — dropped rather than sent and refused, matching the
+          // checkbox's own disabled state below.
+          show_in_table: values.entity === 'contact' && showInTable,
         });
         reset();
         setIsRequired(false);
+        setShowInTable(false);
       } catch (error) {
         setSubmitError(t(errorMessageKey(error)));
       }
     },
   });
   const labelError = form.errorFor('label');
+  const isContactField = form.values.entity === 'contact';
 
   const entityLabel = (entity: string): string =>
     entity === 'ticket'
@@ -167,6 +175,24 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
                 {t('settings.requiredLabel')}
               </label>
 
+              {/* Only a contact field has a row on the Contacts table
+                  (FR-MOD-03.2.3) to render a column value into — unchecked and
+                  disabled, rather than hidden, so switching back to Contact
+                  does not silently lose an already-expressed choice. */}
+              <label
+                className={`flex items-center gap-2 pb-1.5 text-sm text-content-secondary ${
+                  isContactField ? '' : 'opacity-50'
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={isContactField && showInTable}
+                  disabled={!isContactField}
+                  onChange={(event) => setShowInTable(event.target.checked)}
+                />
+                {t('settings.customFields.showInTableLabel')}
+              </label>
+
               <button
                 type="submit"
                 disabled={!form.canSubmit}
@@ -195,6 +221,11 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
               {list.data.items.map((field) => (
                 <li key={field.id} className="flex items-center gap-3 px-4 py-2.5">
                   <span className="flex-1 text-sm font-medium">{field.label}</span>
+                  {field.show_in_table && (
+                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-2xs text-content-secondary">
+                      {t('settings.customFields.showInTableBadge')}
+                    </span>
+                  )}
                   <span className="text-2xs text-content-tertiary">
                     {entityLabel(field.entity)} · {field.type}
                     {field.required ? t('settings.requiredSuffix') : ''}

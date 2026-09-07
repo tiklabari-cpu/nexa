@@ -155,6 +155,15 @@ export function CustomersPage(): ReactElement {
   // once the list has *failed*; a load error must not read as an empty list.
   const pagesLoaded = list.pages.length > 0;
 
+  // The workspace's `show_in_table` contact fields (FR-MOD-03.2.3) — read off
+  // the first loaded row rather than a separate request: every row in a page
+  // carries one entry per flagged definition (`value: null` when unset), so
+  // the set is identical across the page and a second round-trip (which would
+  // also need its own scope, `access_rules:ro`, that a plain `customers:ro`
+  // agent may not hold) buys nothing. Empty, and no extra columns render, when
+  // the list itself is empty or the workspace has flagged none.
+  const customColumns = items[0]?.table_custom_fields ?? [];
+
   // Keep the selection valid as filters change under it — but only once the
   // list has actually loaded, so a deep-linked selection is not cleared against
   // the empty array that precedes the first response. Gated on `!list.hasNext`
@@ -267,7 +276,7 @@ export function CustomersPage(): ReactElement {
                 items={items}
                 rowHeight={56}
                 caption={t('customers.page.table.caption')}
-                colSpan={CUSTOMER_COLUMNS.length}
+                colSpan={CUSTOMER_COLUMNS.length + customColumns.length}
                 onEndReached={list.fetchNext}
                 head={
                   <thead>
@@ -280,6 +289,19 @@ export function CustomersPage(): ReactElement {
                           onSort={changeSort}
                           t={t}
                         />
+                      ))}
+                      {customColumns.map((field) => (
+                        // Never sortable (matches Email/Phone): the server has
+                        // no index over an arbitrary workspace-defined value,
+                        // so a header here carries no button and no aria-sort —
+                        // the same honesty `chats`/`tickets` observe.
+                        <th
+                          key={field.definition_id}
+                          scope="col"
+                          className="px-4 py-2 text-left text-xs font-medium text-content-secondary"
+                        >
+                          {field.label}
+                        </th>
                       ))}
                     </tr>
                   </thead>
@@ -339,6 +361,16 @@ export function CustomersPage(): ReactElement {
                       </td>
                       <td className="tabular px-4 py-2.5 text-right">{customer.chats_count}</td>
                       <td className="tabular px-4 py-2.5 text-right">{customer.tickets_count}</td>
+                      {customColumns.map((column) => (
+                        <td
+                          key={column.definition_id}
+                          className="px-4 py-2.5 text-content-secondary"
+                        >
+                          {customer.table_custom_fields.find(
+                            (field) => field.definition_id === column.definition_id,
+                          )?.value ?? '—'}
+                        </td>
+                      ))}
                     </tr>
                   );
                 }}

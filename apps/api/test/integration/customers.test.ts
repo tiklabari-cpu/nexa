@@ -762,6 +762,202 @@ describe('customers', () => {
     });
   });
 
+  // --- Table custom fields (FR-MOD-03.2.3) ------------------------------------
+
+  describe('table custom fields (FR-MOD-03.2.3)', () => {
+    interface CustomFieldValueRow {
+      definition_id: string;
+      label: string;
+      value: string | null;
+      show_in_table: boolean;
+    }
+    interface CustomerRow {
+      id: string;
+      table_custom_fields: CustomFieldValueRow[];
+    }
+
+    const defineField = async (body: unknown): Promise<{ id: string }> => {
+      const response = await server.post('/settings/custom-fields', body, auth(adminToken));
+      expect(response.statusCode).toBe(201);
+      return response.json() as { id: string };
+    };
+
+    let adminToken: string;
+
+    beforeEach(async () => {
+      adminToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['access_rules:rw', 'customers:rw'],
+      });
+    });
+
+    it("includes a show_in_table field's value on the matching row", async () => {
+      const field = await defineField({
+        entity: 'contact',
+        label: 'Player ID',
+        type: 'text',
+        show_in_table: true,
+      });
+      await server.put(
+        `/customers/${fx.a.customerId}/custom-fields`,
+        { values: { [field.id]: 'P-42' } },
+        auth(adminToken),
+      );
+
+      const response = await server.get('/customers?limit=100', auth(readToken));
+      expect(response.statusCode).toBe(200);
+      const row = (response.json() as { items: CustomerRow[] }).items.find(
+        (c) => c.id === fx.a.customerId,
+      );
+      expect(row?.table_custom_fields).toEqual([
+        expect.objectContaining({ definition_id: field.id, label: 'Player ID', value: 'P-42' }),
+      ]);
+    });
+
+    it('shows a defined-but-unset show_in_table field as null, not omitted', async () => {
+      const field = await defineField({
+        entity: 'contact',
+        label: 'KYC done',
+        type: 'boolean',
+        show_in_table: true,
+      });
+
+      const response = await server.get('/customers?limit=100', auth(readToken));
+      const row = (response.json() as { items: CustomerRow[] }).items.find(
+        (c) => c.id === fx.a.customerId,
+      );
+      const entry = row?.table_custom_fields.find((f) => f.definition_id === field.id);
+      expect(entry).toBeDefined();
+      expect(entry?.value).toBeNull();
+    });
+
+    it('omits a field not flagged show_in_table from table_custom_fields', async () => {
+      const field = await defineField({ entity: 'contact', label: 'Internal note', type: 'text' });
+      await server.put(
+        `/customers/${fx.a.customerId}/custom-fields`,
+        { values: { [field.id]: 'flagged' } },
+        auth(adminToken),
+      );
+
+      const response = await server.get('/customers?limit=100', auth(readToken));
+      const row = (response.json() as { items: CustomerRow[] }).items.find(
+        (c) => c.id === fx.a.customerId,
+      );
+      expect(row?.table_custom_fields).toEqual([]);
+    });
+
+    it("never leaks another organization's show_in_table field or values (NFR-S4)", async () => {
+      const bAdminToken = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['access_rules:rw', 'customers:rw'],
+      });
+      const foreignField = await server.post(
+        '/settings/custom-fields',
+        { entity: 'contact', label: 'Balance', type: 'number', show_in_table: true },
+        auth(bAdminToken),
+      );
+      expect(foreignField.statusCode).toBe(201);
+      const foreignId = (foreignField.json() as { id: string }).id;
+      await server.put(
+        `/customers/${fx.b.customerId}/custom-fields`,
+        { values: { [foreignId]: '999' } },
+        auth(bAdminToken),
+      );
+
+      // Tenant A defines its own field of the same kind, so the response is
+      // non-empty and the assertion below is a genuine "only mine" check, not
+      // an accident of an all-empty list.
+      const ownField = await defineField({
+        entity: 'contact',
+        label: 'Player ID',
+        type: 'text',
+        show_in_table: true,
+      });
+
+      const response = await server.get('/customers?limit=100', auth(readToken));
+      const row = (response.json() as { items: CustomerRow[] }).items.find(
+        (c) => c.id === fx.a.customerId,
+      );
+      const ids = row?.table_custom_fields.map((f) => f.definition_id) ?? [];
+      expect(ids).toContain(ownField.id);
+      expect(ids).not.toContain(foreignId);
+    });
+
+    it('serves the values lookup out of an index (EXPLAIN ANALYZE)', async () => {
+      const field = await defineField({
+        entity: 'contact',
+        label: 'Player ID',
+        type: 'text',
+        show_in_table: true,
+      });
+      await owner.customer.createMany({
+        data: Array.from({ length: 4 }, (_, i) => ({
+          organizationId: fx.a.organizationId,
+          name: `Table Field Probe ${i}`,
+        })),
+      });
+      const others = await owner.customer.findMany({
+        where: { organizationId: fx.a.organizationId, name: { startsWith: 'Table Field Probe' } },
+        select: { id: true },
+      });
+      const customerIds = [fx.a.customerId, ...others.map((c) => c.id)];
+      await server.put(
+        `/customers/${fx.a.customerId}/custom-fields`,
+        { values: { [field.id]: 'P-42' } },
+        auth(adminToken),
+      );
+
+      // The predicate `CustomerService#tableCustomFields` issues for the values
+      // half of the lookup: this page's customer ids crossed with the
+      // `show_in_table` definition ids, scoped to the license.
+      const sql = `SELECT customer_id, definition_id, value FROM custom_field_values
+                   WHERE license_id = $1 AND customer_id = ANY($2::uuid[])
+                     AND definition_id = ANY($3::uuid[])`;
+
+      const explain = async (plannerSetup: string[] = []): Promise<Record<string, unknown>> =>
+        owner.$transaction(async (tx) => {
+          for (const statement of plannerSetup) await tx.$executeRawUnsafe(statement);
+          const [row] = await tx.$queryRawUnsafe<Array<Record<string, unknown>>>(
+            `EXPLAIN (ANALYZE, FORMAT JSON) ${sql}`,
+            fx.a.licenseId,
+            customerIds,
+            [field.id],
+          );
+          const raw = row?.['QUERY PLAN'];
+          const parsed = (typeof raw === 'string' ? JSON.parse(raw) : raw) as Array<
+            Record<string, unknown>
+          >;
+          return parsed[0] ?? {};
+        });
+
+      // Structural: the crossing can be served from an index on
+      // `custom_field_values` — either the plain `customer_id` one or (as
+      // Postgres actually chose here) the `(definition_id, customer_id)`
+      // unique index, which serves both predicates at once — rather than a
+      // sequential scan of this license's stored values.
+      const indexed = await explain(['SET LOCAL enable_seqscan = off']);
+      const indexedPlan = indexed['Plan'] as Record<string, unknown> | undefined;
+      expect(indexedPlan?.['Node Type']).toBe('Index Scan');
+      expect(indexedPlan?.['Relation Name']).toBe('custom_field_values');
+
+      const planned = await explain();
+      const plannedMs = planned['Execution Time'];
+      const indexedMs = indexed['Execution Time'];
+      expect(typeof plannedMs).toBe('number');
+      expect(typeof indexedMs).toBe('number');
+      console.log(
+        'NFR-P2 GET /customers table_custom_fields values lookup — ' +
+          `${String(plannedMs)} ms as planned · ${String(indexedMs)} ms forced onto the index`,
+      );
+      expect(plannedMs as number).toBeLessThan(READ_BUDGET_MS);
+      expect(indexedMs as number).toBeLessThan(READ_BUDGET_MS);
+    });
+  });
+
   // --- Detail ----------------------------------------------------------------
 
   describe('detail', () => {

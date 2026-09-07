@@ -8640,6 +8640,15 @@ export interface components {
       last_activity_at?: string | null;
       /** Format: date-time */
       created_at?: string;
+      /**
+       * @description The contact custom fields flagged `show_in_table` (FR-MOD-03.2.3),
+       *     with this customer's values — one entry per flagged definition, in
+       *     authoring order, `value` null when unset. Empty when the workspace
+       *     has flagged none. A subset of the full set `GET /customers/{id}`
+       *     returns as `custom_fields`; this is only what the Contacts table
+       *     renders as a column.
+       */
+      table_custom_fields: components['schemas']['CustomFieldValue'][];
     };
     /**
      * @description One append-only entry in the workspace's security trail (NFR-S12). The
@@ -9201,6 +9210,13 @@ export interface components {
        * @enum {string|null}
        */
       form_placement?: 'pre_chat' | 'post_chat' | null;
+      /**
+       * @description When true, this field also renders as a row-inline column on the
+       *     Contacts table (FR-MOD-03.2.3), rather than only in the
+       *     Details/CRM panel. Only a `contact` field may set this; a
+       *     `ticket` one is a 400. Defaults to false.
+       */
+      show_in_table: boolean;
       /** Format: date-time */
       created_at: string;
       /** Format: date-time */
@@ -9243,6 +9259,12 @@ export interface components {
        * @enum {string|null}
        */
       form_placement?: 'pre_chat' | 'post_chat' | null;
+      /**
+       * @description Carried through from the definition (FR-MOD-03.2.3): whether this
+       *     field also renders as a row-inline column on the Contacts table.
+       *     Always false on a `ticket` field.
+       */
+      show_in_table: boolean;
     };
     /**
      * @description A map of custom field definition id → value, where null clears a field.
@@ -17334,6 +17356,12 @@ export interface operations {
            * @enum {string|null}
            */
           form_placement?: 'pre_chat' | 'post_chat' | null;
+          /**
+           * @description Also render this field as a row-inline column on the
+           *     Contacts table (FR-MOD-03.2.3). Only a `contact` field may
+           *     set this; a `ticket` one is a 400. Defaults to false.
+           */
+          show_in_table?: boolean;
         };
       };
     };
@@ -17397,6 +17425,11 @@ export interface operations {
            * @enum {string|null}
            */
           form_placement?: 'pre_chat' | 'post_chat' | null;
+          /**
+           * @description Show or hide this field as a Contacts table column
+           *     (FR-MOD-03.2.3). Setting it true on a `ticket` field is a 400.
+           */
+          show_in_table?: boolean;
         };
       };
     };

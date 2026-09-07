@@ -181,6 +181,8 @@ export const settings: Messages = {
   'settings.customFields.entity.ticket': 'Ticket',
   'settings.customFields.entity.contact': 'Contact',
   'settings.customFields.addButton': 'Add field',
+  'settings.customFields.showInTableLabel': 'Show in Contacts table',
+  'settings.customFields.showInTableBadge': 'In Contacts table',
   'settings.customFields.empty.title': 'No custom fields',
   'settings.customFields.empty.description':
     'Add fields your team needs on tickets and contacts, like a player id or a KYC status.',

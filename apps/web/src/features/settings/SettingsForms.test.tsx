@@ -179,6 +179,82 @@ describe('CustomFieldsSettings validation (FR-MOD-08.7.6)', () => {
   });
 });
 
+/**
+ * The "show in Contacts table" checkbox (FR-MOD-03.2.3) — the one control that
+ * decides whether a defined field also becomes a row-inline column, rather
+ * than only showing on the Details/CRM panel.
+ */
+describe('CustomFieldsSettings — show in table (FR-MOD-03.2.3)', () => {
+  it('sends show_in_table: true for a contact field with the box checked', async () => {
+    api.post.mockResolvedValue({ id: 'cf-1' });
+    renderComponent(<CustomFieldsSettings canEdit />);
+
+    await userEvent.type(await screen.findByPlaceholderText('Player ID'), 'Player ID');
+    await userEvent.selectOptions(screen.getByLabelText('On'), 'contact');
+    await userEvent.click(screen.getByLabelText('Show in Contacts table'));
+    await userEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post).toHaveBeenCalledWith('/settings/custom-fields', {
+      entity: 'contact',
+      label: 'Player ID',
+      type: 'text',
+      required: false,
+      show_in_table: true,
+    });
+  });
+
+  it('disables the checkbox for a ticket field and never sends it true', async () => {
+    api.post.mockResolvedValue({ id: 'cf-2' });
+    renderComponent(<CustomFieldsSettings canEdit />);
+
+    await userEvent.type(await screen.findByPlaceholderText('Player ID'), 'Balance');
+    // Ticket is the form's own default — no entity selection needed.
+    expect(screen.getByLabelText('Show in Contacts table')).toBeDisabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Add field' }));
+
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(api.post).toHaveBeenCalledWith(
+      '/settings/custom-fields',
+      expect.objectContaining({ entity: 'ticket', show_in_table: false }),
+    );
+  });
+
+  it('badges a field flagged show_in_table in the list', async () => {
+    api.get.mockResolvedValue({
+      items: [
+        {
+          id: 'a',
+          entity: 'contact',
+          label: 'Player ID',
+          type: 'text',
+          required: false,
+          form_placement: null,
+          show_in_table: true,
+        },
+        {
+          id: 'b',
+          entity: 'contact',
+          label: 'Internal note',
+          type: 'text',
+          required: false,
+          form_placement: null,
+          show_in_table: false,
+        },
+      ],
+    });
+    renderComponent(<CustomFieldsSettings canEdit />);
+
+    const playerRow = (await screen.findByText('Player ID')).closest('li');
+    expect(playerRow).not.toBeNull();
+    expect(within(playerRow!).getByText('In Contacts table')).toBeInTheDocument();
+
+    const noteRow = screen.getByText('Internal note').closest('li');
+    expect(noteRow).not.toBeNull();
+    expect(within(noteRow!).queryByText('In Contacts table')).not.toBeInTheDocument();
+  });
+});
+
 describe('ChatFormsSettings validation (FR-MOD-08.7.7)', () => {
   it('keeps Add field disabled until a label is entered', async () => {
     renderComponent(<ChatFormsSettings canEdit />);

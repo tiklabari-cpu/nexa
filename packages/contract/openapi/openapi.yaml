@@ -2670,7 +2670,7 @@ components:
 
     CustomerSummary:
       type: object
-      required: [id, name, email, is_lead, banned, chats_count, tickets_count]
+      required: [id, name, email, is_lead, banned, chats_count, tickets_count, table_custom_fields]
       properties:
         id: { type: string, format: uuid }
         name:
@@ -2691,6 +2691,16 @@ components:
         tickets_count: { type: integer }
         last_activity_at: { type: string, format: date-time, nullable: true }
         created_at: { type: string, format: date-time }
+        table_custom_fields:
+          type: array
+          description: |
+            The contact custom fields flagged `show_in_table` (FR-MOD-03.2.3),
+            with this customer's values — one entry per flagged definition, in
+            authoring order, `value` null when unset. Empty when the workspace
+            has flagged none. A subset of the full set `GET /customers/{id}`
+            returns as `custom_fields`; this is only what the Contacts table
+            renders as a column.
+          items: { $ref: "#/components/schemas/CustomFieldValue" }
 
     AuditLogEntry:
       type: object
@@ -3434,7 +3444,7 @@ components:
         (FR-MOD-08.7.6) — an extra field the product does not ship with. The
         two properties that carry the requirement are `type` (how a value is
         validated) and `required` (whether it may be blank).
-      required: [id, entity, label, type, required, created_at, updated_at]
+      required: [id, entity, label, type, required, show_in_table, created_at, updated_at]
       properties:
         id: { type: string, format: uuid }
         entity:
@@ -3457,6 +3467,13 @@ components:
             Where this field is also asked as a widget form (FR-MOD-08.7.7):
             `pre_chat` before the conversation starts, `post_chat` once it ends,
             or null for a CRM-only field. Only a `contact` field may carry one.
+        show_in_table:
+          type: boolean
+          description: |
+            When true, this field also renders as a row-inline column on the
+            Contacts table (FR-MOD-03.2.3), rather than only in the
+            Details/CRM panel. Only a `contact` field may set this; a
+            `ticket` one is a 400. Defaults to false.
         created_at: { type: string, format: date-time }
         updated_at: { type: string, format: date-time }
 
@@ -3483,7 +3500,7 @@ components:
         definition's metadata joined with the stored value, or null when nothing
         is set. One entry per definition, so a defined-but-empty field still
         shows.
-      required: [definition_id, label, type, required, value]
+      required: [definition_id, label, type, required, value, show_in_table]
       properties:
         definition_id: { type: string, format: uuid }
         label: { type: string }
@@ -3504,6 +3521,12 @@ components:
             the Traffic visitor 360° panel — tell a pre-chat form answer apart
             from a plain CRM field without a second lookup. Always null on a
             `ticket` field.
+        show_in_table:
+          type: boolean
+          description: |
+            Carried through from the definition (FR-MOD-03.2.3): whether this
+            field also renders as a row-inline column on the Contacts table.
+            Always false on a `ticket` field.
 
     CustomFieldValuesInput:
       type: object

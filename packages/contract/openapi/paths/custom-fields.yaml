@@ -65,6 +65,12 @@ customFields:
                   Also ask this field as a widget form (FR-MOD-08.7.7) — before
                   the conversation starts, or once it ends. Only a `contact`
                   field may carry a placement; a `ticket` one is a 400.
+              show_in_table:
+                type: boolean
+                description: |
+                  Also render this field as a row-inline column on the
+                  Contacts table (FR-MOD-03.2.3). Only a `contact` field may
+                  set this; a `ticket` one is a 400. Defaults to false.
     responses:
       "201":
         description: Created
@@ -108,6 +114,11 @@ customField:
                 description: |
                   Move the field between the widget forms, or null to stop
                   asking it and keep it as a CRM-only field (FR-MOD-08.7.7).
+              show_in_table:
+                type: boolean
+                description: |
+                  Show or hide this field as a Contacts table column
+                  (FR-MOD-03.2.3). Setting it true on a `ticket` field is a 400.
     responses:
       "200":
         description: Updated

@@ -516,6 +516,27 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The composer's tag picker, open (FR-MOD-02.3.5's fifth composer tool).
+       *
+       * Same reasoning as the emoji picker just above: the panel only exists in
+       * the DOM once its trigger has been activated, so the inbox scan alone
+       * never renders it.
+       */
+      test('the composer tag picker has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto(`/app/inbox?chat=${activeChatId}`);
+        await scanPanel(agentPage, 'Inbox composer tag picker', theme, testInfo, async () => {
+          const trigger = agentPage.getByRole('button', { name: 'Chat tags' });
+          await expect(trigger).toBeVisible();
+          await trigger.click();
+          await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+          await expect(agentPage.getByLabel('Add a new tag')).toBeVisible();
+        });
+      });
+
+      /**
        * The Details panel's assignee menu, open (FR-MOD-02.4.1–.6).
        *
        * Same reason as the two above: the list of teammates is only in the DOM

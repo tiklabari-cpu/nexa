@@ -27,12 +27,17 @@ function setup(items = VISIBLE_TO_SALES): { textarea: HTMLTextAreaElement; urls:
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
-      urls.push(typeof input === 'string' ? input : String(input));
+      const url = typeof input === 'string' ? input : String(input);
+      urls.push(url);
+      // The composer's tag picker (FR-MOD-02.3.5) also fetches on mount; this
+      // stub answers only the canned-reply endpoint these tests are about, so
+      // the tag library gets an empty list rather than replies shaped like
+      // `{ name }`, which is not what they are.
       return {
         ok: true,
         status: 200,
         headers: { get: () => null },
-        json: async () => ({ items }),
+        json: async () => ({ items: url.includes('/settings/canned-responses') ? items : [] }),
       };
     }),
   );

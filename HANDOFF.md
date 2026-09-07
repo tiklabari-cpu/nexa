@@ -13,6 +13,14 @@
 
 ## Task log (newest-first)
 
+## 205 — F0-LASTGAP-a: composer'dan #tag seçimi, Faz-0'ın son üç `Must ◐`'sinden biri kapandı (FR-MOD-02.3.5) — done — 2026-09-07 UTC
+
+- **Yapıldı:** Composer'a ayrı bir araç çubuğu düğmesi + `Dropdown` panel (`TagPicker`) eklendi — `#` yeniden kullanılmadı (canned-yanıt zaten o tetiği taşıyor, F5); panel `GET /settings/tags`ten öneri sunar (zaten eklenmiş etiketler filtrelenir), tıklama veya serbest yazı+Enter aynı `useChatAction().tag` mutasyonunu çağırır — Details panelinin tag bölümüyle aynı sorgu anahtarı (`['tag-library']`) ve aynı mutasyon, ikinci uç yok. `InboxPage` artık `chat.data.thread?.tags`'i Composer'a da geçiyor.
+- **Bilinen tuzak #2 çözümü:** composer paneli Details panelinin "Remove tag …"/"Add" erişilebilir adlarını taşımıyor (`getByRole` çakışması) — composer yalnız öneri listesi + kendi ayrı etiketli serbest-metin alanı sunar, kaldırma bilinçli olarak Details panelinde kaldı.
+- **Doğrulama (hepsi yeşil):** `apps/web` tam vitest süiti (168 dosya · 1967 test, `--maxWorkers=4`) + yeni `Composer.tags.test.tsx` (7, `(FR-MOD-02.3.5)`) · `pnpm -w typecheck` · `lint` · `format:check` · `build` · `contract:generate` sonrası diff yok · `db:check-drift` (no drift) · `audit:req-coverage` exit 0, `FR-MOD-02.3.5` site sayısı arttı · e2e `tests/inbox*.spec.ts` (13/13) · `a11y.spec.ts` "the composer tag picker" dark+light (0 ihlal). `Composer.canned.test.tsx`'in blanket fetch stub'ı `/settings/tags`i de canned-yanıt şekilli nesnelerle yanıtlıyordu (yeni `TagPicker` sorgusu yüzünden `undefined` tag adı + React key uyarısı çıktı) — stub URL'e göre ayrıştırıldı, o dosyanın kendi testleri değişmedi.
+- **PLAN.md:** satır 293 `02.3.5` `◐ → ✅`; `#### K02.3.5`e madde eklendi; satır 20'nin Faz-0 Must sayacı `48 ✅ · 3 ◐` → `49 ✅ · 2 ◐`.
+- **Sonraki pencereye not:** Faz-0'ın kalan iki `Must ◐`'si tm 206 (`02.8` — chat yaşam-döngüsü denetim kaydı) ve tm 207 (`03.2.3` — Contacts custom kolonlar); ikisi bitince kapanış turu tm 208 (`GL-13`) açılabilir hale gelir (§F.00 mekanik: bağımlılık zaten `tasks.json`'da). Composer'ın tag aracı hâlâ küratörlü öneri listesine dayanıyor (kütüphanede hiç etiket yoksa serbest-metin alanı yine de herhangi bir etiketi ekleyebiliyor) — bu bilinçli bir kapsam kararı, K02.3.5'te gerekçeli.
+
 ## PANEL BULGULARI DENETLENDİ — üç triyajın kapsam dışı bıraktığı artık toplandı; **Faz-8 açıldı** (§6D · §D149 · tm 211–232) — done — 2026-09-07 UTC
 
 - **Girdi:** panelin (`Claude_Loop_Controller`) sağlık taramasında **26 açık bulgu** (245'i zaten

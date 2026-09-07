@@ -7,11 +7,12 @@ import {
   type KeyboardEvent,
   type ReactElement,
 } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   eventsKey,
   flattenTranscript,
   newIdempotencyKey,
+  useChatAction,
   useSendMessage,
   type TranscriptCache,
 } from './useInbox.js';
@@ -48,9 +49,16 @@ import { useTranslate } from '../../lib/i18n.js';
 export function Composer({
   chatId,
   disabled,
+  tags = [],
 }: {
   chatId: string;
   disabled: boolean;
+  /**
+   * The chat's current tags (FR-MOD-02.3.5's fifth composer tool) — the same
+   * array `DetailsPanel` reads off `chat.thread.tags`, so a tag added here
+   * shows there without a second fetch or a second tag vocabulary.
+   */
+  tags?: string[];
 }): ReactElement {
   const [text, setText] = useState('');
   const [mode, setMode] = useState<'all' | 'agents'>('all');
@@ -565,6 +573,16 @@ export function Composer({
             <ListIcon />
           </button>
           <Dropdown
+            label={t('inbox.composer.tags.trigger')}
+            trigger={<TagIcon />}
+            triggerClassName="flex items-center justify-center rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
+            // Same reasoning as the emoji panel below: anchored above the
+            // trigger so it does not open off the bottom of the window.
+            panelClassName="bottom-10 left-0 w-64 p-2"
+          >
+            {() => <TagPicker chatId={chatId} tags={tags} />}
+          </Dropdown>
+          <Dropdown
             label={t('inbox.composer.emoji.trigger')}
             trigger={<EmojiIcon />}
             triggerClassName="flex items-center justify-center rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content"
@@ -640,6 +658,90 @@ export function Composer({
   );
 }
 
+/**
+ * The composer's tag tool (FR-MOD-02.3.5's fifth tool).
+ *
+ * A dedicated trigger rather than a second meaning for `#`: that key already
+ * opens the canned-reply picker (F5, shipped), and the two vocabularies —
+ * saved-reply shortcuts and tag names — cannot share one typed prefix without
+ * one of them guessing wrong. Same query key (`['tag-library']`) and the same
+ * `useChatAction` mutation pair the Details panel's tag section uses, so a tag
+ * added here is the one already-tested surface, not a second implementation —
+ * and `onSuccess` there invalidates `['chat', chatId]`, which is exactly the
+ * query that feeds this component's own `tags` prop back down.
+ *
+ * Curated suggestions only, deliberately: like the emoji tool above, this
+ * offers what already exists (the library `Tags.tsx` manages) rather than a
+ * second free-form tag editor duplicating the Details panel's chips-with-
+ * remove control — carrying its "Remove tag …" label into a second,
+ * simultaneously-mounted control would collide on `getByRole`. Typing and
+ * pressing Enter still reaches any tag, including a brand new one.
+ */
+function TagPicker({ chatId, tags }: { chatId: string; tags: string[] }): ReactElement {
+  const [draft, setDraft] = useState('');
+  const api = useApiClient();
+  const actions = useChatAction(chatId);
+  const t = useTranslate();
+
+  const library = useQuery({
+    queryKey: ['tag-library'],
+    queryFn: () => api.get<{ items: Array<{ name: string }> }>('/settings/tags'),
+    staleTime: 60_000,
+  });
+  const suggestions = (library.data?.items ?? [])
+    .map((item) => item.name)
+    .filter((name) => !tags.includes(name));
+
+  const addDraft = (): void => {
+    const value = draft.trim();
+    if (!value) return;
+    actions.tag.mutate(value);
+    setDraft('');
+  };
+
+  return (
+    <div className="flex max-h-72 flex-col gap-2">
+      {suggestions.length > 0 ? (
+        <ul className="flex flex-col overflow-y-auto">
+          {suggestions.map((name) => (
+            <li key={name}>
+              <button
+                type="button"
+                onClick={() => actions.tag.mutate(name)}
+                className="w-full rounded-sm px-2 py-1.5 text-left text-xs hover:bg-surface-2"
+              >
+                {name}
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="px-1 text-2xs text-content-tertiary">{t('inbox.composer.tags.empty')}</p>
+      )}
+
+      <div>
+        <label className="sr-only" htmlFor="composer-tag-input">
+          {t('inbox.composer.tags.newTagLabel')}
+        </label>
+        <input
+          id="composer-tag-input"
+          value={draft}
+          onChange={(event) => setDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              addDraft();
+            }
+          }}
+          placeholder={t('inbox.composer.tags.newTagPlaceholder')}
+          maxLength={64}
+          className="w-full rounded-sm border border-border bg-inset px-2 py-1 text-xs"
+        />
+      </div>
+    </div>
+  );
+}
+
 function PaperclipIcon(): ReactElement {
   return (
     <svg
@@ -698,6 +800,24 @@ function ListIcon(): ReactElement {
       <line x1="9" y1="6" x2="20" y2="6" />
       <line x1="9" y1="12" x2="20" y2="12" />
       <line x1="9" y1="18" x2="20" y2="18" />
+    </svg>
+  );
+}
+
+function TagIcon(): ReactElement {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      className="h-4 w-4"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12.59 2.59 2 13.17V22h8.83L21.4 11.41a2 2 0 0 0 0-2.83l-6-6a2 2 0 0 0-2.81.01Z" />
+      <circle cx="7.5" cy="17.5" r="0.5" fill="currentColor" stroke="none" />
     </svg>
   );
 }

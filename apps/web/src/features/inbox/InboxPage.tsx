@@ -735,7 +735,11 @@ export function InboxPage(): ReactElement {
                   />
                   <ConflictBanner chatId={selectedId} />
 
-                  <Composer chatId={selectedId} disabled={!chat.data.active} />
+                  <Composer
+                    chatId={selectedId}
+                    disabled={!chat.data.active}
+                    tags={chat.data.thread?.tags ?? []}
+                  />
                 </>
               ) : (
                 <EmptyState

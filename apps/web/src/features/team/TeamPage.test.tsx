@@ -8,12 +8,13 @@
  * result of zero must read differently from an actually-empty roster.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { TeamPage } from './TeamPage.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { applyPush } from '../inbox/useInbox.js';
 
 /**
  * The roster table only — `WorkSchedule.tsx` further down the page renders
@@ -259,5 +260,106 @@ describe('roster row opens the profile panel (FR-MOD-04.3.4)', () => {
     expect(
       within(dialog).getByRole('spinbutton', { name: 'Concurrent chats limit' }),
     ).toBeInTheDocument();
+  });
+});
+
+/**
+ * The roster's availability column is live (FR-MOD-04.5 · FR-MOD-01.1.4).
+ *
+ * `GET /agents` is read under two keys — `['agents']` for the shell's presence
+ * avatars and `['team', 'agents']` for this roster — and the `routing_status_set`
+ * push used to fold into only the first. The consequence was not a cosmetic
+ * lag: the client holds a fetched roster for 30 s (`main.tsx` staleTime), and
+ * the command palette fires its availability PUT without awaiting it, so a
+ * navigation to Team could start its GET before the write landed, cache the
+ * pre-toggle roster, and then have no reason to ask again for half a minute.
+ * The e2e proof of the palette's action reads the value back on this screen,
+ * which is exactly where that showed up.
+ */
+describe('Team roster — availability arrives over the socket (FR-MOD-04.5 · FR-MOD-01.1.4)', () => {
+  /** A roster whose rows the test can change under the client, as the server would. */
+  function stubMutableRoster(initial: AgentFixture[]): { set: (items: AgentFixture[]) => void } {
+    let items = initial;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/agents?status=suspended')) return jsonResponse({ items: [] });
+        if (url.includes('/agents')) return jsonResponse({ items });
+        if (url.includes('/ai-agents')) return jsonResponse({ items: [] });
+        if (url.includes('/groups')) return jsonResponse({ items: [] });
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    return {
+      set: (next) => {
+        items = next;
+      },
+    };
+  }
+
+  function renderWithClient(): QueryClient {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <TeamPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    return queryClient;
+  }
+
+  const rosterRow = (name: string): HTMLElement =>
+    within(rosterTable()).getByText(name).closest('tr') as HTMLElement;
+
+  it('moves a teammate to "Not accepting" on the push, and the confirming read agrees', async () => {
+    const roster = stubMutableRoster([agent('A1', { name: 'Alex Moreau' })]);
+    const client = renderWithClient();
+
+    await screen.findByRole('table', { name: 'Agents on this licence' });
+    expect(rosterRow('Alex Moreau')).toHaveTextContent('Accepting chats');
+
+    // The server has committed by the time it publishes, so anything it is
+    // asked afterwards answers with the new value.
+    roster.set([agent('A1', { name: 'Alex Moreau', routing_status: 'not_accepting_chats' })]);
+    act(() => {
+      applyPush(client, 'routing_status_set', { agent_id: 'A1', status: 'not_accepting_chats' });
+    });
+
+    await waitFor(() => expect(rosterRow('Alex Moreau')).toHaveTextContent('Not accepting'));
+  });
+
+  it('a roster read that raced the write does not put the old value back', async () => {
+    // The regression this covers: `GET /agents` issued before the write landed
+    // resolves after the push and overwrites it, and the client then holds that
+    // stale roster for its whole `staleTime`. The push marks the key stale, so
+    // the last read happens after the commit and wins.
+    const roster = stubMutableRoster([agent('A1', { name: 'Alex Moreau' })]);
+    const client = renderWithClient();
+
+    await screen.findByRole('table', { name: 'Agents on this licence' });
+    act(() => {
+      client.setQueryData(['team', 'agents'], { items: [agent('A1', { name: 'Alex Moreau' })] });
+    });
+
+    roster.set([agent('A1', { name: 'Alex Moreau', routing_status: 'not_accepting_chats' })]);
+    act(() => {
+      applyPush(client, 'routing_status_set', { agent_id: 'A1', status: 'not_accepting_chats' });
+    });
+
+    await waitFor(() => expect(rosterRow('Alex Moreau')).toHaveTextContent('Not accepting'));
+  });
+
+  it('leaves the roster alone when the push names an agent it does not hold', async () => {
+    stubMutableRoster([agent('A1', { name: 'Alex Moreau' })]);
+    const client = renderWithClient();
+
+    await screen.findByRole('table', { name: 'Agents on this licence' });
+
+    act(() => {
+      applyPush(client, 'routing_status_set', { agent_id: 'A9', status: 'offline' });
+    });
+
+    await waitFor(() => expect(rosterRow('Alex Moreau')).toHaveTextContent('Accepting chats'));
   });
 });

@@ -933,20 +933,44 @@ export function applyPush(
       // new value, and a refetch would spend a request to learn what it just
       // said — on every teammate's screen, every time anyone flips their
       // availability.
+      //
+      // Both roster caches, not just the shell's. `GET /agents` is read under
+      // two keys — `['agents']` (shell avatars, ticket follower picker) and
+      // `['team', 'agents']` (the Team console's roster) — and updating only
+      // the first left the Team screen showing an availability the server had
+      // already changed, for the 30 s the client's default `staleTime` holds a
+      // fetched roster (`main.tsx`). That window is not theoretical: the
+      // palette's toggle fires its PUT without awaiting it (`close()` then
+      // `void action.run(...)`), so a navigation to Team can start its GET
+      // before the write lands, cache the pre-toggle roster, and then have no
+      // reason to ask again.
       const agentId = payload['agent_id'];
       const status = payload['status'];
       if (typeof agentId !== 'string' || typeof status !== 'string') return;
       if (!(ROUTING_STATUSES as readonly string[]).includes(status)) return;
 
-      queryClient.setQueryData<{ items: Array<{ id: string; routing_status: string }> }>(
-        ['agents'],
-        (current) =>
-          current && {
-            items: current.items.map((agent) =>
-              agent.id === agentId ? { ...agent, routing_status: status } : agent,
-            ),
-          },
-      );
+      for (const key of [['agents'], ['team', 'agents']]) {
+        queryClient.setQueryData<{ items: Array<{ id: string; routing_status: string }> }>(
+          key,
+          (current) =>
+            current && {
+              items: current.items.map((agent) =>
+                agent.id === agentId ? { ...agent, routing_status: status } : agent,
+              ),
+            },
+        );
+      }
+
+      // The Team roster additionally gets marked stale, which the shell's
+      // avatars deliberately do not. Writing the value in place is enough only
+      // while no request is in flight; a `GET /agents` that read the row before
+      // the write committed still resolves *after* this push and overwrites it
+      // with the value it saw. Marking the key stale forces the next read to
+      // happen after the commit, so the last word belongs to the server rather
+      // than to whichever request won the race. It is affordable precisely
+      // where the avatars' refetch was not: this key is only active while
+      // someone has the Team console open, so an inactive one costs nothing.
+      void queryClient.invalidateQueries({ queryKey: ['team', 'agents'] });
       return;
     }
 

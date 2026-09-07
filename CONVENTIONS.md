@@ -111,10 +111,16 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   ```
 
   Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
-  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **70 + 110 = 180**; sayı
-  2026-08-30'da GL-11 · tm 158 turunda yeniden ölçüldü — metin "54 + 90 = 144" ile bayattı,
-  Faz-5/Faz-6 arayı doldurdu). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
+  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **80 + 129 = 209**; sayı
+  2026-09-07'de GL-13 · tm 208 turunda yeniden ölçüldü — metin "70 + 110 = 180" ile bayattı,
+  Faz-7 ve `◐` kapatma turları arayı doldurdu; ondan önce 2026-08-30'da GL-11 · tm 158
+  "54 + 90 = 144"ü düzeltmişti). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
   eşleştirebilsin.
+
+  **`apps/web` kendi süitini `--maxWorkers=4` ile ister.** Ölçüldü (GL-13): varsayılan işçi
+  sayısında yüklü bir makinede `userEvent` testleri `Test timed out in 5000ms` veriyor —
+  regresyon değil, CPU çekişmesi; aynı dosya tek başına 1,3 sn'de yeşil. Kırmızıyı sınırlıyken
+  yeniden koşmadan bu tura yazma.
 
 ### 1.4 Kapının önkoşulları: iki sessiz tuzak (2026-08-31)
 

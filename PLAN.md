@@ -632,7 +632,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 06.3.2 | + New source (chunk+embedding) | Must (v1) | ✅ → K06.3.2 |
 | 06.3.3 | Kaynak tablosu (düzenle/sil/yeniden indeksle)             | Must (v1)   | ✅ → K06.3.3 |
 | 06.4   | Profile (persona: Tone/Language/Answer length)            | Must (v1)   | ✅ → K06.4 |
-| 06.5 | Performance (resolution rate, CSAT, transfer) | Should (v1) | ◐ → K06.5 |
+| 06.5 | Performance (resolution rate, CSAT, transfer) | Should (v1) | ✅ → K06.5 |
 
 ### 4.3 Diğer v1 modülleri
 
@@ -3652,7 +3652,7 @@ ve `audit:endpoint-ui` süpürmesinden) · 1 kapanış turu.
 |  9  | V8-INBOX-SUGG    | Reply Suggestions: sabit İngilizce regex yerine **bağlam + i18n**                                        | FR-MOD-02.3.2    | medium  |  ✅   | 219 |  2   |
 | 10  | V8-TRAFFIC-RTM   | Traffic panosu **RTM akışına** bağlansın — bugün 8 sn'lik `setInterval`                                  | FR-MOD-03.1.1    | medium  |  ✅   | 220 |  2   |
 | 11  | V8-SKILL-OWNER   | Playbook "sahip" filtresi **insan sahibi** süzsün (bugün `ai_agent_id`)                                  | FR-MOD-05.4      |   low   |  ⬜   | 221 |  1   |
-| 12  | V8-AIPERF-KPI    | AI Performance KPI'ları PRD'nin **dört metriğiyle** hizalansın                                           | FR-MOD-06.5      | medium  |  ⬜   | 222 |  1   |
+| 12  | V8-AIPERF-KPI    | AI Performance KPI'ları PRD'nin **dört metriğiyle** hizalansın                                           | FR-MOD-06.5      | medium  |  ✅   | 222 |  1   |
 | 13  | V8-RPT-NAV       | Reports **sol dikey kenar çubuğu** + kategori grupları/genişleticiler + Export öğesi                     | FR-MOD-07.1      | medium  |  ⬜   | 223 |  2   |
 | 14  | V8-RPT-SHARE     | **Paylaşılabilir rapor bağlantısı** (KK'daki "Share export/link"in eksik yarısı)                         | FR-MOD-07.3.1    | medium  |  ⬜   | 224 |  2   |
 | 15  | V8-RPT-BENCH     | Chats kartlarının **vs-önceki dönem** ayağı + eksik iki kart (response times · satisfaction)             | FR-MOD-07.3.3    | medium  |  ⬜   | 225 |  2   |
@@ -6580,6 +6580,7 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 ✅ KPI kartları (Resolution rate/AI chats resolved/CSAT/Transferred) — Playbook Performance sekmesi `AiPerformance.tsx` (`PlaybookPage.tsx` `VIEW_TABS[performance]` → `view==='performance'`) + saf `performance.ts` `performanceKpis`/`isLowBase` (düşük-baz eşiği 20 → `tone='warn'`+hint+dipnot; CSAT bazı bağımsız) · AI-off arşiv ayrımı (`!agentActive` → `role=status` "historical figures") · sayılar `/reports/ai-agent`+`/reports/overview` (07.4 ile ortak sorgu = fatura ADR-09, ikinci sayaç yok) · test `AiPerformance.test.tsx`(5)+`performance.test.ts`(8) · tm 33.6 · §D36
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-06.5` [KISMİ ↓]: Dort KPI karti PRD'nin saydigi dort metrigi karsilamiyor. PRD: 'Resolution rate, AI chats, CSAT, Transferred %'. Kod: resolution_rate, 'AI chats resolved' (= report.resolutions, yani cozulen sohbet SAYISI), csat, transfer_rate (performance.ts:50-78). Yani iki…
+- ✅ **Denetim bulgusu kapandı (tm 222, V8-AIPERF-KPI) — ikinci kart artık "AI chats", ham çözüm sayısı değil.** `performance.ts`'in ikinci kartı `report.resolutions` (yalnız çözülen alt küme) yerine **`finished` = `report.resolutions + report.transfers`** döndürüyor — AI'nın *bitirdiği* her sohbet, çözerek ya da devrederek; bu zaten `resolution_rate`/`transfer_rate`'in paydası olan sayı, PRD'nin "AI chats" satırıyla aynı hacim. **`/reports/ai-agent` DEĞİŞMEDİ** — `resolutions`/`transfers` alanları (ADR-09, `reports-billing.test.ts`, CSV export) aynı kaldı; birleştirme yalnız istemci tarafında, zaten alınan iki sayı üzerinde. Bu yüzden kontrat/migration/mobil parite dokunulmadı (mobil bu ekranı hiç okumuyor). Anahtar `ai_resolutions` → `ai_chats`, etiket `locales/{en,tr}/playbook.ts` `kpiAiResolutions` → `kpiAiChats` ("AI chats" / "AI sohbetleri"). KK'nın diğer iki payı (düşük-baz uyarısı `isLowBase` + AI-off arşiv ayrımı `!agentActive`) koda karşı yeniden okundu ve **zaten tamdı** — bu turda değişmedi. — `apps/web/src/features/playbook/performance.ts` · `AiPerformance.tsx` · `locales/{en,tr}/playbook.ts` · test `performance.test.ts` (1 test değişti: "AI chats" = resolved+transferred, FR-MOD-06.5) · `AiPerformance.test.tsx` (3 test etiketlendi + 1 yeni assertion) · 2 mutasyon → 2 kırmızı (elle doğrulandı, dosya restore edildi) · e2e `ai-agent.spec.ts` 6/6 · `a11y.spec.ts -g playbook` iki temada blocking 0 · tm 222
 
 #### K02.1.2 — 02.1.2 · AI Agents grubu (AI agent / Solved)
 

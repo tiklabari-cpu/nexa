@@ -59,11 +59,15 @@ describe('performanceKpis', () => {
     expect(rate(kpis, 'csat').lowBase).toBe(false);
   });
 
-  it('surfaces the AI resolution count straight from the report (ADR-09 figure)', () => {
-    const kpis = performanceKpis(report({ resolutions: 7 }), { score: null, responses: 0 });
-    const aiChats = kpis.find((k) => k.key === 'ai_resolutions');
+  it('surfaces "AI chats" as resolved + transferred, not the resolved count alone (FR-MOD-06.5)', () => {
+    const kpis = performanceKpis(report({ resolutions: 7, transfers: 3 }), {
+      score: null,
+      responses: 0,
+    });
+    const aiChats = kpis.find((k) => k.key === 'ai_chats');
     expect(aiChats?.kind).toBe('count');
-    if (aiChats?.kind === 'count') expect(aiChats.count).toBe(7);
+    // 10, not 7 — a transferred chat is still a chat the AI handled.
+    if (aiChats?.kind === 'count') expect(aiChats.count).toBe(10);
   });
 
   it('judges CSAT low-base by rating responses, independently of chat volume', () => {

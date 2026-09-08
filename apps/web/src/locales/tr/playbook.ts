@@ -429,7 +429,7 @@ export const playbook: Messages = {
   'playbook.performance.lowBaseFooter':
     'Az sayıda sohbet üzerindeki bir yüzde, tek bir vakayla oynayabilir. Daha fazla sohbet kapandıkça uyarılı kartlar oturacak.',
   'playbook.performance.kpiResolutionRate': 'Çözüm oranı',
-  'playbook.performance.kpiAiResolutions': 'AI’nın çözdüğü sohbetler',
+  'playbook.performance.kpiAiChats': 'AI sohbetleri',
   'playbook.performance.kpiCsat': 'CSAT',
   'playbook.performance.kpiTransferRate': 'Aktarım oranı',
 

@@ -76,6 +76,26 @@ function isOrigin(value: string): boolean {
   return parseOriginList(value)?.length === 1;
 }
 
+/**
+ * The `scheme://host[:port]` a browser puts in `Origin` for a page loaded from
+ * this URL, or `null` if no browser ever would (tm 243).
+ *
+ * Separate from `parseOriginList` because the value it reads — `WIDGET_BASE_URL`
+ * — is a base *URL*, not an origin: serving the widget from a path on an
+ * existing host (`https://panel.example.com/widget/`) is a real deployment, and
+ * the allowlist question is about the host it lands on, not the path.
+ */
+function originOf(url: string): string | null {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return null;
+  return parsed.origin;
+}
+
 /** Exported so `env.parity.test.ts` can enumerate keys off `.shape` rather than re-parsing this file as text. */
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -216,6 +236,10 @@ export const envSchema = z.object({
    * and with `credentials: true` the alternative to naming them is reflecting
    * whatever origin asks — which would let any page a signed-in agent visits
    * read this API with that agent's session.
+   *
+   * The list is not only about the panel: `productionProblems` refuses to boot
+   * unless it also contains `WIDGET_BASE_URL`'s origin (tm 243). Everything a
+   * customer ever sees is served from there.
    */
   WEB_ORIGIN: z
     .string()
@@ -225,7 +249,9 @@ export const envSchema = z.object({
         'must be one or more comma-separated origins of the form scheme://host[:port] (e.g. "https://panel.example.com,https://chat.example.com") — no path, query or fragment',
     }),
   /// Origin serving the widget loader + iframe. The install snippet points
-  /// `window.__nexa.widgetOrigin` and the async `loader.js` at it.
+  /// `window.__nexa.widgetOrigin` and the async `loader.js` at it. In
+  /// production its origin has to appear in `WEB_ORIGIN` above, or the widget's
+  /// own calls to this API are refused by CORS — see `productionProblems`.
   WIDGET_BASE_URL: z.string().url().default('http://localhost:5174'),
   /// Domain a workspace forwards its support mail to (FR-MOD-08.5.3). The
   /// per-workspace address is `<organization_id>@<domain>`; the inbound webhook
@@ -677,6 +703,33 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
   if (!env.INBOUND_EMAIL_SECRET) {
     problems.push(
       'INBOUND_EMAIL_SECRET is required in production: unset, the inbound mail webhook accepts anyone who knows a workspace address.',
+    );
+  }
+
+  // The widget half of the product is cross-origin by construction, and the
+  // allowlist above is the only thing that lets it through (tm 243).
+  //
+  // `apps/widget` ships a browser bundle with no same-origin backend at all —
+  // its nginx image proxies nothing (`apps/widget/nginx.conf`'s `connect-src`
+  // comment) and `loader.ts` refuses to open the widget when its origin matches
+  // the page embedding it, so every REST call it makes is cross-origin to this
+  // API. A production `WEB_ORIGIN` naming only the panel therefore serves
+  // agents and refuses customers, and refuses them the quiet way: the browser
+  // drops the response, this process logs a request it answered normally, and
+  // `/health` stays green. The repository already measured this once — the full
+  // container stack runs `NODE_ENV=development` partly because production CORS
+  // cut the widget off (tm 140.3) — and wrote it into a compose comment instead
+  // of into the boot, which is how four separate deployment documents went on
+  // telling operators to list the panel alone.
+  //
+  // Naming a *second* origin is not what this demands: a deployment serving the
+  // widget from the panel's own host (or from a path on it) already satisfies
+  // it, because that origin is on the list. What it forbids is leaving the
+  // widget's origin off, whatever that origin turns out to be.
+  const widgetOrigin = originOf(env.WIDGET_BASE_URL);
+  if (widgetOrigin === null || !(parseOriginList(env.WEB_ORIGIN) ?? []).includes(widgetOrigin)) {
+    problems.push(
+      `WEB_ORIGIN must include the widget's own origin (${widgetOrigin ?? env.WIDGET_BASE_URL}, from WIDGET_BASE_URL): the widget's browser code calls this API cross-origin, so an allowlist without it answers the agent panel and silently refuses every customer conversation.`,
     );
   }
 

@@ -34,8 +34,13 @@ connection storm, suspected cross-tenant data exposure.
       [`infra/helm/nexa/templates/networkpolicy.yaml`](../infra/helm/nexa/templates/networkpolicy.yaml).
       Measured consequence of skipping the policy half:
       `apps/api/test/integration/trust-proxy.test.ts`.
-- [ ] `WEB_ORIGIN` is set to the real panel origin(s) (comma-separated if more than one host
-      serves the panel or a standalone chat page).
+- [ ] `WEB_ORIGIN` lists **every** origin a browser loads a Nexa page from, comma-separated:
+      the agent panel, any standalone chat page, **and `WIDGET_BASE_URL`'s origin**. The widget
+      has no same-origin backend — its browser code calls the API cross-origin — so a list
+      naming only the panel serves agents and refuses every customer conversation, silently.
+      Boot refuses a list that omits the widget's origin (`apps/api/src/config/env.ts`);
+      serving the widget from the panel's own host satisfies it without a second entry.
+      Evidence: `apps/api/test/integration/production-boot.test.ts`.
 - [ ] Copy [`.env.production.example`](../.env.production.example) to `.env`, fill every
       placeholder, then boot once — a missing or placeholder value fails loudly with every
       problem listed together, not on the first request that happens to touch it.

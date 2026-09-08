@@ -265,3 +265,123 @@ describe('TicketPane localisation (NFR-I18N2)', () => {
     expect(screen.getByText('Talep seçilmedi')).toBeInTheDocument();
   });
 });
+
+/**
+ * Notifying the customer from a stored template (FR-MOD-08.7.5).
+ *
+ * The requirement's gap was a consumer: templates existed and nothing sent one.
+ * These pin the console half of the fix — that the picker only appears when a
+ * notice is actually possible, that picking one rides the next status change,
+ * and that not picking one leaves the request byte-identical to what it was
+ * before templates had a consumer.
+ */
+const TEMPLATES = [
+  { id: 'tpl-1', name: 'Solved — thanks', enabled: true },
+  { id: 'tpl-2', name: 'Retired draft', enabled: false },
+];
+
+function renderPaneWithTemplates(
+  detail: TicketDetail,
+  templates: Array<{ id: string; name: string; enabled: boolean }> = TEMPLATES,
+) {
+  const calls: Call[] = [];
+  let current = detail;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      const path = String(url).replace('/api/v1', '');
+      const body = init?.body
+        ? (JSON.parse(String(init.body)) as Record<string, unknown>)
+        : undefined;
+      calls.push({ method, path, body });
+
+      if (path === '/agents') return okJson({ items: [] });
+      if (path === '/settings/ticket-email-templates') return okJson({ items: templates });
+      if (method === 'PATCH' && /^\/tickets\/[^/]+$/.test(path)) {
+        current = { ...current, ...body };
+        return okJson(current);
+      }
+      return okJson(current);
+    }),
+  );
+
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <TicketDetailPane ticketId={detail.id} candidates={[]} />
+    </QueryClientProvider>,
+  );
+  return { calls };
+}
+
+describe('TicketPane customer notice (FR-MOD-08.7.5)', () => {
+  const REACHABLE = { customer_email: 'mira@example.test' };
+
+  it('sends the picked template alongside the status change', async () => {
+    const handles = renderPaneWithTemplates(makeDetail(REACHABLE));
+
+    const picker = await screen.findByLabelText('Notify the customer');
+    await userEvent.selectOptions(picker, 'tpl-1');
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'solved');
+
+    await waitFor(() => {
+      const patch = handles.calls.find((c) => c.method === 'PATCH' && c.path === '/tickets/TCK1');
+      expect(patch?.body).toEqual({ status: 'solved', email_template_id: 'tpl-1' });
+    });
+  });
+
+  it('omits the key entirely when no template is picked', async () => {
+    const handles = renderPaneWithTemplates(makeDetail(REACHABLE));
+    await screen.findByLabelText('Notify the customer');
+
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'pending');
+
+    await waitFor(() => {
+      const patch = handles.calls.find((c) => c.method === 'PATCH' && c.path === '/tickets/TCK1');
+      // Not `email_template_id: null` — an absent key is what leaves the
+      // endpoint's old behaviour untouched.
+      expect(patch?.body).toEqual({ status: 'pending' });
+    });
+  });
+
+  it('resets after a change, so the next transition is its own decision', async () => {
+    const handles = renderPaneWithTemplates(makeDetail(REACHABLE));
+
+    const picker = await screen.findByLabelText('Notify the customer');
+    await userEvent.selectOptions(picker, 'tpl-1');
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'solved');
+    await waitFor(() => expect(handles.calls.some((c) => c.method === 'PATCH')).toBe(true));
+
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'closed');
+    await waitFor(() => {
+      const patches = handles.calls.filter((c) => c.method === 'PATCH');
+      expect(patches).toHaveLength(2);
+      expect(patches[1]?.body).toEqual({ status: 'closed' });
+    });
+  });
+
+  it('offers only the templates the workspace has switched on', async () => {
+    renderPaneWithTemplates(makeDetail(REACHABLE));
+    await screen.findByLabelText('Notify the customer');
+
+    expect(screen.getByRole('option', { name: 'Solved — thanks' })).toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Retired draft' })).toBeNull();
+  });
+
+  it('hides the picker when the ticket has no customer address', async () => {
+    const handles = renderPaneWithTemplates(makeDetail({ customer_email: null }));
+    await screen.findByLabelText('Status');
+
+    expect(screen.queryByLabelText('Notify the customer')).toBeNull();
+    // And the library is never even asked for: an option that could only be
+    // refused is not worth a request.
+    expect(handles.calls.some((c) => c.path === '/settings/ticket-email-templates')).toBe(false);
+  });
+
+  it('hides the picker when the workspace has authored none', async () => {
+    renderPaneWithTemplates(makeDetail(REACHABLE), []);
+    await screen.findByLabelText('Status');
+    expect(screen.queryByLabelText('Notify the customer')).toBeNull();
+  });
+});

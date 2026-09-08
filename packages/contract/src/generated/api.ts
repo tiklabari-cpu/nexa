@@ -1440,6 +1440,20 @@ export interface paths {
      *
      *     Solving a ticket does not delete it: `solved` and `closed` stay readable
      *     in the `solved` view.
+     *
+     *     `email_template_id` tells the customer what happened, in the workspace's
+     *     own words (FR-MOD-08.7.5). It names one of the templates
+     *     `/settings/ticket-email-templates` holds; its `{{ placeholders }}` are
+     *     filled from this ticket and the message is mailed to the customer once the
+     *     change is committed.
+     *
+     *     It is only accepted alongside a `status` that actually changes, because a
+     *     template may print `{{ticket.status}}` — a notice about a transition that
+     *     did not happen would state something untrue. It is refused, rather than
+     *     quietly skipped, when the template is disabled, when it holds a
+     *     placeholder the product cannot fill, or when the ticket has no customer
+     *     address to write to: the whole request fails and the status stays put, so
+     *     an agent is never told a customer was notified when nobody was.
      */
     patch: operations['updateTicket'];
     trace?: never;
@@ -13962,6 +13976,8 @@ export interface operations {
           assignee_id?: string | null;
           /** Format: int64 */
           group_id?: number | null;
+          /** Format: uuid */
+          email_template_id?: string;
         };
       };
     };

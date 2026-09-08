@@ -308,6 +308,12 @@ export const inbox: Messages = {
   'inbox.ticket.saveButton': 'Kaydet',
   'inbox.ticket.statusLabel': 'Durum',
   'inbox.ticket.priorityLabel': 'Öncelik',
+  'inbox.ticket.notice.label': 'Müşteriyi bilgilendir',
+  'inbox.ticket.notice.none': 'E-posta gönderme',
+  'inbox.ticket.notice.hint':
+    'Durumu değiştirdiğinizde müşteriye e-posta gitmesi için bir şablon seçin.',
+  'inbox.ticket.notice.hintSelected':
+    'Sonraki durum değişikliği {email} adresine e-posta gönderir.',
   'inbox.ticket.updateError': 'Bu değişiklik kaydedilemedi.',
 
   // Tickets grid

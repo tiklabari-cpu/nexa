@@ -6,9 +6,12 @@
 # variable the product cannot fill, or a malformed placeholder, is rejected
 # rather than stored (KK "Geçersiz değişken/format engeli").
 #
-# Managed under /settings alongside ticket rules and the tag library, on the
-# tenant-wide ticket scopes: reads take `tickets--all:ro`, writes
+# Managed under /settings alongside ticket rules and the tag library. Writes take
 # `tickets--all:rw` — configuring the mail every ticket can send is an admin act.
+# The list is wider (`tickets--access:ro` also passes) because using a template
+# is not curating one: an agent picks one when they change a ticket's status
+# (`PATCH /tickets/{ticketId}`, `email_template_id`), and that role holds no
+# tenant-wide ticket scope.
 
 ticketEmailTemplates:
   get:

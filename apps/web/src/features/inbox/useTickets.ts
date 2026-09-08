@@ -80,9 +80,43 @@ export function useUpdateTicket(ticketId: string | null) {
   const api = useApiClient();
   const client = useQueryClient();
   return useMutation({
-    mutationFn: (patch: { status?: TicketStatus; subject?: string; priority?: number }) =>
-      api.patch<TicketDetail>(`/tickets/${ticketId}`, patch),
+    mutationFn: (patch: {
+      status?: TicketStatus;
+      subject?: string;
+      priority?: number;
+      /** Mail the customer a branded notice about this change (FR-MOD-08.7.5). */
+      email_template_id?: string;
+    }) => api.patch<TicketDetail>(`/tickets/${ticketId}`, patch),
     onSuccess: (data) => settle(client, data),
+  });
+}
+
+/** Just enough of a template for the pane's picker — never the body it will send. */
+export interface TicketEmailTemplateOption {
+  id: string;
+  name: string;
+  enabled: boolean;
+}
+
+/**
+ * The templates a status change may notify the customer with (FR-MOD-08.7.5).
+ *
+ * Read from the settings endpoint an admin authors through — one library, not a
+ * second listing that could drift from it. `retry: false` because the one
+ * failure worth expecting is a 403 from a narrowed token, and retrying a
+ * refusal three times only delays the pane deciding it has no picker to show.
+ * A failure is *not* surfaced as an error: the notice is an option on top of
+ * changing a status, and a workspace with no templates and a workspace whose
+ * token cannot read them should both simply get the plain status control.
+ */
+export function useTicketEmailTemplates(enabled: boolean) {
+  const api = useApiClient();
+  return useQuery({
+    queryKey: ['ticket-email-templates'],
+    queryFn: () =>
+      api.get<{ items: TicketEmailTemplateOption[] }>('/settings/ticket-email-templates'),
+    enabled,
+    retry: false,
   });
 }
 

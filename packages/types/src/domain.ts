@@ -69,6 +69,45 @@ export const TICKET_PRIORITY_MIN = -100;
 export const TICKET_PRIORITY_MAX = 100;
 export const TICKET_PRIORITY_DEFAULT = 0;
 
+export interface TicketPriorityBand {
+  value: number;
+  /** A stable code word, not display text — the console translates it. */
+  label: 'Urgent' | 'High' | 'Normal' | 'Low';
+}
+
+/**
+ * The named levels the signed priority collapses to, highest first.
+ *
+ * Here rather than in the console because two surfaces have to call the same
+ * number by the same name: the inbox renders a priority as a level, and a ticket
+ * e-mail template may print `{{ticket.priority}}` to a customer. A raw `-50` in
+ * an inbox is confusing; a raw `-50` in somebody's mail is meaningless. Two
+ * tables would let the workspace's screen and the workspace's mail disagree
+ * about what a ticket's urgency is called.
+ */
+export const TICKET_PRIORITY_BANDS: readonly TicketPriorityBand[] = [
+  { value: 100, label: 'Urgent' },
+  { value: 50, label: 'High' },
+  { value: TICKET_PRIORITY_DEFAULT, label: 'Normal' },
+  { value: -50, label: 'Low' },
+];
+
+/**
+ * Snap an arbitrary stored priority to the nearest named band. On a tie the more
+ * urgent one wins — a value halfway between High and Normal reads as the one
+ * that gets attention sooner, which is the safer default to surface.
+ */
+export function nearestTicketPriorityBand(value: number): TicketPriorityBand {
+  return TICKET_PRIORITY_BANDS.reduce((best, band) => {
+    const distance = Math.abs(band.value - value);
+    const bestDistance = Math.abs(best.value - value);
+    if (distance < bestDistance || (distance === bestDistance && band.value > best.value)) {
+      return band;
+    }
+    return best;
+  });
+}
+
 /**
  * The columns `GET /tickets` can order the *whole* collection by.
  *

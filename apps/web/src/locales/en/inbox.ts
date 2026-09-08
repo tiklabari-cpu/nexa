@@ -326,6 +326,10 @@ export const inbox: Messages = {
   'inbox.ticket.saveButton': 'Save',
   'inbox.ticket.statusLabel': 'Status',
   'inbox.ticket.priorityLabel': 'Priority',
+  'inbox.ticket.notice.label': 'Notify the customer',
+  'inbox.ticket.notice.none': 'Do not send an e-mail',
+  'inbox.ticket.notice.hint': 'Pick a template to e-mail the customer when you change the status.',
+  'inbox.ticket.notice.hintSelected': 'The next status change e-mails {email}.',
   'inbox.ticket.updateError': 'Could not save that change.',
 
   // Tickets grid

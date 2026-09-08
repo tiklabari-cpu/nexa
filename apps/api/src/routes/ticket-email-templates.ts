@@ -53,9 +53,18 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 export default async function ticketEmailTemplateRoutes(app: FastifyInstance): Promise<void> {
   const templates = new TicketEmailTemplateService();
 
+  // Reading the library is wider than curating it, and deliberately so: since
+  // tm 227 an ordinary agent picks a template when they change a ticket's
+  // status, and `DEFAULT_AGENT_SCOPES` carries `tickets--access:rw` and nothing
+  // tenant-wide. Gated on `tickets--all:ro` this list came back 403 for exactly
+  // the role that sends the mail, and an empty picker looks the same as a
+  // workspace with no templates — the failure `canned_responses--groups:ro` was
+  // added to fix for the `#` composer, which is the precedent followed here.
+  // Authoring stays `tickets--all:rw` below: using a template is an agent's job,
+  // deciding what every ticket may say is an admin's.
   app.get(
     '/settings/ticket-email-templates',
-    { config: { scopes: ['tickets--all:ro', 'tickets--all:rw'] } },
+    { config: { scopes: ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'] } },
     async (request, reply) => {
       const tenant = request.tenant();
       const result = await request.withTenant((tx) => templates.list(tx, tenant));

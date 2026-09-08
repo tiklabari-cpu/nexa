@@ -134,3 +134,33 @@ export function renderTemplate(text: string, context: TemplateContext): string {
     return context[name as TemplateVariable] ?? '';
   });
 }
+
+/**
+ * The variables a template's text actually names, in reading order, without
+ * repeats — the *names*, never the values they will be filled with.
+ *
+ * It exists for the audit trail. Sending a templated ticket e-mail is worth a
+ * record, but the rendered body is customer data and must not be copied into
+ * one (FR-MOD-08.3 · M-CO-a's rule: field names, not values). This answers
+ * "which fields did that message draw on" from the template alone, so the entry
+ * can be specific without carrying anything about the person it went to.
+ *
+ * Derived from the same `PLACEHOLDER` regex the validator and the renderer use,
+ * rather than by searching the text for each catalogue entry: a substring search
+ * would count `{{ticket.identifier}}` as a use of `ticket.id`.
+ */
+export function templateVariablesUsed(parts: {
+  subject: string;
+  body: string;
+}): TemplateVariable[] {
+  const seen = new Set<TemplateVariable>();
+  for (const text of [parts.subject, parts.body]) {
+    PLACEHOLDER.lastIndex = 0;
+    let match: RegExpExecArray | null;
+    while ((match = PLACEHOLDER.exec(text)) !== null) {
+      const name = (match[1] ?? '').trim();
+      if (KNOWN.has(name)) seen.add(name as TemplateVariable);
+    }
+  }
+  return [...seen];
+}

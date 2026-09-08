@@ -21,6 +21,11 @@ import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
+import { TicketEmailTemplateService } from '../services/tickets/ticket-email-template-service.js';
+import type { RenderedTicketEmail } from '../services/tickets/ticket-email.js';
+import type { Mailer } from '../services/mail/mailer.js';
+import { selfAccountId } from '../services/auth/principal.js';
+import { writeAuditEntry } from '../services/audit/audit-log.js';
 
 const READ_SCOPES = ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'];
 const WRITE_SCOPES = ['tickets--all:rw', 'tickets--access:rw'];
@@ -64,8 +69,22 @@ const updateBody = z
     priority: z.number().int().min(TICKET_PRIORITY_MIN).max(TICKET_PRIORITY_MAX).optional(),
     assignee_id: z.string().uuid().nullable().optional(),
     group_id: z.number().int().positive().nullable().optional(),
+    /**
+     * Tell the customer, in the workspace's own words (FR-MOD-08.7.5). Names a
+     * template from `/settings/ticket-email-templates`; its placeholders are
+     * filled from this ticket and the message goes out once the change commits.
+     */
+    email_template_id: z.string().uuid().optional(),
   })
-  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required')
+  // A notice is *about* a transition, and a template may print `{{ticket.status}}`
+  // — so a template with no status alongside it would mail a customer a sentence
+  // about a change that did not happen. Refused at the edge, where the shape of
+  // the request is judged, rather than deep in the send path.
+  .refine(
+    (body) => body.email_template_id === undefined || body.status !== undefined,
+    'email_template_id: a template notice needs a status to be about',
+  );
 
 const mergeBody = z.object({ into: z.string().min(1).max(12) });
 const followerBody = z.object({ account_id: z.string().uuid() });
@@ -94,13 +113,22 @@ export default async function ticketRoutes(
   app: FastifyInstance,
   {
     automations,
+    mailer,
   }: {
     /** Fans a committed ticket creation out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
+    /**
+     * Delivers the templated customer notice a status change can carry
+     * (FR-MOD-08.7.5). Optional like `automations`: absent, the endpoint still
+     * refuses an unusable template — the validation is the requirement, the
+     * delivery is the effect.
+     */
+    mailer?: Mailer;
   } = {},
 ): Promise<void> {
   const tickets = new TicketService();
   const customFields = new CustomFieldService();
+  const templates = new TicketEmailTemplateService();
 
   app.get('/tickets', { config: { scopes: READ_SCOPES } }, async (request, reply) => {
     const query = parse(listQuery, request.query);
@@ -176,16 +204,84 @@ export default async function ticketRoutes(
       const body = parse(updateBody, request.body);
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
+      const audit = request.auditContext();
+      const templateId = body.email_template_id;
 
-      const ticket = await request.withTenant((tx) =>
-        tickets.update(tx, tenant, principal, request.auditContext(), ticketId, {
+      const { ticket, notice } = await request.withTenant(async (tx) => {
+        // Everything the notice needs is settled *before* the transition, and
+        // inside the same transaction: an unusable template throws here and the
+        // status never moves. The alternative — update, then discover the
+        // template is broken — would leave an agent looking at a solved ticket
+        // believing a customer had been told.
+        let mail: RenderedTicketEmail | null = null;
+        if (templateId !== undefined) {
+          // `get` is the visibility gate: a ticket this caller cannot see is a
+          // 404 here, so a template is never rendered against one they could
+          // not otherwise read.
+          const before = await tickets.get(tx, principal, ticketId);
+          // The status is what the notice asserts. Sending one when nothing
+          // moved would be the product generating a false statement — and it
+          // is also what keeps this endpoint from being a mailer: at most one
+          // notice per real transition. Same rule the audit entry and the
+          // resolution clock below already follow.
+          if (before.status === body.status) {
+            throw ApiError.validation(
+              `email_template_id: this ticket is already ${before.status}; nothing to notify about.`,
+            );
+          }
+          mail = await templates.prepareTicketEmail(tx, tenant, {
+            templateId,
+            ticket: before,
+            // `body.status` is present whenever a template is — `updateBody`
+            // refuses the pair otherwise, which is what makes this narrowing safe.
+            nextStatus: body.status ?? before.status,
+            agentAccountId: selfAccountId(principal),
+          });
+        }
+
+        const updated = await tickets.update(tx, tenant, principal, audit, ticketId, {
           ...(body.subject !== undefined ? { subject: body.subject } : {}),
           ...(body.status !== undefined ? { status: body.status } : {}),
           ...(body.priority !== undefined ? { priority: body.priority } : {}),
           ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
           ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
-        }),
-      );
+        });
+
+        if (mail) {
+          // The template and the *names* of the variables it drew on — never a
+          // value, never the rendered text. The message is the customer's data;
+          // the trail records that it was sent, not what it said.
+          await writeAuditEntry(tx, audit, {
+            action: 'ticket.email_sent',
+            target: `ticket:${ticketId}`,
+            metadata: { template_id: mail.templateId, variables: mail.variables },
+          });
+        }
+
+        return { ticket: updated, notice: mail };
+      });
+
+      // After the commit, never inside it: a mail must not be able to hold a
+      // transaction open or be undone by a rollback. A delivery failure is
+      // logged and not raised — the transition is already durable, and turning
+      // a committed change into a 500 would tell the agent it did not happen.
+      if (notice && mailer) {
+        try {
+          await mailer.send({
+            to: notice.to,
+            kind: 'ticket_notice',
+            subject: notice.subject,
+            body: notice.body,
+          });
+        } catch (error) {
+          // The template id, not the message: this line goes to the same log
+          // the body is deliberately kept out of.
+          request.log.error(
+            { err: error, template_id: notice.templateId, ticket_id: ticketId },
+            'ticket notice delivery failed',
+          );
+        }
+      }
 
       return reply.send(ticket);
     },

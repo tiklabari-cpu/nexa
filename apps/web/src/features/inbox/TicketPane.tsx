@@ -28,6 +28,7 @@ import {
   useRemoveFollower,
   useSetTicketCustomFields,
   useTicket,
+  useTicketEmailTemplates,
   useUnmergeTicket,
   useUpdateTicket,
 } from './useTickets.js';
@@ -412,6 +413,16 @@ export function TicketDetailPane({
   const update = useUpdateTicket(ticketId);
   const unmerge = useUnmergeTicket();
   const [subject, setSubject] = useState<string | null>(null);
+  // Which template the *next* status change should notify the customer with, or
+  // '' for none. Deliberately not remembered across tickets: a notice is about
+  // one transition, and a picker that stayed set would mail the next customer
+  // whatever the last one got.
+  const [noticeTemplateId, setNoticeTemplateId] = useState('');
+  const customerEmail = ticket.data?.customer_email ?? null;
+  // Only asked for when there is somebody to write to. A picker offering a
+  // notice that the server can only refuse with "no customer e-mail address" is
+  // a control that exists to fail.
+  const templates = useTicketEmailTemplates(ticketId !== null && customerEmail !== null);
   const t = useTranslate();
 
   if (!ticketId || !ticket.data) {
@@ -438,6 +449,11 @@ export function TicketDetailPane({
   // agent try a change that can only bounce back.
   const merged = data.merged_into_id !== null;
   const priorityValue = String(nearestPriority(data.priority).value);
+  // A template the workspace has switched off is one it decided not to send;
+  // the server refuses it, so it is not offered. Same rule as `merged` above:
+  // the controls follow the server's answer rather than letting an agent try a
+  // change that can only bounce back.
+  const enabledTemplates = (templates.data?.items ?? []).filter((template) => template.enabled);
 
   return (
     <main className="flex min-w-0 flex-1 flex-col bg-canvas">
@@ -527,7 +543,17 @@ export function TicketDetailPane({
             id="ticket-status"
             value={data.status}
             disabled={merged || update.isPending}
-            onChange={(event) => update.mutate({ status: event.target.value as TicketStatus })}
+            onChange={(event) => {
+              update.mutate({
+                status: event.target.value as TicketStatus,
+                // Only when one is picked. An absent key leaves the endpoint's
+                // behaviour exactly as it was before templates had a consumer.
+                ...(noticeTemplateId ? { email_template_id: noticeTemplateId } : {}),
+              });
+              // One transition, one notice: the picker resets so the next status
+              // change is a deliberate choice rather than a repeat of this one.
+              setNoticeTemplateId('');
+            }}
             className="w-full max-w-xs rounded-md border border-border bg-inset px-2 py-1.5 text-sm disabled:opacity-40"
           >
             {STATUSES.map((status) => (
@@ -536,6 +562,41 @@ export function TicketDetailPane({
               </option>
             ))}
           </select>
+
+          {/* The consuming half of FR-MOD-08.7.5: pick a template and the next
+              status change mails the customer that branded text, placeholders
+              filled from this ticket. Absent entirely when the workspace has
+              authored none, when the token cannot read the library, or when
+              there is no address — an option nobody can take is noise. */}
+          {!merged && enabledTemplates.length > 0 && (
+            <>
+              <label
+                htmlFor="ticket-notice-template"
+                className="mb-1.5 mt-6 block text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+              >
+                {t('inbox.ticket.notice.label')}
+              </label>
+              <select
+                id="ticket-notice-template"
+                value={noticeTemplateId}
+                disabled={update.isPending}
+                onChange={(event) => setNoticeTemplateId(event.target.value)}
+                className="w-full max-w-xs rounded-md border border-border bg-inset px-2 py-1.5 text-sm disabled:opacity-40"
+              >
+                <option value="">{t('inbox.ticket.notice.none')}</option>
+                {enabledTemplates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1.5 text-xs text-content-tertiary">
+                {noticeTemplateId
+                  ? t('inbox.ticket.notice.hintSelected', { email: data.customer_email ?? '' })
+                  : t('inbox.ticket.notice.hint')}
+              </p>
+            </>
+          )}
 
           <label
             htmlFor="ticket-priority"

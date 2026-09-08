@@ -352,3 +352,114 @@ export async function visitorSends(page: Page, text: string): Promise<void> {
   await frame.getByRole('button', { name: 'Send' }).click();
   await expect(frame.getByRole('log', { name: 'Conversation' })).toContainText(text);
 }
+
+/**
+ * One row of `GET /chats` — the fields the routing fixtures below read.
+ *
+ * `queue_position` matters as much as `assignee_id` here: a conversation with
+ * a position is waiting in the *human* queue and is drainable, while one with
+ * neither is being handled by the AI agent and never is.
+ */
+export interface ChatSummary {
+  id: string;
+  active: boolean;
+  assignee_id: string | null;
+  queue_position: number | null;
+  last_event: { text?: string } | null;
+}
+
+/** Every conversation in the workspace — the list endpoint caps a page at 100. */
+export async function allChats(
+  request: APIRequestContext,
+  auth: Record<string, string>,
+): Promise<ChatSummary[]> {
+  const collected: ChatSummary[] = [];
+  let pageId: string | undefined;
+
+  // Bounded rather than `while (true)`: a cursor the server never stops handing
+  // back would otherwise hang the spec instead of failing it.
+  for (let page = 0; page < 10; page += 1) {
+    const query = `view=all&limit=100${pageId ? `&page_id=${encodeURIComponent(pageId)}` : ''}`;
+    const res = await request.get(`${API_BASE}/chats?${query}`, { headers: auth });
+    expect(res.ok(), `list chats failed: ${res.status()} ${await res.text()}`).toBe(true);
+    const body = (await res.json()) as { items: ChatSummary[]; next_page_id?: string };
+    collected.push(...body.items);
+    if (!body.next_page_id) break;
+    pageId = body.next_page_id;
+  }
+
+  return collected;
+}
+
+/** Archive one conversation through the same endpoint an agent's button calls. */
+async function archiveChat(
+  request: APIRequestContext,
+  auth: Record<string, string>,
+  chatId: string,
+): Promise<void> {
+  const archived = await request.post(`${API_BASE}/chats/${chatId}/deactivate`, { headers: auth });
+  expect(
+    archived.ok(),
+    `could not archive ${chatId} to make room: ${archived.status()} ${await archived.text()}`,
+  ).toBe(true);
+}
+
+/**
+ * Leave one named agent a slot the router can actually route into (tm 147, tm 233).
+ *
+ * Two specs need a *specific* agent to be assignable — `skills-routing.spec.ts`
+ * and `team.spec.ts` — and it is the one thing the seed cannot promise them:
+ * the router refuses an agent whose active threads have reached
+ * `concurrent_chats_limit` (`routing-service.ts` — `HAVING COUNT(t.id) <
+ * m.concurrent_chats_limit`), and this shared workspace collects conversations
+ * all run long.
+ *
+ * **Archiving alone is not enough, and that is why this lives here.** Closing a
+ * conversation drains the human queue in the same transaction
+ * (`chat-service.ts` — `#closeConversation` → `routing.drainQueue`, "so the slot
+ * this frees is filled now rather than on the next arrival"). By the time these
+ * two files run in a full-suite pass, every seeded agent is at capacity and
+ * conversations are genuinely waiting, so each archive handed the slot it had
+ * just freed straight to the next chat in line and the agent came back full.
+ * The two specs then read `Received: null` — a routing defect that does not
+ * exist. Measured on the GL-13 and GL-14 full runs (tm 208 · tm 209): the same
+ * two tests failed both times and were green both times when run alone, where
+ * the queue is empty and the drain has nothing to hand over.
+ *
+ * So the queue is emptied *first*, and only then is the agent trimmed. Both
+ * steps go through the same `deactivate` an agent clicks when they are
+ * finished; nothing is deleted, the transcripts stay readable, and nothing
+ * after these files has a claim on conversations they did not open — they are
+ * leftovers, not fixtures.
+ *
+ * Costs nothing when there is nothing to do: an agent already under their limit
+ * returns before any write, which is every solo run of either spec.
+ */
+export async function freeARoutingSlot(
+  request: APIRequestContext,
+  auth: Record<string, string>,
+  agentId: string,
+  limit: number,
+): Promise<void> {
+  const heldBy = (chats: ChatSummary[]): ChatSummary[] =>
+    chats.filter((chat) => chat.active && chat.assignee_id === agentId);
+
+  if (heldBy(await allChats(request, auth)).length < limit) return;
+
+  // The waiting room, oldest position first. Draining is what makes closing a
+  // chat refill the agent it just freed, so it has to be empty before the trim
+  // below — not after, and not at the same time.
+  const queued = (await allChats(request, auth))
+    .filter((chat) => chat.active && chat.queue_position !== null)
+    .sort((a, b) => (a.queue_position ?? 0) - (b.queue_position ?? 0));
+  for (const chat of queued) await archiveChat(request, auth, chat.id);
+
+  // Re-read rather than reuse the first list: emptying the queue above can move
+  // waiting conversations onto agents who still had room, this one included.
+  const held = heldBy(await allChats(request, auth));
+  const surplus = held.length - (limit - 1);
+  if (surplus <= 0) return;
+
+  // `view=all` sorts newest first, so the tail is the oldest.
+  for (const chat of held.slice(-surplus)) await archiveChat(request, auth, chat.id);
+}

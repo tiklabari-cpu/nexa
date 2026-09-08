@@ -45,6 +45,25 @@ async function ecommerceBlock(request: APIRequestContext, token: string): Promis
   return ((await response.json()) as { ecommerce: EcommerceBlock }).ecommerce;
 }
 
+/**
+ * The conversation whose most recent message carries `needle`, straight from
+ * the list API — a committed row rather than a bubble on a screen.
+ */
+async function chatByText(
+  request: APIRequestContext,
+  token: string,
+  needle: string,
+): Promise<{ id: string } | undefined> {
+  const res = await request.get(`${API_BASE}/chats?view=all&limit=50`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok()) return undefined;
+  const { items } = (await res.json()) as {
+    items: Array<{ id: string; last_event: { text?: string } | null }>;
+  };
+  return items.find((chat) => chat.last_event?.text?.includes(needle));
+}
+
 /** The Goals funnel's converted stage and the Overview's counter (FR-MOD-13.3). */
 async function goalCounters(
   request: APIRequestContext,
@@ -520,6 +539,27 @@ test.describe('reports — tracked sales (FR-MOD-13.5)', () => {
       // recorded but not counted as attributed revenue.
       await openWidget(visitor, organizationId, { host: site.origin });
       await visitorSends(visitor, `Adding this to my basket — ${stamp}`);
+
+      // Wait for the conversation to be a *server* fact before reporting the
+      // order against it.
+      //
+      // `visitorSends` returns when the message is on screen, and the widget
+      // paints an optimistic bubble before the round trip settles (`socket.ts`
+      // — `pending-…` ids). Firing `trackSale` on that signal put the two
+      // writes in flight together, and attribution refuses to credit a
+      // conversation that started after the sale (`attribution.ts` — "nothing
+      // after the sale"), so the order was recorded unattributed and
+      // `tracked_sales` — which counts only attributed orders
+      // (`report-csv.ts` — `trackedSalesSummary`) — never moved. Measured on a
+      // full-suite run: chat row at 22:36:11.468, thread at .477, sale at .493,
+      // and the poll below sat on 3 for its whole twenty seconds. A real
+      // checkout is minutes after a chat, never inside its own request.
+      await expect
+        .poll(async () => (await chatByText(request, token, stamp))?.id, {
+          timeout: 20_000,
+          message: 'the visitor’s conversation never reached the API',
+        })
+        .toBeTruthy();
 
       // The shop's own checkout code, called exactly as the setup snippet
       // documents it: a global on the host page, not anything inside the

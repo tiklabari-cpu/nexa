@@ -101,15 +101,28 @@ export function TemplateGallery({
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<GalleryCategoryFilter>('all');
 
+  // A fresh browse every time the gallery opens — a filter left over from a
+  // previous visit would otherwise silently hide templates the admin expects
+  // to see.
+  //
+  // Keyed on `open` alone, and deliberately *not* on `onClose`. The caller
+  // passes an inline arrow (`PlaybookPage.tsx` — `onClose={() => setGalleryOpen(false)}`),
+  // so its identity changes on every parent render; with it in the dependency
+  // list this reset ran again on each of them and wiped a search the admin had
+  // just typed — whenever a background refetch happened to settle a moment
+  // after the first keystroke. `TemplateGallery.test.tsx` pins it.
   useEffect(() => {
     if (!open) return;
-    // A fresh browse every time the gallery opens — a filter left over from a
-    // previous visit would otherwise silently hide templates the admin expects
-    // to see.
     setSearch('');
     setQuery('');
     setCategory('all');
     closeRef.current?.focus();
+  }, [open]);
+
+  // Escape closes. Its own effect, because this one *does* need the current
+  // `onClose` and so must re-subscribe when the caller hands over a new one.
+  useEffect(() => {
+    if (!open) return;
     const onKey = (event: KeyboardEvent): void => {
       if (event.key === 'Escape') onClose();
     };

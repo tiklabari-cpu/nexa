@@ -25,6 +25,9 @@ function overview(overrides: Partial<ReportsOverview> = {}): ReportsOverview {
       satisfaction_score: 0.7,
       achieved_goals: 4,
       sla_breaches: 1,
+      automated_per_hour: 1,
+      automated_avg_duration_seconds: 280,
+      total_duration_seconds: 24000,
     },
     totals: {
       chats: 50,

@@ -207,6 +207,9 @@ const EMPTY_REPORTS_OVERVIEW = {
     satisfaction_score: null,
     achieved_goals: 0,
     sla_breaches: 0,
+    automated_per_hour: 0,
+    automated_avg_duration_seconds: null,
+    total_duration_seconds: 0,
   },
   totals: {
     chats: 0,

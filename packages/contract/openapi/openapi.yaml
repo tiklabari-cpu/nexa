@@ -4450,6 +4450,8 @@ components:
                   automated,
                   achieved_goals,
                   sla_breaches,
+                  automated_per_hour,
+                  total_duration_seconds,
                 ]
               properties:
                 chats: { type: integer }
@@ -4471,6 +4473,18 @@ components:
                 sla_breaches:
                   type: integer
                   description: SLA misses detected in the baseline window (FR-MOD-11.5).
+                automated_per_hour:
+                  type: number
+                  description: |
+                    Automated resolutions per hour in the baseline window
+                    (FR-MOD-07.3.3) — the Chats section's vs-previous badge.
+                automated_avg_duration_seconds:
+                  type: integer
+                  nullable: true
+                  description: Average open-to-close time of automated chats in the baseline window. Null when none closed automated.
+                total_duration_seconds:
+                  type: integer
+                  description: Summed open-to-close time of every chat closed in the baseline window.
         totals:
           type: object
           required:

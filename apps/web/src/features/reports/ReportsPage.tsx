@@ -61,6 +61,9 @@ interface Period {
   avg_duration_seconds: number | null;
   satisfaction_score: number | null;
   sla_breaches: number;
+  automated_per_hour: number;
+  automated_avg_duration_seconds: number | null;
+  total_duration_seconds: number;
 }
 
 interface ReportsOverview {
@@ -893,16 +896,34 @@ function OverviewTab(props: TabProps): ReactElement {
           <Kpi
             label={t('reports.overview.kpi.automatedPerHour')}
             value={formatCount(data.chats.automated_per_hour)}
+            delta={
+              <CountDelta
+                current={data.chats.automated_per_hour}
+                previous={prev.automated_per_hour}
+              />
+            }
             hint={t('reports.overview.kpi.automatedPerHourHint')}
           />
           <Kpi
             label={t('reports.common.kpi.automatedChatDuration')}
             value={formatDuration(data.chats.automated_avg_duration_seconds)}
+            delta={
+              <DurationDelta
+                current={data.chats.automated_avg_duration_seconds}
+                previous={prev.automated_avg_duration_seconds}
+              />
+            }
             hint={t('reports.common.hint.averageOpenToClose')}
           />
           <Kpi
             label={t('reports.overview.kpi.totalDuration')}
             value={formatDuration(data.chats.total_duration_seconds)}
+            delta={
+              <DurationDelta
+                current={data.chats.total_duration_seconds}
+                previous={prev.total_duration_seconds}
+              />
+            }
             hint={t('reports.overview.kpi.totalDurationHint')}
           />
         </KpiGrid>

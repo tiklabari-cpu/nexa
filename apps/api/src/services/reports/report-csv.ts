@@ -1506,6 +1506,8 @@ async function groupCsvTable(
       const automated = Number(totals.automated);
       const assisted = Number(totals.assisted);
       const manual = Number(totals.manual);
+      // Same guard the JSON report's `chats.automated_per_hour` applies.
+      const windowHours = (to.getTime() - from.getTime()) / 3_600_000;
       return {
         headers: ['metric', 'value'],
         rows: [
@@ -1521,6 +1523,12 @@ async function groupCsvTable(
           ['avg_duration_seconds', roundOrNull(totals.avg_duration_seconds)],
           ['satisfaction_score', satisfactionScore(satisfaction)],
           ['satisfaction_responses', satisfaction.good + satisfaction.bad],
+          // The Chats section's three operational cards (FR-MOD-07.3.3) — the
+          // same figures `chats.*` in the JSON report carries, so the download
+          // never disagrees with what the tab shows.
+          ['automated_per_hour', windowHours > 0 ? round(automated / windowHours) : 0],
+          ['automated_avg_duration_seconds', roundOrNull(totals.avg_automated_duration_seconds)],
+          ['total_duration_seconds', Math.round(Number(totals.total_duration_seconds ?? 0))],
         ],
       };
     }
@@ -1756,6 +1764,12 @@ export async function overviewBenchmark(
   const achievedGoals = await achievedGoalCount(tx, licenseId, window.from, window.to);
   const slaBreaches = await slaBreachCount(tx, licenseId, window.from, window.to);
   const chats = Number(totals.total_chats);
+  const automated = Number(totals.automated);
+  // Same guard `buildOverviewReport` applies to the requested window's own
+  // figure: a zero-length baseline (a range too short to have a predecessor)
+  // divides by zero otherwise, and a rate is not owed a decimal point either
+  // way — see FR-MOD-07.3.3.
+  const windowHours = (window.to.getTime() - window.from.getTime()) / 3_600_000;
 
   return {
     chats,
@@ -1764,12 +1778,18 @@ export async function overviewBenchmark(
     closed: Number(totals.closed_chats),
     manual: Number(totals.manual),
     assisted: Number(totals.assisted),
-    automated: Number(totals.automated),
+    automated,
     avg_first_response_seconds: roundOrNull(totals.avg_first_response_seconds),
     avg_duration_seconds: roundOrNull(totals.avg_duration_seconds),
     satisfaction_score: satisfactionScore(satisfaction),
     achieved_goals: achievedGoals,
     sla_breaches: slaBreaches,
+    // The Chats section's three operational cards (FR-MOD-07.3.3), measured
+    // the same way `buildOverviewReport` measures the requested window — so a
+    // "vs previous" badge on any of the three compares like with like.
+    automated_per_hour: windowHours > 0 ? round(automated / windowHours) : 0,
+    automated_avg_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
+    total_duration_seconds: Math.round(Number(totals.total_duration_seconds ?? 0)),
   };
 }
 

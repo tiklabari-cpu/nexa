@@ -10133,6 +10133,15 @@ export interface components {
         achieved_goals: number;
         /** @description SLA misses detected in the baseline window (FR-MOD-11.5). */
         sla_breaches: number;
+        /**
+         * @description Automated resolutions per hour in the baseline window
+         *     (FR-MOD-07.3.3) — the Chats section's vs-previous badge.
+         */
+        automated_per_hour: number;
+        /** @description Average open-to-close time of automated chats in the baseline window. Null when none closed automated. */
+        automated_avg_duration_seconds?: number | null;
+        /** @description Summed open-to-close time of every chat closed in the baseline window. */
+        total_duration_seconds: number;
       };
       totals: {
         chats: number;

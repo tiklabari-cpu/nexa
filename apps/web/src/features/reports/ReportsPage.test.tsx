@@ -57,6 +57,9 @@ const OVERVIEW = {
     avg_duration_seconds: null,
     satisfaction_score: null,
     sla_breaches: 0,
+    automated_per_hour: 0,
+    automated_avg_duration_seconds: null,
+    total_duration_seconds: 0,
   },
   totals: {
     chats: 0,
@@ -153,6 +156,9 @@ const RICH_OVERVIEW = {
     avg_duration_seconds: 550,
     satisfaction_score: 0.7,
     sla_breaches: 0,
+    automated_per_hour: 3,
+    automated_avg_duration_seconds: 74,
+    total_duration_seconds: 32_400,
   },
   totals: {
     chats: 240,
@@ -230,8 +236,13 @@ describe('ReportsPage — Overview KPI grid, real figures (07.1/07.3)', () => {
     expect(within(kpi('Automated')).getByText('50% of closed')).toBeInTheDocument();
 
     expect(within(kpi('Automated chats / hour')).getByText('5')).toBeInTheDocument();
+    expect(within(kpi('Automated chats / hour')).getByText(/↑ 2 vs previous/)).toBeInTheDocument();
     expect(within(kpi('Automated chat duration')).getByText('2m 14s')).toBeInTheDocument();
+    expect(
+      within(kpi('Automated chat duration')).getByText(/↑ 1m vs previous/),
+    ).toBeInTheDocument();
     expect(within(kpi('Total chat duration')).getByText('10h')).toBeInTheDocument();
+    expect(within(kpi('Total chat duration')).getByText(/↑ 1h vs previous/)).toBeInTheDocument();
 
     expect(within(kpi('First response')).getByText('1m 5s')).toBeInTheDocument();
     expect(within(kpi('First response')).getByText(/↓ 1m vs previous/)).toBeInTheDocument();

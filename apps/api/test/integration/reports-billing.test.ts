@@ -852,6 +852,41 @@ describe('reports and billing', () => {
       expect(report.chats).toHaveProperty('automated_avg_duration_seconds');
     });
 
+    it("carries the Chats-section figures on the benchmark window too, so the cards' vs-previous badge is not a phantom (FR-MOD-07.3.3)", async () => {
+      // One automated chat now, one backdated into the preceding equal-length
+      // window — proof `previous_period.chats` measures that window's own
+      // automated chats rather than mirroring the current window's numbers.
+      await conversation({ agentReplies: false });
+      const earlier = await conversation({ agentReplies: false });
+      await backdateChat(earlier, new Date(Date.now() - 15 * 86_400_000));
+
+      const to = new Date();
+      const from = new Date(to.getTime() - 10 * 86_400_000);
+      const report = (
+        await server.get(
+          `/reports/overview?from=${from.toISOString()}&to=${to.toISOString()}`,
+          auth,
+        )
+      ).json();
+
+      expect(report.chats.automated_per_hour).toBeGreaterThan(0);
+      expect(report.previous_period.automated_per_hour).toBeGreaterThan(0);
+      expect(report.previous_period.total_duration_seconds).toBeGreaterThan(0);
+      expect(report.previous_period).toHaveProperty('automated_avg_duration_seconds');
+    });
+
+    it('keeps the Chats-section benchmark finite on an empty baseline window — no NaN or Infinity (FR-MOD-07.3.3)', async () => {
+      // A fresh fixture has no chats in either window: the empty-window guard
+      // (`windowHours > 0 ? … : 0`) is the one line standing between this and
+      // a division by zero.
+      const report = (await server.get('/reports/overview', auth)).json();
+      expect(Number.isFinite(report.previous_period.automated_per_hour)).toBe(true);
+      expect(report.previous_period.automated_per_hour).toBe(0);
+      expect(report.previous_period.automated_avg_duration_seconds).toBeNull();
+      expect(Number.isFinite(report.previous_period.total_duration_seconds)).toBe(true);
+      expect(report.previous_period.total_duration_seconds).toBe(0);
+    });
+
     it('drops a goal reached before the window into the previous period, not the current one', async () => {
       await recordGoalAchievement(); // inside the current window (now)
       await recordGoalAchievement({ achievedAt: new Date(Date.now() - 15 * 86_400_000) }); // earlier
@@ -3116,6 +3151,13 @@ describe('reports and billing', () => {
         expect(rows).toContain('closed,1');
         const overview = (await server.get('/reports/overview', auth)).json();
         expect(rows).toContain(`chats,${overview.totals.chats}`);
+        // The Chats section's three cards (FR-MOD-07.3.3) — the same figures
+        // `chats.*` carries in the JSON report.
+        expect(rows).toContain(`automated_per_hour,${overview.chats.automated_per_hour}`);
+        expect(rows).toContain(
+          `automated_avg_duration_seconds,${overview.chats.automated_avg_duration_seconds}`,
+        );
+        expect(rows).toContain(`total_duration_seconds,${overview.chats.total_duration_seconds}`);
       });
 
       it('exports the AI Agent summary', async () => {

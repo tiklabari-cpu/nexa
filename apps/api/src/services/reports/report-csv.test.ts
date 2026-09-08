@@ -112,7 +112,9 @@ describe('buildGroupCsv — header + row shape (07.9-sched-d2)', () => {
   it("overview — a fixed metric,value table, independent of the window's data", async () => {
     const { headers, rows } = await csv('overview');
     expect(headers).toEqual(['metric', 'value']);
-    expect(rows).toHaveLength(12);
+    // 12 headline figures plus the Chats section's three cards (FR-MOD-07.3.3):
+    // automated_per_hour, automated_avg_duration_seconds, total_duration_seconds.
+    expect(rows).toHaveLength(15);
     for (const row of rows) expect(row).toHaveLength(2);
     expect(rows).toContainEqual(['chats', 1]);
     expect(rows).toContainEqual(['tickets', 1]);

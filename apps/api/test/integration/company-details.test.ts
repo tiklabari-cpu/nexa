@@ -1,13 +1,16 @@
 /**
- * Company details (FR-MOD-08.3 · M-CO-a).
+ * Company details (FR-MOD-08.3 · M-CO-a · FR-MOD-00.4).
  *
  * PRD §8.4 calls sector/address/timezone the billing/branding/report basis,
  * which is why `sector` is the interesting field here: a closed list, not
  * free text, enforced twice — the zod schema and `organizations_sector_check`
  * — and the database attack below proves the second half actually holds, not
- * just the first. Unlike most of `/settings/*` the row this reads and writes
- * always exists (`organizations` is created at signup), so there is no
- * "no row yet" default state to test — only the real one from signup.
+ * just the first. `company_size` (added tm 216) follows the identical shape
+ * for the identical reason, and is also where the onboarding wizard's
+ * "şirket büyüklüğü" step writes — one endpoint, not a second surface for
+ * one more company fact. Unlike most of `/settings/*` the row this reads and
+ * writes always exists (`organizations` is created at signup), so there is
+ * no "no row yet" default state to test — only the real one from signup.
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -115,10 +118,16 @@ describe('company details (FR-MOD-08.3)', () => {
   // Reading
   // =========================================================================
 
-  it('reads the signup name, null sector/address, and UTC for a fresh workspace', async () => {
+  it('reads the signup name, null sector/address/company_size, and UTC for a fresh workspace', async () => {
     const res = await server.get('/settings/company', auth(ownerToken));
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ name: 'Org A', sector: null, address: null, timezone: 'UTC' });
+    expect(res.json()).toEqual({
+      name: 'Org A',
+      sector: null,
+      address: null,
+      timezone: 'UTC',
+      company_size: null,
+    });
   });
 
   // =========================================================================
@@ -133,6 +142,7 @@ describe('company details (FR-MOD-08.3)', () => {
         sector: 'saas_technology',
         address: '1 Infinite Loop',
         timezone: 'Europe/Istanbul',
+        company_size: '51_200',
       },
       auth(ownerToken),
     );
@@ -143,17 +153,19 @@ describe('company details (FR-MOD-08.3)', () => {
       sector: 'saas_technology',
       address: '1 Infinite Loop',
       timezone: 'Europe/Istanbul',
+      company_size: '51_200',
     });
 
     const stored = await owner.organization.findUniqueOrThrow({
       where: { id: fx.a.organizationId },
-      select: { name: true, sector: true, address: true, timezone: true },
+      select: { name: true, sector: true, address: true, timezone: true, companySize: true },
     });
     expect(stored).toEqual({
       name: 'Acme Inc',
       sector: 'saas_technology',
       address: '1 Infinite Loop',
       timezone: 'Europe/Istanbul',
+      companySize: '51_200',
     });
   });
 
@@ -220,6 +232,47 @@ describe('company details (FR-MOD-08.3)', () => {
     expect(res.statusCode).toBe(400);
   });
 
+  // ==========================================================================
+  // Company size — the onboarding wizard's "şirket büyüklüğü" step writes
+  // through this same endpoint (FR-MOD-00.4).
+  // ==========================================================================
+
+  it('saves a company size, clears it with null, and refuses one outside the closed list (FR-MOD-00.4)', async () => {
+    const saved = await server.patch(
+      '/settings/company',
+      { company_size: '1000_plus' },
+      auth(ownerToken),
+    );
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json()).toMatchObject({ company_size: '1000_plus' });
+
+    const cleared = await server.patch(
+      '/settings/company',
+      { company_size: null },
+      auth(ownerToken),
+    );
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json()).toMatchObject({ company_size: null });
+
+    const rejected = await server.patch(
+      '/settings/company',
+      { company_size: 'gigantic' },
+      auth(ownerToken),
+    );
+    expect(rejected.statusCode).toBe(400);
+  });
+
+  it('refuses a company size outside the closed list in the database too, not only at the endpoint (FR-MOD-00.4)', async () => {
+    // Attacked as the table owner, which bypasses RLS and every
+    // application-level guard — the CHECK is what still stops it.
+    await expect(
+      owner.organization.update({
+        where: { id: fx.a.organizationId },
+        data: { companySize: 'gigantic' },
+      }),
+    ).rejects.toThrow(/organizations_company_size_check/);
+  });
+
   it('refuses a misspelled timezone', async () => {
     const res = await server.patch(
       '/settings/company',
@@ -255,7 +308,11 @@ describe('company details (FR-MOD-08.3)', () => {
   // =========================================================================
 
   it('never touches another workspace', async () => {
-    await server.patch('/settings/company', { sector: 'healthcare' }, auth(ownerToken));
+    await server.patch(
+      '/settings/company',
+      { sector: 'healthcare', company_size: '1000_plus' },
+      auth(ownerToken),
+    );
 
     const bToken = await grantToken(owner, {
       licenseId: fx.b.licenseId,
@@ -265,7 +322,7 @@ describe('company details (FR-MOD-08.3)', () => {
     });
     const bRes = await server.get('/settings/company', auth(bToken));
 
-    expect(bRes.json()).toMatchObject({ sector: null });
+    expect(bRes.json()).toMatchObject({ sector: null, company_size: null });
   });
 
   it('records the change in the audit trail, naming the fields', async () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { COMPANY_SECTORS, isCompanySector, isIanaTimeZone } from './company.js';
+import {
+  COMPANY_SECTORS,
+  COMPANY_SIZES,
+  isCompanySector,
+  isCompanySize,
+  isIanaTimeZone,
+} from './company.js';
 
 describe('company sector catalogue', () => {
   it('accepts every listed sector and rejects an arbitrary string', () => {
@@ -10,6 +16,18 @@ describe('company sector catalogue', () => {
     expect(isCompanySector('')).toBe(false);
     expect(isCompanySector(null)).toBe(false);
     expect(isCompanySector(undefined)).toBe(false);
+  });
+});
+
+describe('company size catalogue (FR-MOD-00.4)', () => {
+  it('accepts every listed size and rejects an arbitrary string', () => {
+    for (const size of COMPANY_SIZES) {
+      expect(isCompanySize(size)).toBe(true);
+    }
+    expect(isCompanySize('gigantic')).toBe(false);
+    expect(isCompanySize('')).toBe(false);
+    expect(isCompanySize(null)).toBe(false);
+    expect(isCompanySize(undefined)).toBe(false);
   });
 });
 

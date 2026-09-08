@@ -13,6 +13,7 @@ import { z } from 'zod';
 import {
   COMPANY_ADDRESS_MAX_LENGTH,
   COMPANY_SECTORS,
+  COMPANY_SIZES,
   DEFAULT_SALES_TRACKER_CONFIG,
   DEFAULT_WIDGET_APPEARANCE,
   EXPERTISE_NAME_MAX_LENGTH,
@@ -28,6 +29,7 @@ import {
 import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@nexa/types';
 import type {
   CompanySector,
+  CompanySize,
   Region,
   SandboxView,
   SsoAttributeMappingKey,
@@ -667,14 +669,17 @@ const updateTagBody = z
 const acceptBaaBody = z.object({ accepted: z.literal(true) });
 
 /**
- * Company details (FR-MOD-08.3 · M-CO-a).
+ * Company details (FR-MOD-08.3 · M-CO-a · FR-MOD-00.4).
  *
  * `sector` accepts `null` (clears it) alongside the closed `COMPANY_SECTORS`
  * list; anything else — free text, a value not in the list — is a 400 rather
  * than a report bucket nobody else's workspace uses. `timezone` has no `null`
  * form: the column is `NOT NULL DEFAULT 'UTC'`, so there is nothing to clear,
  * only replace, and `isIanaTimeZone` refuses a misspelled zone before it can
- * reach a screen or a report as a silent no-op.
+ * reach a screen or a report as a silent no-op. `company_size` follows
+ * `sector`'s own rule — closed list, `null` clears it — and is this same
+ * endpoint's field: the onboarding wizard's "şirket büyüklüğü" step writes
+ * through here rather than opening a second surface for one more company fact.
  */
 const updateCompanyBody = z
   .object({
@@ -685,6 +690,7 @@ const updateCompanyBody = z
       .string()
       .refine(isIanaTimeZone, { message: 'must be a real IANA time zone, e.g. Europe/Istanbul' })
       .optional(),
+    company_size: z.enum(COMPANY_SIZES).nullable().optional(),
   })
   .strict()
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
@@ -750,12 +756,14 @@ function serialiseCompany(org: {
   sector: string | null;
   address: string | null;
   timezone: string;
+  companySize: string | null;
 }) {
   return {
     name: org.name,
     sector: org.sector as CompanySector | null,
     address: org.address,
     timezone: org.timezone,
+    company_size: org.companySize as CompanySize | null,
   };
 }
 
@@ -2023,7 +2031,7 @@ export default async function settingsRoutes(
       const org = await request.withTenant((tx) =>
         tx.organization.findUniqueOrThrow({
           where: { id: organizationId },
-          select: { name: true, sector: true, address: true, timezone: true },
+          select: { name: true, sector: true, address: true, timezone: true, companySize: true },
         }),
       );
       return reply.send(serialiseCompany(org));
@@ -2042,13 +2050,14 @@ export default async function settingsRoutes(
         ...(body.sector !== undefined ? { sector: body.sector } : {}),
         ...(body.address !== undefined ? { address: body.address } : {}),
         ...(body.timezone !== undefined ? { timezone: body.timezone } : {}),
+        ...(body.company_size !== undefined ? { companySize: body.company_size } : {}),
       };
 
       const org = await request.withTenant(async (tx) => {
         const updated = await tx.organization.update({
           where: { id: organizationId },
           data,
-          select: { name: true, sector: true, address: true, timezone: true },
+          select: { name: true, sector: true, address: true, timezone: true, companySize: true },
         });
         // Field *names*, not values — the same restraint `settings.security_updated`
         // applies, even though nothing here is sensitive; the pattern is the point.

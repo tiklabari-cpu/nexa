@@ -2308,10 +2308,10 @@ components:
     CompanyDetails:
       type: object
       description: |
-        Company name, sector, address and timezone (FR-MOD-08.3 ·
-        `organizations`), what PRD §8.4 calls the billing/brand/report basis.
-        Organization-scoped, not license- or brand-scoped.
-      required: [name, sector, address, timezone]
+        Company name, sector, address, timezone and size (FR-MOD-08.3 ·
+        FR-MOD-00.4 · `organizations`), what PRD §8.4 calls the billing/brand/
+        report basis. Organization-scoped, not license- or brand-scoped.
+      required: [name, sector, address, timezone, company_size]
       properties:
         name: { type: string }
         sector:
@@ -2346,6 +2346,14 @@ components:
           description: >-
             An IANA zone name, e.g. `Europe/Istanbul`. Defaults to `UTC` — the
             column is never null.
+        company_size:
+          type: string
+          nullable: true
+          description: >-
+            Head-count bucket (FR-MOD-00.4's onboarding "şirket büyüklüğü"
+            step writes here) — a closed list, not free text, `null` until a
+            workspace sets one.
+          enum: [1_10, 11_50, 51_200, 201_1000, 1000_plus]
 
     ChatTimeoutSettings:
       type: object

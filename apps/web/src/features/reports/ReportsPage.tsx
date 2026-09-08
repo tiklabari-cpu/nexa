@@ -25,6 +25,7 @@ import {
   Section,
 } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, bannerDismissKey } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { errorMessageKey, type ApiClient } from '../../lib/api-client.js';
@@ -143,11 +144,32 @@ interface CsatSummary {
   score: number | null;
 }
 
+/**
+ * One statement the Reviews report makes about its own figures (FR-MOD-07.8).
+ *
+ * The server sends an `id` and the numbers, never a sentence: the wording is
+ * this locale's, which is what makes an insight as translated as the card above
+ * it. An `id` this build does not know is skipped rather than rendered raw.
+ */
+interface ReviewInsight {
+  id: string;
+  tone: 'positive' | 'negative' | 'warning' | 'neutral';
+  values: {
+    responses?: number;
+    previous_responses?: number;
+    delta_points?: number;
+    date?: string;
+    bad?: number;
+    share?: number;
+  };
+}
+
 interface ReportsReviews {
   range: { from: string; to: string };
   csat: CsatSummary;
   previous_period: CsatSummary & { range: { from: string; to: string } };
   by_day: Array<CsatSummary & { date: string }>;
+  insights: ReviewInsight[];
   ecommerce:
     | {
         configured: true;
@@ -1212,6 +1234,21 @@ function ReviewsTab(props: TabProps): ReactElement {
         </Card>
       </Section>
 
+      {/*
+       * Between the donut and the daily bar rather than last, though the PRD
+       * enumerates it last: what an insight reads is the two blocks either side
+       * of it — the split above, the day series below — so it belongs where the
+       * reader has just seen the first and is about to see the second.
+       */}
+      <Section
+        title={t('reports.reviews.insights.title')}
+        description={t('reports.reviews.insights.description')}
+      >
+        <Card>
+          <InsightList insights={data.insights} />
+        </Card>
+      </Section>
+
       <Section
         title={t('reports.reviews.byDay.title')}
         description={t('reports.reviews.byDay.description')}
@@ -1266,6 +1303,87 @@ function ReviewsTab(props: TabProps): ReactElement {
       </Section>
     </>
   );
+}
+
+/** Statements this build knows how to word. Anything else the server sends is skipped. */
+const REVIEW_INSIGHT_IDS = [
+  'no_ratings',
+  'low_base',
+  'csat_no_baseline',
+  'csat_improved',
+  'csat_declined',
+  'csat_steady',
+  'all_positive',
+  'all_negative',
+  'bad_day_concentration',
+] as const;
+
+/** Which glyph + colour a tone gets. `warning` is a caveat, `negative` a finding. */
+const INSIGHT_TONE: Record<ReviewInsight['tone'], StatusTone> = {
+  positive: 'success',
+  negative: 'danger',
+  warning: 'warning',
+  neutral: 'info',
+};
+
+/**
+ * The Reviews report's insights (FR-MOD-07.8), each as a tone marker and a
+ * sentence this locale owns.
+ *
+ * Two rules the server cannot enforce from here. An `id` this build does not
+ * recognise is dropped rather than shown as a raw key — a deploy skew should
+ * cost the reader one line, not confront them with `csat_no_baseline`. And the
+ * marker carries its own word ("Watch", "Low confidence") next to the glyph, so
+ * the difference between a finding and a caveat about the evidence survives
+ * greyscale and colour blindness (NFR-A11Y2).
+ */
+function InsightList({ insights }: { insights: ReviewInsight[] }): ReactElement {
+  const t = useTranslate();
+  const known = insights.filter((insight) =>
+    (REVIEW_INSIGHT_IDS as readonly string[]).includes(insight.id),
+  );
+
+  if (known.length === 0) {
+    return (
+      <EmptyState
+        title={t('reports.reviews.insights.emptyTitle')}
+        description={t('reports.reviews.insights.emptyDescription')}
+      />
+    );
+  }
+
+  return (
+    <ul className="flex flex-col gap-3 p-2">
+      {known.map((insight) => (
+        <li key={insight.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-sm">
+          <StatusDot
+            tone={INSIGHT_TONE[insight.tone]}
+            label={t(`reports.reviews.insights.tone.${insight.tone}`)}
+          />
+          <span className="text-content">{insightSentence(t, insight)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One insight's sentence.
+ *
+ * `delta_points` is signed on the wire — the sign is the finding — but the id
+ * already says "up" or "down", so it is worded with the magnitude and a
+ * doubled negative is avoided ("down -12 points").
+ */
+function insightSentence(t: TFunction, insight: ReviewInsight): string {
+  const { responses, previous_responses, delta_points, date, bad, share } = insight.values;
+  return t(`reports.reviews.insights.${insight.id}`, {
+    responses: formatCount(responses ?? 0) ?? '',
+    previous: formatCount(previous_responses ?? 0) ?? '',
+    points: formatCount(Math.abs(delta_points ?? 0)) ?? '',
+    date: date ?? '',
+    bad: formatCount(bad ?? 0) ?? '',
+    share: formatRate(share) ?? '',
+  });
 }
 
 /**

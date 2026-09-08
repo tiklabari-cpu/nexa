@@ -38,6 +38,7 @@ import {
   type BenchmarkBaseline,
 } from '../../routes/reports-metrics.js';
 import { type CsvCell } from '../../routes/reports-export.js';
+import { reviewInsights, type ReviewInsight } from './review-insights.js';
 import { entitlementsForPlan } from '../billing/subscription-service.js';
 
 // ===========================================================================
@@ -1342,7 +1343,9 @@ function centroidOf(vectors: number[][]): number[] {
 
 /**
  * One report group rendered as a CSV table — a header row and its data rows —
- * for {@link toCsv}. `reviews` serialises one row per UTC day; `breakdown`
+ * for {@link toCsv}. `reviews` serialises one row per UTC day, then its
+ * insights as a trailing `insight_*` key/value block ({@link insightCsvRows});
+ * `breakdown`
  * serialises the Breakdown tab's four dimensions (day, hour, team, channel) in
  * one long-format table — `dimension,key,...` — rather than four files, so the
  * download stays one CSV per group; `topics` serialises one row per cluster
@@ -1355,10 +1358,13 @@ function centroidOf(vectors: number[][]): number[] {
  * with the screen it was exported from.
  *
  * `baseline` appends the benchmark block (07.7-e). It is opt-in, unlike the
- * JSON reports' always-present `previous_period`: omitting it returns the table
- * byte-for-byte as this function has always produced it, so a script that reads
- * these columns positionally is never handed rows it did not ask for. See
- * {@link benchmarkCsvRows} for the block's shape.
+ * JSON reports' always-present `previous_period`: omitting it returns the
+ * table without those rows, so a script that reads these columns positionally
+ * is never handed a comparison it did not ask for. See
+ * {@link benchmarkCsvRows} for the block's shape. The Reviews insight block is
+ * *not* opt-in — it is part of that group's table, as its day rows are, and
+ * carries the same one-cell prefix test for a reader that wants only the
+ * series.
  */
 export async function buildGroupCsv(
   tx: TenantClient,
@@ -1425,6 +1431,46 @@ async function benchmarkCsvRows(
 
   // Pad out to the table's own column count so every line in the file has the
   // same number of fields — a ragged CSV is a parse error in stricter readers.
+  return rows.map((row) => [
+    ...row,
+    ...Array<CsvCell>(Math.max(0, columns - row.length)).fill(null),
+  ]);
+}
+
+/** Columns in the Reviews table — what the insight block pads itself out to. */
+const REVIEWS_COLUMNS = 5;
+
+/**
+ * The Reviews report's insights as trailing `key,value` rows (FR-MOD-07.8).
+ *
+ * The same arrangement {@link benchmarkCsvRows} uses, and for the same reason:
+ * the day series above is a measurement table with four numeric columns, and an
+ * insight is a statement with a different field for every kind — folding it into
+ * those columns would mean a column that means something different depending on
+ * the row. A key/value block reads the same either way, and every key is
+ * prefixed `insight_`, so a consumer reading the day rows positionally skips the
+ * whole block on a single test of the first cell — exactly the `benchmark_`
+ * escape hatch, one file over.
+ *
+ * The `id` is written rather than a sentence, which is the same decision the
+ * JSON payload makes: the wording is the reader's locale's, and a CSV that
+ * shipped English prose would be the one place a Turkish workspace could not
+ * translate.
+ */
+function insightCsvRows(insights: ReviewInsight[], columns: number): CsvCell[][] {
+  const rows: CsvCell[][] = [];
+  insights.forEach((insight, index) => {
+    // One-based, and part of the key rather than a column, so a reader can tell
+    // two statements apart without depending on row order.
+    const prefix = `insight_${index + 1}`;
+    rows.push([`${prefix}_id`, insight.id]);
+    rows.push([`${prefix}_tone`, insight.tone]);
+    for (const [key, value] of Object.entries(insight.values)) {
+      rows.push([`${prefix}_${key}`, csvScalar(value)]);
+    }
+  });
+  // Ragged rows are a parse error in stricter readers — the same padding the
+  // benchmark block applies.
   return rows.map((row) => [
     ...row,
     ...Array<CsvCell>(Math.max(0, columns - row.length)).fill(null),
@@ -1597,12 +1643,21 @@ async function groupCsvTable(
     }
     case 'reviews': {
       const byDay = await satisfactionByDay(tx, licenseId, from, to);
+      const counts = await satisfactionCounts(tx, licenseId, from, to);
+      const window = benchmarkWindow(from, to, baseline);
+      const previous = await satisfactionCounts(tx, licenseId, window.from, window.to);
       return {
         headers: ['date', 'good', 'bad', 'responses', 'score'],
-        rows: byDay.map((row) => {
-          const csat = csatSummary(row);
-          return [row.date, csat.good, csat.bad, csat.responses, csat.score];
-        }),
+        rows: [
+          ...byDay.map((row) => {
+            const csat = csatSummary(row);
+            return [row.date, csat.good, csat.bad, csat.responses, csat.score];
+          }),
+          // The tab's insights (FR-MOD-07.8), from the same rule engine the JSON
+          // report runs, so a download can never read the window differently
+          // than the screen it came from.
+          ...insightCsvRows(reviewInsights({ csat: counts, previous, byDay }), REVIEWS_COLUMNS),
+        ],
       };
     }
     case 'topics': {
@@ -1841,7 +1896,16 @@ export async function aiAgentBenchmark(
   };
 }
 
-/** The Reviews report's comparable figures: the baseline window's CSAT tally. */
+/**
+ * The Reviews report's comparable figures: the baseline window's CSAT tally.
+ *
+ * `buildReviewsReport` composes the same two helpers itself rather than calling
+ * this — its insight rules need the raw good/bad counts, and measuring the
+ * baseline twice would be two places for the delta the screen shows and the
+ * delta an insight states to drift apart. The invariant that keeps the two
+ * paths honest is one level down: {@link satisfactionCounts} is the only tally
+ * and {@link csatSummary} the only summary of it.
+ */
 export async function reviewsBenchmark(
   tx: TenantClient,
   licenseId: bigint,

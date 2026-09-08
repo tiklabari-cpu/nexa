@@ -144,7 +144,28 @@ describe('buildGroupCsv — header + row shape (07.9-sched-d2)', () => {
   it('reviews — one row per UTC day with a response, date,good,bad,responses,score', async () => {
     const { headers, rows } = await csv('reviews');
     expect(headers).toEqual(['date', 'good', 'bad', 'responses', 'score']);
-    expect(rows).toEqual([[day, 1, 0, 1, 1]]);
+    // The day series, unchanged: an `insight_`-prefixed reader skips the block
+    // below it on the first cell alone.
+    expect(rows.filter((row) => !String(row[0]).startsWith('insight_'))).toEqual([
+      [day, 1, 0, 1, 1],
+    ]);
+  });
+
+  it('reviews — the insights ride along as a padded insight_* block (FR-MOD-07.8)', async () => {
+    const { headers, rows } = await csv('reviews');
+    const block = rows.filter((row) => String(row[0]).startsWith('insight_'));
+
+    // One rating is far under the low-base bar, so the only statement the rule
+    // engine will make is the caveat — the same one the screen shows, because
+    // both go through `reviewInsights`.
+    expect(block).toEqual([
+      ['insight_1_id', 'low_base', null, null, null],
+      ['insight_1_tone', 'warning', null, null, null],
+      ['insight_1_responses', 1, null, null, null],
+    ]);
+    // Padded to the table's own width — a ragged CSV is a parse error in
+    // stricter readers.
+    for (const row of block) expect(row).toHaveLength(headers.length);
   });
 
   it('cases — one row per UTC day with a ticket, date,open,closed,total', async () => {

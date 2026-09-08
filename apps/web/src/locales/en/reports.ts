@@ -237,6 +237,38 @@ export const reports: Messages = {
   'reports.reviews.byDay.ratingsColumn': 'Ratings',
   'reports.reviews.byDay.goodColumn': 'Good',
   'reports.reviews.byDay.badColumn': 'Bad',
+  // Insights (FR-MOD-07.8) — the sentence for each statement the API can make.
+  // Deliberately worded here rather than on the server: the API sends an id and
+  // the figures, so an insight is as translated as the card above it.
+  'reports.reviews.insights.title': 'Insights',
+  'reports.reviews.insights.description':
+    'What these figures say, read off them by fixed rules rather than guessed (PRD §7.8).',
+  'reports.reviews.insights.emptyTitle': 'Nothing to report',
+  'reports.reviews.insights.emptyDescription':
+    'This period produced no statement this version of the console knows how to word.',
+  'reports.reviews.insights.tone.positive': 'Good',
+  'reports.reviews.insights.tone.negative': 'Watch',
+  'reports.reviews.insights.tone.warning': 'Low confidence',
+  'reports.reviews.insights.tone.neutral': 'Note',
+  'reports.reviews.insights.no_ratings':
+    'Nobody rated a conversation in this period, so there is nothing to read yet.',
+  'reports.reviews.insights.low_base':
+    'Only {responses} ratings in this period — too few to read a trend from, and shares may not be reliable.',
+  'reports.reviews.insights.csat_no_baseline':
+    'The previous period holds {previous} ratings, too few to compare against.',
+  'reports.reviews.insights.csat_improved':
+    'Satisfaction is up {points} points on the previous period, over {responses} ratings.',
+  'reports.reviews.insights.csat_declined':
+    'Satisfaction is down {points} points on the previous period, over {responses} ratings.',
+  'reports.reviews.insights.csat_steady':
+    'Satisfaction held steady against the previous period ({responses} ratings, {previous} before).',
+  'reports.reviews.insights.all_positive':
+    'Every one of this period’s {responses} ratings was positive.',
+  'reports.reviews.insights.all_negative':
+    'Every one of this period’s {responses} ratings was negative.',
+  'reports.reviews.insights.bad_day_concentration':
+    '{share} of this period’s negative ratings ({bad}) landed on {date}.',
+
   'reports.reviews.ecommerce.title': 'Ecommerce',
   'reports.reviews.ecommerce.description':
     'Sales attributed to supported conversations (PRD §7.8, tracked sales §13.5).',

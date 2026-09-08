@@ -57,7 +57,6 @@ import {
   leadsByDay,
   leadTotals,
   overviewBenchmark,
-  reviewsBenchmark,
   roundOrNull,
   salesBenchmark,
   salesReportFigures,
@@ -86,6 +85,7 @@ import {
   SHARE_LINK_DEFAULT_DAYS,
   SHARE_LINK_MAX_DAYS,
 } from '../services/reports/report-share.js';
+import { reviewInsights } from '../services/reports/review-insights.js';
 import { isAgent, scopesOf } from '../services/auth/principal.js';
 import { presenceCoverage, type PresenceEvent } from '../services/staffing/presence-coverage.js';
 import { rosterCoverage, type RosterPlan } from '../services/staffing/roster-coverage.js';
@@ -950,19 +950,30 @@ export async function buildReviewsReport(
   const byDay = await satisfactionByDay(tx, licenseId, from, to);
   const ecommerce = await trackedSalesBlock(tx, licenseId, from, to);
 
-  // The baseline window's CSAT, so the tab can show the vs-previous delta the
-  // PRD asks for (its "67% vs 57%").
+  // The baseline window's CSAT — measured here rather than left to
+  // `withBenchmark`'s callback because the insights compare against it too, and
+  // two measurements of the same window are two places for the comparison the
+  // screen shows and the comparison the insight states to drift apart. The
+  // window arithmetic is still the shared helper's, so it cannot differ from
+  // the one every other group benchmarks against.
+  const previousWindow = benchmarkWindow(from, to, baseline);
+  const previous = await satisfactionCounts(tx, licenseId, previousWindow.from, previousWindow.to);
+
   return withBenchmark(
     {
       range: { from: from.toISOString(), to: to.toISOString() },
       csat: csatSummary(counts),
       by_day: byDay.map((row) => ({ date: row.date, ...csatSummary(row) })),
       ecommerce,
+      // Derived, not measured: a pure rule engine over the tallies above, so
+      // this adds no query and cannot quote a figure the payload does not
+      // carry (FR-MOD-07.8's "Insights").
+      insights: reviewInsights({ csat: counts, previous, byDay }),
     },
     from,
     to,
     baseline,
-    (window) => reviewsBenchmark(tx, licenseId, window),
+    () => Promise.resolve({ ...csatSummary(previous) }),
   );
 }
 

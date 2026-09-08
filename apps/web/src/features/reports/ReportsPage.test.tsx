@@ -491,6 +491,20 @@ interface DayRow {
   score: number | null;
 }
 
+/** One Insights row as `GET /reports/reviews` returns it (FR-MOD-07.8). */
+interface InsightRow {
+  id: string;
+  tone: 'positive' | 'negative' | 'warning' | 'neutral';
+  values: {
+    responses?: number;
+    previous_responses?: number;
+    delta_points?: number;
+    date?: string;
+    bad?: number;
+    share?: number;
+  };
+}
+
 const REVIEWS_BASE = {
   range: OVERVIEW.range,
   csat: { good: 0, bad: 0, responses: 0, score: null as number | null },
@@ -502,6 +516,9 @@ const REVIEWS_BASE = {
     score: null as number | null,
   },
   by_day: [] as DayRow[],
+  // What the API says about an unrated window: one neutral statement, and
+  // nothing read into the silence.
+  insights: [{ id: 'no_ratings', tone: 'neutral', values: {} }] as InsightRow[],
   ecommerce: {
     configured: false,
     tracked_sales: null as number | null,
@@ -633,6 +650,105 @@ describe('ReportsPage — Reviews report (07.8)', () => {
     await openReviewsTab();
 
     expect(api.get).toHaveBeenCalledWith(expect.stringMatching(/^\/reports\/reviews\?from=.*&to=/));
+  });
+
+  // --- Insights (FR-MOD-07.8) ---------------------------------------------
+
+  it('words each insight from its id, with a tone marker that is not colour alone (FR-MOD-07.8)', async () => {
+    mockReviews({
+      csat: { good: 80, bad: 20, responses: 100, score: 0.8 },
+      insights: [
+        { id: 'csat_improved', tone: 'positive', values: { delta_points: 30, responses: 100 } },
+        {
+          id: 'bad_day_concentration',
+          tone: 'negative',
+          values: { date: '2026-07-21', bad: 12, share: 0.6 },
+        },
+      ],
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    const insights = screen.getByRole('region', { name: 'Insights' });
+    expect(
+      within(insights).getByText(
+        'Satisfaction is up 30 points on the previous period, over 100 ratings.',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(insights).getByText(
+        '60% of this period’s negative ratings (12) landed on 2026-07-21.',
+      ),
+    ).toBeInTheDocument();
+    // The tone reaches a colour-blind reader as a word, not only as a hue
+    // (NFR-A11Y2) — the same rule StatusDot exists to keep.
+    expect(within(insights).getByText('Good')).toBeInTheDocument();
+    expect(within(insights).getByText('Watch')).toBeInTheDocument();
+  });
+
+  it('states the magnitude of a decline rather than a doubled negative (FR-MOD-07.8)', async () => {
+    mockReviews({
+      insights: [
+        { id: 'csat_declined', tone: 'negative', values: { delta_points: -12, responses: 40 } },
+      ],
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    // The wire carries the sign because the sign is the finding; the sentence
+    // already says "down", so "-12 points" would read as a rise.
+    expect(
+      screen.getByText('Satisfaction is down 12 points on the previous period, over 40 ratings.'),
+    ).toBeInTheDocument();
+  });
+
+  it('caveats a thin sample instead of showing a trend (FR-MOD-07.8)', async () => {
+    mockReviews({
+      csat: { good: 4, bad: 15, responses: 19, score: 0.211 },
+      insights: [{ id: 'low_base', tone: 'warning', values: { responses: 19 } }],
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    const insights = screen.getByRole('region', { name: 'Insights' });
+    expect(
+      within(insights).getByText(
+        'Only 19 ratings in this period — too few to read a trend from, and shares may not be reliable.',
+      ),
+    ).toBeInTheDocument();
+    // A caveat about the evidence is marked as one, not as a finding about the
+    // workspace.
+    expect(within(insights).getByText('Low confidence')).toBeInTheDocument();
+    expect(within(insights).queryByText('Watch')).not.toBeInTheDocument();
+  });
+
+  it('skips an insight id this build does not know rather than printing the key (FR-MOD-07.8)', async () => {
+    mockReviews({
+      insights: [
+        { id: 'from_a_later_release', tone: 'neutral', values: {} },
+        { id: 'no_ratings', tone: 'neutral', values: {} },
+      ],
+    });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    const insights = screen.getByRole('region', { name: 'Insights' });
+    expect(within(insights).queryByText(/from_a_later_release/)).not.toBeInTheDocument();
+    expect(
+      within(insights).getByText(
+        'Nobody rated a conversation in this period, so there is nothing to read yet.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('falls back to an empty state when nothing in the list can be worded (FR-MOD-07.8)', async () => {
+    mockReviews({ insights: [{ id: 'from_a_later_release', tone: 'neutral', values: {} }] });
+    renderReports(<ReportsPage />);
+    await openReviewsTab();
+
+    expect(
+      within(screen.getByRole('region', { name: 'Insights' })).getByText('Nothing to report'),
+    ).toBeInTheDocument();
   });
 });
 

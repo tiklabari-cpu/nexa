@@ -2015,6 +2015,171 @@ describe('reports and billing', () => {
       expect(theirs.by_day).toEqual([]);
     });
 
+    /**
+     * The report's own reading of the figures above.
+     *
+     * Every case here is about what the rules *refuse* to say as much as what
+     * they say. The derivation itself is table-tested in
+     * `services/reports/review-insights.test.ts`; what these hold is that the
+     * route feeds it this license's tallies and nobody else's, that the gate in
+     * front of it is the figures' own, and that the download quotes the same
+     * statement the tab does.
+     */
+    describe('Insights (FR-MOD-07.8)', () => {
+      /** Write `count` ratings of one value onto a chat, all in one window. */
+      async function rateMany(
+        chatId: string,
+        value: 'good' | 'bad',
+        count: number,
+        createdAt?: Date,
+      ): Promise<void> {
+        await owner.rating.createMany({
+          data: Array.from({ length: count }, () => ({
+            chatId,
+            licenseId: fx.a.licenseId,
+            value,
+            createdAt: createdAt ?? justNow(),
+          })),
+        });
+      }
+
+      /** 45 days back lands squarely in the previous 30-day window. */
+      const inPreviousWindow = (): Date => new Date(Date.now() - 45 * 86_400_000);
+
+      it('reads an unrated window as unknown rather than reading anything into it', async () => {
+        await conversation({ agentReplies: true });
+
+        const reviews = (await server.get('/reports/reviews', auth)).json();
+        expect(reviews.insights).toEqual([{ id: 'no_ratings', tone: 'neutral', values: {} }]);
+      });
+
+      it('caveats a thin sample and refuses to state a trend over it', async () => {
+        const now = await conversation({ agentReplies: true, customerName: 'Now' });
+        const before = await conversation({ agentReplies: true, customerName: 'Before' });
+        // A solid baseline, so a trend *could* have been computed — three
+        // ratings is simply not enough evidence to compute it from.
+        await rateMany(before, 'good', 30, inPreviousWindow());
+        await rateMany(now, 'bad', 3);
+
+        const reviews = (await server.get('/reports/reviews', auth)).json();
+        expect(reviews.insights).toEqual([
+          { id: 'low_base', tone: 'warning', values: { responses: 3 } },
+        ]);
+      });
+
+      it('states the movement in whole points once both windows carry enough ratings', async () => {
+        const now = await conversation({ agentReplies: true, customerName: 'Now' });
+        const before = await conversation({ agentReplies: true, customerName: 'Before' });
+        await rateMany(before, 'good', 45, inPreviousWindow());
+        await rateMany(before, 'bad', 5, inPreviousWindow());
+        await rateMany(now, 'good', 25);
+        await rateMany(now, 'bad', 25);
+
+        const reviews = (await server.get('/reports/reviews', auth)).json();
+        // 50% against 90%: forty points down, and negative because the sign is
+        // the finding.
+        expect(reviews.insights).toContainEqual({
+          id: 'csat_declined',
+          tone: 'negative',
+          values: { delta_points: -40, responses: 50, previous_responses: 50 },
+        });
+      });
+
+      it('reads only this license — a neighbour’s ratings move neither window', async () => {
+        const mine = await conversation({ agentReplies: true });
+        await rateMany(mine, 'good', 25);
+
+        // The sibling license rates heavily and badly, in both windows.
+        const theirCustomer = await owner.customer.create({
+          data: { organizationId: fx.b.organizationId, name: 'Their visitor' },
+          select: { id: true },
+        });
+        const theirChat = 'insightxchat';
+        await owner.chat.create({
+          data: { id: theirChat, licenseId: fx.b.licenseId, customerId: theirCustomer.id },
+        });
+        await owner.rating.createMany({
+          data: [
+            ...Array.from({ length: 40 }, () => ({
+              chatId: theirChat,
+              licenseId: fx.b.licenseId,
+              value: 'bad',
+              createdAt: justNow(),
+            })),
+            ...Array.from({ length: 40 }, () => ({
+              chatId: theirChat,
+              licenseId: fx.b.licenseId,
+              value: 'good',
+              createdAt: inPreviousWindow(),
+            })),
+          ],
+        });
+
+        const mineReviews = (await server.get('/reports/reviews', auth)).json();
+        // My window cleared the bar on my own ratings alone, all of them good,
+        // and my baseline is empty — neither statement borrows their figures.
+        expect(mineReviews.csat.responses).toBe(25);
+        expect(mineReviews.insights).toEqual([
+          { id: 'csat_no_baseline', tone: 'neutral', values: { previous_responses: 0 } },
+          { id: 'all_positive', tone: 'positive', values: { responses: 25 } },
+        ]);
+
+        const theirToken = await grantToken(owner, {
+          licenseId: fx.b.licenseId,
+          organizationId: fx.b.organizationId,
+          ownerId: fx.b.ownerAccountId,
+          scopes: ['reports_read'],
+        });
+        const theirs = (
+          await server.get('/reports/reviews', { authorization: `Bearer ${theirToken}` })
+        ).json();
+        expect(theirs.insights).toContainEqual({
+          id: 'all_negative',
+          tone: 'negative',
+          values: { responses: 40 },
+        });
+      });
+
+      it('is behind the same fail-closed gate as the figures it reads', async () => {
+        const mine = await conversation({ agentReplies: true });
+        await rateMany(mine, 'good', 25);
+
+        const scopeless = await grantToken(owner, {
+          licenseId: fx.a.licenseId,
+          organizationId: fx.a.organizationId,
+          ownerId: fx.a.ownerAccountId,
+          scopes: ['chats--all:rw'],
+        });
+        const response = await server.get('/reports/reviews', {
+          authorization: `Bearer ${scopeless}`,
+        });
+        // Not an empty list of insights — no response body carrying them at all.
+        expect(response.statusCode).toBe(403);
+        expect(response.json()).not.toHaveProperty('insights');
+      });
+
+      it('exports the same statement it shows, as a padded insight_* block', async () => {
+        const now = await conversation({ agentReplies: true, customerName: 'Now' });
+        await rateMany(now, 'good', 25);
+
+        const [reviews, csv] = await Promise.all([
+          server.get('/reports/reviews', auth),
+          server.get('/reports/export?group=reviews', auth),
+        ]);
+        expect(csv.statusCode).toBe(200);
+        const rows = csv.body.split('\r\n').filter((line) => line !== '');
+        // Same rule engine on both sides, so the download cannot read the window
+        // differently than the tab it came from.
+        const first = reviews.json().insights[0];
+        expect(rows).toContain(`insight_1_id,${first.id},,,`);
+        expect(rows).toContain(`insight_1_tone,${first.tone},,,`);
+        // The day series above it is untouched, and one test on the first cell
+        // is all a positional reader needs to stop.
+        expect(rows[0]).toBe('date,good,bad,responses,score');
+        expect(rows[1]).toMatch(/^\d{4}-\d{2}-\d{2},25,0,25,1$/);
+      });
+    });
+
     it('rejects a backwards date range', async () => {
       const response = await server.get('/reports/reviews?from=2026-08-01&to=2026-07-01', auth);
       expect(response.statusCode).toBe(400);

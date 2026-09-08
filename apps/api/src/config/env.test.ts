@@ -244,9 +244,18 @@ describe('production configuration', () => {
   /** What a real deployment sets: long enough, and not the published placeholder. */
   const realSecret = (label: string): string => `${label}-0123456789abcdef0123456789abcdef`;
 
+  const PANEL_ORIGIN = 'https://panel.nexa.test';
+  const WIDGET_ORIGIN = 'https://widget.nexa.test';
+
   const PROD_BASE: NodeJS.ProcessEnv = {
     ...BASE,
     NODE_ENV: 'production',
+    // Both spelled out because production refuses a WEB_ORIGIN that does not
+    // name the widget's origin (tm 243), and the schema defaults — :5173 and
+    // :5174 — are two different origins. Every other assertion in this
+    // describe would otherwise fail on that one problem.
+    WEB_ORIGIN: `${PANEL_ORIGIN},${WIDGET_ORIGIN}`,
+    WIDGET_BASE_URL: WIDGET_ORIGIN,
     DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
     INBOUND_EMAIL_SECRET: 'an-inbound-webhook-shared-secret',
     JWT_SIGNING_KEY: realSecret('jwt'),
@@ -367,6 +376,7 @@ describe('production configuration', () => {
 
     expect(message).toMatch(/DATABASE_APP_URL/);
     expect(message).toMatch(/INBOUND_EMAIL_SECRET/);
+    expect(message).toMatch(/WEB_ORIGIN/);
     for (const key of SECRET_KEYS) expect(message).toMatch(new RegExp(key));
   });
 
@@ -379,6 +389,91 @@ describe('production configuration', () => {
       expect(env.isProduction).toBe(false);
       expect(env.runtimeDatabaseUrl).toBe(env.DATABASE_URL);
     }
+  });
+
+  /**
+   * The widget's origin has to be on the CORS allowlist (tm 243).
+   *
+   * The defect this closes was not in any function: `.env.production.example`,
+   * `README`, `docs/production-checklist.md` and the Helm production overlay
+   * all told an operator to set `WEB_ORIGIN` to the panel's origin, and none of
+   * the four mentioned the widget's — which serves everything a *customer* ever
+   * loads, and calls this API cross-origin from there. Following those
+   * instructions to the letter produced a deployment where the agent panel
+   * worked and every conversation failed, with no error anywhere: the browser
+   * drops a disallowed cross-origin response.
+   *
+   * Fixing the four documents alone would have left the next deployment that
+   * writes its own configuration exposed to the same thing, so the sentence is
+   * a boot check. What the check must NOT do is refuse a topology that is
+   * actually fine — that is the point of the two "boots" cases below, and they
+   * are the reason this is a membership test on the widget's *origin* rather
+   * than a demand for a second entry.
+   */
+  describe('a production WEB_ORIGIN that forgets the widget', () => {
+    it('refuses to boot, naming both keys and the consequence', () => {
+      const panelOnly = { ...PROD_BASE, WEB_ORIGIN: PANEL_ORIGIN };
+
+      expect(() => parseEnv(panelOnly)).toThrow(/WEB_ORIGIN/);
+      expect(() => parseEnv(panelOnly)).toThrow(/WIDGET_BASE_URL/);
+      // The message has to carry the origin that is missing, not only the key
+      // name: an operator reading it should be able to paste the fix.
+      expect(() => parseEnv(panelOnly)).toThrow(new RegExp(WIDGET_ORIGIN));
+    });
+
+    it('refuses the exact configuration the four documents used to describe', () => {
+      // `WEB_ORIGIN=https://panel.<your-domain>` beside
+      // `WIDGET_BASE_URL=https://widget.<your-domain>`, which is what
+      // .env.production.example and values.production.example.yaml shipped.
+      expect(() =>
+        parseEnv({
+          ...PROD_BASE,
+          WEB_ORIGIN: 'https://panel.example.com',
+          WIDGET_BASE_URL: 'https://widget.example.com',
+        }),
+      ).toThrow(/widget/i);
+    });
+
+    it('refuses the schema defaults too — :5173 and :5174 are different origins', () => {
+      const { WEB_ORIGIN: _panel, WIDGET_BASE_URL: _widget, ...defaults } = PROD_BASE;
+
+      expect(() => parseEnv(defaults)).toThrow(/localhost:5174/);
+    });
+
+    it('boots when the widget is served from the panel host, with or without a path', () => {
+      // The topology the check could plausibly have locked out, and does not:
+      // one host serving both, where the widget's origin is already on the list
+      // because it IS the panel's. Verified rather than assumed — a check that
+      // demanded a second entry would refuse a perfectly correct deployment.
+      for (const widgetUrl of [PANEL_ORIGIN, `${PANEL_ORIGIN}/widget/`]) {
+        const env = parseEnv({
+          ...PROD_BASE,
+          WEB_ORIGIN: PANEL_ORIGIN,
+          WIDGET_BASE_URL: widgetUrl,
+        });
+        expect(env.webOrigins, widgetUrl).toEqual([PANEL_ORIGIN]);
+      }
+    });
+
+    it('boots when the list names the widget among several origins', () => {
+      const env = parseEnv({
+        ...PROD_BASE,
+        WEB_ORIGIN: `${PANEL_ORIGIN}, https://chat.nexa.test , ${WIDGET_ORIGIN}/`,
+      });
+
+      // Normalisation applies to the membership test as well: a trailing slash
+      // and surrounding whitespace are how a real list gets typed.
+      expect(env.webOrigins).toContain(WIDGET_ORIGIN);
+    });
+
+    it('costs development and test nothing — they boot on the mismatched defaults', () => {
+      // `make dev` runs the panel on :5173 and the widget on :5174 and has
+      // always been fine, because CORS is only an allowlist under production
+      // (`server.ts`). This check must not become a cost paid everywhere.
+      for (const nodeEnv of ['development', 'test'] as const) {
+        expect(() => parseEnv({ ...BASE, NODE_ENV: nodeEnv })).not.toThrow();
+      }
+    });
   });
 });
 

@@ -103,12 +103,24 @@ config:
   # build absolute links (invitations, webhook docs), not for routing.
   API_BASE_URL: "https://<api-hostname>"
   RTM_BASE_URL: "wss://<rtm-hostname>"
-  # REQUIRED to change: left at the chart default (http://localhost:4000,
+  # REQUIRED to change: left at the chart default (http://localhost:5173,
   # inherited from apps/api/src/config/env.ts's own dev default), every real
   # browser request from the agent panel is refused by CORS.
-  WEB_ORIGIN: "https://panel.<your-domain>"
+  #
+  # List EVERY origin a browser loads a Nexa page from — the agent panel, any
+  # separately hosted chat page, AND WIDGET_BASE_URL's origin below. The widget
+  # image proxies nothing (values.yaml's networkPolicy note says the same
+  # thing from the other side): its browser code calls api cross-origin, so a
+  # list naming only the panel serves agents and refuses every customer
+  # conversation, silently — the browser drops the response and api logs a
+  # request it answered normally. api refuses to boot on a list that omits the
+  # widget's origin (tm 243), which in this chart means the pod CrashLoops
+  # instead of coming up half-working.
+  WEB_ORIGIN: "https://panel.<your-domain>,https://widget.<your-domain>"
   # Origin serving the widget loader + iframe — the install snippet and
-  # loader.js point at this.
+  # loader.js point at this. Its origin must appear in WEB_ORIGIN above;
+  # serving the widget from the panel's own host satisfies that without a
+  # second entry.
   WIDGET_BASE_URL: "https://widget.<your-domain>"
   # Domain a workspace's support mail forwards to; must match what the web
   # app shows on the Email channel card (VITE_INBOUND_EMAIL_DOMAIN, apps/web's

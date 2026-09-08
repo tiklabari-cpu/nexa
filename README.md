@@ -547,9 +547,25 @@ described above. That is fine there and only there: a single-host development st
 
 Comma-separated list of origins the API answers cross-origin (only production enforces
 it). Left at the `.env.example` localhost default, every real browser request is refused by
-CORS — this has to be set to the panel's actual origin(s), and a second origin if a chat
-page is hosted separately (FR-MOD-08.5.9). A value that isn't a bare `scheme://host[:port]`
-fails the boot rather than silently matching nothing.
+CORS.
+
+List **every** origin a browser loads a Nexa page from, not only the panel's:
+
+- the agent panel;
+- a standalone chat page, if one is hosted separately (FR-MOD-08.5.9);
+- **`WIDGET_BASE_URL`'s origin.** The widget image proxies nothing — its browser code calls
+  this API cross-origin (`apps/widget/nginx.conf`'s `connect-src`), and `loader.js` refuses
+  to open the widget at all when its origin matches the page embedding it. A `WEB_ORIGIN`
+  naming only the panel therefore serves agents and refuses every customer conversation, and
+  refuses them the quiet way: the browser drops the response, the API logs a request it
+  answered normally, and `/health` stays green.
+
+Because that failure is invisible, production **refuses to boot** on a list that omits
+`WIDGET_BASE_URL`'s origin, the same way it refuses a value that isn't a bare
+`scheme://host[:port]` — a process that looks healthy and serves half the product is worse
+than one that does not start. Serving the widget from the panel's own host (or from a path
+on it) satisfies the check without a second entry; it demands the widget's origin be on the
+list, not that it be different.
 
 ### `SCHEDULER_ENABLED` and `RETENTION_ENABLED` defaults
 

@@ -19,6 +19,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startTestServer, type TestServer } from '../helpers/server.js';
 
 const PANEL_ORIGIN = 'https://panel.nexa.test';
+const WIDGET_ORIGIN = 'https://widget.nexa.test';
 const FOREIGN_ORIGIN = 'https://not-the-panel.example';
 
 /** 32+ characters and not the `dev-only-` placeholder — the production check refuses both. */
@@ -36,6 +37,13 @@ const PRODUCTION_ENV: NodeJS.ProcessEnv = {
   SCHEDULER_ENABLED: 'false',
   OTEL_ENABLED: 'false',
   WEB_ORIGIN: PANEL_ORIGIN,
+  // One host serving both, so this fixture keeps saying what it always said —
+  // a single panel origin — under the rule tm 243 added: production refuses a
+  // `WEB_ORIGIN` that does not contain `WIDGET_BASE_URL`'s origin. Here it
+  // does, because it is the same origin. The separate-host shape, which is what
+  // the four deployment documents actually describe, gets its own describe at
+  // the bottom of this file.
+  WIDGET_BASE_URL: PANEL_ORIGIN,
   INBOUND_EMAIL_SECRET: 'an-inbound-webhook-shared-secret',
   JWT_SIGNING_KEY: realSecret('jwt'),
   WEBHOOK_HMAC_SEED: realSecret('webhook'),
@@ -141,5 +149,87 @@ describe('a production server with several panel origins', () => {
     await expect(
       startTestServer({ ...PRODUCTION_ENV, WEB_ORIGIN: 'panel.nexa.test/app' }),
     ).rejects.toThrow(/WEB_ORIGIN/);
+  });
+});
+
+/**
+ * The customer half of the product, on its own host (tm 243).
+ *
+ * This is the shape every deployment document in the repository described —
+ * `panel.<domain>` for agents, `widget.<domain>` for the loader and iframe —
+ * and it is the shape that did not work, because all four of them named only
+ * the panel in `WEB_ORIGIN`. The widget's browser bundle has no same-origin
+ * backend at all (`apps/widget/nginx.conf`'s `connect-src`), so every call it
+ * makes is the request measured below, and a browser drops the answer silently
+ * when the allowlist does not name it.
+ *
+ * Two directions, because either alone would be satisfiable by an accident:
+ * the widget origin is answered, and an origin nobody listed still is not.
+ */
+describe('a production server whose widget is a separate origin (NFR-S6)', () => {
+  let server: TestServer;
+
+  beforeAll(async () => {
+    server = await startTestServer({
+      ...PRODUCTION_ENV,
+      WEB_ORIGIN: `${PANEL_ORIGIN},${WIDGET_ORIGIN}`,
+      WIDGET_BASE_URL: WIDGET_ORIGIN,
+    });
+  });
+
+  afterAll(async () => {
+    await server?.close();
+  });
+
+  it('answers the widget origin on a preflight and on the request itself', async () => {
+    // A cross-origin POST with a JSON body is preflighted, so the widget's
+    // first real call is an OPTIONS this server has to allow before the browser
+    // will send anything at all.
+    const preflight = await server.app.inject({
+      method: 'OPTIONS',
+      url: server.url('/customer/token'),
+      headers: {
+        origin: WIDGET_ORIGIN,
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type',
+      },
+    });
+
+    expect(preflight.statusCode).toBe(204);
+    expect(preflight.headers['access-control-allow-origin']).toBe(WIDGET_ORIGIN);
+    expect(preflight.headers['access-control-allow-credentials']).toBe('true');
+
+    const request = await server.get('/health', { origin: WIDGET_ORIGIN });
+    expect(request.headers['access-control-allow-origin']).toBe(WIDGET_ORIGIN);
+  });
+
+  it('still refuses an origin nobody listed', async () => {
+    const preflight = await server.app.inject({
+      method: 'OPTIONS',
+      url: server.url('/customer/token'),
+      headers: { origin: FOREIGN_ORIGIN, 'access-control-request-method': 'POST' },
+    });
+
+    expect(preflight.headers['access-control-allow-origin']).toBeUndefined();
+    expect(
+      (await server.get('/health', { origin: FOREIGN_ORIGIN })).headers[
+        'access-control-allow-origin'
+      ],
+    ).toBeUndefined();
+  });
+
+  it('never comes up with the widget left off the list', async () => {
+    // The gate, at the only place it can be enforced for a deployment that
+    // writes its own configuration rather than copying an example. Refusing the
+    // boot is the same choice `WEB_ORIGIN`'s own parser already makes: a
+    // process that looks healthy and serves half the product is worse than one
+    // that does not start.
+    await expect(
+      startTestServer({
+        ...PRODUCTION_ENV,
+        WEB_ORIGIN: PANEL_ORIGIN,
+        WIDGET_BASE_URL: WIDGET_ORIGIN,
+      }),
+    ).rejects.toThrow(/WIDGET_BASE_URL/);
   });
 });

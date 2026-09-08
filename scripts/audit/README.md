@@ -4,22 +4,22 @@ PLAN.md §F.0/§F.1'in maddelerini **ölçen** betikler (ilk yazımı: tm 126 ·
 turu; kalıcı komutlarla çağrılabilir hale getirildi: tm 132.4). Prose bir denetim raporu yeniden
 koşulamaz; bunlar koşulabilir. Hepsi salt-okunurdur — hiçbiri dosya yazmaz.
 
-| Betik                  |  §F.1 maddesi  | Komut                         | Ne ölçer                                                                                                                                                                                                                                   |
-| ---------------------- | :------------: | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `sweep.cjs`            |       1        | `pnpm audit:sweep`            | PRD §6'nın 138 `FR-MOD` satırını çıkarır ve her birinin PLAN'daki damgasını bulur. Hücre-bazlı okur (glif saymaz — §D68–§D77'nin yanlış-pozitif tarihçesi).                                                                                |
-| `schema-consumers.cjs` |       4        | `pnpm audit:schema-consumers` | `schema.prisma`'daki her modelin `apps/api` + `apps/rtm` kaynağında tüketicisi var mı. Ham SQL / SECURITY DEFINER ile okunan tabloları yanlış-pozitif verir — §8'in GL-9 notuna bak.                                                       |
-| `silent-debt.cjs`      |       6        | `pnpm audit:silent-debt`      | `TODO`/`FIXME`/`XXX`/`HACK`/`@ts-expect-error`/`@ts-ignore`/`.skip`/`.only`/`eslint-disable` taraması, izlenen tüm kaynakta.                                                                                                               |
-| `dead-code.cjs`        |       7        | `pnpm audit:dead-code`        | Referanssız api route'u, web `features/` modülü ve api servisi. CLI girişleri (`package.json` script'leri) yanlış-pozitif çıkar.                                                                                                           |
-| `endpoint-ui.cjs`      |       7        | `pnpm audit:endpoint-ui`      | Sözleşmedeki hangi path'in web/widget/mobile'da çağıranı yok (önce `pnpm contract:generate` gerekir). Başsız-tasarım uçlarını (SCIM, IdP ACS, sağlayıcı webhook'ları, public KB) ayırt etmez — sonucu elle sınıflandır.                    |
-| `unpaged-lists.cjs`    |     NFR-P5     | `pnpm audit:unpaged-lists`    | `apps/web/src`'te sabit `limit` ile yapılıp aynı istekte imleç (`page_id`/`before_event_id`/`after_event_id`) taşımayan liste çağrıları. Sayfalaması OLMAYAN uçlar da `limit` alır — bunlar `paging-exempt:` ile muaf tutulur (aşağı bak). |
-| `req-coverage.cjs`     | CONVENTIONS §7 | `pnpm audit:req-coverage`     | `prd-uyum-denetimi.md` Ek A'nın 247 satırını, test başlıklarındaki gereksinim etiketleriyle kesiştirir: **hangi kabul kriterini kimse üstlenmemiş**. Etiketin kriteri DOĞRU ölçtüğünü göremez (aşağı bak). `--json` makine biçimini verir. |
+| Betik                  |  §F.1 maddesi  | Komut                         | Ne ölçer                                                                                                                                                                                                                                                   |
+| ---------------------- | :------------: | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sweep.cjs`            |       1        | `pnpm audit:sweep`            | PRD §6'nın 138 `FR-MOD` satırını çıkarır ve her birinin PLAN'daki damgasını bulur. Hücre-bazlı okur (glif saymaz — §D68–§D77'nin yanlış-pozitif tarihçesi).                                                                                                |
+| `schema-consumers.cjs` |       4        | `pnpm audit:schema-consumers` | `schema.prisma`'daki her modelin `apps/api` + `apps/rtm` kaynağında tüketicisi var mı. Ham SQL / SECURITY DEFINER ile okunan tabloları yanlış-pozitif verir — §8'in GL-9 notuna bak.                                                                       |
+| `silent-debt.cjs`      |       6        | `pnpm audit:silent-debt`      | `TODO`/`FIXME`/`XXX`/`HACK`/`@ts-expect-error`/`@ts-ignore`/`.skip`/`.only`/`eslint-disable` taraması, izlenen tüm kaynakta.                                                                                                                               |
+| `dead-code.cjs`        |       7        | `pnpm audit:dead-code`        | Referanssız api route'u, web `features/` modülü ve api servisi. CLI girişleri (`package.json` script'leri) yanlış-pozitif çıkar.                                                                                                                           |
+| `endpoint-ui.cjs`      |       7        | `pnpm audit:endpoint-ui`      | Sözleşmedeki hangi **operasyonun** (yol **+ metot**) web/widget/mobile'da çağıranı yok (önce `pnpm contract:generate` gerekir). Cevabı elle sınıflandırmaz — cagrilmayan her operasyon üç listeden birindedir, bulgu varsa **exit 1** (aşağı bak, tm 215). |
+| `unpaged-lists.cjs`    |     NFR-P5     | `pnpm audit:unpaged-lists`    | `apps/web/src`'te sabit `limit` ile yapılıp aynı istekte imleç (`page_id`/`before_event_id`/`after_event_id`) taşımayan liste çağrıları. Sayfalaması OLMAYAN uçlar da `limit` alır — bunlar `paging-exempt:` ile muaf tutulur (aşağı bak).                 |
+| `req-coverage.cjs`     | CONVENTIONS §7 | `pnpm audit:req-coverage`     | `prd-uyum-denetimi.md` Ek A'nın 247 satırını, test başlıklarındaki gereksinim etiketleriyle kesiştirir: **hangi kabul kriterini kimse üstlenmemiş**. Etiketin kriteri DOĞRU ölçtüğünü göremez (aşağı bak). `--json` makine biçimini verir.                 |
 
 Kökten koş: `pnpm audit:<ad>` (ör. `pnpm audit:sweep`) veya doğrudan `node scripts/audit/<betik>`.
 Bulguların değerlendirmesi HANDOFF'un ilgili turunun §F.1 bölümündedir (ilk tam koşu: `## 126` bloğu).
 
 ## `unpaged-lists.cjs` — tek nöbetçi, tek istisna (tm 153.7)
 
-Diğer beşi **rapor**; bu **kapı**: bulgu varsa `process.exitCode = 1`. Gerekçe P5-PAGE'in
+Diğer dördü **rapor**; bu ve `endpoint-ui.cjs` **kapı**: bulgu varsa `process.exitCode = 1`. Gerekçe P5-PAGE'in
 kapattığı kusurun şeklidir — bir liste tek sayfa isteyip tek sayfa alır ve onu her şeymiş gibi
 çizer. Ekran dolu, satırlar doğru, çoğu geliştirme çalışma alanında elli birinci satır hiç yok:
 kusur "bozuk" gibi okunmaz. Her zaman 0 dönen bir denetim bunun geri gelmesini engellemez.
@@ -35,6 +35,48 @@ sayfalamanın onu kaldırmayacağını, `GET /chats`'e `query` parametresi gerek
 görünmez, hiç `limit` almayan bir uç da (sunucunun varsayılan sayfası devreye girer) hakkında
 bir şey söylemez. "Aynı istek" ±8 satır olarak yaklaşıklanır. Yalnız `apps/web/src` taranır:
 widget'ta liste yok, mobil kendi sayfa boyunu kendi taşır.
+
+## `endpoint-ui.cjs` — yol değil, **operasyon** sayar (tm 215)
+
+Bu betik 2026-09-08'e kadar **yol** sayıyordu: bir yolu herhangi bir istemci andığı anda o yol
+"kapsanmış" oluyordu. Sonuç ölçülebilir bir yanlıştı — `POST /chats/{chatId}/supervise`
+çağrılıyordu, `DELETE`'i **hiçbir istemci çağırmıyordu**, ve rapor yüzeyi tam gösteriyordu.
+Kusuru tm 213 **okuyarak** buldu, ölçerek değil. Bir HTTP yüzeyi (yol, metot) çiftidir; çifti
+düzleştiren bir rapor yüzeyin kendisi hakkında konuşmuyordur.
+
+Aynı turda iki kör nokta daha kapandı: **test dosyaları** korpustan çıktı (`DeveloperPortal.test.tsx`
+içindeki bir `fetch` mock'u `GET /partner/apps/{clientId}`'i kapsanmış gösteriyordu) ve yol eşleyici
+sıkılaştı (eskiden statik parçaların **ayrı ayrı** herhangi bir yerde geçmesi yetiyordu; artık yol
+şablonu tek bir regex olarak eşleşir ve `/kb-categories` artık `/kb-categories/{categoryId}` yerine
+cevap veremez). Sayı bu yüzden **büyüdü**: 205 yol → **287 operasyon**, 14 çağrılmayan yol → 50
+çağrılmayan operasyon. Bu bir regresyon değil, ölçümün düzelmesidir.
+
+**Metot nasıl bulunur.** Bir anmanın çevresindeki `WINDOW` (6) satır içinde **en yakın** metot
+işareti kazanır: `api.post(` / `api.delete<` ve alt satıra sarkmış `.post(` (web),
+`client.request('delete', …)` / `#request('POST', …)` (mobil, widget), `method: 'PUT'` (çıplak
+`fetch`). Hiç işaret yoksa anma bir **GET**'tir — `usePagedQuery`'nin `buildUrl`'leri ve
+`useInbox`'ın `chatListUrl`'ü gibi çağrı yerinden ayrı duran URL kurucular yapı gereği okuma
+isteğidir. "En yakın kazanır" şart: penceredeki **her** işareti saymak, altı satır ötedeki bir
+`DELETE`'i aradaki yola yazardı — bu turun kaldırdığı körlüğün bir ölçek küçüğü.
+
+**Üç liste, üçü de gerekçeli.** Çağrılmayan her operasyon tam olarak birindedir:
+
+- `HEADLESS` — istemcisi yok ve olmamalı: altyapı probu, IdP callback'i (SAML ACS, SCIM),
+  sağlayıcı webhook'u, SIEM çekişi (`/audit-log/export`), API tüketicisi için var olan
+  id-bazlı okuma, public KB. `reason` zorunlu.
+- `INDIRECT` — bir istemci **çağırıyor**, ama URL'i çalışma anında kuruyor
+  (`` `/reports/${kind}` ``, SSO'nun `${action}`'ı, imzalı `upload_url`). `site` dosyayı ve bir
+  kod parçasını adlandırır; betik parçanın **hâlâ orada** olduğunu ve yanındaki fiilin bu
+  operasyonun fiili olduğunu doğrular. Çağrı silinirse kayıt kırmızıya döner.
+- `TRACKED` — gerçek yüzey borcu, **sahibi olan Task Master göreviyle** birlikte. `owner` zorunlu.
+  §D145 disiplini: adı ve sahibi olan bir borç kaydedilmiştir, muaf tutulmamıştır. Bugün 6 kalem
+  (tm 245 · tm 246) — hepsi aynı şekil: "yaratılabiliyor ve silinebiliyor, değiştirilemiyor".
+
+**Çıkış kodu.** Listelenmemiş bir ölü uç, gerekçesiz bir kayıt, sözleşmede artık olmayan bir
+operasyon için kayıt, ve **artık çağrılan** bir operasyon için kalmış kayıt — dördü de exit 1.
+Sonuncusu kasıtlı: yüzey geldiğinde mazeretin gitmesi gerekir, yoksa liste borcun saklandığı yere
+dönüşür. Betiğin kendisi `apps/api/src/config/endpoint-ui-audit.test.ts` ile sabitlenir; oradaki
+ilk test **metot körlüğünün kendisidir** (POST'u çağrılan, DELETE'i çağrılmayan sentetik bir yol).
 
 ## `req-coverage.cjs` — kapsama raporu ve NE SATIN ALMADIĞI (tm 184.2)
 

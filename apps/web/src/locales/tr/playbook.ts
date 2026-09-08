@@ -494,6 +494,19 @@ export const playbook: Messages = {
   'playbook.kb.loadError':
     'Bilgi bankası makaleleri yüklenemedi. API’ye erişilebildiğini kontrol edin.',
 
+  // Category management (KbCategoryManager.tsx)
+  'playbook.kbCategories.manage': 'Kategorileri yönet',
+  'playbook.kbCategories.hide': 'Kategorileri gizle',
+  'playbook.kbCategories.description':
+    'Bir kategoriyi yeniden adlandırın veya artık kullanmadığınızı kaldırın. Yeni kategoriler makale yazarken oluşturulur.',
+  'playbook.kbCategories.nameLabel': '{name} adı',
+  'playbook.kbCategories.remove': 'Kaldır',
+  'playbook.kbCategories.removeLabel': '{name} kategorisini kaldır',
+  'playbook.kbCategories.confirmRemove': 'Kalıcı olarak kaldır',
+  'playbook.kbCategories.cancel': 'Vazgeç',
+  'playbook.kbCategories.removeExplainer':
+    'Altındaki makaleler korunur — kategorisiz hâle gelirler.',
+
   // Article editor (KbArticleEditor.tsx)
   'playbook.kbEditor.newTitle': 'Yeni makale',
   'playbook.kbEditor.editTitle': 'Makaleyi düzenle',

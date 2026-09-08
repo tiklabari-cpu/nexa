@@ -67,6 +67,7 @@ import { VirtualTable } from '../../components/VirtualList.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { AccessReviewExport } from './AccessReviewExport.js';
 
 interface AuditLogEntry {
   id: string;
@@ -460,6 +461,15 @@ export function AuditLogPage(): ReactElement {
               </>
             )}
           </Card>
+          {/*
+           * Below the trail, not beside it: the review is a point-in-time
+           * snapshot of who holds the keys, gated on exactly the two things
+           * that gate this page (`audit_log--all:ro` + admin), and it is the
+           * other half of the CC6.1 evidence the trail feeds (tm 215).
+           */}
+          <div className="mt-6">
+            <AccessReviewExport />
+          </div>
         </>
       )}
     </Page>

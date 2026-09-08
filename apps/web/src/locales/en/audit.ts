@@ -59,4 +59,14 @@ export const audit: Messages = {
   'audit.group.tickets': 'Tickets',
   'audit.group.credentials': 'Credentials',
   'audit.group.data': 'Data',
+
+  // Access review export (AccessReviewExport.tsx)
+  'audit.accessReview.title': 'Access review',
+  'audit.accessReview.description':
+    'Who can reach this workspace right now, with what authority — the SOC 2 CC6.1 evidence, as a CSV to hand to a reviewer.',
+  'audit.accessReview.members': 'Download members (CSV)',
+  'audit.accessReview.credentials': 'Download credentials (CSV)',
+  'audit.accessReview.downloading': 'Preparing…',
+  'audit.accessReview.note':
+    'The report states facts and does not judge them: no risk scores, no suggestions. No token value is ever included. “No sign-in recorded” means none since the retained trail begins.',
 };

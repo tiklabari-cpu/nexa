@@ -26,14 +26,15 @@ const { api } = vi.hoisted(() => ({ api: { get: vi.fn() } }));
 const ADMIN_SCOPES = ['audit_log--all:ro'];
 
 let currentScopes = ADMIN_SCOPES;
+let currentRole = 'owner';
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthStore>();
   return {
     ...actual,
     useApiClient: () => api,
-    useAuth: (selector: (state: { agent: { scopes: string[] } }) => unknown) =>
-      selector({ agent: { scopes: currentScopes } }),
+    useAuth: (selector: (state: { agent: { scopes: string[]; role: string } }) => unknown) =>
+      selector({ agent: { scopes: currentScopes, role: currentRole } }),
   };
 });
 
@@ -68,6 +69,7 @@ function table(): HTMLElement {
 
 beforeEach(() => {
   currentScopes = ADMIN_SCOPES;
+  currentRole = 'owner';
   api.get.mockReset();
 });
 
@@ -227,6 +229,35 @@ describe('AuditLogPage', () => {
  * decision is the decision — and that the detail is fetched by id, which is
  * what makes `?entry=<id>` resolve for an entry the current list does not hold.
  */
+/**
+ * The access review sits under the trail, gated on the same two things (tm 215).
+ *
+ * `GET /reports/access-review` had no client at all until this screen grew one,
+ * so what is worth pinning is that it is MOUNTED — a component that renders and
+ * a page that never renders it are the same thing to a user, and the audit that
+ * would have caught it counts callers in the source, not on the screen.
+ */
+describe('AuditLogPage — access review (NFR-C6)', () => {
+  it('offers the access review below the trail for an admin', async () => {
+    api.get.mockResolvedValue(ENTRIES);
+    renderPage(<AuditLogPage />);
+
+    expect(
+      await screen.findByRole('heading', { name: 'Access review', level: 2 }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Download members (CSV)' })).toBeInTheDocument();
+  });
+
+  it('does not offer it to a role the endpoint would refuse', async () => {
+    currentRole = 'agent';
+    api.get.mockResolvedValue(ENTRIES);
+    renderPage(<AuditLogPage />);
+
+    await screen.findByRole('table', { name: 'Audit log' });
+    expect(screen.queryByRole('heading', { name: 'Access review' })).not.toBeInTheDocument();
+  });
+});
+
 describe('AuditLogPage entry detail', () => {
   const DETAIL = {
     ...LOGIN_ENTRY,

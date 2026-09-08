@@ -52,4 +52,14 @@ export const audit: Messages = {
   'audit.group.tickets': 'Talepler',
   'audit.group.credentials': 'Kimlik bilgileri',
   'audit.group.data': 'Veri',
+
+  // Access review export (AccessReviewExport.tsx)
+  'audit.accessReview.title': 'Erişim gözden geçirmesi',
+  'audit.accessReview.description':
+    'Şu anda bu çalışma alanına kim, hangi yetkiyle erişebiliyor — SOC 2 CC6.1 kanıtı, bir denetçiye verilecek CSV olarak.',
+  'audit.accessReview.members': 'Üyeleri indir (CSV)',
+  'audit.accessReview.credentials': 'Kimlik bilgilerini indir (CSV)',
+  'audit.accessReview.downloading': 'Hazırlanıyor…',
+  'audit.accessReview.note':
+    'Rapor olguları yazar, onları yargılamaz: risk puanı yok, öneri yok. Hiçbir token değeri yer almaz. “Giriş kaydı yok”, saklanan izin başlangıcından bu yana giriş olmadığı anlamına gelir.',
 };

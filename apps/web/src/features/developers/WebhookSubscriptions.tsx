@@ -46,6 +46,15 @@ const WEBHOOKS_KEY = ['developers', 'webhooks'] as const;
 const MANIFEST_KEY = ['developers', 'integration-manifest'] as const;
 const AUTOMATION_APPS_KEY = ['developers', 'automation-apps'] as const;
 
+/**
+ * One page big enough to hold the whole `productivity` section of the catalogue.
+ *
+ * Exported so the test can compare it against `APP_CATALOG` — see the
+ * `paging-exempt` note on the request itself for why a cap is right here and a
+ * cursor is not.
+ */
+export const AUTOMATION_APPS_LIMIT = 100;
+
 interface Webhook {
   id: string;
   url: string;
@@ -84,7 +93,16 @@ function useConnectedAutomationApps() {
   const api = useApiClient();
   return useQuery({
     queryKey: AUTOMATION_APPS_KEY,
-    queryFn: () => api.get<AppListResponse>('/settings/apps?category=productivity&limit=100'),
+    // paging-exempt: the bound is over `APP_CATALOG`, a compile-time constant in
+    // `@nexa/types`, not over tenant data — the failure NFR-P5 exists to prevent
+    // (a workspace whose rows outgrow one page) cannot happen to a list that a
+    // deployment cannot lengthen. `productivity` holds 13 cards today, and the
+    // one way the cap could be exceeded — someone adding the 101st — is pinned
+    // by `WebhookSubscriptions.test.tsx` rather than left to be noticed.
+    queryFn: () =>
+      api.get<AppListResponse>(
+        `/settings/apps?category=productivity&limit=${AUTOMATION_APPS_LIMIT}`,
+      ),
     select: (data) => data.items.filter((app) => app.installation?.automation),
     staleTime: 30_000,
   });

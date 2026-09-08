@@ -431,7 +431,7 @@ export const playbook: Messages = {
   'playbook.performance.lowBaseFooter':
     'A percentage over a handful of chats swings on a single case. The warned cards will settle as more conversations close.',
   'playbook.performance.kpiResolutionRate': 'Resolution rate',
-  'playbook.performance.kpiAiResolutions': 'AI chats resolved',
+  'playbook.performance.kpiAiChats': 'AI chats',
   'playbook.performance.kpiCsat': 'CSAT',
   'playbook.performance.kpiTransferRate': 'Transferred',
 

@@ -7,6 +7,12 @@
  * shapes those figures into cards and decides when a rate rests on too few cases
  * to trust: a 100% resolution rate over three chats is noise, and showing it
  * without a caveat invites a decision the sample cannot support (FR-MOD-06.5).
+ *
+ * PRD FR-MOD-06.5 names four cards: Resolution rate, AI chats, CSAT,
+ * Transferred %. "AI chats" is the volume the two rates are computed over —
+ * every chat the AI *finished*, whether it resolved the chat itself or handed
+ * it to a human — not `report.resolutions` alone, which is only the resolved
+ * subset and undercounts the AI's actual workload.
  */
 
 /** Below this many cases a percentage is noise, not a signal — flag, don't hide. */
@@ -56,10 +62,10 @@ export function performanceKpis(
       lowBase: isLowBase(finished),
     },
     {
-      key: 'ai_resolutions',
-      label: 'AI chats resolved',
+      key: 'ai_chats',
+      label: 'AI chats',
       kind: 'count',
-      count: report.resolutions,
+      count: finished,
     },
     {
       key: 'csat',

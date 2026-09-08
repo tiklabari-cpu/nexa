@@ -57,7 +57,7 @@ beforeEach(() => {
 });
 
 describe('AiPerformance', () => {
-  it('renders the four KPI cards from the reports', async () => {
+  it('renders the four KPI cards from the reports (FR-MOD-06.5)', async () => {
     mockReports({
       resolutions: 40,
       resolution_rate: 0.8,
@@ -69,21 +69,23 @@ describe('AiPerformance', () => {
     renderPerf(<AiPerformance agentActive canRead />);
 
     expect(await screen.findByText('Resolution rate')).toBeInTheDocument();
-    expect(screen.getByText('AI chats resolved')).toBeInTheDocument();
+    expect(screen.getByText('AI chats')).toBeInTheDocument();
     expect(screen.getByText('CSAT')).toBeInTheDocument();
     expect(screen.getByText('Transferred')).toBeInTheDocument();
     // The resolution figure is the report's number, formatted.
     expect(screen.getByText('80%')).toBeInTheDocument();
+    // "AI chats" is resolved + transferred (40 + 10), not the resolved count alone.
+    expect(screen.getByText('50')).toBeInTheDocument();
   });
 
-  it('flags a rate that rests on too few chats', async () => {
+  it('flags a rate that rests on too few chats (FR-MOD-06.5)', async () => {
     mockReports({ resolutions: 2, resolution_rate: 1, transfers: 1, transfer_rate: 0.333 });
     renderPerf(<AiPerformance agentActive canRead />);
 
     expect(await screen.findAllByText(/Based on few chats/)).not.toHaveLength(0);
   });
 
-  it('labels the figures as historical when the AI is off', async () => {
+  it('labels the figures as historical when the AI is off (FR-MOD-06.5)', async () => {
     mockReports({ resolutions: 30, resolution_rate: 0.5, responses: 30, score: 0.8 });
     renderPerf(<AiPerformance agentActive={false} canRead />);
 

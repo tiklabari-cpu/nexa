@@ -26,7 +26,7 @@ interface OverviewResponse {
  * stable `key` each card carries to what is actually shown. */
 const KPI_LABEL_KEYS: Record<string, string> = {
   resolution_rate: 'playbook.performance.kpiResolutionRate',
-  ai_resolutions: 'playbook.performance.kpiAiResolutions',
+  ai_chats: 'playbook.performance.kpiAiChats',
   csat: 'playbook.performance.kpiCsat',
   transfer_rate: 'playbook.performance.kpiTransferRate',
 };

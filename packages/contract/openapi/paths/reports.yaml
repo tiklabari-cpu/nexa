@@ -612,6 +612,203 @@ accessReview:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# --- Shareable report links (FR-MOD-07.3.1) ----------------------------------
+#
+# The "link" half of the Overview header's "Share export/link". The export half
+# hands a file to whoever is already signed in; this hands a URL to somebody who
+# is not, which is a different security question and is answered here rather
+# than by widening any existing endpoint.
+#
+# Three decisions carry it:
+#
+#   * A link is **time-limited and scope-limited by construction**. It names one
+#     report group and one pinned window, and it always has an `expires_at` —
+#     there is no shape of this request that mints a permanent, workspace-wide
+#     URL. It is not a public dashboard and cannot be turned into one.
+#   * The token is **the credential**, so it obeys the personal-access-token
+#     rules: 256 bits, returned once, stored only as a SHA-256 digest, `no-store`
+#     on the response that carries it, and only its last four characters ever
+#     shown again.
+#   * Every failure to resolve one — unknown, expired, revoked, cancelled
+#     licence — is the **same 404** (NFR-S5). A 401 would tell the holder of a
+#     dead token that it was once real, and an expired-vs-revoked distinction
+#     tells them something about the workspace's behaviour after they were cut
+#     off.
+#
+# Minting and revoking sit under `reports_manage`, not `reports_read`, for the
+# same reason `scheduled-exports` does: this is the surface through which report
+# data leaves the workspace, so it belongs to managing reports rather than
+# reading one.
+
+shareLinks:
+  get:
+    tags: [Reports]
+    operationId: listReportShareLinks
+    summary: Share links this workspace has minted
+    description: |
+      Every share link the workspace holds that has not been revoked, newest
+      first — including ones that have already lapsed, each flagged with
+      `expired`, so "why did my link stop working?" is answerable from the
+      screen rather than from silence.
+
+      Never carries a token, and cannot: only the digest is stored. Gated on
+      `reports_manage` rather than `reports_read` — the list is the inventory of
+      who can currently read this workspace's numbers without an account, which
+      is a management question, not a reporting one.
+    responses:
+      "200":
+        description: The workspace's live share links (possibly empty)
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/ReportShareLink" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Reports]
+    operationId: createReportShareLink
+    summary: Mint a share link for one report group over one window
+    description: |
+      Mints a link and returns its token **once**. The response is `no-store`;
+      there is no endpoint that reads a token back, because none is stored.
+
+      `group` must name a group in the report catalogue — the same vocabulary
+      `GET /reports/export?group=` accepts — and one whose scope the calling
+      token itself holds. A link cannot be minted for a report its creator may
+      not read: that would make this endpoint a way to launder a permission the
+      caller lacks into an anonymous URL that has it.
+
+      The window follows the same rules as every other report request: it
+      defaults to the last 30 days and may not exceed the same maximum span
+      (NFR-P7), because a share link is read by running the very same
+      aggregation.
+
+      `expires_in_days` is capped rather than optional-and-unbounded — the
+      requirement is a link that *expires*, so the shortest defensible default
+      (7 days) applies when it is omitted.
+
+      A workspace may hold a bounded number of un-revoked links at once; past
+      that, minting is refused with a 400 naming the limit. An unbounded set of
+      standing anonymous credentials is the thing this endpoint most needs not
+      to become, and refusing is the only bound that does not depend on somebody
+      remembering to tidy up.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [group]
+            properties:
+              group:
+                type: string
+                description: "Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`."
+              from:
+                type: string
+                format: date-time
+                description: Start of the window to pin. Defaults to 30 days before `to`.
+              to:
+                type: string
+                format: date-time
+                description: End of the window to pin. Defaults to now.
+              expires_in_days:
+                type: integer
+                minimum: 1
+                maximum: 90
+                default: 7
+                description: How long the link resolves for, from now.
+    responses:
+      "201":
+        description: The link, with its token — the only time the token is returned
+        headers:
+          Cache-Control:
+            schema: { type: string }
+            description: Always `no-store`; the body carries a credential.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ReportShareLinkCreated" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+shareLink:
+  parameters:
+    - name: shareLinkId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  delete:
+    tags: [Reports]
+    operationId: revokeReportShareLink
+    summary: Revoke a share link
+    description: |
+      Cuts the link off immediately: the next request carrying its token gets
+      the same 404 an unknown token does.
+
+      The row is stamped, not deleted — `revoked_at` is the record that this
+      access existed and was withdrawn, which is what an access review is for.
+      Revoking an already-revoked link, or one that belongs to another
+      workspace, answers 404 alike; a 403 would confirm the id names something.
+    responses:
+      "204": { description: Revoked }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+sharedReport:
+  get:
+    tags: [Reports]
+    operationId: getSharedReport
+    summary: Read a report through a share link (public)
+    description: |
+      Resolves a share token to the report group and window it was minted for,
+      and returns that group's table — the same `headers`/`rows` the export
+      serialises. No authentication: the token *is* the credential, which is why
+      it is scoped to one group and one window and always expires.
+
+      `security: []` marks it anonymous. The token travels as a **query
+      parameter named `token`**, deliberately: `lib/log-redact.ts` already masks
+      the value of a query key called `token` in every logged request line, and
+      the span exporter drops query strings wholesale, so the credential does
+      not survive into a log or a trace. The console keeps it out of the *web*
+      server's logs and out of `Referer` too, by carrying it in the share URL's
+      fragment and never in its query.
+
+      Every miss — unknown token, expired, revoked, a cancelled workspace — is
+      one indistinguishable **404** with the same body (NFR-S5). There is no 401
+      and no per-case message, so a dead token cannot be told from one that was
+      never real, and nothing about the workspace leaks to whoever holds it.
+
+      Nothing in the response names the workspace, an agent or a licence, and a
+      valid agent token presented here grants no elevation: the handler ignores
+      `principal` entirely and answers exactly what the link allows.
+    security: []
+    parameters:
+      - name: token
+        in: query
+        required: true
+        description: The opaque token from the share link.
+        schema: { type: string, minLength: 16, maxLength: 512 }
+    responses:
+      "200":
+        description: The shared report group's table over the link's pinned window
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/SharedReport" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 scheduledExports:
   get:
     tags: [Reports]

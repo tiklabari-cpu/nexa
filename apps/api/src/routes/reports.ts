@@ -80,7 +80,13 @@ import {
   accessReviewMemberTable,
   buildAccessReview,
 } from '../services/reports/access-review.js';
-import { scopesOf } from '../services/auth/principal.js';
+import {
+  ReportShareService,
+  resolveShareLink,
+  SHARE_LINK_DEFAULT_DAYS,
+  SHARE_LINK_MAX_DAYS,
+} from '../services/reports/report-share.js';
+import { isAgent, scopesOf } from '../services/auth/principal.js';
 import { presenceCoverage, type PresenceEvent } from '../services/staffing/presence-coverage.js';
 import { rosterCoverage, type RosterPlan } from '../services/staffing/roster-coverage.js';
 import {
@@ -90,7 +96,7 @@ import {
   type VolumeCell,
 } from '../services/staffing/staffing-forecast.js';
 import type { Env } from '../config/env.js';
-import type { TenantClient, TenantContext } from '../lib/tenant.js';
+import { withTenantRead, type TenantClient, type TenantContext } from '../lib/tenant.js';
 import { currentPeriod, trialState, usageSummary } from '../services/billing/metering.js';
 import {
   BILLING_CYCLES,
@@ -213,6 +219,39 @@ const exportQuery = rangeQuery.extend({
   group: z.string().min(1).max(64),
   format: z.enum(['csv', 'pdf']).default('csv'),
 });
+
+/**
+ * Minting a share link (FR-MOD-07.3.1).
+ *
+ * `.strict()` so a mistyped key is a 400 rather than a link quietly minted on
+ * the defaults — the field most likely to be misspelled is the one that decides
+ * how long an anonymous credential lives.
+ *
+ * `expires_in_days` is bounded on both sides in the schema rather than clamped
+ * in the handler: a caller who asks for 365 and silently receives 90 has no way
+ * to tell a capped lifetime from the one they asked for, and the difference
+ * matters here more than it does for a page size.
+ */
+const shareLinkBody = z
+  .object({
+    group: z.string().trim().min(1).max(64),
+    from: z.coerce.date().optional(),
+    to: z.coerce.date().optional(),
+    expires_in_days: z.coerce.number().int().min(1).max(SHARE_LINK_MAX_DAYS).optional(),
+  })
+  .strict();
+
+/**
+ * The anonymous read's only parameter.
+ *
+ * A length floor as well as a ceiling: a one-character `token` cannot be a real
+ * one, and rejecting it at the schema keeps the digest-and-lookup work off the
+ * table for the cheapest kind of probing. Both bounds are generous enough that
+ * a real token — 43 base64url characters — is never near either.
+ */
+const sharedReportQuery = z.object({ token: z.string().trim().min(16).max(512) });
+
+const shareLinkIdSchema = z.string().uuid();
 
 /**
  * The access review takes no date range — it is a snapshot of *now*, not a
@@ -1791,6 +1830,191 @@ export default async function reportRoutes(
         )
         .send(csv)
     );
+  });
+
+  /**
+   * Shareable report links (FR-MOD-07.3.1) — the "link" half of the Overview
+   * header's "Share export/link".
+   *
+   * Four routes: mint, list, revoke, and the one anonymous read they exist for.
+   * They live beside the export because they are the same criterion's other
+   * half, and because the anonymous read serves the *same table* `buildGroupCsv`
+   * builds for a download — one aggregation, so a share can never expose more
+   * than an export of that group would, and the two cannot drift apart.
+   *
+   * The three management routes take `reports_manage`, not `reports_read`, on
+   * the reasoning `scheduled-exports` already wrote down: this is the surface
+   * through which report data leaves the workspace, so it belongs to managing
+   * reports rather than to reading one. Minting and revoking additionally take
+   * `minimumRole: admin` — the scope says the token may, the role says the
+   * person may — while listing does not, so an ordinary agent holding an admin
+   * token can still see what is outstanding.
+   */
+  const shares = new ReportShareService();
+
+  app.get(
+    '/reports/share-links',
+    { config: { scopes: ['reports_manage'] } },
+    async (request, reply) => {
+      const tenant = request.tenant();
+      // One clock for the whole list, so two rows that lapse either side of a
+      // second boundary do not disagree about which of them is expired.
+      const now = new Date();
+      const result = await request.withTenant((tx) => shares.list(tx, tenant, now));
+      // The list names no token, but it does name every standing anonymous
+      // grant this workspace has issued. Never from a shared cache.
+      reply.header('cache-control', 'no-store');
+      return reply.send(result);
+    },
+  );
+
+  app.post(
+    '/reports/share-links',
+    { config: { scopes: ['reports_manage'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(shareLinkBody, request.body);
+      const { from, to } = resolveRange({ from: body.from, to: body.to });
+      // The same NFR-P7 bound the JSON groups and the export are held to: a
+      // share link is read by running the very same aggregation, and this is
+      // the one surface where the person who *runs* it is not the person who
+      // chose the window.
+      assertReportRange(from, to);
+
+      const group = reportGroup(body.group);
+      if (!group) throw ApiError.validation(`Unknown report group: ${body.group}.`);
+
+      // A link cannot be minted for a report its creator may not read.
+      // `reports_manage` proves they may manage sharing; this proves they hold
+      // *this group's* own scope, exactly as the export route checks it.
+      // Without it, minting would be a way to launder a permission the caller
+      // lacks into an anonymous URL that has it.
+      const principal = request.requirePrincipal();
+      if (!hasAnyScope(scopesOf(principal), group.scopes)) {
+        throw ApiError.authorization(`This token cannot share the ${group.id} report.`);
+      }
+
+      const tenant = request.tenant();
+      const now = new Date();
+      const created = await request.withTenant(async (tx) => {
+        const link = await shares.issue(
+          tx,
+          tenant,
+          {
+            group: group.id,
+            from,
+            to,
+            expiresInDays: body.expires_in_days ?? SHARE_LINK_DEFAULT_DAYS,
+            // A soft reference for the management list. A bot token holding the
+            // scope leaves it unset rather than borrowing someone's identity.
+            ...(isAgent(principal) ? { createdByAgentId: principal.accountId } : {}),
+          },
+          now,
+        );
+        // What was shared, over what window, until when — never the token, and
+        // not even its last four characters. The row shows those to somebody
+        // who already holds `reports_manage`; the trail is read under
+        // `audit_log--all:ro`, which is a different door.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'report_share.created',
+          target: `report_share:${link.id}`,
+          metadata: {
+            group: link.group,
+            from: link.from,
+            to: link.to,
+            expires_at: link.expires_at,
+          },
+        });
+        return link;
+      });
+
+      // The body carries a live credential exactly once. Same header the PAT
+      // mint sets, for the same reason.
+      reply.header('cache-control', 'no-store');
+      return reply.status(201).send(created);
+    },
+  );
+
+  app.delete<{ Params: { shareLinkId: string } }>(
+    '/reports/share-links/:shareLinkId',
+    { config: { scopes: ['reports_manage'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const id = parse(shareLinkIdSchema, request.params.shareLinkId);
+      const tenant = request.tenant();
+      await request.withTenant(async (tx) => {
+        // Throws not-found on a zero-row update — an unknown id, an
+        // already-revoked link and another workspace's link all take that same
+        // path, so reaching the line below already proves a live link was cut
+        // off.
+        await shares.revoke(tx, tenant, id, new Date());
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'report_share.revoked',
+          target: `report_share:${id}`,
+        });
+      });
+      return reply.status(204).send();
+    },
+  );
+
+  /**
+   * The anonymous read a share link exists for.
+   *
+   * `public: true`: the token *is* the credential, which is the whole reason it
+   * is scoped to one group, pinned to one window and always expires. A valid
+   * agent token presented here grants nothing extra — this handler never looks
+   * at `principal`, so the anonymous path cannot be widened by having an
+   * account.
+   *
+   * **The token travels as `?token=`, and that is a decision.** A path segment
+   * would be logged verbatim: `lib/log-redact.ts` masks the *values of named
+   * query keys* and `token` is already one of them, while `requestPath` drops
+   * the query string wholesale before a span leaves the process. So the query
+   * form is the one the existing redaction already covers, with no new masking
+   * rule to keep in step. The console keeps it out of the *web* server's logs
+   * and out of `Referer` as well, by carrying it in the share URL's fragment
+   * (`#token=…`), which no browser ever sends anywhere.
+   *
+   * Every miss is one indistinguishable 404 (NFR-S5) and the uniformity is not
+   * this route's doing — `reports_resolve_share_link` filters revoked, expired
+   * and cancelled-licence rows itself, so the handler receives `null` and is
+   * physically unable to tell which miss occurred, let alone leak it.
+   */
+  app.get('/reports/shared', { config: { public: true } }, async (request, reply) => {
+    const { token } = parse(sharedReportQuery, request.query);
+
+    const link = await resolveShareLink(app.db, token);
+    // One answer for every miss — see the route's own comment and the resolver.
+    if (!link) throw ApiError.notFound('Not found.');
+
+    // The catalogue is code and the row is data, so a group removed from the
+    // catalogue after a link was minted resolves to nothing. That is the same
+    // 404 rather than a 500: the link no longer names a report.
+    const group = reportGroup(link.group);
+    if (!group) throw ApiError.notFound('Not found.');
+
+    const generatedAt = new Date();
+    // The replica, like every other report read (M-SCALE-c), and READ ONLY —
+    // an anonymous caller runs the same full-window aggregation the export
+    // does, which is precisely the query NFR-P7 is about.
+    const table = await withTenantRead(app.dbRead, link.tenant, (tx) =>
+      buildGroupCsv(tx, link.tenant.licenseId, group.id, link.from, link.to),
+    );
+
+    // A shared report is a point-in-time snapshot behind a bearer token: never
+    // let a proxy hold it for the next person who asks.
+    reply.header('x-content-type-options', 'nosniff').header('cache-control', 'no-store');
+    return reply.send({
+      group: group.id,
+      label: group.label,
+      from: link.from.toISOString(),
+      to: link.to.toISOString(),
+      generated_at: generatedAt.toISOString(),
+      expires_at: link.expiresAt.toISOString(),
+      headers: table.headers,
+      // `CsvCell` is `string | number | null | undefined`; the wire has no
+      // `undefined`, so an absent cell is sent as the null the schema declares
+      // rather than being dropped and shifting every later column.
+      rows: table.rows.map((row) => row.map((cell) => cell ?? null)),
+    });
   });
 
   /**

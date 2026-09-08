@@ -1,5 +1,5 @@
 import { useEffect, type ReactElement } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
 import { AuthCallbackPage } from './features/auth/AuthCallbackPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
@@ -22,6 +22,8 @@ import { DeveloperPortalPage } from './features/developers/DeveloperPortal.js';
 import { InboxPage } from './features/inbox/InboxPage.js';
 import { HomePage } from './features/home/HomePage.js';
 import { ReportsPage } from './features/reports/ReportsPage.js';
+import { SHARED_REPORT_PATH } from './features/reports/ShareControl.js';
+import { SharedReportPage } from './features/reports/SharedReportPage.js';
 import { TeamPage } from './features/team/TeamPage.js';
 import { TeamAiAgentsPage } from './features/team/TeamAiAgentsPage.js';
 import { TeamsPage } from './features/team/TeamsPage.js';
@@ -32,10 +34,22 @@ export function App(): ReactElement {
   const status = useAuth((s) => s.status);
   const restore = useAuth((s) => s.restore);
   const agent = useAuth((s) => s.agent);
+  /**
+   * A shared report (FR-MOD-07.3.1) is read by somebody with no account, so it
+   * has to sit outside every branch below — including the "restoring a session"
+   * one, which would otherwise show a recipient a loading screen while the app
+   * tries to refresh a token they do not have. The token itself is in the URL
+   * fragment and is never touched here; the page reads it.
+   */
+  const sharedReport = useLocation().pathname === SHARED_REPORT_PATH;
 
   useEffect(() => {
-    if (status === 'unknown') void restore();
-  }, [status, restore]);
+    // Not merely unnecessary on the shared page — a restore attempt would put a
+    // refresh request in a log line belonging to a caller who is not a user.
+    if (status === 'unknown' && !sharedReport) void restore();
+  }, [status, restore, sharedReport]);
+
+  if (sharedReport) return <SharedReportPage />;
 
   if (status === 'unknown') {
     return (

@@ -170,6 +170,7 @@ model License {
   presenceEvents         AgentPresenceEvent[]
   scheduledReports       ScheduledReport[]
   scheduledReportRuns    ScheduledReportRun[]
+  reportShareLinks       ReportShareLink[]
   chatSupervisions       ChatSupervision[]
   goalAchievements       GoalAchievement[]
   salesTrackerSettings   SalesTrackerSettings?
@@ -2566,4 +2567,56 @@ model ScheduledReportRun {
   @@unique([scheduledReportId, periodKey])
   @@index([licenseId, scheduledReportId, createdAt])
   @@map("scheduled_report_runs")
+}
+
+/// A shareable report link (FR-MOD-07.3.1) — the "link" half of the Overview
+/// header's "Share export/link".
+///
+/// A row is a standing, *anonymous* grant: whoever holds the token reads one
+/// report group over one window with no account at all. Three columns are what
+/// keep that bounded rather than open-ended, and none of them is optional by
+/// accident:
+///
+///   * `groupId` — one `REPORT_GROUPS` id, so a link is scope-limited. No FK and
+///     no domain CHECK, the `scheduled_reports.group_id` decision: the catalogue
+///     lives in code and gains entries without a migration.
+///   * `rangeFrom`/`rangeTo` — the window pinned at creation, not resolved per
+///     view. A relative window would mean a link handed out in March quietly
+///     starts answering with April's numbers.
+///   * `expiresAt` — NOT NULL, and `report_share_links_expires_after_created_check`
+///     makes the database say so. A nullable expiry is a permanent public URL one
+///     forgotten branch away.
+///
+/// `tokenHash` is the whole credential story: the raw token is returned once by
+/// `POST /reports/share-links` and never stored, exactly as `ApiToken` does it.
+/// `tokenLastFour` exists so a workspace can tell two rows apart — four
+/// characters of a 256-bit secret narrow a guess by nothing worth measuring, and
+/// without them the management list is a column of identical dates.
+///
+/// Revocation stamps `revokedAt` rather than deleting the row: an access review
+/// wants to see that a grant existed and was withdrawn, and a deleted row says
+/// neither.
+model ReportShareLink {
+  id               String    @id @default(uuid()) @db.Uuid
+  licenseId        BigInt    @map("license_id")
+  /// A `REPORT_GROUPS` id — 'overview', 'leads', 'sales', …
+  groupId          String    @map("group_id")
+  /// SHA-256 of the token, base64url. Unique platform-wide: one token, one link.
+  tokenHash        String    @unique @map("token_hash")
+  /// The token's last four characters, for telling rows apart in the UI.
+  tokenLastFour    String    @map("token_last_four")
+  rangeFrom        DateTime  @map("range_from") @db.Timestamptz(6)
+  rangeTo          DateTime  @map("range_to") @db.Timestamptz(6)
+  expiresAt        DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt        DateTime? @map("revoked_at") @db.Timestamptz(6)
+  /// Soft reference to `accounts.id`, like `ScheduledReport.createdByAgentId` —
+  /// no FK, so the link survives the agent who minted it leaving.
+  createdByAgentId String?   @map("created_by_agent_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  /// The management list's only question: this licence's links, newest first.
+  @@index([licenseId, createdAt])
+  @@map("report_share_links")
 }

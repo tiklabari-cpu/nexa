@@ -45,6 +45,7 @@ import {
   type SavedReportView,
 } from './report-views.js';
 import { SurveyPopover } from './SurveyPopover.js';
+import { ShareControl } from './ShareControl.js';
 
 interface Period {
   range: { from: string; to: string };
@@ -583,6 +584,16 @@ export function ReportsPage(): ReactElement {
             onAdd={(name) => savedViews.add({ name, tab, mode, customFrom, customTo, baseline })}
             onRemove={savedViews.remove}
           />
+          {/* PRD FR-MOD-07.3.1 names Share in the *header* — "range tabs +
+              vs. previous period + Share" — which is why it stayed here when
+              07.7's Export moved into the sidebar (FR-MOD-07.1). The two are
+              the criterion's two halves and the PRD puts them in two places.
+
+              Gated by the same catalogue as Export, and for a stronger reason:
+              a link the caller may not export is a link the server refuses to
+              mint (403), so offering the control would be offering a button
+              that cannot work. */}
+          {visibleGroupIds.has(tab) && <ShareControl group={tab} range={range} />}
           <RangeControls
             mode={mode}
             onMode={setMode}

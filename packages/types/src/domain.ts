@@ -635,6 +635,78 @@ export interface ScheduledExportRun {
   created_at: string;
 }
 
+/**
+ * A shareable report link (FR-MOD-07.3.1) — the "link" half of the Overview
+ * header's "Share export/link".
+ *
+ * One report group, one window pinned at creation, and an expiry that is never
+ * null. Those three together are what keeps this from being a public dashboard:
+ * there is no shape of the create request that mints a permanent, workspace-wide
+ * URL, and a link handed out in March cannot start answering with April's
+ * numbers.
+ *
+ * The token is deliberately absent. It exists once, in
+ * {@link ReportShareLinkCreated}, and only its SHA-256 digest is stored — the
+ * personal-access-token rule, for the same reason: a credential that can be read
+ * back is a credential every later reader of the database has.
+ */
+export interface ReportShareLink {
+  id: string;
+  /** A `REPORT_GROUPS` id — the same vocabulary `GET /reports/export?group=` uses. */
+  group: string;
+  from: string;
+  to: string;
+  /**
+   * The last four characters of the token, so two rows can be told apart. Four
+   * characters of a 256-bit secret narrow a guess by nothing worth measuring;
+   * without them a list of links is a list of indistinguishable dates.
+   */
+  token_last_four: string;
+  created_at: string;
+  /** Never null — a link that never expires is not one this API can mint. */
+  expires_at: string;
+  /** When the link was cancelled, or null while it stands. */
+  revoked_at: string | null;
+  /**
+   * Whether `expires_at` is already past, as the *server* reads the clock.
+   * Derived server-side so a browser with a skewed clock cannot paint a dead
+   * link as live.
+   */
+  expired: boolean;
+}
+
+/**
+ * The creation response — the only time the token exists outside the recipient's
+ * URL. Sent `no-store`; losing it means minting a new link.
+ */
+export interface ReportShareLinkCreated extends ReportShareLink {
+  token: string;
+}
+
+/**
+ * What a share token resolves to: one report group's table over the window its
+ * link pinned.
+ *
+ * `headers`/`rows` are the *same* table `GET /reports/export` serialises to CSV
+ * and PDF, not a second rendering of the same figures. A share therefore can
+ * never expose more than an export of that group would, and the two cannot drift
+ * into disagreeing about a number.
+ *
+ * Nothing here names the workspace, an agent or a licence. The payload is the
+ * report and only the report.
+ */
+export interface SharedReport {
+  group: string;
+  label: string;
+  from: string;
+  to: string;
+  /** When the figures were computed — a share link is read live, never cached. */
+  generated_at: string;
+  expires_at: string;
+  headers: string[];
+  rows: Array<Array<string | number | null>>;
+}
+
 // --- Single sign-on (NFR-S11) -----------------------------------------------
 
 /**

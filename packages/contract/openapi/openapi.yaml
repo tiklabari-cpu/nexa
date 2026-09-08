@@ -517,6 +517,12 @@ paths:
     $ref: "./paths/reports.yaml#/export"
   /reports/access-review:
     $ref: "./paths/reports.yaml#/accessReview"
+  /reports/share-links:
+    $ref: "./paths/reports.yaml#/shareLinks"
+  /reports/share-links/{shareLinkId}:
+    $ref: "./paths/reports.yaml#/shareLink"
+  /reports/shared:
+    $ref: "./paths/reports.yaml#/sharedReport"
   /reports/scheduled-exports:
     $ref: "./paths/reports.yaml#/scheduledExports"
   /reports/scheduled-exports/{scheduledExportId}:
@@ -5388,6 +5394,107 @@ components:
                 type: string
                 description: "Group id: `overview`, `breakdown`, `ai-agent` or `reviews`."
               label: { type: string, description: Human-readable tab name. }
+
+    ReportShareLink:
+      type: object
+      description: |
+        A time-limited, scope-limited link that lets someone without a Nexa
+        account read **one** report group over **one** fixed window
+        (FR-MOD-07.3.1 "Share export/link").
+
+        The token itself is **never** in this shape. It is returned exactly once,
+        by `POST /reports/share-links`, and only its SHA-256 digest is stored —
+        the personal-access-token pattern. `token_last_four` is the only part of
+        it a row ever shows again, so a workspace can tell two links apart
+        without the row being able to reconstruct either.
+
+        `from`/`to` are pinned at creation rather than resolved per view: a link
+        is a snapshot definition, and a relative window would quietly start
+        exposing data that did not exist when the link was handed out.
+      required: [id, group, from, to, token_last_four, created_at, expires_at, revoked_at, expired]
+      properties:
+        id: { type: string, format: uuid }
+        group:
+          type: string
+          description: "A report group id — the same vocabulary `GET /reports/export?group=` uses."
+        from: { type: string, format: date-time, description: Start of the pinned window. }
+        to: { type: string, format: date-time, description: End of the pinned window. }
+        token_last_four:
+          type: string
+          description: |
+            The last four characters of the token, for telling rows apart. Four
+            characters of a 256-bit secret narrow a guess by nothing worth
+            measuring, and without them a list of links is unlabelled.
+        created_at: { type: string, format: date-time }
+        expires_at:
+          type: string
+          format: date-time
+          description: Never null — a share link that never expires is not one this API can mint.
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the link was cancelled, or null while it stands.
+        expired:
+          type: boolean
+          description: |
+            Whether `expires_at` is already in the past, as the server sees the
+            clock. Derived rather than left to the client so a browser with a
+            skewed clock cannot show a dead link as live.
+
+    ReportShareLinkCreated:
+      allOf:
+        - $ref: "#/components/schemas/ReportShareLink"
+        - type: object
+          description: |
+            The creation response, and the **only** time the token exists outside
+            the recipient's URL. Sent with `Cache-Control: no-store`; losing it
+            means minting a new link, exactly as with a personal access token.
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: The opaque share token, shown once and never retrievable.
+
+    SharedReport:
+      type: object
+      description: |
+        What a share link resolves to (FR-MOD-07.3.1): one report group's table,
+        over the window the link pinned.
+
+        Deliberately the **same** `headers`/`rows` table `GET /reports/export`
+        serialises to CSV and PDF, not a second rendering of the same figures. A
+        share can therefore never expose more than an export of the same group
+        would, and the two cannot drift apart into disagreeing about a number.
+
+        Nothing here identifies the workspace, its agents' accounts or its
+        licence: the payload is the report, and the report only.
+      required: [group, label, from, to, generated_at, expires_at, headers, rows]
+      properties:
+        group: { type: string, description: The report group this link was minted for. }
+        label: { type: string, description: The group's human-readable name. }
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        generated_at:
+          type: string
+          format: date-time
+          description: When these figures were computed — a share link is read live, not cached.
+        expires_at:
+          { type: string, format: date-time, description: When this link stops resolving. }
+        headers:
+          type: array
+          items: { type: string }
+          description: The table's header row, identical to the export's.
+        rows:
+          type: array
+          description: The table's data rows, identical to the export's.
+          items:
+            type: array
+            items:
+              nullable: true
+              oneOf:
+                - { type: string }
+                - { type: number }
 
     AccessReviewReport:
       type: object

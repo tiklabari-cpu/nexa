@@ -658,3 +658,64 @@ test.describe('reports — tracked sales (FR-MOD-13.5)', () => {
     await expect(ecommerce.getByText('GBP', { exact: true })).toHaveCount(0);
   });
 });
+
+/**
+ * Share link (FR-MOD-07.3.1) — the "link" half of "Share export/link", end to
+ * end: mint it in the console, open it in a browser that has never signed in,
+ * revoke it, and watch the same URL stop working.
+ *
+ * The second context is the point of the test rather than a detail of it. The
+ * whole claim a share link makes is that somebody with no account can read one
+ * report; running the read in the agent's own browser would prove nothing,
+ * because that browser would have opened the report anyway.
+ */
+test.describe('reports — share link (FR-MOD-07.3.1)', () => {
+  test('mints a link an anonymous browser can read, and revoking it closes the door', async ({
+    agentPage,
+    browser,
+  }) => {
+    await agentPage.goto('/app/reports');
+    await expect(agentPage.getByRole('heading', { name: 'Reports', level: 1 })).toBeVisible();
+
+    await agentPage.getByRole('button', { name: 'Share this report' }).click();
+    await agentPage.getByRole('button', { name: 'Create link' }).click();
+
+    // Shown once, with the warning that says so.
+    const url = await agentPage.getByTestId('report-share-url').innerText();
+    expect(url).toContain('/shared/report#token=');
+    await agentPage.screenshot({ path: 'kanit/28-reports-share-link.png', fullPage: true });
+    await agentPage.getByRole('button', { name: 'Done' }).click();
+
+    // A browser that has never signed in — no cookie, no token, no session.
+    const anonymous = await browser.newContext();
+    const visitor = await anonymous.newPage();
+    await visitor.goto(url);
+
+    await expect(visitor.getByRole('heading', { name: 'Overview', level: 1 })).toBeVisible();
+    // The report's own table, not a sign-in page: the Overview export's
+    // `metric,value` header is the shape a share resolves to.
+    await expect(visitor.getByRole('columnheader', { name: 'metric' })).toBeVisible();
+    await expect(visitor.getByRole('cell', { name: 'chats' })).toBeVisible();
+    await visitor.screenshot({ path: 'kanit/28-reports-shared-view.png', fullPage: true });
+
+    // …and nothing on that page offers a way further in.
+    await expect(visitor.getByRole('link')).toHaveCount(0);
+
+    // Revoke from the same place it was minted.
+    await agentPage.getByRole('button', { name: 'Share this report' }).click();
+    await agentPage.getByRole('button', { name: /^Revoke the link ending / }).click();
+    await expect(agentPage.getByRole('button', { name: /^Revoke the link ending / })).toHaveCount(
+      0,
+    );
+
+    // The same URL, the same browser, one second later: gone. And the message is
+    // the uniform one — a revoked link is indistinguishable from a link that
+    // never existed (NFR-S5).
+    await visitor.reload();
+    await expect(visitor.getByText('This link is no longer available.')).toBeVisible();
+    await expect(visitor.getByRole('columnheader', { name: 'metric' })).toHaveCount(0);
+    await visitor.screenshot({ path: 'kanit/28-reports-share-revoked.png', fullPage: true });
+
+    await anonymous.close();
+  });
+});

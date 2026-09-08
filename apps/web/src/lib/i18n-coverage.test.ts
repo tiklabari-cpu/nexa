@@ -104,6 +104,8 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/settings/WebsiteWidgets.tsx',
   'src/features/reports/ReportsPage.tsx',
   'src/features/reports/SurveyPopover.tsx',
+  'src/features/reports/ShareControl.tsx',
+  'src/features/reports/SharedReportPage.tsx',
   'src/features/billing/BillingPage.tsx',
   'src/features/playbook/PlaybookPage.tsx',
   'src/features/playbook/SkillEditor.tsx',

@@ -74,6 +74,20 @@ test.describe('billing checkout', () => {
     if (await monthly.isEnabled()) await monthly.click();
     await expect(annual).toBeEnabled();
 
+    // The tier this workspace was on *before* this test — restored at the end.
+    //
+    // Read rather than assumed, and restored to *this* value rather than to a
+    // literal: the file header's promise is "puts both back", and for the cycle
+    // that is what happens, but the plan used to be put back to `growth`
+    // unconditionally while the seed puts Acme on `enterprise`. In a full-suite
+    // run that silently downgraded the shared tenant for everything that came
+    // after, and `entitlements.spec.ts` — the next file to read this plan —
+    // failed on line 122 with "Save appearance" still enabled, because
+    // `white_label` is an enterprise-only entitlement (`subscription-service.ts`,
+    // `PLANS`) and the save it drives was refused. Measured: billing +
+    // entitlements alone reproduce that failure; entitlements alone is green.
+    const startedOnGrowth = (await growthPlan.getAttribute('aria-pressed')) === 'true';
+
     // Plan tier (FR-MOD-10.1.1): known starting point first, same discipline as
     // the cycle toggle above — growth is disabled only when already active.
     if (await growthPlan.isEnabled()) {
@@ -91,9 +105,12 @@ test.describe('billing checkout', () => {
     await expect(growthPlan).toHaveAttribute('aria-pressed', 'false');
 
     // Put the plan back the way we found it.
-    await growthPlan.click();
-    await confirmPlanChange.click();
-    await expect(growthPlan).toHaveAttribute('aria-pressed', 'true');
+    const startingPlan = startedOnGrowth ? growthPlan : enterprisePlan;
+    if (await startingPlan.isEnabled()) {
+      await startingPlan.click();
+      await confirmPlanChange.click();
+    }
+    await expect(startingPlan).toHaveAttribute('aria-pressed', 'true');
 
     // Adding a seat sticks after the PATCH round trip — the value is the
     // server's, not local optimism — then restore it.

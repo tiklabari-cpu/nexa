@@ -126,6 +126,34 @@ describe('TemplateGallery', () => {
     expect(rows.length).toBeLessThanOrEqual(20);
   });
 
+  it('keeps a typed search across a parent re-render (05.6-tmpl31-d)', async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <TemplateGallery open onClose={() => {}} onUse={() => {}} pendingId={null} />,
+    );
+    const dialog = screen.getByRole('dialog');
+    const search = within(dialog).getByPlaceholderText('Search templates…');
+
+    await user.type(search, 'warranty');
+    await waitFor(() => {
+      expect(within(dialog).queryByText('Where is my order?')).not.toBeInTheDocument();
+    });
+
+    // `PlaybookPage` passes `onClose={() => setGalleryOpen(false)}` — a fresh
+    // function on every render, and it renders whenever one of its queries
+    // settles. The "a fresh browse every time the gallery opens" reset must key
+    // off `open` alone; keyed off the callback's identity too, a background
+    // refetch landing a moment after the admin typed wiped the box under them.
+    // Measured in `apps/e2e/tests/playbook.spec.ts:68`: in a full-suite run the
+    // search reported 11 cards — one untouched virtualized window of the whole
+    // catalogue — and stayed there for the full ten-second timeout.
+    rerender(<TemplateGallery open onClose={() => {}} onUse={() => {}} pendingId={null} />);
+
+    expect(search).toHaveValue('warranty');
+    expect(within(dialog).getByText('Warranty coverage')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Where is my order?')).not.toBeInTheDocument();
+  });
+
   it('shows a meaningful empty state when nothing matches, and "Clear filters" recovers', async () => {
     const user = userEvent.setup();
     render(<TemplateGallery open onClose={() => {}} onUse={() => {}} pendingId={null} />);

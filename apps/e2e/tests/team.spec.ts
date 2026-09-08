@@ -12,10 +12,12 @@ import {
   API_BASE,
   DEMO,
   expect,
+  freeARoutingSlot,
   openWidget,
   ownerAccessToken,
   test,
   visitorSends,
+  type ChatSummary,
 } from './fixtures.js';
 
 test.describe('invite teammates — dirty guard (FR-EK-A.2)', () => {
@@ -368,60 +370,6 @@ test.describe('Team — changing a teammate’s role (NFR-S12)', () => {
 /** The plain-agent teammate — role `agent`, no admin power (seed.ts). */
 const TEAM_AGENT = { email: 'agent2@acme.localhost', name: 'Priya Nair' } as const;
 
-interface ChatSummary {
-  id: string;
-  active: boolean;
-  assignee_id: string | null;
-  last_event: { text?: string } | null;
-}
-
-/** Every conversation in the workspace — the list endpoint caps a page at 100. */
-async function allChats(
-  request: APIRequestContext,
-  auth: Record<string, string>,
-): Promise<ChatSummary[]> {
-  const collected: ChatSummary[] = [];
-  let pageId: string | undefined;
-  for (let page = 0; page < 10; page += 1) {
-    const query = `view=all&limit=100${pageId ? `&page_id=${encodeURIComponent(pageId)}` : ''}`;
-    const res = await request.get(`${API_BASE}/chats?${query}`, { headers: auth });
-    expect(res.ok(), `list chats failed: ${res.status()} ${await res.text()}`).toBe(true);
-    const body = (await res.json()) as { items: ChatSummary[]; next_page_id?: string };
-    collected.push(...body.items);
-    if (!body.next_page_id) break;
-    pageId = body.next_page_id;
-  }
-  return collected;
-}
-
-/**
- * Leave the target agent a slot to be routed into (the same precondition
- * `skills-routing.spec.ts` needs and measured — this shared tenant's
- * conversations run long enough that a fixed agent can be at their
- * `concurrent_chats_limit` by the time an unrelated file's rule edit lands).
- */
-async function freeARoutingSlot(
-  request: APIRequestContext,
-  auth: Record<string, string>,
-  agentId: string,
-  limit: number,
-): Promise<void> {
-  const held = (await allChats(request, auth)).filter(
-    (chat) => chat.active && chat.assignee_id === agentId,
-  );
-  const surplus = held.length - (limit - 1);
-  if (surplus <= 0) return;
-  for (const chat of held.slice(-surplus)) {
-    const archived = await request.post(`${API_BASE}/chats/${chat.id}/deactivate`, {
-      headers: auth,
-    });
-    expect(
-      archived.ok(),
-      `could not archive ${chat.id} to make room: ${archived.status()} ${await archived.text()}`,
-    ).toBe(true);
-  }
-}
-
 /** The chat whose most recent message is `text`, straight from the list API. */
 async function chatByText(
   request: APIRequestContext,
@@ -450,6 +398,11 @@ test.describe('Team — the console screen (FR-MOD-04.5)', () => {
     request,
     organizationId,
   }) => {
+    // Same reason as `skills-routing.spec.ts`'s: in a full-suite run
+    // `freeARoutingSlot` has a waiting room to empty before it can promise this
+    // teammate a slot, and every archive is its own round trip.
+    test.slow();
+
     const stamp = Date.now().toString().slice(-6);
     const teamName = `E2E Routing ${stamp}`;
     const question = `Does this route to the new team? ${stamp}`;

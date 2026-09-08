@@ -76,6 +76,12 @@ apps:
     hpa:
       enabled: true
       minReplicas: 1
+      # More than one api pod is only correct while an upload written by one of
+      # them can be read by the others — which is `config.STORAGE_PROVIDER`
+      # below, not a property of this number. Change either and re-read the
+      # other; the combination this chart used to ship (`local` + a ceiling
+      # above 1) is the audit's D6 defect, and
+      # apps/api/src/config/chart-storage.test.ts now refuses it.
       maxReplicas: 4
       targetCPUUtilizationPercentage: 70
     pdb:
@@ -215,12 +221,18 @@ migrationJob:
   # this deadline exists for is an index build on a populated one.
   activeDeadlineSeconds: 1800
 
-# Scheduled Postgres backup (tm 165.1, M-BACKUP-a). Database only, stated
-# rather than hidden: this chart mounts no shared volume for uploads (api/rtm
-# write STORAGE_PROVIDER=local files to their own pod's ephemeral disk, and
-# STORAGE_PROVIDERS only has 'local' today — apps/api/src/services/storage/
-# object-store.ts), so there is nothing durable for this CronJob to archive
-# alongside the database. templates/backup-cronjob.yaml carries the full
+# Scheduled Postgres backup (tm 165.1, M-BACKUP-a). Database only — and since
+# tm 242 that is a scope DECISION, not a description of what happens to exist.
+# The old wording ("nothing durable for this CronJob to archive") described the
+# `local` provider and stopped being true the moment `config.STORAGE_PROVIDER`
+# below became `s3`: uploads are now durable, in the bucket
+# `config.STORAGE_S3_BUCKET` names, which lives outside this cluster and comes
+# with its own answer to this problem. Versioning, lifecycle rules and
+# cross-region replication are bucket settings applied by whoever owns the
+# bucket; a pod running `pg_dump` on a nightly schedule is the wrong tool for
+# them and would need read access to every tenant's files to try. The
+# production checklist (docs/production-checklist.md §4) is where the bucket's
+# own durability is checked. templates/backup-cronjob.yaml carries the full
 # reasoning; templates/backup-pvc.yaml is where the dump lands.
 backup:
   enabled: true
@@ -388,10 +400,53 @@ config:
   LLM_PROVIDER: mock
   MAIL_PROVIDER: file
   PUSH_PROVIDER: file
-  STORAGE_PROVIDER: local
   STRIPE_PROVIDER: mock
   VIRUS_SCANNER: mock
   SIEM_PROVIDER: file
+
+  # --- Object storage (tm 242, M-STORE / NFR-R1 / audit finding D6) ---
+  #
+  # `s3`, NOT the `local` that apps/api/src/config/env.ts defaults to, and the
+  # difference is the whole reason this block is longer than the mocks above.
+  # `local` writes every upload to the pod's own ephemeral disk. Every app in
+  # this chart runs behind an HPA allowed to make more than one pod, and this
+  # repo measured what those two facts do together — apps/api/test/integration/
+  # two-pod.test.ts runs a `local-a`/`local-b` control group as four real
+  # processes: the pod that took the upload answers 200, the other answers 404,
+  # and an event carrying that `attachment_url` is refused by the other pod with
+  # 400 "a file this workspace uploaded". A 400 is never retried and no 4xx
+  # wakes anyone, so under `local` a share of attachments simply vanishes
+  # quietly. `apps.api.hpa.maxReplicas` above is only defensible because this
+  # line says `s3`.
+  #
+  # The DEVELOPER default is deliberately untouched (M-STORE-b's own acceptance
+  # criterion): .env.example, CI and `make dev` stay on `local`, and MinIO stays
+  # behind the compose `storage` profile. Nothing here changes that — a
+  # deployment manifest is the only place more than one replica exists.
+  #
+  # STORAGE_PROVIDERS: local, s3
+  #   The providers apps/api/src/services/storage/object-store.ts actually
+  #   implements. This line is machine-checked against that constant by
+  #   apps/api/src/config/chart-storage.test.ts, because the sentence it
+  #   replaces ("STORAGE_PROVIDERS only has 'local' today") stayed in this file
+  #   for a week after `s3` shipped and was the manifest telling a stale story
+  #   about itself.
+  STORAGE_PROVIDER: s3
+  # `CHANGE_ME`, the same placeholder discipline `secrets.DATABASE_URL` below
+  # uses: the chart cannot know your bucket, and a plausible-looking default
+  # would be worse than one that cannot resolve. Left untouched, `S3Store`
+  # raises `StorageUnavailableError` and every attachment request answers 503
+  # (tm 177.1 built that on purpose: "unreachable" must not be reported as
+  # "missing") — loud, and never a silent fallback to pod-local disk.
+  #
+  # STORAGE_S3_REGION and STORAGE_S3_FORCE_PATH_STYLE are NOT set here: both
+  # have safe in-code defaults (`us-east-1`, path-style on, which is what MinIO
+  # needs) and this file ships what boots the four apps, not every tunable. A
+  # real deployment sets them — an AWS virtual-host bucket needs path-style off
+  # and a region the SigV4 signature is scoped to. See
+  # values.production.example.yaml.
+  STORAGE_S3_ENDPOINT: https://CHANGE_ME
+  STORAGE_S3_BUCKET: nexa-uploads-change-me
 
 # Secret template — key NAMES only conceptually; the values below are the
 # SAME `dev-only-…` placeholders `.env.example` ships, not real secrets
@@ -417,3 +472,16 @@ secrets:
   DATABASE_URL: postgresql://nexa:CHANGE_ME@CHANGE_ME:5432/nexa
   DATABASE_APP_URL: postgresql://nexa_app:CHANGE_ME@CHANGE_ME:5432/nexa
   REDIS_URL: redis://CHANGE_ME:6379
+  # Credentials for the bucket `config.STORAGE_S3_ENDPOINT`/`STORAGE_S3_BUCKET`
+  # names (tm 242). `CHANGE_ME` rather than `dev-only-…` on purpose: the five
+  # keys above are key material this process MINTS, and `parseEnv`'s production
+  # guard refuses to boot while any still starts with `dev-only-`. These two are
+  # issued BY the object store instead — env.ts says so where it declines to
+  # declare them with `secret()` — so no such guard covers them and the
+  # placeholder is the entire warning. The access key id lives here rather than
+  # in `config` because it is useless without its secret and splitting one
+  # credential across two objects buys nothing but a second place to leak it
+  # from. Both are api-only in practice (rtm reads no STORAGE_* key at all) but
+  # ride the same Secret, which api and rtm mount whole.
+  STORAGE_S3_ACCESS_KEY_ID: CHANGE_ME
+  STORAGE_S3_SECRET_ACCESS_KEY: CHANGE_ME

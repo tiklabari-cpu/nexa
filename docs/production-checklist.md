@@ -90,6 +90,21 @@ connection storm, suspected cross-tenant data exposure.
       leader is elected, measured with two real OS processes each for `apps/api` and
       `apps/rtm` (not two instances inside one test process). Evidence:
       `apps/api/test/integration/two-pod.test.ts` (8).
+- [ ] Uploads land somewhere **every** api pod can read them: `STORAGE_PROVIDER=s3` with
+      `STORAGE_S3_ENDPOINT`, `STORAGE_S3_BUCKET`, `STORAGE_S3_ACCESS_KEY_ID` and
+      `STORAGE_S3_SECRET_ACCESS_KEY` pointed at a real bucket — never `local` once more than
+      one api pod can exist. `local` writes to the pod's own ephemeral disk, so an upload
+      taken by one pod is a 404 from the next and a 400 ("a file this workspace uploaded") on
+      any event carrying its `attachment_url`; a 400 is never retried and no 4xx pages anyone.
+      That is not a prediction — it is the `local` control group in
+      `apps/api/test/integration/two-pod.test.ts`, four real processes, alongside the `s3`
+      pair that passes the same three steps. The chart ships `STORAGE_PROVIDER: s3` with
+      `CHANGE_ME` placeholders ([`values.yaml`](../infra/helm/nexa/values.yaml)); left
+      untouched every attachment answers 503 rather than silently falling back to local disk.
+      `apps/api/src/config/chart-storage.test.ts` fails the build if the chart ever pairs
+      pod-local uploads with an api replica ceiling above 1. Security parity between the two
+      providers (fail-closed virus scan, signed PUT, type/size limits, served content type) is
+      `apps/api/test/integration/uploads-parity.test.ts` — one expectation list, run twice.
 - [ ] Sticky sessions are **not** applied to `apps/rtm` — the two-pod result above is the
       reason: fan-out already crosses pods via Redis pub/sub, so a load balancer needs no
       session affinity in front of it. Applying stickiness anyway does not break anything, it
@@ -144,6 +159,12 @@ connection storm, suspected cross-tenant data exposure.
       has RLS on with exactly one policy; connecting as the non-owner `nexa_app` role returns
       no rows without a tenant context and the right rows with one. See README
       ["Restore drill"](../README.md#restore-drill).
+- [ ] Uploads are covered by the **bucket's** own durability settings, not by this CronJob:
+      the scheduled backup is `pg_dump` only, deliberately
+      ([`values.yaml`](../infra/helm/nexa/values.yaml) `backup:` block explains why). With
+      `STORAGE_PROVIDER=s3` the objects live outside the cluster, so versioning, lifecycle
+      rules and any cross-region replication are settings on the bucket — check they exist
+      there, because nothing in this chart checks them for you.
 - [ ] `backup.storageClassName` in `values.production.example.yaml` names an at-rest-encrypted
       StorageClass — the PVC holds every tenant's personal data unencrypted at the application
       layer, so this is the single richest target the chart creates.

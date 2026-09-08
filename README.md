@@ -267,7 +267,9 @@ for you. It is gitignored; no secret is ever committed.
 ### Object storage: trying `STORAGE_PROVIDER=s3` locally
 
 Uploads default to `STORAGE_PROVIDER=local` (a directory on disk, `STORAGE_LOCAL_DIR`) —
-that stays the default for `make dev` and CI, nothing below changes it. To exercise the
+that stays the default for `make dev` and CI, nothing below changes it. The **Helm chart
+is the exception and does so deliberately**: it selects `s3`, because that is the only
+place more than one api pod exists (see "Deployment"). To exercise the
 `s3` provider ([`apps/api/src/services/storage/s3-store.ts`](apps/api/src/services/storage/s3-store.ts),
 M-STORE · NFR-R1) against a real bucket instead of AWS, `docker-compose.yml` has an
 opt-in [MinIO](https://min.io/) service behind the `storage` profile — not started by a
@@ -666,6 +668,22 @@ controller that reaches the API directly (required to serve the widget, and it c
 hop-count question), and whether the cluster's CNI enforces policy against kubelet probe
 traffic. rtm is deliberately **not** covered; that file says why.
 
+**Uploads go to a bucket, not to a pod's disk.** `values.yaml` sets
+`STORAGE_PROVIDER: s3` with `CHANGE_ME` placeholders for the endpoint, the bucket and
+its two credentials — the one place in this repository where `local` is not the default,
+and the reason is arithmetic rather than preference: `local` writes to the pod's own
+ephemeral disk, and every app here runs behind an HPA allowed up to four pods. The pair
+is measured, not feared —
+[`apps/api/test/integration/two-pod.test.ts`](apps/api/test/integration/two-pod.test.ts)
+runs a `local` control group as four real processes and the pod that did not take the
+upload answers `404`, while an event carrying that `attachment_url` is refused with `400`
+("a file this workspace uploaded"), which is never retried and pages nobody. Left at the
+placeholders the chart fails loudly instead: every attachment request answers `503`
+(unreachable is reported as unreachable, never as missing), and it never falls back to
+local disk. `apps/api/src/config/chart-storage.test.ts` fails the build if the chart ever
+pairs pod-local uploads with an api replica ceiling above 1 — either shape is fine, the
+combination is the defect.
+
 **What is verified, and how:**
 
 - `helm lint infra/helm/nexa` — passes (one non-blocking suggestion: add a chart icon).
@@ -717,11 +735,13 @@ The Helm chart's analogue is
 [`infra/helm/nexa/templates/backup-cronjob.yaml`](infra/helm/nexa/templates/backup-cronjob.yaml)
 (schedule/image/retention in `values.yaml`'s `backup:` block) — a daily `pg_dump`
 into a PersistentVolumeClaim (`templates/backup-pvc.yaml`), pruned by the same
-whole-file retention window. **Database only**, stated rather than hidden: the chart's
-own `values.yaml` still sets `STORAGE_PROVIDER: local` (ephemeral to each pod — see
-[`apps/api/src/services/storage/object-store.ts`](apps/api/src/services/storage/object-store.ts)
-for the `s3` provider this backup story does not yet cover), so there is nothing
-durable yet for a CronJob to archive alongside the database.
+whole-file retention window. **Database only**, and since tm 242 that is a scope
+decision rather than a description of what exists: the chart selects
+`STORAGE_PROVIDER: s3` (see "Deployment" below), so uploads _are_ durable — they are
+simply not durable _here_. They live in an S3-compatible bucket outside the cluster,
+whose own versioning, lifecycle and replication settings are the backup story for
+them; a nightly pod holding a tar of every tenant's files would be a second copy of
+the richest data in the product for no gain the bucket does not already offer.
 
 **That volume holds every tenant's personal data in the clear**, which makes it the
 richest single target the chart creates and the one object whose contents outlive

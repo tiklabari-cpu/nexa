@@ -137,6 +137,23 @@ config:
   # and Postgres' own reserved connections. See README "Connection pool
   # budget".
   # DATABASE_POOL_SIZE: "10"
+  #
+  # --- Object storage (tm 242, M-STORE / NFR-R1) ---
+  # The chart already ships `STORAGE_PROVIDER: s3` and CHANGE_ME placeholders
+  # for the two settings below, because a shared bucket is not optional at more
+  # than one api replica: with pod-local files an upload taken by one pod is a
+  # 404 from the next and a 400 on any event carrying its `attachment_url`
+  # (measured — apps/api/test/integration/two-pod.test.ts's `local` control
+  # group). These are the two the chart cannot guess.
+  STORAGE_S3_ENDPOINT: "https://s3.<region>.amazonaws.com"
+  STORAGE_S3_BUCKET: "<your-bucket>"
+  # Signed into every request; the bucket rejects a signature scoped elsewhere.
+  # The chart falls back to the in-code default `us-east-1`, which is right for
+  # exactly one region and quietly wrong everywhere else — set it.
+  STORAGE_S3_REGION: "<region>"
+  # `<endpoint>/<bucket>/<key>`, the in-code default, and what MinIO and most
+  # S3-compatible stores need. Uncomment for AWS virtual-host-style buckets.
+  # STORAGE_S3_FORCE_PATH_STYLE: "false"
 
 # Real secret material. Every value below is a placeholder or a generation
 # instruction, never a working default — same discipline as
@@ -160,6 +177,13 @@ config:
 #                          forward mail to).
 #   DATABASE_REPLICA_URL — OPTIONAL (M-SCALE-c); only matters if this
 #                          deployment runs a read replica.
+#
+# The list is FIXED but MAINTAINED, which is the distinction that matters here:
+# tm 242 added STORAGE_S3_ACCESS_KEY_ID and STORAGE_S3_SECRET_ACCESS_KEY to both
+# values.yaml and that template together, and
+# apps/api/src/config/chart-storage.test.ts now fails if the two files disagree
+# — so the two keys below are a known outstanding gap, not evidence that the
+# template is unmaintained.
 #
 # The provisioning path recommended right below sidesteps this cleanly:
 # envFrom loads every key a Secret object holds, not just the ones
@@ -220,3 +244,11 @@ secrets:
   # disables every tenant isolation policy while every test still passes.
   DATABASE_APP_URL: "postgresql://nexa_app:<app_password>@<db-host>:5432/<db>"
   REDIS_URL: "redis://<redis-host>:6379"
+  # Issued by the object store, not generated here — so unlike the five keys
+  # above, no `dev-only-` production guard covers them and nothing refuses to
+  # boot on the chart's CHANGE_ME placeholder. What happens instead is a 503 on
+  # every attachment request (S3Store reports "unreachable", never "missing").
+  # Prefer credentials scoped to this one bucket: the api process only ever
+  # PUTs, GETs and HEADs objects under it.
+  STORAGE_S3_ACCESS_KEY_ID: "<access key id for the uploads bucket>"
+  STORAGE_S3_SECRET_ACCESS_KEY: "<secret access key for the uploads bucket>"

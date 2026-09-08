@@ -1,8 +1,13 @@
 {{- if .Values.backup.enabled }}
 # Scheduled Postgres backup for a real deployment (tm 165.1, M-BACKUP-a).
 #
-# SCOPE: database only, not uploads — see values.yaml's backup block for why
-# (no shared volume exists for STORAGE_PROVIDER=local's pod-local files).
+# SCOPE: database only, not uploads — see values.yaml's backup block for why.
+# Short version since tm 242: uploads are durable now (STORAGE_PROVIDER: s3),
+# they just are not durable HERE — they live in an S3-compatible bucket outside
+# this cluster whose own versioning/lifecycle/replication settings are the
+# backup story for them. The earlier reason given on this line ("no shared
+# volume exists for STORAGE_PROVIDER=local's pod-local files") described a
+# provider this chart no longer selects.
 #
 # WHY A DEDICATED CLIENT IMAGE, NOT THIS CHART'S OWN api IMAGE: pg_dump only
 # needs to match the server's major version, and reusing api's image would

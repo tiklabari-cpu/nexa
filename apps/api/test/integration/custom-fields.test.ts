@@ -20,6 +20,7 @@ interface CustomFieldDefinition {
   label: string;
   type: 'text' | 'number' | 'boolean' | 'date';
   required: boolean;
+  form_placement: 'pre_chat' | 'post_chat' | 'ticket' | 'prospect' | null;
   show_in_table: boolean;
   created_at: string;
   updated_at: string;
@@ -267,6 +268,140 @@ describe('custom fields (tickets/contacts)', () => {
       auth(adminToken),
     );
     expect(rejected.statusCode).toBe(400);
+  });
+
+  // --- Form placements (FR-MOD-08.7.7) ---------------------------------------
+  //
+  // The PRD counts four forms — pre-chat, post-chat, ticket, prospect — and a
+  // placement is not a free label: it decides which entity the answers land on.
+  // Three ask a visitor about themselves and are contact fields; `ticket` asks
+  // about the request they are leaving and is a ticket field. These pin the
+  // agreement between the two from the authoring side; the CHECK constraint in
+  // the migration holds the same rule at the column.
+
+  it('accepts all four form placements on the entity each one writes to (FR-MOD-08.7.7)', async () => {
+    const created = await Promise.all([
+      createDefinition(adminToken, {
+        entity: 'contact',
+        label: 'Order number',
+        type: 'text',
+        form_placement: 'pre_chat',
+      }),
+      createDefinition(adminToken, {
+        entity: 'contact',
+        label: 'Anything else?',
+        type: 'text',
+        form_placement: 'post_chat',
+      }),
+      createDefinition(adminToken, {
+        entity: 'ticket',
+        label: 'Affected order',
+        type: 'text',
+        form_placement: 'ticket',
+      }),
+      createDefinition(adminToken, {
+        entity: 'contact',
+        label: 'Company',
+        type: 'text',
+        form_placement: 'prospect',
+      }),
+    ]);
+    expect(created.map((field) => field.form_placement)).toEqual([
+      'pre_chat',
+      'post_chat',
+      'ticket',
+      'prospect',
+    ]);
+  });
+
+  it('refuses a fifth placement', async () => {
+    const rejected = await define(adminToken, {
+      entity: 'contact',
+      label: 'Mid-chat question',
+      type: 'text',
+      form_placement: 'mid_chat',
+    });
+    expect(rejected.statusCode).toBe(400);
+  });
+
+  it('refuses a placement on the entity it does not write to', async () => {
+    // A ticket question on a contact field would have nothing to write to when
+    // the visitor leaves a message, and a prospect question on a ticket field
+    // would put an answer about the person on one of their requests.
+    const ticketOnContact = await define(adminToken, {
+      entity: 'contact',
+      label: 'Affected order',
+      type: 'text',
+      form_placement: 'ticket',
+    });
+    expect(ticketOnContact.statusCode).toBe(400);
+
+    for (const placement of ['pre_chat', 'post_chat', 'prospect']) {
+      const onTicket = await define(adminToken, {
+        entity: 'ticket',
+        label: `Q ${placement}`,
+        type: 'text',
+        form_placement: placement,
+      });
+      expect(onTicket.statusCode).toBe(400);
+    }
+  });
+
+  it('refuses to move a field onto a form its entity does not write to, via PATCH', async () => {
+    // `entity` is immutable, so this is the only way the two could come apart
+    // after creation.
+    const contactField = await createDefinition(adminToken, {
+      entity: 'contact',
+      label: 'Player ID',
+      type: 'text',
+    });
+    const rejected = await server.patch(
+      `/settings/custom-fields/${contactField.id}`,
+      { form_placement: 'ticket' },
+      auth(adminToken),
+    );
+    expect(rejected.statusCode).toBe(400);
+
+    // …and the reverse, so neither direction is left open.
+    const ticketField = await createDefinition(adminToken, {
+      entity: 'ticket',
+      label: 'Affected order',
+      type: 'text',
+    });
+    const alsoRejected = await server.patch(
+      `/settings/custom-fields/${ticketField.id}`,
+      { form_placement: 'prospect' },
+      auth(adminToken),
+    );
+    expect(alsoRejected.statusCode).toBe(400);
+  });
+
+  it('still accepts the two placements that existed before, unchanged', async () => {
+    // The migration widened a CHECK rather than replacing it: what was legal
+    // before this slice has to stay legal, and a stored row from before it has
+    // to stay valid. Written from the API on purpose — an insert is the strictest
+    // reading the constraint gets.
+    const preChat = await createDefinition(adminToken, {
+      entity: 'contact',
+      label: 'Order number',
+      type: 'text',
+      form_placement: 'pre_chat',
+    });
+    const patched = await server.patch(
+      `/settings/custom-fields/${preChat.id}`,
+      { form_placement: 'post_chat' },
+      auth(adminToken),
+    );
+    expect(patched.statusCode).toBe(200);
+    expect((patched.json() as CustomFieldDefinition).form_placement).toBe('post_chat');
+
+    const cleared = await server.patch(
+      `/settings/custom-fields/${preChat.id}`,
+      { form_placement: null },
+      auth(adminToken),
+    );
+    expect(cleared.statusCode).toBe(200);
+    expect((cleared.json() as CustomFieldDefinition).form_placement).toBeNull();
   });
 
   // --- Definition lifecycle --------------------------------------------------

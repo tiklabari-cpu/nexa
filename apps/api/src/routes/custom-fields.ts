@@ -22,7 +22,11 @@ const createBody = z.object({
   label: z.string().trim().min(1).max(120),
   type: z.enum(CUSTOM_FIELD_TYPES),
   required: z.boolean().optional(),
-  /** Ask this contact field on the widget's pre-chat form (FR-MOD-08.7.7). */
+  /**
+   * Ask this field on one of the widget's four forms (FR-MOD-08.7.7). The
+   * placement decides which entity its answers land on, so the service refuses
+   * one that disagrees with `entity` rather than correcting either half.
+   */
   form_placement: z.enum(FORM_PLACEMENTS).nullable().optional(),
   /** Render this contact field as a Contacts table column (FR-MOD-03.2.3). */
   show_in_table: z.boolean().optional(),

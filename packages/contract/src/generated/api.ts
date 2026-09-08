@@ -1302,6 +1302,62 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customer/ticket': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Leave a message when nobody is available
+     * @description The `ticket` and `prospect` halves of the forms builder (FR-MOD-08.7.7),
+     *     and the only path by which a widget answer reaches a **ticket** rather
+     *     than a contact (KK "widget'ta gösterim → contact/ticket'a yazma").
+     *
+     *     Not a `/customer/chat/…` route, because it opens a ticket precisely when
+     *     there is no conversation to have: the visitor's words become the ticket's
+     *     subject, `ticket_fields` become custom fields on that ticket, and
+     *     `prospect_fields` become custom fields on the contact who left it. One
+     *     screen, two destinations — one set of questions is about the request, the
+     *     other about the person.
+     *
+     *     **Opt-in.** Until the workspace has built at least one `ticket` or
+     *     `prospect` field there is no form, and this refuses with a 400. The widget
+     *     applies the same rule from the other side (it shows no panel), so the
+     *     server is not trusting it to.
+     *
+     *     Screened exactly as the chat path is: the address ban (FR-MOD-08.9.2),
+     *     card masking at the source (FR-MOD-08.9.5) and the same deterministic spam
+     *     engine (FR-MOD-08.9.3) the widget and the e-mail channel share.
+     *
+     *     Everything happens in one transaction: the ticket is created before the
+     *     answers are written, so an ill-typed answer takes the ticket down with it.
+     *     A workspace never ends up with a message whose questions were silently
+     *     dropped, and a visitor is never told the message failed while a ticket sits
+     *     in the queue.
+     *
+     *     `email` is required here and optional on the chat path. A chat is answered
+     *     in the widget the visitor is looking at; a message left when nobody is
+     *     available can only be answered somewhere else. Supplying it also makes the
+     *     visitor a lead by the funnel's own predicate (FR-MOD-13.3
+     *     `lead_captured`) — this endpoint adds no second one.
+     *
+     *     Note what the body does not accept: no assignee, group, priority or
+     *     status. A visitor says what they need, never who should work on it. Triage
+     *     is left to the ticket rules (FR-MOD-08.6.2), which see this ticket with an
+     *     origin no `source` condition can name — so a subject rule still fires on
+     *     it while a rule scoped to chats or forwarded mail correctly does not.
+     */
+    post: operations['leaveCustomerTicket'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers': {
     parameters: {
       query?: never;
@@ -9353,12 +9409,19 @@ export interface components {
       /** @description When true, a value may not be left blank. */
       required: boolean;
       /**
-       * @description Where this field is also asked as a widget form (FR-MOD-08.7.7):
-       *     `pre_chat` before the conversation starts, `post_chat` once it ends,
-       *     or null for a CRM-only field. Only a `contact` field may carry one.
+       * @description Which of the widget's four forms also asks this field
+       *     (FR-MOD-08.7.7), or null for a CRM-only field: `pre_chat` before the
+       *     conversation starts, `post_chat` once it ends, and — on the offline
+       *     "leave a message" screen — `prospect` about the person and `ticket`
+       *     about the request.
+       *
+       *     A placement implies the `entity`, and the two must agree: the three
+       *     forms that ask a visitor about themselves are `contact` fields, and
+       *     the `ticket` form is a `ticket` field, so its answers land on the
+       *     ticket the message opens.
        * @enum {string|null}
        */
-      form_placement?: 'pre_chat' | 'post_chat' | null;
+      form_placement?: 'pre_chat' | 'post_chat' | 'ticket' | 'prospect' | null;
       /**
        * @description When true, this field also renders as a row-inline column on the
        *     Contacts table (FR-MOD-03.2.3), rather than only in the
@@ -9402,12 +9465,13 @@ export interface components {
       value: string | null;
       /**
        * @description Carried through from the definition (FR-MOD-13.2): lets a reader —
-       *     the Traffic visitor 360° panel — tell a pre-chat form answer apart
-       *     from a plain CRM field without a second lookup. Always null on a
-       *     `ticket` field.
+       *     the Traffic visitor 360° panel — tell a form answer apart from a
+       *     plain CRM field without a second lookup. On a `ticket` field this is
+       *     either `ticket`, a question the visitor answered when they left the
+       *     message, or null for a field only an agent fills in.
        * @enum {string|null}
        */
-      form_placement?: 'pre_chat' | 'post_chat' | null;
+      form_placement?: 'pre_chat' | 'post_chat' | 'ticket' | 'prospect' | null;
       /**
        * @description Carried through from the definition (FR-MOD-03.2.3): whether this
        *     field also renders as a row-inline column on the Contacts table.
@@ -12865,6 +12929,27 @@ export interface operations {
              *     answers go to `/customer/chat/form-response`.
              */
             post_chat_form?: components['schemas']['WidgetFormField'][];
+            /**
+             * @description The workspace's ticket form (FR-MOD-08.7.7) — the questions
+             *     about the *request*, asked when nobody is available and the
+             *     visitor leaves a message instead of holding a conversation.
+             *     The answers go to `/customer/ticket` as `ticket_fields` and
+             *     are stored on the ticket that message opens.
+             *
+             *     Empty when the workspace has built neither this form nor
+             *     `prospect_form`, in which case the widget shows no offline
+             *     panel and `/customer/ticket` refuses — the surface is opt-in
+             *     on both sides.
+             */
+            ticket_form?: components['schemas']['WidgetFormField'][];
+            /**
+             * @description The workspace's prospect form (FR-MOD-08.7.7) — the questions
+             *     about the *person* who leaves that message, asked on the same
+             *     screen as `ticket_form` and stored on the contact, exactly
+             *     where the two chat forms' answers go. The answers travel in
+             *     the same request, as `prospect_fields`.
+             */
+            prospect_form?: components['schemas']['WidgetFormField'][];
           };
         };
       };
@@ -13692,6 +13777,69 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  leaveCustomerTicket: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /**
+           * @description What the visitor needs, in their own words — stored as the
+           *     ticket's subject. Capped at the subject's own limit rather
+           *     than accepting a longer body that would be silently
+           *     truncated.
+           */
+          subject: string;
+          name?: string;
+          /**
+           * Format: email
+           * @description Where the reply goes. Also stored on the contact.
+           */
+          email: string;
+          /**
+           * @description `ticket` form answers: custom-field id → value, stored on the
+           *     ticket this opens. An id the workspace does not ask on *this*
+           *     form — a prospect question, an agent-only field, another
+           *     workspace's, or invented — is refused with the same 400 either
+           *     way, so the surface says nothing about what exists.
+           */
+          ticket_fields?: {
+            [key: string]: string | null;
+          };
+          /**
+           * @description `prospect` form answers: custom-field id → value, stored on the
+           *     contact. Judged against its own placement, which is what stops
+           *     a question about the person being written onto the request.
+           */
+          prospect_fields?: {
+            [key: string]: string | null;
+          };
+        };
+      };
+    };
+    responses: {
+      /** @description Ticket opened */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            ticket_id: string;
+          };
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };

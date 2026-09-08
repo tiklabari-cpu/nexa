@@ -17,6 +17,7 @@ import type { Prisma } from '@prisma/client';
 import {
   CUSTOM_FIELD_TYPES,
   checkCustomFieldValue,
+  formPlacementEntity,
   isCustomFieldProblem,
   type CustomFieldDefinition,
   type CustomFieldEntity,
@@ -131,11 +132,13 @@ export class CustomFieldService {
     if (!CUSTOM_FIELD_TYPES.includes(input.type)) {
       throw ApiError.validation(`type: must be one of ${CUSTOM_FIELD_TYPES.join(', ')}.`);
     }
-    // A form placement only makes sense on a contact field: the pre-chat form
-    // runs before any ticket exists, and the post-chat one asks the visitor —
-    // whose identity is the contact — so a ticket field has nothing to write to.
-    if (input.formPlacement && input.entity !== 'contact') {
-      throw ApiError.validation('form_placement: only a contact field can be a widget form field.');
+    // A placement decides which entity its answers land on (FR-MOD-08.7.7), so
+    // the two have to agree: the three forms that ask a visitor about
+    // *themselves* are contact fields, and the `ticket` form — which asks about
+    // the request they are leaving — is a ticket field. Refused rather than
+    // silently corrected, because either half could be the typo.
+    if (input.formPlacement) {
+      assertPlacementEntity(input.formPlacement, input.entity);
     }
     // Same restriction as `formPlacement`, for the same reason: the Contacts
     // table has one row per contact, so a ticket field has no row to render a
@@ -192,10 +195,11 @@ export class CustomFieldService {
     }
     if (patch.required !== undefined) data.required = patch.required;
     if (patch.formPlacement !== undefined) {
-      if (patch.formPlacement && existing.entity !== 'contact') {
-        throw ApiError.validation(
-          'form_placement: only a contact field can be a widget form field.',
-        );
+      // The same agreement `createDefinition` enforces, read against the row's
+      // own entity — which is immutable, so a field cannot be moved between the
+      // chat forms and the ticket form by an edit.
+      if (patch.formPlacement) {
+        assertPlacementEntity(patch.formPlacement, existing.entity as CustomFieldEntity);
       }
       data.formPlacement = patch.formPlacement;
     }
@@ -239,11 +243,15 @@ export class CustomFieldService {
   }
 
   /**
-   * One of the workspace's widget forms (FR-MOD-08.7.7): the contact fields
-   * flagged with this placement, in creation order, shaped for the widget to
-   * render one input per row. Read on every widget token mint, so it stays a
-   * single indexed query and returns only what the widget needs — never the
-   * whole definition.
+   * One of the workspace's widget forms (FR-MOD-08.7.7): the fields flagged
+   * with this placement, in creation order, shaped for the widget to render one
+   * input per row. Read on every widget token mint, so it stays a single
+   * indexed query and returns only what the widget needs — never the whole
+   * definition.
+   *
+   * The entity comes from the placement rather than being passed in: it is the
+   * placement that decides where an answer lands, and a caller free to name a
+   * different one could offer a ticket question on the pre-chat form.
    */
   async listFormFields(
     tx: TenantClient,
@@ -251,7 +259,11 @@ export class CustomFieldService {
     placement: FormPlacement,
   ): Promise<WidgetFormField[]> {
     const rows = await tx.customFieldDefinition.findMany({
-      where: { licenseId: tenant.licenseId, entity: 'contact', formPlacement: placement },
+      where: {
+        licenseId: tenant.licenseId,
+        entity: formPlacementEntity(placement),
+        formPlacement: placement,
+      },
       orderBy: [{ createdAt: 'asc' }],
       select: { id: true, label: true, type: true, required: true },
     });
@@ -273,6 +285,16 @@ export class CustomFieldService {
     return this.listFormFields(tx, tenant, 'post_chat');
   }
 
+  /** The questions about the request, asked when a visitor leaves a message. */
+  listTicketForm(tx: TenantClient, tenant: TenantContext): Promise<WidgetFormField[]> {
+    return this.listFormFields(tx, tenant, 'ticket');
+  }
+
+  /** The questions about the person, asked on that same screen. */
+  listProspectForm(tx: TenantClient, tenant: TenantContext): Promise<WidgetFormField[]> {
+    return this.listFormFields(tx, tenant, 'prospect');
+  }
+
   // --- Values ----------------------------------------------------------------
 
   /**
@@ -290,26 +312,33 @@ export class CustomFieldService {
   }
 
   /**
-   * Answers to one of the widget's forms (FR-MOD-08.7.7), written to the
-   * contact.
+   * Answers to one of the widget's forms (FR-MOD-08.7.7), written to whichever
+   * entity that placement's answers belong to — the contact for the pre-chat,
+   * post-chat and prospect forms, the ticket the visitor just opened for the
+   * ticket form.
    *
    * The narrowing over `setValues` is the point: the party filling this in is a
    * visitor, not an agent, so it may only answer what it was actually *asked*.
-   * A contact custom field the workspace keeps for internal use — a KYC status,
-   * an account tier — is a contact field like any other and `setValues` would
-   * happily take it; here an id without this placement reads as unknown and is
-   * refused. A required field left blank is refused by `setValues` below, the
-   * same rule the pre-chat path applies.
+   * A custom field the workspace keeps for internal use — a KYC status, an
+   * account tier, a refund amount an agent fills in later — is a field like any
+   * other and `setValues` would happily take it; here an id without this
+   * placement reads as unknown and is refused. That refusal is also what keeps
+   * the two forms asked in the same breath apart: a `prospect` id sent as a
+   * ticket answer is as unknown here as an invented one, so a question about
+   * the person can never be written onto the request or the other way round. A
+   * required field left blank is refused by `setValues` below, the same rule the
+   * pre-chat path applies.
    */
   async setFormValues(
     tx: TenantClient,
     tenant: TenantContext,
-    customerId: string,
     placement: FormPlacement,
+    entityId: string,
     values: Record<string, string | null>,
   ): Promise<void> {
+    const entity = formPlacementEntity(placement);
     const asked = await tx.customFieldDefinition.findMany({
-      where: { licenseId: tenant.licenseId, entity: 'contact', formPlacement: placement },
+      where: { licenseId: tenant.licenseId, entity, formPlacement: placement },
       select: { id: true },
     });
     const askedIds = new Set(asked.map((row) => row.id));
@@ -322,7 +351,7 @@ export class CustomFieldService {
       }
     }
 
-    await this.setValues(tx, tenant, 'contact', customerId, values);
+    await this.setValues(tx, tenant, entity, entityId, values);
   }
 
   /**
@@ -389,6 +418,23 @@ export class CustomFieldService {
         });
       }
     }
+  }
+}
+
+/**
+ * Refuse a definition whose placement and entity disagree (FR-MOD-08.7.7).
+ *
+ * The same rule the migration's CHECK holds, stated here so the caller gets a
+ * sentence naming the entity the placement needs rather than a constraint
+ * violation. One function for both create and update: a rule enforced in two
+ * places is a rule that eventually holds in one.
+ */
+function assertPlacementEntity(placement: FormPlacement, entity: CustomFieldEntity): void {
+  const required = formPlacementEntity(placement);
+  if (entity !== required) {
+    throw ApiError.validation(
+      `form_placement: the ${placement} form asks a ${required} field, not a ${entity} one.`,
+    );
   }
 }
 

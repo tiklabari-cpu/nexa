@@ -24,6 +24,20 @@ export interface TrackSaleInput {
   currency: string;
 }
 
+/**
+ * A message left when nobody is available (FR-MOD-08.7.7). The two answer maps
+ * are kept apart because their destinations are: `ticket_fields` are about the
+ * request and land on the ticket this opens, `prospect_fields` are about the
+ * person and land on the contact.
+ */
+export interface LeaveTicketInput {
+  subject: string;
+  name?: string;
+  email: string;
+  ticket_fields?: Record<string, string>;
+  prospect_fields?: Record<string, string>;
+}
+
 export interface WidgetState {
   online: boolean;
   /** Whether an agent is mid-reply, for the "…is typing" line (FR-MOD-02.9). */
@@ -47,6 +61,8 @@ export class WidgetApi {
   #appearance: WidgetAppearance | null = null;
   #preChatForm: WidgetFormField[] = [];
   #postChatForm: WidgetFormField[] = [];
+  #ticketForm: WidgetFormField[] = [];
+  #prospectForm: WidgetFormField[] = [];
 
   /**
    * The credential the socket logs in with (FR-MOD-11.6), or null before the
@@ -102,6 +118,21 @@ export class WidgetApi {
     return this.#postChatForm;
   }
 
+  /**
+   * The questions about the *request*, asked when nobody is available and the
+   * visitor leaves a message instead (FR-MOD-08.7.7). Empty before connect and
+   * for a workspace that has built no offline form — in which case the widget
+   * shows no panel at all, which is what makes the surface opt-in.
+   */
+  get ticketForm(): WidgetFormField[] {
+    return this.#ticketForm;
+  }
+
+  /** The questions about the *person*, asked on that same screen. */
+  get prospectForm(): WidgetFormField[] {
+    return this.#prospectForm;
+  }
+
   constructor(
     private readonly baseUrl: string,
     private readonly organizationId: string,
@@ -138,20 +169,32 @@ export class WidgetApi {
     });
     if (!response.ok) throw new WidgetApiError(await describe(response));
 
-    const { token, customer_id, rtm_url, widget, pre_chat_form, post_chat_form } =
-      (await response.json()) as {
-        token: string;
-        customer_id: string;
-        rtm_url?: string;
-        widget?: WidgetAppearance;
-        pre_chat_form?: WidgetFormField[];
-        post_chat_form?: WidgetFormField[];
-      };
+    const {
+      token,
+      customer_id,
+      rtm_url,
+      widget,
+      pre_chat_form,
+      post_chat_form,
+      ticket_form,
+      prospect_form,
+    } = (await response.json()) as {
+      token: string;
+      customer_id: string;
+      rtm_url?: string;
+      widget?: WidgetAppearance;
+      pre_chat_form?: WidgetFormField[];
+      post_chat_form?: WidgetFormField[];
+      ticket_form?: WidgetFormField[];
+      prospect_form?: WidgetFormField[];
+    };
     this.#token = token;
     this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
     if (widget) this.#appearance = widget;
     this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
+    this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];
+    this.#prospectForm = Array.isArray(prospect_form) ? prospect_form : [];
     safeSetItem('nexa.customer_id', customer_id);
 
     return this.state();
@@ -242,6 +285,17 @@ export class WidgetApi {
    */
   async submitPostChatForm(values: Record<string, string>): Promise<void> {
     await this.#request('POST', '/customer/chat/form-response', { custom_fields: values });
+  }
+
+  /**
+   * Leave a message when nobody is available (FR-MOD-08.7.7): the visitor's
+   * words open a ticket, and both offline forms' answers ride the same request
+   * so the server stores them in the one transaction that creates it. Rejects on
+   * a 400 so the caller can keep the form on screen rather than claim a message
+   * was sent.
+   */
+  async leaveTicket(input: LeaveTicketInput): Promise<{ ticket_id: string }> {
+    return this.#request('POST', '/customer/ticket', input);
   }
 
   async close(): Promise<void> {

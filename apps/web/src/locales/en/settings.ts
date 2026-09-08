@@ -197,10 +197,10 @@ export const settings: Messages = {
     'Add fields your team needs on tickets and contacts, like a player id or a KYC status.',
   'settings.customFields.deleteAriaLabel': 'Delete field {label}',
 
-  // Chat forms (pre/post-chat) — ChatFormsSettings.tsx
+  // Chat forms (pre-chat/post-chat/ticket/prospect) — ChatFormsSettings.tsx
   'settings.chatForms.title': 'Chat forms',
   'settings.chatForms.description':
-    'Ask visitors for details before the chat starts, or once it ends. Answers are saved to the contact and shown in the CRM.',
+    'Ask visitors for details before the chat starts, once it ends, or when nobody is available and they leave a message. Answers are saved to the contact — or, for questions about the message itself, to the ticket it opens.',
   'settings.chatForms.loadError': 'Could not load the chat forms.',
   'settings.chatForms.labelLabel': 'Label',
   'settings.chatForms.labelError': 'Name the field.',
@@ -208,10 +208,12 @@ export const settings: Messages = {
   'settings.chatForms.placementLabel': 'Asked',
   'settings.chatForms.placement.preChat': 'Before the chat',
   'settings.chatForms.placement.postChat': 'After the chat',
+  'settings.chatForms.placement.ticket': 'Offline message — about the request',
+  'settings.chatForms.placement.prospect': 'Offline message — about the person',
   'settings.chatForms.addButton': 'Add field',
   'settings.chatForms.empty.title': 'No chat questions',
   'settings.chatForms.empty.description':
-    'Add a field to ask visitors for details — an order number, an account id — before they start chatting or once the chat ends.',
+    'Add a field to ask visitors for details — an order number, an account id — before they start chatting, once the chat ends, or when they leave a message because nobody is available.',
   'settings.chatForms.deleteAriaLabel': 'Delete field {label}',
 
   // Channels — Channels.tsx

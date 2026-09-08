@@ -10,13 +10,16 @@ import type { TicketRuleActions, TicketRuleConditions, TicketRuleSource } from '
 
 /**
  * What a ticket looks like to a rule at the moment it is opened. `source` widens
- * the two rule-visible origins (`chat`, `email`) with `manual` — a ticket
- * created directly through the API — so a `source` condition simply never
- * matches one, rather than the engine having to special-case it.
+ * the two rule-visible origins (`chat`, `email`) with the ones a `source`
+ * condition cannot name: `manual`, a ticket created directly through the API,
+ * and `widget`, one a visitor left on the offline form (FR-MOD-08.7.7). Both
+ * are carried rather than faked as `chat`/`email` so a `source` condition simply
+ * never matches them — the engine special-cases nothing, and a rule that says
+ * "forwarded by email" cannot fire on a ticket that was not.
  */
 export interface TicketRuleContext {
   subject: string;
-  source: TicketRuleSource | 'manual';
+  source: TicketRuleSource | 'manual' | 'widget';
 }
 
 /**

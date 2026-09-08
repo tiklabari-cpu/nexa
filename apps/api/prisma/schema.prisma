@@ -978,10 +978,12 @@ model CustomFieldDefinition {
   /// 'text' | 'number' | 'boolean' | 'date'.
   type          String
   required      Boolean  @default(false)
-  /// 'pre_chat' or 'post_chat' when this contact field is also asked on one of
-  /// the widget's forms (FR-MOD-08.7.7) — before the conversation starts, or once
-  /// it ends — or null for a CRM-only field. A CHECK in the migration keeps a
-  /// placement to `entity = 'contact'` and to those two values.
+  /// Which of the widget's four forms also asks this field (FR-MOD-08.7.7), or
+  /// null for a CRM-only field: 'pre_chat' before the conversation starts,
+  /// 'post_chat' once it ends, and — on the offline "leave a message" screen —
+  /// 'prospect' about the person and 'ticket' about the request. A CHECK in the
+  /// migration ties each placement to the entity its answers land on: the first
+  /// three to `entity = 'contact'`, 'ticket' to `entity = 'ticket'`.
   formPlacement String?  @map("form_placement")
   /// Show this field as a row-inline column on the Contacts table (FR-MOD-03.2.3)
   /// rather than only in the Details/CRM panel. A CHECK in the migration keeps

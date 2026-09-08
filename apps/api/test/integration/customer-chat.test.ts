@@ -1089,6 +1089,477 @@ describe('customer chat api', () => {
     });
   });
 
+  // The other two forms the PRD counts (FR-MOD-08.7.7): the ones asked when
+  // nobody is available and the visitor leaves a message instead of holding a
+  // conversation. Together they are the only path by which a widget answer
+  // reaches a *ticket* rather than a contact — `ticket` questions are about the
+  // request and land on the ticket the message opens, `prospect` questions are
+  // about the person and land on the contact, exactly where the two chat forms'
+  // answers already go.
+  describe('offline form — ticket + prospect (FR-MOD-08.7.7)', () => {
+    async function formField(
+      placement: 'ticket' | 'prospect',
+      label: string,
+      type: 'text' | 'number' = 'text',
+      required = false,
+      licenseId = fx.a.licenseId,
+    ): Promise<string> {
+      const created = await owner.customFieldDefinition.create({
+        data: {
+          licenseId,
+          entity: placement === 'ticket' ? 'ticket' : 'contact',
+          label,
+          type,
+          required,
+          formPlacement: placement,
+        },
+        select: { id: true },
+      });
+      return created.id;
+    }
+
+    /** The custom-field values an agent reads back off a ticket. */
+    async function ticketFieldValues(
+      ticketId: string,
+    ): Promise<Array<{ definition_id: string; value: string | null }>> {
+      const detail = await server.get(`/tickets/${ticketId}`, auth(ticketToken));
+      expect(detail.statusCode).toBe(200);
+      return (
+        detail.json() as {
+          custom_fields: Array<{ definition_id: string; value: string | null }>;
+        }
+      ).custom_fields;
+    }
+
+    let ticketToken: string;
+
+    beforeEach(async () => {
+      ticketToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['tickets--all:rw', 'customers:rw'],
+      });
+    });
+
+    it('delivers the two offline forms on the widget token, apart from the chat ones', async () => {
+      await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          entity: 'contact',
+          label: 'Order number',
+          type: 'text',
+          formPlacement: 'pre_chat',
+        },
+      });
+      await formField('ticket', 'Affected order');
+      await formField('prospect', 'Company');
+
+      const response = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        { origin: `https://${fx.a.trustedDomain}` },
+      );
+      const body = response.json() as {
+        pre_chat_form: Array<{ label: string }>;
+        post_chat_form: Array<{ label: string }>;
+        ticket_form: Array<{ label: string }>;
+        prospect_form: Array<{ label: string }>;
+      };
+      // Four forms, four disjoint field sets — a question asked on one is never
+      // offered on another.
+      expect(body.pre_chat_form.map((field) => field.label)).toEqual(['Order number']);
+      expect(body.post_chat_form).toEqual([]);
+      expect(body.ticket_form.map((field) => field.label)).toEqual(['Affected order']);
+      expect(body.prospect_form.map((field) => field.label)).toEqual(['Company']);
+    });
+
+    it('writes the ticket form\'s answers to the TICKET (KK "ticket\'a yazma")', async () => {
+      const affected = await formField('ticket', 'Affected order', 'text', true);
+      const { token } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'My order never arrived',
+          email: 'visitor@example.com',
+          ticket_fields: { [affected]: 'ORD-42' },
+        },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(201);
+      const { ticket_id } = left.json() as { ticket_id: string };
+
+      // The ticket exists, carries the visitor's words as its subject, and the
+      // answer is on it — readable by an agent through the ticket detail, the
+      // same place every other ticket custom field is.
+      const detail = await server.get(`/tickets/${ticket_id}`, auth(ticketToken));
+      expect(detail.statusCode).toBe(200);
+      expect((detail.json() as { subject: string }).subject).toBe('My order never arrived');
+      const stored = (await ticketFieldValues(ticket_id)).find(
+        (field) => field.definition_id === affected,
+      );
+      expect(stored?.value).toBe('ORD-42');
+    });
+
+    it("writes the prospect form's answers to the CONTACT, on the same request", async () => {
+      const affected = await formField('ticket', 'Affected order');
+      const company = await formField('prospect', 'Company');
+      const { token, customer_id } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'Bulk pricing?',
+          name: 'Dana',
+          email: 'dana@example.com',
+          ticket_fields: { [affected]: 'ORD-9' },
+          prospect_fields: { [company]: 'Acme Ltd' },
+        },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(201);
+      const { ticket_id } = left.json() as { ticket_id: string };
+
+      // One screen, two destinations: the question about the request is on the
+      // ticket and the question about the person is on the contact.
+      const onTicket = await ticketFieldValues(ticket_id);
+      expect(onTicket.find((field) => field.definition_id === affected)?.value).toBe('ORD-9');
+
+      const contact = await server.get(`/customers/${customer_id}`, auth(agentToken));
+      expect(contact.statusCode).toBe(200);
+      const contactFields = (
+        contact.json() as { custom_fields: Array<{ definition_id: string; value: string | null }> }
+      ).custom_fields;
+      expect(contactFields.find((field) => field.definition_id === company)?.value).toBe(
+        'Acme Ltd',
+      );
+      // …and neither strayed onto the other.
+      expect(contactFields.some((field) => field.definition_id === affected)).toBe(false);
+      expect(onTicket.some((field) => field.definition_id === company)).toBe(false);
+    });
+
+    it('refuses the request until the workspace has built one of the two forms', async () => {
+      // Opt-in: a surface nobody enabled cannot be used, even by a caller
+      // holding a perfectly good customer token.
+      const { token } = await widgetToken();
+      const left = await server.post(
+        '/customer/ticket',
+        { subject: 'Anyone there?', email: 'visitor@example.com' },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(400);
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it('refuses an answer sent under the other form’s heading', async () => {
+      const affected = await formField('ticket', 'Affected order');
+      const company = await formField('prospect', 'Company');
+      const { token } = await widgetToken();
+
+      // Each map is judged against its own placement, so a question about the
+      // person cannot be stored as an answer about the request or vice versa.
+      const swapped = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'Hello',
+          email: 'visitor@example.com',
+          ticket_fields: { [company]: 'Acme Ltd' },
+        },
+        auth(token),
+      );
+      expect(swapped.statusCode).toBe(400);
+
+      const alsoSwapped = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'Hello',
+          email: 'visitor@example.com',
+          prospect_fields: { [affected]: 'ORD-1' },
+        },
+        auth(token),
+      );
+      expect(alsoSwapped.statusCode).toBe(400);
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it('refuses a CRM-only field, and a chat form’s field, from this surface', async () => {
+      await formField('ticket', 'Affected order');
+      const crmOnly = await owner.customFieldDefinition.create({
+        data: { licenseId: fx.a.licenseId, entity: 'contact', label: 'KYC status', type: 'text' },
+        select: { id: true },
+      });
+      const preChat = await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          entity: 'contact',
+          label: 'Order number',
+          type: 'text',
+          formPlacement: 'pre_chat',
+        },
+        select: { id: true },
+      });
+      const agentOnly = await owner.customFieldDefinition.create({
+        data: { licenseId: fx.a.licenseId, entity: 'ticket', label: 'Refund', type: 'number' },
+        select: { id: true },
+      });
+      const { token } = await widgetToken();
+
+      for (const [key, fieldId] of [
+        ['prospect_fields', crmOnly.id],
+        ['prospect_fields', preChat.id],
+        ['ticket_fields', agentOnly.id],
+      ] as const) {
+        const left = await server.post(
+          '/customer/ticket',
+          { subject: 'Hello', email: 'visitor@example.com', [key]: { [fieldId]: 'x' } },
+          auth(token),
+        );
+        expect(left.statusCode).toBe(400);
+      }
+      expect(await owner.ticket.count()).toBe(0);
+      expect(await owner.customFieldValue.count()).toBe(0);
+    });
+
+    it("refuses another tenant's field id, and opens no ticket", async () => {
+      await formField('ticket', 'Affected order');
+      const foreignTicketField = await formField('ticket', 'Secret', 'text', false, fx.b.licenseId);
+      const foreignProspectField = await formField(
+        'prospect',
+        'Secret person',
+        'text',
+        false,
+        fx.b.licenseId,
+      );
+      const { token } = await widgetToken();
+
+      for (const [key, fieldId] of [
+        ['ticket_fields', foreignTicketField],
+        ['prospect_fields', foreignProspectField],
+      ] as const) {
+        const left = await server.post(
+          '/customer/ticket',
+          { subject: 'Hello', email: 'visitor@example.com', [key]: { [fieldId]: 'x' } },
+          auth(token),
+        );
+        expect(left.statusCode).toBe(400);
+      }
+      expect(await owner.ticket.count()).toBe(0);
+      expect(await owner.customFieldValue.count()).toBe(0);
+    });
+
+    it('rejects an ill-typed answer and leaves NO ticket behind (fail-closed)', async () => {
+      // The whole request is one transaction, so a workspace never ends up with
+      // a message whose questions were silently dropped.
+      const amount = await formField('ticket', 'Order total', 'number');
+      const { token } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'Wrong total',
+          email: 'visitor@example.com',
+          ticket_fields: { [amount]: 'not-a-number' },
+        },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(400);
+      expect((left.json() as { error: { type: string } }).error.type).toBe('validation');
+      expect(await owner.ticket.count()).toBe(0);
+      expect(await owner.customFieldValue.count()).toBe(0);
+    });
+
+    it('rejects a blank answer on a required field', async () => {
+      const affected = await formField('ticket', 'Affected order', 'text', true);
+      const { token } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'Hello',
+          email: 'visitor@example.com',
+          ticket_fields: { [affected]: '   ' },
+        },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(400);
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it("records the visitor's e-mail on the contact and makes them a lead (FR-MOD-13.3)", async () => {
+      await formField('prospect', 'Company');
+      const { token, customer_id } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        { subject: 'Bulk pricing?', name: 'Dana', email: 'dana@example.com' },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(201);
+
+      // The funnel keeps one predicate: leaving a message with an e-mail makes
+      // somebody a lead by `is_lead`, exactly as the pre-chat path does — the
+      // `prospect` placement adds no second flag.
+      const contact = await owner.customer.findUniqueOrThrow({
+        where: { id: customer_id },
+        select: { email: true, name: true, isLead: true },
+      });
+      expect(contact.email).toBe('dana@example.com');
+      expect(contact.name).toBe('Dana');
+      expect(contact.isLead).toBe(true);
+    });
+
+    it('requires an e-mail, unlike the chat path', async () => {
+      await formField('ticket', 'Affected order');
+      const { token } = await widgetToken();
+
+      const left = await server.post('/customer/ticket', { subject: 'Hello' }, auth(token));
+      expect(left.statusCode).toBe(400);
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it('masks a card number in the subject (FR-MOD-08.9.5)', async () => {
+      await formField('ticket', 'Affected order');
+      const { token } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        { subject: 'charged twice on 4111 1111 1111 1111', email: 'visitor@example.com' },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(201);
+
+      const ticket = await owner.ticket.findUniqueOrThrow({
+        where: { id: (left.json() as { ticket_id: string }).ticket_id },
+        select: { subject: true },
+      });
+      expect(ticket.subject).not.toContain('4111 1111 1111 1111');
+    });
+
+    it('refuses a spam message and opens no ticket (FR-MOD-08.9.3)', async () => {
+      await formField('ticket', 'Affected order');
+      const { token } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'Congratulations! You have won a prize — click here to claim now',
+          email: 'spam@example.com',
+        },
+        auth(token),
+      );
+      // The chat path's own answer for the same refusal, taxonomy and all.
+      expect(left.statusCode).toBe(403);
+      expect((left.json() as { error: { type: string } }).error.type).toBe('message_rejected');
+      // Generic on purpose: naming the rule would let the filter be probed.
+      expect((left.json() as { error: { message: string } }).error.message).not.toMatch(
+        /spam|blocklist|link/i,
+      );
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it('refuses a banned address, even with a token minted before the ban (FR-MOD-08.9.2)', async () => {
+      await formField('ticket', 'Affected order');
+      const minted = await server.post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        { origin: `https://${fx.a.trustedDomain}`, 'x-forwarded-for': '203.0.113.44' },
+      );
+      const { token } = minted.json() as { token: string };
+
+      await owner.securitySettings.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          brandId: brandA,
+          bannedCustomerIps: ['203.0.113.44'],
+        },
+      });
+
+      const left = await server.post(
+        '/customer/ticket',
+        { subject: 'Hello', email: 'visitor@example.com' },
+        { ...auth(token), 'x-forwarded-for': '203.0.113.44' },
+      );
+      expect(left.statusCode).toBe(403);
+      expect((left.json() as { error: { type: string } }).error.type).toBe('customer_banned');
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it('triages the ticket by subject, but is not matched by a chat- or email-scoped rule', async () => {
+      // A widget-left ticket carries an origin no `source` condition can name,
+      // so a subject rule still fires on it while one scoped to another origin
+      // correctly does not (FR-MOD-08.6.2).
+      await formField('ticket', 'Affected order');
+      await owner.ticketRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          name: 'Urgent refunds',
+          enabled: true,
+          conditions: { subject_contains: 'refund' },
+          actions: { priority: 40 },
+          position: 1,
+        },
+      });
+      await owner.ticketRule.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          name: 'Forwarded mail',
+          enabled: true,
+          conditions: { source: 'email' },
+          actions: { priority: 90 },
+          position: 2,
+        },
+      });
+      const { token } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        { subject: 'I need a refund', email: 'visitor@example.com' },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(201);
+
+      const ticket = await owner.ticket.findUniqueOrThrow({
+        where: { id: (left.json() as { ticket_id: string }).ticket_id },
+        select: { priority: true, status: true, assigneeId: true },
+      });
+      expect(ticket.priority).toBe(40);
+      expect(ticket.status).toBe('open');
+      // A visitor says what they need, never who works on it.
+      expect(ticket.assigneeId).toBeNull();
+    });
+
+    it('refuses an agent token — the widget surface stays disjoint', async () => {
+      await formField('ticket', 'Affected order');
+      const left = await server.post(
+        '/customer/ticket',
+        { subject: 'Hello', email: 'visitor@example.com' },
+        auth(agentToken),
+      );
+      expect(left.statusCode).toBe(404);
+      expect(await owner.ticket.count()).toBe(0);
+    });
+
+    it('refuses a field the visitor was never asked for — assignee, priority, status', async () => {
+      await formField('ticket', 'Affected order');
+      const { token } = await widgetToken();
+
+      const left = await server.post(
+        '/customer/ticket',
+        {
+          subject: 'Hello',
+          email: 'visitor@example.com',
+          priority: 100,
+          status: 'resolved',
+          assignee_id: fx.a.agentAccountId,
+        },
+        auth(token),
+      );
+      expect(left.statusCode).toBe(400);
+      expect(await owner.ticket.count()).toBe(0);
+    });
+  });
+
   // =========================================================================
   // Banned IPs (FR-MOD-08.9.2)
   //

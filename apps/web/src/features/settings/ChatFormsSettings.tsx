@@ -1,23 +1,30 @@
 /**
- * Settings → Chat forms (FR-MOD-08.7.7, "Forms builder (pre/post-chat)").
+ * Settings → Chat forms (FR-MOD-08.7.7, "Forms builder
+ * (pre-chat/post-chat/ticket/prospect)").
  *
  * Its own file rather than a section inside `SettingsPage.tsx` (I18N-i, tm
  * 133.9) — `NotificationSettings.tsx`'s precedent (I18N-e, tm 133.5): the i18n
  * coverage sentinel claims a whole *file* as translated, and `SettingsPage.tsx`
  * still carries sections I18N-j (tm 133.10) owns in English.
  *
- * A field asked in the widget — before the conversation starts (`pre_chat`) or
- * once it ends (`post_chat`). Each is a contact custom field carrying that
- * placement, so an answer is validated by its `type` (KK "tip validasyon") and
- * lands on the contact like any other field (KK "widget'ta gösterim →
- * contact'a yazma") — visible in the CRM, no parallel store. "At least one
- * field": the widget shows a form only once one exists here for that placement.
+ * A field asked in the widget — before the conversation starts (`pre_chat`),
+ * once it ends (`post_chat`), or, when nobody is available and the visitor
+ * leaves a message instead, about that request (`ticket`) or about the person
+ * leaving it (`prospect`). Each is a custom field carrying that placement, so an
+ * answer is validated by its `type` (KK "tip validasyon") and lands on a real
+ * record like any other field (KK "widget'ta gösterim → contact/ticket'a
+ * yazma") — visible in the CRM or on the ticket, no parallel store. "At least
+ * one field": the widget shows a form only once one exists here for it.
  *
- * One builder with a placement selector rather than two sections, because the
- * two forms differ in exactly one property and nothing else: same fields, same
- * types, same destination. Two sections would be the same list rendered twice
- * with a filter, and moving a question from one form to the other would mean
- * deleting it and losing the answers already stored under its id.
+ * One builder with a placement selector rather than four sections, because the
+ * forms differ in exactly one property: same fields, same types, same authoring.
+ * Four sections would be the same list rendered four times with a filter, and
+ * moving a question between forms would mean deleting it and losing the answers
+ * already stored under its id.
+ *
+ * The `entity` is not offered as a choice: a placement already decides it
+ * (`formPlacementEntity`), and letting an admin pick both would let them build a
+ * combination the endpoint and the migration's CHECK would then refuse.
  *
  * The `type` values themselves (`text`, `number`, …) are left untranslated —
  * the same raw-enum precedent as `CustomFieldsSettings.tsx`. The placements are
@@ -35,7 +42,9 @@ import { useTranslate } from '../../lib/i18n.js';
 import {
   CUSTOM_FIELD_TYPES,
   FORM_PLACEMENTS,
+  formPlacementEntity,
   type CustomFieldDefinition,
+  type CustomFieldEntity,
   type CustomFieldType,
   type FormPlacement,
 } from '@nexa/types';
@@ -46,10 +55,12 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
   const queryClient = useQueryClient();
   const [isRequired, setIsRequired] = useState(false);
 
+  // Every custom field, not one entity's: a form question is now either a
+  // contact field or — for the `ticket` placement — a ticket one, and asking
+  // for a single entity would hide half the builder's own list.
   const list = useQuery({
     queryKey: ['settings', 'custom-fields', 'chat-forms'],
-    queryFn: () =>
-      api.get<{ items: CustomFieldDefinition[] }>('/settings/custom-fields?entity=contact'),
+    queryFn: () => api.get<{ items: CustomFieldDefinition[] }>('/settings/custom-fields'),
   });
 
   // Prefix-invalidate so the CRM custom-fields list refreshes too: a form field
@@ -59,15 +70,12 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
 
   const create = useMutation({
     mutationFn: (body: {
+      entity: CustomFieldEntity;
       label: string;
       type: CustomFieldType;
       required: boolean;
       form_placement: FormPlacement;
-    }) =>
-      api.post<CustomFieldDefinition>('/settings/custom-fields', {
-        entity: 'contact',
-        ...body,
-      }),
+    }) => api.post<CustomFieldDefinition>('/settings/custom-fields', body),
     onSuccess: invalidate,
   });
 
@@ -80,12 +88,17 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
     initial: { label: '', type: 'text', placement: 'pre_chat' },
     validators: { label: required(t('settings.chatForms.labelError')) },
     onSubmit: async (values, { setSubmitError, reset }) => {
+      const placement = values.placement as FormPlacement;
       try {
         await create.mutateAsync({
+          // Derived, never chosen: the placement decides where its answers land,
+          // and one shared mapping keeps this form, the endpoint and the CHECK
+          // constraint from disagreeing about which entity that is.
+          entity: formPlacementEntity(placement),
           label: values.label.trim(),
           type: values.type as CustomFieldType,
           required: isRequired,
-          form_placement: values.placement as FormPlacement,
+          form_placement: placement,
         });
         reset();
         setIsRequired(false);
@@ -96,8 +109,8 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
   });
   const labelError = form.errorFor('label');
 
-  // Only the fields asked in the widget: the query returns every contact field,
-  // but this builder is about the ones with a placement.
+  // Only the fields asked in the widget: the query returns every custom field,
+  // on both entities, but this builder is about the ones with a placement.
   const fields = (list.data?.items ?? []).filter((field) => field.form_placement !== null);
 
   return (
@@ -151,8 +164,9 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
                 </select>
               </label>
 
-              {/* Which form the question belongs to — the one thing that makes a
-                  contact field a pre- or a post-chat question. */}
+              {/* Which form the question belongs to — the one property that
+                  separates the four, and the one that decides whether the
+                  answer is about the person or about the request. */}
               <label htmlFor="pcf-placement" className="flex w-40 flex-col gap-1">
                 <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
                   {t('settings.chatForms.placementLabel')}
@@ -237,9 +251,20 @@ export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactEleme
   );
 }
 
-/** `pre_chat` → the catalogue key naming it. One mapping, two call sites. */
+/**
+ * `pre_chat` → the catalogue key naming it. One mapping, two call sites.
+ *
+ * A lookup rather than a chain of ternaries now that there are four: a chain
+ * silently falls through to whichever branch is last when a placement is added,
+ * printing the wrong name instead of failing.
+ */
+const PLACEMENT_KEYS: Record<FormPlacement, string> = {
+  pre_chat: 'settings.chatForms.placement.preChat',
+  post_chat: 'settings.chatForms.placement.postChat',
+  ticket: 'settings.chatForms.placement.ticket',
+  prospect: 'settings.chatForms.placement.prospect',
+};
+
 function placementKey(placement: FormPlacement): string {
-  return placement === 'post_chat'
-    ? 'settings.chatForms.placement.postChat'
-    : 'settings.chatForms.placement.preChat';
+  return PLACEMENT_KEYS[placement];
 }

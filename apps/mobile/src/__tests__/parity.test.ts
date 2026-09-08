@@ -837,7 +837,12 @@ describe('module parity matrix — what is still owed', () => {
       // (`OUT_OF_SCOPE` below); `/reports/shared` is not an app surface at all
       // — it is a browser page for somebody with no account, which is the
       // opposite of what this parity check measures. Nothing here re-scopes.
-      contractEndpoints: 208,
+      // 208 -> 209 with `/customer/ticket` (V8-FORM-PLACE, tm 228). The widget's
+      // offline "leave a message" form — a *visitor* surface behind a customer
+      // token, not an agent one, so it is not in this app's scope for the same
+      // reason `/customer/chat/events` never was: this parity check measures
+      // what an agent can do from a phone. Nothing here re-scopes.
+      contractEndpoints: 209,
       scopeBoundaries: 1,
     });
   });

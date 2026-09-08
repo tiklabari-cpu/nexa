@@ -227,6 +227,36 @@ export const reports: Messages = {
   'reports.reviews.byDay.ratingsColumn': 'Değerlendirmeler',
   'reports.reviews.byDay.goodColumn': 'Olumlu',
   'reports.reviews.byDay.badColumn': 'Olumsuz',
+  // İçgörüler (FR-MOD-07.8) — API kimlik + rakam gönderir, cümle burada kurulur.
+  'reports.reviews.insights.title': 'İçgörüler',
+  'reports.reviews.insights.description':
+    'Bu rakamların ne söylediği — tahmin edilmez, sabit kurallarla türetilir (PRD §7.8).',
+  'reports.reviews.insights.emptyTitle': 'Söylenecek bir şey yok',
+  'reports.reviews.insights.emptyDescription':
+    'Bu dönem, konsolun bu sürümünün ifade edebildiği bir sonuç üretmedi.',
+  'reports.reviews.insights.tone.positive': 'Olumlu',
+  'reports.reviews.insights.tone.negative': 'Dikkat',
+  'reports.reviews.insights.tone.warning': 'Düşük güven',
+  'reports.reviews.insights.tone.neutral': 'Not',
+  'reports.reviews.insights.no_ratings':
+    'Bu dönemde kimse bir sohbeti değerlendirmedi; henüz okunacak bir şey yok.',
+  'reports.reviews.insights.low_base':
+    'Bu dönemde yalnızca {responses} değerlendirme var — trend okumak için çok az, oranlar güvenilir olmayabilir.',
+  'reports.reviews.insights.csat_no_baseline':
+    'Önceki dönemde {previous} değerlendirme var; karşılaştırma için çok az.',
+  'reports.reviews.insights.csat_improved':
+    'Memnuniyet önceki döneme göre {points} puan arttı ({responses} değerlendirme üzerinden).',
+  'reports.reviews.insights.csat_declined':
+    'Memnuniyet önceki döneme göre {points} puan düştü ({responses} değerlendirme üzerinden).',
+  'reports.reviews.insights.csat_steady':
+    'Memnuniyet önceki döneme göre sabit kaldı ({responses} değerlendirme, öncesinde {previous}).',
+  'reports.reviews.insights.all_positive':
+    'Bu dönemdeki {responses} değerlendirmenin tamamı olumlu.',
+  'reports.reviews.insights.all_negative':
+    'Bu dönemdeki {responses} değerlendirmenin tamamı olumsuz.',
+  'reports.reviews.insights.bad_day_concentration':
+    'Bu dönemdeki olumsuz değerlendirmelerin ({bad}) {share} kadarı {date} gününde geldi.',
+
   'reports.reviews.ecommerce.title': 'E-ticaret',
   'reports.reviews.ecommerce.description':
     'Desteklenen sohbetlere atfedilen satışlar (PRD §7.8, izlenen satışlar §13.5).',

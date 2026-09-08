@@ -4815,8 +4815,10 @@ components:
         (not `0`) for an unrated span — the same rule the Overview's satisfaction
         follows. `ecommerce` carries the tracked-sales figures (FR-MOD-13.5) when
         the workspace has sales tracking switched on, and an honest "not set up"
-        block when it has not.
-      required: [range, previous_period, csat, by_day, ecommerce]
+        block when it has not. `insights` is the PRD line's fourth item: the
+        report's own reading of those figures, as identifiers rather than
+        sentences.
+      required: [range, previous_period, csat, by_day, ecommerce, insights]
       properties:
         range:
           type: object
@@ -4880,6 +4882,83 @@ components:
               description: |
                 ISO 4217 code the revenue figure is denominated in, as configured
                 in Settings → Sales tracker. Null while unconfigured.
+        insights:
+          type: array
+          description: |
+            What the figures above say, as a short ordered list of statements
+            (FR-MOD-07.8's "Insights").
+
+            Every one is a deterministic rule over the tallies in this same
+            payload — a threshold, a ratio, a difference. No model is called: the
+            same window must read the same way twice, and a statement nobody can
+            reproduce is not one a workspace can act on.
+
+            The array carries `id` and figures, never a sentence. The wording is
+            the client's, so an insight is as translated as the card it sits
+            under, and a consumer that does not know an `id` can skip it rather
+            than render English at a Turkish workspace.
+
+            Evidence comes before reading. On a window with no ratings the list
+            is exactly `no_ratings`; below the low-base bar it is exactly
+            `low_base`, and no trend is offered — a 30-point swing over three
+            ratings is arithmetic, not information.
+          items:
+            type: object
+            required: [id, tone, values]
+            properties:
+              id:
+                type: string
+                description: |
+                  Which statement this is. `no_ratings` nobody rated ·
+                  `low_base` too few ratings to read · `csat_no_baseline` the
+                  previous window is too thin to compare against ·
+                  `csat_improved` / `csat_declined` / `csat_steady` the movement
+                  against it · `all_positive` / `all_negative` every rating fell
+                  one way · `bad_day_concentration` most of the window's negative
+                  ratings landed on one UTC day.
+                enum:
+                  - no_ratings
+                  - low_base
+                  - csat_no_baseline
+                  - csat_improved
+                  - csat_declined
+                  - csat_steady
+                  - all_positive
+                  - all_negative
+                  - bad_day_concentration
+              tone:
+                type: string
+                description: |
+                  How to colour it. `warning` is a caveat about the evidence
+                  itself; `negative` is a finding about the workspace.
+                enum: [positive, negative, warning, neutral]
+              values:
+                type: object
+                description: |
+                  The figures the statement's sentence interpolates. Which keys
+                  are present depends on `id`; a client renders the ones its
+                  wording uses.
+                properties:
+                  responses:
+                    type: integer
+                    description: Ratings in this window.
+                  previous_responses:
+                    type: integer
+                    description: Ratings in the baseline window.
+                  delta_points:
+                    type: integer
+                    description: |
+                      CSAT change against the baseline window, in whole
+                      percentage points; negative when it fell.
+                  date:
+                    type: string
+                    description: "UTC day the statement points at, as `YYYY-MM-DD`."
+                  bad:
+                    type: integer
+                    description: Negative ratings the statement counts.
+                  share:
+                    type: number
+                    description: A fraction (0–1) the surface formats as a percentage.
 
     ReportsTopics:
       type: object

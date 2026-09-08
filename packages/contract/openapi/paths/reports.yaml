@@ -112,6 +112,12 @@ reviews:
       v2 capability with no data source wired yet, so `configured` is `false` and
       the figures are `null` — the shape is present for the surface to render an
       honest "not set up" state rather than a fabricated zero.
+
+      `insights` is the PRD line's fourth item, and it is the same figures read
+      rather than a second measurement: deterministic rules over the tallies
+      already in this response, returned as identifiers so the wording can be the
+      client's. No model is called, and a window too thin to read gets a caveat
+      instead of a trend.
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"

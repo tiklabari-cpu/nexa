@@ -651,7 +651,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 04.6 | Chatbots / Suspended agents sekmeleri | Should (v1) | ✅ → K04.6 |
 | 07.4       | AI Agent raporu (resolution/deflection)                                                                | Should (v1)    | ✅ → K07.4 |
 | 07.7 | Rapor grupları + Export (CSV) | Should (v1–v2) | ✅ → K07.7 |
-| 07.8       | Reviews / Ratings                                                                                      | Should (v1)    | ◐ → K07.8 |
+| 07.8       | Reviews / Ratings                                                                                      | Should (v1)    | ✅ → K07.8 |
 | 08.5.4 | Messenger (Facebook OAuth) | Must (v1) | ✅ → K08.5.4 |
 | 08.5.5     | Twilio SMS                                                                                             | Must (v1)      | ✅ → K08.5.5 |
 | 08.5.6     | WhatsApp (Business)                                                                                    | Must (v1)      | ✅ → K08.5.6 |
@@ -3656,7 +3656,7 @@ ve `audit:endpoint-ui` süpürmesinden) · 1 kapanış turu.
 | 13  | V8-RPT-NAV       | Reports **sol dikey kenar çubuğu** + kategori grupları/genişleticiler + Export öğesi                     | FR-MOD-07.1      | medium  |  ✅   | 223 |  2   |
 | 14  | V8-RPT-SHARE     | **Paylaşılabilir rapor bağlantısı** (KK'daki "Share export/link"in eksik yarısı)                         | FR-MOD-07.3.1    | medium  |  ✅   | 224 |  2   |
 | 15  | V8-RPT-BENCH     | Chats kartlarının **vs-önceki dönem** ayağı + eksik iki kart (response times · satisfaction)             | FR-MOD-07.3.3    | medium  |  ✅   | 225 |  2   |
-| 16  | V8-RPT-INSIGHT   | Reviews/Ratings'in **Insights** payı — repoda `insight` geçen tek dosya yok                              | FR-MOD-07.8      | medium  |  ⬜   | 226 |  2   |
+| 16  | V8-RPT-INSIGHT   | Reviews/Ratings'in **Insights** payı — repoda `insight` geçen tek dosya yok                              | FR-MOD-07.8      | medium  |  ✅   | 226 |  2   |
 | 17  | V8-TMPL-USE      | Ticket e-posta şablonlarının **tüketicisi** — `renderTemplate`'i kimse çağırmıyor                        | FR-MOD-08.7.5    | medium  |  ⬜   | 227 |  2   |
 | 18  | V8-FORM-PLACE    | Forms builder: `ticket` + `prospect` **yerleşimi** (bugün yalnız pre/post-chat, yalnız contact)          | FR-MOD-08.7.7    | medium  |  ⬜   | 228 |  2   |
 | 19  | V8-APPS-FILTER   | Marketplace **filtre taksonomisi** — koleksiyonlar + ödeme/yerleşim filtreleri                           | FR-MOD-09.1      |   low   |  ⬜   | 229 |  2   |
@@ -5607,6 +5607,24 @@ görüneceği en son yerdir.
   demek olmadı. Kural tek yerde (`@nexa/types` · `pushAllowed`) — 13.7-d, 13.7-j ve panel aynı
   cevabı okur. `localStorage` anahtarı korunur ama artık yalnız **önbellektir**: gelen her
   push'ta çalışan `decideNotification` senkron okumak zorundadır ve bir `fetch` bekleyemez.
+
+- **A34 (tm 226 · V8-RPT-INSIGHT — "Insights" bu üründe NE demektir):** PRD `FR-MOD-07.8` satırı
+  dört kalem sayar (_"rated good/bad; iki dönem karşılaştırma; Ecommerce/Tracked sales;
+  **Insights**"_) ama dördüncüsünü tanımlamaz ve KK sütunu (_"CSAT donut; günlük bar; e-ticaret
+  satış izleme"_) da onu anmaz. Tanım bu yüzden PRD satırından türetildi ve **burada sabitlenir**:
+  **Insights = raporun kendi rakamlarını okuması.** Her ifade, aynı yanıtın içinde zaten bulunan
+  tallies üzerinde çalışan bir **kural**dır (eşik · oran · fark); aynı girdi her zaman aynı çıktıyı,
+  aynı sırayla verir. **LLM ÇAĞRILMAZ** — gerekçe GL-7'nin spam süzgeci kararıyla aynıdır
+  (deterministik kural motoru; test edilebilirlik + yanlış-pozitif denetimi), ve buna ek olarak
+  rakamları hakkında bir cümle okuyan kişinin o cümleyi **yeniden üretebilmesi** gerekir.
+  Üç sınır tanımın parçasıdır: (1) **yeni ölçüm yok** — kural motoru hiçbir sorgu açmaz, dolayısıyla
+  yükün taşımadığı bir rakamı asla alıntılayamaz; (2) **ince örnekte trend yok** —
+  `LOW_BASE_RESPONSES = 20`'nin altında tek çıktı düşük-baz uyarısıdır ve trend kuralı hiç
+  koşmaz (eşik ürünün mevcut eşiğidir: `performance.ts` `LOW_BASE_THRESHOLD`, ikinci bir "kaç az"
+  sayısı yoktur); (3) **cümle sunucuda değil** — API kimlik + rakam gönderir, metin
+  `locales/{en,tr}` içindedir (tm 219 emsali), yani bir içgörü üstündeki kart kadar çevrilidir.
+  Tracked sales (13.5) bilerek kapsam dışıdır: bu raporda karşılaştırma penceresi taşımaz, dolayısıyla
+  üzerine kurulacak her "trend" temelsiz olurdu.
 
 ## D. Deviations (sapmalar)
 
@@ -8707,6 +8725,8 @@ _(Faz-7 · tm 184 — açıldı 2026-09-04. Alt-görevler kapandıkça bu bloğu
 #### K07.8 — 07.8 · Reviews / Ratings
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-07.8` [KISMİ]: PRD satırının 'Insights' kalemi kodda yok: apps/web/src ve apps/api/src genelinde 'insight' geçen tek bir dosya/bileşen/uç yok. KK'daki üç madde (CSAT donut, günlük bar, e-ticaret satış izleme) tam ve testli; eksik olan yalnız açıklamadaki Insights bloğu.
+
+- ✅ **Damga `◐` → `✅` — PRD satırının dördüncü kalemi (`Insights`) yazıldı; ilk üçü değişmedi (tm 226 · V8-RPT-INSIGHT, 2026-09-08).** Denetimin ölçüsü birebir buydu ve bu turda yeniden ölçüldü: `grep -rln "insight" apps/web/src apps/api/src` → **0**, artık **değil**. **TANIM (§C · A34'e yazıldı, görevin BELGE kabul kriteri):** "Insights", raporun **kendi rakamlarını okuması**dır — eşik/oran/fark kuralları, aynı yükün içindeki tallies üzerinde, **LLM yok** (emsal: GL-7 spam süzgeci kararı — deterministik kural motoru, test edilebilirlik). Yeni sorgu, yeni veri kaynağı, yeni rapor grubu **açılmadı**; tracked sales (13.5) ve CSAT hesabı **dokunulmadı**. Saf modül `apps/api/src/services/reports/review-insights.ts` (`reviewInsights(input) → {id, tone, values}[]`), dokuz kimlik: `no_ratings` · `low_base` · `csat_no_baseline` · `csat_improved`/`csat_declined`/`csat_steady` · `all_positive`/`all_negative` · `bad_day_concentration`. **İnce örnek tuzağı yapısal olarak kapalı:** `LOW_BASE_RESPONSES = 20`'nin altında modül **yalnız uyarıyı** döner ve trend kuralı hiç koşmaz — "3 değerlendirmede %30 düşüş" aritmetiktir, bilgi değil; eşik ürünün kendi eşiğidir (`apps/web/src/features/playbook/performance.ts` `LOW_BASE_THRESHOLD`), ikinci bir "kaç az" sayısı icat edilmedi. Aynı bar temel döneme de uygulanır (`csat_no_baseline`), ve yoğunlaşma kuralı en az iki değerlendirilmiş gün ister — tek günlük bir pencerede "olumsuzların hepsi bir günde" totolojidir. **Cümle sunucuda DEĞİL:** API kimlik + rakam gönderir, metin `locales/{en,tr}` içindedir (tm 219 emsali), bilinmeyen bir kimlik ekranda **atlanır**, ham anahtar basılmaz; ton `StatusDot` ile sözcük + glif taşır, renk tek başına değil (NFR-A11Y2). **CSV**: `reviews` tablosunun gün serisi bayt-bayt aynı kaldı, içgörüler `insight_*` önekli, tabloya doldurulmuş `key,value` bloğu olarak arkasına eklendi — `benchmark_*` bloğunun birebir aynı deyimi, tek hücrelik önek testiyle atlanabilir. **15 mutasyon, 15 kırmızı**; dört dosya snapshot'tan `diff -q` ile bayt-birebir geri alındı. **Bilerek eksik:** a11y taraması `/app/reports`'ta kalıyor (Reviews sekmesini hiç açmıyor), yani Insights listesi jsdom + e2e rol iddialarıyla korunuyor, axe ile değil. — `apps/api/src/services/reports/review-insights.ts` (yeni) · `apps/api/src/routes/reports.ts` · `apps/api/src/services/reports/report-csv.ts` · `packages/contract/openapi/{openapi.yaml,paths/reports.yaml}` (208 yol sabit) · `apps/web/src/features/reports/ReportsPage.tsx` · `locales/{en,tr}/reports.ts` · test `apps/api/src/services/reports/review-insights.test.ts` (18, tablo) · `report-csv.test.ts` (+1) · `apps/api/test/integration/reports-billing.test.ts` (+6) · `apps/web/src/features/reports/ReportsPage.test.tsx` (+5) · e2e `apps/e2e/tests/reports.spec.ts` (+1, `kanit/22-reports-reviews-insights.png`) · tm 226
 
 #### K08.9.3 — 08.9.3 · Spam filtre
 

@@ -27,6 +27,24 @@ interface EcommerceBlock {
   currency: string | null;
 }
 
+/** One Insights row (FR-MOD-07.8) — an identifier and figures, never a sentence. */
+interface InsightRow {
+  id: string;
+  tone: string;
+}
+
+/** The Insights the API states for the default window, for a given owner. */
+async function reviewInsights(request: APIRequestContext, token: string): Promise<InsightRow[]> {
+  const response = await request.get(`${API_BASE}/reports/reviews`, {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(
+    response.ok(),
+    `reviews report failed: ${response.status()} ${await response.text()}`,
+  ).toBe(true);
+  return ((await response.json()) as { insights: InsightRow[] }).insights;
+}
+
 /**
  * The Ecommerce block for a given owner, read straight from the API.
  *
@@ -145,15 +163,17 @@ test.describe('reports overview', () => {
     await agentPage.screenshot({ path: 'kanit/21-reports-breakdown.png', fullPage: true });
   });
 
-  test('opens the Reviews tab with CSAT, the daily bar and the seeded tracked sales (07.8, 13.5)', async ({
+  test('opens the Reviews tab with CSAT, insights, the daily bar and the seeded tracked sales (07.8, 13.5)', async ({
     agentPage,
     request,
   }) => {
     await openReportsTab(agentPage, 'Reviews');
 
-    // The three sections of the Reviews report (FR-MOD-07.8): the CSAT donut, the
-    // daily rating bar, and the tracked-sales block — each its own region.
+    // The four sections of the Reviews report (FR-MOD-07.8): the CSAT donut,
+    // the insights read off it, the daily rating bar, and the tracked-sales
+    // block — each its own region.
     await expect(agentPage.getByRole('region', { name: 'Satisfaction (CSAT)' })).toBeVisible();
+    await expect(agentPage.getByRole('region', { name: 'Insights' })).toBeVisible();
     await expect(agentPage.getByRole('region', { name: 'Ratings by day' })).toBeVisible();
     const ecommerce = agentPage.getByRole('region', { name: 'Ecommerce' });
     await expect(ecommerce).toBeVisible();
@@ -180,6 +200,42 @@ test.describe('reports overview', () => {
     await expect(ecommerce.getByText('USD', { exact: true })).toBeVisible();
 
     await agentPage.screenshot({ path: 'kanit/22-reports-reviews.png', fullPage: true });
+  });
+
+  /**
+   * Insights (FR-MOD-07.8) end to end: the API states identifiers, the screen
+   * states sentences, and the two are the same statements.
+   *
+   * The rules themselves are table-tested server-side; what only a browser can
+   * prove is the half the wire deliberately does not carry — that every id the
+   * API sends this build reaches the reader as prose in their own language,
+   * rather than as `csat_no_baseline` on a card.
+   */
+  test('states each insight as a sentence, one per statement the API makes (07.8)', async ({
+    agentPage,
+    request,
+  }) => {
+    await openReportsTab(agentPage, 'Reviews');
+    const insights = agentPage.getByRole('region', { name: 'Insights' });
+    await expect(insights).toBeVisible();
+
+    const stated = await reviewInsights(request, await ownerAccessToken(request));
+    // The seed always produces at least one statement — an unrated window is
+    // itself one ("no_ratings"), so this list is never empty.
+    expect(stated.length).toBeGreaterThan(0);
+    await expect(insights.getByRole('listitem')).toHaveCount(stated.length);
+
+    for (const insight of stated) {
+      // The identifier is the wire's, never the reader's.
+      await expect(insights.getByText(insight.id, { exact: false })).toHaveCount(0);
+    }
+    // Each row carries its tone as a word next to the glyph, so the difference
+    // between a finding and a caveat survives greyscale (NFR-A11Y2).
+    const tones = ['Good', 'Watch', 'Low confidence', 'Note'];
+    const firstRow = insights.getByRole('listitem').first();
+    await expect(firstRow).toContainText(new RegExp(tones.join('|')));
+
+    await agentPage.screenshot({ path: 'kanit/22-reports-reviews-insights.png' });
   });
 
   /**

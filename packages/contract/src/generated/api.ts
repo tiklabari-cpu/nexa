@@ -5546,6 +5546,12 @@ export interface paths {
      *     v2 capability with no data source wired yet, so `configured` is `false` and
      *     the figures are `null` — the shape is present for the surface to render an
      *     honest "not set up" state rather than a fabricated zero.
+     *
+     *     `insights` is the PRD line's fourth item, and it is the same figures read
+     *     rather than a second measurement: deterministic rules over the tallies
+     *     already in this response, returned as identifiers so the wording can be the
+     *     client's. No model is called, and a window too thin to read gets a caveat
+     *     instead of a trend.
      */
     get: operations['getReportsReviews'];
     put?: never;
@@ -10386,7 +10392,9 @@ export interface components {
      *     (not `0`) for an unrated span — the same rule the Overview's satisfaction
      *     follows. `ecommerce` carries the tracked-sales figures (FR-MOD-13.5) when
      *     the workspace has sales tracking switched on, and an honest "not set up"
-     *     block when it has not.
+     *     block when it has not. `insights` is the PRD line's fourth item: the
+     *     report's own reading of those figures, as identifiers rather than
+     *     sentences.
      */
     ReportsReviews: {
       range: {
@@ -10438,6 +10446,75 @@ export interface components {
          */
         currency: string | null;
       };
+      /**
+       * @description What the figures above say, as a short ordered list of statements
+       *     (FR-MOD-07.8's "Insights").
+       *
+       *     Every one is a deterministic rule over the tallies in this same
+       *     payload — a threshold, a ratio, a difference. No model is called: the
+       *     same window must read the same way twice, and a statement nobody can
+       *     reproduce is not one a workspace can act on.
+       *
+       *     The array carries `id` and figures, never a sentence. The wording is
+       *     the client's, so an insight is as translated as the card it sits
+       *     under, and a consumer that does not know an `id` can skip it rather
+       *     than render English at a Turkish workspace.
+       *
+       *     Evidence comes before reading. On a window with no ratings the list
+       *     is exactly `no_ratings`; below the low-base bar it is exactly
+       *     `low_base`, and no trend is offered — a 30-point swing over three
+       *     ratings is arithmetic, not information.
+       */
+      insights: {
+        /**
+         * @description Which statement this is. `no_ratings` nobody rated ·
+         *     `low_base` too few ratings to read · `csat_no_baseline` the
+         *     previous window is too thin to compare against ·
+         *     `csat_improved` / `csat_declined` / `csat_steady` the movement
+         *     against it · `all_positive` / `all_negative` every rating fell
+         *     one way · `bad_day_concentration` most of the window's negative
+         *     ratings landed on one UTC day.
+         * @enum {string}
+         */
+        id:
+          | 'no_ratings'
+          | 'low_base'
+          | 'csat_no_baseline'
+          | 'csat_improved'
+          | 'csat_declined'
+          | 'csat_steady'
+          | 'all_positive'
+          | 'all_negative'
+          | 'bad_day_concentration';
+        /**
+         * @description How to colour it. `warning` is a caveat about the evidence
+         *     itself; `negative` is a finding about the workspace.
+         * @enum {string}
+         */
+        tone: 'positive' | 'negative' | 'warning' | 'neutral';
+        /**
+         * @description The figures the statement's sentence interpolates. Which keys
+         *     are present depends on `id`; a client renders the ones its
+         *     wording uses.
+         */
+        values: {
+          /** @description Ratings in this window. */
+          responses?: number;
+          /** @description Ratings in the baseline window. */
+          previous_responses?: number;
+          /**
+           * @description CSAT change against the baseline window, in whole
+           *     percentage points; negative when it fell.
+           */
+          delta_points?: number;
+          /** @description UTC day the statement points at, as `YYYY-MM-DD`. */
+          date?: string;
+          /** @description Negative ratings the statement counts. */
+          bad?: number;
+          /** @description A fraction (0–1) the surface formats as a percentage. */
+          share?: number;
+        };
+      }[];
     };
     /**
      * @description The Chat topics report (FR-MOD-07.6): conversations in the window grouped

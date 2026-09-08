@@ -4,10 +4,17 @@ import type { Messages } from '../merge.js';
  * Inbox: views rail, conversation list, transcript, composer, details,
  * Copilot, and the ticket half of the surface (I18N-c, tm 133.3).
  *
- * Reply Suggestions (`replySuggestions.ts`) and the BI example questions in
- * `CopilotPanel.tsx` stay out of this catalogue on purpose: they are drafted
- * text fed to (or matched against) the AI mocks, not chrome, and PRD §9
+ * The BI example questions in `CopilotPanel.tsx` stay out of this catalogue on
+ * purpose: they are text matched against the AI mocks, not chrome, and PRD §9
  * excludes conversation content from translation.
+ *
+ * Reply Suggestions (`replySuggestions.ts`) used to be exempted on the same
+ * grounds and no longer is (tm 219). PRD §9 keeps *conversation* content out of
+ * translation — what the customer wrote, what the agent typed — and a chip is
+ * neither: it is a phrase the product authored and is offering, so a Turkish
+ * agent being offered it in English is the same defect as an English rail
+ * label in a Turkish console. The generator now yields intent ids and the
+ * `inbox.composer.suggestions.chip.*` keys below say them.
  */
 export const inbox: Messages = {
   // Views rail
@@ -112,6 +119,26 @@ export const inbox: Messages = {
   'inbox.composer.attachment.remove': 'Remove attachment',
   'inbox.composer.suggestions.ariaLabel': 'Reply suggestions',
   'inbox.composer.suggestions.dismiss': 'Dismiss reply suggestions',
+  'inbox.composer.suggestions.copilotPending': 'Copilot is drafting…',
+  'inbox.composer.suggestions.fromCopilot': 'Drafted from your Copilot knowledge base',
+  // One per `ReplySuggestionId` — the chips Space offers. Editable drafts, so
+  // they are written to be sent as they stand and improved in a keystroke.
+  'inbox.composer.suggestions.chip.opener':
+    'Hi there! Thanks for reaching out — how can I help you today?',
+  'inbox.composer.suggestions.chip.greeting': 'Hi there! How can I help you today?',
+  'inbox.composer.suggestions.chip.thanks':
+    'You’re very welcome! Is there anything else I can help you with?',
+  'inbox.composer.suggestions.chip.order':
+    'Happy to help with that — let me pull up the details and take a look.',
+  'inbox.composer.suggestions.chip.question':
+    'Great question — let me look into that and get right back to you.',
+  'inbox.composer.suggestions.chip.questionWait':
+    'Thanks for asking! One moment while I find the answer for you.',
+  'inbox.composer.suggestions.chip.details':
+    'Thanks for the details — let me take a look and get back to you.',
+  'inbox.composer.suggestions.chip.holdingBear':
+    'I’m still on it — please bear with me for a moment.',
+  'inbox.composer.suggestions.chip.holdingMoment': 'Give me a moment, I’ll check that for you.',
   'inbox.composer.picker.ariaLabel': 'Saved replies',
   'inbox.composer.placeholder.note': 'Add a note for your team…',
   'inbox.composer.placeholder.reply': 'Type your reply, or press Space for suggestions…',

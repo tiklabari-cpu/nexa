@@ -175,8 +175,10 @@ const TEXT_FREE_FILES: readonly string[] = [
   // Not a design-system primitive but the same shape of exemption: every word
   // `renderRichText` puts on screen is `content` lifted from a chat message,
   // never chrome of its own — and PRD §9 excludes conversation content from
-  // translation (the same reason `replySuggestions.ts` stays out of the
-  // catalogue entirely, noted at the top of `locales/en/inbox.ts`).
+  // translation. Reply Suggestions used to be listed alongside it and no longer
+  // is (tm 219): a suggested reply is a phrase the *product* wrote, not one a
+  // person in the conversation did, so it belongs in the catalogue — see the
+  // header of `locales/en/inbox.ts` for the full reasoning.
   'src/features/inbox/richText.tsx',
   // No text of its own — a bare open/close boolean around `TeamEditor`, whose
   // own file (already registered) carries every word the form shows.

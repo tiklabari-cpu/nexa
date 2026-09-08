@@ -302,8 +302,14 @@ describe('copilot (agent-assist)', () => {
     });
   });
 
+  /**
+   * This is the endpoint Reply Suggestions draws its AI chip from (tm 219): the
+   * composer's Space shortcut calls it in the background and puts the draft at
+   * the head of the chip row, so a break here is a break in FR-MOD-02.3.2's
+   * "AI" half as well as in the Copilot panel's Draft a reply.
+   */
   describe('reply draft from the copilot base (12.3)', () => {
-    it('drafts from the copilot knowledge base using the latest customer message', async () => {
+    it('drafts from the copilot knowledge base using the latest customer message (FR-MOD-12.3 · FR-MOD-02.3.2)', async () => {
       const token = await agentToken(fx.a);
       await server.post(
         '/copilot/knowledge',
@@ -334,6 +340,20 @@ describe('copilot (agent-assist)', () => {
       const response = await server.post(`/copilot/chats/${chatId}/reply`, undefined, auth(token));
       expect(response.statusCode).toBe(200);
       expect((response.json() as { draft: string }).draft).toBe('');
+    });
+
+    it("cannot draft from another tenant's chat (FR-MOD-02.3.2 · NFR-S1)", async () => {
+      // The summary route has had this fence since 12.3. It matters twice over
+      // now: Reply Suggestions calls this route for every agent who presses
+      // Space, so a chat id guessed from anywhere would otherwise leak the
+      // other workspace's conversation back as a suggestion chip. 404 rather
+      // than 403 — the same refusal shape, so the id's existence is not news.
+      const tokenA = await agentToken(fx.a);
+      const chatId = await chatWithMessage(tokenA, 'I want a refund over five hundred dollars.');
+      const tokenB = await agentToken(fx.b);
+      expect(
+        (await server.post(`/copilot/chats/${chatId}/reply`, undefined, auth(tokenB))).statusCode,
+      ).toBe(404);
     });
   });
 

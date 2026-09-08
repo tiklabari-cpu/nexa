@@ -5,6 +5,7 @@ import {
   findTemplateProblemsIn,
   isTemplateValid,
   renderTemplate,
+  templateVariablesUsed,
 } from './template-variables.js';
 
 /**
@@ -91,6 +92,39 @@ describe('ticket email template variables', () => {
 
     it('tolerates spacing inside the placeholder', () => {
       expect(renderTemplate('{{  ticket.id  }}', { 'ticket.id': 'T-7' })).toBe('T-7');
+    });
+  });
+
+  /**
+   * What an audit entry is allowed to say about a message that went out. The
+   * resolved values are the customer's data; the variable *names* are the
+   * workspace's own template, so only they may be recorded (FR-MOD-08.3 ·
+   * M-CO-a) — this is the function that draws that line.
+   */
+  describe('templateVariablesUsed', () => {
+    it('lists the variables the text names, subject first, without repeats', () => {
+      expect(
+        templateVariablesUsed({
+          subject: 'Ticket {{ticket.id}}',
+          body: 'Hi {{customer.name}}, ticket {{ticket.id}} is {{ticket.status}}.',
+        }),
+      ).toEqual(['ticket.id', 'customer.name', 'ticket.status']);
+    });
+
+    it('is empty for text with no placeholders', () => {
+      expect(templateVariablesUsed({ subject: 'Hello', body: 'No variables here.' })).toEqual([]);
+    });
+
+    it('ignores a placeholder naming something the catalogue does not have', () => {
+      expect(templateVariablesUsed({ subject: '{{ticket.titel}}', body: '{{ticket.id}}' })).toEqual(
+        ['ticket.id'],
+      );
+    });
+
+    it('does not mistake a longer name for a catalogued one', () => {
+      // Why this reads the placeholder regex rather than searching the text for
+      // each catalogue entry: `ticket.identifier` contains `ticket.id`.
+      expect(templateVariablesUsed({ subject: '{{ticket.identifier}}', body: '' })).toEqual([]);
     });
   });
 });

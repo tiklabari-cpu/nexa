@@ -13,7 +13,10 @@
  * created *or reopened*, priority is set to the same level each run, and adding a
  * follower is a server-side no-op when it is already there.
  */
-import { expect, test } from './fixtures.js';
+import { readdir, readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { API_BASE, expect, ownerAccessToken, test } from './fixtures.js';
 
 test.describe('ticket HelpDesk surface', () => {
   // The transcript header is deliberately tight; at the default width its
@@ -177,5 +180,123 @@ test.describe('ticket HelpDesk surface', () => {
       'aria-current',
       'page',
     );
+  });
+});
+
+/**
+ * The consuming half of ticket e-mail templates (FR-MOD-08.7.5).
+ *
+ * The integration suite proves the rendering, the refusals and the tenant
+ * boundary against an injected mailer. What only the live stack proves is that
+ * the loop closes at all: a template an admin authored through the product, a
+ * status change an agent made in a browser, and a message on the spool whose
+ * body came from that template with this ticket's values in it.
+ *
+ * The spool is the `file` mailer's directory (`MAIL_DIR`, PLAN assumption A4 —
+ * no real SMTP in this build). Reading it back is the honest evidence: the claim
+ * is not "mail was delivered" but "what left carried the template".
+ */
+test.describe('ticket e-mail template — a status change mails the customer (FR-MOD-08.7.5)', () => {
+  test.use({ viewport: { width: 1680, height: 1050 } });
+
+  const TEMPLATE_NAME = 'E2E status notice';
+  const MARKER = 'nexa-e2e-template-marker';
+  const SUBJECT = `${MARKER} {{ticket.id}} is {{ticket.status}}`;
+  const BODY = `Hello {{customer.name}}, "{{ticket.subject}}" is now {{ticket.status}}. ${MARKER}`;
+
+  /** Where the `file` provider spools, relative to the API package that runs it. */
+  const MAIL_DIR = fileURLToPath(new URL('../../api/.data/mail', import.meta.url));
+
+  /** Messages carrying our marker, so a shared spool from other suites cannot fool us. */
+  async function markedMessages(): Promise<Array<{ to: string; subject: string; body: string }>> {
+    let names: string[];
+    try {
+      names = await readdir(MAIL_DIR);
+    } catch {
+      return [];
+    }
+    const messages = await Promise.all(
+      names
+        .filter((name) => name.includes('-ticket_notice-') && name.endsWith('.json'))
+        .map(async (name) => JSON.parse(await readFile(join(MAIL_DIR, name), 'utf8'))),
+    );
+    return messages.filter((message) => String(message.subject).includes(MARKER));
+  }
+
+  test('renders the authored template into the message that goes out', async ({
+    agentPage,
+    request: apiRequest,
+  }) => {
+    const token = await ownerAccessToken(apiRequest);
+    const authorised = { headers: { authorization: `Bearer ${token}` } };
+
+    // Author the template through the product's own endpoint — the same one the
+    // Settings screen posts to, and the one that enforces the placeholder rule.
+    // Idempotent: the seed is re-run without truncating, so a re-run reuses it.
+    const existing = await apiRequest.get(
+      `${API_BASE}/settings/ticket-email-templates`,
+      authorised,
+    );
+    expect(existing.ok()).toBe(true);
+    const items = ((await existing.json()) as { items: Array<{ id: string; name: string }> }).items;
+    if (!items.some((item) => item.name === TEMPLATE_NAME)) {
+      const created = await apiRequest.post(`${API_BASE}/settings/ticket-email-templates`, {
+        ...authorised,
+        data: { name: TEMPLATE_NAME, subject: SUBJECT, body: BODY, enabled: true },
+      });
+      expect(created.ok(), `template failed: ${created.status()}`).toBe(true);
+    }
+
+    const before = (await markedMessages()).length;
+
+    // A ticket off a seeded conversation, whose customer has an address.
+    await agentPage.goto('/app/inbox');
+    await agentPage
+      .getByRole('region', { name: 'Conversations' })
+      .getByRole('button')
+      .first()
+      .click();
+    await agentPage.getByRole('button', { name: 'Create ticket', exact: true }).click();
+    await agentPage.getByRole('button', { name: 'Create', exact: true }).click();
+
+    const openExisting = agentPage.getByRole('button', { name: 'Open it' });
+    const status = agentPage.getByLabel('Status');
+    await status.or(openExisting).first().waitFor();
+    if (await openExisting.isVisible()) await openExisting.click();
+    await expect(status).toBeVisible();
+
+    // The picker only exists because the ticket has a customer to write to and
+    // the workspace has an enabled template — both of which are now true.
+    const notice = agentPage.getByLabel('Notify the customer');
+    await expect(notice).toBeVisible();
+    await notice.selectOption({ label: TEMPLATE_NAME });
+
+    // A real transition, since a notice is refused without one. `pending` and
+    // `solved` alternate so a re-run always has somewhere to move to.
+    const next = (await status.inputValue()) === 'pending' ? 'solved' : 'pending';
+    await status.selectOption(next);
+    await expect(status).toHaveValue(next);
+
+    // The message on the spool, with this ticket's values substituted in.
+    await expect
+      .poll(async () => (await markedMessages()).length, { timeout: 10_000 })
+      .toBeGreaterThan(before);
+
+    const sent = (await markedMessages()).at(-1)!;
+    expect(sent.to).toContain('@');
+    expect(sent.subject).toContain(`is ${next}`);
+    expect(sent.body).toContain(`is now ${next}.`);
+    // The property the whole feature turns on: nothing placeholder-shaped
+    // survived into the message.
+    expect(sent.subject + sent.body).not.toContain('{{');
+    expect(sent.subject + sent.body).not.toContain('}}');
+
+    // And the picker resets, so the next transition is its own decision.
+    await expect(notice).toHaveValue('');
+
+    await agentPage.screenshot({
+      path: 'kanit/08.7.5-ticket-email-template.png',
+      fullPage: true,
+    });
   });
 });

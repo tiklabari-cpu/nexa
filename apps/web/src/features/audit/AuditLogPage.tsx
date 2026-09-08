@@ -186,6 +186,11 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'ticket.unmerged',
       'ticket.follower_added',
       'ticket.follower_removed',
+      // A templated notice mailed to the ticket's customer (FR-MOD-08.7.5).
+      // Filed with the ticket lifecycle rather than apart from it: what an
+      // auditor is looking for is everything that happened to a ticket, and
+      // "we told the customer" is one of those things.
+      'ticket.email_sent',
     ],
   },
   {

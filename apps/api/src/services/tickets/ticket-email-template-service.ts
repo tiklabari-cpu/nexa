@@ -11,11 +11,12 @@
  * template that would render broken mail can never reach the table.
  */
 import type { Prisma } from '@prisma/client';
-import type { TicketEmailTemplate } from '@nexa/types';
+import type { TicketEmailTemplate, TicketStatus } from '@nexa/types';
 import { findTemplateProblemsIn } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';
+import { renderTicketEmail, type RenderedTicketEmail } from './ticket-email.js';
 
 export interface TicketEmailTemplateInput {
   name: string;
@@ -109,6 +110,94 @@ export class TicketEmailTemplateService {
 
     const updated = await tx.ticketEmailTemplate.update({ where: { id }, data });
     return toDto(updated);
+  }
+
+  /**
+   * Turn one stored template into the message a ticket transition should send,
+   * or refuse (FR-MOD-08.7.5 — the consuming half).
+   *
+   * Runs *inside* the caller's transaction, before the transition is applied, so
+   * every refusal below rolls the whole change back. That ordering is the point:
+   * an agent who asked to solve a ticket *and* tell the customer must not end up
+   * with a solved ticket and a silent customer. Either both happen or neither
+   * does, and the reason is on the response.
+   *
+   * The lookup is licence-scoped, so a template id from another workspace is
+   * simply not found — the same 404 an invented id gets (NFR-S5: absent, not
+   * forbidden). RLS says the same thing underneath; the `where` is the belt.
+   *
+   * Nothing is sent from here. The rendered message goes back to the caller to
+   * be handed to the mailer *after* the commit, because a mail is a side effect
+   * that must not be able to hold a transaction open or be undone by a rollback.
+   */
+  async prepareTicketEmail(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: {
+      templateId: string;
+      ticket: {
+        id: string;
+        subject: string;
+        priority: number;
+        customer_name: string | null;
+        customer_email: string | null;
+      };
+      /** The status the ticket is moving to — what the notice is about. */
+      nextStatus: TicketStatus;
+      /** The account behind the change, or null when the caller names no person. */
+      agentAccountId: string | null;
+    },
+  ): Promise<RenderedTicketEmail> {
+    const template = await tx.ticketEmailTemplate.findFirst({
+      where: { id: input.templateId, licenseId: tenant.licenseId },
+      select: { id: true, subject: true, body: true, enabled: true },
+    });
+    if (!template) throw ApiError.notFound('Ticket e-mail template not found.');
+
+    // The two names a *branded* notice needs: who is writing, and on whose
+    // behalf. Both are best-effort — a template that names neither renders
+    // identically either way, and a missing account is not a reason to refuse a
+    // message the customer is waiting for.
+    const [agent, organization] = await Promise.all([
+      input.agentAccountId
+        ? tx.account.findUnique({ where: { id: input.agentAccountId }, select: { name: true } })
+        : Promise.resolve(null),
+      tx.organization.findUnique({
+        where: { id: tenant.organizationId },
+        select: { name: true },
+      }),
+    ]);
+
+    const outcome = renderTicketEmail(template, {
+      ticketId: input.ticket.id,
+      subject: input.ticket.subject,
+      status: input.nextStatus,
+      priority: input.ticket.priority,
+      customerName: input.ticket.customer_name,
+      customerEmail: input.ticket.customer_email,
+      agentName: agent?.name ?? null,
+      companyName: organization?.name ?? null,
+    });
+
+    if (outcome.ok) return outcome.message;
+
+    // Each refusal names what the sender has to change, and none of them leaks
+    // the rendered text — the messages talk about the *template*, never about
+    // the customer.
+    switch (outcome.refusal.reason) {
+      case 'disabled':
+        throw ApiError.validation(
+          'email_template_id: this template is turned off; enable it before sending with it.',
+        );
+      case 'invalid_template':
+        throw ApiError.validation(
+          `email_template_id: ${outcome.refusal.problem.field}: ${outcome.refusal.problem.message}`,
+        );
+      case 'no_recipient':
+        throw ApiError.validation(
+          'email_template_id: this ticket has no customer e-mail address to write to.',
+        );
+    }
   }
 
   /** Delete a template. Scoped by licence so an id alone cannot reach another tenant's. */

@@ -24,9 +24,13 @@ export interface Message {
    * file name embeds it (`${stamp}-${kind}-...`), so a scheduled delivery is
    * distinguishable from an ordinary notification in the mailbox and in a test
    * that filters `outbox()` by kind, without opening every message to tell them
-   * apart.
+   * apart. `ticket_notice` — a ticket transition mailed to a customer from a
+   * workspace's own template (FR-MOD-08.7.5) — is separate for the same reason,
+   * and for one more: it is the only kind that leaves the workspace carrying
+   * text the workspace wrote, so "what did we send our customers" is a mailbox
+   * filter rather than an audit reconstruction.
    */
-  kind: 'password_reset' | 'invitation' | 'notification' | 'scheduled_report';
+  kind: 'password_reset' | 'invitation' | 'notification' | 'scheduled_report' | 'ticket_notice';
 }
 
 export interface Mailer {

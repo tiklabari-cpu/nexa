@@ -324,7 +324,7 @@ export async function buildServer({
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
       await api.register(goalRoutes);
-      await api.register(ticketRoutes, { automations });
+      await api.register(ticketRoutes, { automations, mailer });
       await api.register(ticketRuleRoutes);
       await api.register(ticketEmailTemplateRoutes);
       await api.register(customFieldRoutes);

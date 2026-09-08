@@ -290,6 +290,13 @@ export const AUDIT_ACTIONS = [
   'ticket.unmerged',
   'ticket.follower_added',
   'ticket.follower_removed',
+  // A templated notice was mailed to a ticket's customer (FR-MOD-08.7.5). Data
+  // left the workspace, addressed to a person, in text the workspace authored —
+  // that is the class of event this trail is for. Metadata names the template
+  // and the *variables* it drew on, never their resolved values and never the
+  // rendered body: the message is customer data, and copying it into an
+  // append-only log would put it somewhere it can never be erased from.
+  'ticket.email_sent',
   // Supervision (FR-MOD-08.6.3 / NFR-S12). A supervisor forcibly took a chat
   // from whoever held it — an authority action on someone *else's* conversation,
   // so it is recorded. The entry names the actor, the chat and the previous

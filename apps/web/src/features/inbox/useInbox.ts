@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { ROUTING_STATUSES, type AdapterChannelType } from '@nexa/types';
 import { RtmClient, type PushHandler } from '../../lib/realtime.js';
+import { noteTrafficVisitorUpdated } from '../../lib/traffic-live.js';
 import { setRealtimeStatus } from '../../lib/realtime-status.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
@@ -824,6 +825,12 @@ export function useRealtime(onPush?: PushHandler): void {
         'incoming_typing_indicator',
         'incoming_sneak_peek',
         'agent_conflict_warning',
+        // The real-time traffic board's own signal (FR-MOD-03.1.1). Subscribed
+        // here, with the others, rather than by the board: the socket belongs to
+        // the shell and outlives every route, so a subscription taken out when
+        // the board mounts would be a second `login` — and the board is exactly
+        // the screen an agent leaves open in another tab.
+        'traffic_visitor_updated',
       ],
       onStatusChange: setRealtimeStatus,
       onPush: (action, payload) => {
@@ -1002,6 +1009,20 @@ export function applyPush(
       // where the avatars' refetch was not: this key is only active while
       // someone has the Team console open, so an inactive one costs nothing.
       void queryClient.invalidateQueries({ queryKey: ['team', 'agents'] });
+      return;
+    }
+
+    case 'traffic_visitor_updated': {
+      // Someone moved on the live-visitor board (FR-MOD-03.1.1). Deliberately
+      // not written into the `['traffic']` cache here, and deliberately not an
+      // `invalidateQueries` either: the board is an infinite query, so
+      // invalidating it refetches *every* page loaded so far, which is the cost
+      // the 8s poll was built to avoid (`TrafficPage.tsx`'s header). The signal
+      // goes to the board's own store instead and it re-reads its first page
+      // through the one merger both triggers share, `mergeTrafficHead`.
+      const customerId = payload['customer_id'];
+      if (typeof customerId !== 'string') return;
+      noteTrafficVisitorUpdated(customerId);
       return;
     }
 

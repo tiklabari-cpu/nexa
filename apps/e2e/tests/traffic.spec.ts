@@ -22,10 +22,14 @@ import {
   ownerAccessToken,
   REFERRING_SITE,
   visitorSends,
+  widgetFrame,
 } from './fixtures.js';
 
 /** NFR-P2: reads are budgeted at p99 < 150 ms. */
 const READ_BUDGET_MS = 150;
+
+/** `TRAFFIC_REFRESH_MS` — the board's backup poll, mirrored from the client. */
+const POLL_PERIOD_MS = 8_000;
 
 test.describe('real-time traffic', () => {
   test('surfaces a live visitor with row actions, reached via the Real-time tab', async ({
@@ -58,6 +62,108 @@ test.describe('real-time traffic', () => {
       await expect(row.getByRole('button', { name: 'Assign chat to me' })).toBeVisible();
 
       await agentPage.screenshot({ path: 'kanit/03-traffic-board.png', fullPage: true });
+    } finally {
+      await visitorContext.close();
+    }
+  });
+
+  test('a visitor changes state on an open board, with no reload (FR-MOD-03.1.1)', async ({
+    browser,
+    request,
+    agentPage,
+    organizationId,
+  }) => {
+    // Two round trips through the widget plus a chat close, on a shared seeded
+    // workspace.
+    test.setTimeout(90_000);
+
+    const stamp = Date.now().toString().slice(-6);
+    const visitorName = `E2E Live ${stamp}`;
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    const visitorContext = await browser.newContext();
+    const visitor = await visitorContext.newPage();
+
+    try {
+      // --- A visitor who is browsing, and nothing more ----------------------
+      // The widget can only record a visit by sending, so the conversation that
+      // opens is closed again from the agent side — leaving a live visit and no
+      // chat, which is what `browsing` means.
+      await openWidget(visitor, organizationId);
+      await visitorSends(visitor, `Live board ${stamp}`);
+
+      const newest = await request.get(`${API_BASE}/customers?segment=all&limit=1`, {
+        headers: auth,
+      });
+      expect(newest.ok(), `customers read failed: ${newest.status()}`).toBe(true);
+      const arrival = (
+        (await newest.json()) as { items: Array<{ id: string; name: string | null }> }
+      ).items[0];
+      expect(arrival?.name, 'newest contact is not the anonymous visitor just created').toBeNull();
+      const customerId = arrival!.id;
+
+      // Named, because every other widget visitor on this shared board also
+      // reads "Unnamed visitor".
+      const named = await request.patch(`${API_BASE}/customers/${customerId}`, {
+        headers: auth,
+        data: { name: visitorName },
+      });
+      expect(named.ok(), `naming failed: ${named.status()}`).toBe(true);
+
+      const detail = await request.get(`${API_BASE}/customers/${customerId}`, { headers: auth });
+      expect(detail.ok()).toBe(true);
+      const openChat = (
+        (await detail.json()) as { chats: Array<{ id: string; active: boolean }> }
+      ).chats.find((chat) => chat.active);
+      expect(openChat, 'the widget message did not open a conversation').toBeDefined();
+      const closed = await request.post(`${API_BASE}/chats/${openChat!.id}/deactivate`, {
+        headers: auth,
+      });
+      expect(closed.ok(), `deactivate failed: ${closed.status()}`).toBe(true);
+
+      // --- The board, opened once and never reloaded again ------------------
+      // Every timestamp of a first-page read the board makes, so the assertion
+      // below can be about *why* it read rather than only that it did.
+      const headReads: number[] = [];
+      agentPage.on('request', (req) => {
+        const url = req.url();
+        if (url.includes('/traffic?') && !url.includes('page_id=')) headReads.push(Date.now());
+      });
+
+      await agentPage.goto('/app/customers/real-time');
+      const table = agentPage.getByRole('table', { name: 'Live visitors' });
+      const row = table.getByRole('row').filter({ hasText: visitorName });
+      await expect(row).toContainText('Browsing');
+
+      // The widget noticed the agent's close and swapped its composer for the
+      // "chat ended" banner (FR-MOD-11.4-b). Re-armed here, before the phase is
+      // synchronised below, because the button only clears a client-side flag —
+      // nothing reaches the server until the visitor actually sends.
+      await widgetFrame(visitor).getByRole('button', { name: 'Start a new chat' }).click();
+
+      // The phase is synchronised on purpose: act right after a read, so the
+      // timer's next tick is a full period away and cannot be what answers.
+      const readsBefore = headReads.length;
+      await expect
+        .poll(() => headReads.length, { timeout: POLL_PERIOD_MS * 2 })
+        .toBeGreaterThan(readsBefore);
+      const lastReadBefore = headReads.at(-1)!;
+
+      // --- Browsing → in a conversation, live -------------------------------
+      await visitorSends(visitor, `Are you there? ${stamp}`);
+
+      // No `goto`, no reload, no click: the row changes under an untouched page.
+      await expect(row).toContainText(/Chatting|Waiting for reply|Queued/, { timeout: 6_000 });
+      await agentPage.screenshot({ path: 'kanit/03.1.1-traffic-live.png', fullPage: true });
+
+      // Why it changed, not just that it did. Two consecutive reads from the
+      // timer are a full `TRAFFIC_REFRESH_MS` apart — never less — so a gap
+      // materially under one period is a read the socket asked for. This holds
+      // however long the widget itself took to send, which is what makes it a
+      // proof rather than a race the machine could lose.
+      const readAfter = headReads.find((at) => at > lastReadBefore);
+      expect(readAfter, 'the board never re-read its first page').toBeDefined();
+      expect(readAfter! - lastReadBefore).toBeLessThan(POLL_PERIOD_MS * 0.75);
     } finally {
       await visitorContext.close();
     }

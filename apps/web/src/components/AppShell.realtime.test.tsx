@@ -23,6 +23,7 @@ import { defaultScopesForRole } from '@nexa/types';
 import { AppShell } from './AppShell.js';
 import { useAuth } from '../lib/auth-store.js';
 import { useRealtimeStatus } from '../lib/realtime-status.js';
+import { useTrafficLiveStore } from '../lib/traffic-live.js';
 import { useRealtime } from '../features/inbox/useInbox.js';
 import { FakeWebSocket, customerMessage, installFakeWebSocket } from '../test/fake-socket.js';
 
@@ -127,6 +128,35 @@ describe('the shell owns the connection', () => {
 
     expect(FakeWebSocket.last.closedByClient).toBe(true);
     expect(FakeWebSocket.instances).toHaveLength(1);
+  });
+
+  it("subscribes to the traffic board's visitor signal and lands it in its store (FR-MOD-03.1.1)", async () => {
+    // Two links in one chain, and both are invisible from the board itself: the
+    // gateway only ever sends what the socket asked for at `login`, and the
+    // board reads a store rather than the socket. A push that arrives with the
+    // subscription missing is dropped by the gateway with nothing to see.
+    renderShell();
+    await connected();
+
+    const login = FakeWebSocket.last.sent.find((frame) => frame.action === 'login');
+    const subscribed = (login?.payload['pushes'] as Record<string, string[]>)['3.6'];
+    expect(subscribed).toContain('traffic_visitor_updated');
+
+    const before = useTrafficLiveStore.getState().revision;
+    act(() => FakeWebSocket.last.push('traffic_visitor_updated', { customer_id: 'cus-77' }));
+
+    expect(useTrafficLiveStore.getState().revision).toBe(before + 1);
+    expect(useTrafficLiveStore.getState().customerId).toBe('cus-77');
+  });
+
+  it('ignores a traffic signal that names nobody, rather than waking the board for it', async () => {
+    renderShell();
+    await connected();
+
+    const before = useTrafficLiveStore.getState().revision;
+    act(() => FakeWebSocket.last.push('traffic_visitor_updated', {}));
+
+    expect(useTrafficLiveStore.getState().revision).toBe(before);
   });
 
   it('reports a second owner rather than quietly notifying twice', async () => {

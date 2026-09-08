@@ -71,6 +71,22 @@ export interface CampaignPatch {
   recurring?: boolean;
 }
 
+/**
+ * What a campaign write reports back.
+ *
+ * `sent` is the number the API answers with. `invited` is the audience the fire
+ * aimed at — carried out of the transaction so the route can announce each of
+ * them on the traffic board (FR-MOD-03.1.1): activating a campaign is one of the
+ * two ways a visitor enters the `invited` bucket, and the other one
+ * (`fireCampaignsAtVisitor`, on the visitor's own page view) already had a
+ * publish site.
+ */
+export interface CampaignWriteResult {
+  campaign: Campaign;
+  sent: number;
+  invited: string[];
+}
+
 export class CampaignService {
   /**
    * Every campaign in the tenant, newest first, optionally narrowed by status
@@ -173,7 +189,7 @@ export class CampaignService {
     tenant: TenantContext,
     input: CampaignInput,
     now: Date = new Date(),
-  ): Promise<{ campaign: Campaign; sent: number }> {
+  ): Promise<CampaignWriteResult> {
     const name = input.name.trim();
     if (!name) throw ApiError.validation('name: a campaign needs a name.');
     if (!hasTrigger(input.conditions)) {
@@ -201,8 +217,8 @@ export class CampaignService {
       select: { id: true },
     });
 
-    const sent = await this.#fireIfRunning(tx, tenant, created.id, input.conditions, status, now);
-    return { campaign: await this.#reload(tx, tenant, created.id), sent };
+    const fired = await this.#fireIfRunning(tx, tenant, created.id, input.conditions, status, now);
+    return { campaign: await this.#reload(tx, tenant, created.id), ...fired };
   }
 
   /**
@@ -217,7 +233,7 @@ export class CampaignService {
     id: string,
     patch: CampaignPatch,
     now: Date = new Date(),
-  ): Promise<{ campaign: Campaign; sent: number }> {
+  ): Promise<CampaignWriteResult> {
     const existing = await tx.campaign.findFirst({
       where: { id, licenseId: tenant.licenseId },
       select: { status: true, conditions: true, content: true, startsAt: true, endsAt: true },
@@ -273,8 +289,8 @@ export class CampaignService {
 
     await tx.campaign.update({ where: { id }, data });
 
-    const sent = await this.#fireIfRunning(tx, tenant, id, resultingConditions, status, now);
-    return { campaign: await this.#reload(tx, tenant, id), sent };
+    const fired = await this.#fireIfRunning(tx, tenant, id, resultingConditions, status, now);
+    return { campaign: await this.#reload(tx, tenant, id), ...fired };
   }
 
   /** A closed schedule window (`ends_at <= starts_at`) is a 400, not a DB 500. */
@@ -286,8 +302,8 @@ export class CampaignService {
 
   /**
    * The trigger engine (FR-MOD-03.3.2). Only fires while the campaign is actually
-   * running; a scheduled or inactive one records nothing. Returns how many fresh
-   * sends were written.
+   * running; a scheduled or inactive one records nothing. Reports how many fresh
+   * sends were written, and who they were aimed at.
    */
   async #fireIfRunning(
     tx: TenantClient,
@@ -296,8 +312,8 @@ export class CampaignService {
     conditions: CampaignConditions,
     status: CampaignStatus,
     now: Date,
-  ): Promise<number> {
-    if (status !== 'ongoing') return 0;
+  ): Promise<{ sent: number; invited: string[] }> {
+    if (status !== 'ongoing') return { sent: 0, invited: [] };
 
     const liveSince = new Date(now.getTime() - LIVE_WINDOW_MINUTES * 60_000);
     // Live visitors: recent visits in this tenant. The org filter mirrors the
@@ -323,7 +339,7 @@ export class CampaignService {
         matched.push(visit.customerId);
       }
     }
-    if (matched.length === 0) return 0;
+    if (matched.length === 0) return { sent: 0, invited: [] };
 
     const result = await tx.campaignSend.createMany({
       data: matched.map((customerId) => ({
@@ -335,7 +351,14 @@ export class CampaignService {
       // visitor; the unique (campaign, customer) pair turns that into a no-op.
       skipDuplicates: true,
     });
-    return result.count;
+    // `sent` counts the rows this fire actually wrote; `invited` is everyone it
+    // aimed at, duplicates included. They differ on a re-fire, and the wider
+    // list is the right one for the traffic board's signal: a visitor already
+    // sitting in `invited` from an earlier fire has not moved, and announcing
+    // them anyway costs one re-read of a first page — whereas trimming the list
+    // to the count would need to know *which* of the two a `skipDuplicates`
+    // insert dropped, which it does not report.
+    return { sent: result.count, invited: matched };
   }
 
   async #reload(tx: TenantClient, tenant: TenantContext, id: string): Promise<Campaign> {

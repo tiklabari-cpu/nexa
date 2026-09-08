@@ -7,17 +7,29 @@
  * contact — Start chat / Supervise / Assign to me / Edit — gated by the visitor's
  * state and the caller's scopes (see `visitorRowActions`).
  *
- * The board polls rather than holding a socket. A true RTM traffic feed is a
- * larger, separate slice (FR-EK-C.1); until then a short interval keeps it
- * live enough to act on, and every row action invalidates it immediately.
+ * **The board is live off the socket, and polls as well** (FR-MOD-03.1.1). A
+ * `traffic_visitor_updated` push says a visitor moved; the board answers by
+ * re-reading its first page, which is precisely what the poll below already
+ * does — one merger (`mergeTrafficHead`), two triggers. The push is what makes
+ * Browsing → Chatting → Invited visible as it happens instead of within eight
+ * seconds; the poll is what keeps the board honest when the socket is down, and
+ * catches the handful of board facts nothing publishes at all: a supervision
+ * lapsing after its 90-second liveness window, and a visit ageing out of the
+ * 30-minute live window. Neither has a request behind it, so neither can have a
+ * push behind it. That is why the interval stays at 8s rather than being
+ * relaxed once a socket is up — a "backup" that is only correct while pushes
+ * cover everything is not a backup.
  *
- * Paginated and live at once, the same shape 153.2 gave the inbox chat list —
- * a simpler one, since there is no RTM push to reconcile against a loaded
- * page here, just the poll. `usePagedQuery` chains pages as the table scrolls
- * (NFR-P5: the board no longer ends at one fixed `limit=100` request); the
- * periodic refresh re-reads only the first page and folds it into the cache
- * via `mergeTrafficHead`, rather than `refetchInterval`, which would re-ask
- * for every page already loaded on each tick.
+ * Paginated and live at once, the same shape 153.2 gave the inbox chat list.
+ * `usePagedQuery` chains pages as the table scrolls (NFR-P5: the board no
+ * longer ends at one fixed `limit=100` request); both the push and the interval
+ * re-read only the *first* page and fold it into the cache via
+ * `mergeTrafficHead`, rather than `refetchInterval` or an `invalidateQueries`,
+ * either of which would re-ask for every page already loaded on each tick.
+ * Since the board sorts by `last_activity_at` descending, a visitor who just
+ * did something is on that first page by construction — which is what makes a
+ * head-only read the right answer to a push about them, and not merely the
+ * cheap one.
  */
 import { hasAnyScope } from '@nexa/types';
 import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
@@ -40,6 +52,7 @@ import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { usePagedQuery, type PagedResponse } from '../../lib/paged-query.js';
+import { useTrafficRevision } from '../../lib/traffic-live.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { canReadChannels } from '../inbox/views.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
@@ -65,8 +78,27 @@ import type { TrafficActivity, TrafficVisitor } from './types.js';
 const TAB_PARAM = 'tab';
 /** Rows per request. The board chains pages from here, so it is a page, not a cap. */
 const TRAFFIC_PAGE_SIZE = 100;
-/** How often the first page is re-read to keep the board feeling live. */
+/**
+ * How often the first page is re-read on the timer.
+ *
+ * The backup, not the mechanism — see the header. Deliberately unchanged now
+ * that pushes exist: the states a push cannot announce (a lapsed supervision, a
+ * visit ageing out) are exactly the ones this catches.
+ */
 const TRAFFIC_REFRESH_MS = 8_000;
+
+/**
+ * The floor between two push-driven reads of the first page.
+ *
+ * A busy workspace produces one `traffic_visitor_updated` per message, per
+ * campaign fire and per queue drain; reading the board once per push would turn
+ * a burst into a request per event, which is the shape NFR-P2 rules out. The
+ * first push in a quiet moment is served immediately (the agent sees the change
+ * on the next frame) and anything arriving inside the window collapses into one
+ * trailing read — so a burst costs two requests rather than N, and the last
+ * event in it is still reflected.
+ */
+const TRAFFIC_PUSH_MIN_GAP_MS = 700;
 
 /** Where the all-tab empty state's CTA sends you to connect a channel (03.1.2-b). */
 const CHANNELS_HREF = '/app/settings#section-channels';
@@ -341,6 +373,56 @@ export function TrafficPage(): ReactElement {
     const timer = setInterval(() => void refreshHead(), TRAFFIC_REFRESH_MS);
     return () => clearInterval(timer);
   }, [refreshHead]);
+
+  // The socket's half of the same job (FR-MOD-03.1.1). `revision` moves once per
+  // `traffic_visitor_updated` push (`lib/traffic-live.ts`, fed by `applyPush`);
+  // what it triggers is the identical `refreshHead` the interval above calls, so
+  // "a push arrived" and "the timer fired" cannot disagree about how the board
+  // is updated.
+  //
+  // Read through a ref rather than listed as a dependency: `refreshHead`'s
+  // identity changes with `tab` and `conditions`, and depending on it would make
+  // every tab switch look like a push. The ref also means a trailing read
+  // scheduled before a tab change runs against the tab the agent is *now*
+  // looking at rather than the one they left.
+  const refreshHeadRef = useRef(refreshHead);
+  refreshHeadRef.current = refreshHead;
+
+  const revision = useTrafficRevision();
+  // Seeded with the value at mount: pushes that landed while the board was
+  // closed are already reflected in the first fetch this mount is about to make.
+  const handledRevisionRef = useRef(revision);
+  const lastPushReadAtRef = useRef(0);
+  const trailingPushReadRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (revision === handledRevisionRef.current) return;
+    handledRevisionRef.current = revision;
+
+    const sinceLastRead = Date.now() - lastPushReadAtRef.current;
+    if (sinceLastRead >= TRAFFIC_PUSH_MIN_GAP_MS) {
+      lastPushReadAtRef.current = Date.now();
+      void refreshHeadRef.current();
+      return;
+    }
+    // Inside the window: one trailing read covers this push and every other one
+    // that arrives before it fires.
+    if (trailingPushReadRef.current !== null) return;
+    trailingPushReadRef.current = setTimeout(() => {
+      trailingPushReadRef.current = null;
+      lastPushReadAtRef.current = Date.now();
+      void refreshHeadRef.current();
+    }, TRAFFIC_PUSH_MIN_GAP_MS - sinceLastRead);
+  }, [revision]);
+
+  // Only on unmount — a trailing read must survive a tab change (it reads the
+  // current tab through the ref above), but not the board being left.
+  useEffect(() => {
+    return () => {
+      if (trailingPushReadRef.current !== null) clearTimeout(trailingPushReadRef.current);
+      trailingPushReadRef.current = null;
+    };
+  }, []);
 
   // De-duplicated on the way out, the same as `useChatList`'s: a visitor who
   // leaves the board lets the freshly re-read first page reach one row

@@ -45,7 +45,12 @@ import {
   transcriptRecipients,
   type TranscriptLine,
 } from '../notifications/chat-transcript.js';
-import { RoutingService, type RoutingContext } from '../routing/routing-service.js';
+import {
+  RoutingService,
+  type DrainedAssignment,
+  type RoutingContext,
+} from '../routing/routing-service.js';
+import { publishTrafficChange } from '../traffic/traffic-events.js';
 import { evaluate as evaluateSla, evaluateSubject, readClock } from '../sla/sla-service.js';
 import {
   canSeeChat,
@@ -108,7 +113,7 @@ interface CloseResult {
   /** The thread that was just closed — what the transcript e-mail reads from. */
   threadId: string;
   audience: { groupIds: number[]; agentIds: string[]; customerId: string };
-  drained: Array<{ chatId: string; threadId: string; assigneeId: string }>;
+  drained: DrainedAssignment[];
 }
 
 /**
@@ -311,6 +316,12 @@ export class ChatService {
         requester_id: actorOf(principal),
         chat: result.chat,
       });
+      // The real-time board's own signal (FR-MOD-03.1.1): this visitor just left
+      // whichever of browsing/invited they were in for a live conversation.
+      // Only on an actual creation, matching `incoming_chat` above — `start` is
+      // idempotent on an existing active chat, and re-announcing one moves
+      // nobody.
+      await publishTrafficChange(this.publisher, tenant, result.raw.customerId);
       // Only a chat that was actually created (FR-MOD-09.4): `start` is
       // idempotent on an existing active chat, and a subscriber that received
       // `chat_started` twice for one conversation would open two tickets.
@@ -512,6 +523,13 @@ export class ChatService {
         : result.audience,
       { chat_id: result.event.chat_id, thread_id: result.event.thread_id, event: result.event },
     );
+
+    // Every event moves the board, and not only because `last_activity_at` is
+    // the sort key: the funnel bucket is read off the newest event's author, so
+    // a visitor's message turns `chatting` into `waiting` and any agent reply —
+    // an internal note included, since the board reads the last event without
+    // filtering on recipients — turns it back (FR-MOD-03.1.1).
+    await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
 
     // A conversation that arrived over a connected channel is answered there
     // (FR-MOD-08.5.4-.8). Out here for the same reason the publish is: this is a
@@ -867,6 +885,16 @@ export class ChatService {
       thread_id: result.detail.thread?.id ?? null,
       requester_id: requesterId,
     });
+
+    // A closed conversation drops its visitor out of the board's first source
+    // entirely — back to `browsing` if their visit is still inside the live
+    // window, off the board if it is not (FR-MOD-03.1.1). Anyone the drain just
+    // handed a queued chat to moved as well, so they are announced too rather
+    // than left for the backup poll.
+    await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
+    for (const assignment of result.drained) {
+      await publishTrafficChange(this.publisher, tenant, assignment.customerId);
+    }
   }
 
   /**
@@ -1105,6 +1133,9 @@ export class ChatService {
       requester_id: actorOf(principal),
       chat: result.detail,
     });
+    // ...and to the traffic board, where the visitor goes back into a
+    // conversation bucket (FR-MOD-03.1.1).
+    await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
     return result.detail;
   }
 
@@ -1234,6 +1265,11 @@ export class ChatService {
         agent_ids: target.agentId !== undefined ? [target.agentId] : [],
       },
     });
+
+    // The board's headline column is **Chatting with** (FR-MOD-03.1.3), and a
+    // hand-off is precisely what changes the name in it; a transfer to a team
+    // with nobody free additionally puts the row back in `queued`.
+    await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
 
     await this.automations?.emit(tenant, 'chat_transferred', {
       chat_id: chatId,
@@ -1464,6 +1500,10 @@ export class ChatService {
       previous_assignee_id: result.previousAssigneeId,
       new_assignee_id: supervisorId,
     } satisfies ChatTakenOverPush);
+
+    // Same reason as the hand-off above: **Chatting with** now names somebody
+    // else (FR-MOD-03.1.1 · FR-MOD-03.1.3).
+    await publishTrafficChange(this.publisher, tenant, result.audience.customerId);
 
     return result.detail;
   }

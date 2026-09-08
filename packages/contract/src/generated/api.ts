@@ -6000,6 +6000,128 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/reports/share-links': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Share links this workspace has minted
+     * @description Every share link the workspace holds that has not been revoked, newest
+     *     first — including ones that have already lapsed, each flagged with
+     *     `expired`, so "why did my link stop working?" is answerable from the
+     *     screen rather than from silence.
+     *
+     *     Never carries a token, and cannot: only the digest is stored. Gated on
+     *     `reports_manage` rather than `reports_read` — the list is the inventory of
+     *     who can currently read this workspace's numbers without an account, which
+     *     is a management question, not a reporting one.
+     */
+    get: operations['listReportShareLinks'];
+    put?: never;
+    /**
+     * Mint a share link for one report group over one window
+     * @description Mints a link and returns its token **once**. The response is `no-store`;
+     *     there is no endpoint that reads a token back, because none is stored.
+     *
+     *     `group` must name a group in the report catalogue — the same vocabulary
+     *     `GET /reports/export?group=` accepts — and one whose scope the calling
+     *     token itself holds. A link cannot be minted for a report its creator may
+     *     not read: that would make this endpoint a way to launder a permission the
+     *     caller lacks into an anonymous URL that has it.
+     *
+     *     The window follows the same rules as every other report request: it
+     *     defaults to the last 30 days and may not exceed the same maximum span
+     *     (NFR-P7), because a share link is read by running the very same
+     *     aggregation.
+     *
+     *     `expires_in_days` is capped rather than optional-and-unbounded — the
+     *     requirement is a link that *expires*, so the shortest defensible default
+     *     (7 days) applies when it is omitted.
+     *
+     *     A workspace may hold a bounded number of un-revoked links at once; past
+     *     that, minting is refused with a 400 naming the limit. An unbounded set of
+     *     standing anonymous credentials is the thing this endpoint most needs not
+     *     to become, and refusing is the only bound that does not depend on somebody
+     *     remembering to tidy up.
+     */
+    post: operations['createReportShareLink'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/share-links/{shareLinkId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        shareLinkId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Revoke a share link
+     * @description Cuts the link off immediately: the next request carrying its token gets
+     *     the same 404 an unknown token does.
+     *
+     *     The row is stamped, not deleted — `revoked_at` is the record that this
+     *     access existed and was withdrawn, which is what an access review is for.
+     *     Revoking an already-revoked link, or one that belongs to another
+     *     workspace, answers 404 alike; a 403 would confirm the id names something.
+     */
+    delete: operations['revokeReportShareLink'];
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/reports/shared': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read a report through a share link (public)
+     * @description Resolves a share token to the report group and window it was minted for,
+     *     and returns that group's table — the same `headers`/`rows` the export
+     *     serialises. No authentication: the token *is* the credential, which is why
+     *     it is scoped to one group and one window and always expires.
+     *
+     *     `security: []` marks it anonymous. The token travels as a **query
+     *     parameter named `token`**, deliberately: `lib/log-redact.ts` already masks
+     *     the value of a query key called `token` in every logged request line, and
+     *     the span exporter drops query strings wholesale, so the credential does
+     *     not survive into a log or a trace. The console keeps it out of the *web*
+     *     server's logs and out of `Referer` too, by carrying it in the share URL's
+     *     fragment and never in its query.
+     *
+     *     Every miss — unknown token, expired, revoked, a cancelled workspace — is
+     *     one indistinguishable **404** with the same body (NFR-S5). There is no 401
+     *     and no per-case message, so a dead token cannot be told from one that was
+     *     never real, and nothing about the workspace leaks to whoever holds it.
+     *
+     *     Nothing in the response names the workspace, an agent or a licence, and a
+     *     valid agent token presented here grants no elevation: the handler ignores
+     *     `principal` entirely and answers exactly what the link allows.
+     */
+    get: operations['getSharedReport'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/reports/scheduled-exports': {
     parameters: {
       query?: never;
@@ -10721,6 +10843,101 @@ export interface components {
         /** @description Human-readable tab name. */
         label: string;
       }[];
+    };
+    /**
+     * @description A time-limited, scope-limited link that lets someone without a Nexa
+     *     account read **one** report group over **one** fixed window
+     *     (FR-MOD-07.3.1 "Share export/link").
+     *
+     *     The token itself is **never** in this shape. It is returned exactly once,
+     *     by `POST /reports/share-links`, and only its SHA-256 digest is stored —
+     *     the personal-access-token pattern. `token_last_four` is the only part of
+     *     it a row ever shows again, so a workspace can tell two links apart
+     *     without the row being able to reconstruct either.
+     *
+     *     `from`/`to` are pinned at creation rather than resolved per view: a link
+     *     is a snapshot definition, and a relative window would quietly start
+     *     exposing data that did not exist when the link was handed out.
+     */
+    ReportShareLink: {
+      /** Format: uuid */
+      id: string;
+      /** @description A report group id — the same vocabulary `GET /reports/export?group=` uses. */
+      group: string;
+      /**
+       * Format: date-time
+       * @description Start of the pinned window.
+       */
+      from: string;
+      /**
+       * Format: date-time
+       * @description End of the pinned window.
+       */
+      to: string;
+      /**
+       * @description The last four characters of the token, for telling rows apart. Four
+       *     characters of a 256-bit secret narrow a guess by nothing worth
+       *     measuring, and without them a list of links is unlabelled.
+       */
+      token_last_four: string;
+      /** Format: date-time */
+      created_at: string;
+      /**
+       * Format: date-time
+       * @description Never null — a share link that never expires is not one this API can mint.
+       */
+      expires_at: string;
+      /**
+       * Format: date-time
+       * @description When the link was cancelled, or null while it stands.
+       */
+      revoked_at: string | null;
+      /**
+       * @description Whether `expires_at` is already in the past, as the server sees the
+       *     clock. Derived rather than left to the client so a browser with a
+       *     skewed clock cannot show a dead link as live.
+       */
+      expired: boolean;
+    };
+    ReportShareLinkCreated: components['schemas']['ReportShareLink'] & {
+      /** @description The opaque share token, shown once and never retrievable. */
+      token: string;
+    };
+    /**
+     * @description What a share link resolves to (FR-MOD-07.3.1): one report group's table,
+     *     over the window the link pinned.
+     *
+     *     Deliberately the **same** `headers`/`rows` table `GET /reports/export`
+     *     serialises to CSV and PDF, not a second rendering of the same figures. A
+     *     share can therefore never expose more than an export of the same group
+     *     would, and the two cannot drift apart into disagreeing about a number.
+     *
+     *     Nothing here identifies the workspace, its agents' accounts or its
+     *     licence: the payload is the report, and the report only.
+     */
+    SharedReport: {
+      /** @description The report group this link was minted for. */
+      group: string;
+      /** @description The group's human-readable name. */
+      label: string;
+      /** Format: date-time */
+      from: string;
+      /** Format: date-time */
+      to: string;
+      /**
+       * Format: date-time
+       * @description When these figures were computed — a share link is read live, not cached.
+       */
+      generated_at: string;
+      /**
+       * Format: date-time
+       * @description When this link stops resolving.
+       */
+      expires_at: string;
+      /** @description The table's header row, identical to the export's. */
+      headers: string[];
+      /** @description The table's data rows, identical to the export's. */
+      rows: ((string | number) | null)[][];
     };
     /**
      * @description Access review evidence for SOC 2 CC6.1 (NFR-C6 · C6-e) — a point-in-time
@@ -20614,6 +20831,129 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listReportShareLinks: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The workspace's live share links (possibly empty) */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['ReportShareLink'][];
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createReportShareLink: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Report group id: one of `overview`, `breakdown`, `ai-agent`, `reviews`, `topics`, `cases`, `leads`, `team-performance`, `sales`, `goals`. */
+          group: string;
+          /**
+           * Format: date-time
+           * @description Start of the window to pin. Defaults to 30 days before `to`.
+           */
+          from?: string;
+          /**
+           * Format: date-time
+           * @description End of the window to pin. Defaults to now.
+           */
+          to?: string;
+          /**
+           * @description How long the link resolves for, from now.
+           * @default 7
+           */
+          expires_in_days?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description The link, with its token — the only time the token is returned */
+      201: {
+        headers: {
+          /** @description Always `no-store`; the body carries a credential. */
+          'Cache-Control'?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ReportShareLinkCreated'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  revokeReportShareLink: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        shareLinkId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Revoked */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getSharedReport: {
+    parameters: {
+      query: {
+        /** @description The opaque token from the share link. */
+        token: string;
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The shared report group's table over the link's pinned window */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['SharedReport'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
   };

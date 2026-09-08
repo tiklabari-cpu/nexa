@@ -84,6 +84,38 @@ export const reports: Messages = {
   'reports.export.cta': 'Export',
   'reports.export.pending': 'Exporting…',
 
+  // Share link (FR-MOD-07.3.1) — the "link" half of "Share export/link"
+  'reports.share.trigger': 'Share',
+  'reports.share.ariaLabel': 'Share this report',
+  'reports.share.description':
+    'A link to this report, over the window you have selected. Anyone with the link can read it until it expires.',
+  'reports.share.expiresLabel': 'Expires',
+  'reports.share.expiresDays': '{count} days',
+  'reports.share.create': 'Create link',
+  'reports.share.creating': 'Creating…',
+  'reports.share.rowGroup': '{group} · …{suffix}',
+  'reports.share.rowExpires': 'Expires {when}',
+  'reports.share.rowExpired': 'Expired {when}',
+  'reports.share.revoke': 'Revoke the link ending {suffix}',
+  'reports.share.revokeShort': 'Revoke',
+  'reports.share.onceTitle': 'Share link created',
+  'reports.share.onceDescription': 'Anyone with this link can read the report until {when}.',
+  'reports.share.onceWarning':
+    'Copy it now — it is shown once and cannot be retrieved. Revoke it any time from Share.',
+  'reports.share.copy': 'Copy',
+  'reports.share.copied': 'Copied',
+  'reports.share.done': 'Done',
+
+  // The page a share link opens
+  'reports.shared.title': 'Shared report',
+  'reports.shared.loading': 'Loading the report…',
+  'reports.shared.unavailable': 'This link is no longer available.',
+  'reports.shared.incomplete': 'This link is incomplete. Ask whoever sent it for a new one.',
+  'reports.shared.range': '{range}',
+  'reports.shared.caption': '{label}, {range}',
+  'reports.shared.generated': 'Generated {when}',
+  'reports.shared.expires': 'This link expires {when}',
+
   // Shared across two or more tabs — same word, same meaning every time
   'reports.common.volume': 'Volume',
   'reports.common.byDay': 'By day',

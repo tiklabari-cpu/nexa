@@ -354,6 +354,18 @@ export const AUDIT_ACTIONS = [
   // Credentials
   'pat.created',
   'pat.revoked',
+  // A shareable report link was minted or withdrawn (FR-MOD-07.3.1). Its own
+  // pair rather than `pat.*` because it is the opposite kind of credential: a
+  // PAT acts as a person inside what that person may already do, while a share
+  // link hands one report group to somebody with **no account at all**. "Who
+  // outside this workspace can read our numbers, and since when" is exactly the
+  // question an access review asks, and the revocation entry is what makes the
+  // answer have an end date. Metadata carries the group, the window and the
+  // expiry — never the token, and not even its last four characters: the row
+  // shows those to somebody who already holds `reports_manage`, while the audit
+  // trail is read under a different scope entirely.
+  'report_share.created',
+  'report_share.revoked',
   // SCIM provisioning credentials (NFR-S11 · S11-e). Its own pair rather than
   // reusing `pat.*`, because the two answer different questions for whoever
   // reads the trail: a PAT acts as one person within what that person may

@@ -71,6 +71,39 @@ export const reports: Messages = {
   'reports.export.cta': 'Dışa aktar',
   'reports.export.pending': 'Dışa aktarılıyor…',
 
+  // Paylaşım bağlantısı (FR-MOD-07.3.1)
+  'reports.share.trigger': 'Paylaş',
+  'reports.share.ariaLabel': 'Bu raporu paylaş',
+  'reports.share.description':
+    'Seçtiğiniz aralıkla bu rapora bir bağlantı. Bağlantıya sahip herkes, süresi dolana kadar raporu okuyabilir.',
+  'reports.share.expiresLabel': 'Süre',
+  'reports.share.expiresDays': '{count} gün',
+  'reports.share.create': 'Bağlantı oluştur',
+  'reports.share.creating': 'Oluşturuluyor…',
+  'reports.share.rowGroup': '{group} · …{suffix}',
+  'reports.share.rowExpires': 'Bitiş: {when}',
+  'reports.share.rowExpired': 'Süresi doldu: {when}',
+  'reports.share.revoke': '{suffix} ile biten bağlantıyı iptal et',
+  'reports.share.revokeShort': 'İptal et',
+  'reports.share.onceTitle': 'Paylaşım bağlantısı oluşturuldu',
+  'reports.share.onceDescription':
+    'Bu bağlantıya sahip herkes {when} tarihine kadar raporu okuyabilir.',
+  'reports.share.onceWarning':
+    'Şimdi kopyalayın — yalnızca bir kez gösterilir ve sonradan alınamaz. Paylaş menüsünden istediğiniz zaman iptal edebilirsiniz.',
+  'reports.share.copy': 'Kopyala',
+  'reports.share.copied': 'Kopyalandı',
+  'reports.share.done': 'Tamam',
+
+  // Paylaşım bağlantısının açtığı sayfa
+  'reports.shared.title': 'Paylaşılan rapor',
+  'reports.shared.loading': 'Rapor yükleniyor…',
+  'reports.shared.unavailable': 'Bu bağlantı artık kullanılamıyor.',
+  'reports.shared.incomplete': 'Bu bağlantı eksik. Gönderen kişiden yenisini isteyin.',
+  'reports.shared.range': '{range}',
+  'reports.shared.caption': '{label}, {range}',
+  'reports.shared.generated': 'Oluşturulma: {when}',
+  'reports.shared.expires': 'Bağlantının bitişi: {when}',
+
   // Shared across two or more tabs — same word, same meaning every time
   'reports.common.volume': 'Hacim',
   'reports.common.byDay': 'Güne göre',

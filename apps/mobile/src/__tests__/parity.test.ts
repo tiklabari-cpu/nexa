@@ -830,7 +830,14 @@ describe('module parity matrix — what is still owed', () => {
       // path rather than a second operation because it has to refuse the OAuth
       // cards the existing pair serves, and vice versa. The phone connects no
       // integrations, so nothing here re-scopes.
-      contractEndpoints: 205,
+      // 205 -> 208 with the three report share-link routes (V8-RPT-SHARE,
+      // tm 224): `/reports/share-links`, `.../{shareLinkId}` and the anonymous
+      // `/reports/shared`. Minting and revoking are Owner/Admin actions behind
+      // `reports_manage`, in the Reports surface this app has never had
+      // (`OUT_OF_SCOPE` below); `/reports/shared` is not an app surface at all
+      // — it is a browser page for somebody with no account, which is the
+      // opposite of what this parity check measures. Nothing here re-scopes.
+      contractEndpoints: 208,
       scopeBoundaries: 1,
     });
   });

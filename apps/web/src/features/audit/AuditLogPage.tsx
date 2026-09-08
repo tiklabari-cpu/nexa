@@ -193,6 +193,13 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     actions: [
       'pat.created',
       'pat.revoked',
+      // A share link is a credential too, and the one that reaches furthest:
+      // it reads a report with no account behind it (FR-MOD-07.3.1). Filed
+      // with the other credentials rather than with reports, because the
+      // question it answers — who outside the workspace can read our numbers —
+      // is a credential question.
+      'report_share.created',
+      'report_share.revoked',
       'partner_app.created',
       'partner_app.updated',
       'partner_app.deleted',

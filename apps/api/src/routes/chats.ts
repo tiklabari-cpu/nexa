@@ -1,6 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { EVENT_RECIPIENTS, EVENT_TYPES, TRANSFER_REASONS, isShortId } from '@nexa/types';
+import {
+  ADAPTER_CHANNEL_TYPES,
+  EVENT_RECIPIENTS,
+  EVENT_TYPES,
+  TRANSFER_REASONS,
+  isShortId,
+} from '@nexa/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
@@ -23,6 +29,15 @@ const listQuery = z.object({
   view: z
     .enum(['all', 'my', 'queued', 'unassigned', 'supervised', 'archived', 'ai', 'ai_solved'])
     .default('all'),
+  /**
+   * The inbox's channel views (FR-MOD-02.1.4) — a second axis, not a ninth
+   * `view`, so `view=my&channel=whatsapp` is answerable. Built from
+   * `ADAPTER_CHANNEL_TYPES` rather than a literal list, because the same five
+   * values are the OpenAPI enum and the inbox rail's rows; an unlisted value is
+   * a 400 here rather than an empty page, which is what makes a client typo
+   * distinguishable from a quiet channel.
+   */
+  channel: z.enum(ADAPTER_CHANNEL_TYPES).optional(),
   customer_id: z.string().uuid().optional(),
   group_id: z.coerce.bigint().optional(),
   sort: z.enum(['newest', 'oldest']).default('newest'),
@@ -168,6 +183,7 @@ export default async function chatRoutes(
         view: query.view,
         sort: query.sort,
         limit: query.limit,
+        ...(query.channel !== undefined ? { channel: query.channel } : {}),
         ...(query.customer_id !== undefined ? { customerId: query.customer_id } : {}),
         ...(query.group_id !== undefined ? { groupId: query.group_id } : {}),
         ...(query.page_id !== undefined ? { pageId: query.page_id } : {}),

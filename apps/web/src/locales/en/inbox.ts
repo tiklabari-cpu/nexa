@@ -78,6 +78,7 @@ export const inbox: Messages = {
     'Supervising nothing right now. Watch a conversation from Traffic and it lands here.',
   'inbox.list.empty.ai': 'Conversations the AI agent is handling appear here.',
   'inbox.list.empty.aiSolved': 'Conversations the AI resolved on its own appear here.',
+  'inbox.list.empty.channel': 'No conversations have arrived on this channel yet.',
   'inbox.list.empty.description': 'New conversations land here as they arrive.',
   'inbox.list.item.visitorFallback': 'Visitor',
   'inbox.list.item.queuePosition': '#{position} in queue',

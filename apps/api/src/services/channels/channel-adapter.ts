@@ -19,6 +19,7 @@
  * changes. Provider signature verification is deliberately out of scope (§9).
  */
 import { z } from 'zod';
+import { ADAPTER_CHANNEL_TYPES, type AdapterChannelType } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
 
 /**
@@ -34,12 +35,16 @@ import { ApiError } from '../../lib/api-error.js';
  * without an adapter in the registry — `Record<ChannelType, ChannelAdapter>`
  * turns that mistake into a compile error rather than a runtime 500.
  *
- * Distinct from `@nexa/types`' domain-scoped `CHANNEL_TYPES` (8 values, every
- * channel the product names, including ones with no adapter). The two lists are
- * deliberately separate — different questions, different answers.
+ * Still distinct from `@nexa/types`' domain-scoped `CHANNEL_TYPES` (8 values,
+ * every channel the product names, including ones with no adapter) — different
+ * questions, different answers. What changed (tm 218) is where the adapter list
+ * itself is written down: it moved to `@nexa/types` as `ADAPTER_CHANNEL_TYPES`,
+ * because the inbox's channel views and the `channel` filter on `GET /chats`
+ * ask this same question from packages that cannot import `apps/api`. Re-exported
+ * under the name this module's callers already use, so nothing downstream moves.
  */
-export const CHANNEL_TYPES = ['messenger', 'twilio', 'whatsapp', 'instagram', 'telegram'] as const;
-export type ChannelType = (typeof CHANNEL_TYPES)[number];
+export const CHANNEL_TYPES = ADAPTER_CHANNEL_TYPES;
+export type ChannelType = AdapterChannelType;
 
 export function isChannelType(value: unknown): value is ChannelType {
   return typeof value === 'string' && (CHANNEL_TYPES as readonly string[]).includes(value);

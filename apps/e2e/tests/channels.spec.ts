@@ -253,10 +253,13 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4-.6)', () => {
     await agentPage.goto('/app/inbox');
 
     // FR-MOD-02.1.4: no known channel connected → the promo, not an empty group.
+    // The rows are looked for as *buttons* (tm 218): a channel view is a filter
+    // now, so asking for a link here would be an assertion that passes because
+    // it is asking for something that no longer exists either way.
     const views = agentPage.getByRole('navigation', { name: 'Inbox views' });
     await expect(agentPage.getByTestId('channel-promo')).toBeVisible();
     for (const subject of SUBJECTS) {
-      await expect(views.getByRole('link', { name: subject.view })).toHaveCount(0);
+      await expect(views.getByRole('button', { name: subject.view })).toHaveCount(0);
     }
 
     await agentPage.goto('/app/settings');
@@ -420,14 +423,16 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4-.6)', () => {
     const views = agentPage.getByRole('navigation', { name: 'Inbox views' });
 
     // Three rows, each reading Connected, and the promo that belongs only to a
-    // workspace with nothing connected is gone. The rows are links into
-    // Settings → Channels rather than filters — the group's job here is to say
-    // which channels are live, and the three conversations below are what says
-    // they are actually delivering.
+    // workspace with nothing connected is gone. The rows are *filters* now
+    // (tm 218): each one is a button that narrows the middle list to the
+    // conversations that arrived on that channel, and none of them is pressed
+    // until the agent presses it. Until then they were links into Settings —
+    // the group announced three views and offered none.
     for (const subject of SUBJECTS) {
-      const row = views.getByRole('link', { name: subject.view });
+      const row = views.getByRole('button', { name: subject.view });
       await expect(row).toBeVisible();
       await expect(row).toContainText('Connected');
+      await expect(row).toHaveAttribute('aria-pressed', 'false');
     }
     await expect(agentPage.getByTestId('channel-promo')).toHaveCount(0);
 
@@ -441,6 +446,70 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4-.6)', () => {
     }
 
     await agentPage.screenshot({ path: 'kanit/channels-views.png', fullPage: true });
+  });
+
+  /**
+   * The half of FR-MOD-02.1.4 that the rest of this file could never reach: a
+   * channel row that actually *is* a view.
+   *
+   * This is the one place the claim can be made honestly, because it needs
+   * three real conversations that each arrived over a different provider — and
+   * that is precisely what the tests above have just built through three public
+   * webhooks. The narrowing is the server's (`GET /chats?channel=…`), so what
+   * this proves that a jsdom test cannot is that the whole chain agrees: the
+   * click sends the channel, the query resolves it through `channel_messages`,
+   * and the two conversations that did not arrive on it are gone from the rail
+   * the agent is reading.
+   */
+  test('a channel row filters the conversation list to that channel (FR-MOD-02.1.4)', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/inbox');
+    const views = agentPage.getByRole('navigation', { name: 'Inbox views' });
+    const list = agentPage.getByRole('region', { name: 'Conversations' });
+
+    // Everything is there before the filter — otherwise "it narrowed" would be
+    // provable by the list simply having failed to load.
+    for (const subject of SUBJECTS) {
+      await expect(list).toContainText(subject.senderName, { timeout: 20_000 });
+    }
+
+    const [picked, ...others] = SUBJECTS;
+    const row = views.getByRole('button', { name: picked!.view });
+    await row.click();
+
+    await expect(row).toHaveAttribute('aria-pressed', 'true');
+    await expect(list).toContainText(picked!.senderName);
+    for (const other of others) {
+      await expect(list).not.toContainText(other.senderName);
+    }
+
+    await agentPage.screenshot({ path: 'kanit/channels-view-filter.png', fullPage: true });
+
+    // Composes with the base view rather than replacing it: the channel stays
+    // pressed while the Chats group moves to Archive, and that intersection —
+    // this channel's *closed* conversations — is empty, because the agent
+    // answered the conversation above and never closed it.
+    await agentPage
+      .getByRole('navigation', { name: 'Inbox views' })
+      .getByRole('button', { name: /^Archive/ })
+      .click();
+    await expect(agentPage.getByRole('heading', { level: 2, name: 'Archive' })).toBeVisible();
+    await expect(row).toHaveAttribute('aria-pressed', 'true');
+    await expect(list).not.toContainText(picked!.senderName);
+
+    // Pressing the same row again clears the channel, and the other two
+    // conversations come back into the list the agent is working.
+    await agentPage
+      .getByRole('navigation', { name: 'Inbox views' })
+      .getByRole('button', { name: /^All/ })
+      .first()
+      .click();
+    await row.click();
+    await expect(row).toHaveAttribute('aria-pressed', 'false');
+    for (const subject of SUBJECTS) {
+      await expect(list).toContainText(subject.senderName);
+    }
   });
 
   test('disconnects all three, and every surface tells the truth again', async ({ agentPage }) => {
@@ -477,7 +546,7 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4-.6)', () => {
     const views = agentPage.getByRole('navigation', { name: 'Inbox views' });
     await expect(agentPage.getByTestId('channel-promo')).toBeVisible();
     for (const subject of SUBJECTS) {
-      await expect(views.getByRole('link', { name: subject.view })).toHaveCount(0);
+      await expect(views.getByRole('button', { name: subject.view })).toHaveCount(0);
     }
 
     // The conversations they delivered are still here. Disconnecting a channel

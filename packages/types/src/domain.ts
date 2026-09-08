@@ -153,6 +153,33 @@ export const CHANNEL_TYPES = [
 ] as const;
 export type ChannelType = (typeof CHANNEL_TYPES)[number];
 
+/**
+ * The subset of {@link CHANNEL_TYPES} that reaches the product through a
+ * channel *adapter* — a provider webhook in, a provider send out
+ * (FR-MOD-08.5.4-.8). SMS is `twilio`, its provider.
+ *
+ * Distinct from `CHANNEL_TYPES` above, which names every channel the product
+ * has a word for: `website_widget`, `email` and `chat_page` resolve their
+ * tenant their own way and have no adapter, so they can never be the answer to
+ * "which adapter did this message cross".
+ *
+ * It lives here rather than beside the adapters because three surfaces need the
+ * same list and none of them can import another's: the API's adapter registry
+ * (`services/channels/channel-adapter.ts`, where a value without an adapter is
+ * a compile error), the inbox's channel views (`features/inbox/views.ts`), and
+ * the `channel` filter on `GET /chats` — whose OpenAPI enum is the one copy a
+ * compiler cannot check, so `chats.ts`'s validator is built from this constant
+ * and `chats-channel-filter.test.ts` compares the two.
+ */
+export const ADAPTER_CHANNEL_TYPES = [
+  'messenger',
+  'twilio',
+  'whatsapp',
+  'instagram',
+  'telegram',
+] as const;
+export type AdapterChannelType = (typeof ADAPTER_CHANNEL_TYPES)[number];
+
 export const CHANNEL_STATUSES = ['connected', 'off', 'soon'] as const;
 export type ChannelStatus = (typeof CHANNEL_STATUSES)[number];
 

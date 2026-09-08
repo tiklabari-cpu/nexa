@@ -1421,6 +1421,219 @@ describe('agent chat api', () => {
   });
 
   // =========================================================================
+  // Channel views (FR-MOD-02.1.4): the second filter axis.
+  //
+  // The rail's channel rows used to be links to Settings, so `/chats` had never
+  // been asked this question and carried no parameter for it. What is pinned
+  // here is not just "the filter narrows" but the three properties the filter
+  // has to have to be a *view* rather than a decoration: it composes with
+  // `view` instead of replacing it, `total` counts the same intersection the
+  // rows come from (the counter defect tm 179.4 closed, which a filter applied
+  // to only one of the two would reopen), and it cannot be made to reach across
+  // a tenant boundary through `channel_messages` — a table whose `chat_id` is a
+  // soft reference with no foreign key behind it.
+  // =========================================================================
+
+  describe('channel views (FR-MOD-02.1.4)', () => {
+    /**
+     * A chat that arrived over `channel`, recorded the way the adapters record
+     * it — a `channel_messages` row in the inbound direction carrying the chat
+     * id. Written through the owner client rather than by driving a provider
+     * webhook, because what is under test is the *read*, and a webhook would
+     * drag customer resolution, spam screening and routing in with it.
+     */
+    async function chatOn(channel: string, name: string, options: { at?: Date } = {}) {
+      const customer = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name },
+        select: { id: true },
+      });
+      const chat = await startChat(acmeAdminToken, { customerId: customer.id, text: `hi ${name}` });
+      await owner.channelMessage.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          channelType: channel,
+          direction: 'inbound',
+          externalId: `ext-${name}`,
+          chatId: chat.id,
+          text: `hi ${name}`,
+          ...(options.at ? { createdAt: options.at } : {}),
+        },
+      });
+      return chat;
+    }
+
+    interface Page {
+      items: Array<{ id: string }>;
+      total: number;
+    }
+
+    const list = async (query: string, token = acmeAdminToken): Promise<Page> => {
+      const response = await server.get(`/chats${query}`, auth(token));
+      expect(response.statusCode).toBe(200);
+      return response.json() as Page;
+    };
+
+    const ids = (page: Page): string[] => page.items.map((chat) => chat.id).sort();
+
+    it('rejects a channel it does not serve rather than answering with an empty page', async () => {
+      // A typo and a quiet channel must not look the same to a client: an empty
+      // 200 would read as "nothing has arrived on Signal yet", which is a claim
+      // about the workspace rather than about the request.
+      const unknown = await server.get('/chats?channel=signal', auth(acmeAdminToken));
+      expect(unknown.statusCode).toBe(400);
+
+      // `website_widget` is a channel the product genuinely has a word for
+      // (`CHANNEL_TYPES`) and no adapter for, so it is refused too — the filter
+      // answers "which adapter did this cross", and the widget crosses none.
+      const nonAdapter = await server.get('/chats?channel=website_widget', auth(acmeAdminToken));
+      expect(nonAdapter.statusCode).toBe(400);
+    });
+
+    it('returns only the conversations that arrived on that channel', async () => {
+      const wa = await chatOn('whatsapp', 'wa-one');
+      const wa2 = await chatOn('whatsapp', 'wa-two');
+      const messenger = await chatOn('messenger', 'fb-one');
+      // A widget conversation: no adapter crossed, so no `channel_messages` row
+      // and therefore no channel view it can belong to.
+      const widget = await startChat(acmeAdminToken, { text: 'from the website' });
+
+      expect(ids(await list('?channel=whatsapp'))).toEqual([wa.id, wa2.id].sort());
+      expect(ids(await list('?channel=messenger'))).toEqual([messenger.id]);
+      expect(ids(await list('?channel=telegram'))).toEqual([]);
+
+      const everything = ids(await list('?view=all'));
+      expect(everything).toContain(widget.id);
+      expect(everything).toHaveLength(4);
+    });
+
+    it('classifies a chat by its OLDEST inbound message, as Reports does', async () => {
+      // Two adapters reaching one conversation is the only case where "which
+      // channel is this?" has more than one candidate answer, and the codebase
+      // already settled it in `breakdownByChannel` (FR-MOD-07.5): the oldest
+      // inbound message wins. Pinned here so the rail and the report cannot
+      // drift into two different answers — and so a chat lands in exactly one
+      // channel view rather than two.
+      const chat = await chatOn('whatsapp', 'moved', { at: new Date('2026-09-01T10:00:00Z') });
+      await owner.channelMessage.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          channelType: 'telegram',
+          direction: 'inbound',
+          externalId: 'ext-moved-2',
+          chatId: chat.id,
+          text: 'and again from telegram',
+          createdAt: new Date('2026-09-02T10:00:00Z'),
+        },
+      });
+
+      expect(ids(await list('?channel=whatsapp'))).toEqual([chat.id]);
+      expect(ids(await list('?channel=telegram'))).toEqual([]);
+    });
+
+    it('ignores the outbound half of the trail', async () => {
+      // An agent's reply leaves over the same adapter and is recorded with
+      // `direction: 'outbound'`. Counting it would make a conversation the
+      // workspace *answered* on WhatsApp look like one that *arrived* there,
+      // which is the opposite of what a channel view is for.
+      const chat = await startChat(acmeAdminToken, { text: 'from the website' });
+      await owner.channelMessage.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          channelType: 'whatsapp',
+          direction: 'outbound',
+          externalId: 'ext-out',
+          chatId: chat.id,
+          text: 'replying',
+        },
+      });
+
+      expect(ids(await list('?channel=whatsapp'))).toEqual([]);
+    });
+
+    it('is a second axis, not a ninth view: `view` and `channel` intersect', async () => {
+      const mine = await chatOn('whatsapp', 'wa-mine');
+      const archived = await chatOn('whatsapp', 'wa-archived');
+      await chatOn('messenger', 'fb-mine');
+      await server.post(`/chats/${archived.id}/deactivate`, undefined, auth(acmeAdminToken));
+
+      // Every chat here was started by (and assigned to) the admin, so `my` is
+      // the whole active set — and `my` ∩ `whatsapp` is one of the two.
+      expect(ids(await list('?view=my&channel=whatsapp'))).toEqual([mine.id]);
+      expect(ids(await list('?view=archived&channel=whatsapp'))).toEqual([archived.id]);
+      expect(ids(await list('?view=archived&channel=messenger'))).toEqual([]);
+
+      // And the other agent's `my` is empty on this channel too — the channel
+      // filter widens nothing that visibility had already closed.
+      expect(ids(await list('?view=my&channel=whatsapp', acmeAgentToken))).toEqual([]);
+    });
+
+    it('counts the filtered total, not the view behind it', async () => {
+      // tm 179.4's rule, in the one place a new filter can quietly break it:
+      // the rail badge beside a channel view reads this number, so a `total`
+      // computed without `channel` would label a two-row list "seven".
+      const onWhatsApp = 3;
+      for (let i = 0; i < onWhatsApp; i++) await chatOn('whatsapp', `wa-${i}`);
+      for (let i = 0; i < 4; i++) await chatOn('messenger', `fb-${i}`);
+
+      const page = await list('?channel=whatsapp&limit=1');
+      expect(page.items).toHaveLength(1);
+      // The number describes the whole filtered view, not the page.
+      expect(page.total).toBe(onWhatsApp);
+      expect((await list('?channel=messenger&limit=50')).total).toBe(4);
+      expect((await list('?view=all&limit=50')).total).toBe(7);
+    });
+
+    it('never lets another tenant channel trail reclassify a chat', async () => {
+      // `channel_messages.chat_id` is a soft reference — no foreign key — and
+      // the filter resolves chats through it. So the attack is to plant a row
+      // in one license naming a chat id that lives in another. RLS plus the
+      // explicit `license_id` lock in the query are what refuse it; without
+      // either, Northwind's WhatsApp view would show an Acme conversation.
+      const acmeChat = await chatOn('whatsapp', 'acme-wa');
+      const northwind = await server.post(
+        '/chats',
+        { customer_id: fx.b.customerId },
+        auth(northwindToken),
+      );
+      expect([200, 201]).toContain(northwind.statusCode);
+      const northwindChatId = (northwind.json() as { id: string }).id;
+
+      await owner.channelMessage.create({
+        data: {
+          licenseId: fx.b.licenseId,
+          channelType: 'whatsapp',
+          direction: 'inbound',
+          externalId: 'ext-cross',
+          // Northwind's own trail, pointing at ACME's chat.
+          chatId: acmeChat.id,
+          text: 'not yours',
+        },
+      });
+
+      const theirs = await list('?channel=whatsapp', northwindToken);
+      expect(ids(theirs)).toEqual([]);
+      expect(theirs.total).toBe(0);
+
+      // And Acme's own view is untouched by the neighbour's row.
+      expect(ids(await list('?channel=whatsapp'))).toEqual([acmeChat.id]);
+
+      // The reverse direction too: Acme cannot pull Northwind's chat in by
+      // owning a trail row that names it.
+      await owner.channelMessage.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          channelType: 'telegram',
+          direction: 'inbound',
+          externalId: 'ext-cross-2',
+          chatId: northwindChatId,
+          text: 'not yours either',
+        },
+      });
+      expect(ids(await list('?channel=telegram'))).toEqual([]);
+    });
+  });
+
+  // =========================================================================
   // The Chats group's Supervised bucket: conversations the *caller* is watching
   // without owning. `rapor-1-fonksiyonel.md:339` defines it in one clause —
   // «"Supervised" ajanin izledigi (supervise) sohbetler» — so the thing under

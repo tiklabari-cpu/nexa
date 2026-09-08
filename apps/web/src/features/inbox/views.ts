@@ -22,6 +22,7 @@
  * `rightPanel` are, not through the rendered sidebar.
  */
 import { useState } from 'react';
+import { ADAPTER_CHANNEL_TYPES, type AdapterChannelType } from '@nexa/types';
 import type { InboxView, TrafficTab } from './types.js';
 
 /**
@@ -29,8 +30,14 @@ import type { InboxView, TrafficTab } from './types.js';
  * (FR-MOD-08.5.4-.6, FR-MOD-08.5.7), whose provider type `twilio` surfaces to
  * the agent as "SMS". Email and the Website widget resolve tenants their own
  * way and are not adapter channels, so they are not listed here.
+ *
+ * The list itself is `@nexa/types`' (tm 218), not a third copy beside the API's
+ * adapter registry and the `channel` filter's OpenAPI enum: these views are now
+ * a real filter that sends one of these values to `GET /chats`, so a channel
+ * this file recognised and the server did not would render a row that answers
+ * 400 on click.
  */
-export type ChannelViewType = 'messenger' | 'twilio' | 'whatsapp' | 'instagram' | 'telegram';
+export type ChannelViewType = AdapterChannelType;
 
 export interface ChannelView {
   type: ChannelViewType;
@@ -58,13 +65,7 @@ export interface ConnectedChannelLike {
 }
 
 function isChannelViewType(value: string): value is ChannelViewType {
-  return (
-    value === 'messenger' ||
-    value === 'twilio' ||
-    value === 'whatsapp' ||
-    value === 'instagram' ||
-    value === 'telegram'
-  );
+  return (ADAPTER_CHANNEL_TYPES as readonly string[]).includes(value);
 }
 
 /**

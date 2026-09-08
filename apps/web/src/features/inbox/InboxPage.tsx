@@ -38,6 +38,7 @@ import {
   showChannelPromo,
   useSavedViews,
   SAVED_VIEW_NAME_MAX,
+  type ChannelViewType,
   type ConnectedChannelLike,
   type SavedView,
 } from './views.js';
@@ -145,6 +146,17 @@ export function InboxPage(): ReactElement {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
   const [trafficTab, setTrafficTab] = useState<TrafficTab>('all');
+  /**
+   * The channel view in force (FR-MOD-02.1.4), or null for every channel.
+   *
+   * Component state rather than a URL parameter, on purpose: it is a working
+   * filter like the real-time tab beside it, not the shareable grid state
+   * `?ticket_view`/`?chat_sort` are. Keeping it out of the URL is also what
+   * keeps this task's promise that the saved-views schema does not move — a
+   * saved view still captures a base view plus a traffic tab, and nothing here
+   * writes a third field into `localStorage`.
+   */
+  const [activeChannel, setActiveChannel] = useState<ChannelViewType | null>(null);
 
   // A deep link opens a specific chat or ticket (from the command palette or a
   // shared URL). The record's own detail query loads it regardless of which
@@ -202,6 +214,21 @@ export function InboxPage(): ReactElement {
     }
   };
 
+  /**
+   * Picking a channel view (FR-MOD-02.1.4), or clearing it by pressing the row
+   * that is already on.
+   *
+   * It leaves the base view alone — the two are orthogonal axes, so "my
+   * WhatsApp chats" is a thing an agent can be looking at — but it does leave
+   * the Tickets grid, because a channel view is a statement about
+   * *conversations* and the grid has no such column to narrow. Landing on the
+   * chat side under `all` is what the click plainly asks for.
+   */
+  const selectChannel = (next: ChannelViewType | null): void => {
+    if (selection.kind === 'ticket') selectChatView('all');
+    setActiveChannel(next);
+  };
+
   // A ticket view always lands on the grid, not a stale open ticket. Unlike
   // the sort's header clicks (`replace: true`, below), this pushes a new
   // history entry — the PRD asks the browser's back/forward buttons to walk
@@ -230,8 +257,10 @@ export function InboxPage(): ReactElement {
   // `RealtimeOwner`), which this screen no longer opens: it outlives the route,
   // so the alerts it drives keep working after an agent navigates away.
   const rtmStatus = useRealtimeStatus();
-  const counts = useViewCounts();
-  const list = useChatList(view, chatSort);
+  // Both narrowed by the channel view, so the rail badge and the list it labels
+  // are counting the same filter (FR-MOD-02.1.4; the tm 179.4 rule).
+  const counts = useViewCounts(activeChannel);
+  const list = useChatList(view, chatSort, activeChannel);
   const chat = useChat(selectedId);
   const transcript = useTranscript(selectedId);
   const tickets = useTicketList(ticketView, ticketSort, onTickets);
@@ -426,6 +455,8 @@ export function InboxPage(): ReactElement {
             canReadChannels={canChannels}
             channels={channelItems}
             channelsResolved={!channels.isPending}
+            activeChannel={activeChannel}
+            onSelectChannel={selectChannel}
             savedViews={savedViews.views}
             onSelectSaved={applySavedView}
             onAddSavedView={(name) => savedViews.add({ name, base: view, traffic: trafficTab })}
@@ -586,15 +617,23 @@ export function InboxPage(): ReactElement {
                     description={
                       chats.length > 0 && trafficTab !== 'all'
                         ? t('inbox.list.empty.tabDescription')
-                        : view === 'archived'
-                          ? t('inbox.list.empty.archived')
-                          : view === 'supervised'
-                            ? t('inbox.list.empty.supervised')
-                            : view === 'ai'
-                              ? t('inbox.list.empty.ai')
-                              : view === 'ai_solved'
-                                ? t('inbox.list.empty.aiSolved')
-                                : t('inbox.list.empty.description')
+                        : // A channel view that is empty is empty for a reason
+                          // the view's own copy cannot state: "new conversations
+                          // land here" is true of the inbox and misleading of a
+                          // channel nobody has written in on. It is checked
+                          // ahead of the per-view text because the channel is
+                          // the narrower statement of the two.
+                          activeChannel
+                          ? t('inbox.list.empty.channel')
+                          : view === 'archived'
+                            ? t('inbox.list.empty.archived')
+                            : view === 'supervised'
+                              ? t('inbox.list.empty.supervised')
+                              : view === 'ai'
+                                ? t('inbox.list.empty.ai')
+                                : view === 'ai_solved'
+                                  ? t('inbox.list.empty.aiSolved')
+                                  : t('inbox.list.empty.description')
                     }
                   />
                 ) : (
@@ -856,11 +895,20 @@ function ViewButton({
  * channel → channel-promo" criterion) — and the agent's own saved views below.
  * The channel section only renders for owners/admins, who can read and connect
  * channels; an ordinary agent sees just their saved views.
+ *
+ * A channel row is a *filter*, not a link (tm 218). It used to be
+ * `<Link to="/app/settings">`, which meant the group's own heading promised a
+ * view and every row in it navigated away instead; the promo — the half of the
+ * criterion that was already met — is still that link, and deliberately so:
+ * with nothing connected there is nothing to filter to, and Settings → Channels
+ * is exactly where the agent needs to go.
  */
 function ViewsGroup({
   canReadChannels,
   channels,
   channelsResolved,
+  activeChannel,
+  onSelectChannel,
   savedViews,
   onSelectSaved,
   onAddSavedView,
@@ -869,6 +917,8 @@ function ViewsGroup({
   canReadChannels: boolean;
   channels: ConnectedChannelLike[];
   channelsResolved: boolean;
+  activeChannel: ChannelViewType | null;
+  onSelectChannel: (channel: ChannelViewType | null) => void;
   savedViews: SavedView[];
   onSelectSaved: (view: SavedView) => void;
   onAddSavedView: (name: string) => SavedView | null;
@@ -900,18 +950,35 @@ function ViewsGroup({
           </div>
         ) : (
           <ul className="flex flex-col gap-0.5 px-2">
-            {connectedChannelViews(channels).map((channel) => (
-              <li key={channel.type}>
-                <Link
-                  to="/app/settings"
-                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm text-content-secondary transition-colors hover:bg-surface-2"
-                >
-                  <span aria-hidden="true">{channel.icon}</span>
-                  <span className="flex-1">{channel.label}</span>
-                  <StatusDot tone="success" label={t('inbox.rail.channelConnected')} />
-                </Link>
-              </li>
-            ))}
+            {connectedChannelViews(channels).map((channel) => {
+              const on = activeChannel === channel.type;
+              return (
+                <li key={channel.type}>
+                  {/* A view, not a doorway to Settings (FR-MOD-02.1.4): the row
+                    narrows the middle list to the conversations that arrived on
+                    this channel, through the server's own `channel` filter.
+                    `aria-pressed` rather than the rail's `aria-current`, because
+                    this is a filter that composes with whichever view is
+                    selected — pressing it does not move "the page" — and it is
+                    a toggle: the same click that turned the channel on turns it
+                    off, which is why no separate "clear" control is needed. */}
+                  <button
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => onSelectChannel(on ? null : channel.type)}
+                    className={`flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors ${
+                      on
+                        ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                        : 'text-content-secondary hover:bg-surface-2'
+                    }`}
+                  >
+                    <span aria-hidden="true">{channel.icon}</span>
+                    <span className="flex-1">{channel.label}</span>
+                    <StatusDot tone="success" label={t('inbox.rail.channelConnected')} />
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         ))}
 

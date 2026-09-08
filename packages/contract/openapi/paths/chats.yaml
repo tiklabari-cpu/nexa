@@ -40,6 +40,25 @@ chats:
           type: string
           enum: [all, my, queued, unassigned, supervised, archived, ai, ai_solved]
           default: all
+      - name: channel
+        in: query
+        description: |
+          Narrows to the conversations that arrived over one messaging channel
+          — the inbox's channel views (FR-MOD-02.1.4). An axis of its own, at
+          right angles to `view`: `view=my&channel=whatsapp` is the caller's
+          own WhatsApp conversations, and `total` counts the same intersection
+          the rows come from.
+
+          A chat's channel is the `channel_type` of its *oldest inbound*
+          `channel_messages` row — the definition Reports' channel split
+          already uses (FR-MOD-07.5), so the rail and the report can never
+          disagree about which channel a conversation belongs to. Only adapter
+          channels can answer it: a conversation that arrived through the
+          website widget, a chat page or e-mail crossed no adapter and so
+          belongs to none of these values.
+        schema:
+          type: string
+          enum: [messenger, twilio, whatsapp, instagram, telegram]
       - name: customer_id
         in: query
         schema: { type: string, format: uuid }

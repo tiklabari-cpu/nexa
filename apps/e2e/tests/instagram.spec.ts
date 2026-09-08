@@ -59,7 +59,7 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
     // FR-MOD-02.1.4: no known channel connected → the promo, not an empty group.
     const views = agentPage.getByRole('navigation', { name: 'Inbox views' });
     await expect(agentPage.getByTestId('channel-promo')).toBeVisible();
-    await expect(views.getByRole('link', { name: 'Instagram' })).toHaveCount(0);
+    await expect(views.getByRole('button', { name: 'Instagram' })).toHaveCount(0);
 
     await agentPage.goto('/app/settings');
     const card = agentPage
@@ -147,7 +147,12 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
 
     // --- (iv) The Views group lists the channel, and drops the promo ---------
     const views = agentPage.getByRole('navigation', { name: 'Inbox views' });
-    await expect(views.getByRole('link', { name: 'Instagram' })).toBeVisible();
+    // A filter, not a link into Settings (tm 218) — unpressed until the agent
+    // presses it, and `channels.spec.ts` is where the narrowing itself is
+    // proved across three channels at once.
+    const row = views.getByRole('button', { name: 'Instagram' });
+    await expect(row).toBeVisible();
+    await expect(row).toHaveAttribute('aria-pressed', 'false');
     await expect(agentPage.getByTestId('channel-promo')).toHaveCount(0);
     await agentPage.screenshot({ path: 'kanit/08.5.7-instagram-inbox.png', fullPage: true });
 
@@ -186,7 +191,7 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
     await agentPage.goto('/app/inbox');
     await expect(agentPage.getByTestId('channel-promo')).toBeVisible();
     await expect(
-      agentPage.getByRole('navigation', { name: 'Inbox views' }).getByRole('link', {
+      agentPage.getByRole('navigation', { name: 'Inbox views' }).getByRole('button', {
         name: 'Instagram',
       }),
     ).toHaveCount(0);

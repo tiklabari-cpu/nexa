@@ -70,6 +70,7 @@ export const inbox: Messages = {
     'Şu anda gözetlediğiniz sohbet yok. Trafik ekranından bir sohbeti gözetlemeye alın, burada görünsün.',
   'inbox.list.empty.ai': 'AI ajanının yürüttüğü sohbetler burada görünür.',
   'inbox.list.empty.aiSolved': "AI'nın kendi başına çözdüğü sohbetler burada görünür.",
+  'inbox.list.empty.channel': 'Bu kanaldan henüz sohbet gelmedi.',
   'inbox.list.empty.description': 'Yeni sohbetler geldikçe burada görünür.',
   'inbox.list.item.visitorFallback': 'Ziyaretçi',
   'inbox.list.item.queuePosition': '#{position}. sırada',

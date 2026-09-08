@@ -15,7 +15,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { ROUTING_STATUSES } from '@nexa/types';
+import { ROUTING_STATUSES, type AdapterChannelType } from '@nexa/types';
 import { RtmClient, type PushHandler } from '../../lib/realtime.js';
 import { setRealtimeStatus } from '../../lib/realtime-status.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
@@ -45,16 +45,38 @@ const TRANSCRIPT_PAGE_SIZE = 200;
  */
 const CHAT_HEAD_REFRESH_MS = 30_000;
 
-export function chatsKey(view: InboxView, sort: ChatSort = DEFAULT_CHAT_SORT): unknown[] {
-  return ['chats', view, sort];
+/**
+ * One chat list's cache key. `channel` (FR-MOD-02.1.4) sits *after* `sort`
+ * deliberately: `patchChatInPages` reads the sort off position 2 to know which
+ * end of the chain a moved row belongs at, and a live push has to keep landing
+ * correctly in every list mounted at once. `null` rather than omitted, so the
+ * unfiltered list and a channel view are two keys rather than one being a
+ * prefix of the other.
+ */
+export function chatsKey(
+  view: InboxView,
+  sort: ChatSort = DEFAULT_CHAT_SORT,
+  channel: AdapterChannelType | null = null,
+): unknown[] {
+  return ['chats', view, sort, channel];
 }
 export function eventsKey(chatId: string): unknown[] {
   return ['events', chatId];
 }
 
-function chatListUrl(view: InboxView, sort: ChatSort, pageId: string | undefined): string {
+function chatListUrl(
+  view: InboxView,
+  sort: ChatSort,
+  channel: AdapterChannelType | null,
+  pageId: string | undefined,
+): string {
   const cursor = pageId ? `&page_id=${encodeURIComponent(pageId)}` : '';
-  return `/chats?view=${view}&sort=${sort}&limit=${CHAT_PAGE_SIZE}${cursor}`;
+  // The server filters, the same way `view` and `sort` do — not a slice of the
+  // rows already loaded. A client-side channel filter would narrow one page of
+  // fifty and then keep asking for the next page of *everything*, so a busy
+  // workspace's WhatsApp view would be mostly empty and its counter wrong.
+  const onChannel = channel ? `&channel=${channel}` : '';
+  return `/chats?view=${view}&sort=${sort}${onChannel}&limit=${CHAT_PAGE_SIZE}${cursor}`;
 }
 
 /**
@@ -216,15 +238,20 @@ export function mergeChatHead(
  */
 const headRefreshers = new Map<
   symbol,
-  { view: InboxView; sort: ChatSort; run: () => Promise<void> }
+  { view: InboxView; sort: ChatSort; channel: AdapterChannelType | null; run: () => Promise<void> }
 >();
 const headInFlight = new Set<string>();
 const headPending = new Set<string>();
 let headTicker: ReturnType<typeof setInterval> | null = null;
 
-/** The dedup/collapse key for one mounted list — a view can be mounted twice at once (below), each at its own sort. */
-function headKey(view: InboxView, sort: ChatSort): string {
-  return `${view}:${sort}`;
+/**
+ * The dedup/collapse key for one mounted list — a view can be mounted twice at
+ * once (below), each at its own sort, and (FR-MOD-02.1.4) each at its own
+ * channel filter. Two lists that differ only by channel are two different
+ * requests, so collapsing them onto one key would leave one of them stale.
+ */
+function headKey(view: InboxView, sort: ChatSort, channel: AdapterChannelType | null): string {
+  return `${view}:${sort}:${channel ?? ''}`;
 }
 
 /**
@@ -236,7 +263,7 @@ function headKey(view: InboxView, sort: ChatSort): string {
 export function refreshChatHeads(): void {
   const done = new Set<string>();
   for (const entry of headRefreshers.values()) {
-    const key = headKey(entry.view, entry.sort);
+    const key = headKey(entry.view, entry.sort, entry.channel);
     if (done.has(key)) continue;
     done.add(key);
     void entry.run();
@@ -260,15 +287,19 @@ export function refreshChatHeads(): void {
 export function useChatList(
   view: InboxView,
   sort: ChatSort = DEFAULT_CHAT_SORT,
+  channel: AdapterChannelType | null = null,
 ): PagedQueryResult<ChatSummary> {
   const api = useApiClient();
   const queryClient = useQueryClient();
 
   const buildUrl = useCallback(
-    (pageId: string | undefined) => chatListUrl(view, sort, pageId),
-    [view, sort],
+    (pageId: string | undefined) => chatListUrl(view, sort, channel, pageId),
+    [view, sort, channel],
   );
-  const query = usePagedQuery<ChatSummary>({ queryKey: chatsKey(view, sort), buildUrl });
+  const query = usePagedQuery<ChatSummary>({
+    queryKey: chatsKey(view, sort, channel),
+    buildUrl,
+  });
 
   // Read through a ref, not a dependency: the merge writes the page array that
   // an in-flight `fetchNext` is about to overwrite with the snapshot it took
@@ -279,7 +310,7 @@ export function useChatList(
 
   const refreshHead = useCallback(async (): Promise<void> => {
     if (fetchingNextRef.current) return;
-    const cacheKey = chatsKey(view, sort);
+    const cacheKey = chatsKey(view, sort, channel);
     // Nothing loaded yet: the query's own first fetch is the refresh.
     if (!queryClient.getQueryData(cacheKey)) return;
 
@@ -289,7 +320,7 @@ export function useChatList(
     // read already in flight when the second lands is usually too early to
     // contain it — dropping it would leave the row saying "no messages yet"
     // until the next tick.
-    const burstKey = headKey(view, sort);
+    const burstKey = headKey(view, sort, channel);
     if (headInFlight.has(burstKey)) {
       headPending.add(burstKey);
       return;
@@ -300,7 +331,7 @@ export function useChatList(
         headPending.delete(burstKey);
         if (sort === 'newest') {
           const fresh = await api.get<PagedResponse<ChatSummary>>(
-            chatListUrl(view, sort, undefined),
+            chatListUrl(view, sort, channel, undefined),
           );
           queryClient.setQueryData<ChatListCache>(cacheKey, (cache) => mergeChatHead(cache, fresh));
         } else {
@@ -326,11 +357,11 @@ export function useChatList(
     } finally {
       headInFlight.delete(burstKey);
     }
-  }, [api, queryClient, view, sort]);
+  }, [api, queryClient, view, sort, channel]);
 
   useEffect(() => {
     const token = Symbol('chat-head');
-    headRefreshers.set(token, { view, sort, run: refreshHead });
+    headRefreshers.set(token, { view, sort, channel, run: refreshHead });
     // One timer for all views rather than one per mounted list, so the eight
     // lists on screen cost seven requests every interval, not eight.
     headTicker ??= setInterval(refreshChatHeads, CHAT_HEAD_REFRESH_MS);
@@ -341,7 +372,7 @@ export function useChatList(
         headTicker = null;
       }
     };
-  }, [view, sort, refreshHead]);
+  }, [view, sort, channel, refreshHead]);
 
   const items = useMemo(() => {
     const seen = new Set<string>();
@@ -1016,22 +1047,34 @@ export function applyPush(
   }
 }
 
-/** Live per-view counts for the sidebar. */
-export function useViewCounts(): Record<InboxView, number | undefined> {
-  const all = useChatList('all');
-  const mine = useChatList('my');
-  const queued = useChatList('queued');
-  const unassigned = useChatList('unassigned');
+/**
+ * Live per-view counts for the sidebar.
+ *
+ * `channel` (FR-MOD-02.1.4) is passed straight through to all eight lists on
+ * purpose: a channel view narrows what clicking a rail item will show, so a
+ * badge that ignored it would promise conversations the click cannot produce.
+ * The counter and the list it labels have to be counting the same filter — the
+ * same rule tm 179.4 established when these numbers stopped being the loaded
+ * window. Switching channel therefore restarts all eight page chains, exactly
+ * as switching sort does, because they are eight different questions now.
+ */
+export function useViewCounts(
+  channel: AdapterChannelType | null = null,
+): Record<InboxView, number | undefined> {
+  const all = useChatList('all', DEFAULT_CHAT_SORT, channel);
+  const mine = useChatList('my', DEFAULT_CHAT_SORT, channel);
+  const queued = useChatList('queued', DEFAULT_CHAT_SORT, channel);
+  const unassigned = useChatList('unassigned', DEFAULT_CHAT_SORT, channel);
   // The conversations this agent is watching without owning (PRD 02.1.1). Its
   // count comes from the same place as every other view's — the server `total`
   // on the same list request — because the PRD asks for one live counter per
   // rail item, not for a second mechanism beside it.
-  const supervised = useChatList('supervised');
-  const archived = useChatList('archived');
+  const supervised = useChatList('supervised', DEFAULT_CHAT_SORT, channel);
+  const archived = useChatList('archived', DEFAULT_CHAT_SORT, channel);
   // The AI Agents group (PRD 02.1.2): AI-handled conversations, kept out of the
   // human queue, and the AI resolutions ("Solved") counter.
-  const ai = useChatList('ai');
-  const aiSolved = useChatList('ai_solved');
+  const ai = useChatList('ai', DEFAULT_CHAT_SORT, channel);
+  const aiSolved = useChatList('ai_solved', DEFAULT_CHAT_SORT, channel);
 
   // Read straight through rather than memoised: the counts are consumed as
   // plain numbers by the rail buttons, so a stable object identity buys

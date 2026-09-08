@@ -640,7 +640,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | ---------- | ------------------------------------------------------------------------------------------------------ | -------------- | :---------------------------------------------------: |
 | **08.8.4** | **Webhooks** (register/list/unregister) — HMAC-SHA256 + timestamp/nonce + retry 3× + **SSRF koruması** | Must (v1)      | ✅ → K08.8.4 |
 | 02.1.2 | AI Agents grubu (AI agent / Solved) | Must (v1) | ✅ → K02.1.2 |
-| 02.1.4 | Views grubu (WhatsApp/Messenger/Twilio görünümleri) | Should (v1) | ◐ → K02.1.4 |
+| 02.1.4 | Views grubu (WhatsApp/Messenger/Twilio görünümleri) | Should (v1) | ✅ → K02.1.4 |
 | 02.3.2 | Reply Suggestions çipleri | Should (v1) | ◐ → K02.3.2 |
 | 02.5 | Copilot özeti → internal note | Should (v1) | ✅ → K02.5 |
 | 02.7 | Tickets grid (sıralanabilir, deep-link) | Should (v1) | ✅ → K02.7 |
@@ -3648,7 +3648,7 @@ ve `audit:endpoint-ui` süpürmesinden) · 1 kapanış turu.
 |  5  | V8-DEADEND       | Çağrılmayan uç süpürmesi + `audit:endpoint-ui`'nin **metot körlüğü** (yol bazlı sayıyor)                 | NFR-türetilmiş   | medium  |  ✅   | 215 |  2   |
 |  6  | V8-ONBOARD       | Onboarding sihirbazının eksik iki adımı (ek kanallar · şirket büyüklüğü) → PRD'nin **5 adımı**           | FR-MOD-00.4      | medium  |  ⬜   | 216 |  1   |
 |  7  | V8-SHELL-MENU    | Logo → **menü/uygulama seçici** (pin/unpin yarısı zaten var)                                             | FR-MOD-01.1.1    |   low   |  ⬜   | 217 |  1   |
-|  8  | V8-INBOX-CHAN    | Kanal görünümleri **gerçek görünüm** olsun — bugün `<Link to="/app/settings">`                           | FR-MOD-02.1.4    | medium  |  ⬜   | 218 |  2   |
+|  8  | V8-INBOX-CHAN    | Kanal görünümleri **gerçek görünüm** olsun — bugün `<Link to="/app/settings">`                           | FR-MOD-02.1.4    | medium  |  ✅   | 218 |  2   |
 |  9  | V8-INBOX-SUGG    | Reply Suggestions: sabit İngilizce regex yerine **bağlam + i18n**                                        | FR-MOD-02.3.2    | medium  |  ⬜   | 219 |  2   |
 | 10  | V8-TRAFFIC-RTM   | Traffic panosu **RTM akışına** bağlansın — bugün 8 sn'lik `setInterval`                                  | FR-MOD-03.1.1    | medium  |  ⬜   | 220 |  2   |
 | 11  | V8-SKILL-OWNER   | Playbook "sahip" filtresi **insan sahibi** süzsün (bugün `ai_agent_id`)                                  | FR-MOD-05.4      |   low   |  ⬜   | 221 |  1   |
@@ -6593,6 +6593,8 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 ✅ Inbox **Views** grubu (`InboxPage.tsx`) — kanal bağlı değilse **channel-promo** (dashed CTA → Settings→Channels), bağlıysa kanal satırları (Messenger/WhatsApp/SMS, "Connected" → Settings); **custom saved views** (base view + real-time tab, `localStorage`, ekle/sil, reload'da kalıcı, boş ad reddi). Kanal durumu owner/admin `channels--all` kapılı (`canReadChannels`) — ajan `/channels` çağırmaz (403 önlenir), yalnız kendi saved view'lerini görür. Saf `views.ts` (`showChannelPromo`/`connectedChannelViews`/`canReadChannels`/`addSavedView`/`removeSavedView`/`useSavedViews`) + `useConnectedChannels` (`useInbox.ts`, scope-gated) · test `views.test.ts` (19: kanal yok→promo · bağlıysa liste+sıra · saved view ekle/sil/round-trip/reload/boş-ad reddi) · tm 38 · §D42. Not: kanal→chat filtresi (per-kanal) `ChatSummary`'de kanal etiketi ister (backend, ayrı task); bu dilim promo+saved views KK'sını tam karşılar.
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-02.1.4` [KISMİ]: Kanal görünümleri gerçek bir görünüm değil: her satır <Link to="/app/settings"> (InboxPage.tsx:832-839) — tıklanınca orta listeyi kanala göre filtrelemiyor, Ayarlar'a gidiyor. /chats sorgu şemasında kanal filtresi parametresi de yok (chats.ts:20-27), yani fil…
+
+- ✅ tm 218 (V8-INBOX-CHAN): **kanal satırı artık gerçek bir görünüm — `<Link to="/app/settings">` yerine sunucu tarafı filtre.** `GET /chats`e `channel` sorgu parametresi (`packages/contract/openapi/paths/chats.yaml`; kanal sözlüğü tek kaynak — yeni `ADAPTER_CHANNEL_TYPES` `@nexa/types`'ta, `channel-adapter.ts` ve `views.ts` ondan türüyor). `view` ile **dik eksen** (`view=my&channel=whatsapp` anlamlı; kanal `view` enum'una EKLENMEDİ) ve filtre `where`e girdiği için `total` da FİLTRELİ (tm 179.4 kuralı). Bir sohbetin kanalı = **en eski gelen** `channel_messages` satırının `channel_type`'ı — Reports'un `breakdownByChannel` (FR-MOD-07.5) tanımının aynısı, ikinci bir doğruluk kaynağı açılmadı (`chats.channel` kolonu bilerek AÇILMADI). Rozetler de aynı filtreyi görüyor (`useViewCounts(channel)`), satır toggle (`aria-pressed`), kanal boşsa kendi boş-durum metni. **channel-promo davranışı DEĞİŞMEDİ** (bağlı kanal yokken hâlâ Settings'e giden link) — `chat-service.ts#chatIdsOnChannel` · `routes/chats.ts` · `InboxPage.tsx`/`useInbox.ts`/`views.ts` · test `chats.test.ts` (7) · `chats-channel-filter.test.ts` (2) · `InboxPage.channels.test.tsx` (8) · e2e `channels.spec.ts` (kanal satırı → liste daralması, `kanit/channels-view-filter.png`) · 8 mutasyon → 8 kırmızı · tm 218
 
 #### K02.3.2 — 02.3.2 · Reply Suggestions çipleri
 

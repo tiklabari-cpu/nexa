@@ -20,6 +20,7 @@ import {
   composerStateKey,
   generateShortId,
   SNEAK_PEEK_MAX_LENGTH,
+  type AdapterChannelType,
   type AgentConflictWarningPush,
   type ChatTakenOverPush,
   type EventRecipients,
@@ -63,6 +64,13 @@ export interface ChatListOptions {
   view: 'all' | 'my' | 'queued' | 'unassigned' | 'supervised' | 'archived' | 'ai' | 'ai_solved';
   customerId?: string;
   groupId?: bigint;
+  /**
+   * The inbox's channel views (FR-MOD-02.1.4) — an axis of its own, deliberately
+   * NOT a ninth `view`. The two compose (`view=my&channel=whatsapp`), and the
+   * counters, saved views and rail labels are all keyed on `view`, so folding a
+   * channel into that enum would have made "my WhatsApp chats" unaskable.
+   */
+  channel?: AdapterChannelType;
   sort: 'newest' | 'oldest';
   limit: number;
   pageId?: string;
@@ -1770,6 +1778,16 @@ export async function listChatsInTenant(
   const visibilityFilter = chatVisibilityFilter(visibility);
   if (Object.keys(visibilityFilter).length > 0) scope.push(visibilityFilter);
 
+  // The channel view's own narrowing (FR-MOD-02.1.4), resolved to chat ids
+  // before the page is read — see `chatIdsOnChannel` for why it is a separate
+  // read and what that costs. It joins `where` rather than the cursor clause,
+  // so `total` counts the channel too: a rail badge that ignored the filter
+  // beside it is the "loaded window read as the real total" defect (tm 179.4)
+  // wearing a different hat.
+  const channelChatIds = options.channel
+    ? await chatIdsOnChannel(tx, principal.licenseId, options.channel)
+    : undefined;
+
   // Everything that describes *the view*, with the cursor deliberately left out
   // — this is what `total` counts. A total narrowed by the cursor would shrink
   // as the reader scrolled, which is the counter equivalent of the defect this
@@ -1777,6 +1795,11 @@ export async function listChatsInTenant(
   const where = {
     ...(options.customerId ? { customerId: options.customerId } : {}),
     ...(options.groupId !== undefined ? { access: { some: { groupId: options.groupId } } } : {}),
+    // An empty set is a real answer, not a missing filter: `{ in: [] }` matches
+    // nothing, which is exactly what "no conversation has arrived on this
+    // channel yet" means. Spreading it away instead would silently widen the
+    // channel view to every chat in the workspace.
+    ...(channelChatIds !== undefined ? { id: { in: channelChatIds } } : {}),
     ...viewFilter(options.view, visibility.actorId),
     ...(scope.length > 0 ? { AND: scope } : {}),
   };
@@ -1889,6 +1912,58 @@ export async function listChatsInTenant(
       ? { nextPageId: encodeCursor({ activityAt: last.lastEventAt, id: last.id }) }
       : {}),
   };
+}
+
+/**
+ * The chats that arrived over one messaging channel (FR-MOD-02.1.4).
+ *
+ * WHAT "A CHAT'S CHANNEL" MEANS — and why this is a read rather than a column.
+ * The definition already exists and is Reports': `breakdownByChannel`
+ * (FR-MOD-07.5) calls a chat's channel the `channel_type` of its OLDEST INBOUND
+ * `channel_messages` row, and folds everything else into the website bucket.
+ * This asks that same question with the same `DISTINCT ON` ordering, so the
+ * inbox rail and the channel split cannot disagree about which channel a
+ * conversation belongs to. The obvious alternative — a `chats.channel` column
+ * maintained on the write path, the way `last_event_at` is — was refused for
+ * exactly that reason: it would be a *second* statement of a fact one query
+ * already derives, and the two would agree only for as long as somebody kept
+ * them agreeing. `last_event_at` earns its denormalisation by being the sort
+ * key of every inbox read; a channel filter is asked for only when an agent
+ * clicks a channel view.
+ *
+ * WHAT IT COSTS, stated rather than hidden: the answer is a list of ids, so a
+ * workspace's whole adapter history crosses the wire between the two round
+ * trips of one request. That is bounded by conversations that actually reached
+ * an adapter (a widget-only workspace returns nothing at all and the filter
+ * costs one indexed lookup), and it buys the property that matters most here —
+ * the page and `total` are filtered by ONE `where`, so the badge beside the
+ * list is counting the list. Splitting the channel out into a second predicate
+ * applied to only one of them is the shape of the defect tm 179.4 closed.
+ *
+ * ISOLATION (NFR-S4), the argument `breakdownByChannel` spells out and this
+ * inherits: `channel_messages.chat_id` is a *soft* reference — no FK — so the
+ * read is locked on `license_id` explicitly as well as by RLS. Without it, a
+ * weakened policy would let another tenant's row carrying the same chat id
+ * decide which channel view a conversation shows up in.
+ */
+async function chatIdsOnChannel(
+  tx: TenantClient,
+  licenseId: bigint,
+  channel: AdapterChannelType,
+): Promise<string[]> {
+  const rows = await tx.$queryRaw<Array<{ chat_id: string }>>`
+    SELECT first_inbound.chat_id AS chat_id
+    FROM (
+      SELECT DISTINCT ON (cm.chat_id) cm.chat_id AS chat_id, cm.channel_type AS channel_type
+      FROM channel_messages cm
+      WHERE cm.license_id = ${licenseId}
+        AND cm.chat_id IS NOT NULL
+        AND cm.direction = 'inbound'
+      ORDER BY cm.chat_id, cm.created_at, cm.id
+    ) first_inbound
+    WHERE first_inbound.channel_type = ${channel}
+  `;
+  return rows.map((row) => row.chat_id);
 }
 
 /** The most recent event per chat, keyed by chat id — `listChatsInTenant`'s only per-row read. */

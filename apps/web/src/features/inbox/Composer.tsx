@@ -20,7 +20,14 @@ import { useTypingStore } from './typing.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { uploadAttachment, type UploadedAttachment } from './uploadAttachment.js';
-import { replySuggestions, type SuggestionTurn } from './replySuggestions.js';
+import {
+  replySuggestionIds,
+  withCopilotDraft,
+  type ReplyChip,
+  type ReplySuggestionId,
+  type SuggestionTurn,
+} from './replySuggestions.js';
+import { useCopilotReply } from './useCopilot.js';
 import {
   activeShortcutQuery,
   applyShortcut,
@@ -31,6 +38,18 @@ import { EMOJI_CATEGORIES, insertAtCaret } from './emoji.js';
 import { applyBulletPrefix, wrapSelection } from './richText.js';
 import { Dropdown } from '../../components/ui/Dropdown.js';
 import { useTranslate } from '../../lib/i18n.js';
+
+/**
+ * How long Reply Suggestions waits for Copilot before settling for the template
+ * chips (FR-MOD-02.3.2).
+ *
+ * A budget, not a network timeout: the request is left to finish on its own —
+ * it may still be recorded as an assist server-side — but past this point its
+ * answer is no longer allowed to rearrange a row the agent has been reading.
+ * Three seconds is roughly a glance; longer and the chips would move under the
+ * cursor, which is worse than not having the extra one.
+ */
+const COPILOT_SUGGESTION_TIMEOUT_MS = 3_000;
 
 /**
  * Message composer.
@@ -68,10 +87,17 @@ export function Composer({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   // Reply Suggestions (FR-MOD-02.3.2): `null` closed, an array of chips open.
-  const [suggestions, setSuggestions] = useState<string[] | null>(null);
+  const [suggestions, setSuggestions] = useState<ReplyChip[] | null>(null);
+  // Whether Copilot's own draft is still on its way. The template chips are
+  // already on screen while this is true — it is a row that may still grow, not
+  // a spinner standing in for an empty one.
+  const [copilotPending, setCopilotPending] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const send = useSendMessage(chatId);
+  // The same Copilot draft endpoint the Copilot panel calls (FR-MOD-12.3) —
+  // Reply Suggestions is a faster door onto it, not a second AI path.
+  const copilotReply = useCopilotReply(chatId);
   const api = useApiClient();
   const queryClient = useQueryClient();
   const t = useTranslate();
@@ -266,8 +292,84 @@ export function Composer({
   };
 
   // Reply Suggestions (FR-MOD-02.3.2). The agent asks for them by pressing Space
-  // in an empty reply field; they are drawn from the transcript already in cache,
-  // so no fetch and no round-trip stand between the keystroke and the chips.
+  // in an empty reply field. The chips the keystroke puts on screen are drawn
+  // from the transcript already in cache and said in the agent's own language —
+  // no fetch and no round-trip stand between the keystroke and the row.
+  const suggestionText = (id: ReplySuggestionId): string =>
+    t(`inbox.composer.suggestions.chip.${id}`);
+
+  /**
+   * Which request the chips on screen belong to. Bumped by everything that
+   * closes or replaces the row, so a Copilot draft that arrives after the agent
+   * has moved on is dropped rather than reopening a row they dismissed.
+   */
+  const suggestionRequest = useRef(0);
+  const copilotTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const closeSuggestions = useCallback((): void => {
+    suggestionRequest.current += 1;
+    if (copilotTimer.current) {
+      clearTimeout(copilotTimer.current);
+      copilotTimer.current = null;
+    }
+    setSuggestions(null);
+    setCopilotPending(false);
+  }, []);
+
+  // Nothing may land on an unmounted composer.
+  useEffect(
+    () => () => {
+      if (copilotTimer.current) clearTimeout(copilotTimer.current);
+    },
+    [],
+  );
+
+  /**
+   * Ask Copilot for a draft grounded in the workspace's knowledge base, and add
+   * it to the row if it answers in time.
+   *
+   * Deliberately fire-and-forget: the template chips are already up, so this can
+   * only improve the row, never delay it. Three ways it comes to nothing — an
+   * empty draft (the knowledge base had no match, which the endpoint reports
+   * rather than inventing one), a refusal (an unentitled plan, an expired
+   * session, a provider that is down) and a timeout — and all three leave the
+   * agent exactly what they already had. That is the requirement: the chips are
+   * never worse for having asked.
+   */
+  const requestCopilotDraft = (request: number): void => {
+    setCopilotPending(true);
+    copilotTimer.current = setTimeout(() => {
+      copilotTimer.current = null;
+      if (suggestionRequest.current !== request) return;
+      // Too slow to be part of an "instant" row. Stop waiting, and disown the
+      // reply so a late arrival cannot rearrange chips under the agent's cursor.
+      suggestionRequest.current += 1;
+      setCopilotPending(false);
+    }, COPILOT_SUGGESTION_TIMEOUT_MS);
+
+    copilotReply
+      .mutateAsync()
+      .then((result) => {
+        if (suggestionRequest.current !== request) return;
+        const draft = (result.draft ?? '').trim();
+        if (draft.length === 0) return;
+        setSuggestions((current) =>
+          current === null ? current : withCopilotDraft(current, draft),
+        );
+      })
+      .catch(() => {
+        // The template chips stand. Reply Suggestions is a convenience; a failed
+        // assist must not put an error in front of an agent mid-conversation.
+      })
+      .finally(() => {
+        if (copilotTimer.current) {
+          clearTimeout(copilotTimer.current);
+          copilotTimer.current = null;
+        }
+        if (suggestionRequest.current === request) setCopilotPending(false);
+      });
+  };
+
   const openSuggestions = (): void => {
     const cached = queryClient.getQueryData<TranscriptCache>(eventsKey(chatId));
     const turns: SuggestionTurn[] = flattenTranscript(cached)
@@ -281,7 +383,12 @@ export function Composer({
         role: event.author_type === 'customer' ? 'customer' : 'agent',
         text: event.text ?? '',
       }));
-    setSuggestions(replySuggestions(turns));
+
+    const request = (suggestionRequest.current += 1);
+    setSuggestions(
+      replySuggestionIds(turns).map((id) => ({ text: suggestionText(id), source: 'template' })),
+    );
+    requestCopilotDraft(request);
   };
 
   // A chip fills the reply field with editable text — never a note — and the
@@ -290,7 +397,7 @@ export function Composer({
   const applySuggestion = (suggestion: string): void => {
     setText(suggestion);
     setMode('all');
-    setSuggestions(null);
+    closeSuggestions();
     setShortcut(null);
     requestAnimationFrame(() => {
       const input = inputRef.current;
@@ -311,7 +418,7 @@ export function Composer({
     }
     if (event.key === 'Escape' && suggestions !== null && !pickerOpen) {
       event.preventDefault();
-      setSuggestions(null);
+      closeSuggestions();
       return;
     }
 
@@ -388,7 +495,7 @@ export function Composer({
                 // Reply Suggestions (they only make sense for a customer reply).
                 if (option.id === 'agents') {
                   stopTyping();
-                  setSuggestions(null);
+                  closeSuggestions();
                 }
               }}
               // The selected note tab is the one place `--note` is a *fill*;
@@ -445,21 +552,45 @@ export function Composer({
           aria-label={t('inbox.composer.suggestions.ariaLabel')}
           className="mb-2 flex flex-wrap items-start gap-1.5"
         >
-          {suggestions.map((suggestion) => (
+          {suggestions.map((chip) => (
             <button
-              key={suggestion}
+              key={chip.text}
               type="button"
-              onClick={() => applySuggestion(suggestion)}
-              className="max-w-full truncate rounded-full border border-border bg-inset px-3 py-1 text-left text-2xs text-content-secondary transition-colors hover:bg-brand-100 hover:text-content dark:hover:bg-brand-950"
+              onClick={() => applySuggestion(chip.text)}
+              // The Copilot chip says where it came from on hover rather than in
+              // its accessible name: the name has to stay the text the agent is
+              // about to insert, which is what they are choosing between.
+              title={
+                chip.source === 'copilot' ? t('inbox.composer.suggestions.fromCopilot') : undefined
+              }
+              // The Copilot chip wears the row's own hover state as its resting
+              // one — `brand-100` / `brand-950` on `text-content`, the exact
+              // pairing every chip here already lands on under the cursor, so
+              // it needs no colour the design system has not already cleared.
+              className={`max-w-full truncate rounded-full border px-3 py-1 text-left text-2xs transition-colors hover:bg-brand-100 hover:text-content dark:hover:bg-brand-950 ${
+                chip.source === 'copilot'
+                  ? 'border-brand-500 bg-brand-100 text-content dark:bg-brand-950'
+                  : 'border-border bg-inset text-content-secondary'
+              }`}
             >
-              {suggestion}
+              {chip.text}
             </button>
           ))}
+          {copilotPending && (
+            // A row that may still grow, announced politely. It is never the
+            // only thing here — the template chips are already usable.
+            <span
+              role="status"
+              className="rounded-full border border-dashed border-border px-3 py-1 text-2xs text-content-tertiary"
+            >
+              {t('inbox.composer.suggestions.copilotPending')}
+            </span>
+          )}
           <button
             type="button"
             aria-label={t('inbox.composer.suggestions.dismiss')}
             onClick={() => {
-              setSuggestions(null);
+              closeSuggestions();
               requestAnimationFrame(() => inputRef.current?.focus());
             }}
             className="rounded-full px-2 py-1 text-2xs text-content-tertiary hover:text-content"
@@ -515,7 +646,7 @@ export function Composer({
             syncShortcut(value, event.target.selectionStart);
             // The suggestion chips are for the empty field; once the agent types,
             // they no longer fit — retract them.
-            if (value.length > 0 && suggestions !== null) setSuggestions(null);
+            if (value.length > 0 && suggestions !== null) closeSuggestions();
             // A reply is shown to the visitor; an internal note is not, so only a
             // reply-in-progress broadcasts "the agent is typing".
             if (value.trim() && mode === 'all') signalTyping();

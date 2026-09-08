@@ -104,6 +104,25 @@ export const inbox: Messages = {
   'inbox.composer.attachment.remove': 'Eki kaldır',
   'inbox.composer.suggestions.ariaLabel': 'Yanıt önerileri',
   'inbox.composer.suggestions.dismiss': 'Yanıt önerilerini kapat',
+  'inbox.composer.suggestions.copilotPending': 'Copilot taslak hazırlıyor…',
+  'inbox.composer.suggestions.fromCopilot': 'Copilot bilgi tabanınızdan hazırlandı',
+  'inbox.composer.suggestions.chip.opener':
+    'Merhaba! Bize ulaştığınız için teşekkürler — size nasıl yardımcı olabilirim?',
+  'inbox.composer.suggestions.chip.greeting': 'Merhaba! Size nasıl yardımcı olabilirim?',
+  'inbox.composer.suggestions.chip.thanks':
+    'Rica ederim! Yardımcı olabileceğim başka bir konu var mı?',
+  'inbox.composer.suggestions.chip.order':
+    'Memnuniyetle yardımcı olayım — kaydınızı açıp hemen bakıyorum.',
+  'inbox.composer.suggestions.chip.question':
+    'Güzel bir soru — hemen inceleyip size geri döneceğim.',
+  'inbox.composer.suggestions.chip.questionWait':
+    'Sorduğunuz için teşekkürler! Yanıtı bulmam için bir dakika verin.',
+  'inbox.composer.suggestions.chip.details':
+    'Ayrıntılar için teşekkürler — inceleyip size geri döneceğim.',
+  'inbox.composer.suggestions.chip.holdingBear':
+    'Hâlâ üzerinde çalışıyorum — biraz sabrettiğiniz için teşekkürler.',
+  'inbox.composer.suggestions.chip.holdingMoment':
+    'Bana bir dakika verin, sizin için kontrol edeyim.',
   'inbox.composer.picker.ariaLabel': 'Kayıtlı yanıtlar',
   'inbox.composer.placeholder.note': 'Ekibiniz için bir not ekleyin…',
   'inbox.composer.placeholder.reply': 'Yanıtınızı yazın veya öneriler için Boşluk tuşuna basın…',

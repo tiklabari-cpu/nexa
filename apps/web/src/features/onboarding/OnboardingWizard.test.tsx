@@ -124,6 +124,46 @@ describe('OnboardingWizard', () => {
     expect(screen.getByRole('heading', { name: 'Connect your first website' })).toBeInTheDocument();
   });
 
+  it('walks through channels and company without filling in either — both are skippable via Continue', async () => {
+    stubOnboardingFetch();
+    renderWizard();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' })); // welcome → website
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' })); // website → channels
+    expect(screen.getByRole('heading', { name: 'Reach customers everywhere' })).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' })); // channels → company
+    expect(screen.getByRole('heading', { name: 'How big is your team?' })).toBeInTheDocument();
+    // Nothing was chosen, and Continue still works — this step is optional.
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' })); // company → team
+    expect(screen.getByRole('heading', { name: 'Invite your team' })).toBeInTheDocument();
+  });
+
+  it('saves a chosen company size through PATCH /settings/company', async () => {
+    const fetchMock = stubOnboardingFetch();
+    renderWizard();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' })); // welcome → website
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' })); // website → channels
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' })); // channels → company
+
+    await userEvent.selectOptions(screen.getByLabelText('Company size'), '11_50');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        expect.stringContaining('/settings/company'),
+        expect.objectContaining({
+          method: 'PATCH',
+          body: JSON.stringify({ company_size: '11_50' }),
+        }),
+      );
+    });
+    expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
   it('reads GET /onboarding/state on mount and stays on welcome when nothing is set up yet', async () => {
     const fetchMock = stubOnboardingFetch();
     renderWizard();
@@ -152,8 +192,16 @@ describe('OnboardingWizard', () => {
     expect(await screen.findByText('Inbox module')).toBeInTheDocument();
     expect(useAuth.getState().agent?.onboarding_completed).toBe(true);
   });
+});
 
-  it('resumes on the sample step, already marked seeded, when the demo was laid down earlier', async () => {
+describe('OnboardingWizard step count and resume (FR-MOD-00.4)', () => {
+  it('shows five steps and starts the progress indicator at "Step 1 of 5"', () => {
+    stubOnboardingFetch();
+    renderWizard();
+    expect(screen.getByText('Step 1 of 5')).toBeInTheDocument();
+  });
+
+  it('resumes on the last (team) step, already marked seeded, when the demo was laid down earlier — a workspace with progress recorded by the old four-step wizard does not crash', async () => {
     stubOnboardingFetch({
       completed: false,
       completed_at: null,
@@ -165,9 +213,13 @@ describe('OnboardingWizard', () => {
 
     renderWizard();
 
-    expect(await screen.findByRole('heading', { name: 'Add sample data' })).toBeInTheDocument();
+    // Lands on the final step, which now carries both the team invite form
+    // and the sample-data section on the same page.
+    expect(await screen.findByRole('heading', { name: 'Invite your team' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add sample data' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sample data added' })).toBeDisabled();
     expect(screen.getByText('Sample data is already in your workspace.')).toBeInTheDocument();
+    expect(screen.getByText('Step 5 of 5')).toBeInTheDocument();
   });
 });
 

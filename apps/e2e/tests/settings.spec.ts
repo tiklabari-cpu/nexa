@@ -918,6 +918,8 @@ test.describe('company details', () => {
     await section().getByLabel('Sector').selectOption('ecommerce_retail');
     await section().getByLabel('Address').fill(address);
     await section().getByLabel('Time zone').selectOption('Europe/Istanbul');
+    // Company size (FR-MOD-00.4 · FR-MOD-08.3) — same endpoint, same round trip.
+    await section().getByLabel('Company size').selectOption('11_50');
 
     try {
       // Wait for the PATCH, not the repaint — a reload racing the request would
@@ -937,6 +939,7 @@ test.describe('company details', () => {
       await expect(section().getByLabel('Sector')).toHaveValue('ecommerce_retail');
       await expect(section().getByLabel('Address')).toHaveValue(address);
       await expect(section().getByLabel('Time zone')).toHaveValue('Europe/Istanbul');
+      await expect(section().getByLabel('Company size')).toHaveValue('11_50');
       await section().screenshot({ path: 'kanit/08.3-company.png' });
     } finally {
       const token = await ownerAccessToken(agentPage.request);

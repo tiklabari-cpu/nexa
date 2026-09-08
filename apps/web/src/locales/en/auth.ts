@@ -151,8 +151,9 @@ export const auth: Messages = {
   // Onboarding wizard
   'auth.onboarding.steps.welcome': 'Welcome',
   'auth.onboarding.steps.website': 'Website',
+  'auth.onboarding.steps.channels': 'Channels',
+  'auth.onboarding.steps.company': 'Company',
   'auth.onboarding.steps.team': 'Team',
-  'auth.onboarding.steps.sample': 'Sample data',
   'auth.onboarding.title': 'Set up your workspace',
   'auth.onboarding.stepProgress': 'Step {current} of {count}',
   'auth.onboarding.skip': 'Skip setup',
@@ -166,6 +167,8 @@ export const auth: Messages = {
   'auth.onboarding.welcome.body':
     'Your workspace is ready. A few quick steps get the widget onto your site, your teammates in, and a sample conversation in your inbox so it is not empty on day one.',
   'auth.onboarding.welcome.bulletWebsite': 'Connect your first website',
+  'auth.onboarding.welcome.bulletChannels': 'See the other ways customers can reach you',
+  'auth.onboarding.welcome.bulletCompany': 'Tell us about your company',
   'auth.onboarding.welcome.bulletTeam': 'Invite your team',
   'auth.onboarding.welcome.bulletSample': 'Add sample data to explore',
   'auth.onboarding.welcome.footer':
@@ -179,6 +182,31 @@ export const auth: Messages = {
   'auth.onboarding.website.submit': 'Add website',
   'auth.onboarding.website.submitting': 'Adding…',
   'auth.onboarding.website.added': 'Added {domain}. You can add more sites later in Settings.',
+  'auth.onboarding.channels.heading': 'Reach customers everywhere',
+  'auth.onboarding.channels.body':
+    'The website widget is only one way in. Connect these anytime from Settings → Channels — nothing to do here now.',
+  'auth.onboarding.channels.email': 'Email',
+  'auth.onboarding.channels.messenger': 'Facebook Messenger',
+  'auth.onboarding.channels.whatsapp': 'WhatsApp',
+  'auth.onboarding.channels.instagram': 'Instagram',
+  'auth.onboarding.channels.telegram': 'Telegram',
+  'auth.onboarding.channels.sms': 'SMS',
+  'auth.onboarding.channels.footer':
+    'Head to Settings → Channels whenever you are ready to connect one.',
+  'auth.onboarding.company.heading': 'How big is your team?',
+  'auth.onboarding.company.body':
+    'This helps us tailor the product for you. You can change it anytime in Settings → Company details.',
+  'auth.onboarding.company.sizeLabel': 'Company size',
+  'auth.onboarding.company.sizePlaceholder': 'Select a size',
+  'auth.onboarding.company.sizeRequiredError': 'Choose a company size.',
+  'auth.onboarding.company.size.1_10': '1–10 people',
+  'auth.onboarding.company.size.11_50': '11–50 people',
+  'auth.onboarding.company.size.51_200': '51–200 people',
+  'auth.onboarding.company.size.201_1000': '201–1,000 people',
+  'auth.onboarding.company.size.1000_plus': '1,000+ people',
+  'auth.onboarding.company.submit': 'Save',
+  'auth.onboarding.company.submitting': 'Saving…',
+  'auth.onboarding.company.saved': 'Saved.',
   'auth.onboarding.team.heading': 'Invite your team',
   'auth.onboarding.team.body':
     'Add teammates by email — separate several with a space or comma. They join as agents; you can change roles later. Skip this if you are flying solo for now.',

@@ -41,6 +41,22 @@ export function isCompanySector(value: unknown): value is CompanySector {
 }
 
 /**
+ * The closed list `company_size` accepts (FR-MOD-00.4 · FR-MOD-08.3). Head
+ * count, not revenue or seats — the one figure every workspace, trial or
+ * enterprise, knows on day one without opening a spreadsheet. Closed for the
+ * same reason `COMPANY_SECTORS` is: a report bucketing workspaces by size
+ * needs them to agree on the buckets. Keep in step with
+ * `organizations_company_size_check`.
+ */
+export const COMPANY_SIZES = ['1_10', '11_50', '51_200', '201_1000', '1000_plus'] as const;
+
+export type CompanySize = (typeof COMPANY_SIZES)[number];
+
+export function isCompanySize(value: unknown): value is CompanySize {
+  return typeof value === 'string' && (COMPANY_SIZES as readonly string[]).includes(value);
+}
+
+/**
  * Free text (FR-MOD-08.3). No closed set fits postal formats across every
  * region this product serves, and MVP collects no separate billing address to
  * reuse a structured one from — a single bounded string is what the screen
@@ -86,4 +102,5 @@ export interface CompanyDetails {
   sector: CompanySector | null;
   address: string | null;
   timezone: string;
+  company_size: CompanySize | null;
 }

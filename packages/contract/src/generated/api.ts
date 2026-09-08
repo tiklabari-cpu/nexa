@@ -4017,10 +4017,10 @@ export interface paths {
       cookie?: never;
     };
     /**
-     * Company name, sector, address and timezone
+     * Company name, sector, address, timezone and size
      * @description A workspace that has never opened this screen still reads real values:
-     *     `name` from signup, `timezone` defaulting to `UTC`, and `sector`/`address`
-     *     `null` until set.
+     *     `name` from signup, `timezone` defaulting to `UTC`, and
+     *     `sector`/`address`/`company_size` `null` until set.
      */
     get: operations['getCompanyDetails'];
     put?: never;
@@ -4029,16 +4029,18 @@ export interface paths {
     options?: never;
     head?: never;
     /**
-     * Change the company name, sector, address or timezone
+     * Change the company name, sector, address, timezone or size
      * @description **Owner or admin.**
      *
      *     `sector` must be one of the closed list `CompanyDetails` documents — a
      *     value reports can group by, not free text (PRD §8.4 "rapor temeli").
      *     Send `null` to clear it. `address` is free text, bounded, and `null`
      *     clears it too. `timezone` must name a zone the runtime's own tz database
-     *     recognises; unlike the other two fields there is no way to unset it,
+     *     recognises; unlike the other fields there is no way to unset it,
      *     only replace it — the column is `NOT NULL` and defaults to `UTC`, so
-     *     every workspace always has one.
+     *     every workspace always has one. `company_size` (FR-MOD-00.4's
+     *     onboarding "şirket büyüklüğü" step writes through here) follows
+     *     `sector`'s own rule — one of the closed list, `null` clears it.
      *
      *     Records `settings.company_updated` in the audit trail, naming the
      *     fields that changed.
@@ -8302,9 +8304,9 @@ export interface components {
       hipaa_baa_signed_at: string | null;
     };
     /**
-     * @description Company name, sector, address and timezone (FR-MOD-08.3 ·
-     *     `organizations`), what PRD §8.4 calls the billing/brand/report basis.
-     *     Organization-scoped, not license- or brand-scoped.
+     * @description Company name, sector, address, timezone and size (FR-MOD-08.3 ·
+     *     FR-MOD-00.4 · `organizations`), what PRD §8.4 calls the billing/brand/
+     *     report basis. Organization-scoped, not license- or brand-scoped.
      */
     CompanyDetails: {
       name: string;
@@ -8332,6 +8334,11 @@ export interface components {
       address: string | null;
       /** @description An IANA zone name, e.g. `Europe/Istanbul`. Defaults to `UTC` — the column is never null. */
       timezone: string;
+      /**
+       * @description Head-count bucket (FR-MOD-00.4's onboarding "şirket büyüklüğü" step writes here) — a closed list, not free text, `null` until a workspace sets one.
+       * @enum {string|null}
+       */
+      company_size: '1_10' | '11_50' | '51_200' | '201_1000' | '1000_plus' | null;
     };
     /**
      * @description Per-license idle-chat auto-close window (FR-MOD-08.7.3, `inbox_settings`).
@@ -17641,6 +17648,8 @@ export interface operations {
           address?: string | null;
           /** @description An IANA zone name, e.g. `Europe/Istanbul`. */
           timezone?: string;
+          /** @enum {string|null} */
+          company_size?: '1_10' | '11_50' | '51_200' | '201_1000' | '1000_plus' | null;
         };
       };
     };

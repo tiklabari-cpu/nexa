@@ -58,7 +58,9 @@ import { Link } from 'react-router-dom';
 import {
   COMPANY_ADDRESS_MAX_LENGTH,
   COMPANY_SECTORS,
+  COMPANY_SIZES,
   type CompanySector,
+  type CompanySize,
   type CompanyDetails as CompanyDetailsValue,
 } from '@nexa/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
@@ -74,11 +76,15 @@ const VIEWER_ROLES = new Set(['admin', 'viceowner', 'owner']);
 /** Mirrors the endpoint's `name` bound (`z.string().trim().min(1).max(200)`). */
 const NAME_MAX_LENGTH = 200;
 
-/** The form's four fields, all strings — `''` is how "not set" is spelled. */
-type FormValues = Record<'name' | 'sector' | 'address' | 'timezone', string>;
+/** The form's five fields, all strings — `''` is how "not set" is spelled. */
+type FormValues = Record<'name' | 'sector' | 'address' | 'timezone' | 'company_size', string>;
 
 function sectorLabel(t: TFunction, sector: CompanySector): string {
   return t(`settings.company.sector.${sector}`);
+}
+
+function sizeLabel(t: TFunction, size: CompanySize): string {
+  return t(`settings.company.size.${size}`);
 }
 
 export function CompanyDetails({ canManage }: { canManage: boolean }): ReactElement | null {
@@ -125,6 +131,7 @@ function initialValues(company: CompanyDetailsValue): FormValues {
     sector: company.sector ?? '',
     address: company.address ?? '',
     timezone: company.timezone,
+    company_size: company.company_size ?? '',
   };
 }
 
@@ -167,9 +174,9 @@ function CompanyDetailsForm({
     onSubmit: async (values, { setSubmitError }) => {
       // Only what changed. The endpoint is a patch, Submit is disabled unless
       // something is dirty (so the body is never empty), and its audit entry
-      // records the *field names* of the write — sending all four every time
-      // would file "name, sector, address, timezone changed" for someone who
-      // corrected a postcode.
+      // records the *field names* of the write — sending all five every time
+      // would file "name, sector, address, timezone, company_size changed"
+      // for someone who corrected a postcode.
       const body: Partial<CompanyDetailsValue> = {};
       if (values.name !== initial.name) body.name = values.name.trim();
       if (values.sector !== initial.sector) {
@@ -179,6 +186,10 @@ function CompanyDetailsForm({
         body.address = values.address.trim() === '' ? null : values.address.trim();
       }
       if (values.timezone !== initial.timezone) body.timezone = values.timezone;
+      if (values.company_size !== initial.company_size) {
+        body.company_size =
+          values.company_size === '' ? null : (values.company_size as CompanySize);
+      }
 
       try {
         await save.mutateAsync(body);
@@ -240,6 +251,29 @@ function CompanyDetailsForm({
             ))}
           </select>
           <p className="text-2xs text-content-tertiary">{t('settings.company.sectorHint')}</p>
+        </div>
+
+        <div className="flex w-72 flex-col gap-1">
+          <label
+            htmlFor="company-size"
+            className="text-2xs font-medium uppercase tracking-wide text-content-tertiary"
+          >
+            {t('settings.company.sizeLabel')}
+          </label>
+          <select
+            id="company-size"
+            value={form.values.company_size}
+            onChange={(event) => form.setValue('company_size', event.target.value)}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          >
+            <option value="">{t('settings.company.sizeUnset')}</option>
+            {COMPANY_SIZES.map((size) => (
+              <option key={size} value={size}>
+                {sizeLabel(t, size)}
+              </option>
+            ))}
+          </select>
+          <p className="text-2xs text-content-tertiary">{t('settings.company.sizeHint')}</p>
         </div>
       </div>
 

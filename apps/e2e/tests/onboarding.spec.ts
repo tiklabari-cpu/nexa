@@ -34,8 +34,10 @@ test.describe('onboarding wizard (FR-MOD-00.4)', () => {
     await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toHaveCount(0);
   });
 
-  test('stepping through and finishing lands in the shell', async ({ page }) => {
+  test('stepping through all five steps and finishing lands in the shell', async ({ page }) => {
     await signUpFreshOwner(page);
+
+    await expect(page.getByText('Step 1 of 5')).toBeVisible();
 
     // Welcome → Website.
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -44,13 +46,23 @@ test.describe('onboarding wizard (FR-MOD-00.4)', () => {
     await page.getByRole('button', { name: 'Add website' }).click();
     await expect(page.getByText(/^Added /)).toBeVisible();
 
-    // Website → Team (skip the invite) → Sample data.
+    // Website → Channels — a bridge to Settings, nothing to fill in here.
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'Reach customers everywhere' })).toBeVisible();
+
+    // Channels → Company size — the two steps this task added (FR-MOD-00.4).
+    await page.getByRole('button', { name: 'Continue' }).click();
+    await expect(page.getByRole('heading', { name: 'How big is your team?' })).toBeVisible();
+    await page.getByLabel('Company size').selectOption('11_50');
+    await page.getByRole('button', { name: 'Save' }).click();
+    await expect(page.getByText('Saved.')).toBeVisible();
+    await page.screenshot({ path: 'kanit/00.4-onboarding-company-size.png', fullPage: true });
+
+    // Company → Team (skip the invite) + Sample data, on the same last step.
     await page.getByRole('button', { name: 'Continue' }).click();
     await expect(page.getByRole('heading', { name: 'Invite your team' })).toBeVisible();
-    await page.getByRole('button', { name: 'Continue' }).click();
-
-    // Lay down the sample data, then finish.
     await expect(page.getByRole('heading', { name: 'Add sample data' })).toBeVisible();
+    await expect(page.getByText('Step 5 of 5')).toBeVisible();
     await page.getByRole('button', { name: 'Add sample data' }).click();
     await expect(page.getByText(/sample conversation\.$/)).toBeVisible();
 
@@ -61,12 +73,14 @@ test.describe('onboarding wizard (FR-MOD-00.4)', () => {
     await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toHaveCount(0);
   });
 
-  test('reloading after seeding sample data resumes on that step (GET /onboarding/state)', async ({
+  test('reloading after seeding sample data resumes on the last step (GET /onboarding/state)', async ({
     page,
   }) => {
     await signUpFreshOwner(page);
 
-    // Welcome → Website → Team → Sample data, skipping each step's own form.
+    // Welcome → Website → Channels → Company → Team, skipping each step's
+    // own form, then lay down the sample data on the last step.
+    await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'Continue' }).click();
     await page.getByRole('button', { name: 'Continue' }).click();
@@ -76,8 +90,9 @@ test.describe('onboarding wizard (FR-MOD-00.4)', () => {
 
     // Reload before choosing "Finish setup" — the wizard re-reads
     // GET /onboarding/state and, since the demo is already down, opens
-    // straight on the sample step instead of back at welcome.
+    // straight on the last step instead of back at welcome.
     await page.reload();
+    await expect(page.getByRole('heading', { name: 'Invite your team' })).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Add sample data' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sample data added' })).toBeDisabled();
     await expect(page.getByText('Sample data is already in your workspace.')).toBeVisible();

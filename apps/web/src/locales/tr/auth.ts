@@ -148,8 +148,9 @@ export const auth: Messages = {
   // Onboarding wizard
   'auth.onboarding.steps.welcome': 'Hoş geldiniz',
   'auth.onboarding.steps.website': 'Website',
+  'auth.onboarding.steps.channels': 'Kanallar',
+  'auth.onboarding.steps.company': 'Şirket',
   'auth.onboarding.steps.team': 'Ekip',
-  'auth.onboarding.steps.sample': 'Örnek veri',
   'auth.onboarding.title': 'Çalışma alanınızı ayarlayın',
   'auth.onboarding.stepProgress': 'Adım {current} / {count}',
   'auth.onboarding.skip': 'Kurulumu atla',
@@ -163,6 +164,8 @@ export const auth: Messages = {
   'auth.onboarding.welcome.body':
     'Çalışma alanınız hazır. Widget’ı sitenize eklemek, ekip arkadaşlarınızı davet etmek ve gelen kutunuzun ilk günden boş görünmemesi için bir örnek konuşma eklemek üzere birkaç kısa adım var.',
   'auth.onboarding.welcome.bulletWebsite': 'İlk web sitenizi bağlayın',
+  'auth.onboarding.welcome.bulletChannels': 'Müşterilerin ulaşabileceği diğer kanalları görün',
+  'auth.onboarding.welcome.bulletCompany': 'Şirketiniz hakkında bilgi verin',
   'auth.onboarding.welcome.bulletTeam': 'Ekibinizi davet edin',
   'auth.onboarding.welcome.bulletSample': 'Keşfetmek için örnek veri ekleyin',
   'auth.onboarding.welcome.footer':
@@ -177,6 +180,30 @@ export const auth: Messages = {
   'auth.onboarding.website.submitting': 'Ekleniyor…',
   'auth.onboarding.website.added':
     '{domain} eklendi. Daha fazla siteyi Ayarlar’dan ekleyebilirsiniz.',
+  'auth.onboarding.channels.heading': 'Müşterilere her yerden ulaşın',
+  'auth.onboarding.channels.body':
+    'Website widget’ı yalnızca tek bir yol. Bunları istediğiniz zaman Ayarlar → Kanallar bölümünden bağlayabilirsiniz — şimdi yapacak bir şey yok.',
+  'auth.onboarding.channels.email': 'E-posta',
+  'auth.onboarding.channels.messenger': 'Facebook Messenger',
+  'auth.onboarding.channels.whatsapp': 'WhatsApp',
+  'auth.onboarding.channels.instagram': 'Instagram',
+  'auth.onboarding.channels.telegram': 'Telegram',
+  'auth.onboarding.channels.sms': 'SMS',
+  'auth.onboarding.channels.footer': 'Hazır olduğunuzda Ayarlar → Kanallar bölümüne gidin.',
+  'auth.onboarding.company.heading': 'Ekibiniz ne büyüklükte?',
+  'auth.onboarding.company.body':
+    'Bu, ürünü sizin için uyarlamamıza yardımcı olur. Dilediğiniz zaman Ayarlar → Şirket bilgileri bölümünden değiştirebilirsiniz.',
+  'auth.onboarding.company.sizeLabel': 'Şirket büyüklüğü',
+  'auth.onboarding.company.sizePlaceholder': 'Bir büyüklük seçin',
+  'auth.onboarding.company.sizeRequiredError': 'Bir şirket büyüklüğü seçin.',
+  'auth.onboarding.company.size.1_10': '1-10 kişi',
+  'auth.onboarding.company.size.11_50': '11-50 kişi',
+  'auth.onboarding.company.size.51_200': '51-200 kişi',
+  'auth.onboarding.company.size.201_1000': '201-1.000 kişi',
+  'auth.onboarding.company.size.1000_plus': '1.000+ kişi',
+  'auth.onboarding.company.submit': 'Kaydet',
+  'auth.onboarding.company.submitting': 'Kaydediliyor…',
+  'auth.onboarding.company.saved': 'Kaydedildi.',
   'auth.onboarding.team.heading': 'Ekibinizi davet edin',
   'auth.onboarding.team.body':
     'Ekip arkadaşlarınızı e-postayla ekleyin — birden fazlasını boşluk veya virgülle ayırın. Temsilci olarak katılırlar; rollerini daha sonra değiştirebilirsiniz. Şimdilik tek başınaysanız bu adımı atlayın.',

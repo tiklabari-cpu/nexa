@@ -1,11 +1,11 @@
 /**
- * Settings → Company details (FR-MOD-08.3 · M-CO-b): the server's saved values
- * land in the form, only the fields that actually changed are sent (the audit
- * entry records field names, so sending all four would misreport a postcode
- * fix), an empty optional clears to `null` rather than `''`, the sector picker
- * offers the closed list and nothing else, and someone without
- * `organization--my:rw` — or below `admin` — is not shown a section that only
- * leads to a 403.
+ * Settings → Company details (FR-MOD-08.3 · M-CO-b · FR-MOD-00.4): the server's
+ * saved values land in the form, only the fields that actually changed are sent
+ * (the audit entry records field names, so sending all five would misreport a
+ * postcode fix), an empty optional clears to `null` rather than `''`, the
+ * sector and company-size pickers each offer their own closed list and nothing
+ * else, and someone without `organization--my:rw` — or below `admin` — is not
+ * shown a section that only leads to a 403.
  *
  * The timezone half of this task is tested where the decision actually lives,
  * against a real database: `apps/api/test/integration/work-schedule.test.ts`,
@@ -19,7 +19,11 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { COMPANY_SECTORS, type CompanyDetails as CompanyDetailsValue } from '@nexa/types';
+import {
+  COMPANY_SECTORS,
+  COMPANY_SIZES,
+  type CompanyDetails as CompanyDetailsValue,
+} from '@nexa/types';
 import { CompanyDetails } from './CompanyDetails.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
@@ -29,6 +33,7 @@ const SAVED: CompanyDetailsValue = {
   sector: 'ecommerce_retail',
   address: '1 Market Street, Istanbul',
   timezone: 'Europe/Istanbul',
+  company_size: '11_50',
 };
 
 function okJson(body: unknown): Response {
@@ -108,6 +113,7 @@ describe('CompanyDetails', () => {
     expect(screen.getByLabelText('Sector')).toHaveValue('ecommerce_retail');
     expect(screen.getByLabelText('Address')).toHaveValue('1 Market Street, Istanbul');
     expect(screen.getByLabelText('Time zone')).toHaveValue('Europe/Istanbul');
+    expect(screen.getByLabelText('Company size')).toHaveValue('11_50');
   });
 
   it('keeps Save disabled until something changes', async () => {
@@ -158,6 +164,27 @@ describe('CompanyDetails', () => {
       .map((option) => (option as HTMLOptionElement).value);
     // The 14 the database CHECK holds, plus the blank that means "not set".
     expect(values).toEqual(['', ...COMPANY_SECTORS]);
+  });
+
+  it('clears the company size to null through the "Not set" option', async () => {
+    renderCompany();
+
+    await userEvent.selectOptions(await screen.findByLabelText('Company size'), '');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(patchBodies).toHaveLength(1));
+    expect(patchBodies[0]).toEqual({ company_size: null });
+  });
+
+  it('offers the closed company size list and nothing else', async () => {
+    renderCompany();
+
+    const select = await screen.findByLabelText('Company size');
+    const values = within(select)
+      .getAllByRole('option')
+      .map((option) => (option as HTMLOptionElement).value);
+    // The 5 the database CHECK holds, plus the blank that means "not set".
+    expect(values).toEqual(['', ...COMPANY_SIZES]);
   });
 
   it('refuses a blank company name before it reaches the network', async () => {

@@ -81,6 +81,7 @@ const AGENT_PUSHES = [
   'incoming_event',
   'routing_status_set',
   'agent_conflict_warning',
+  'traffic_visitor_updated',
 ];
 
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
@@ -99,6 +100,8 @@ interface Conversation {
   chatId: string;
   threadId: string;
   eventCount: number;
+  /** Who is on the visitor end — the key the traffic board's signal carries. */
+  customerId: string;
 }
 
 /**
@@ -153,7 +156,7 @@ async function createConversation(
     await db.thread.update({ where: { id: threadId }, data: { eventSequence: messages.length } });
   }
 
-  return { chatId, threadId, eventCount: messages.length };
+  return { chatId, threadId, eventCount: messages.length, customerId: tenant.customerId };
 }
 
 /** A team, so the chat carries a `groupIds` audience as well as an agent one. */
@@ -342,6 +345,31 @@ describe('a four-process fleet sharing one Postgres and one Redis', () => {
             (frame.payload['event'] as { text?: string }).text === 'posted through api-a',
         ),
       ]);
+    });
+
+    it("carries the traffic board's visitor signal across the fleet (FR-MOD-03.1.1)", async () => {
+      // The board is the one screen whose liveness is a *fan-out* property
+      // rather than a per-agent one: `traffic_visitor_updated` is addressed to
+      // `allAgents`, so with more than one gateway up, an agent watching the
+      // board on rtm-A must hear about a visitor whose message went to api-B.
+      // A process-local registry would satisfy every in-process test in this
+      // repository and still leave half a fleet's boards eight seconds stale.
+      const onA = await login(rtmA, fx.a, agentToken);
+      const onB = await login(rtmB, fx.a, ownerToken);
+
+      const viaB = await podRequest(apiB, 'POST', `/chats/${conversation.chatId}/events`, {
+        token: ownerToken,
+        body: { type: 'message', text: 'moves the board' },
+      });
+      expect(viaB.status, JSON.stringify(viaB.body)).toBe(201);
+
+      const [signalOnA, signalOnB] = await Promise.all([
+        onA.waitForPush('traffic_visitor_updated'),
+        onB.waitForPush('traffic_visitor_updated'),
+      ]);
+      for (const frame of [signalOnA, signalOnB]) {
+        expect(frame.payload['customer_id']).toBe(conversation.customerId);
+      }
     });
 
     it('keeps the licence boundary across pods — a foreign tenant on rtm-A hears nothing', async () => {

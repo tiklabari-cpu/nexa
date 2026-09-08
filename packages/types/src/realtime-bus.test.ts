@@ -22,4 +22,12 @@ describe('RTM_PUSH_ACTIONS', () => {
   it('carries a push action for the multi-agent conflict warning', () => {
     expect(RTM_PUSH_ACTIONS).toContain('agent_conflict_warning');
   });
+
+  it("carries the real-time traffic board's visitor signal (FR-MOD-03.1.1)", () => {
+    // The gateway only forwards — and a client may only subscribe to — an action
+    // in this list (`apps/rtm/src/dispatcher.ts`'s `extractPushes`), so dropping
+    // it here would silence the board without failing anything on either side of
+    // the socket.
+    expect(RTM_PUSH_ACTIONS).toContain('traffic_visitor_updated');
+  });
 });

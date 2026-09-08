@@ -79,6 +79,23 @@ interface GroupSelection {
   requiredExpertiseIds: bigint[];
 }
 
+/**
+ * One chat the queue drain just handed to an agent.
+ *
+ * `customerId` is here rather than left for the caller to fetch because both
+ * callers announce this assignment on two channels at once — `incoming_chat` to
+ * the agent who now owns it, and the traffic board's own visitor signal
+ * (FR-MOD-03.1.1), which is keyed on the person waiting rather than on the
+ * chat. Neither caller is inside the transaction any more by the time it
+ * publishes, so a second read would be a second query per drained chat.
+ */
+export interface DrainedAssignment {
+  chatId: string;
+  threadId: string;
+  assigneeId: string;
+  customerId: string;
+}
+
 /** The expertise a matched rule demands, as bigints for the candidate query. */
 function requiredExpertise(conditions: RoutingConditions): bigint[] {
   const ids = conditions.expertise_ids;
@@ -159,20 +176,22 @@ export class RoutingService {
    * what is left so positions stay contiguous — a queue that reads
    * "you are number 4" with three people in it erodes trust fast.
    */
-  async drainQueue(
-    tx: TenantClient,
-    licenseId: bigint,
-    limit = 20,
-  ): Promise<Array<{ chatId: string; threadId: string; assigneeId: string }>> {
+  async drainQueue(tx: TenantClient, licenseId: bigint, limit = 20): Promise<DrainedAssignment[]> {
     const waiting = await tx.thread.findMany({
       where: { licenseId, active: true, assigneeId: null, queuePosition: { not: null } },
       orderBy: [{ queuePosition: 'asc' }, { createdAt: 'asc' }],
       take: limit,
-      select: { id: true, chatId: true },
+      // `customerId` rides along because a drained chat is a row on the
+      // real-time board too: it leaves `queued` for `chatting` the moment this
+      // assignment lands, and the board's signal is keyed on the visitor rather
+      // than on the chat (FR-MOD-03.1.1). Read here, in the query that is
+      // already selecting from this row, rather than looked up afterwards by
+      // whichever caller happens to want it.
+      select: { id: true, chatId: true, chat: { select: { customerId: true } } },
     });
     if (waiting.length === 0) return [];
 
-    const assigned: Array<{ chatId: string; threadId: string; assigneeId: string }> = [];
+    const assigned: DrainedAssignment[] = [];
 
     for (const thread of waiting) {
       const access = await tx.chatAccess.findMany({
@@ -209,7 +228,12 @@ export class RoutingService {
         data: { lastAssignedAt: new Date() },
       });
 
-      assigned.push({ chatId: thread.chatId, threadId: thread.id, assigneeId: assignee });
+      assigned.push({
+        chatId: thread.chatId,
+        threadId: thread.id,
+        assigneeId: assignee,
+        customerId: thread.chat.customerId,
+      });
     }
 
     if (assigned.length > 0) await this.renumberQueue(tx, licenseId);

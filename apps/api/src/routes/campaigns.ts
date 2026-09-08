@@ -11,11 +11,14 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { ApiError } from '../lib/api-error.js';
+import type { TenantContext } from '../lib/tenant.js';
 import {
   CampaignService,
   type CampaignInput,
   type CampaignPatch,
 } from '../services/campaigns/campaign-service.js';
+import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { publishTrafficChange } from '../services/traffic/traffic-events.js';
 
 const listQuery = z.object({
   status: z.enum(['all', 'ongoing', 'scheduled', 'inactive']).default('all'),
@@ -65,6 +68,24 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
 
 export default async function campaignRoutes(app: FastifyInstance): Promise<void> {
   const campaigns = new CampaignService();
+  const publisher = new RealtimePublisher(app.redis, app.log);
+
+  /**
+   * Tell the real-time board that a fire just moved people into `invited`
+   * (FR-MOD-03.1.1).
+   *
+   * After the transaction, never inside it — the board's reaction is to re-read
+   * `GET /traffic`, and a re-read that beat the commit would come back with the
+   * board exactly as it was and leave it stale until the backup poll. Sequential
+   * rather than `Promise.all` for the same reason every other publisher here is:
+   * a burst of Redis publishes ahead of the response buys nothing, and the
+   * client coalesces whatever arrives.
+   */
+  async function announceInvited(tenant: TenantContext, customerIds: string[]): Promise<void> {
+    for (const customerId of customerIds) {
+      await publishTrafficChange(publisher, tenant, customerId);
+    }
+  }
 
   app.get(
     '/campaigns',
@@ -90,6 +111,7 @@ export default async function campaignRoutes(app: FastifyInstance): Promise<void
       recurring: body.recurring,
     };
     const result = await request.withTenant((tx) => campaigns.create(tx, tenant, input));
+    await announceInvited(tenant, result.invited);
     return reply.status(201).send(result.campaign);
   });
 
@@ -112,6 +134,7 @@ export default async function campaignRoutes(app: FastifyInstance): Promise<void
         recurring: body.recurring,
       };
       const result = await request.withTenant((tx) => campaigns.update(tx, tenant, id, patch));
+      await announceInvited(tenant, result.invited);
       return reply.send(result.campaign);
     },
   );

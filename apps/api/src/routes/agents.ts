@@ -38,6 +38,7 @@ import {
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
+import { publishTrafficChange } from '../services/traffic/traffic-events.js';
 import { RoutingService } from '../services/routing/routing-service.js';
 import { roleAtLeast, scopesOf, type Principal } from '../services/auth/principal.js';
 import { setMembershipSuspension } from '../services/auth/membership-service.js';
@@ -388,6 +389,9 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
             chat: { id: assignment.chatId, thread: { id: assignment.threadId } },
           },
         );
+        // The same assignment seen from the traffic board: this visitor just
+        // left `queued` for `chatting` (FR-MOD-03.1.1).
+        await publishTrafficChange(publisher, tenant, assignment.customerId);
       }
 
       return reply.send({

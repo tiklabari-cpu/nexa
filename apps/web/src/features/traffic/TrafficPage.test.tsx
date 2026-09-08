@@ -6,11 +6,12 @@
  * selection round-trips through the URL.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { noteTrafficVisitorUpdated, useTrafficLiveStore } from '../../lib/traffic-live.js';
 import { useSupervisingStore } from './supervising-store.js';
 import type { TrafficVisitor } from './types.js';
 
@@ -86,6 +87,9 @@ beforeEach(() => {
   // actually re-read the now-empty storage instead of a no-op skip).
   window.localStorage.clear();
   useSupervisingStore.setState({ accountId: null, chatIds: new Set() });
+  // The socket's signal is a module-level store too: a push from one test would
+  // otherwise be the revision the next test's board mounts against.
+  useTrafficLiveStore.setState({ revision: 0, customerId: null });
 });
 
 describe('TrafficPage status tabs', () => {
@@ -618,6 +622,169 @@ describe('paging (P5-PAGE-f)', () => {
     await screen.findByText('Alex Moreau');
     await screen.findByText('Robin Lee');
     expect(screen.getAllByText('Mira Haddad')).toHaveLength(1);
+  });
+});
+
+/**
+ * The board is live off the socket as well as off the clock (FR-MOD-03.1.1).
+ *
+ * `traffic_visitor_updated` says a visitor moved; the board's answer is to
+ * re-read its first page through the *same* `mergeTrafficHead` the 8s poll
+ * folds its own read with. What is pinned here is the four ways that can go
+ * wrong — a push that re-reads more than the head, a push that leaves the
+ * server's `total` behind, a burst that costs a request per event, and (the
+ * regression this whole feature invites) somebody deciding the poll is now
+ * redundant.
+ */
+describe('the traffic board off the socket (FR-MOD-03.1.1)', () => {
+  const alex = (over: Partial<TrafficVisitor> = {}): TrafficVisitor =>
+    v('c1', 14, { name: 'Alex Moreau', activity: 'browsing', ...over });
+  const mira = (over: Partial<TrafficVisitor> = {}): TrafficVisitor =>
+    v('c2', 13, { name: 'Mira Haddad', activity: 'browsing', ...over });
+
+  const rowFor = (name: string): HTMLElement => {
+    const row = screen.getByText(name).closest('tr');
+    if (!row) throw new Error(`no row for ${name}`);
+    return row as HTMLElement;
+  };
+
+  it('re-reads the board when a visitor moves, and only that visitor’s row changes', async () => {
+    api.get.mockResolvedValue(trafficPage([alex(), mira()]));
+    renderPage();
+    await screen.findByText('Alex Moreau');
+    expect(api.get).toHaveBeenCalledTimes(1);
+
+    // Browsing → Chatting, the transition the acceptance criterion names. The
+    // server is the one that decides the bucket; the push only said who to look
+    // at again, which is why the board asks rather than trusting the payload.
+    api.get.mockResolvedValue(trafficPage([alex({ activity: 'chatting' }), mira()]));
+    act(() => noteTrafficVisitorUpdated('c1'));
+
+    await waitFor(() =>
+      expect(within(rowFor('Alex Moreau')).getByText('Chatting')).toBeInTheDocument(),
+    );
+    expect(within(rowFor('Mira Haddad')).getByText('Browsing')).toBeInTheDocument();
+  });
+
+  it('re-reads only the first page, leaving the pages already scrolled past alone', async () => {
+    const robin = v('c3', 12, { name: 'Robin Lee' });
+    const head = (first: TrafficVisitor): ((url: string) => Promise<unknown>) => {
+      return (url: string) =>
+        Promise.resolve(
+          url.includes('page_id=cursor-1')
+            ? trafficPage([robin])
+            : trafficPage([first, mira()], 'cursor-1'),
+        );
+    };
+    api.get.mockImplementation(head(alex()));
+    renderPage();
+    await screen.findByText('Robin Lee');
+
+    api.get.mockClear();
+    api.get.mockImplementation(head(alex({ activity: 'chatting' })));
+    act(() => noteTrafficVisitorUpdated('c1'));
+
+    await waitFor(() =>
+      expect(within(rowFor('Alex Moreau')).getByText('Chatting')).toBeInTheDocument(),
+    );
+    // One request, and it is the head. An `invalidateQueries` on an infinite
+    // query would have re-asked for every loaded page — a request per page on
+    // every visitor event, which is exactly what the poll was built to avoid.
+    expect(api.get).toHaveBeenCalledTimes(1);
+    expect(api.get).toHaveBeenCalledWith('/traffic?limit=100');
+    expect(screen.getByText('Robin Lee')).toBeInTheDocument();
+  });
+
+  it("moves the tab badge with the server's total, not with the rows on screen", async () => {
+    // The badge is the server's count for this exact query, past whatever page
+    // has loaded (M-COUNT-d). A client-side row upsert could not have moved it,
+    // which is the second reason the push re-reads instead.
+    api.get.mockResolvedValue({ items: [alex({ activity: 'chatting' })], total: 41 });
+    renderPage(['/?tab=chatting']);
+
+    const tablist = await screen.findByRole('tablist', { name: 'Traffic status' });
+    const chattingTab = within(tablist).getByRole('tab', { name: /Chatting/ });
+    expect(await within(chattingTab).findByText('41')).toBeInTheDocument();
+
+    api.get.mockResolvedValue({
+      items: [alex({ activity: 'chatting' }), mira({ activity: 'chatting' })],
+      total: 42,
+    });
+    act(() => noteTrafficVisitorUpdated('c2'));
+
+    expect(await within(chattingTab).findByText('42')).toBeInTheDocument();
+    expect(await screen.findByText('42 visitors on your site now')).toBeInTheDocument();
+  });
+
+  it('collapses a burst of pushes into two reads rather than one per push', async () => {
+    vi.useFakeTimers();
+    try {
+      api.get.mockResolvedValue(trafficPage([alex(), mira()]));
+      renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+      expect(api.get).toHaveBeenCalledTimes(1);
+
+      // Five visitors move in the same instant — one campaign fire, or a queue
+      // drain handing out five waiting chats. React batches the five store
+      // writes into one render, so this costs one read before the window is
+      // consulted at all.
+      await act(async () => {
+        for (const id of ['c1', 'c2', 'c3', 'c4', 'c5']) noteTrafficVisitorUpdated(id);
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(api.get).toHaveBeenCalledTimes(2);
+
+      // Spread across ticks, which is what a busy workspace actually produces,
+      // the window is what holds the line: four more pushes inside it, one
+      // trailing read out of it.
+      for (const id of ['c6', 'c7', 'c8', 'c9']) {
+        await act(async () => {
+          noteTrafficVisitorUpdated(id);
+          await vi.advanceTimersByTimeAsync(50);
+        });
+        expect(api.get).toHaveBeenCalledTimes(2);
+      }
+
+      await act(async () => void (await vi.advanceTimersByTimeAsync(700)));
+      expect(api.get).toHaveBeenCalledTimes(3);
+      // And nothing keeps firing once the burst is over.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(700)));
+      expect(api.get).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps the 8s poll running with no push in sight (REGRESSION: polling was not removed)', async () => {
+    vi.useFakeTimers();
+    try {
+      api.get.mockResolvedValue(trafficPage([alex()]));
+      renderPage();
+      await act(async () => void (await vi.advanceTimersByTimeAsync(0)));
+      expect(api.get).toHaveBeenCalledTimes(1);
+
+      // Nothing pushes: the socket is down, or the change is one no request
+      // produces at all — a supervision lapsing after its 90s liveness window,
+      // a visit ageing out of the 30-minute one. The board must still move.
+      await act(async () => void (await vi.advanceTimersByTimeAsync(8_000)));
+      expect(api.get).toHaveBeenCalledTimes(2);
+      await act(async () => void (await vi.advanceTimersByTimeAsync(8_000)));
+      expect(api.get).toHaveBeenCalledTimes(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('spends no extra read on a push that arrived while the board was closed', async () => {
+    // Nothing is mounted, so this is not an `act` — the store simply carries a
+    // revision the board has never seen.
+    noteTrafficVisitorUpdated('c1');
+
+    api.get.mockResolvedValue(trafficPage([alex()]));
+    renderPage();
+
+    await screen.findByText('Alex Moreau');
+    expect(api.get).toHaveBeenCalledTimes(1);
   });
 });
 

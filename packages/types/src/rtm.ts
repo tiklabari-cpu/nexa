@@ -154,6 +154,7 @@ export const RTM_PUSH_ACTIONS = [
   // Customers
   'customer_updated',
   'incoming_customers',
+  'traffic_visitor_updated',
   // Errors
   'incoming_error',
 ] as const;
@@ -250,6 +251,49 @@ export interface SneakPeekPush {
 export interface RoutingStatusSetPush {
   agent_id: string;
   status: RoutingStatus;
+}
+
+/**
+ * Someone on the real-time traffic board moved (FR-MOD-03.1.1).
+ *
+ * A signal, not a row. The board is a projection over three sources — an active
+ * conversation, a pending campaign invitation, a recent visit — merged, filtered
+ * and counted by `TrafficService#listLive`, and the funnel bucket a visitor
+ * lands in (`browsing` / `queued` / `waiting` / `chatting` / `supervised` /
+ * `invited`) is that read's own decision, made from all three at once. Computing
+ * the bucket a second time at the publish site would be a second source of truth
+ * free to disagree with the row the agent is looking at, so it is deliberately
+ * not on the wire: the client re-reads the board's first page through
+ * `GET /traffic` and folds the answer in exactly where the 8-second poll folds
+ * its own (`mergeTrafficHead`). One merger, two triggers.
+ *
+ * That also settles two things the payload would otherwise have to carry and
+ * could not carry honestly:
+ *
+ *   - **The tab badges.** They report the server's `total` for the caller's exact
+ *     query (activity + every filter condition). A client-side row upsert cannot
+ *     move that number correctly, and a stale badge beside a changed row is the
+ *     "loaded window mistaken for the real total" defect over again (13.2
+ *     M-COUNT-d).
+ *   - **The filters.** `country_code`, `is_lead`, `page_url_contains`,
+ *     `came_from_contains` and `group_id` are facts the row itself does not
+ *     carry, so no client could decide whether a pushed row still belongs on a
+ *     filtered board.
+ *
+ * The audience is every authenticated agent (`allAgents`), which is the reach
+ * `GET /traffic` already has: it rides `customers:ro`/`customers:rw`, and
+ * `customers:ro` is in `DEFAULT_AGENT_SCOPES`. Nothing about the visitor travels
+ * with it — one opaque customer id and no name, e-mail, page or referrer — so a
+ * narrowed token that the endpoint would refuse learns nothing from the signal
+ * either.
+ */
+export interface TrafficVisitorUpdatedPush {
+  /**
+   * Who the change is about. The board does not filter on it — it re-reads —
+   * but an event that cannot name its subject cannot be logged, traced or
+   * consumed by anything that is not this one screen.
+   */
+  customer_id: string;
 }
 
 export interface QueuePositionsUpdatedPush {

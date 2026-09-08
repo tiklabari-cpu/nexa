@@ -555,6 +555,16 @@ export default async function customerRoutes(
       // new visit — where they came from before it. Recorded on a best-effort
       // basis: both feed the panels an agent reads for context, and losing that
       // context is not worth failing the message the visitor is trying to send.
+      //
+      // Deliberately *not* a traffic-board publish site (FR-MOD-03.1.1), even
+      // though a visit is one of the board's three sources. Every path through
+      // this handler ends in `chats.sendEvent` or `chats.start` below, and both
+      // announce the visitor themselves; a second signal here would say the
+      // same thing about the same person one step earlier, and — because the
+      // request always leaves them in a conversation — the buckets a visit can
+      // produce (`browsing`, `invited`) are ones this visitor is now in no
+      // position to be in. The visit still reaches the board: on the day the
+      // conversation closes, which is its own publish site.
       if (body.url) {
         try {
           await request.withTenant(async (tx) => {

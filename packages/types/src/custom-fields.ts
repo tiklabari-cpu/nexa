@@ -20,17 +20,59 @@ export const CUSTOM_FIELD_ENTITIES = ['ticket', 'contact'] as const;
 export type CustomFieldEntity = (typeof CUSTOM_FIELD_ENTITIES)[number];
 
 /**
- * Where a contact field is also asked as a form in the widget (FR-MOD-08.7.7,
- * "Forms builder (pre/post-chat)"). `pre_chat` shows the field on the widget's
- * pre-chat form, before the conversation starts; `post_chat` asks it once the
- * conversation ends, on the same screen as the CSAT prompt; a `null` placement
- * is a plain CRM field that is never asked in the widget. Only `contact` fields
- * may carry a placement — there is no ticket to hang a value on before a chat
- * exists, and the post-chat answers land on the same contact the pre-chat ones
- * do — which a CHECK in the migration enforces.
+ * Where a field is also asked as a form in the widget (FR-MOD-08.7.7, "Forms
+ * builder (pre-chat/post-chat/ticket/prospect)"). A `null` placement is a plain
+ * CRM field that is never asked in the widget.
+ *
+ * The four the PRD names are the four cells of two axes — *when* the widget
+ * asks, and *what the answer is about*:
+ *
+ *   - `pre_chat`  — before the conversation starts; about the person.
+ *   - `post_chat` — once it ends, on the same screen as the CSAT prompt; about
+ *     the person.
+ *   - `ticket`    — when nobody is available and the visitor leaves a message
+ *     instead of holding a conversation; about the **request**, so the answer
+ *     lands on the ticket that message opens.
+ *   - `prospect`  — asked in that same breath, but about the **person** who
+ *     left it, so the answer lands on the contact like the two chat forms'.
+ *
+ * A placement therefore decides which entity a field may hang off, which is
+ * what {@link formPlacementEntity} maps and a CHECK in the migration enforces:
+ * three of them are contact fields, `ticket` is a ticket field.
  */
-export const FORM_PLACEMENTS = ['pre_chat', 'post_chat'] as const;
+export const FORM_PLACEMENTS = ['pre_chat', 'post_chat', 'ticket', 'prospect'] as const;
 export type FormPlacement = (typeof FORM_PLACEMENTS)[number];
+
+/**
+ * The entity a placement's answers land on — the single mapping the authoring
+ * form, the definition endpoint, the widget delivery and the migration's CHECK
+ * all read, so "which form may a ticket field be on" has one answer rather than
+ * four that can drift.
+ *
+ * Note what this is *not*: a second identity for the visitor. `prospect` names a
+ * moment the widget asks, not a state on a row — the funnel's own predicate
+ * (`customers.is_lead`, FR-MOD-13.3 `lead_captured`) is untouched and stays the
+ * only thing that makes somebody a lead.
+ */
+export const FORM_PLACEMENT_ENTITY: Record<FormPlacement, CustomFieldEntity> = {
+  pre_chat: 'contact',
+  post_chat: 'contact',
+  ticket: 'ticket',
+  prospect: 'contact',
+};
+
+/** The entity a form field with this placement must hang off. */
+export function formPlacementEntity(placement: FormPlacement): CustomFieldEntity {
+  return FORM_PLACEMENT_ENTITY[placement];
+}
+
+/**
+ * The placements asked on the widget's offline "leave a message" form — the one
+ * moment that writes to two entities at once (the request and the person). Read
+ * by the token mint, the endpoint that stores the answers and the widget, so
+ * "which forms make up that screen" is stated once.
+ */
+export const TICKET_FORM_PLACEMENTS = ['ticket', 'prospect'] as const;
 
 /**
  * How a value is validated and rendered. `text` is free text; `number` a finite
@@ -50,7 +92,9 @@ export interface CustomFieldDefinition {
   required: boolean;
   /**
    * Where this field is asked as a widget form, or `null` for a CRM-only field
-   * (FR-MOD-08.7.7). Only meaningful on `contact` fields.
+   * (FR-MOD-08.7.7). A placement implies the `entity` — see
+   * {@link formPlacementEntity} — so `ticket` appears only on a ticket field
+   * and the other three only on a contact field.
    */
   form_placement: FormPlacement | null;
   /**
@@ -64,14 +108,15 @@ export interface CustomFieldDefinition {
 }
 
 /**
- * A contact field as the widget needs it to render one row of a form
- * (FR-MOD-08.7.7): the label to prompt with, the `type` that picks the input and
- * validates the answer, whether it is `required`, and the `definition_id` the
- * answer is written back under. One shape for both placements — the widget
- * renders a pre-chat and a post-chat field identically; only *when* it asks
- * differs, and with it how the answer travels (pre-chat rides the first message,
- * post-chat posts to `/customer/chat/form-response`). Either way it is stored on
- * the contact. The widget imports this type-only.
+ * A field as the widget needs it to render one row of a form (FR-MOD-08.7.7):
+ * the label to prompt with, the `type` that picks the input and validates the
+ * answer, whether it is `required`, and the `definition_id` the answer is
+ * written back under. One shape for all four placements — the widget renders
+ * every form field identically; what differs is *when* it asks, how the answer
+ * travels (pre-chat rides the first message, post-chat posts to
+ * `/customer/chat/form-response`, the ticket and prospect forms post together to
+ * `/customer/ticket`) and, for `ticket`, that the answer is stored on the ticket
+ * rather than on the contact. The widget imports this type-only.
  */
 export interface WidgetFormField {
   definition_id: string;
@@ -93,10 +138,11 @@ export interface CustomFieldValue {
   required: boolean;
   value: string | null;
   /**
-   * Carried through from the definition so a reader can tell a pre-chat form
-   * answer apart from a plain CRM field without a second lookup (FR-MOD-13.2,
-   * the Traffic visitor 360° panel). `null` on a `ticket` field, which never
-   * carries a placement.
+   * Carried through from the definition so a reader can tell a form answer
+   * apart from a plain CRM field without a second lookup (FR-MOD-13.2, the
+   * Traffic visitor 360° panel). On a `ticket` field this is either `ticket` —
+   * a question the visitor answered when they left the message — or `null` for
+   * a field only an agent fills in.
    */
   form_placement: FormPlacement | null;
   /**

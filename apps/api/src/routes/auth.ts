@@ -1629,11 +1629,13 @@ export default async function authRoutes(
 
     // The widget's appearance (FR-MOD-11.7), so the hosted Chat page — which has
     // no snippet to bake it into — and any embed running a stale snippet theme
-    // themselves from the server as the source of truth. Alongside it, both
-    // widget forms (FR-MOD-08.7.7): the fields asked before the chat starts and
-    // the ones asked once it ends. Delivered together at mint because the widget
-    // has no second fetch — the post-chat form must already be in hand when the
-    // conversation closes, which is exactly when a round-trip is least welcome.
+    // themselves from the server as the source of truth. Alongside it, all four
+    // widget forms (FR-MOD-08.7.7): the fields asked before the chat starts,
+    // the ones asked once it ends, and the two asked when nobody is available
+    // and the visitor leaves a message instead. Delivered together at mint
+    // because the widget has no second fetch — each of the other three must
+    // already be in hand at the moment it is needed, which is exactly when a
+    // round-trip is least welcome.
     // All best-effort — the widget falls back to the shipped look and no extra
     // fields, so a read failure must never deny a token.
     const [widget, forms] = await Promise.all([
@@ -1660,6 +1662,8 @@ export default async function authRoutes(
       widget,
       pre_chat_form: forms.pre_chat,
       post_chat_form: forms.post_chat,
+      ticket_form: forms.ticket,
+      prospect_form: forms.prospect,
     });
   });
 }
@@ -1705,26 +1709,32 @@ async function widgetAppearance(
 }
 
 /**
- * Both of the workspace's widget forms (FR-MOD-08.7.7), or empty lists when none
- * are configured or the read fails. One transaction for the pair: they are the
- * same table filtered two ways, and the pre-chat form is on the critical path of
- * opening the panel. Guarded like the appearance so a form lookup never breaks
- * token issuance — the widget simply shows no extra fields.
+ * All four of the workspace's widget forms (FR-MOD-08.7.7), or empty lists when
+ * none are configured or the read fails. One transaction for the set: they are
+ * the same table filtered four ways, and the pre-chat form is on the critical
+ * path of opening the panel. Guarded like the appearance so a form lookup never
+ * breaks token issuance — the widget simply shows no extra fields.
+ *
+ * The offline pair rides along for the post-chat form's reason: the widget makes
+ * no second fetch, and whether anybody is available is only known once the state
+ * poll lands, which is exactly the moment a round-trip is least welcome.
  */
 async function readWidgetForms(
   db: PrismaClient,
   tenant: TenantContext,
   request: FastifyRequest,
-): Promise<{ pre_chat: WidgetFormField[]; post_chat: WidgetFormField[] }> {
+): Promise<Record<'pre_chat' | 'post_chat' | 'ticket' | 'prospect', WidgetFormField[]>> {
   try {
     const fields = new CustomFieldService();
     return await withTenant(db, tenant, async (tx) => ({
       pre_chat: await fields.listPreChatForm(tx, tenant),
       post_chat: await fields.listPostChatForm(tx, tenant),
+      ticket: await fields.listTicketForm(tx, tenant),
+      prospect: await fields.listProspectForm(tx, tenant),
     }));
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read widget forms');
-    return { pre_chat: [], post_chat: [] };
+    return { pre_chat: [], post_chat: [], ticket: [], prospect: [] };
   }
 }
 

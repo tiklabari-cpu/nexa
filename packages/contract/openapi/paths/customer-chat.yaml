@@ -331,3 +331,108 @@ rating:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+leaveTicket:
+  post:
+    tags: [Customer]
+    operationId: leaveCustomerTicket
+    summary: Leave a message when nobody is available
+    description: |
+      The `ticket` and `prospect` halves of the forms builder (FR-MOD-08.7.7),
+      and the only path by which a widget answer reaches a **ticket** rather
+      than a contact (KK "widget'ta gösterim → contact/ticket'a yazma").
+
+      Not a `/customer/chat/…` route, because it opens a ticket precisely when
+      there is no conversation to have: the visitor's words become the ticket's
+      subject, `ticket_fields` become custom fields on that ticket, and
+      `prospect_fields` become custom fields on the contact who left it. One
+      screen, two destinations — one set of questions is about the request, the
+      other about the person.
+
+      **Opt-in.** Until the workspace has built at least one `ticket` or
+      `prospect` field there is no form, and this refuses with a 400. The widget
+      applies the same rule from the other side (it shows no panel), so the
+      server is not trusting it to.
+
+      Screened exactly as the chat path is: the address ban (FR-MOD-08.9.2),
+      card masking at the source (FR-MOD-08.9.5) and the same deterministic spam
+      engine (FR-MOD-08.9.3) the widget and the e-mail channel share.
+
+      Everything happens in one transaction: the ticket is created before the
+      answers are written, so an ill-typed answer takes the ticket down with it.
+      A workspace never ends up with a message whose questions were silently
+      dropped, and a visitor is never told the message failed while a ticket sits
+      in the queue.
+
+      `email` is required here and optional on the chat path. A chat is answered
+      in the widget the visitor is looking at; a message left when nobody is
+      available can only be answered somewhere else. Supplying it also makes the
+      visitor a lead by the funnel's own predicate (FR-MOD-13.3
+      `lead_captured`) — this endpoint adds no second one.
+
+      Note what the body does not accept: no assignee, group, priority or
+      status. A visitor says what they need, never who should work on it. Triage
+      is left to the ticket rules (FR-MOD-08.6.2), which see this ticket with an
+      origin no `source` condition can name — so a subject rule still fires on
+      it while a rule scoped to chats or forwarded mail correctly does not.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [subject, email]
+            additionalProperties: false
+            properties:
+              subject:
+                type: string
+                minLength: 1
+                maxLength: 200
+                description: |
+                  What the visitor needs, in their own words — stored as the
+                  ticket's subject. Capped at the subject's own limit rather
+                  than accepting a longer body that would be silently
+                  truncated.
+              name: { type: string, maxLength: 120 }
+              email:
+                type: string
+                format: email
+                maxLength: 320
+                description: Where the reply goes. Also stored on the contact.
+              ticket_fields:
+                type: object
+                description: |
+                  `ticket` form answers: custom-field id → value, stored on the
+                  ticket this opens. An id the workspace does not ask on *this*
+                  form — a prospect question, an agent-only field, another
+                  workspace's, or invented — is refused with the same 400 either
+                  way, so the surface says nothing about what exists.
+                additionalProperties:
+                  type: string
+                  nullable: true
+                  maxLength: 5000
+              prospect_fields:
+                type: object
+                description: |
+                  `prospect` form answers: custom-field id → value, stored on the
+                  contact. Judged against its own placement, which is what stops
+                  a question about the person being written onto the request.
+                additionalProperties:
+                  type: string
+                  nullable: true
+                  maxLength: 5000
+    responses:
+      "201":
+        description: Ticket opened
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ticket_id]
+              properties:
+                ticket_id: { type: string }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

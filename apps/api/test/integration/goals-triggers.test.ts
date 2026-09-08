@@ -241,6 +241,78 @@ describe('reaching a sale, lead or resolution goal (FR-MOD-13.3)', () => {
 
       expect(await achievementsOf(fx.a)).toEqual([]);
     });
+
+    it('converts a visitor who leaves a message when nobody is available (FR-MOD-08.7.7)', async () => {
+      // The fourth address the funnel can be reached from, and the one that is
+      // easiest to leave behind: this request opens a ticket rather than a
+      // chat, so it goes nowhere near the two paths above. A workspace whose
+      // agents are offline half the day would otherwise under-count exactly the
+      // leads it most wants to see.
+      //
+      // The `prospect` placement is *not* a second predicate for this — what
+      // converts them is the e-mail landing on the contact, the same rule the
+      // pre-chat form and the CRM edit trip. The field only exists here because
+      // the offline surface is opt-in and refuses until the workspace has built
+      // one of its two forms.
+      const goalId = await seedGoal(fx.a, 'Lead captured', { lead_captured: true });
+      await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          entity: 'contact',
+          label: 'Company',
+          type: 'text',
+          formPlacement: 'prospect',
+        },
+      });
+
+      const lead = await visitor(fx.a);
+      const left = await server.post(
+        '/customer/ticket',
+        { subject: 'Nobody was around', email: 'buyer@example.com' },
+        auth(lead.token),
+      );
+      expect(left.statusCode).toBe(201);
+
+      const rows = await achievementsOf(fx.a);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.goalId).toBe(goalId);
+      expect(rows[0]?.customerId).toBe(lead.customerId);
+      // No conversation on the row, for the pre-chat form's reason turned up a
+      // notch: there is no chat here at all, and never was.
+      expect(rows[0]?.chatId).toBeNull();
+    });
+
+    it('does not convert them twice when they leave a second message', async () => {
+      // `becameLead` is read inside the transaction that sets the flag, so the
+      // conversion rides the transition rather than the state — a visitor who
+      // comes back offline a second time is already a lead.
+      await seedGoal(fx.a, 'Lead captured', { lead_captured: true });
+      await owner.customFieldDefinition.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          entity: 'contact',
+          label: 'Company',
+          type: 'text',
+          formPlacement: 'prospect',
+        },
+      });
+
+      const lead = await visitor(fx.a);
+      for (const subject of ['Nobody was around', 'Still nobody around']) {
+        await clearRateLimits(server.app);
+        expect(
+          (
+            await server.post(
+              '/customer/ticket',
+              { subject, email: 'buyer@example.com' },
+              auth(lead.token),
+            )
+          ).statusCode,
+        ).toBe(201);
+      }
+
+      expect(await achievementsOf(fx.a)).toHaveLength(1);
+    });
   });
 
   // --- Resolution (FR-MOD-13.3) ----------------------------------------------

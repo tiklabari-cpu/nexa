@@ -191,10 +191,10 @@ export const settings: Messages = {
     'Ekibinizin talep ve kişilerde ihtiyaç duyduğu alanları ekleyin — bir oyuncu kimliği ya da KYC durumu gibi.',
   'settings.customFields.deleteAriaLabel': '{label} alanını sil',
 
-  // Sohbet formları (öncesi/sonrası) — ChatFormsSettings.tsx
+  // Sohbet formları (öncesi/sonrası/talep/aday) — ChatFormsSettings.tsx
   'settings.chatForms.title': 'Sohbet formları',
   'settings.chatForms.description':
-    "Sohbet başlamadan önce ya da bittikten sonra ziyaretçilerden bilgi isteyin. Yanıtlar kişiye kaydedilir ve CRM'de gösterilir.",
+    'Sohbet başlamadan önce, bittikten sonra ya da kimse müsait değilken mesaj bırakıldığında ziyaretçilerden bilgi isteyin. Yanıtlar kişiye — mesajın kendisine dair sorularda ise açtığı talebe — kaydedilir.',
   'settings.chatForms.loadError': 'Sohbet formları yüklenemedi.',
   'settings.chatForms.labelLabel': 'Etiket',
   'settings.chatForms.labelError': 'Alana bir ad verin.',
@@ -202,10 +202,12 @@ export const settings: Messages = {
   'settings.chatForms.placementLabel': 'Sorulma anı',
   'settings.chatForms.placement.preChat': 'Sohbetten önce',
   'settings.chatForms.placement.postChat': 'Sohbetten sonra',
+  'settings.chatForms.placement.ticket': 'Bırakılan mesaj — talebe dair',
+  'settings.chatForms.placement.prospect': 'Bırakılan mesaj — kişiye dair',
   'settings.chatForms.addButton': 'Alan ekle',
   'settings.chatForms.empty.title': 'Henüz sohbet sorusu yok',
   'settings.chatForms.empty.description':
-    'Ziyaretçiler sohbete başlamadan önce ya da sohbet bittikten sonra onlardan bilgi istemek için bir alan ekleyin — bir sipariş numarası, bir hesap kimliği gibi.',
+    'Ziyaretçiler sohbete başlamadan önce, sohbet bittikten sonra ya da kimse müsait değilken mesaj bırakırken onlardan bilgi istemek için bir alan ekleyin — bir sipariş numarası, bir hesap kimliği gibi.',
   'settings.chatForms.deleteAriaLabel': '{label} alanını sil',
 
   // Kanallar — Channels.tsx

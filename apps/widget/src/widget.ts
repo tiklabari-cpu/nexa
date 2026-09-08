@@ -167,6 +167,20 @@ interface State {
   postChatSubmitting: boolean;
   /** The last submit failed — the answers are still on screen to retry. */
   postChatError: boolean;
+  /**
+   * The workspace's offline form (FR-MOD-08.7.7): the `ticket` questions, about
+   * the request the visitor is leaving, and the `prospect` ones, about the
+   * person leaving it. Both empty for a workspace that has not built the form —
+   * in which case no offline panel is ever shown and nothing about the widget
+   * changes, which is what makes the surface opt-in.
+   */
+  ticketFields: WidgetFormField[];
+  prospectFields: WidgetFormField[];
+  /** The message went through — the form is swapped for a thank-you. */
+  offlineSent: boolean;
+  offlineSubmitting: boolean;
+  /** The last submit failed — what the visitor typed is still on screen. */
+  offlineError: boolean;
   error: string | null;
   sending: boolean;
   /** A file the visitor picked and we uploaded, waiting to be sent. */
@@ -228,6 +242,11 @@ export function mount(doc: Document = document, win: Window = window): void {
     postChat: null,
     postChatSubmitting: false,
     postChatError: false,
+    ticketFields: [],
+    prospectFields: [],
+    offlineSent: false,
+    offlineSubmitting: false,
+    offlineError: false,
     error: null,
     sending: false,
     pendingAttachment: null,
@@ -726,7 +745,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     postToHost(win, { type: open ? 'nexa:open' : 'nexa:close' });
 
     if (open) {
-      renderPrechat();
+      renderPanelBody();
       (state.prechat ? ui.prechatName : ui.input).focus();
       // First open: this mints, fetches and starts the poll. Every open after
       // that it returns immediately — so the panel would otherwise sit on
@@ -818,14 +837,113 @@ export function mount(doc: Document = document, win: Window = window): void {
     if (!state.open) resize();
   }
 
-  /** Swap the panel body between the pre-chat form and the conversation. */
-  function renderPrechat(): void {
-    const showForm = state.prechat;
-    ui.prechat.hidden = !showForm;
-    ui.transcript.hidden = showForm;
-    ui.status.hidden = showForm;
-    ui.form.hidden = showForm;
-    ui.chip.hidden = showForm || state.pendingAttachment === null;
+  /**
+   * Is the offline form what this visitor should be looking at?
+   *
+   * Every condition is a reason the *live* composer would be the wrong offer:
+   * nobody is available to receive a message, the visitor is not already in a
+   * conversation, and the workspace has actually built the form — the same
+   * opt-in the endpoint enforces from the other side, so the widget is not
+   * asking questions nowhere is set up to answer. A chat that just closed keeps
+   * its own screen: the CSAT prompt and the post-chat form are already there,
+   * and a third panel underneath them would bury both.
+   */
+  function offlineFormOpen(): boolean {
+    return (
+      state.connected &&
+      !state.online &&
+      state.chatId === null &&
+      !state.closed &&
+      state.ticketFields.length + state.prospectFields.length > 0
+    );
+  }
+
+  /**
+   * Swap the panel body between the pre-chat form, the offline form and the
+   * conversation.
+   *
+   * One function owns which of the three is on screen, and with it whether the
+   * composer is. Split across three renderers they would each set
+   * `ui.form.hidden` and the last one to run would win — which is a bug that
+   * only shows up in whichever order a future caller happens to pick.
+   */
+  function renderPanelBody(): void {
+    const showPrechat = state.prechat;
+    const offline = !showPrechat && offlineFormOpen();
+    ui.prechat.hidden = !showPrechat;
+    // Form and thank-you are the two halves of one panel: exactly one is on
+    // screen while the offline form is open, neither when it is not.
+    ui.offline.hidden = !offline || state.offlineSent;
+    ui.offlineThanks.hidden = !offline || !state.offlineSent;
+    ui.offlineSubmit.disabled = state.offlineSubmitting;
+    ui.offlineError.hidden = !state.offlineError;
+    ui.transcript.hidden = showPrechat;
+    ui.status.hidden = showPrechat;
+    // The composer stands down while either form is up: during the pre-chat
+    // form because the conversation has not started, and during the offline one
+    // because there is nobody to receive a live message — offering both would
+    // give the visitor two doors, one of which nobody is behind.
+    ui.form.hidden = showPrechat || offline;
+    ui.chip.hidden = showPrechat || offline || state.pendingAttachment === null;
+  }
+
+  /** Rebuilt whenever the mint reports the fields — `replaceChildren` inside. */
+  function renderOfflineFields(): void {
+    renderFormFields(doc, ui.offlineTicketFields, state.ticketFields);
+    renderFormFields(doc, ui.offlineProspectFields, state.prospectFields);
+  }
+
+  /**
+   * Leave the message (FR-MOD-08.7.7): the visitor's words open a ticket, the
+   * `ticket` answers land on it and the `prospect` answers on the contact — one
+   * request, because the server writes all three in one transaction.
+   */
+  async function submitOffline(): Promise<void> {
+    if (state.offlineSubmitting || state.offlineSent) return;
+
+    const subject = ui.offlineSubject.value.trim();
+    if (!subject) {
+      ui.offlineSubject.focus();
+      return;
+    }
+    const email = ui.offlineEmail.value.trim();
+    if (!email) {
+      // Required here and optional on the pre-chat form, for the reason the
+      // endpoint gives: this message can only be answered somewhere else.
+      ui.offlineEmail.focus();
+      return;
+    }
+    // A required question must be answered; an empty optional one is left out
+    // rather than sent blank. Types are validated authoritatively server-side.
+    const ticketAnswers = readFormAnswers(ui.offlineTicketFields);
+    if (!ticketAnswers) return; // a required field was empty and now has focus
+    const prospectAnswers = readFormAnswers(ui.offlineProspectFields);
+    if (!prospectAnswers) return;
+
+    state.offlineSubmitting = true;
+    state.offlineError = false;
+    renderPanelBody();
+    try {
+      const name = ui.offlineName.value.trim();
+      await api.leaveTicket({
+        subject,
+        email,
+        ...(name ? { name } : {}),
+        ...(Object.keys(ticketAnswers).length > 0 ? { ticket_fields: ticketAnswers } : {}),
+        ...(Object.keys(prospectAnswers).length > 0 ? { prospect_fields: prospectAnswers } : {}),
+      });
+      state.offlineSent = true;
+    } catch (error) {
+      // Surfaced rather than swallowed, like the post-chat form and unlike the
+      // rating: the visitor wrote a message, and letting them believe it was
+      // received when it was not is the one outcome this screen must not
+      // produce.
+      state.offlineError = true;
+      console.warn('nexa widget: leaving a message failed', error);
+    } finally {
+      state.offlineSubmitting = false;
+      renderPanelBody();
+    }
   }
 
   /**
@@ -852,7 +970,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     state.pendingDetails = { name, ...(email ? { email } : {}) };
     state.pendingCustomFields = Object.keys(custom).length > 0 ? custom : null;
     state.prechat = false;
-    renderPrechat();
+    renderPanelBody();
     ui.input.focus();
   }
 
@@ -895,6 +1013,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       // …and the post-chat form, held until a conversation ends (FR-MOD-08.7.7).
       state.postChatFields = api.postChatForm;
       renderPostChatFields();
+      // …and the two offline forms, held until a poll says nobody is available.
+      // Both empty for a workspace that has not built them, which is exactly
+      // how the panel stays invisible for everyone else.
+      state.ticketFields = api.ticketForm;
+      state.prospectFields = api.prospectForm;
+      renderOfflineFields();
       state.connected = true;
       state.online = snapshot.online;
       state.chatId = snapshot.chat?.id ?? null;
@@ -914,8 +1038,11 @@ export function mount(doc: Document = document, win: Window = window): void {
       // A returning visitor already in a conversation skips the pre-chat form.
       if (snapshot.events.length > 0) {
         state.prechat = false;
-        renderPrechat();
       }
+      // Unconditional, unlike the line above: this mint is also the first time
+      // the widget knows whether anybody is available, which is what decides
+      // between the composer and the offline form.
+      renderPanelBody();
       renderEvents();
       renderStatus();
       renderHeader();
@@ -1152,6 +1279,10 @@ export function mount(doc: Document = document, win: Window = window): void {
       renderPostChat();
       renderRating();
       renderClosed();
+      // Availability is a poll-to-poll fact, so the choice between the composer
+      // and the offline form is re-made on every one of them: an agent coming
+      // online puts the composer back, and going offline offers the form.
+      renderPanelBody();
       renderCard();
       // Last, so it counts against the transcript this poll just installed.
       syncUnread();
@@ -1418,6 +1549,10 @@ export function mount(doc: Document = document, win: Window = window): void {
     event.preventDefault();
     void submitPostChat();
   });
+  ui.offline.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitOffline();
+  });
   ui.ratingGood.addEventListener('click', () => void vote('good'));
   ui.ratingBad.addEventListener('click', () => void vote('bad'));
   ui.ratingDismiss.addEventListener('click', () => {
@@ -1504,7 +1639,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.close.hidden = true;
     ui.panel.hidden = false;
     state.open = true;
-    renderPrechat();
+    renderPanelBody();
     ui.input.focus();
     void connect();
   } else {
@@ -1638,6 +1773,21 @@ interface Ui {
   postchatSubmit: HTMLButtonElement;
   postchatThanks: HTMLElement;
   postchatError: HTMLElement;
+  /**
+   * The offline form (FR-MOD-08.7.7) — shown instead of the composer when
+   * nobody is available and the workspace has built one. Two field hosts, one
+   * per placement, because the two go to different places: `ticket` answers to
+   * the ticket the message opens, `prospect` answers to the contact.
+   */
+  offline: HTMLFormElement;
+  offlineSubject: HTMLInputElement;
+  offlineName: HTMLInputElement;
+  offlineEmail: HTMLInputElement;
+  offlineTicketFields: HTMLDivElement;
+  offlineProspectFields: HTMLDivElement;
+  offlineSubmit: HTMLButtonElement;
+  offlineThanks: HTMLElement;
+  offlineError: HTMLElement;
   /** The CSAT prompt itself — shown automatically on close, or from the menu. */
   rating: HTMLElement;
   ratingPrompt: HTMLElement;
@@ -1808,6 +1958,77 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   postchatError.setAttribute('role', 'alert');
   postchatError.textContent = t('postchat.error');
   postchat.append(postchatIntro, postchatFields, postchatSubmit, postchatThanks, postchatError);
+
+  // The offline form (FR-MOD-08.7.7): shown instead of the composer when nobody
+  // is available, so the visitor leaves a message that opens a ticket rather
+  // than typing into a conversation nobody is in. Hidden until `renderPanelBody`
+  // has something to show — which is never, for a workspace that has built
+  // neither the `ticket` nor the `prospect` form.
+  const offline = doc.createElement('form');
+  offline.className = 'nx-offline';
+  offline.hidden = true;
+  offline.setAttribute('aria-label', t('offline.label'));
+  const offlineIntro = doc.createElement('p');
+  offlineIntro.className = 'nx-offline-intro';
+  offlineIntro.textContent = t('offline.intro');
+  // What the visitor needs, in their own words. A single line rather than a
+  // textarea because it becomes the ticket's subject, and a box that invites a
+  // paragraph the product then truncates would be a promise it cannot keep.
+  const offlineSubject = doc.createElement('input');
+  offlineSubject.className = 'nx-prechat-input';
+  offlineSubject.type = 'text';
+  offlineSubject.placeholder = t('offline.subject');
+  offlineSubject.setAttribute('aria-label', t('offline.subject'));
+  offlineSubject.required = true;
+  offlineSubject.maxLength = 200;
+  const offlineName = doc.createElement('input');
+  offlineName.className = 'nx-prechat-input';
+  offlineName.type = 'text';
+  offlineName.placeholder = t('offline.name');
+  offlineName.setAttribute('aria-label', t('offline.name'));
+  offlineName.maxLength = 120;
+  // Required, unlike the pre-chat form's: this message is answered by e-mail or
+  // not at all.
+  const offlineEmail = doc.createElement('input');
+  offlineEmail.className = 'nx-prechat-input';
+  offlineEmail.type = 'email';
+  offlineEmail.placeholder = t('offline.email');
+  offlineEmail.setAttribute('aria-label', t('offline.emailLabel'));
+  offlineEmail.required = true;
+  offlineEmail.maxLength = 320;
+  // The workspace's own questions, appended after the mint reports them. Two
+  // hosts, not one: `readFormAnswers` reads each back separately so an answer
+  // about the person can never be sent as an answer about the request.
+  const offlineProspectFields = doc.createElement('div');
+  offlineProspectFields.className = 'nx-prechat-fields';
+  const offlineTicketFields = doc.createElement('div');
+  offlineTicketFields.className = 'nx-prechat-fields';
+  const offlineSubmit = doc.createElement('button');
+  offlineSubmit.type = 'submit';
+  offlineSubmit.className = 'nx-offline-submit';
+  offlineSubmit.textContent = t('offline.submit');
+  const offlineError = doc.createElement('p');
+  offlineError.className = 'nx-postchat-error';
+  offlineError.hidden = true;
+  offlineError.setAttribute('role', 'alert');
+  offlineError.textContent = t('offline.error');
+  offline.append(
+    offlineIntro,
+    offlineSubject,
+    offlineName,
+    offlineEmail,
+    offlineProspectFields,
+    offlineTicketFields,
+    offlineSubmit,
+    offlineError,
+  );
+  // Its own element rather than a state of the form, so the answers are gone
+  // from the DOM once they are safely stored.
+  const offlineThanks = doc.createElement('p');
+  offlineThanks.className = 'nx-offline-thanks';
+  offlineThanks.hidden = true;
+  offlineThanks.setAttribute('role', 'status');
+  offlineThanks.textContent = t('offline.thanks');
 
   // CSAT prompt (FR-MOD-07.8-b). One group, `role=group` + a named label so a
   // screen-reader visitor hears what the two buttons below belong to; hidden
@@ -1994,6 +2215,11 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     rating,
     closedBanner,
     prechat,
+    // Where the composer would be, because it is what the composer is replaced
+    // by: nobody is available, so the message goes to a queue rather than to a
+    // conversation.
+    offline,
+    offlineThanks,
     chip,
     form,
     poweredBy,
@@ -2056,6 +2282,15 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     postchatSubmit,
     postchatThanks,
     postchatError,
+    offline,
+    offlineSubject,
+    offlineName,
+    offlineEmail,
+    offlineTicketFields,
+    offlineProspectFields,
+    offlineSubmit,
+    offlineThanks,
+    offlineError,
     rating,
     ratingPrompt,
     ratingGood,
@@ -2708,6 +2943,18 @@ body {
   font-weight: 600; cursor: pointer;
 }
 .nx-postchat-submit:disabled { opacity: .6; cursor: default; }
+/* Offline form (FR-MOD-08.7.7). Laid out like the pre-chat form because it
+   plays the same part — a stack of inputs filling the body where the composer
+   would be — rather than like the post-chat block, which is a card inside a
+   conversation that is still on screen. */
+.nx-offline { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+.nx-offline-intro { margin: 0; font-size: 13px; color: var(--nx-muted); }
+.nx-offline-submit {
+  border: 0; border-radius: 8px; padding: 9px 12px;
+  background: var(--nx-brand); color: #fff; font: inherit; font-weight: 600; cursor: pointer;
+}
+.nx-offline-submit:disabled { opacity: .6; cursor: default; }
+.nx-offline-thanks { margin: 0; padding: 16px 12px; font-size: 13px; color: var(--nx-muted); }
 .nx-powered { margin: 0; padding: 6px 12px 10px; text-align: center; font-size: 11px; color: var(--nx-muted); }
 .nx-powered-link { color: inherit; text-decoration: none; }
 .nx-powered-link:hover { text-decoration: underline; }

@@ -828,6 +828,29 @@ customerToken:
                     fetched at closing time, so the widget already has it; the
                     answers go to `/customer/chat/form-response`.
                   items: { $ref: "../openapi.yaml#/components/schemas/WidgetFormField" }
+                ticket_form:
+                  type: array
+                  description: |
+                    The workspace's ticket form (FR-MOD-08.7.7) — the questions
+                    about the *request*, asked when nobody is available and the
+                    visitor leaves a message instead of holding a conversation.
+                    The answers go to `/customer/ticket` as `ticket_fields` and
+                    are stored on the ticket that message opens.
+
+                    Empty when the workspace has built neither this form nor
+                    `prospect_form`, in which case the widget shows no offline
+                    panel and `/customer/ticket` refuses — the surface is opt-in
+                    on both sides.
+                  items: { $ref: "../openapi.yaml#/components/schemas/WidgetFormField" }
+                prospect_form:
+                  type: array
+                  description: |
+                    The workspace's prospect form (FR-MOD-08.7.7) — the questions
+                    about the *person* who leaves that message, asked on the same
+                    screen as `ticket_form` and stored on the contact, exactly
+                    where the two chat forms' answers go. The answers travel in
+                    the same request, as `prospect_fields`.
+                  items: { $ref: "../openapi.yaml#/components/schemas/WidgetFormField" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "421": { $ref: "../openapi.yaml#/components/responses/MisdirectedRequest" }

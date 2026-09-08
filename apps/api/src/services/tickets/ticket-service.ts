@@ -318,6 +318,48 @@ export class TicketService {
     return created;
   }
 
+  /**
+   * Create a ticket from the widget's offline form (FR-MOD-08.7.7).
+   *
+   * A sibling of {@link createFromEmail} and kept apart from `create()` for the
+   * same reason: the party behind it is a *visitor*, not an agent, so there is
+   * no principal and no visibility to resolve, and the scope-guarded path stays
+   * unreachable without one. Everything that decides whose ticket this is comes
+   * from the customer token — the licence from the surrounding `withTenant`, the
+   * contact from the token's own customer id — so no field in the request body
+   * can point it anywhere else.
+   *
+   * `assignee_id`, `group_id`, `priority` and `status` are deliberately absent:
+   * a visitor may say what they need, never who should work on it or how
+   * urgently. Triage is the ticket rules' job, exactly as it is for a forwarded
+   * e-mail — which is why `applyTicketRules` runs here too.
+   */
+  async createFromWidget(
+    tx: TenantClient,
+    tenant: TenantContext,
+    input: { subject: string; customerId: string },
+  ): Promise<{ id: string }> {
+    const subject = input.subject.trim() || '(no subject)';
+    const created = await tx.ticket.create({
+      data: {
+        id: await allocateId(tx),
+        licenseId: tenant.licenseId,
+        subject,
+        status: 'open',
+        customerId: input.customerId,
+        // Set on creation so the ticket sorts from its first moment, matching
+        // both other creation paths.
+        lastMessageAt: new Date(),
+      },
+      select: { id: true },
+    });
+    // Ticket rules (FR-MOD-08.6.2). `widget` is an origin no `source` condition
+    // can name (see `TicketRuleContext`), so a subject rule still triages this
+    // ticket while a rule scoped to chats or forwarded mail correctly does not.
+    await applyTicketRules(tx, tenant.licenseId, created.id, { subject, source: 'widget' });
+    return created;
+  }
+
   async update(
     tx: TenantClient,
     tenant: TenantContext,

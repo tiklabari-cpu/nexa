@@ -31,6 +31,7 @@ import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
+import { TicketService } from '../services/tickets/ticket-service.js';
 import { deliverPendingCampaign } from '../services/campaigns/campaign-delivery.js';
 import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.js';
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
@@ -94,6 +95,41 @@ const rateSchema = z.object({
 const formResponseSchema = z
   .object({
     custom_fields: z.record(z.string().max(5000).nullable()),
+  })
+  .strict();
+
+/**
+ * The widget's offline "leave a message" form (FR-MOD-08.7.7 `ticket` +
+ * `prospect`).
+ *
+ * Two maps rather than one because the two forms asked on that screen have two
+ * different destinations — `ticket_fields` are about the request and land on the
+ * ticket, `prospect_fields` are about the person and land on the contact — and
+ * a single map would leave the server guessing which was meant. Sending an id
+ * under the wrong heading is a 400, so a question about the person can never be
+ * stored as an answer about the request.
+ *
+ * `email` is required here and optional on the chat path, and the difference is
+ * the point: a chat is answered in the widget the visitor is looking at, but a
+ * message left when nobody is available can only be answered somewhere else.
+ *
+ * `.strict()` for `startSchema`'s reason: a typo in a key the visitor's context
+ * rides on must be a 400, not a ticket that quietly arrives without it. And note
+ * what is *not* here — no assignee, group, priority or status: a visitor says
+ * what they need, never who should work on it.
+ */
+const leaveTicketSchema = z
+  .object({
+    // Capped at the ticket subject's own limit rather than a longer body that
+    // would be silently truncated: a ticket stores a subject, so that is what
+    // the widget asks for.
+    subject: z.string().trim().min(1).max(200),
+    name: z.string().trim().max(120).optional(),
+    email: z.string().email().max(320),
+    /** Answers to the `ticket` form — stored on the ticket this opens. */
+    ticket_fields: z.record(z.string().max(5000).nullable()).optional(),
+    /** Answers to the `prospect` form — stored on the contact. */
+    prospect_fields: z.record(z.string().max(5000).nullable()).optional(),
   })
   .strict();
 
@@ -193,6 +229,22 @@ function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   return result.data;
 }
 
+/**
+ * Form answers with a card number masked out of each value (FR-MOD-08.9.5),
+ * before any of them reaches the database. Every widget form goes through this
+ * — the pre-chat answers riding the first message, the post-chat ones and both
+ * halves of the offline form — so a visitor typing a PAN into a free-text
+ * question is masked wherever they were asked it.
+ */
+function maskAnswers(
+  values: Record<string, string | null> | undefined,
+): Record<string, string | null> {
+  if (!values) return {};
+  return Object.fromEntries(
+    Object.entries(values).map(([key, value]) => [key, maskOptional(value)]),
+  );
+}
+
 export default async function customerRoutes(
   app: FastifyInstance,
   {
@@ -224,6 +276,9 @@ export default async function customerRoutes(
   );
   const customerDirectory = new CustomerService();
   const customFields = new CustomFieldService();
+  // Only ever entered through `createFromWidget` from here: the visitor has no
+  // principal, so none of the scope-guarded methods on it are reachable.
+  const tickets = new TicketService();
   // Every moment a visitor can convert on this route — a page view, an e-mail
   // that makes them a lead, a reported sale — goes through the one recorder
   // (FR-MOD-13.3). The chat core holds its own for the close path.
@@ -543,9 +598,7 @@ export default async function customerRoutes(
       if (body.custom_fields && Object.keys(body.custom_fields).length > 0) {
         // Pre-chat answers are visitor free text too — mask each value at the
         // source (FR-MOD-08.9.5) before it is written to the contact.
-        const maskedFields = Object.fromEntries(
-          Object.entries(body.custom_fields).map(([key, value]) => [key, maskOptional(value)]),
-        );
+        const maskedFields = maskAnswers(body.custom_fields);
         await request.withTenant((tx) =>
           customFields.setValues(tx, tenant, 'contact', principal.customerId, maskedFields),
         );
@@ -767,20 +820,137 @@ export default async function customerRoutes(
 
       // Visitor free text on its way to the database — masked at the source
       // (FR-MOD-08.9.5), exactly as the pre-chat answers are above.
-      const masked = Object.fromEntries(
-        Object.entries(body.custom_fields).map(([key, value]) => [key, maskOptional(value)]),
-      );
+      const masked = maskAnswers(body.custom_fields);
 
       // `setFormValues`, not `setValues`: only a field the workspace actually
       // asks after the chat may be written from here. Type validation and the
       // required rule are the same ones the CRM and the pre-chat path apply.
       await request.withTenant((tx) =>
-        customFields.setFormValues(tx, tenant, principal.customerId, 'post_chat', masked),
+        customFields.setFormValues(tx, tenant, 'post_chat', principal.customerId, masked),
       );
 
       return reply.status(204).send();
     },
   );
+
+  /**
+   * Leave a message when nobody is available (FR-MOD-08.7.7) — the `ticket` and
+   * `prospect` halves of the forms builder, and the only path by which a widget
+   * answer reaches a *ticket* rather than a contact.
+   *
+   * Not a chat route, and deliberately not `/customer/chat/…`: this opens a
+   * ticket precisely because there is no conversation to have. The visitor's
+   * words become the ticket's subject, the `ticket` form's answers become custom
+   * fields on that ticket, and the `prospect` form's answers become custom
+   * fields on the contact who left it — one screen, two destinations, because
+   * one set of questions is about the request and the other about the person.
+   *
+   * Three things make this safe to expose to a browser:
+   *
+   *   - It is **opt-in**. Until the workspace builds at least one `ticket` or
+   *     `prospect` field, there is no form, and the endpoint refuses — a
+   *     surface nobody enabled cannot be used. The widget applies the same rule
+   *     from the other side (it shows no panel), so the server is not trusting
+   *     it to.
+   *   - It is screened exactly as the chat path is: the address ban
+   *     (FR-MOD-08.9.2), card masking at the source (FR-MOD-08.9.5) and the
+   *     same deterministic spam engine (FR-MOD-08.9.3) the widget and the
+   *     e-mail channel share. Same visitor, same free text, same screening.
+   *   - Everything is one transaction. The ticket is created *before* the
+   *     answers are written, so an ill-typed answer takes the ticket down with
+   *     it — a workspace never ends up with a message whose questions were
+   *     silently dropped, and a visitor is never told their message was refused
+   *     while a ticket sits in the queue.
+   */
+  app.post('/customer/ticket', { config: { principals: ['customer'] } }, async (request, reply) => {
+    const principal = request.requirePrincipal();
+    if (principal.kind !== 'customer') throw ApiError.notFound('Resource not found.');
+
+    const body = parse(leaveTicketSchema, request.body);
+    const tenant = request.tenant();
+
+    // The address-based ban, enforced on this write path for the reason the
+    // chat path gives: a token minted before the ban would otherwise still let
+    // the address reach the workspace.
+    if (await request.withTenant((tx) => isIpBanned(tx, request.ip))) {
+      throw new ApiError('customer_banned', 'This customer is banned.');
+    }
+
+    // Masked once, up front — the same value is what the spam classifier sees
+    // and what the ticket stores, so no raw PAN reaches either.
+    const subject = maskCardNumbers(body.subject);
+
+    const spamFilterOn = await request.withTenant((tx) => isSpamFilterEnabled(tx));
+    if (evaluateSpam({ filterEnabled: spamFilterOn, text: subject }).spam) {
+      // The chat path's wording and reasoning: generic, so the filter cannot be
+      // probed, and nothing is persisted.
+      throw new ApiError('message_rejected', 'This message could not be sent.');
+    }
+
+    // Visitor free text on its way to the database, masked at the source like
+    // every other answer the widget sends.
+    const ticketAnswers = maskAnswers(body.ticket_fields);
+    const prospectAnswers = maskAnswers(body.prospect_fields);
+
+    const result = await request.withTenant(async (tx) => {
+      // Opt-in, checked inside the transaction that would do the writing: a
+      // workspace that has built neither form has not turned this on.
+      const ticketForm = await customFields.listTicketForm(tx, tenant);
+      const prospectForm = await customFields.listProspectForm(tx, tenant);
+      if (ticketForm.length === 0 && prospectForm.length === 0) {
+        throw ApiError.validation('This workspace does not take messages left in the widget.');
+      }
+
+      // Whether this write is what *made* them a lead — read in the same
+      // transaction that does it, the rule the pre-chat path already applies
+      // (FR-MOD-13.3 fires on the transition, not on the state). Leaving a
+      // message with an e-mail is what turns a prospect into a lead; the
+      // placement itself is not a second identity for them.
+      const before = await tx.customer.findFirst({
+        where: { id: principal.customerId },
+        select: { isLead: true },
+      });
+      await tx.customer.update({
+        where: { id: principal.customerId },
+        data: {
+          ...(body.name ? { name: body.name } : {}),
+          email: body.email,
+          isLead: true,
+          lastActivityAt: new Date(),
+        },
+      });
+
+      const ticket = await tickets.createFromWidget(tx, tenant, {
+        subject,
+        customerId: principal.customerId,
+      });
+
+      // `setFormValues`, not `setValues`: only a field the workspace actually
+      // asks on that form may be written from here — which is also what stops a
+      // prospect question being answered onto the ticket, or the other way
+      // round, since each map is judged against its own placement.
+      if (Object.keys(prospectAnswers).length > 0) {
+        await customFields.setFormValues(
+          tx,
+          tenant,
+          'prospect',
+          principal.customerId,
+          prospectAnswers,
+        );
+      }
+      if (Object.keys(ticketAnswers).length > 0) {
+        await customFields.setFormValues(tx, tenant, 'ticket', ticket.id, ticketAnswers);
+      }
+
+      return { ticketId: ticket.id, becameLead: before?.isLead === false };
+    });
+
+    // After the transaction commits: `evaluate` reads `is_lead` back, so it has
+    // to see the write that set it.
+    if (result.becameLead) await goals.record(tenant, principal.customerId);
+
+    return reply.status(201).send({ ticket_id: result.ticketId });
+  });
 
   /** Customer satisfaction rating (FR-MOD-11). */
   app.post(

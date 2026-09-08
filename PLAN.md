@@ -660,7 +660,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 08.7.4 | Chat transcripts (e-posta) | Should (v1) | ✅ → K08.7.4 |
 | 08.7.5 | Ticket email templates | Should (v1) | ✅ → K08.7.5 |
 | 08.7.6 | Custom fields | Should (v1) | ✅ → K08.7.6 |
-| 08.7.7 | Forms builder (pre/post-chat) | Should (v1) | ◐ → K08.7.7 |
+| 08.7.7 | Forms builder (pre-chat/post-chat/ticket/prospect) | Should (v1) | ✅ → K08.7.7 |
 | 08.8.1 | Apps (marketplace) girişi | Should (v1) | ✅ → K08.8.1 |
 | 09.1 | Entegrasyon kartları gridi | Should (v1) | ◐ → K09.1 |
 | 09.2 | Entegrasyon listesi (15–20) | Should (v1) | ✅ → K09.2 |
@@ -3658,7 +3658,7 @@ ve `audit:endpoint-ui` süpürmesinden) · 1 kapanış turu.
 | 15  | V8-RPT-BENCH     | Chats kartlarının **vs-önceki dönem** ayağı + eksik iki kart (response times · satisfaction)             | FR-MOD-07.3.3    | medium  |  ✅   | 225 |  2   |
 | 16  | V8-RPT-INSIGHT   | Reviews/Ratings'in **Insights** payı — repoda `insight` geçen tek dosya yok                              | FR-MOD-07.8      | medium  |  ✅   | 226 |  2   |
 | 17  | V8-TMPL-USE      | Ticket e-posta şablonlarının **tüketicisi** — `renderTemplate`'i kimse çağırmıyor                        | FR-MOD-08.7.5    | medium  |  ✅   | 227 |  2   |
-| 18  | V8-FORM-PLACE    | Forms builder: `ticket` + `prospect` **yerleşimi** (bugün yalnız pre/post-chat, yalnız contact)          | FR-MOD-08.7.7    | medium  |  ⬜   | 228 |  2   |
+| 18  | V8-FORM-PLACE    | Forms builder: `ticket` + `prospect` **yerleşimi** (bugün yalnız pre/post-chat, yalnız contact)          | FR-MOD-08.7.7    | medium  |  ✅   | 228 |  2   |
 | 19  | V8-APPS-FILTER   | Marketplace **filtre taksonomisi** — koleksiyonlar + ödeme/yerleşim filtreleri                           | FR-MOD-09.1      |   low   |  ⬜   | 229 |  2   |
 | 20  | V8-INVOICE       | **Kalıcı fatura geçmişi** — `Invoice` modeli yok, geçmiş bugünkü fiyatla türetiliyor                     | FR-MOD-10.3      | medium  |  ⬜   | 230 |  2   |
 | 21  | V8-HOME          | Home: **kişiselleştirilmiş karşılama** + Performance overview'ın PRD dörtlüsü                            | FR-MOD-13.1      | medium  |  ⬜   | 231 |  2   |
@@ -5626,6 +5626,42 @@ görüneceği en son yerdir.
   Tracked sales (13.5) bilerek kapsam dışıdır: bu raporda karşılaştırma penceresi taşımaz, dolayısıyla
   üzerine kurulacak her "trend" temelsiz olurdu.
 
+- **A35 (tm 228 · V8-FORM-PLACE — "prospect" bu üründe NE demektir):** PRD `:636` dört form
+  sayıyor (`PRE-CHAT/POST-CHAT/TICKET/PROSPECT`) ama `prospect`in karşılığını tanımlamıyor ve
+  depoda da karşılığı yoktu. Tanım PRD satırının kendisinden türetildi ve **bir andır, bir durum
+  değildir:** dört ad iki eksenin dört hücresidir — widget **ne zaman** sorar, ve yanıt **neye
+  dairdir**. `pre_chat`/`post_chat` konuşmanın iki ucunda kişiye dair sorar; `ticket` ile
+  `prospect` ise **kimse müsait değilken** bırakılan mesaj ekranında **aynı nefeste** sorulur, ama
+  `ticket` **talebe** dair olduğu için yanıtı o mesajın açtığı bilete, `prospect` **kişiye** dair
+  olduğu için yanıtı iki sohbet formununkiyle aynı yere — contact'a — düşer. Yerleşim dolayısıyla
+  alanın entity'sini **belirler** (`FORM_PLACEMENT_ENTITY` tek eşleme; authoring formu, tanım ucu,
+  widget teslimi ve migration'ın CHECK'i aynı eşlemeyi okur, yani dördü ayrışamaz).
+  **13.3 ile çelişmemesi bu tanımın şartıydı:** `prospect` bir kişiye ikinci bir kimlik VERMEZ —
+  huninin kendi predikatı (`customers.is_lead` · `lead_captured`) dokunulmadan kaldı ve birini
+  lead yapan şey hâlâ yalnız e-postanın kayda düşmesidir. Bırakılan mesajda e-posta **zorunlu**
+  olduğu için bu yol da huniyi tetikler; tetikleyen `prospect` yerleşimi değil, e-postanın
+  kendisidir (aynı kural pre-chat formunda ve CRM düzenlemesinde de geçerlidir).
+
+- **A36 (tm 228 · 08.7.7 KK'sının "Nexa: yaş/sorumlu-oyun onayı" payı nasıl okundu):**
+  `FR-MOD-08.7.7`'nin kabul kriteri bu cümleyle bitiyor ve görevin (e) maddesi ayrıca
+  değerlendirilmesini istiyordu. **Okuma: bu bir dikey ÖRNEĞİdir, ayrı bir özellik değil** —
+  PRD'nin `Nexa:` öneki hemen bir satır yukarıda da aynı işi görüyor (`FR-MOD-08.7.6`:
+  "Nexa: player ID/KYC/bakiye"), ve o satır depoda KYC'ye özel tek satır kod olmadan `✅`
+  kapandı: örnek, bir bahis operatörünün builder'la **kuracağı** alanın türünü anlatır. Aynı
+  okumayla bir yaş/sorumlu-oyun onayı bugün de kurulabiliyor: `boolean` tipi + `required`,
+  dört yerleşimden herhangi biri; widget onu onay kutusu olarak basıyor
+  (`renderFormFields`), yanıt `checkCustomFieldValue`'dan geçip contact ya da bilete düşüyor.
+  **Ölçülen sınır, dürüstçe:** bu bir KAYIT'tır, ZORLAMA değil — `readFormAnswers` işaretsiz
+  kutuyu `'false'` olarak gönderir ve sunucu bunu geçerli bir boolean sayar, yani hiçbir
+  ziyaretçi onay vermediği için durdurulmaz. PRD **engelleyen** bir onay kastediyorsa
+  (hangi yaş sınırı, hangi yargı bölgesi, reddedildiğinde sohbet hiç açılmaz mı yoksa açılıp
+  işaretlenir mi, kaydın saklama süresi ve NFR-C8 silme talebiyle ilişkisi) bunların hiçbiri
+  satırda yazmıyor ve hepsi ürün/hukuk kararıdır; teknik bir varsayımla doldurmak "onay alındı"
+  diyen ama hiçbir kuralı zorlamayan bir kutu üretirdi — bu turun kapatmaya çalıştığı türden
+  sahte kapsama. Bu yüzden onay **semantiği** ayrı bir gereksinim kalemidir; bu tur `◐`'yi
+  denetimin fiilen ölçtüğü boşluk (YERLEŞİM) kapandığı için kaldırıyor, ki §D149 zaten yalnız
+  onu sayıyordu.
+
 ## D. Deviations (sapmalar)
 
 - **D1 (dilim 2):** Redirect URI eşleşmesi **tam eşitlik** (OAuth 2.1). Kaynak platformun
@@ -6739,6 +6775,38 @@ Ses + masaüstü/tarayıcı (Notification API) + sekme başlığı ✅ (tm 16, `
 ✅ post-chat yerleşimi TESLİM EDİLDİ — satır `◐` → `✅` (§D114'ün borcu kapandı): `FORM_PLACEMENTS` artık `['pre_chat','post_chat']` · migration `20260821100000_post_chat_form` CHECK'i genişletti (kolon/veri/RLS değişmedi, drift temiz) · `custom-field-service.ts` `listFormFields(placement)` + `listPostChatForm` + **`setFormValues`** (yalnız o yerleşimde SORULAN alan yazılabilir — CRM-only/pre_chat/başka kiracı hepsi aynı 400) · `/customer/token` yanıtına `post_chat_form` (pre_chat_form'un yanında, tek transaction, best-effort emsali korundu) · yeni uç **`POST /customer/chat/form-response`** (204; sohbete bağlı değil — yanıt contact'ın, ajan arşivlediyse de yazılır; kart maskeleme pre-chat yolundaki gibi) · widget kapanışta (`noteChatClosed` — kendi bitirmesi de ajan arşivi de aynı tetikleyici) formu **rating'in ÜSTÜNDE** gösterir → gönderim → teşekkür; alan yoksa kapanış ekranı 134.1/134.2'nin aynısı · `renderFormFields`/`readFormAnswers` iki yerleşimde paylaşıldı (pre-chat render'ı davranış değiştirmeden buraya taşındı) · web `PreChatFormSettings.tsx` → **`ChatFormsSettings.tsx`** ("Sohbet formları") + yerleşim seçici `pre_chat|post_chat` + listede rozet; `settings.preChatForm.*` → `settings.chatForms.*` (en+tr) · widget i18n `postchat.*` 8 kataloğun hepsine · kontrat: `CustomFieldDefinition.form_placement` + `WidgetFormField` şeması + token yanıtındaki iki form + events gövdesindeki `custom_fields` belgelendi (üçü de kodda vardı, kontratta yoktu) · integration `customer-chat.test.ts` +7 (82→89: iki form ayrı teslim · contact'a yazma · tip reddi · zorunlu-boş reddi · sorulmayan alan reddi (CRM-only + pre_chat) · cross-tenant · kart maskeleme) · widget `widget.postchat.test.ts`(7) · web `SettingsForms.test.tsx`(+3) · mobil `parity.test.ts` kontrat sayacı 183→184 (ziyaretçi ucu, telefon kapsamı değişmedi) · tm 134.3
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-08.7.7` [KISMİ]: İki boşluk: (1) YERLEŞİM eksik — FORM_PLACEMENTS yalnızca ['pre_chat','post_chat'] (custom-fields.ts:32); PRD'nin saydığı 'ticket' ve 'prospect' formları yok ve servis form alanını contact entity'siyle sınırlıyor (custom-field-service.ts:128-129), yani ticket…
+
+- ✅ **Damga `◐` → `✅` (tm 228 · V8-FORM-PLACE) — denetimin saydığı iki YERLEŞİM teslim edildi.**
+  Denetimin ölçüsü tur başında birebir doğrulandı (`FORM_PLACEMENTS` = `['pre_chat','post_chat']`)
+  ve kapatıldı: dört yerleşim + yerleşimin entity'yi belirlediği tek eşleme (`FORM_PLACEMENT_ENTITY`
+  / `formPlacementEntity`, `packages/types/src/custom-fields.ts`) · migration
+  `20260908160000_ticket_prospect_form_placement` CHECK'i **genişletti** (kolon/veri/index/RLS
+  dokunulmadı; eski her kombinasyon hâlâ geçerli — psql'de savepoint'lerle doğrulandı: `ticket`
+  contact'ta ve `prospect` ticket'ta **reddedildi**, `pre_chat`/contact ve `ticket`/ticket kabul
+  edildi) · yeni uç `POST /customer/ticket` (208 → **209 yol**, mobil parite sayacı yorumla
+  bumplandı) — bir widget yanıtının **bilete** ulaştığı tek yol (KK "contact/ticket'a yazma"):
+  ziyaretçinin sözleri biletin konusu, `ticket_fields` biletin custom field'ları,
+  `prospect_fields` kişinin — tek istek, tek transaction, bilet **önce** açılıp yanıtlar sonra
+  yazıldığı için hatalı bir yanıt bileti de düşürüyor (fail-closed) · `TicketService.createFromWidget`
+  (+ `TicketRuleContext.source` `'widget'`: konu kuralı tetiklenir, `source: 'email'`/`'chat'`
+  kuralı tetiklenmez) · widget'ta kimse müsait değilken composer yerine "leave a message" formu
+  (`widget.ts` `offlineFormOpen`/`renderPanelBody`, sekiz dil) · konsolda tek builder dört
+  yerleşimi sunuyor ve entity'yi **seçtirmiyor**, yerleşimden türetiyor (`ChatFormsSettings.tsx`).
+  Yüzey **opt-in**: iki formdan biri kurulana kadar widget panel göstermiyor ve uç 400 veriyor.
+  Ekranlama sohbet yoluyla aynı: adres yasağı (08.9.2) · kart maskeleme (08.9.5) · deterministik
+  spam motoru (08.9.3). — `packages/types/src/custom-fields.ts` · `apps/api/src/routes/customer.ts`
+  · `apps/api/src/services/custom-fields/custom-field-service.ts` ·
+  `apps/api/src/services/tickets/ticket-service.ts` · `apps/api/src/routes/auth.ts` ·
+  `apps/widget/src/{api,widget}.ts` · `apps/web/src/features/settings/ChatFormsSettings.tsx` ·
+  migration `20260908160000` · test `apps/api/test/integration/customer-chat.test.ts` (17) ·
+  `custom-fields.test.ts` (5) · `goals-triggers.test.ts` (2) · `packages/types/src/custom-fields.test.ts` (4)
+  · `apps/widget/src/widget.offline.test.ts` (8) · `apps/web/.../SettingsForms.test.tsx` (4) ·
+  e2e `apps/e2e/tests/offline-form.spec.ts` (1) · tm 228
+- ℹ **Kalan pay, `✅`'nin ne demek OLMADIĞI:** KK'nın son cümlesi ("Nexa: yaş/sorumlu-oyun onayı")
+  §C · A36'da dikey ÖRNEĞİ olarak okundu (08.7.6'nın "Nexa: player ID/KYC/bakiye" emsali) — böyle
+  bir alan bugün `boolean` + `required` ile kurulabiliyor, ama **kaydediliyor, zorlanmıyor**:
+  işaretsiz kutu `'false'` olarak gidiyor ve kabul ediliyor. Engelleyen bir onay isteniyorsa ayrı
+  bir kalemdir; §D149 onu saymıyordu.
 
 #### K08.8.1 — 08.8.1 · Apps (marketplace) girişi
 

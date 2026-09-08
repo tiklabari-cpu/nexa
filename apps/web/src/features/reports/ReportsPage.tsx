@@ -328,6 +328,67 @@ const TAB_LABEL_KEYS: Record<TabId, string> = {
  */
 const GROUP_GATED_TABS = new Set<TabId>(['cases', 'leads', 'sales', 'team-performance']);
 
+/**
+ * The sidebar's categories, in order, and the tabs each one holds — the
+ * "Kategoriler + grup genişleticiler" acceptance criterion of FR-MOD-07.1.
+ *
+ * A category answers "what does this report measure?", which is why Overview
+ * sits beside the dimensional breakdown and the CSAT ratings rather than
+ * alone: all three score the service. AI Agent and Chat topics are together
+ * because both are produced by the model, Staffing and Team performance
+ * because both are about who is on shift, and Cases/Leads/Sales because all
+ * three count commercial outcomes.
+ *
+ * Deliberately a client constant rather than a field added to
+ * `GET /reports/groups`, even though that catalogue is the server's own list
+ * of report groups and would be the contract-first instinct. Two reasons, both
+ * read off the code rather than assumed:
+ *
+ *   1. That response is permission-filtered *by design* — a token without
+ *      `reports_read` gets an empty list, which is exactly what makes it a
+ *      fail-closed gate. A sidebar whose *structure* came from it would
+ *      therefore collapse to nothing for such a caller, taking the six
+ *      ungated tabs (which render unconditionally today) with it. Grouping is
+ *      not a permission, and borrowing the permission channel to carry it
+ *      would put the two on the same fate.
+ *   2. It is an export/permission catalogue, not a navigation one: it carries
+ *      `goals` (a group with an export but no tab — Goals has its own page)
+ *      and lacks `staffing` (a tab with no CSV serialiser). Both gaps would
+ *      have to be patched client-side anyway, which is a second source of
+ *      truth wearing the first one's clothes.
+ *
+ * What the catalogue keeps owning is untouched: which of the four gated tabs
+ * may be seen at all, and whether Export is offered for the open tab.
+ */
+type CategoryId = 'performance' | 'automation' | 'team' | 'business';
+
+/**
+ * Annotated rather than `as const`-inferred so a misspelt tab id in the table
+ * below is a `typecheck` failure here, not a silently empty group at runtime.
+ * The other half — a tab added to `TABS` and never filed into a category — is
+ * caught by the "renders every tab under a category" unit test, since nothing
+ * in the type system can notice an omission.
+ */
+const TAB_CATEGORIES: ReadonlyArray<{ id: CategoryId; tabs: readonly TabId[] }> = [
+  { id: 'performance', tabs: ['overview', 'breakdown', 'reviews'] },
+  { id: 'automation', tabs: ['ai-agent', 'topics'] },
+  { id: 'team', tabs: ['staffing', 'team-performance'] },
+  { id: 'business', tabs: ['cases', 'leads', 'sales'] },
+];
+
+/** `CategoryId` → its catalogue key, same discipline as `TAB_LABEL_KEYS`. */
+const CATEGORY_LABEL_KEYS: Record<CategoryId, string> = {
+  performance: 'reports.categories.performance',
+  automation: 'reports.categories.automation',
+  team: 'reports.categories.team',
+  business: 'reports.categories.business',
+};
+
+/** The category holding this tab, or undefined if it was never filed. */
+function categoryOfTab(id: TabId): CategoryId | undefined {
+  return TAB_CATEGORIES.find((category) => category.tabs.includes(id))?.id;
+}
+
 interface ReportGroupsResponse {
   groups: Array<{ id: string; label: string }>;
 }
@@ -436,11 +497,20 @@ export function ReportsPage(): ReactElement {
   // Hidden until the groups response confirms visibility (fail closed, not
   // open) — a transient loading state and a caller who truly lacks the scope
   // look the same for one beat, which is the safe default for a permission gate.
-  const visibleTabs = TABS.filter(
-    (tabDef) => !GROUP_GATED_TABS.has(tabDef.id) || visibleGroupIds.has(tabDef.id),
+  const visibleTabs = new Set<TabId>(
+    TABS.filter((tabDef) => !GROUP_GATED_TABS.has(tabDef.id) || visibleGroupIds.has(tabDef.id)).map(
+      (tabDef) => tabDef.id,
+    ),
   );
 
   const [tab, setTab] = useState<TabId>('overview');
+  // Every category open on arrival. The sidebar is a *navigation* aid, not a
+  // way to hide reports: a first visit that showed four collapsed headings
+  // would have replaced one flat strip with an emptier screen. Collapsing is
+  // the agent's move once they know which category they live in.
+  const [openCategories, setOpenCategories] = useState<readonly CategoryId[]>(() =>
+    TAB_CATEGORIES.map((category) => category.id),
+  );
   const [mode, setMode] = useState<RangeMode>(30);
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -457,6 +527,33 @@ export function ReportsPage(): ReactElement {
     if (tab === 'topics') markTopicsSeen();
   }, [tab]);
 
+  const toggleCategory = (id: CategoryId): void =>
+    setOpenCategories((open) =>
+      open.includes(id) ? open.filter((other) => other !== id) : [...open, id],
+    );
+
+  /**
+   * The only way the page changes tab. Opening the tab's category as well is
+   * what keeps a *programmatic* switch honest: a restored saved view, or the
+   * Topics promo's CTA, can name a tab whose category the agent collapsed, and
+   * switching to a report that is nowhere in the sidebar would leave the
+   * selection unreadable — and, worse, the panel labelled by an element that no
+   * longer exists. Clicking a tab in the sidebar cannot hit this (you can only
+   * click what is open), so the cost is paid only where the risk is.
+   */
+  const selectTab = (next: TabId): void => {
+    setTab(next);
+    const category = categoryOfTab(next);
+    if (category)
+      setOpenCategories((open) => (open.includes(category) ? open : [...open, category]));
+  };
+
+  const activeCategory = categoryOfTab(tab);
+  /** Is the open tab's own button on screen? (Its category could be collapsed,
+   * and a gated tab could still be waiting on the catalogue.) */
+  const activeTabRendered =
+    visibleTabs.has(tab) && activeCategory !== undefined && openCategories.includes(activeCategory);
+
   const range = resolveRange(mode, customFrom, customTo);
   // Stable across renders (unlike `range`, which re-derives "now"), so it is the
   // right thing to key a query on.
@@ -467,7 +564,7 @@ export function ReportsPage(): ReactElement {
   // one click (07.7-k KK, derived from 07.7-h): the same all-at-once binding
   // Inbox uses for its own saved views (`InboxPage.tsx`'s `applySavedView`).
   const applySavedView = (view: SavedReportView): void => {
-    setTab(view.tab);
+    selectTab(view.tab);
     setMode(view.mode);
     setCustomFrom(view.customFrom);
     setCustomTo(view.customTo);
@@ -494,76 +591,147 @@ export function ReportsPage(): ReactElement {
             onCustomFrom={setCustomFrom}
             onCustomTo={setCustomTo}
           />
-          <ExportControl group={tab} range={range} visible={visibleGroupIds.has(tab)} />
         </div>
       }
     >
       <SurveyPopover />
-      <div
-        role="tablist"
-        aria-label={t('reports.page.tabsAriaLabel')}
-        className="flex gap-1 border-b border-border"
-      >
-        {visibleTabs.map((tabDef) => {
-          const selected = tab === tabDef.id;
-          return (
-            <button
-              key={tabDef.id}
-              type="button"
-              role="tab"
-              id={`reports-tab-${tabDef.id}`}
-              aria-selected={selected}
-              aria-controls={`reports-panel-${tabDef.id}`}
-              onClick={() => setTab(tabDef.id)}
-              className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                selected
-                  ? 'border-brand-500 text-content'
-                  : 'border-transparent text-content-secondary hover:text-content'
-              }`}
-            >
-              {t(TAB_LABEL_KEYS[tabDef.id])}
-            </button>
-          );
-        })}
-      </div>
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
+        <nav
+          aria-label={t('reports.page.tabsAriaLabel')}
+          className="flex shrink-0 flex-col gap-4 border-border pb-4 lg:w-56 lg:border-r lg:pb-0 lg:pr-4"
+        >
+          {TAB_CATEGORIES.map((category) => {
+            // Ordered by the category, not by `TABS`: the sidebar's sequence is
+            // this table's to state, and reading it off the old flat strip
+            // would make the two silently disagree.
+            const tabs = category.tabs.filter((id) => visibleTabs.has(id));
+            // A category the catalogue withheld every tab of is not rendered at
+            // all. An expander over an empty list would still name a report
+            // group the caller may not open — the same leak the hidden tab was
+            // avoiding, one level up.
+            if (tabs.length === 0) return null;
+            const open = openCategories.includes(category.id);
+            const headingId = `reports-category-${category.id}`;
+            const listId = `reports-group-${category.id}`;
+            return (
+              <div key={category.id} className="flex flex-col gap-1">
+                <button
+                  type="button"
+                  id={headingId}
+                  aria-expanded={open}
+                  // Only while the list exists: an `aria-controls` pointing at
+                  // nothing is an assertion the DOM does not support, and axe
+                  // rightly flags it (the precedent is AuditLogPage's row
+                  // expander).
+                  {...(open ? { 'aria-controls': listId } : {})}
+                  onClick={() => toggleCategory(category.id)}
+                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1 text-2xs font-semibold uppercase tracking-wide text-content-tertiary transition-colors hover:bg-inset hover:text-content-secondary"
+                >
+                  <span>{t(CATEGORY_LABEL_KEYS[category.id])}</span>
+                  <span aria-hidden="true">{open ? '▾' : '▸'}</span>
+                </button>
+                {open && (
+                  <div
+                    role="tablist"
+                    aria-orientation="vertical"
+                    aria-labelledby={headingId}
+                    id={listId}
+                    className="flex flex-col gap-0.5"
+                  >
+                    {tabs.map((tabId) => {
+                      const selected = tab === tabId;
+                      return (
+                        <button
+                          key={tabId}
+                          type="button"
+                          role="tab"
+                          id={`reports-tab-${tabId}`}
+                          aria-selected={selected}
+                          aria-controls={`reports-panel-${tabId}`}
+                          onClick={() => selectTab(tabId)}
+                          className={`rounded-md border-l-2 px-2.5 py-1.5 text-left text-sm font-medium transition-colors ${
+                            selected
+                              ? 'border-brand-500 bg-inset text-content'
+                              : 'border-transparent text-content-secondary hover:bg-inset hover:text-content'
+                          }`}
+                        >
+                          {t(TAB_LABEL_KEYS[tabId])}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
-      <div
-        role="tabpanel"
-        id={`reports-panel-${tab}`}
-        aria-labelledby={`reports-tab-${tab}`}
-        className="flex flex-col gap-6"
-      >
-        {mode === 'custom' && range === null ? (
-          <Card>
-            <EmptyState
-              title={t('reports.emptyRange.title')}
-              description={t('reports.emptyRange.description')}
-            />
-          </Card>
-        ) : tab === 'overview' ? (
-          <>
-            <TopicsPromoBanner onSeeTopics={() => setTab('topics')} />
-            <OverviewTab rangeKey={rangeKey} range={range} baseline={baseline} />
-          </>
-        ) : tab === 'ai-agent' ? (
-          <AiAgentTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : tab === 'reviews' ? (
-          <ReviewsTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : tab === 'breakdown' ? (
-          <BreakdownTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : tab === 'staffing' ? (
-          <StaffingTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : tab === 'topics' ? (
-          <TopicsTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : tab === 'cases' ? (
-          <CasesTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : tab === 'leads' ? (
-          <LeadsTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : tab === 'sales' ? (
-          <SalesTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        ) : (
-          <TeamPerformanceTab rangeKey={rangeKey} range={range} baseline={baseline} />
-        )}
+          {/* PRD FR-MOD-07.1 lists Export as the ninth sidebar item, so it
+              moved out of the header actions row and down here. Deliberately a
+              heading and not a fifth expander: the disclosure button would
+              carry the accessible name "Export", which is already the name of
+              the control's own button — two buttons one substring apart, and
+              every `getByRole('button', { name: 'Export' })` ambiguous.
+
+              The fail-closed gate that used to live inside `ExportControl`
+              moved up here with it, unchanged in meaning: hidden until
+              `/reports/groups` confirms this tab is one the caller may export.
+              It is the *section* that has to disappear now, heading included —
+              a lone "Export" label over nothing would announce a download that
+              is not on offer. */}
+          {visibleGroupIds.has(tab) && (
+            <div className="flex flex-col gap-1.5">
+              <h2 className="px-2 text-2xs font-semibold uppercase tracking-wide text-content-tertiary">
+                {t('reports.export.sectionTitle')}
+              </h2>
+              <ExportControl group={tab} range={range} />
+            </div>
+          )}
+        </nav>
+
+        <div
+          role="tabpanel"
+          id={`reports-panel-${tab}`}
+          // Labelled by the open tab while that tab is on screen. When its
+          // category is collapsed the element is gone, and an `aria-labelledby`
+          // pointing at a missing id would name the panel nothing at all — so
+          // the label is carried directly instead. Same rule, two shapes.
+          {...(activeTabRendered
+            ? { 'aria-labelledby': `reports-tab-${tab}` }
+            : { 'aria-label': t(TAB_LABEL_KEYS[tab]) })}
+          className="flex min-w-0 flex-1 flex-col gap-6"
+        >
+          {mode === 'custom' && range === null ? (
+            <Card>
+              <EmptyState
+                title={t('reports.emptyRange.title')}
+                description={t('reports.emptyRange.description')}
+              />
+            </Card>
+          ) : tab === 'overview' ? (
+            <>
+              <TopicsPromoBanner onSeeTopics={() => selectTab('topics')} />
+              <OverviewTab rangeKey={rangeKey} range={range} baseline={baseline} />
+            </>
+          ) : tab === 'ai-agent' ? (
+            <AiAgentTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : tab === 'reviews' ? (
+            <ReviewsTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : tab === 'breakdown' ? (
+            <BreakdownTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : tab === 'staffing' ? (
+            <StaffingTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : tab === 'topics' ? (
+            <TopicsTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : tab === 'cases' ? (
+            <CasesTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : tab === 'leads' ? (
+            <LeadsTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : tab === 'sales' ? (
+            <SalesTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          ) : (
+            <TeamPerformanceTab rangeKey={rangeKey} range={range} baseline={baseline} />
+          )}
+        </div>
       </div>
     </Page>
   );
@@ -2179,11 +2347,14 @@ export function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }):
  * CSV/PDF export (FR-MOD-07.7 "export"): the active tab's group, over the
  * selected window — `GET /reports/export?group=<tab>&from&to&format=csv|pdf`,
  * the same endpoint the backend already gates on `EXPORT_SCOPES` and a
- * per-group scope check (`reports.ts`). Hidden until `/reports/groups`
- * confirms this tab is one the caller may export ("İzin bazlı görünürlük"):
- * the same fail-closed default the gated tabs above use, and the same reason
- * — a transient loading state and "no export scope" look identical for one
- * beat, and that is the safe default for a permission-gated download.
+ * per-group scope check (`reports.ts`). Its permission gate ("İzin bazlı
+ * görünürlük") is the caller's: since FR-MOD-07.1 moved this into the sidebar,
+ * the whole section — heading included — is what `/reports/groups` withholds,
+ * so the control no longer takes a `visible` prop and cannot be rendered under
+ * a heading it then hides itself from. The rule is otherwise unchanged, and so
+ * is its reason: a transient loading state and "no export scope" look
+ * identical for one beat, and fail-closed is the safe default for a
+ * permission-gated download.
  *
  * A failed download surfaces the server's own message rather than swallowing
  * it — an agent who cannot export a group needs to know why, not watch
@@ -2192,19 +2363,15 @@ export function TeamPerformanceTable({ rows }: { rows: AgentPerformanceRow[] }):
 function ExportControl({
   group,
   range,
-  visible,
 }: {
   group: TabId;
   range: { from: string; to: string } | null;
-  visible: boolean;
-}): ReactElement | null {
+}): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const [format, setFormat] = useState<'csv' | 'pdf'>('csv');
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  if (!visible) return null;
 
   const download = async (): Promise<void> => {
     if (!range) return;
@@ -2233,7 +2400,7 @@ function ExportControl({
   };
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col gap-1">
       <div className="flex items-center gap-1.5">
         <label className="sr-only" htmlFor="export-format">
           {t('reports.export.formatLabel')}

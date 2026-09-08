@@ -5,7 +5,7 @@ export const reports: Messages = {
   // Page chrome
   'reports.page.title': 'Raporlar',
   'reports.page.description': 'Sohbet hacmi, yanıt verme hızı ve memnuniyet.',
-  'reports.page.tabsAriaLabel': 'Rapor',
+  'reports.page.tabsAriaLabel': 'Rapor kategorileri',
 
   // Tabs
   'reports.tabs.overview': 'Genel Bakış',
@@ -18,6 +18,12 @@ export const reports: Messages = {
   'reports.tabs.leads': 'Potansiyel Müşteriler',
   'reports.tabs.sales': 'Satışlar',
   'reports.tabs.teamPerformance': 'Ekip Performansı',
+
+  // Kenar çubuğu kategorileri (FR-MOD-07.1)
+  'reports.categories.performance': 'Performans',
+  'reports.categories.automation': 'AI ve otomasyon',
+  'reports.categories.team': 'Ekip ve planlama',
+  'reports.categories.business': 'İş sonuçları',
 
   // Custom range not yet chosen, or invalid
   'reports.emptyRange.title': 'Bir tarih aralığı seçin',
@@ -58,6 +64,7 @@ export const reports: Messages = {
   'reports.savedViews.submitPending': 'Kaydediliyor…',
 
   // CSV/PDF export
+  'reports.export.sectionTitle': 'Dışa aktarma',
   'reports.export.formatLabel': 'Dışa aktarma biçimi',
   'reports.export.csv': 'CSV',
   'reports.export.pdf': 'PDF',

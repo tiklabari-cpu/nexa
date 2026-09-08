@@ -2148,3 +2148,277 @@ describe('ReportsPage — Turkish locale (I18N-f)', () => {
     expect(await screen.findByText('Ulaşılan hedefler')).toBeInTheDocument();
   });
 });
+
+/**
+ * The reports sidebar (FR-MOD-07.1).
+ *
+ * PRD §583 asks for a *kenar çubuğu* — a left vertical nav of nine items,
+ * Export among them — and its acceptance criterion is "Kategoriler + grup
+ * genişleticiler". What shipped until now was a flat horizontal `role=tablist`
+ * with Export sitting in the page header, so both halves of the criterion were
+ * missing rather than approximated.
+ *
+ * These tests hold the three things the new shape can quietly get wrong: a tab
+ * that no category files (invisible, and no type can catch it), an expander
+ * that opens by mouse but not by keyboard, and a *programmatic* tab switch —
+ * a restored saved view — landing on a tab whose category the agent collapsed.
+ */
+const SIDEBAR_GROUPS = [
+  { id: 'cases', label: 'Cases' },
+  { id: 'leads', label: 'Leads' },
+  { id: 'sales', label: 'Sales' },
+  { id: 'team-performance', label: 'Team performance' },
+  { id: 'overview', label: 'Overview' },
+];
+
+/**
+ * Every report endpoint the sidebar can reach, so any tab may be opened. Each
+ * group answers with the base payload its own describe block above uses — a
+ * generic stub is not enough here, since several tabs read fields off
+ * `previous_period` and would throw rather than render.
+ */
+function mockSidebar(groups: Array<{ id: string; label: string }> = SIDEBAR_GROUPS): void {
+  api.get.mockImplementation((path: string) => {
+    if (path.startsWith('/reports/groups')) return Promise.resolve({ groups });
+    if (path.startsWith('/reports/overview')) return Promise.resolve(OVERVIEW);
+    if (path.startsWith('/reports/cases')) return Promise.resolve(CASES_BASE);
+    if (path.startsWith('/reports/leads')) return Promise.resolve(LEADS_BASE);
+    if (path.startsWith('/reports/sales')) return Promise.resolve(SALES_BASE);
+    if (path.startsWith('/reports/team-performance')) return Promise.resolve(TEAM_PERFORMANCE_BASE);
+    if (path.startsWith('/reports/reviews')) return Promise.resolve(REVIEWS_BASE);
+    if (path.startsWith('/reports/topics')) return Promise.resolve(TOPICS_BASE);
+    if (path.startsWith('/reports/staffing-forecast')) return Promise.resolve(STAFFING_BASE);
+    return Promise.resolve(BREAKDOWN_BASE);
+  });
+}
+
+/** The expander button heading a category, by its visible label. */
+function categoryToggle(label: string): HTMLElement {
+  return screen.getByRole('button', { name: label });
+}
+
+describe('ReportsPage — sidebar categories and group expanders (FR-MOD-07.1)', () => {
+  it('renders every tab under a category, PRD’s nine items included', async () => {
+    mockSidebar();
+    renderReports(<ReportsPage />);
+    await screen.findByRole('tab', { name: 'Cases' });
+
+    // The nav is a landmark now, not a strip of buttons above the report.
+    const nav = screen.getByRole('navigation', { name: 'Report categories' });
+
+    // PRD FR-MOD-07.1's own list. Export is the ninth item and is not a tab —
+    // it is asserted separately below, since it is a control, not a report.
+    for (const name of [
+      'Overview',
+      'AI Agent',
+      'Breakdown',
+      'Chat topics',
+      'Leads',
+      'Cases',
+      'Sales',
+      'Team performance',
+    ]) {
+      expect(within(nav).getByRole('tab', { name })).toBeInTheDocument();
+    }
+    expect(within(nav).getByRole('button', { name: 'Export' })).toBeInTheDocument();
+
+    // Every tab the page can open is filed — a tab added to `TABS` and
+    // forgotten in `TAB_CATEGORIES` would be unreachable, which no type can
+    // notice. Ten, i.e. PRD's eight report items plus Reviews (07.8) and
+    // Staffing, which the product has and the PRD list predates.
+    const tabs = within(nav).getAllByRole('tab');
+    expect(tabs).toHaveLength(10);
+
+    // And each one sits inside a category's list, not loose in the nav.
+    for (const tab of tabs) {
+      expect(tab.closest('[role="tablist"]')).not.toBeNull();
+    }
+  });
+
+  it('groups the tabs under the four category headings', async () => {
+    mockSidebar();
+    renderReports(<ReportsPage />);
+    await screen.findByRole('tab', { name: 'Cases' });
+
+    const expected: Array<[string, string[]]> = [
+      ['Performance', ['Overview', 'Breakdown', 'Reviews']],
+      ['AI & automation', ['AI Agent', 'Chat topics']],
+      ['Team & staffing', ['Staffing', 'Team performance']],
+      ['Business', ['Cases', 'Leads', 'Sales']],
+    ];
+    for (const [category, members] of expected) {
+      const list = screen.getByRole('tablist', { name: category });
+      expect(
+        within(list)
+          .getAllByRole('tab')
+          .map((tab) => tab.textContent),
+      ).toEqual(members);
+    }
+  });
+
+  it('collapses and re-opens a category, hiding only its own tabs', async () => {
+    mockSidebar();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByRole('tab', { name: 'Cases' });
+
+    const toggle = categoryToggle('Business');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('tab', { name: 'Cases' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: 'Sales' })).not.toBeInTheDocument();
+    // A neighbouring category is untouched — one expander, one group.
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('tab', { name: 'Cases' })).toBeInTheDocument();
+  });
+
+  it('toggles a category from the keyboard alone', async () => {
+    mockSidebar();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByRole('tab', { name: 'Cases' });
+
+    const toggle = categoryToggle('AI & automation');
+    toggle.focus();
+    expect(toggle).toHaveFocus();
+
+    await user.keyboard('{Enter}');
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('tab', { name: 'Chat topics' })).not.toBeInTheDocument();
+
+    await user.keyboard(' ');
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('tab', { name: 'Chat topics' })).toBeInTheDocument();
+  });
+
+  it('points aria-controls at the list it opens, and at nothing while closed', async () => {
+    mockSidebar();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByRole('tab', { name: 'Cases' });
+
+    const toggle = categoryToggle('Business');
+    const listId = toggle.getAttribute('aria-controls');
+    expect(listId).toBeTruthy();
+    expect(document.getElementById(listId as string)).toHaveAttribute('role', 'tablist');
+
+    // An `aria-controls` pointing at an element that is no longer in the DOM is
+    // an assertion the page cannot support, so it is dropped rather than left
+    // dangling (AuditLogPage's row expander set the precedent).
+    await user.click(toggle);
+    expect(toggle).not.toHaveAttribute('aria-controls');
+  });
+
+  it('keeps the tab → panel aria-controls relationship the flat tablist had', async () => {
+    mockSidebar();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+
+    const tab = await screen.findByRole('tab', { name: 'Cases' });
+    await user.click(tab);
+    await screen.findByRole('region', { name: 'By status' });
+
+    const panel = screen.getByRole('tabpanel');
+    expect(tab).toHaveAttribute('aria-selected', 'true');
+    expect(tab).toHaveAttribute('aria-controls', panel.id);
+    expect(panel).toHaveAttribute('aria-labelledby', tab.id);
+  });
+
+  it('names the panel directly once the open tab’s category is collapsed', async () => {
+    mockSidebar();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+
+    await user.click(await screen.findByRole('tab', { name: 'Cases' }));
+    await screen.findByRole('region', { name: 'By status' });
+
+    await user.click(categoryToggle('Business'));
+
+    // The label element is gone, so `aria-labelledby` would resolve to nothing
+    // and leave the panel nameless. The name is carried inline instead — the
+    // report itself is still on screen and still has to say what it is.
+    const panel = screen.getByRole('tabpanel');
+    expect(panel).not.toHaveAttribute('aria-labelledby');
+    expect(panel).toHaveAccessibleName('Cases');
+  });
+
+  it('re-opens the category a restored saved view lands in', async () => {
+    mockSidebar();
+    const user = userEvent.setup();
+    renderReports(<ReportsPage />);
+    await screen.findByRole('tab', { name: 'Sales' });
+
+    // Save a view on Sales, come back to Overview, then collapse the category
+    // Sales lives in — the state a saved view can be restored into and the one
+    // clicking a tab can never reach, because a collapsed tab is unclickable.
+    await user.click(screen.getByRole('tab', { name: 'Sales' }));
+    await user.click(screen.getByRole('button', { name: 'Saved views' }));
+    await user.type(screen.getByLabelText('Save this view'), 'Sales last 30 days');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(screen.getByRole('tab', { name: 'Overview' }));
+    await user.click(categoryToggle('Business'));
+    expect(screen.queryByRole('tab', { name: 'Sales' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Saved views' }));
+    await user.click(screen.getByRole('button', { name: 'Sales last 30 days' }));
+
+    expect(categoryToggle('Business')).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('tab', { name: 'Sales' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('drops a whole category when the catalogue grants none of its tabs (fail-closed)', async () => {
+    mockSidebar([{ id: 'overview', label: 'Overview' }]);
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    // Business holds only gated tabs, so an ungranted caller must not even see
+    // the heading — an expander over an empty list still names report groups
+    // the caller may not open.
+    expect(screen.queryByRole('button', { name: 'Business' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tablist', { name: 'Business' })).not.toBeInTheDocument();
+
+    // The categories whose tabs are ungated are untouched.
+    expect(categoryToggle('Performance')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Overview' })).toBeInTheDocument();
+  });
+
+  it('keeps a category whose gated tabs are only partly granted', async () => {
+    mockSidebar([
+      { id: 'overview', label: 'Overview' },
+      { id: 'leads', label: 'Leads' },
+    ]);
+    renderReports(<ReportsPage />);
+
+    const business = await screen.findByRole('tablist', { name: 'Business' });
+    expect(
+      within(business)
+        .getAllByRole('tab')
+        .map((tab) => tab.textContent),
+    ).toEqual(['Leads']);
+  });
+
+  it('shows the Export item inside the sidebar, not the page header', async () => {
+    mockSidebar();
+    renderReports(<ReportsPage />);
+    await screen.findByRole('tab', { name: 'Cases' });
+
+    const nav = screen.getByRole('navigation', { name: 'Report categories' });
+    expect(within(nav).getByRole('heading', { name: 'Export', level: 2 })).toBeInTheDocument();
+    expect(within(nav).getByRole('button', { name: 'Export' })).toBeInTheDocument();
+    expect(within(nav).getByLabelText('Export format')).toBeInTheDocument();
+  });
+
+  it('hides the Export item, heading included, when the catalogue withholds the open tab', async () => {
+    mockSidebar([]);
+    renderReports(<ReportsPage />);
+    await screen.findByText('Conversations', { exact: true });
+
+    expect(screen.queryByRole('heading', { name: 'Export', level: 2 })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Export' })).not.toBeInTheDocument();
+  });
+});

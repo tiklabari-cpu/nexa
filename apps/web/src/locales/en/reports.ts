@@ -19,7 +19,7 @@ export const reports: Messages = {
   // Page chrome
   'reports.page.title': 'Reports',
   'reports.page.description': 'Conversation volume, responsiveness and satisfaction.',
-  'reports.page.tabsAriaLabel': 'Report',
+  'reports.page.tabsAriaLabel': 'Report categories',
 
   // Tabs
   'reports.tabs.overview': 'Overview',
@@ -32,6 +32,12 @@ export const reports: Messages = {
   'reports.tabs.leads': 'Leads',
   'reports.tabs.sales': 'Sales',
   'reports.tabs.teamPerformance': 'Team performance',
+
+  // Sidebar categories (FR-MOD-07.1)
+  'reports.categories.performance': 'Performance',
+  'reports.categories.automation': 'AI & automation',
+  'reports.categories.team': 'Team & staffing',
+  'reports.categories.business': 'Business',
 
   // Custom range not yet chosen, or invalid
   'reports.emptyRange.title': 'Pick a date range',
@@ -71,6 +77,7 @@ export const reports: Messages = {
   'reports.savedViews.submitPending': 'Saving…',
 
   // CSV/PDF export
+  'reports.export.sectionTitle': 'Export',
   'reports.export.formatLabel': 'Export format',
   'reports.export.csv': 'CSV',
   'reports.export.pdf': 'PDF',

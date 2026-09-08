@@ -236,13 +236,15 @@ test.describe('sandbox workspace (11.5-f · 11.5-g)', () => {
     await page.getByRole('button', { name: 'Create workspace' }).click();
     await expect(page.getByRole('heading', { name: 'Set up your workspace' })).toBeVisible();
 
-    // Welcome → Website → Team → Sample data. The middle two are skipped by
-    // continuing past them; the last one is the point — it lays down a contact
-    // and a conversation, so "the sandbox is empty" is a claim about isolation
-    // rather than about a workspace that never had anything.
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('button', { name: 'Continue' }).click();
-    await page.getByRole('button', { name: 'Continue' }).click();
+    // Welcome → Website → Channels → Company → Team, where the sample-data
+    // block sits (tm 216 took the wizard from four steps to five). The first
+    // four are skipped by continuing past them; the last one is the point — it
+    // lays down a contact and a conversation, so "the sandbox is empty" is a
+    // claim about isolation rather than about a workspace that never had
+    // anything.
+    for (let step = 0; step < 4; step += 1) {
+      await page.getByRole('button', { name: 'Continue' }).click();
+    }
     await expect(page.getByRole('heading', { name: 'Add sample data' })).toBeVisible();
     await page.getByRole('button', { name: 'Add sample data' }).click();
     await expect(page.getByRole('status')).toContainText(/sample conversation\.$/);

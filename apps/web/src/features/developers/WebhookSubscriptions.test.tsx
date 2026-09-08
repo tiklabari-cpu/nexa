@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_CATALOG } from '@nexa/types';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
@@ -21,7 +22,7 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   return { ...actual, useApiClient: () => api };
 });
 
-const { WebhookSubscriptions, IntegrationManifestReference } =
+const { WebhookSubscriptions, IntegrationManifestReference, AUTOMATION_APPS_LIMIT } =
   await import('./WebhookSubscriptions.js');
 
 function renderComponent(ui: 'webhooks' | 'manifest', canEdit = true): void {
@@ -362,5 +363,21 @@ describe('WebhookSubscriptions — automation card (FR-MOD-09.4)', () => {
     const row = await screen.findByTestId(`webhook-${registeredWebhook.id}`);
     // The card's display name, not its catalogue id.
     await waitFor(() => expect(within(row).getByText('via Zapier')).toBeInTheDocument());
+  });
+
+  /**
+   * The other half of this screen's `paging-exempt` (tm 215, NFR-P5).
+   *
+   * The automation-app request pins a `limit` and sends no cursor, which
+   * `audit:unpaged-lists` reports unless the source says why. The reason given
+   * there is that the list being capped is a compile-time constant rather than
+   * tenant data — so the claim that has to stay true is this one, and a bare
+   * comment cannot hold it. Adding a 101st `productivity` card turns this red
+   * instead of silently truncating the dropdown.
+   */
+  it('asks for the whole productivity section in one page (NFR-P5)', () => {
+    const productivity = APP_CATALOG.filter((entry) => entry.category === 'productivity');
+    expect(productivity.length).toBeGreaterThan(0);
+    expect(productivity.length).toBeLessThanOrEqual(AUTOMATION_APPS_LIMIT);
   });
 });

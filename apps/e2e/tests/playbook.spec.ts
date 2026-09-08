@@ -218,3 +218,105 @@ test.describe('playbook — step authoring', () => {
     await expect(steps.nth(1)).toContainText('Tag the conversation');
   });
 });
+/**
+ * Public KB → the category taxonomy is editable (tm 215 · FR-EK-B.1).
+ *
+ * `PATCH` and `DELETE /kb-categories/{categoryId}` shipped with `routes/kb.ts`
+ * and no client called either: the console could bring a category into being
+ * (from inside the article editor) and list it, and nothing more, so a typo in
+ * the taxonomy of a public knowledge base was permanent. `audit:endpoint-ui`
+ * could not see it while it counted paths rather than (path, method) — the
+ * collection endpoint had a caller and that was taken for the item's answer.
+ *
+ * Driven end to end because both halves of the finding are round trips: the
+ * rename has to reach the server and come back, and the removal has to actually
+ * remove. The category is created and read back through the API so nothing here
+ * depends on what the shared workspace happens to already contain, and the test
+ * removes what it made — through the UI, which is the second half of the point.
+ */
+test.describe('playbook — public KB categories', () => {
+  const NAME = `E2E category ${Date.now().toString().slice(-6)}`;
+  const RENAMED = `${NAME} renamed`;
+
+  let apiCtx: APIRequestContext;
+  let token: string;
+  let categoryId: string | null = null;
+
+  test.beforeAll(async () => {
+    apiCtx = await newApiContext.newContext({
+      extraHTTPHeaders: { 'user-agent': 'nexa-e2e-kb-categories' },
+    });
+    token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
+  });
+
+  test.afterAll(async () => {
+    // Only if the test never got to the removal — the shared workspace keeps
+    // nothing this file invented.
+    if (categoryId) {
+      await apiCtx
+        .delete(`${API_BASE}/kb-categories/${categoryId}`, {
+          headers: { authorization: `Bearer ${token}` },
+        })
+        .catch(() => {});
+    }
+    await apiCtx.dispose();
+  });
+
+  const categories = async (): Promise<{ id: string; name: string }[]> => {
+    const response = await apiCtx.get(`${API_BASE}/kb-categories`, {
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(response.ok(), `list failed: ${response.status()}`).toBe(true);
+    return ((await response.json()) as { items: { id: string; name: string }[] }).items;
+  };
+
+  test('renames a category and removes it from the console', async ({ agentPage }) => {
+    const created = await apiCtx.post(`${API_BASE}/kb-categories`, {
+      headers: { authorization: `Bearer ${token}` },
+      data: { name: NAME },
+    });
+    expect(created.ok(), `create failed: ${created.status()} ${await created.text()}`).toBe(true);
+    categoryId = ((await created.json()) as { id: string }).id;
+
+    await agentPage.goto('/app/playbook');
+    await agentPage.getByRole('tab', { name: 'Public KB' }).click();
+    await agentPage.getByRole('button', { name: 'Manage categories' }).click();
+
+    const field = agentPage.getByLabel(`${NAME} name`);
+    await field.fill(RENAMED);
+    const [renamed] = await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PATCH' && response.url().includes('/kb-categories/'),
+      ),
+      field.press('Enter'),
+    ]);
+    expect(renamed.ok(), `rename failed: ${renamed.status()} ${await renamed.text()}`).toBe(true);
+
+    // Read back from the server, not from the input that was just typed into.
+    await expect
+      .poll(async () => (await categories()).find((c) => c.id === categoryId)?.name)
+      .toBe(RENAMED);
+
+    await agentPage.getByRole('button', { name: `Remove ${RENAMED}` }).click();
+    // Removing a category keeps its articles (FK ON DELETE SET NULL), and the
+    // screen says so before the second click rather than after.
+    await expect(
+      agentPage.getByText('The articles filed under it are kept — they become uncategorized.'),
+    ).toBeVisible();
+
+    const [removed] = await Promise.all([
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'DELETE' && response.url().includes('/kb-categories/'),
+      ),
+      agentPage.getByRole('button', { name: 'Remove for good' }).click(),
+    ]);
+    expect(removed.status(), `remove failed: ${removed.status()}`).toBe(204);
+
+    await expect
+      .poll(async () => (await categories()).some((c) => c.id === categoryId))
+      .toBe(false);
+    categoryId = null;
+  });
+});

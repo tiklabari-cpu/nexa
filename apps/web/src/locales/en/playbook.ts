@@ -494,6 +494,19 @@ export const playbook: Messages = {
   'playbook.kb.loadError':
     'Could not load the knowledge base articles. Check that the API is reachable.',
 
+  // Category management (KbCategoryManager.tsx)
+  'playbook.kbCategories.manage': 'Manage categories',
+  'playbook.kbCategories.hide': 'Hide categories',
+  'playbook.kbCategories.description':
+    'Rename a category, or remove one you no longer file under. New categories are created while writing an article.',
+  'playbook.kbCategories.nameLabel': '{name} name',
+  'playbook.kbCategories.remove': 'Remove',
+  'playbook.kbCategories.removeLabel': 'Remove {name}',
+  'playbook.kbCategories.confirmRemove': 'Remove for good',
+  'playbook.kbCategories.cancel': 'Cancel',
+  'playbook.kbCategories.removeExplainer':
+    'The articles filed under it are kept — they become uncategorized.',
+
   // Article editor (KbArticleEditor.tsx)
   'playbook.kbEditor.newTitle': 'New article',
   'playbook.kbEditor.editTitle': 'Edit article',

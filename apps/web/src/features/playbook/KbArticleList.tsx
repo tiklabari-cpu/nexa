@@ -21,6 +21,7 @@ import { formatDate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import type { KbArticle, KbCategory } from './types.js';
 import { KbArticleEditor } from './KbArticleEditor.js';
+import { KbCategoryManager } from './KbCategoryManager.js';
 import {
   applyKbControls,
   countArticlesByTab,
@@ -115,6 +116,14 @@ export function KbArticleList({ canEdit = false }: { canEdit?: boolean }): React
           </button>
         </div>
       )}
+
+      {/*
+       * Above the list rather than inside the filter block: the filter block is
+       * only rendered once articles exist, and a taxonomy that needs tidying is
+       * most likely to need it on a workspace that has categories and no
+       * articles filed under them yet.
+       */}
+      {canEdit && <KbCategoryManager categories={categoryList} onChanged={invalidate} />}
 
       {articles.isPending || categories.isPending ? (
         <Card>

@@ -9694,11 +9694,11 @@
         "description": "PRD satiri dort sey sayiyor: rated good/bad; iki donem karsilastirma; Ecommerce/Tracked sales; INSIGHTS. Ilk ucu var, dorduncusu yok — apps/web/src ve apps/api/src genelinde 'insight' gecen tek bir dosya/bilesen bulunmuyor.",
         "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1; git akisi §2; handoff bicimi §4. Sinirlar `CLAUDE.md`.\nBu gorev PLAN.md §6D (FAZ 8 — Kalan Gereksinim Borclari, §D149) kaleminin Task Master karsiligidir.\nDIKKAT: PLAN.md ~2,3 MB — BASTAN SONA OKUMA. Hedef satiri `grep -n` ile bul, cevresindeki ~30\nsatiri oku. Kanit metni tablo hucresinde DEGIL, `## K. Kanit Gecmisi` altindaki `#### K<kod>`\nblogundadir (CONVENTIONS §1.2) — ve gecerli olan blogun SON maddesidir, ortadaki `◐` glifleri\ntarihcedir.\nKAYITLI KARAR ARAMASI (§D149un dersi): damgayi degistirmeden once `grep -n \"D1[0-9][0-9] (\" PLAN.md`\nile ilgili kodu ara ve `git log --oneline --since=2026-08-30` ile denetimden SONRA is yapilmis mi bak.\nNUMARALANDIRMA: bu faz **8**dir — `Faz-7` §7Cnindir (tm 175-184). Onek `V8-`, `V7-` KULLANMA.\n\n(a) GEREKCE + KANIT:\nPRD `:592`: \"Reviews / Ratings (rated good/bad; iki donem karsilastirma; Ecommerce/Tracked sales;\nINSIGHTS)\" · KK: \"CSAT donut; gunluk bar; e-ticaret satis izleme\".\n`grep -rln \"insight\" apps/web/src apps/api/src` -> SIFIR eslesme (bu turda olculdu).\n`#### K07.8` (PLAN.md ~8107) denetim maddesi birebir: \"PRD satirinin 'Insights' kalemi kodda yok:\napps/web/src ve apps/api/src genelinde 'insight' gecen tek bir dosya/bilesen[…]\". PLAN satiri 652,\n`Should (v1)`. Diger uc pay VAR: CSAT donut + gunluk bar (`ReviewsTab`), iki donem karsilastirma\n(`withBenchmark` `reviews` grubu), tracked sales (`13.5` ailesi + tm 201.1/201.2).\n\n(b) DOKUNULACAK DOSYALAR:\n- ILK IS: \"Insights\" bu urunde NE DEMEK — PRD satirindan turetilir, §C'ye (Assumptions) yazilir.\n  Denetim metni kesik oldugu icin olcut PRD satiri + KK sutunudur (tm 187'nin `194.2` emsali).\n- `apps/api/src/services/reports/` — yeni SAF turetim modulu (tablo testiyle).\n- `apps/api/src/routes/reports.ts` + `packages/contract/openapi/paths/reports.yaml` — rapor\n  grubuna alan/satir.\n- `apps/api/src/services/reports/report-csv.ts` — CSV export satiri.\n- `apps/web/src/features/reports/ReportsPage.tsx` + `locales/{en,tr}/reports.ts`.\n\n(c) CONTRACT-FIRST SIRA: tanim (§C) -> saf modul + tablo testi -> sozlesme -> backend +\nintegration -> `contract:generate` -> web + unit -> CSV -> e2e.\n\n(d) BILINEN TUZAKLAR:\n- LLM CAGRISI ACILMAZ. \"Insight\" deterministik bir turetim olmali (esik/oran/trend kurallari),\n  yoksa test edilemez ve DoD kapisindan gecmez. Emsal: GL-7'nin spam filtresi karari\n  (\"deterministik kural motoru; LLM yok — test edilebilirlik + yanlis-pozitif denetimi\").\n- Ince ornek tuzagi: az sayida derecelendirmede \"trend\" uydurmak yaniltir — dusuk-baz uyarisi\n  (\"shares may not be reliable\" deseni) ZORUNLU.\n- Rapor grubu eklenirse izin kapisi (`visibleReportGroups` · `GROUP_GATED_TABS`) FAIL-CLOSED\n  kalmali ve `GET /reports/groups` katalogu ile senkron olmali.\n- Yeni OpenAPI yolu eklersen `apps/mobile` parite sayacini yorumla bump et.\n\n(e) KAPSAM SINIRI: CSAT hesabi DEGISMEZ · tracked sales (13.5) DEGISMEZ · benchmark altyapisi\nDEGISMEZ · yeni AI saglayicisi/model ACILMAZ · Reports kenar cubugu yerlesimi tm 223'un isi.\n(f) KAPANIS: DoD kapisi yesil -> commit + push (Conventional Commit; PLAN.md satir damgasi\n`◐ → ✅` + `#### K<kod>` bloguna kanit maddesi + HANDOFF.md girisi AYNI commite girer) ->\nTask Master `done`. Calisma alanini kirli BIRAKMA.",
         "testStrategy": "Tam DoD kapisi exit 0, `contract:generate` sonrasi beklenmeyen diff YOK · `audit:req-coverage` exit 0 ve `FR-MOD-07.8` site sayisi ARTMIS. Kapanis olcusu: `grep -rln \"insight\" apps/web/src apps/api/src` artik SIFIR DEGIL. Birim: saf turetim modulu TABLO testiyle — (1) bilinen girdi -> bilinen insight (deterministik, ayni girdi ayni cikti); (2) ince ornekte dusuk-baz uyarisi doner, trend UYDURMAZ; (3) bos veride patlamaz. Integration: rapor grubu yaniti insight satirini tasiyor + izin kapisi FAIL-CLOSED (scope'suz token grubu GORMEZ) + cross-tenant. CSV: export satiri var. Web unit + e2e (kanit PNG). §C'ye yazilan tanim bu gorevin BELGE kabul kriteridir — tanim yazilmadan gorev kapanmaz.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-09-08T13:32:49.685Z"
+        "updatedAt": "2026-09-08T14:42:45.819Z"
       },
       {
         "id": "227",
@@ -9960,9 +9960,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-08T13:32:49.686Z",
+      "lastModified": "2026-09-08T14:42:45.825Z",
       "taskCount": 246,
-      "completedCount": 225,
+      "completedCount": 226,
       "tags": [
         "master"
       ]

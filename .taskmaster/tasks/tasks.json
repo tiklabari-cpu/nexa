@@ -9646,11 +9646,11 @@
         "description": "PRD 'Resolution rate, AI chats, CSAT, Transferred %' sayiyor; kod ikinci kart olarak 'AI chats resolved' (= cozulen sohbet SAYISI) gosteriyor. Iki metrik PRD'nin sordugu sey degil.",
         "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1; git akisi §2; handoff bicimi §4. Sinirlar `CLAUDE.md`.\nBu gorev PLAN.md §6D (FAZ 8 — Kalan Gereksinim Borclari, §D149) kaleminin Task Master karsiligidir.\nDIKKAT: PLAN.md ~2,3 MB — BASTAN SONA OKUMA. Hedef satiri `grep -n` ile bul, cevresindeki ~30\nsatiri oku. Kanit metni tablo hucresinde DEGIL, `## K. Kanit Gecmisi` altindaki `#### K<kod>`\nblogundadir (CONVENTIONS §1.2) — ve gecerli olan blogun SON maddesidir, ortadaki `◐` glifleri\ntarihcedir.\nKAYITLI KARAR ARAMASI (§D149un dersi): damgayi degistirmeden once `grep -n \"D1[0-9][0-9] (\" PLAN.md`\nile ilgili kodu ara ve `git log --oneline --since=2026-08-30` ile denetimden SONRA is yapilmis mi bak.\nNUMARALANDIRMA: bu faz **8**dir — `Faz-7` §7Cnindir (tm 175-184). Onek `V8-`, `V7-` KULLANMA.\n\n(a) GEREKCE + KANIT:\nPRD `:576`: \"Performance (AI analitigi) — Resolution rate, AI CHATS, CSAT, TRANSFERRED %\" ·\nKK: \"KPI kartlari; DUSUK-BAZ UYARISI; AI OFF IKEN ARSIV AYRIMI\".\nKod `apps/web/src/features/playbook/performance.ts`: `:17` `resolution_rate` · `:19`\n`transfer_rate` · `:52` `key: 'resolution_rate'` · `:65` `key: 'csat'` · `:72` `key: 'transfer_rate'`\nve ikinci kart `report.resolutions` (SAYI) uzerinden \"AI chats resolved\".\n`#### K06.5` (PLAN.md ~6039) denetim maddesi: \"Dort KPI karti PRD'nin saydigi dort metrigi\nkarsilamiyor ... 'AI chats resolved' (= report.resolutions, yani cozulen sohbet SAYISI) ... yani iki[si]\".\nPLAN satiri 633, `Should (v1)`. Ekran: `AiPerformance.tsx` (`PlaybookPage` `view==='performance'`).\n\n(b) DOKUNULACAK DOSYALAR:\n- `apps/web/src/features/playbook/performance.ts` (+ `performance.test.ts`) — saf `performanceKpis`\n  / `isLowBase`.\n- `apps/web/src/features/playbook/AiPerformance.tsx` (+ testi).\n- `apps/api/src/routes/reports.ts` — `/reports/ai-agent` yaniti; alan adi degisiyorsa\n  `packages/contract/openapi/paths/reports.yaml` + `contract:generate`.\n- `apps/mobile` salt-okur Reports yuzeyi AYNI sozlugu okur — parite testini kir.\n- `apps/web/src/locales/{en,tr}/playbook.ts` — kart etiketleri.\n\n(c) CONTRACT-FIRST SIRA: \"AI chats\" metriginin TANIMINA karar ver (PRD satiri + KK; ADR-09\n\"automated\" tanimiyla CELISMEMELI) -> sozlesme (gerekiyorsa) -> backend + integration -> saf\nfonksiyon + tablo testi -> UI + unit -> mobil parite.\n\n(d) BILINEN TUZAKLAR:\n- ADR-09 \"automated\" tanimi KORUNUR; \"AI chats\" onunla ayni sey mi, degil mi — karari\n  `#### K06.5`e YAZ. 07.4 (AI Agent raporu) ve 07.3.2 (Manual/Assisted/Automated) AYNI kaynaktan\n  besleniyor; birini degistirirken otekini kirma (`reports-billing.test.ts` bunu kapiyor).\n- KK'nin iki ek payi ayrica DOGRULANIR: `isLowBase` (dusuk-baz uyarisi) VAR mi ve esigi PRD ile\n  tutarli mi · \"AI off iken arsiv ayrimi\" davranisi VAR mi. Yoksa bu gorevin kapsamindadir.\n- Alan adi degisirse mobil parite testi ve OpenAPI yol sayaci etkilenir; yol EKLENMIYORSA sayac\n  degismez, ama alan degisimi mobil tipleri kirar.\n\n(e) KAPSAM SINIRI: ADR-09 tanimi DEGISMEZ · 07.4/07.3.2 raporlarinin figurleri DEGISMEZ ·\nbenchmark (vs-onceki donem) altyapisi DEGISMEZ · CSAT hesabi DEGISMEZ.\n(f) KAPANIS: DoD kapisi yesil -> commit + push (Conventional Commit; PLAN.md satir damgasi\n`◐ → ✅` + `#### K<kod>` bloguna kanit maddesi + HANDOFF.md girisi AYNI commite girer) ->\nTask Master `done`. Calisma alanini kirli BIRAKMA.",
         "testStrategy": "Tam DoD kapisi exit 0 (sozlesme degistiyse `contract:generate` sonrasi `git status --short packages/contract/src/generated` BOS) · `audit:req-coverage` exit 0 ve `FR-MOD-06.5` site sayisi ARTMIS. Birim: `performance.test.ts` — dort kartin dordu de PRD'nin adlandirdigi metrigi doner (ikinci kart artik ham SAYI degil PRD'nin \"AI chats\" tanimi) · `isLowBase` esigi tablo testiyle sabit · sifir-baz durumunda NaN/Infinity DONMEZ. Integration: `/reports/ai-agent` yaniti yeni sozlugu tasiyor + `reports-billing.test.ts` REGRESYON yesil (07.4 ve 07.3.2 figurleri DEGISMEDI) + cross-tenant. Web unit: `AiPerformance.tsx` dort karti dogru etiketle render ediyor, dusuk-baz uyarisi gorunuyor, \"AI off\" durumunda arsiv ayrimi davranisi testli. `apps/mobile` parite testi yesil.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-09-08T08:42:24.779Z"
+        "updatedAt": "2026-09-08T09:24:44.603Z"
       },
       {
         "id": "223",
@@ -9956,9 +9956,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-08T08:42:24.781Z",
+      "lastModified": "2026-09-08T09:24:44.606Z",
       "taskCount": 246,
-      "completedCount": 221,
+      "completedCount": 222,
       "tags": [
         "master"
       ]

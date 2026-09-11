@@ -825,6 +825,17 @@ model Event {
   @@index([licenseId, createdAt])
   /// Reports filter on event properties; GIN turns that from a scan into a lookup.
   @@index([properties(ops: JsonbPathOps)], type: Gin, map: "idx_events_properties")
+  /// One column here is missing on purpose, and this is the only place the
+  /// schema can say so: `event_sequence BIGINT GENERATED ALWAYS AS
+  /// ((split_part(id, '_', 2))::bigint) STORED`, with
+  /// `events_thread_id_event_sequence_idx` over `(thread_id, event_sequence)`.
+  /// It is the per-thread counter the id already carries, stored so a transcript
+  /// page can be driven from an index under row level security (NFR-P6) — the
+  /// measurement and the alternatives rejected are in migration
+  /// 20260911170000_events_sequence_column. Prisma can express neither a
+  /// generated column nor an index over one, so it is allowed by name in
+  /// `scripts/check-drift.ts` rather than modelled here; nothing reads or writes
+  /// it through the client, only the two raw paging queries.
   @@map("events")
 }
 

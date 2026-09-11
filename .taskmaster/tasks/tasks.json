@@ -9825,13 +9825,13 @@
         "description": "apps/web transcript'i renderRichText ile basiyor, apps/widget ise bubble.textContent = event.text ile. Ajan **kalin** yazinca ziyaretci yildizlarla goruyor. tm 189.5'ten beri K02.3.5'te yazili ama gorevi yoktu; GL-13 (tm 208) karara bagladi.",
         "details": "(a) GEREKCE + KANIT (karar tm 208 · GL-13 · PLAN §D154):\n`apps/web/src/features/inbox/Transcript.tsx:215` ajan mesajini `renderRichText(entry.input.text)`\nile basiyor — tm 189.5'in getirdigi kucuk markdown alt kumesi (`**kalin**` · `*italik*` · `- liste`),\n`apps/web/src/features/inbox/richText.tsx`. Composer ayni alt kumeyi YAZMA tarafinda sunuyor\n(bold/italic/list dugmeleri, `Composer.tsx:213-218`).\n`apps/widget/src/widget.ts:2100` ise ayni metni **`bubble.textContent = event.text`** ile basiyor.\nSonuc: ajan `**onemli**` yazinca musteri `**onemli**` goruyor — yildizlariyla.\n\nDIKKAT — KAYITTAKI SATIR REFERANSI YANLIS. `#### K02.3.5`'te `widget.ts` \"~1539/1549\" diye\ngeciyor; o satir bir **pre-chat form etiketidir** (`const marked = field.required ? label + ' *'\n: label` -> `span.textContent = marked`), markdown ile ilgisi yok. Gercek yer **2100**.\ntm 189.5 bunu \"kapsam disi (bu gorev yalniz apps/web), yeni kalem ACILMADI\" diye not dusmustu;\nGL-13'un 8. tuzagi tam olarak bu sahipsizligi karara baglamayi istedi -> bu gorev odur.\n\n(b) YAPILACAK IS:\n1. `apps/widget`'e ayni alt kumeyi basan bir render (`renderRichText`in widget karsiligi).\n   `packages/`e ORTAKLASTIRMAK cazip ama ZORUNLU DEGIL: `apps/web` React elemani uretiyor,\n   widget DOM dugumu uretmeli — paylasilacak sey **parser**, renderer degil. Once parser'i\n   ayirmayi degerlendir; maliyeti buyurse widget kendi kucuk parser'ini tasiyabilir, ama o\n   zaman IKI YERDE ayni alt kume tanimlanir ve bu bir sapma olarak §D'ye yazilir.\n2. **`innerHTML` KESINLIKLE YASAK** — NFR-S6 widget izolasyonunun acik kabul kriteri\n   (`#### KS6`). `document.createElement` + `textContent` ile dugum kur.\n3. **Musterinin kendi metni ASLA render edilmez.** `Transcript.tsx:287` bu kurali zaten yazili\n   olarak tasiyor (\"A customer's own text is never run through `renderRichText`\"); widget\n   tarafinda ayni ayrim `event`in yonune gore yapilir.\n4. Ayni muameleyi hosted Chat sayfasi (`chat.html`) da almali — ayni `widget.ts` kodundan\n   besleniyor, ayri bir yol acma.\n\n(c) OLCULEBILIR KAPANIS: `apps/widget` birim testi — ajan mesajinda `**kalin**` bold dugumu\nuretiyor, `*italik*`, `- liste`; **musteri mesajinda ayni girdi duz metin kaliyor**; `<img\nsrc=x onerror=...>` gibi bir girdi hicbir kosulda element uretmiyor (XSS negatifi). e2e\n`widget.spec.ts`e bir adim: ajan bicimli bir yanit gonderiyor, ziyaretci tarafinda yildiz\nGORUNMUYOR ve `<strong>` var.\n\n(d) BILINEN TUZAKLAR:\n1. **NFR-P3 bundle butcesi** — widget'in gzip toplami 2026-09-07'de **22.602 B / 51.200 B**\n   (loader 1.635 B / 8.192 B). Parser buyudukce butce daralir; `apps/widget/test/bundle-size.test.ts`\n   kirmiziya doner. Ucuncu parti markdown kutuphanesi EKLEME.\n2. `apps/widget` testleri `apps/web`inkilerden ayri kosar (`@nexa/widget` vitest); `TRANSLATED_FILES`\n   kaydi web'e ozgudur, widget'te karsiligi yok.\n3. e2e widget spec'leri gercek tarayicida iframe surer; `kanit/*.png` churn'u beklenir.\n\n(e) KAPSAM SINIRI: **`02.3.5`'in damgasi bu gorevle DEGISMEZ** — o satirin KK'si composer\nARACLARINI sayar (canned/tag/emoji/attach + zengin metin girisi), musteri tarafindaki RENDER\n`FR-MOD-11.x` widget payidir. Sunucu kontrati degismez (duz metin tasimaya devam), migration yok.\nWidget composer'ina bicimlendirme dugmesi EKLENMEZ — bu gorev yalniz OKUMA tarafidir.",
         "testStrategy": "Birim (`@nexa/widget`): ajan mesajinda `**kalin**`/`*italik*`/`- liste` dogru dugumleri uretiyor; AYNI girdi musteri mesajinda duz metin kaliyor; XSS negatifi (`<img src=x onerror=alert(1)>` ve `<script>`) hicbir kosulda element uretmiyor ve `innerHTML` kod tabaninda hala kullanilmiyor (mevcut NFR-S6 nobetcisi yesil kalir). e2e: `widget.spec.ts`e bir adim — ajan `**kalin**` gonderir, ziyaretci panelinde `strong` gorunur ve yildiz metni gorunmez. Butce: `apps/widget/test/bundle-size.test.ts` yesil (50 KB gzip toplam / 8 KB loader) ve yeni sayi HANDOFF'a yazilir. Tam DoD kapisi (CONVENTIONS §1) exit 0.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [
           "208"
         ],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-09-11T04:24:10.726Z"
+        "updatedAt": "2026-09-11T05:03:03.042Z"
       },
       {
         "id": "236",
@@ -9965,9 +9965,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-11T04:24:10.726Z",
+      "lastModified": "2026-09-11T05:03:03.042Z",
       "taskCount": 246,
-      "completedCount": 230,
+      "completedCount": 231,
       "tags": [
         "master"
       ]

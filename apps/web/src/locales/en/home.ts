@@ -17,6 +17,10 @@ export const home: Messages = {
   'home.page.goToInbox': 'Go to inbox',
   'home.page.loadError': 'The dashboard could not be loaded. Please try again.',
 
+  // Personalized welcome
+  'home.welcome.greeting': 'Welcome back, {name}',
+  'home.welcome.greetingFallback': 'Welcome back',
+
   // Activation checklist
   'home.activation.title': 'Get started',
   'home.activation.allDone': 'Your workspace is fully set up.',
@@ -47,6 +51,16 @@ export const home: Messages = {
   'home.live.ongoing_chats.hint': 'Open conversations',
   'home.live.agents_online.label': 'Agents online',
   'home.live.agents_online.hint': 'Accepting chats',
+
+  // Performance overview
+  'home.performance.title': 'Performance overview',
+  'home.performance.description': 'The last 7 days, compared with the 7 before',
+  'home.performance.totalChats': 'Total chats',
+  'home.performance.satisfaction': 'Satisfaction',
+  'home.performance.responseTime': 'Response time',
+  'home.performance.efficiency': 'Efficiency',
+  'home.performance.efficiencyHint': 'Chats per hour, per agent',
+  'home.performance.secondsVsLastWeek': '{seconds}s vs last week',
 
   // Weekly performance
   'home.weekly.title': 'This week',

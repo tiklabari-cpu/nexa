@@ -35,7 +35,7 @@ home:
           application/json:
             schema:
               type: object
-              required: [activation, live, weekly]
+              required: [activation, live, weekly, performance]
               properties:
                 activation:
                   type: object
@@ -115,6 +115,56 @@ home:
                         chats: { type: integer }
                         resolved: { type: integer }
                         satisfaction_score:
+                          type: number
+                          nullable: true
+                performance:
+                  type: object
+                  description: |
+                    The Performance overview quartet (Total chats/Satisfaction/Response
+                    time/Efficiency), read from the same figures `GET /reports/overview`
+                    serves for the identical 7-day window — never a second query.
+                  required:
+                    [
+                      range,
+                      total_chats,
+                      satisfaction_score,
+                      response_time_seconds,
+                      efficiency_chats_per_agent_hour,
+                      previous,
+                    ]
+                  properties:
+                    range:
+                      type: object
+                      required: [from, to]
+                      properties:
+                        from: { type: string, format: date-time }
+                        to: { type: string, format: date-time }
+                    total_chats:
+                      type: integer
+                      description: Conversations started in the window (Reports overview's `totals.chats`).
+                    satisfaction_score:
+                      type: number
+                      nullable: true
+                      description: Good ÷ rated, or null when nobody rated.
+                    response_time_seconds:
+                      type: number
+                      nullable: true
+                      description: Average first-response time, or null when nothing has been answered yet.
+                    efficiency_chats_per_agent_hour:
+                      type: number
+                      nullable: true
+                      description: >-
+                        Chats per hour, per distinct agent assigned one in the window. Null
+                        (never NaN) when the window is empty or nobody handled a chat.
+                    previous:
+                      type: object
+                      required: [total_chats, satisfaction_score, response_time_seconds]
+                      properties:
+                        total_chats: { type: integer }
+                        satisfaction_score:
+                          type: number
+                          nullable: true
+                        response_time_seconds:
                           type: number
                           nullable: true
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }

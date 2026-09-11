@@ -14,6 +14,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type { HomeDashboard } from '@nexa/types';
+import { useAuth } from '../../lib/auth-store.js';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
@@ -40,6 +41,18 @@ const DASHBOARD: HomeDashboard = {
     total: 5,
   },
   live: { visitors_online: 7, ongoing_chats: 3, agents_online: 2 },
+  performance: {
+    range: { from: '2026-07-19T00:00:00.000Z', to: '2026-07-26T00:00:00.000Z' },
+    total_chats: 40,
+    satisfaction_score: 0.75,
+    response_time_seconds: 62,
+    efficiency_chats_per_agent_hour: 9.6,
+    previous: {
+      total_chats: 30,
+      satisfaction_score: 0.6,
+      response_time_seconds: 60,
+    },
+  },
   weekly: {
     range: { from: '2026-07-19T00:00:00.000Z', to: '2026-07-26T00:00:00.000Z' },
     chats: 40,
@@ -68,6 +81,54 @@ function renderHome(): void {
 
 beforeEach(() => {
   api.get.mockReset();
+  useAuth.setState({ agent: null });
+});
+
+describe('HomePage welcome (FR-MOD-13.1)', () => {
+  it('greets the signed-in agent by name', async () => {
+    useAuth.setState({
+      agent: {
+        account_id: 'a-1',
+        email: 'dana@acme.localhost',
+        name: 'Dana Okonkwo',
+        role: 'owner',
+        organization_id: 'o-1',
+        license_id: '1000003',
+        scopes: [],
+        routing_status: 'accepting_chats',
+      },
+    });
+    api.get.mockResolvedValue(DASHBOARD);
+    renderHome();
+
+    expect(await screen.findByText('Welcome back, Dana Okonkwo')).toBeInTheDocument();
+  });
+
+  it('falls back to a name-free greeting rather than crashing when the session has no name', async () => {
+    useAuth.setState({
+      agent: {
+        account_id: 'a-1',
+        email: 'dana@acme.localhost',
+        name: null,
+        role: 'owner',
+        organization_id: 'o-1',
+        license_id: '1000003',
+        scopes: [],
+        routing_status: 'accepting_chats',
+      },
+    });
+    api.get.mockResolvedValue(DASHBOARD);
+    renderHome();
+
+    expect(await screen.findByText('Welcome back')).toBeInTheDocument();
+  });
+
+  it('falls back to a name-free greeting before the session is known at all', async () => {
+    api.get.mockResolvedValue(DASHBOARD);
+    renderHome();
+
+    expect(await screen.findByText('Welcome back')).toBeInTheDocument();
+  });
 });
 
 describe('HomePage', () => {
@@ -116,9 +177,69 @@ describe('HomePage', () => {
     const resolved = (await screen.findByText('Resolved')).closest('div');
     expect(within(resolved as HTMLElement).getByText('No change vs last week')).toBeInTheDocument();
 
+    // "Satisfaction" also labels a Performance overview card (FR-MOD-13.1), so
+    // this scopes to the "This week" section before looking for its own.
+    const weeklySection = (await screen.findByRole('heading', { name: 'This week' })).closest(
+      'section',
+    );
+    const csat = within(weeklySection as HTMLElement)
+      .getByText('Satisfaction')
+      .closest('div');
     // Satisfaction 75% vs 60% → up 15 points.
-    const csat = (await screen.findByText('Satisfaction')).closest('div');
     expect(within(csat as HTMLElement).getByText(/↑ 15 pts vs last week/)).toBeInTheDocument();
+  });
+
+  it('shows the Performance overview quartet with week-over-week deltas', async () => {
+    api.get.mockResolvedValue(DASHBOARD);
+    renderHome();
+
+    const section = (await screen.findByRole('heading', { name: 'Performance overview' })).closest(
+      'section',
+    );
+    const within_ = within(section as HTMLElement);
+
+    const totalChats = within_.getByText('Total chats').closest('div');
+    expect(within(totalChats as HTMLElement).getByText('40')).toBeInTheDocument();
+    // 40 vs 30 last week → up 10.
+    expect(within(totalChats as HTMLElement).getByText(/↑ 10 vs last week/)).toBeInTheDocument();
+
+    const satisfaction = within_.getByText('Satisfaction').closest('div');
+    expect(within(satisfaction as HTMLElement).getByText('75%')).toBeInTheDocument();
+    expect(
+      within(satisfaction as HTMLElement).getByText(/↑ 15 pts vs last week/),
+    ).toBeInTheDocument();
+
+    const responseTime = within_.getByText('Response time').closest('div');
+    // 62s vs 60s previous → up 2s.
+    expect(within(responseTime as HTMLElement).getByText('1m 2s')).toBeInTheDocument();
+    expect(within(responseTime as HTMLElement).getByText(/↑ 2s vs last week/)).toBeInTheDocument();
+
+    const efficiency = within_.getByText('Efficiency').closest('div');
+    expect(within(efficiency as HTMLElement).getByText('9.6')).toBeInTheDocument();
+  });
+
+  it('shows a placeholder, not NaN, when a zero-base performance figure is unknown', async () => {
+    api.get.mockResolvedValue({
+      ...DASHBOARD,
+      performance: {
+        range: DASHBOARD.performance.range,
+        total_chats: 0,
+        satisfaction_score: null,
+        response_time_seconds: null,
+        efficiency_chats_per_agent_hour: null,
+        previous: { total_chats: 0, satisfaction_score: null, response_time_seconds: null },
+      },
+    } satisfies HomeDashboard);
+    renderHome();
+
+    const section = (await screen.findByRole('heading', { name: 'Performance overview' })).closest(
+      'section',
+    );
+    const within_ = within(section as HTMLElement);
+
+    expect(within_.getAllByText('—').length).toBeGreaterThanOrEqual(3);
+    expect(within_.queryByText(/NaN/)).not.toBeInTheDocument();
+    expect(within_.queryByText(/Infinity/)).not.toBeInTheDocument();
   });
 
   it('shows an honest panel when the caller may not see the dashboard', async () => {

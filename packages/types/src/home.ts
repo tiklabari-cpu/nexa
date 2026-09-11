@@ -94,8 +94,33 @@ export interface HomeWeeklyPerformance extends HomeWeeklyWindow {
   previous: HomeWeeklyWindow & { satisfaction_score: number | null };
 }
 
+/** The three figures a week-over-week comparison can show for Performance overview. */
+export interface HomePerformanceComparable {
+  total_chats: number;
+  satisfaction_score: number | null;
+  response_time_seconds: number | null;
+}
+
+/**
+ * The Performance overview quartet (FR-MOD-13.1's "Total chats/Satisfaction/
+ * Response time/Efficiency"), read from the same figures `GET /reports/overview`
+ * serves — no second query for any of them.
+ *
+ * `efficiency_chats_per_agent_hour` carries no `previous` comparison: the
+ * distinct-agent breakdown it needs only exists for the requested window (see
+ * `by_agent` on the Overview report), not for the benchmark window, and getting
+ * one for the benchmark would mean a query this screen does not otherwise need.
+ */
+export interface HomePerformanceOverview extends HomePerformanceComparable {
+  range: { from: string; to: string };
+  /** Chats per hour, per agent who handled one this window. Null, never NaN, when either is zero. */
+  efficiency_chats_per_agent_hour: number | null;
+  previous: HomePerformanceComparable;
+}
+
 export interface HomeDashboard {
   activation: ActivationChecklist;
   live: HomeLiveCounts;
   weekly: HomeWeeklyPerformance;
+  performance: HomePerformanceOverview;
 }

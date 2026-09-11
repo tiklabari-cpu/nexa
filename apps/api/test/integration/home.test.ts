@@ -65,7 +65,12 @@ describe('home dashboard', () => {
   async function seedChat(
     t: TenantFixture,
     customerId: string,
-    opts: { active?: boolean; createdAt?: Date } = {},
+    opts: {
+      active?: boolean;
+      createdAt?: Date;
+      assigneeId?: string;
+      firstResponseAt?: Date;
+    } = {},
   ): Promise<string> {
     const active = opts.active ?? true;
     const createdAt = opts.createdAt ?? minutesAgo(2);
@@ -80,6 +85,8 @@ describe('home dashboard', () => {
         licenseId: t.licenseId,
         active,
         createdAt,
+        assigneeId: opts.assigneeId,
+        firstResponseAt: opts.firstResponseAt,
         // The DB requires a closed thread to carry a closedAt (an active one must
         // not). The count only cares that it is inactive; the timestamp just
         // satisfies threads_closed_consistency_check.
@@ -400,6 +407,90 @@ describe('home dashboard', () => {
       const { body } = await getHome();
       expect(body.weekly.satisfaction).toEqual({ good: 0, bad: 0, responses: 0, score: null });
       expect(body.weekly.previous.satisfaction_score).toBeNull();
+    });
+  });
+
+  // --- Performance overview (FR-MOD-13.1) -------------------------------------
+
+  describe('performance overview', () => {
+    it('reads total chats, satisfaction and response time off the same figures Reports overview computes', async () => {
+      const person = await seedCustomer(fx.a, 'Regular');
+
+      // This week: two answered chats — first-response times 60s and 120s (avg 90s) —
+      // plus one rated-but-unassigned chat, so total_chats = 3.
+      await seedChat(fx.a, person, {
+        active: false,
+        createdAt: daysAgo(2),
+        assigneeId: fx.a.agentAccountId,
+        firstResponseAt: new Date(daysAgo(2).getTime() + 60_000),
+      });
+      await seedChat(fx.a, person, {
+        active: false,
+        createdAt: daysAgo(1),
+        assigneeId: fx.a.agentAccountId,
+        firstResponseAt: new Date(daysAgo(1).getTime() + 120_000),
+      });
+      const rated = await seedChat(fx.a, person, { active: false, createdAt: daysAgo(1) });
+      await seedRating(fx.a, rated, 'good', daysAgo(1));
+      await seedRating(fx.a, rated, 'bad', daysAgo(1));
+
+      // Last week: two chats, one good rating → previous satisfaction 1, previous total 2.
+      await seedChat(fx.a, person, { active: false, createdAt: daysAgo(9) });
+      const ratedLastWeek = await seedChat(fx.a, person, { active: false, createdAt: daysAgo(9) });
+      await seedRating(fx.a, ratedLastWeek, 'good', daysAgo(9));
+
+      const { body } = await getHome();
+      expect(body.performance.total_chats).toBe(3);
+      expect(body.performance.satisfaction_score).toBe(0.5);
+      expect(body.performance.response_time_seconds).toBe(90);
+      expect(body.performance.previous.total_chats).toBe(2);
+      expect(body.performance.previous.satisfaction_score).toBe(1);
+      // Same created-in-window basis as `weekly`, so the two never disagree.
+      expect(body.performance.total_chats).toBe(body.weekly.chats);
+      expect(body.performance.satisfaction_score).toBe(body.weekly.satisfaction.score);
+    });
+
+    it('computes efficiency as chats per hour per agent who handled one, with no NaN/Infinity on an empty window', async () => {
+      const person = await seedCustomer(fx.a, 'Regular');
+      // 20 chats this week, every one assigned to the same single agent:
+      // 20 / 168h / 1 agent ≈ 0.119, rounded to one decimal → 0.1.
+      for (let i = 0; i < 20; i += 1) {
+        await seedChat(fx.a, person, {
+          active: false,
+          createdAt: daysAgo(1),
+          assigneeId: fx.a.agentAccountId,
+        });
+      }
+
+      const busy = await getHome();
+      expect(busy.body.performance.efficiency_chats_per_agent_hour).toBe(0.1);
+
+      // A second tenant, seeded fresh by `beforeEach`, has done nothing this
+      // week — zero chats, nobody assigned — so the figure is null, not NaN.
+      const tokenB = await grantToken(owner, {
+        licenseId: fx.b.licenseId,
+        organizationId: fx.b.organizationId,
+        ownerId: fx.b.ownerAccountId,
+        scopes: ['reports_read'],
+      });
+      const idle = await getHome(tokenB);
+      expect(idle.body.performance.efficiency_chats_per_agent_hour).toBeNull();
+      expect(idle.body.performance.total_chats).toBe(0);
+      expect(idle.body.performance.satisfaction_score).toBeNull();
+      expect(idle.body.performance.response_time_seconds).toBeNull();
+    });
+
+    it("never counts another tenant's chats in the performance figures", async () => {
+      const theirs = await seedCustomer(fx.b, 'Theirs');
+      await seedChat(fx.b, theirs, {
+        active: false,
+        createdAt: daysAgo(1),
+        assigneeId: fx.b.agentAccountId,
+      });
+
+      const { body } = await getHome();
+      expect(body.performance.total_chats).toBe(0);
+      expect(body.performance.efficiency_chats_per_agent_hour).toBeNull();
     });
   });
 });

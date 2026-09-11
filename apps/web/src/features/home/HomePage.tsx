@@ -24,15 +24,16 @@ import {
   Section,
 } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
-import { useApiClient } from '../../lib/auth-store.js';
+import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
-import { formatCount, formatRate } from '../../lib/format.js';
+import { formatCount, formatDuration, formatRate } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import {
   ACTIVATION_STEP_ROUTE,
   activationSummary,
   countDelta,
   liveCards,
+  numberDelta,
   scoreDelta,
   type DeltaDirection,
 } from './dashboard.js';
@@ -40,6 +41,7 @@ import {
 export function HomePage(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
+  const agentName = useAuth((s) => s.agent?.name);
   const query = useQuery({
     queryKey: ['home'],
     queryFn: () => api.get<HomeDashboard>('/home'),
@@ -47,6 +49,7 @@ export function HomePage(): ReactElement {
 
   return (
     <Page title={t('home.page.title')} description={t('home.page.description')}>
+      <Welcome name={agentName ?? null} t={t} />
       {query.isPending ? (
         <KpiGrid>
           <CardSkeleton />
@@ -73,11 +76,39 @@ export function HomePage(): ReactElement {
       ) : (
         <>
           <ActivationChecklist activation={query.data.activation} t={t} />
+          <PerformanceOverview performance={query.data.performance} t={t} />
           <LiveNow live={query.data.live} t={t} />
           <WeeklyPerformance weekly={query.data.weekly} t={t} />
         </>
       )}
     </Page>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Personalized welcome
+// ---------------------------------------------------------------------------
+
+/**
+ * The welcome line (FR-MOD-13.1's "kişiselleştirilmiş karşılama"). Deliberately
+ * in the body, not the page `title`/`description` above — those sit in the
+ * fixed top bar every module shares (Reports, Team, Billing…), and changing
+ * that shared header's shape for one screen was not worth it when the body
+ * already scrolls into view first. The name never reaches `document.title`
+ * either way (that is owned by the unread-count badge, `useNotifications.ts`),
+ * so this choice is about layout, not about keeping data out of browser
+ * history.
+ *
+ * Renders a name-free fallback rather than nothing when the session has none
+ * (a brand-new account, or a name left blank) — a missing personalization is
+ * not a reason to show no greeting at all.
+ */
+function Welcome({ name, t }: { name: string | null; t: TFunction }): ReactElement {
+  const trimmed = name?.trim();
+  return (
+    <p className="text-sm font-medium text-content">
+      {trimmed ? t('home.welcome.greeting', { name: trimmed }) : t('home.welcome.greetingFallback')}
+    </p>
   );
 }
 
@@ -164,6 +195,88 @@ function ActivationChecklist({
           })}
         </ul>
       </Card>
+    </Section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Performance overview
+// ---------------------------------------------------------------------------
+
+/**
+ * The Performance overview quartet (FR-MOD-13.1): Total chats, Satisfaction,
+ * Response time and Efficiency — every figure read off the same
+ * `GET /reports/overview` computation the Reports tab uses (`home-service.ts`),
+ * never a client-side second source. Efficiency shows no week-over-week delta;
+ * see the field's own doc comment in `@nexa/types` for why.
+ */
+function PerformanceOverview({
+  performance,
+  t,
+}: {
+  performance: HomeDashboard['performance'];
+  t: TFunction;
+}): ReactElement {
+  const chats = countDelta(performance.total_chats, performance.previous.total_chats);
+  const satisfaction = scoreDelta(
+    performance.satisfaction_score,
+    performance.previous.satisfaction_score,
+  );
+  const responseTime = numberDelta(
+    performance.response_time_seconds,
+    performance.previous.response_time_seconds,
+  );
+
+  return (
+    <Section title={t('home.performance.title')} description={t('home.performance.description')}>
+      <KpiGrid>
+        <Kpi
+          label={t('home.performance.totalChats')}
+          value={formatCount(performance.total_chats)}
+          delta={
+            <DeltaNote
+              direction={chats.direction}
+              text={t('home.weekly.vsLastWeek', {
+                count: formatCount(Math.abs(chats.change)) ?? 0,
+              })}
+              t={t}
+            />
+          }
+        />
+        <Kpi
+          label={t('home.performance.satisfaction')}
+          value={formatRate(performance.satisfaction_score)}
+          delta={
+            satisfaction ? (
+              <DeltaNote
+                direction={satisfaction.direction}
+                text={t('home.weekly.ptsVsLastWeek', { points: Math.abs(satisfaction.points) })}
+                t={t}
+              />
+            ) : undefined
+          }
+        />
+        <Kpi
+          label={t('home.performance.responseTime')}
+          value={formatDuration(performance.response_time_seconds)}
+          delta={
+            responseTime ? (
+              <DeltaNote
+                direction={responseTime.direction}
+                text={t('home.performance.secondsVsLastWeek', {
+                  seconds: Math.abs(responseTime.change),
+                })}
+                t={t}
+              />
+            ) : undefined
+          }
+        />
+        <Kpi
+          label={t('home.performance.efficiency')}
+          value={formatCount(performance.efficiency_chats_per_agent_hour)}
+          hint={t('home.performance.efficiencyHint')}
+        />
+      </KpiGrid>
     </Section>
   );
 }

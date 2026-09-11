@@ -10,6 +10,10 @@ export const home: Messages = {
   'home.page.goToInbox': 'Gelen kutusuna git',
   'home.page.loadError': 'Gösterge paneli yüklenemedi. Lütfen tekrar deneyin.',
 
+  // Kişiselleştirilmiş karşılama
+  'home.welcome.greeting': 'Tekrar hoş geldin, {name}',
+  'home.welcome.greetingFallback': 'Tekrar hoş geldin',
+
   // Activation checklist
   'home.activation.title': 'Başlarken',
   'home.activation.allDone': 'Çalışma alanınız tamamen kuruldu.',
@@ -42,6 +46,16 @@ export const home: Messages = {
   'home.live.ongoing_chats.hint': 'Açık sohbetler',
   'home.live.agents_online.label': 'Çevrimiçi temsilci',
   'home.live.agents_online.hint': 'Sohbet kabul ediyor',
+
+  // Performance overview
+  'home.performance.title': 'Performans genel bakış',
+  'home.performance.description': 'Son 7 gün, önceki 7 günle karşılaştırmalı',
+  'home.performance.totalChats': 'Toplam sohbet',
+  'home.performance.satisfaction': 'Memnuniyet',
+  'home.performance.responseTime': 'Yanıt süresi',
+  'home.performance.efficiency': 'Verimlilik',
+  'home.performance.efficiencyHint': 'Saat başına, temsilci başına sohbet',
+  'home.performance.secondsVsLastWeek': 'geçen haftaya göre {seconds}sn',
 
   // Weekly performance
   'home.weekly.title': 'Bu hafta',

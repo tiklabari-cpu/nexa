@@ -32,6 +32,7 @@ import {
   orderActivationSteps,
 } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { buildOverviewReport } from '../../routes/reports.js';
 
 /** How recent a visit has to be for the visitor to count as "on the site now". */
 const LIVE_WINDOW_MINUTES = 30;
@@ -40,6 +41,30 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 /** Round to three decimals — the precision a satisfaction KPI ever shows. */
 function round3(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+/** Round to one decimal — the precision the Efficiency card shows (PRD example: 56.4). */
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/**
+ * The slice of {@link buildOverviewReport}'s response this screen reads. That
+ * function returns `Record<string, unknown>` because its callers each want a
+ * different handful of fields (Copilot's BI answers want one metric; this wants
+ * four) — this interface is Home's own view of the shape, not a claim about the
+ * whole report.
+ */
+interface OverviewReportSlice {
+  totals: { chats: number };
+  satisfaction: { score: number | null };
+  response_times: { avg_first_response_seconds: number | null };
+  by_agent: unknown[];
+  previous_period: {
+    chats: number;
+    satisfaction_score: number | null;
+    avg_first_response_seconds: number | null;
+  };
 }
 
 interface WeeklyCounts {
@@ -56,7 +81,8 @@ export class HomeService {
     const activation = await this.#activation(tx, tenant.licenseId);
     const live = await this.#live(tx, tenant, now);
     const weekly = await this.#weekly(tx, tenant, now);
-    return { activation, live, weekly };
+    const performance = await this.#performance(tx, tenant, now);
+    return { activation, live, weekly, performance };
   }
 
   /**
@@ -195,5 +221,60 @@ export class HomeService {
       where: { licenseId, value: 'bad', createdAt: { gte: from, lte: to } },
     });
     return { chats, resolved, good, bad };
+  }
+
+  /**
+   * The Performance overview quartet (FR-MOD-13.1): Total chats, Satisfaction,
+   * Response time and Efficiency, for the same last-7-days window `#weekly`
+   * uses. The first three are read straight off {@link buildOverviewReport} —
+   * the exact function `GET /reports/overview` serves — rather than a second
+   * set of queries, so Home can never quote a different chats/satisfaction/
+   * response-time figure than the report a click away.
+   *
+   * "Updated every Monday" (the PRD's observed LiveChat wording) is not
+   * reproduced: these figures are computed fresh on every read, same as the
+   * rest of this screen, and there is no weekly batch job behind them — stating
+   * a freshness this repo does not implement would be a false claim.
+   */
+  async #performance(
+    tx: TenantClient,
+    tenant: TenantContext,
+    now: Date,
+  ): Promise<HomeDashboard['performance']> {
+    const to = now;
+    const from = new Date(now.getTime() - WEEK_MS);
+    const windowHours = (to.getTime() - from.getTime()) / 3_600_000;
+
+    const overview = (await buildOverviewReport(
+      tx,
+      tenant.licenseId,
+      from,
+      to,
+    )) as unknown as OverviewReportSlice;
+
+    const totalChats = overview.totals.chats;
+    const agentsHandlingChats = overview.by_agent.length;
+    // Chats per hour, per agent who actually handled one this window. Null
+    // (never NaN/Infinity) when the window is empty or nobody handled a chat —
+    // no previous-period figure, because that would need the same by-agent
+    // breakdown for the benchmark window, which `buildOverviewReport`'s
+    // `previous_period` block does not carry (see the type's own comment).
+    const efficiency =
+      windowHours > 0 && agentsHandlingChats > 0
+        ? round1(totalChats / windowHours / agentsHandlingChats)
+        : null;
+
+    return {
+      range: { from: from.toISOString(), to: to.toISOString() },
+      total_chats: totalChats,
+      satisfaction_score: overview.satisfaction.score,
+      response_time_seconds: overview.response_times.avg_first_response_seconds,
+      efficiency_chats_per_agent_hour: efficiency,
+      previous: {
+        total_chats: overview.previous_period.chats,
+        satisfaction_score: overview.previous_period.satisfaction_score,
+        response_time_seconds: overview.previous_period.avg_first_response_seconds,
+      },
+    };
   }
 }

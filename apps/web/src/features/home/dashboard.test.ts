@@ -13,6 +13,7 @@ import {
   activationSummary,
   countDelta,
   liveCards,
+  numberDelta,
   scoreDelta,
 } from './dashboard.js';
 
@@ -80,5 +81,19 @@ describe('scoreDelta', () => {
     expect(scoreDelta(null, 0.5)).toBeNull();
     expect(scoreDelta(0.5, null)).toBeNull();
     expect(scoreDelta(null, null)).toBeNull();
+  });
+});
+
+describe('numberDelta', () => {
+  it('signs the change and names the direction, like countDelta', () => {
+    expect(numberDelta(90, 60)).toEqual({ direction: 'up', change: 30 });
+    expect(numberDelta(60, 90)).toEqual({ direction: 'down', change: -30 });
+    expect(numberDelta(60, 60)).toEqual({ direction: 'flat', change: 0 });
+  });
+
+  it('is null when either side is unknown — a response time nobody has yet', () => {
+    expect(numberDelta(null, 60)).toBeNull();
+    expect(numberDelta(60, null)).toBeNull();
+    expect(numberDelta(null, null)).toBeNull();
   });
 });

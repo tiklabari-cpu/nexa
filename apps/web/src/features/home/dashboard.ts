@@ -87,3 +87,15 @@ export function scoreDelta(current: number | null, previous: number | null): Sco
   const points = Math.round((current - previous) * 100);
   return { direction: points > 0 ? 'up' : points < 0 ? 'down' : 'flat', points };
 }
+
+/**
+ * The null-safe twin of {@link countDelta}, for figures that can be genuinely
+ * unknown rather than absent-as-zero (Performance overview's response time,
+ * unset until something has been answered). Null when either side is unknown —
+ * a delta against "unknown" is no delta, the same rule {@link scoreDelta} follows.
+ */
+export function numberDelta(current: number | null, previous: number | null): CountDelta | null {
+  if (current == null || previous == null) return null;
+  const change = current - previous;
+  return { direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat', change };
+}

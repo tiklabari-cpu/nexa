@@ -20262,6 +20262,32 @@ export interface operations {
                 satisfaction_score: number | null;
               };
             };
+            /**
+             * @description The Performance overview quartet (Total chats/Satisfaction/Response
+             *     time/Efficiency), read from the same figures `GET /reports/overview`
+             *     serves for the identical 7-day window — never a second query.
+             */
+            performance: {
+              range: {
+                /** Format: date-time */
+                from: string;
+                /** Format: date-time */
+                to: string;
+              };
+              /** @description Conversations started in the window (Reports overview's `totals.chats`). */
+              total_chats: number;
+              /** @description Good ÷ rated, or null when nobody rated. */
+              satisfaction_score: number | null;
+              /** @description Average first-response time, or null when nothing has been answered yet. */
+              response_time_seconds: number | null;
+              /** @description Chats per hour, per distinct agent assigned one in the window. Null (never NaN) when the window is empty or nobody handled a chat. */
+              efficiency_chats_per_agent_hour: number | null;
+              previous: {
+                total_chats: number;
+                satisfaction_score: number | null;
+                response_time_seconds: number | null;
+              };
+            };
           };
         };
       };

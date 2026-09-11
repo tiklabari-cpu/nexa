@@ -354,6 +354,31 @@ export const inbox: Messages = {
   'inbox.ticketGrid.error.title': 'Ticket views unavailable',
   'inbox.ticketGrid.visitorFallback': 'Visitor',
   'inbox.ticketGrid.assigneeUnassigned': 'Unassigned',
+  'inbox.ticketGrid.selectAll': 'Select every loaded ticket (up to {max})',
+  'inbox.ticketGrid.selectRow': 'Select ticket: {subject}',
+
+  // Bulk actions over the grid's selection (FR-13-EK.3 · FR-MOD-02.7.1). The
+  // result line prints both numbers because the endpoint answers 200 for a
+  // partial outcome too — "done" over a selection that half failed is the one
+  // sentence this bar must never say.
+  'inbox.ticketBulk.ariaLabel': 'Bulk actions',
+  'inbox.ticketBulk.selected.one': '{count} ticket selected',
+  'inbox.ticketBulk.selected.other': '{count} tickets selected',
+  'inbox.ticketBulk.actionLabel': 'Action',
+  'inbox.ticketBulk.choose': 'Choose an action…',
+  'inbox.ticketBulk.apply': 'Apply',
+  'inbox.ticketBulk.clear': 'Clear',
+  'inbox.ticketBulk.ceiling': 'One action covers at most {max} tickets.',
+  'inbox.ticketBulk.group.status': 'Set status',
+  'inbox.ticketBulk.group.priority': 'Set priority',
+  'inbox.ticketBulk.group.assignee': 'Assign',
+  'inbox.ticketBulk.unassign': 'Nobody',
+  'inbox.ticketBulk.assignTo': '{name}',
+  'inbox.ticketBulk.result': '{updated} updated, {failed} skipped',
+  // No plural forms: the reason is about the count, not about a counted noun,
+  // so both languages read the same at one and at many.
+  'inbox.ticketBulk.reason.notFound': '{count} no longer in this view',
+  'inbox.ticketBulk.reason.merged': '{count} merged into another ticket',
 
   // Ticket status + priority — shared display words for the two raw enums
   // (TicketPane.tsx and TicketGrid.tsx both render them).

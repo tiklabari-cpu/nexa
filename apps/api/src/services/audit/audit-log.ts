@@ -286,6 +286,14 @@ export const AUDIT_ACTIONS = [
   // tickets, so they are recorded as much for the audit trail as for support.
   'ticket.status_changed',
   'ticket.priority_changed',
+  // Who a ticket belongs to now (FR-MOD-02.7.1). Recorded alongside the other
+  // two because an auditor asking "what happened to this ticket" means all
+  // three, and because bulk actions made the gap legible: reassigning fifty
+  // tickets at once is exactly the kind of sweep a trail exists to show, and it
+  // would have left no trace at all. The single `PATCH` writes the same entry —
+  // an audit trail whose completeness depends on which button an agent pressed
+  // is worse than one that records nothing.
+  'ticket.assigned',
   'ticket.merged',
   'ticket.unmerged',
   'ticket.follower_added',

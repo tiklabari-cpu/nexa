@@ -850,7 +850,13 @@ describe('module parity matrix — what is still owed', () => {
       // purpose, so the matrix keeps describing what the app really calls;
       // recorded as owed work in PLAN §K02.3.7 rather than claimed here.
       // Nothing here re-scopes.
-      contractEndpoints: 210,
+      // 210 -> 211 with `/tickets/bulk` (V8-BULK-ACTIONS, tm 237) — one change
+      // applied to a selection of tickets. The Tickets grid it belongs to is a
+      // desk surface: this app has no ticket list and no multi-select gesture
+      // to build a selection with, so this is a boundary rather than a gap —
+      // the same reason `/tickets` itself has never been in `Inbox.endpoints`.
+      // Nothing here re-scopes.
+      contractEndpoints: 211,
       scopeBoundaries: 1,
     });
   });

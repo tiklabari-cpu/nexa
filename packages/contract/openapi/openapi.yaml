@@ -234,6 +234,8 @@ paths:
     $ref: "./paths/customers.yaml#/customer"
   /tickets:
     $ref: "./paths/tickets.yaml#/tickets"
+  /tickets/bulk:
+    $ref: "./paths/tickets.yaml#/ticketsBulk"
   /tickets/{ticketId}:
     $ref: "./paths/tickets.yaml#/ticket"
   /tickets/{ticketId}/merge:
@@ -3849,6 +3851,40 @@ components:
               type: array
               description: Custom fields defined for tickets, with this ticket's values (FR-MOD-08.7.6).
               items: { $ref: "#/components/schemas/CustomFieldValue" }
+
+    TicketBulkRowResult:
+      type: object
+      description: |
+        One selected ticket's verdict, in request order. `reason` is null when
+        the ticket changed and names the refusal otherwise — it is a closed
+        vocabulary so a client can react to it rather than parse a sentence.
+      required: [ticket_id, status, reason]
+      properties:
+        ticket_id: { type: string, maxLength: 12 }
+        status:
+          type: string
+          enum: [updated, skipped]
+        reason:
+          type: string
+          nullable: true
+          enum: [not_found, merged, null]
+          description: |
+            `not_found` covers another workspace's ticket, one outside the
+            caller's teams and one that never existed alike — telling them
+            apart would confirm an id exists (NFR-S5). `merged` is a ticket
+            folded under a primary, which `PATCH` refuses for the same reason.
+
+    TicketBulkResult:
+      type: object
+      description: The report for one bulk action over the Tickets grid (FR-MOD-02.7.1).
+      required: [updated, failed, results]
+      properties:
+        updated: { type: integer, description: Tickets actually written. }
+        failed: { type: integer }
+        results:
+          type: array
+          description: One entry per requested id, in request order.
+          items: { $ref: "#/components/schemas/TicketBulkRowResult" }
 
     CustomerDetail:
       allOf:

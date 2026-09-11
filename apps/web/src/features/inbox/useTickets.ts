@@ -91,6 +91,49 @@ export function useUpdateTicket(ticketId: string | null) {
   });
 }
 
+/** One selected ticket's verdict, straight off `POST /tickets/bulk`. */
+export interface TicketBulkRowResult {
+  ticket_id: string;
+  status: 'updated' | 'skipped';
+  reason: 'not_found' | 'merged' | null;
+}
+
+export interface TicketBulkResult {
+  updated: number;
+  failed: number;
+  results: TicketBulkRowResult[];
+}
+
+/**
+ * Apply one change to a selection of tickets (FR-13-EK.3 · FR-MOD-02.7.1).
+ *
+ * Success is not "everything worked" — the endpoint answers 200 for a partial
+ * outcome too, so the caller reads `updated`/`failed` rather than treating the
+ * resolved promise as an all-clear. Treating it as one is the specific bug this
+ * shape exists to prevent: an agent told "done" about six tickets when two of
+ * them were merged out from under the selection.
+ *
+ * `settle` is reused unchanged and matters more here than on a single write: a
+ * bulk status change moves rows between views wholesale, so every list query is
+ * invalidated rather than patched — there is no single ticket to seed.
+ */
+export function useBulkUpdateTickets() {
+  const api = useApiClient();
+  const client = useQueryClient();
+  return useMutation<
+    TicketBulkResult,
+    ApiClientError,
+    {
+      ticketIds: string[];
+      patch: { status?: TicketStatus; priority?: number; assignee_id?: string | null };
+    }
+  >({
+    mutationFn: ({ ticketIds, patch }) =>
+      api.post<TicketBulkResult>('/tickets/bulk', { ticket_ids: ticketIds, ...patch }),
+    onSuccess: () => settle(client, undefined),
+  });
+}
+
 /** Just enough of a template for the pane's picker — never the body it will send. */
 export interface TicketEmailTemplateOption {
   id: string;

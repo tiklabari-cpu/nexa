@@ -338,6 +338,29 @@ export const inbox: Messages = {
   'inbox.ticketGrid.error.title': 'Talep görünümleri kullanılamıyor',
   'inbox.ticketGrid.visitorFallback': 'Ziyaretçi',
   'inbox.ticketGrid.assigneeUnassigned': 'Atanmamış',
+  'inbox.ticketGrid.selectAll': 'Yüklü tüm talepleri seç (en çok {max})',
+  'inbox.ticketGrid.selectRow': 'Talebi seç: {subject}',
+
+  // Toplu eylemler (FR-13-EK.3 · FR-MOD-02.7.1). Sonuç satırı iki sayıyı da
+  // yazar: uç nokta kısmi sonuçta da 200 döner, yani yarısı atlanmış bir
+  // seçim için "tamam" demek bu barın asla kuramayacağı cümledir.
+  'inbox.ticketBulk.ariaLabel': 'Toplu eylemler',
+  'inbox.ticketBulk.selected.one': '{count} talep seçildi',
+  'inbox.ticketBulk.selected.other': '{count} talep seçildi',
+  'inbox.ticketBulk.actionLabel': 'Eylem',
+  'inbox.ticketBulk.choose': 'Bir eylem seçin…',
+  'inbox.ticketBulk.apply': 'Uygula',
+  'inbox.ticketBulk.clear': 'Temizle',
+  'inbox.ticketBulk.ceiling': 'Tek eylem en çok {max} talebi kapsar.',
+  'inbox.ticketBulk.group.status': 'Durumu ayarla',
+  'inbox.ticketBulk.group.priority': 'Önceliği ayarla',
+  'inbox.ticketBulk.group.assignee': 'Ata',
+  'inbox.ticketBulk.unassign': 'Kimseye',
+  'inbox.ticketBulk.assignTo': '{name}',
+  'inbox.ticketBulk.result': '{updated} güncellendi, {failed} atlandı',
+  // Çoğul biçimi yok: sayı sayılan adın değil, gerekçenin kendisinin konusu.
+  'inbox.ticketBulk.reason.notFound': '{count} tanesi artık bu görünümde değil',
+  'inbox.ticketBulk.reason.merged': '{count} tanesi başka bir talebe birleştirilmiş',
 
   // Ticket status + priority
   'inbox.ticketStatus.open': 'Açık',

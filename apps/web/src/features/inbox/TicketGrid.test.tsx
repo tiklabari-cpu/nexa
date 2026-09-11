@@ -9,6 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TicketGrid } from './TicketGrid.js';
 import { DEFAULT_TICKET_SORT } from './ticket-grid.js';
+import { TICKET_BULK_MAX } from './ticket-selection.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { Ticket } from './types.js';
 
@@ -127,6 +128,91 @@ describe('TicketGrid', () => {
     const onEndReached = vi.fn();
     renderGrid({ onEndReached });
     expect(onEndReached).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * The selection column (FR-13-EK.3 · FR-MOD-02.7.1). The model itself is proven
+ * in `ticket-selection.test.ts`; these pin the three things only the DOM can
+ * answer — the column is absent unless a caller asks for it, a partial
+ * selection reads as partial, and ticking a box is not the same gesture as
+ * opening the ticket.
+ */
+describe('TicketGrid selection column', () => {
+  const withSelection = (selected: string[], props: Record<string, unknown> = {}) => {
+    const onToggleOne = vi.fn();
+    const onToggleAll = vi.fn();
+    const rest = renderGrid({
+      selection: new Set(selected),
+      onToggleOne,
+      onToggleAll,
+      ...props,
+    });
+    return { onToggleOne, onToggleAll, ...rest };
+  };
+
+  it('renders no checkbox at all for a caller with no bulk surface', () => {
+    renderGrid();
+    // The Customers grid and the tests above render the same component without
+    // the three selection props; growing a dead column there would be the
+    // regression.
+    expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+  });
+
+  it('adds one box per row plus the header, without losing a column', () => {
+    withSelection([]);
+    expect(screen.getAllByRole('checkbox')).toHaveLength(TICKETS.length + 1);
+    expect(screen.getByRole('columnheader', { name: /Subject/ })).toBeInTheDocument();
+  });
+
+  it('asks to toggle the row it belongs to, and does not open the ticket', async () => {
+    const { onToggleOne, onOpen } = withSelection([]);
+    await userEvent.click(screen.getByRole('checkbox', { name: /Broken checkout/ }));
+    expect(onToggleOne).toHaveBeenCalledWith('TCK1');
+    // The row opens on click; without the cell swallowing it, ticking a box
+    // would navigate away from the grid the selection lives in and lose it.
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('shows a partial selection as indeterminate rather than as empty', () => {
+    withSelection(['TCK1']);
+    const header = screen.getByRole('checkbox', { name: /Select every loaded ticket/ });
+    // React does not forward `indeterminate`, so this is the assertion that
+    // fails if the ref that sets the DOM property is dropped — and an empty box
+    // above one ticked row reads as "nothing is selected".
+    expect((header as HTMLInputElement).indeterminate).toBe(true);
+    expect(header).not.toBeChecked();
+  });
+
+  it('ticks the header box only when every loaded row is selected', () => {
+    withSelection(TICKETS.map((ticket) => ticket.id));
+    const header = screen.getByRole('checkbox', { name: /Select every loaded ticket/ });
+    expect(header).toBeChecked();
+    expect((header as HTMLInputElement).indeterminate).toBe(false);
+  });
+
+  it('disables select-all once the grid holds more rows than one action covers', () => {
+    const many = Array.from({ length: TICKET_BULK_MAX + 1 }, (_, i) =>
+      makeTicket({ id: `T${String(i)}`, subject: `Row ${String(i)}` }),
+    );
+    withSelection([], { tickets: many });
+    // Refused, not truncated: a box labelled "all" that silently means "the
+    // first fifty" is the one outcome a bulk action must never have.
+    expect(screen.getByRole('checkbox', { name: /Select every loaded ticket/ })).toBeDisabled();
+  });
+
+  it('stops offering unticked rows once the selection is full', () => {
+    // A full selection whose other members are on pages this browser has
+    // scrolled past: `TCK1` is in it, `TCK2` is not, and the ceiling is reached.
+    const full = [
+      'TCK1',
+      ...Array.from({ length: TICKET_BULK_MAX - 1 }, (_, i) => `OFFSCREEN${String(i)}`),
+    ];
+    withSelection(full);
+
+    expect(screen.getByRole('checkbox', { name: /Refund request/ })).toBeDisabled();
+    // …and the ones already ticked stay operable, or the ceiling is a trap.
+    expect(screen.getByRole('checkbox', { name: /Broken checkout/ })).toBeEnabled();
   });
 });
 

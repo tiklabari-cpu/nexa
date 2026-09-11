@@ -32,6 +32,12 @@ import {
   type TicketSort,
   type TicketSortKey,
 } from './ticket-grid.js';
+import {
+  canSelectAll,
+  canSelectMore,
+  selectAllState,
+  TICKET_BULK_MAX,
+} from './ticket-selection.js';
 import type { Ticket, TicketStatus } from './types.js';
 
 /** Solved and closed read as done; spam is its own thing, and not a success. */
@@ -145,6 +151,9 @@ export function TicketGrid({
   onOpen,
   selectedId,
   onEndReached,
+  selection,
+  onToggleOne,
+  onToggleAll,
 }: {
   tickets: Ticket[];
   loading: boolean;
@@ -158,6 +167,15 @@ export function TicketGrid({
   selectedId: string | null;
   /** Asks for the next page as the grid scrolls near the end (NFR-P5); omit for no effect. */
   onEndReached?: () => void;
+  /**
+   * The ids ticked for a bulk action (FR-MOD-02.7.1). Omit the three selection
+   * props together and the grid renders exactly as it did before them — the
+   * checkbox column is not rendered at all, so a caller that has no bulk
+   * surface does not grow a dead one.
+   */
+  selection?: ReadonlySet<string>;
+  onToggleOne?: (id: string) => void;
+  onToggleAll?: () => void;
 }): ReactElement {
   const t = useTranslate();
   if (loading) {
@@ -182,6 +200,16 @@ export function TicketGrid({
     );
   }
 
+  // Bundled into one nullable object rather than three loose props so the
+  // checkbox column is all-or-nothing: a grid cannot end up with boxes that
+  // tick nothing, or a header box with no rows under it.
+  const bulk =
+    selection !== undefined && onToggleOne !== undefined && onToggleAll !== undefined
+      ? { selection, onToggleOne, onToggleAll }
+      : null;
+  const loadedIds = tickets.map((ticket) => ticket.id);
+  const allState = bulk ? selectAllState(bulk.selection, loadedIds) : 'none';
+
   return (
     <VirtualTable
       items={tickets}
@@ -189,11 +217,33 @@ export function TicketGrid({
       maxHeight="100%"
       onEndReached={onEndReached}
       caption={t('inbox.ticketGrid.caption')}
-      colSpan={TICKET_COLUMNS.length}
+      colSpan={TICKET_COLUMNS.length + (bulk ? 1 : 0)}
       tableClassName="w-full text-sm"
       head={
         <thead>
           <tr className="border-b border-border">
+            {bulk && (
+              <th scope="col" className="w-10 px-3 py-2">
+                <input
+                  type="checkbox"
+                  checked={allState === 'all'}
+                  // `indeterminate` is a DOM property, not an attribute, so it
+                  // is set through the ref rather than declared — React does not
+                  // forward it. Without it a partial selection renders as an
+                  // empty box, which reads as "nothing is selected".
+                  ref={(node) => {
+                    if (node) node.indeterminate = allState === 'some';
+                  }}
+                  // Refused, not truncated, once the grid has chained more rows
+                  // than one action may hold: a box labelled "all" that silently
+                  // means "the first fifty" is the one outcome a bulk action
+                  // must never have. The bar beside the grid says why.
+                  disabled={!canSelectAll(loadedIds)}
+                  onChange={bulk.onToggleAll}
+                  aria-label={t('inbox.ticketGrid.selectAll', { max: TICKET_BULK_MAX })}
+                />
+              </th>
+            )}
             {TICKET_COLUMNS.map((column) => (
               <ColumnHeader key={column.key} column={column} sort={sort} onSort={onSort} t={t} />
             ))}
@@ -209,6 +259,23 @@ export function TicketGrid({
           }`}
           onClick={() => onOpen(ticket.id)}
         >
+          {bulk && (
+            <td
+              className="w-10 px-3 py-2.5"
+              // The row opens the ticket on click; a tick is not an open. Without
+              // this, ticking a box would also navigate away from the grid the
+              // selection lives in and lose it.
+              onClick={(event) => event.stopPropagation()}
+            >
+              <input
+                type="checkbox"
+                checked={bulk.selection.has(ticket.id)}
+                disabled={!canSelectMore(bulk.selection, ticket.id)}
+                onChange={() => bulk.onToggleOne(ticket.id)}
+                aria-label={t('inbox.ticketGrid.selectRow', { subject: ticket.subject })}
+              />
+            </td>
+          )}
           <td className="max-w-0 px-4 py-2.5">
             <button
               type="button"

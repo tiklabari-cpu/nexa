@@ -272,8 +272,22 @@ export class ChatService {
       // Sequence lives inside the id, so "everything after N" — and its mirror,
       // "the page just before N" — is answerable without comparing timestamps,
       // which matters because several events can share a millisecond. The same
-      // expression orders and bounds the page, so the two directions cannot
-      // disagree about what "next" means.
+      // key orders and bounds the page, so the two directions cannot disagree
+      // about what "next" means.
+      //
+      // `event_sequence` is that number as a stored generated column, and it is
+      // read here rather than dug back out of the id with `split_part` for one
+      // measured reason (NFR-P6, migration `20260911170000_events_sequence_
+      // column`): `events` carries row level security, which makes it a
+      // security barrier, and PostgreSQL will not push a non-leakproof qual
+      // below a barrier into an index condition. `split_part` is not leakproof,
+      // so an index on the expression left the cursor bound as a row filter —
+      // the plan still said `Index Scan` while the scan restarted at event one
+      // and discarded everything before the cursor. `bigint` comparison is
+      // leakproof, so the bound rides into `events_thread_id_event_sequence_idx`
+      // and the page costs the same wherever it sits in the thread. Keep the
+      // two sides in step: `test/integration/transcript-page-plan.test.ts`
+      // explains this very statement and fails if the plan degrades.
       //
       // Internal notes are filtered in SQL rather than after fetching: dropping
       // them afterwards would return short pages and let a customer infer, from
@@ -283,10 +297,10 @@ export class ChatService {
                recipients, attachment_url, properties, created_at
         FROM events
         WHERE thread_id = ${threadId}
-          AND (split_part(id, '_', 2))::bigint > ${after}
-          ${before === null ? Prisma.empty : Prisma.sql`AND (split_part(id, '_', 2))::bigint < ${before}`}
+          AND event_sequence > ${after}
+          ${before === null ? Prisma.empty : Prisma.sql`AND event_sequence < ${before}`}
           ${principal.kind === 'customer' ? Prisma.sql`AND recipients = 'all'` : Prisma.empty}
-        ORDER BY (split_part(id, '_', 2))::bigint ${newestFirst ? Prisma.sql`DESC` : Prisma.sql`ASC`}
+        ORDER BY event_sequence ${newestFirst ? Prisma.sql`DESC` : Prisma.sql`ASC`}
         LIMIT ${options.limit + 1}
       `);
 

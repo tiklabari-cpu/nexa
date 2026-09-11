@@ -108,13 +108,22 @@ export class SyncService {
           continue;
         }
 
+        // `event_sequence` is the per-thread counter the event id carries,
+        // stored as a generated column so the replay can be driven from an
+        // index. Not `split_part(id, ...)`, which is what stood here: `events`
+        // has row level security, a non-leakproof function cannot be pushed
+        // below that barrier into an index condition, and `split_part` is not
+        // leakproof — so the cursor became a row filter and every reconnect
+        // re-read the thread from its first event to find the tail. The reason
+        // in full, with the measurement, is in migration
+        // `20260911170000_events_sequence_column` (NFR-P6).
         const rows = await tx.$queryRaw<EventRow[]>`
           SELECT id, chat_id, thread_id, type, text, author_id, author_type,
                  recipients, attachment_url, properties, created_at
           FROM events
           WHERE thread_id = ${chat.thread_id}
-            AND (split_part(id, '_', 2))::bigint > ${after}
-          ORDER BY (split_part(id, '_', 2))::bigint ASC
+            AND event_sequence > ${after}
+          ORDER BY event_sequence ASC
           LIMIT ${MAX_REPLAY_PER_CHAT + 1}
         `;
 

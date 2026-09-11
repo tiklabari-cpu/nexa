@@ -78,6 +78,25 @@ const KNOWN_UNMODELLABLE = [
     reason:
       'partial unique index (one default forwarding address per licence) — Prisma cannot express a WHERE predicate',
   },
+  {
+    // Created as `GENERATED ALWAYS AS ((split_part(id, '_', 2))::bigint) STORED`
+    // in 20260911170000_events_sequence_column. Prisma reports it as a DEFAULT
+    // because that is the nearest thing it can express — and the difference
+    // matters, which is why it is not modelled that way: a DEFAULT cannot read
+    // another column, and a column the application could write could drift from
+    // the id it mirrors.
+    pattern:
+      /^ALTER TABLE "public"\."events" ADD COLUMN "event_sequence" BIGINT DEFAULT CASE WHEN .*split_part.* ELSE NULL::bigint END$/,
+    reason:
+      'stored generated column (the per-thread event sequence carried in the id) — Prisma cannot express GENERATED ALWAYS AS ... STORED',
+  },
+  {
+    // The index over that column, from the same migration. Unmodellable only
+    // because its second column is: Prisma has no field to name here.
+    pattern:
+      /CREATE INDEX "events_thread_id_event_sequence_idx" ON "public"\."events"\("thread_id" ASC, "event_sequence" ASC\)/,
+    reason: 'composite index on a generated column — the column above is not in the datamodel',
+  },
 ];
 
 async function main(): Promise<void> {
@@ -96,10 +115,19 @@ async function main(): Promise<void> {
     { cwd: apiRoot, env: process.env },
   );
 
+  // Split on statement boundaries rather than on newlines, and flatten the
+  // whitespace inside each one. Prisma wraps a long statement over several
+  // lines — a generated column's `CASE ... END` is four of them — and a
+  // line-based reading turns that into four fragments, each of which would need
+  // its own allowance. A pattern matching a bare `CASE` allows any drift that
+  // happens to contain one, which is the opposite of what this list is for.
   const statements = stdout
     .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line.length > 0 && !line.startsWith('--'));
+    .filter((line) => !line.trim().startsWith('--'))
+    .join('\n')
+    .split(';')
+    .map((statement) => statement.replace(/\s+/g, ' ').trim())
+    .filter((statement) => statement.length > 0);
 
   const unexplained = statements.filter(
     (statement) => !KNOWN_UNMODELLABLE.some((known) => known.pattern.test(statement)),

@@ -178,6 +178,10 @@ export function CustomersPage(): ReactElement {
 
   const canEdit = scopes.includes('customers:rw');
   const canBan = scopes.includes('customers.ban:rw');
+  // Narrower than `canEdit` on purpose, and never implied by it (NFR-C8's
+  // "erişim ≠ silme"): `customers:rw` does not expand to this scope, and the
+  // endpoint refuses it on top of a `minimumRole: admin` gate.
+  const canErase = scopes.includes('customers.erase:rw');
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['customers'] });
@@ -382,9 +386,17 @@ export function CustomersPage(): ReactElement {
             customerId={selectedId}
             canEdit={canEdit}
             canBan={canBan}
+            canErase={canErase}
             onChanged={invalidate}
             onBanToggle={(id, banned) => banMutation.mutate({ id, banned })}
             banPending={banMutation.isPending}
+            onErased={() => {
+              // Drop the selection before refetching: the panel is showing a
+              // record that no longer exists, and leaving it selected would send
+              // the detail query straight into a 404 the moment it reruns.
+              setSelectedId(null);
+              invalidate();
+            }}
           />
         </div>
       )}

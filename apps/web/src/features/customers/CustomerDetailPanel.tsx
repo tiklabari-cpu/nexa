@@ -4,12 +4,18 @@
  * The edit form sends only the fields that changed. Sending the whole record
  * back would mean two agents editing different fields overwrite each other,
  * and the last one to press save silently wins.
+ *
+ * Erasure (GDPR Art. 17 · NFR-C8) lives here too, under its own scope and
+ * behind a confirmation — the `Sandbox.tsx` destructive-confirmation pattern.
+ * It sits beside the ban button on purpose and is worded to say what separates
+ * them: a ban can be lifted and keeps the history; this deletes it.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { type ReactElement } from 'react';
+import { useState, type ReactElement } from 'react';
 import { Card, CardSkeleton } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { Modal } from '../../components/ui/Modal.js';
+import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
 import { email, FieldError, optional, useForm } from '../../lib/form.js';
@@ -21,18 +27,24 @@ interface Props {
   customerId: string | null;
   canEdit: boolean;
   canBan: boolean;
+  /** `customers.erase:rw` — narrower than `canEdit`, and never implied by it. */
+  canErase: boolean;
   onChanged: () => void;
   onBanToggle: (id: string, banned: boolean) => void;
   banPending: boolean;
+  /** Clears the selection once the person this panel is showing no longer exists. */
+  onErased: (id: string) => void;
 }
 
 export function CustomerDetailPanel({
   customerId,
   canEdit,
   canBan,
+  canErase,
   onChanged,
   onBanToggle,
   banPending,
+  onErased,
 }: Props): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -149,6 +161,8 @@ export function CustomerDetailPanel({
             </p>
           </div>
         )}
+
+        {canErase && <EraseCustomer customerId={customer.id} onErased={onErased} />}
       </Card>
 
       {customer.custom_fields.length > 0 && (
@@ -400,5 +414,87 @@ function Field({
       />
       <FieldError id={`${id}-error`} message={error ?? null} />
     </label>
+  );
+}
+
+/**
+ * Right to erasure (GDPR Art. 17 · NFR-C8).
+ *
+ * Two clicks and a sentence that names the consequence, because the action is
+ * irreversible and its neighbour above it is not — `Sandbox.tsx`'s
+ * destructive-confirmation shape.
+ *
+ * One refusal is worth explaining rather than passing through ADR-06's generic
+ * sentence: the server declines while the person is in a live conversation
+ * (`details.reason === 'active_chat'`), and "close the conversation first" is
+ * an instruction somebody can act on, where "not allowed" reads as a
+ * permissions problem and sends them to an admin who cannot help.
+ */
+function EraseCustomer({
+  customerId,
+  onErased,
+}: {
+  customerId: string;
+  onErased: (id: string) => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const [confirming, setConfirming] = useState(false);
+
+  const erase = useMutation({
+    mutationFn: () => api.post(`/customers/${customerId}/erase`),
+    onSuccess: () => {
+      setConfirming(false);
+      onErased(customerId);
+    },
+  });
+
+  const activeChat =
+    erase.error instanceof ApiClientError && erase.error.details?.['reason'] === 'active_chat';
+
+  return (
+    <div className="border-t border-border px-4 py-3">
+      <button
+        type="button"
+        onClick={() => setConfirming(true)}
+        className="w-full rounded-md border border-danger px-3 py-1.5 text-sm text-danger transition-colors hover:bg-danger/10"
+      >
+        {t('customers.detail.eraseCustomer')}
+      </button>
+      <p className="mt-1.5 text-2xs text-content-tertiary">{t('customers.detail.eraseHint')}</p>
+
+      {confirming && (
+        <Modal
+          onClose={() => setConfirming(false)}
+          title={t('customers.detail.eraseModalTitle')}
+          description={t('customers.detail.eraseModalDescription')}
+        >
+          {erase.error !== null && (
+            <p role="alert" className="text-2xs text-danger">
+              {activeChat
+                ? t('customers.detail.eraseActiveChatError')
+                : t(errorMessageKey(erase.error))}
+            </p>
+          )}
+          <div className="mt-4 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setConfirming(false)}
+              className="rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {t('customers.detail.eraseCancel')}
+            </button>
+            <button
+              type="button"
+              onClick={() => erase.mutate()}
+              disabled={erase.isPending}
+              className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
+            >
+              {erase.isPending ? t('customers.detail.erasing') : t('customers.detail.eraseConfirm')}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
   );
 }

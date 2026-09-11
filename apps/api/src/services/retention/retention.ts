@@ -25,14 +25,22 @@
  * cross-tenant guard, and it refuses a null or not-yet-past cutoff; a dry-run
  * counts under RLS and never calls it.
  *
- * The windows are resolved **per tenant**, not once for the run: a workspace
- * inside HIPAA scope (NFR-C4 · C4-e) has its windows capped at
- * `HIPAA_RETENTION_CEILING`, and scope is a property of a licence, so two
- * workspaces in the same deployment can be swept under different policies. Each
- * tenant's effective policy is reported back and recorded in its audit entry,
- * because "why did this conversation disappear a year early" has to be
- * answerable from the trail rather than from the deployment's configuration at
- * the time.
+ * The windows are resolved **per tenant**, not once for the run, and since
+ * tm 241 that resolution has three layers rather than two (`policy.ts`): the
+ * deployment default, the workspace's own choice from its `licenses` row
+ * (NFR-C8's "yapılandırılabilir 30/60/365/sınırsız"), and last the ceiling a
+ * signed BAA imposes (NFR-C4 · C4-e). All three are properties of a licence, so
+ * two workspaces in the same deployment are swept under different policies —
+ * which is the whole point of the middle layer. Each tenant's effective policy
+ * is reported back and recorded in its audit entry, because "why did this
+ * conversation disappear a year early" has to be answerable from the trail
+ * rather than from the deployment's configuration at the time.
+ *
+ * A workspace that chose `unlimited` for a class is **skipped for that class**,
+ * not swept with a very long window: `resolveCutoffs` hands back a null cutoff
+ * and the step does not run at all. That is the one place where "unlimited"
+ * being a string rather than a number pays for itself — there is no arithmetic
+ * to get wrong, only a branch that cannot be omitted.
  *
  * `dryRun` counts what *would* go without writing anything — no delete, no audit
  * entry — so an operator can see the blast radius before committing to it. It is
@@ -44,10 +52,17 @@
 import { readFile, readdir, stat, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
 import { type PrismaClient } from '@prisma/client';
-import { readHipaaScope } from '../../lib/hipaa.js';
+import { inHipaaScope } from '../../lib/hipaa.js';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { writeAuditEntry } from '../audit/audit-log.js';
-import { capRetentionForHipaa, cutoffFor, type RetentionPolicy, resolveCutoffs } from './policy.js';
+import {
+  applyTenantWindows,
+  capRetentionForHipaa,
+  cutoffFor,
+  readTenantWindow,
+  type RetentionPolicy,
+  resolveCutoffs,
+} from './policy.js';
 
 /**
  * Rows deleted per statement. Large enough that real workloads finish in a
@@ -189,23 +204,56 @@ export class RetentionRunner {
       organizationId: tenant.organization_id,
     };
 
-    // Scope first, because it decides the windows everything below is measured
-    // against. Read under this tenant's own RLS context, from the timestamp
-    // `C4-d` writes — which the database will not let exist outside a US
-    // organization, so it already carries both halves of NFR-C4's condition.
-    const hipaaScope = await withTenant(this.#db, context, (tx) =>
-      readHipaaScope(tx, context.licenseId),
+    // The licence row first, because it decides the windows everything below is
+    // measured against — both halves of the decision live on it. One read, not
+    // two: the HIPAA timestamp `C4-d` writes (which the database will not let
+    // exist outside a US organization, so it already carries both halves of
+    // NFR-C4's condition) and this workspace's own choice of window (NFR-C8).
+    // Read under this tenant's own RLS context.
+    const licence = await withTenant(this.#db, context, (tx) =>
+      tx.license.findUnique({
+        where: { id: context.licenseId },
+        select: {
+          hipaaBaaSignedAt: true,
+          retentionThreadWindow: true,
+          retentionVisitWindow: true,
+        },
+      }),
     );
-    const policy = hipaaScope ? capRetentionForHipaa(this.#policy) : this.#policy;
+    // `inHipaaScope` rather than a second predicate here: one place decides
+    // what "covered" means, and `lib/hipaa.ts` says why.
+    const hipaaScope = inHipaaScope(licence);
+    // Order matters and is the design: the workspace's choice layers over the
+    // deployment default, and the ceiling is applied LAST so it is the last
+    // word whatever was chosen.
+    const chosen = applyTenantWindows(this.#policy, {
+      threadWindow: readTenantWindow(licence?.retentionThreadWindow),
+      visitWindow: readTenantWindow(licence?.retentionVisitWindow),
+    });
+    const policy = hipaaScope ? capRetentionForHipaa(chosen) : chosen;
     const cutoffs = resolveCutoffs(policy, now);
 
-    const threads = dryRun
-      ? await withTenant(this.#db, context, (tx) => this.#countThreads(tx, cutoffs.threads))
-      : await this.#deleteInBatches(context, (tx) => this.#deleteThreadBatch(tx, cutoffs.threads));
+    // A null cutoff is an unlimited window: the class is skipped entirely
+    // rather than swept with a very large number of days. Counting zero is the
+    // honest report — nothing *would* go, and a dry-run that claimed otherwise
+    // would be describing a sweep that will not happen.
+    const threads =
+      cutoffs.threads === null
+        ? 0
+        : dryRun
+          ? await withTenant(this.#db, context, (tx) => this.#countThreads(tx, cutoffs.threads!))
+          : await this.#deleteInBatches(context, (tx) =>
+              this.#deleteThreadBatch(tx, cutoffs.threads!),
+            );
 
-    const visits = dryRun
-      ? await withTenant(this.#db, context, (tx) => this.#countVisits(tx, cutoffs.visits))
-      : await this.#deleteInBatches(context, (tx) => this.#deleteVisitBatch(tx, cutoffs.visits));
+    const visits =
+      cutoffs.visits === null
+        ? 0
+        : dryRun
+          ? await withTenant(this.#db, context, (tx) => this.#countVisits(tx, cutoffs.visits!))
+          : await this.#deleteInBatches(context, (tx) =>
+              this.#deleteVisitBatch(tx, cutoffs.visits!),
+            );
 
     // The audit log is append-only to `nexa_app` (no DELETE grant), so its
     // window cannot be applied through `withTenant` like the tables above. A
@@ -242,10 +290,18 @@ export class RetentionRunner {
               // The windows that were actually applied, and why they were those
               // windows. Without this the trail cannot answer "was this deleted
               // early because we are covered, or because somebody changed the
-              // configuration" — and those are different incidents.
+              // configuration" — and those are different incidents. Since
+              // tm 241 there is a third possible answer ("the workspace chose
+              // it"), which is why the chosen tier is recorded beside the
+              // effective window rather than only the latter: a covered
+              // workspace whose `unlimited` was capped to 365 and one that
+              // picked 365 outright are indistinguishable from the number
+              // alone, and they are different conversations to have.
               hipaa_scope: hipaaScope,
               thread_days: policy.threadDays,
               visit_days: policy.visitDays,
+              thread_window: licence?.retentionThreadWindow ?? null,
+              visit_window: licence?.retentionVisitWindow ?? null,
             },
           },
         ),

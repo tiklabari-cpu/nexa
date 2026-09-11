@@ -71,6 +71,17 @@ export const customers: Messages = {
   'customers.detail.banCustomer': 'Müşteriyi engelle',
   'customers.detail.bannedHint': 'Yeniden sohbet başlatabilecekler.',
   'customers.detail.notBannedHint': 'Yeni sohbetleri engeller. Geçmiş saklanır.',
+  'customers.detail.eraseCustomer': 'Bu kişiyi sil',
+  'customers.detail.eraseHint':
+    'Görüşmelerini, mesajlarını, ziyaretlerini ve biletlerini kalıcı olarak siler. Geri alınamaz.',
+  'customers.detail.eraseModalTitle': 'Bu kişi silinsin mi?',
+  'customers.detail.eraseModalDescription':
+    'Görüşmeleri, içlerindeki tüm mesajlar, ziyaretleri, biletleri ve iletişim bilgileri kalıcı olarak silinir. Onu sayan raporlar değişir. Bu işlem geri alınamaz.',
+  'customers.detail.eraseCancel': 'Vazgeç',
+  'customers.detail.eraseConfirm': 'Kalıcı olarak sil',
+  'customers.detail.erasing': 'Siliniyor…',
+  'customers.detail.eraseActiveChatError':
+    'Bu kişi şu anda canlı bir görüşmede. Önce görüşmeyi kapatın, sonra silin.',
   'customers.detail.customFieldsHeading': 'Özel alanlar',
   'customers.detail.visitedPages': 'Ziyaret edilen sayfalar',
   'customers.detail.noVisits':

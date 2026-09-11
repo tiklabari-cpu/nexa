@@ -444,6 +444,15 @@ export const AUDIT_ACTIONS = [
   // action across the settings-family kinds it covers; metadata carries only
   // `kind`, never the deleted record's name, body or values.
   'data.deleted',
+  // A "right to erasure" request honoured (GDPR Art. 17 · NFR-C8) — one named
+  // person and everything that identified them, removed because they asked.
+  // Distinct from both neighbours on purpose: `data.retention_pruned` is a
+  // policy expiring and `data.deleted` is an operator tidying up, while this is
+  // the workspace answering a legal request and is the kind of entry a
+  // regulator asks to see. Metadata is counts only, and the target is the
+  // erased id — with the record gone that uuid identifies nobody, which is what
+  // makes it safe to keep and useful as the receipt that the request was met.
+  'data.subject_erased',
   // Public knowledge base (PRD §5.3, PUBKB-b). Publishing an article, or turning
   // the workspace's KB on/off, changes what an anonymous audience can see — the
   // moment content crosses from private to public — so each is recorded. The

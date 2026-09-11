@@ -27,7 +27,11 @@ import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTenant } from '../../src/lib/tenant.js';
-import { cutoffFor, type RetentionPolicy } from '../../src/services/retention/policy.js';
+import {
+  cutoffFor,
+  cutoffForWindow,
+  type RetentionPolicy,
+} from '../../src/services/retention/policy.js';
 import { RetentionRunner } from '../../src/services/retention/retention.js';
 import {
   ownerClient,
@@ -253,7 +257,7 @@ describe('retention sweep (NFR-C8)', () => {
 
       // Run the sweep's exact delete, but only in A's context. RLS — not the
       // WHERE clause — is what must keep it out of B.
-      const cutoff = cutoffFor(POLICY.threadDays, new Date());
+      const cutoff = cutoffForWindow(POLICY.threadDays, new Date())!;
       await withTenant(
         appRole,
         ctx(fx.a),

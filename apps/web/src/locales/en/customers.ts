@@ -80,6 +80,17 @@ export const customers: Messages = {
   'customers.detail.banCustomer': 'Ban customer',
   'customers.detail.bannedHint': 'They will be able to start conversations again.',
   'customers.detail.notBannedHint': 'Blocks new conversations. History is kept.',
+  'customers.detail.eraseCustomer': 'Erase this person',
+  'customers.detail.eraseHint':
+    'Permanently deletes their conversations, messages, visits and tickets. This cannot be undone.',
+  'customers.detail.eraseModalTitle': 'Erase this person?',
+  'customers.detail.eraseModalDescription':
+    'Their conversations, every message in them, their visits, tickets and contact details are deleted for good. Reports that counted them will change. This cannot be undone.',
+  'customers.detail.eraseCancel': 'Cancel',
+  'customers.detail.eraseConfirm': 'Erase permanently',
+  'customers.detail.erasing': 'Erasing…',
+  'customers.detail.eraseActiveChatError':
+    'They are in a live conversation. Close it first, then erase.',
   'customers.detail.customFieldsHeading': 'Custom fields',
   'customers.detail.visitedPages': 'Visited pages',
   'customers.detail.noVisits':

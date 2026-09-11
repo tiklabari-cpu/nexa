@@ -237,3 +237,63 @@ customerCustomFields:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+# --- Right to erasure (GDPR Art. 17 · NFR-C8) -------------------------------
+#
+# The targeted, single-subject counterpart to the periodic retention sweep.
+# The sweep answers "this is old"; this answers "this person asked". They share
+# nothing but the requirement line, which is why this lives beside the customer
+# it erases rather than inside `services/retention/`'s tenant loop.
+
+erase:
+  parameters:
+    - name: customerId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Customers]
+    operationId: eraseCustomer
+    summary: Erase a customer and everything that identifies them
+    description: |
+      Hard-deletes this person and the data that identifies them (GDPR Art. 17):
+      their conversations and every message in them, their visit telemetry,
+      their tickets, their external channel identities and their custom field
+      values. Irreversible, and not a soft flag — the rows are gone.
+
+      **Not a ban.** Banning denies someone service and keeps the history the
+      decision rests on (`POST /customers/{customerId}/ban`); this removes the
+      history. The two are separate actions with separate scopes so neither can
+      be reached by mistake while aiming for the other.
+
+      **Its own scope: `customers.erase:rw`.** Deliberately not implied by
+      `customers:rw` — editing a misspelled name and erasing a person are not
+      the same authority, the split `customers.ban:rw` already makes. Paired
+      with `minimumRole: admin`, so a broad but agent-held token cannot reach
+      it either. This is the `erişim ≠ silme` line NFR-C8 names: a credential
+      that can read everything about a contact still cannot delete them.
+
+      **Refused while a conversation is live** (403,
+      `details.reason = "active_chat"`). The retention sweep holds the same
+      invariant — it only ever prunes threads that are closed — and erasing a
+      conversation out from under the agent and the visitor holding it open
+      would break the socket both sides are on. Close the conversation, then
+      erase.
+
+      **What deliberately survives.** Tracked sales are unlinked, not deleted:
+      a revenue record is the workspace's own accounting, and the FK already
+      drops the pointer to the person. The audit trail keeps one entry naming
+      the erased id and the counts — never the name, e-mail or any message —
+      because with the record gone that id identifies nobody, and it is the
+      only evidence the request was honoured.
+    responses:
+      "200":
+        description: Erased — a receipt of what went.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/ErasureReceipt" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

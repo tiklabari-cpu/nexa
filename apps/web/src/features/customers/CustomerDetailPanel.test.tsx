@@ -9,9 +9,11 @@
  * start rendering it.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CustomerDetailPanel } from './CustomerDetailPanel.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { CustomerDetail } from './types.js';
 
@@ -48,7 +50,10 @@ function baseCustomer(overrides?: Partial<CustomerDetail>): CustomerDetail {
   };
 }
 
-function renderPanel(customer: CustomerDetail) {
+function renderPanel(
+  customer: CustomerDetail,
+  options: { canErase?: boolean; onErased?: (id: string) => void } = {},
+) {
   api.get.mockReset();
   api.get.mockResolvedValue(customer);
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -58,9 +63,11 @@ function renderPanel(customer: CustomerDetail) {
         customerId={customer.id}
         canEdit={false}
         canBan={false}
+        canErase={options.canErase ?? false}
         onChanged={() => {}}
         onBanToggle={() => {}}
         banPending={false}
+        onErased={options.onErased ?? (() => {})}
       />
     </QueryClientProvider>,
   );
@@ -275,14 +282,103 @@ describe('CustomerDetailPanel localisation (NFR-I18N2)', () => {
           customerId={null}
           canEdit={false}
           canBan={false}
+          canErase={false}
           onChanged={() => {}}
           onBanToggle={() => {}}
           banPending={false}
+          onErased={() => {}}
         />
       </QueryClientProvider>,
       'tr',
     );
 
     expect(screen.getByText('Geçmişini görmek için birini seçin.')).toBeInTheDocument();
+  });
+});
+
+/**
+ * Right to erasure (NFR-C8 · GDPR Art. 17).
+ *
+ * The panel's job here is small and the two things it must not get wrong are
+ * both about consequence: the button may not exist without the scope, and it
+ * may not fire without a confirmation.
+ */
+describe('CustomerDetailPanel — erasure (NFR-C8)', () => {
+  beforeEach(() => {
+    api.post.mockReset();
+  });
+
+  it('offers nothing at all without the erasure scope', async () => {
+    // The courtesy hide, and the stronger half of it: `canEdit`/`canBan` are
+    // both false here too, but this is the one button whose absence matters,
+    // because the server refuses `customers:rw` for it.
+    renderPanel(baseCustomer());
+
+    expect(await screen.findByText('Visits')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Erase this person' })).not.toBeInTheDocument();
+  });
+
+  it('asks before erasing, and calls nothing until the confirmation is pressed', async () => {
+    const user = userEvent.setup();
+    renderPanel(baseCustomer(), { canErase: true });
+
+    await user.click(await screen.findByRole('button', { name: 'Erase this person' }));
+
+    // The dialog is open and NOTHING has been sent — the assertion a
+    // confirm-less delete would fail.
+    expect(await screen.findByText('Erase this person?')).toBeInTheDocument();
+    expect(api.post).not.toHaveBeenCalled();
+
+    api.post.mockResolvedValue({ customer_id: 'cust-1', chats: 0 });
+    await user.click(screen.getByRole('button', { name: 'Erase permanently' }));
+
+    expect(api.post).toHaveBeenCalledWith('/customers/cust-1/erase');
+  });
+
+  it('backing out of the dialog sends nothing', async () => {
+    const user = userEvent.setup();
+    renderPanel(baseCustomer(), { canErase: true });
+
+    await user.click(await screen.findByRole('button', { name: 'Erase this person' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(api.post).not.toHaveBeenCalled();
+  });
+
+  it('tells the selection to clear once the record is gone', async () => {
+    // Without this the detail query reruns against a uuid that no longer
+    // exists and the panel shows a load error for something it just deleted.
+    const user = userEvent.setup();
+    const onErased = vi.fn();
+    renderPanel(baseCustomer(), { canErase: true, onErased });
+
+    await user.click(await screen.findByRole('button', { name: 'Erase this person' }));
+    api.post.mockResolvedValue({ customer_id: 'cust-1' });
+    await user.click(screen.getByRole('button', { name: 'Erase permanently' }));
+
+    await waitFor(() => expect(onErased).toHaveBeenCalledWith('cust-1'));
+  });
+
+  it('explains the live-conversation refusal instead of showing a permissions error', async () => {
+    // `not_allowed` reads as "ask an admin", which is the wrong instruction:
+    // the caller has the authority and simply has to close the chat first.
+    const user = userEvent.setup();
+    renderPanel(baseCustomer(), { canErase: true });
+
+    await user.click(await screen.findByRole('button', { name: 'Erase this person' }));
+    api.post.mockRejectedValue(
+      new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'refused',
+        requestId: 'req-1',
+        details: { reason: 'active_chat' },
+      }),
+    );
+    await user.click(screen.getByRole('button', { name: 'Erase permanently' }));
+
+    expect(
+      await screen.findByText('They are in a live conversation. Close it first, then erase.'),
+    ).toBeInTheDocument();
   });
 });

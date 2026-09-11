@@ -56,6 +56,15 @@ test.describe('multibrand cross-brand isolation', () => {
       page.getByRole('region', { name: 'Website widgets' });
     // `exact` so it never collides with the "Brand colour" controls.
     const switcher = page.getByRole('button', { name: 'Brand', exact: true });
+    // Scoped to the switcher's own listbox, not the page. A bare
+    // `getByRole('option', { name: 'Default' })` matched three elements once
+    // Settings grew a `<select>` whose first entry reads "Use the default (365
+    // days)" (NFR-C8, tm 241): Playwright matches an accessible name by
+    // case-insensitive SUBSTRING, and a native `<option>` carries the role too.
+    // The narrow locator is also what the assertion always meant — "the brand
+    // called Default", not "anything on this page named like a default".
+    const brandOption = (name: string): ReturnType<typeof page.getByRole> =>
+      page.getByRole('listbox', { name: 'Brand' }).getByRole('option', { name, exact: true });
 
     // --- The default brand, selected on first load -----------------------------
     // The switcher exists at all only because the license has two brands — a
@@ -68,7 +77,7 @@ test.describe('multibrand cross-brand isolation', () => {
 
     // --- Switch to the second brand --------------------------------------------
     await switcher.click();
-    await page.getByRole('option', { name: NORTHWIND.secondBrand }).click();
+    await brandOption(NORTHWIND.secondBrand).click();
 
     // The widget appearance follows the brand — a different colour and a title
     // that names it.
@@ -84,7 +93,7 @@ test.describe('multibrand cross-brand isolation', () => {
 
     // --- Switch back — the default brand's appearance and site return ----------
     await switcher.click();
-    await page.getByRole('option', { name: NORTHWIND.defaultBrand }).click();
+    await brandOption(NORTHWIND.defaultBrand).click();
     await expect(colourHex).toHaveValue(NORTHWIND.defaultColor);
     await expect(websites().getByText(NORTHWIND.defaultSite)).toBeVisible();
     await expect(websites().getByText(NORTHWIND.secondSite)).toHaveCount(0);

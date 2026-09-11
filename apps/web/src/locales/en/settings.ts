@@ -613,6 +613,28 @@ export const settings: Messages = {
   'settings.compliance.entitlementError':
     'HIPAA cover is an Enterprise feature. Upgrade the plan to accept the agreement.',
 
+  // Data retention — DataRetention.tsx
+  'settings.retention.title': 'Data retention',
+  'settings.retention.description':
+    'How long this workspace keeps conversations and visitor data before they are permanently deleted.',
+  'settings.retention.loadError': 'Could not load retention settings.',
+  'settings.retention.threadLabel': 'Closed conversations',
+  'settings.retention.threadHint':
+    'Applies to closed conversations and every message in them. Live conversations are never touched.',
+  'settings.retention.visitLabel': 'Visitor data',
+  'settings.retention.visitHint': 'Visits recorded by the widget — IP address, browser and pages.',
+  'settings.retention.inherit': 'Use the default ({days} days)',
+  'settings.retention.tier.30d': '30 days',
+  'settings.retention.tier.60d': '60 days',
+  'settings.retention.tier.365d': '365 days',
+  'settings.retention.tier.unlimited': 'Keep indefinitely',
+  'settings.retention.effectiveDays': 'Deleted after {days} days.',
+  'settings.retention.effectiveUnlimited': 'Never deleted automatically.',
+  'settings.retention.hipaaNote':
+    'This workspace has a signed HIPAA agreement, so data cannot be kept longer than {days} days and cannot be kept indefinitely.',
+  'settings.retention.auditNote':
+    'The audit log keeps its own 30-day window and is not affected by these settings.',
+
   // SIEM export — SiemExport.tsx
   'settings.siemExport.title': 'SIEM export',
   'settings.siemExport.description':

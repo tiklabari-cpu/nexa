@@ -91,6 +91,20 @@ model License {
   /// `licenses_baa_requires_us_region` trigger enforces that across tables,
   /// which Prisma cannot model, so this comment is where the schema says so.
   hipaaBaaSignedAt      DateTime? @map("hipaa_baa_signed_at") @db.Timestamptz(6)
+  /// This workspace's own retention window for closed conversations (NFR-C8),
+  /// or null to inherit the deployment default (`RETENTION_THREAD_DAYS`). One of
+  /// `@nexa/types`' `RETENTION_TIERS` — `'30d' | '60d' | '365d' | 'unlimited'` —
+  /// a checked string, the `device_tokens.platform` pattern, since Prisma has no
+  /// shared enum for it; `licenses_retention_thread_window_check` is where the
+  /// database says so. Stored as the tier rather than a day count so "unlimited"
+  /// is not a number: the one integer it would naturally be (`0`) is the value
+  /// `cutoffFor` refuses, because a zero window matches every row.
+  /// A workspace under HIPAA scope has this capped at `HIPAA_RETENTION_CEILING`
+  /// when the sweep reads it (NFR-C4 · C4-e); the stored choice is left alone.
+  retentionThreadWindow String?   @map("retention_thread_window")
+  /// The same, for visitor telemetry (`visits`) — null inherits
+  /// `RETENTION_VISIT_DAYS`.
+  retentionVisitWindow  String?   @map("retention_visit_window")
   /// When the onboarding sample data was laid down, so the seed never runs twice.
   demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
   /// The "What are you tracking?" survey popover's answer (FR-MOD-07.2), or

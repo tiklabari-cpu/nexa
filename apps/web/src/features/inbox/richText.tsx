@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { parseRichText } from '@nexa/types';
 
 /** A caret (`start === end`) or selection range in a `<textarea>`. */
 export interface TextRange {
@@ -60,48 +61,6 @@ export function applyBulletPrefix(value: string, range: TextRange): EditResult {
   };
 }
 
-interface Segment {
-  type: 'text' | 'bold' | 'italic';
-  content: string;
-}
-
-/**
- * `**bold**` before `*italic*`, so a lazy `.+?` never stops at the first half
- * of a double marker. `.` does not match `\n` (no `s` flag), which is what
- * keeps a marker from spanning two lines without any extra code — the lazy
- * quantifier simply cannot find a closing pair across the break.
- */
-const INLINE_PATTERN = /\*\*(.+?)\*\*|\*(.+?)\*/g;
-
-/** Malformed markdown (an unclosed `**`) finds no closing pair and falls out as plain text, never throws. */
-function parseInline(source: string): Segment[] {
-  const segments: Segment[] = [];
-  let cursor = 0;
-  for (const match of source.matchAll(INLINE_PATTERN)) {
-    const index = match.index ?? 0;
-    if (index > cursor) segments.push({ type: 'text', content: source.slice(cursor, index) });
-    if (match[1] !== undefined) segments.push({ type: 'bold', content: match[1] });
-    else segments.push({ type: 'italic', content: match[2]! });
-    cursor = index + match[0].length;
-  }
-  if (cursor < source.length) segments.push({ type: 'text', content: source.slice(cursor) });
-  return segments;
-}
-
-/**
- * A `- ` line prefix becomes a bullet glyph — one substituted character, not
- * a semantic `<ul>`: nothing here needs list/listitem ARIA machinery for a
- * single-character marker, and a real list would force block-per-line layout
- * where this instead rides the same `white-space: pre-wrap` span the plain
- * text already used.
- */
-function markBullets(source: string): string {
-  return source
-    .split('\n')
-    .map((line) => (line.startsWith('- ') ? `•${line.slice(1)}` : line))
-    .join('\n');
-}
-
 /**
  * The composer's markdown subset — `**bold**`, `*italic*`, `- ` bullet lines —
  * rendered as React elements, never HTML. There is no `dangerouslySetInnerHTML`
@@ -110,9 +69,14 @@ function markBullets(source: string): string {
  * it to non-customer authors as a *product* decision — a customer's literal
  * asterisks should read back exactly as they typed them, not be reinterpreted
  * — not a security boundary.
+ *
+ * The subset itself is defined once, in `@nexa/types#parseRichText`, because
+ * the customer widget has to read back exactly what this shows the agent
+ * (`apps/widget/src/rich-text.ts`, tm 235). Only the parse is shared: this
+ * side makes React elements, that side makes DOM nodes.
  */
 export function renderRichText(text: string): ReactNode {
-  return parseInline(markBullets(text)).map((segment, index) => {
+  return parseRichText(text).map((segment, index) => {
     if (segment.type === 'bold') return <strong key={index}>{segment.content}</strong>;
     if (segment.type === 'italic') return <em key={index}>{segment.content}</em>;
     return segment.content;

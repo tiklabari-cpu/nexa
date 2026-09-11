@@ -4,13 +4,16 @@
  * Written against the DOM directly rather than with a framework: the whole
  * artifact has a 50 KB budget (NFR-P3) and React alone is three times that.
  *
- * Hard rule throughout: every piece of customer- or agent-authored text is set
- * with `textContent`. Never `innerHTML` — the eslint config bans it outright
- * rather than relying on anyone remembering (NFR-S6).
+ * Hard rule throughout: every piece of customer- or agent-authored text reaches
+ * the DOM as `textContent` or a text node. Never `innerHTML` — the eslint config
+ * bans it outright rather than relying on anyone remembering (NFR-S6). The one
+ * place a message becomes more than a single text node is `appendRichText`
+ * (`rich-text.ts`), which still builds elements rather than parsing markup.
  */
 import type { WidgetFormField, WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
+import { appendRichText } from './rich-text.js';
 import { WidgetSocket } from './socket.js';
 import {
   createTranslator,
@@ -2330,9 +2333,20 @@ function renderBubble(
 
   const bubble = doc.createElement('div');
   bubble.className = 'nx-bubble';
-  // textContent, never innerHTML — this is the one place agent- and
-  // customer-authored text meets the DOM.
-  if (event.text) bubble.textContent = event.text;
+  // Elements and text nodes, never innerHTML — this is the one place agent-
+  // and customer-authored text meets the DOM (NFR-S6).
+  //
+  // The team's side goes through the composer's markdown subset, the same one
+  // the agent console renders, so `**important**` reaches the visitor emphasised
+  // rather than starred (FR-MOD-11.4, tm 235). A customer's own text never
+  // does: their literal asterisks read back exactly as they typed them, which
+  // is the rule `Transcript.tsx` already carries on the console side
+  // (`#### K02.3.5`). `bot` is the AI persona answering for the team, so it
+  // formats like an agent; `system_message` returned above and never gets here.
+  if (event.text) {
+    if (event.author_type === 'customer') bubble.textContent = event.text;
+    else appendRichText(doc, bubble, event.text);
+  }
   if (event.attachment_url)
     bubble.append(renderAttachment(doc, api, event.attachment_url, cache, t));
 

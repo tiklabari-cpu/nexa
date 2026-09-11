@@ -45,7 +45,14 @@ import {
 } from './views.js';
 import { TicketDetailPane } from './TicketPane.js';
 import { TicketGrid } from './TicketGrid.js';
-import { useTicketList } from './useTickets.js';
+import { TicketBulkBar } from './TicketBulkBar.js';
+import { useAgents, useBulkUpdateTickets, useTicketList } from './useTickets.js';
+import {
+  pruneTicketSelection,
+  selectedTicketIds,
+  toggleAllTickets,
+  toggleTicketSelection,
+} from './ticket-selection.js';
 import { CreateTicketButton } from './CreateTicketButton.js';
 import { TRAFFIC_TABS, filterByTrafficTab, trafficTabCounts } from './traffic.js';
 import {
@@ -356,6 +363,37 @@ export function InboxPage(): ReactElement {
   const ticketItems = tickets.items;
   const ticketsLoaded = tickets.pages.length > 0;
 
+  // The rows ticked for a bulk action (FR-13-EK.3 · FR-MOD-02.7.1). Ids rather
+  // than "everything matching the view": the grid is keyset-paged over a
+  // collection that moves while it is read, so only what the agent actually saw
+  // may be written. Component state, not the URL — a selection is a gesture in
+  // progress, not shareable grid state the way `?ticket_sort` is.
+  const [ticketSelection, setTicketSelection] = useState<ReadonlySet<string>>(new Set());
+  const bulkUpdate = useBulkUpdateTickets();
+  // Only fetched once there is a selection to act on, so the Tickets grid does
+  // not pull the licence's agent list just by being opened.
+  const bulkAgents = useAgents(onTickets && ticketSelection.size > 0);
+
+  // A ticket that leaves the loaded list — solved into another view, the view
+  // switched, a fresh page chain after a re-sort — leaves the selection with it.
+  // Without this the bar would go on counting rows that are not on screen and
+  // Apply would name ids the agent can no longer see.
+  useEffect(() => {
+    setTicketSelection((current) =>
+      pruneTicketSelection(
+        current,
+        ticketItems.map((ticket) => ticket.id),
+      ),
+    );
+  }, [ticketItems]);
+
+  // Opening a record and leaving the Tickets group both end the gesture: the
+  // bar is not on screen in either case, and a selection that survived out of
+  // sight would apply to rows the agent stopped looking at long ago.
+  useEffect(() => {
+    if (!onTickets || selectedTicketId) setTicketSelection(new Set());
+  }, [onTickets, selectedTicketId]);
+
   // Grid-first: nothing is auto-selected, so opening the Tickets group lands on
   // the grid rather than jumping into a record. A selection that drops out of
   // the loaded list (solved into another view, merged away) falls back to the
@@ -515,6 +553,31 @@ export function InboxPage(): ReactElement {
                   </span>
                 )}
               </header>
+              {/* Bulk actions (FR-13-EK.3 · FR-MOD-02.7.1): renders nothing
+                  until something is ticked, so the grid keeps its full height
+                  for the common case of reading a queue rather than sweeping
+                  it. */}
+              <TicketBulkBar
+                selectedCount={ticketSelection.size}
+                loadedCount={ticketItems.length}
+                agents={bulkAgents.data?.items ?? []}
+                pending={bulkUpdate.isPending}
+                error={bulkUpdate.error}
+                result={bulkUpdate.data ?? null}
+                onApply={(action) => {
+                  bulkUpdate.mutate({
+                    ticketIds: selectedTicketIds(ticketItems, ticketSelection),
+                    patch: action,
+                  });
+                }}
+                // Dismisses the receipt as well as the ticks: the bar survives
+                // an emptied selection precisely so a report can be read, so
+                // something has to be able to put it away.
+                onClear={() => {
+                  bulkUpdate.reset();
+                  setTicketSelection(new Set());
+                }}
+              />
               <div className="min-h-0 flex-1 overflow-hidden p-4">
                 <TicketGrid
                   tickets={ticketItems}
@@ -525,6 +588,23 @@ export function InboxPage(): ReactElement {
                   onOpen={setSelectedTicketId}
                   selectedId={selectedTicketId}
                   onEndReached={tickets.fetchNext}
+                  selection={ticketSelection}
+                  // Every change to the selection drops the last report: a
+                  // summary that outlived the rows it counted would be read as
+                  // the answer to whatever is ticked now.
+                  onToggleOne={(id) => {
+                    bulkUpdate.reset();
+                    setTicketSelection((current) => toggleTicketSelection(current, id));
+                  }}
+                  onToggleAll={() => {
+                    bulkUpdate.reset();
+                    setTicketSelection((current) =>
+                      toggleAllTickets(
+                        current,
+                        ticketItems.map((ticket) => ticket.id),
+                      ),
+                    );
+                  }}
                 />
               </div>
             </main>

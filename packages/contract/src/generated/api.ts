@@ -1516,6 +1516,68 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/tickets/bulk': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Apply one change to several tickets at once
+     * @description A queue is worked in handfuls — "assign these six to me", "close last
+     *     week's". Doing that one `PATCH` at a time is six requests and six chances
+     *     to stop halfway, so this endpoint takes the ids the agent selected and
+     *     applies **one** change to all of them.
+     *
+     *     **The offered fields are exactly the subset of `PATCH /tickets/{ticketId}`
+     *     that means something across many rows.** `subject` is missing because a
+     *     subject describes one ticket; `email_template_id` is missing because
+     *     mailing a form letter to every customer in a selection is a different
+     *     product decision from correcting a queue, and this endpoint does not make
+     *     it quietly. Everything else behaves exactly as it does on the single
+     *     endpoint, including who may see which ticket.
+     *
+     *     **The caller names the ids; there is no "all matching".** A selection is
+     *     what an agent looked at, and this collection is keyset-paged and changing
+     *     underneath them — a server-side "everything in this view" would act on
+     *     rows that arrived after they clicked. It also keeps the work bounded: at
+     *     most `50` ids, which is one page of the grid.
+     *
+     *     **Partial success is the normal outcome, and it is a 200.** Tickets move
+     *     while a queue is being read: one of the six may have been merged a second
+     *     ago. Refusing all six because of it would lose five correct decisions and
+     *     teach agents to select fewer rows than they mean. Each id gets its own
+     *     verdict in `results`, and the ones that succeeded are **not** rolled back.
+     *     `updated`/`failed` say which happened.
+     *
+     *     Two verdicts can come back on a row, and neither is an error envelope:
+     *
+     *     - `not_found` — no such ticket *for this caller*. Another workspace's id,
+     *       a ticket outside the agent's teams and one that never existed are
+     *       deliberately indistinguishable, the same way the single endpoint answers
+     *       404 rather than 403 (NFR-S5).
+     *     - `merged` — the ticket is folded under a primary; editing it in place
+     *       would desync the two halves. `PATCH` refuses the same thing.
+     *
+     *     A bad *request* is still a whole refusal: an assignee outside the licence
+     *     or a team that does not exist is a `400` with nothing written, because
+     *     that names the target, not a row — every row would fail it identically.
+     *
+     *     Each ticket that actually changes writes its own `audit_log` entries, the
+     *     same ones a single `PATCH` writes. Being done in bulk is not a reason to
+     *     collapse fifty decisions into one summary line: the trail answers "what
+     *     happened to this ticket", and a ticket whose row is missing has no answer.
+     */
+    post: operations['bulkUpdateTickets'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/tickets/{ticketId}': {
     parameters: {
       query?: never;
@@ -9774,6 +9836,32 @@ export interface components {
       /** @description Custom fields defined for tickets, with this ticket's values (FR-MOD-08.7.6). */
       custom_fields: components['schemas']['CustomFieldValue'][];
     };
+    /**
+     * @description One selected ticket's verdict, in request order. `reason` is null when
+     *     the ticket changed and names the refusal otherwise — it is a closed
+     *     vocabulary so a client can react to it rather than parse a sentence.
+     */
+    TicketBulkRowResult: {
+      ticket_id: string;
+      /** @enum {string} */
+      status: 'updated' | 'skipped';
+      /**
+       * @description `not_found` covers another workspace's ticket, one outside the
+       *     caller's teams and one that never existed alike — telling them
+       *     apart would confirm an id exists (NFR-S5). `merged` is a ticket
+       *     folded under a primary, which `PATCH` refuses for the same reason.
+       * @enum {string|null}
+       */
+      reason: 'not_found' | 'merged' | null;
+    };
+    /** @description The report for one bulk action over the Tickets grid (FR-MOD-02.7.1). */
+    TicketBulkResult: {
+      /** @description Tickets actually written. */
+      updated: number;
+      failed: number;
+      /** @description One entry per requested id, in request order. */
+      results: components['schemas']['TicketBulkRowResult'][];
+    };
     CustomerDetail: components['schemas']['CustomerSummary'] & {
       /** Format: date-time */
       banned_at?: string | null;
@@ -14225,6 +14313,55 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  bulkUpdateTickets: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description The selected tickets. Duplicates are refused rather than applied twice. */
+          ticket_ids: string[];
+          /** @enum {string} */
+          status?: 'open' | 'pending' | 'solved' | 'closed' | 'spam';
+          priority?: number;
+          /**
+           * Format: uuid
+           * @description `null` unassigns; an absent key leaves the assignee alone.
+           */
+          assignee_id?: string | null;
+          /**
+           * Format: int64
+           * @description `null` clears the team; an absent key leaves it alone.
+           */
+          group_id?: number | null;
+        };
+      };
+    };
+    responses: {
+      /**
+       * @description The per-ticket report. 200 covers full success, partial success and
+       *     "every row failed" alike — the request itself was understood in all
+       *     three.
+       */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TicketBulkResult'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      402: components['responses']['PaymentRequired'];
+      403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
     };
   };

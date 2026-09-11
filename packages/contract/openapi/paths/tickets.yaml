@@ -148,6 +148,102 @@ tickets:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# Bulk actions over the Tickets grid (PRD §5.2 "Ticketing (gelişmiş)" ·
+# FR-13-EK.3 · FR-MOD-02.7.1). The multi-row counterpart of
+# `PATCH /tickets/{ticketId}` — same fields, same rules, one request.
+ticketsBulk:
+  post:
+    tags: [Tickets]
+    operationId: bulkUpdateTickets
+    summary: Apply one change to several tickets at once
+    description: |
+      A queue is worked in handfuls — "assign these six to me", "close last
+      week's". Doing that one `PATCH` at a time is six requests and six chances
+      to stop halfway, so this endpoint takes the ids the agent selected and
+      applies **one** change to all of them.
+
+      **The offered fields are exactly the subset of `PATCH /tickets/{ticketId}`
+      that means something across many rows.** `subject` is missing because a
+      subject describes one ticket; `email_template_id` is missing because
+      mailing a form letter to every customer in a selection is a different
+      product decision from correcting a queue, and this endpoint does not make
+      it quietly. Everything else behaves exactly as it does on the single
+      endpoint, including who may see which ticket.
+
+      **The caller names the ids; there is no "all matching".** A selection is
+      what an agent looked at, and this collection is keyset-paged and changing
+      underneath them — a server-side "everything in this view" would act on
+      rows that arrived after they clicked. It also keeps the work bounded: at
+      most `50` ids, which is one page of the grid.
+
+      **Partial success is the normal outcome, and it is a 200.** Tickets move
+      while a queue is being read: one of the six may have been merged a second
+      ago. Refusing all six because of it would lose five correct decisions and
+      teach agents to select fewer rows than they mean. Each id gets its own
+      verdict in `results`, and the ones that succeeded are **not** rolled back.
+      `updated`/`failed` say which happened.
+
+      Two verdicts can come back on a row, and neither is an error envelope:
+
+      - `not_found` — no such ticket *for this caller*. Another workspace's id,
+        a ticket outside the agent's teams and one that never existed are
+        deliberately indistinguishable, the same way the single endpoint answers
+        404 rather than 403 (NFR-S5).
+      - `merged` — the ticket is folded under a primary; editing it in place
+        would desync the two halves. `PATCH` refuses the same thing.
+
+      A bad *request* is still a whole refusal: an assignee outside the licence
+      or a team that does not exist is a `400` with nothing written, because
+      that names the target, not a row — every row would fail it identically.
+
+      Each ticket that actually changes writes its own `audit_log` entries, the
+      same ones a single `PATCH` writes. Being done in bulk is not a reason to
+      collapse fifty decisions into one summary line: the trail answers "what
+      happened to this ticket", and a ticket whose row is missing has no answer.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [ticket_ids]
+            properties:
+              ticket_ids:
+                type: array
+                minItems: 1
+                maxItems: 50
+                uniqueItems: true
+                description: The selected tickets. Duplicates are refused rather than applied twice.
+                items: { type: string, minLength: 1, maxLength: 12 }
+              status:
+                type: string
+                enum: [open, pending, solved, closed, spam]
+              priority: { type: integer, minimum: -100, maximum: 100 }
+              assignee_id:
+                type: string
+                format: uuid
+                nullable: true
+                description: "`null` unassigns; an absent key leaves the assignee alone."
+              group_id:
+                type: integer
+                format: int64
+                nullable: true
+                description: "`null` clears the team; an absent key leaves it alone."
+    responses:
+      "200":
+        description: |
+          The per-ticket report. 200 covers full success, partial success and
+          "every row failed" alike — the request itself was understood in all
+          three.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/TicketBulkResult" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 ticket:
   parameters:
     - name: ticketId

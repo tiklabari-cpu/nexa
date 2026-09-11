@@ -13,6 +13,7 @@ import { z } from 'zod';
 import {
   DEFAULT_TICKET_SORT_KEY,
   SORT_ORDERS,
+  TICKET_BULK_MAX,
   TICKET_PRIORITY_MAX,
   TICKET_PRIORITY_MIN,
   TICKET_SORT_KEYS,
@@ -84,6 +85,42 @@ const updateBody = z
   .refine(
     (body) => body.email_template_id === undefined || body.status !== undefined,
     'email_template_id: a template notice needs a status to be about',
+  );
+
+/**
+ * A bulk action over the Tickets grid (FR-MOD-02.7.1).
+ *
+ * The field list is `updateBody` minus `subject` (it describes one ticket) and
+ * minus `email_template_id` (mailing every customer in a selection is a
+ * different product decision, and this endpoint does not make it quietly).
+ *
+ * The ceiling is `@nexa/types`' rather than a literal: the console sizes its
+ * "select the whole page" gesture from the same constant, and a client offering
+ * one more row than the server accepts would 400 on the flagship action.
+ */
+const bulkBody = z
+  .object({
+    ticket_ids: z
+      .array(z.string().min(1).max(12))
+      .min(1)
+      .max(TICKET_BULK_MAX)
+      // Refused rather than deduplicated: a duplicate id means the caller and
+      // the server disagree about what was selected, and silently collapsing it
+      // would return fewer results than ids and break the report's alignment
+      // with the rows the agent ticked.
+      .refine((ids) => new Set(ids).size === ids.length, 'ticket_ids: ids must be unique'),
+    status: z.enum(TICKET_STATUSES).optional(),
+    priority: z.number().int().min(TICKET_PRIORITY_MIN).max(TICKET_PRIORITY_MAX).optional(),
+    assignee_id: z.string().uuid().nullable().optional(),
+    group_id: z.number().int().positive().nullable().optional(),
+  })
+  .refine(
+    (body) =>
+      body.status !== undefined ||
+      body.priority !== undefined ||
+      body.assignee_id !== undefined ||
+      body.group_id !== undefined,
+    'at least one field to change is required',
   );
 
 const mergeBody = z.object({ into: z.string().min(1).max(12) });
@@ -183,6 +220,34 @@ export default async function ticketRoutes(
     });
 
     return reply.code(201).send(ticket);
+  });
+
+  // Bulk actions (PRD §5.2 "Ticketing (gelişmiş)" · FR-13-EK.3 ·
+  // FR-MOD-02.7.1). Declared before `/tickets/:ticketId` so the literal
+  // segment is unambiguous to a reader; Fastify's radix tree prefers the
+  // static branch either way.
+  //
+  // A POST rather than a PATCH on the collection: it does not describe the
+  // collection's new state, it runs one action over a caller-named selection
+  // and answers with a report. `WRITE_SCOPES` and the licence gate hook are the
+  // same ones the single endpoint sits behind — nothing here is a cheaper door
+  // into a ticket than `PATCH /tickets/{id}` is.
+  app.post('/tickets/bulk', { config: { scopes: WRITE_SCOPES } }, async (request, reply) => {
+    const body = parse(bulkBody, request.body);
+    const tenant = request.tenant();
+    const principal = request.requirePrincipal();
+    const audit = request.auditContext();
+
+    const result = await request.withTenant((tx) =>
+      tickets.bulkUpdate(tx, tenant, principal, audit, body.ticket_ids, {
+        ...(body.status !== undefined ? { status: body.status } : {}),
+        ...(body.priority !== undefined ? { priority: body.priority } : {}),
+        ...(body.assignee_id !== undefined ? { assignee_id: body.assignee_id } : {}),
+        ...(body.group_id !== undefined ? { group_id: body.group_id } : {}),
+      }),
+    );
+
+    return reply.send(result);
   });
 
   app.get<{ Params: { ticketId: string } }>(

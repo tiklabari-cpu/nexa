@@ -300,3 +300,112 @@ test.describe('ticket e-mail template — a status change mails the customer (FR
     });
   });
 });
+
+/**
+ * Bulk actions over a ticket selection (PRD §5.2 "Ticketing (gelişmiş)" ·
+ * FR-13-EK.3 · FR-MOD-02.7.1).
+ *
+ * The unit suite proves the selection model and the bar's arithmetic against a
+ * fake; the integration suite proves the endpoint's isolation and its per-row
+ * report against a real database. What only the live stack proves is that the
+ * three meet: boxes ticked in a browser become one request, one request becomes
+ * a report the agent can read, and the report is true of the database
+ * afterwards — asserted here through the API rather than by trusting the same
+ * screen that printed it.
+ *
+ * Idempotent against the shared seed, which is reseeded without truncating: the
+ * two tickets are found by subject or created, and put back to `open` before
+ * the sweep so a re-run has somewhere to move them to. The subjects sort to the
+ * top of the grid under `?ticket_sort=subject&ticket_order=asc`, which is what
+ * keeps the two rows inside the virtualiser's window however many tickets
+ * earlier runs have left behind.
+ */
+test.describe('bulk actions over a ticket selection (FR-13-EK.3)', () => {
+  test.use({ viewport: { width: 1680, height: 1050 } });
+
+  const SUBJECTS = ['AAA bulk sweep one', 'AAA bulk sweep two'];
+
+  test('solves a multi-row selection in one gesture and reports it', async ({
+    agentPage,
+    request: apiRequest,
+  }) => {
+    const token = await ownerAccessToken(apiRequest);
+    const authorised = { headers: { authorization: `Bearer ${token}` } };
+
+    // A customer to hang the tickets off — `POST /tickets` needs one or a chat.
+    const customers = await apiRequest.get(`${API_BASE}/customers?segment=all&limit=1`, authorised);
+    expect(customers.ok()).toBe(true);
+    const customerId = ((await customers.json()) as { items: Array<{ id: string }> }).items[0]?.id;
+    expect(customerId, 'the seed has no customer to file a ticket against').toBeTruthy();
+
+    // Find or create, then force back to `open`: a re-run must start from a
+    // state the sweep can actually change, or "2 updated" proves nothing.
+    const listed = await apiRequest.get(`${API_BASE}/tickets?view=all&limit=100`, authorised);
+    expect(listed.ok()).toBe(true);
+    const existing = ((await listed.json()) as { items: Array<{ id: string; subject: string }> })
+      .items;
+
+    const ids: string[] = [];
+    for (const subject of SUBJECTS) {
+      const found = existing.find((ticket) => ticket.subject === subject);
+      if (found) {
+        const reopened = await apiRequest.patch(`${API_BASE}/tickets/${found.id}`, {
+          ...authorised,
+          data: { status: 'open' },
+        });
+        expect(reopened.ok(), `reopen failed: ${reopened.status()}`).toBe(true);
+        ids.push(found.id);
+      } else {
+        const created = await apiRequest.post(`${API_BASE}/tickets`, {
+          ...authorised,
+          data: { subject, customer_id: customerId },
+        });
+        expect(created.ok(), `create failed: ${created.status()}`).toBe(true);
+        ids.push(((await created.json()) as { id: string }).id);
+      }
+    }
+
+    // `all` rather than a filtered view, so solving does not move the rows out
+    // from under the selection while the report is being read.
+    await agentPage.goto('/app/inbox?ticket_view=all&ticket_sort=subject&ticket_order=asc');
+    const grid = agentPage.getByRole('table', { name: 'Tickets' });
+    await expect(grid).toBeVisible();
+
+    // Nothing ticked, nothing offered: the bar is not furniture above the grid.
+    const bar = agentPage.getByRole('group', { name: 'Bulk actions' });
+    await expect(bar).toBeHidden();
+
+    for (const subject of SUBJECTS) {
+      await grid.getByRole('checkbox', { name: `Select ticket: ${subject}` }).check();
+    }
+    await expect(bar).toBeVisible();
+    await expect(bar.getByText('2 tickets selected')).toBeVisible();
+
+    // Two gestures, not one: the picker alone must not move anything.
+    await bar.getByLabel('Action').selectOption('status:solved');
+    for (const id of ids) {
+      const stillOpen = await apiRequest.get(`${API_BASE}/tickets/${id}`, authorised);
+      expect(((await stillOpen.json()) as { status: string }).status).toBe('open');
+    }
+
+    await bar.getByRole('button', { name: 'Apply' }).click();
+
+    // The report, read as the agent reads it — both numbers, so a partial
+    // outcome could not have been painted as success.
+    await expect(bar.getByRole('status')).toHaveText(/2 updated, 0 skipped/);
+
+    // …and the same claim checked against the server rather than the screen.
+    for (const id of ids) {
+      const detail = await apiRequest.get(`${API_BASE}/tickets/${id}`, authorised);
+      expect(detail.ok()).toBe(true);
+      expect(((await detail.json()) as { status: string }).status).toBe('solved');
+    }
+
+    // The grid behind the bar agrees, which is what the invalidation is for.
+    await expect(
+      grid.getByRole('row').filter({ hasText: SUBJECTS[0]! }).getByText('Solved'),
+    ).toBeVisible();
+
+    await agentPage.screenshot({ path: 'kanit/02.7.1-ticket-bulk-actions.png', fullPage: true });
+  });
+});

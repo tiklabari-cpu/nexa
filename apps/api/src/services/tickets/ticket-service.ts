@@ -18,6 +18,7 @@ import {
   hasAnyScope,
   type CustomFieldValue,
   type SortOrder,
+  type TicketBulkSkipReason,
   type TicketSortKey,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
@@ -25,7 +26,7 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';
 import type { Principal } from '../auth/principal.js';
 import { readCustomFieldValues } from '../custom-fields/custom-field-service.js';
-import { evaluateSubject } from '../sla/sla-service.js';
+import { evaluate, evaluateSubject, readClock } from '../sla/sla-service.js';
 import { applyTicketRules } from './apply-ticket-rules.js';
 
 export const TICKET_STATUSES = ['open', 'pending', 'solved', 'closed', 'spam'] as const;
@@ -104,6 +105,20 @@ export interface UpdateInput {
   priority?: number;
   assignee_id?: string | null;
   group_id?: number | null;
+}
+
+/** One selected ticket's verdict in a bulk action (FR-MOD-02.7.1). */
+export interface BulkUpdateRowResult {
+  ticket_id: string;
+  status: 'updated' | 'skipped';
+  reason: TicketBulkSkipReason | null;
+}
+
+export interface BulkUpdateResult {
+  updated: number;
+  failed: number;
+  /** One entry per requested id, in request order. */
+  results: BulkUpdateRowResult[];
 }
 
 interface Visibility {
@@ -403,23 +418,12 @@ export class TicketService {
       include: TICKET_INCLUDE,
     });
 
-    // Lifecycle and priority are auditable HelpDesk events (FR-MOD-13.6). Only a
-    // real transition writes a row — a PATCH that sets a field to what it already
-    // was should not litter the append-only log.
-    if (patch.status !== undefined && patch.status !== existing.status) {
-      await writeAuditEntry(tx, audit, {
-        action: 'ticket.status_changed',
-        target: `ticket:${ticketId}`,
-        metadata: { from: existing.status, to: patch.status },
-      });
-    }
-    if (patch.priority !== undefined && patch.priority !== existing.priority) {
-      await writeAuditEntry(tx, audit, {
-        action: 'ticket.priority_changed',
-        target: `ticket:${ticketId}`,
-        metadata: { from: existing.priority, to: patch.priority },
-      });
-    }
+    // Lifecycle, priority and ownership are auditable HelpDesk events
+    // (FR-MOD-13.6). Written through the shared helper so the single and the
+    // bulk endpoint record the same thing: a trail that says different things
+    // about the same product action depending on which control was used is not
+    // a trail anybody can reason from.
+    await writeTicketChangeAudit(tx, audit, ticketId, existing, patch);
 
     // The resolution clock stops when the ticket leaves the unresolved set
     // (FR-MOD-11.5 · 11.5-d). Only that transition — a solved ticket edited
@@ -449,6 +453,151 @@ export class TicketService {
     }
 
     return toDetail(tx, updated);
+  }
+
+  /**
+   * Apply one change to a selection of tickets (PRD §5.2 "Ticketing
+   * (gelişmiş)" · FR-13-EK.3 · FR-MOD-02.7.1).
+   *
+   * **Partial success, reported per row.** A queue moves while it is being
+   * worked: one of the six tickets an agent just selected may have been merged
+   * a second ago. Refusing the whole request over it would throw away five
+   * correct decisions, so every id gets its own verdict and the writes that
+   * succeeded stand. The two verdicts — `not_found` and `merged` — are the two
+   * things `PATCH /tickets/{id}` refuses, answered per row instead of as a
+   * status code.
+   *
+   * **What is batched and what is not, deliberately.** The row work is constant
+   * in the size of the selection: one read for the whole set, one validation of
+   * the assignment target (it names the *request*, not a row — every row would
+   * fail it identically, so a bad target is a 400 with nothing written), one
+   * `updateMany`, and one read of the SLA calendar for the whole batch rather
+   * than per ticket (the shape `sla-service` already offers its sweep). What
+   * stays per row is the `audit_log` entry, and that is not an oversight: the
+   * chain hashes each entry onto the one before it, so it cannot be batched,
+   * and collapsing a fifty-ticket sweep into one summary line would leave
+   * forty-nine tickets with nothing in the trail. That per-row cost is what
+   * `TICKET_BULK_MAX` bounds.
+   *
+   * Cross-tenant needs no branch here and that is the point: `tx` is the
+   * tenant-scoped client, so row level security means another workspace's id
+   * simply does not come back from the read and is reported as `not_found` —
+   * the same answer an id that never existed gets (NFR-S5).
+   */
+  async bulkUpdate(
+    tx: TenantClient,
+    tenant: TenantContext,
+    principal: Principal,
+    audit: AuditContext,
+    ticketIds: string[],
+    patch: UpdateInput,
+  ): Promise<BulkUpdateResult> {
+    const visibility = await resolveVisibility(tx, principal, 'write');
+
+    const rows = await tx.ticket.findMany({
+      where: { id: { in: ticketIds } },
+      select: {
+        id: true,
+        status: true,
+        priority: true,
+        assigneeId: true,
+        groupId: true,
+        mergedIntoId: true,
+        createdAt: true,
+      },
+    });
+    const found = new Map(rows.map((row) => [row.id, row]));
+
+    // Validated once, before anything is written. An assignee outside the
+    // licence or a team that does not exist is a property of the request, so it
+    // refuses the request rather than producing fifty identical row failures.
+    if (patch.assignee_id !== undefined || patch.group_id !== undefined) {
+      await assertAssignable(
+        tx,
+        tenant,
+        patch.assignee_id !== undefined ? patch.assignee_id : null,
+        patch.group_id !== undefined ? patch.group_id : null,
+      );
+    }
+
+    const results: BulkUpdateRowResult[] = [];
+    const eligible: typeof rows = [];
+
+    // Request order, so the console can line the report up against the rows the
+    // agent ticked without sorting anything.
+    for (const id of ticketIds) {
+      const row = found.get(id);
+      if (!row || !isVisibleTo(visibility, row)) {
+        results.push({ ticket_id: id, status: 'skipped', reason: 'not_found' });
+        continue;
+      }
+      // A merged ticket is folded under its primary; editing it in place would
+      // desync the two halves of the merge. `update` refuses the same thing.
+      if (row.mergedIntoId) {
+        results.push({ ticket_id: id, status: 'skipped', reason: 'merged' });
+        continue;
+      }
+      eligible.push(row);
+      results.push({ ticket_id: id, status: 'updated', reason: null });
+    }
+
+    if (eligible.length > 0) {
+      // One stamp for the whole batch: fifty tickets touched by one gesture
+      // happened at one moment, and giving them fifty timestamps a millisecond
+      // apart would invent an order the agent never expressed.
+      const now = new Date();
+
+      await tx.ticket.updateMany({
+        where: { id: { in: eligible.map((row) => row.id) } },
+        data: {
+          ...(patch.status !== undefined ? { status: patch.status } : {}),
+          ...(patch.priority !== undefined ? { priority: patch.priority } : {}),
+          ...(patch.assignee_id !== undefined ? { assigneeId: patch.assignee_id } : {}),
+          ...(patch.group_id !== undefined
+            ? { groupId: patch.group_id != null ? BigInt(patch.group_id) : null }
+            : {}),
+          // Any change is activity, exactly as on the single endpoint — the two
+          // must not order the queue differently depending on how many rows the
+          // agent happened to tick.
+          lastMessageAt: now,
+        },
+      });
+
+      for (const row of eligible) {
+        await writeTicketChangeAudit(tx, audit, row.id, row, patch);
+      }
+
+      // The resolution clock stops when a ticket leaves the unresolved set
+      // (FR-MOD-11.5 · 11.5-d). The calendar is read once for the batch and
+      // handed to `evaluate`, which is why `evaluateSubject` is not called in
+      // this loop: it rebuilds the business week per subject, and doing that
+      // fifty times for one gesture is the N-query shape this endpoint exists
+      // to avoid.
+      const nextStatus = patch.status;
+      const stopping =
+        nextStatus !== undefined && !UNRESOLVED.includes(nextStatus)
+          ? eligible.filter(
+              (row) => row.status !== nextStatus && UNRESOLVED.includes(row.status as TicketStatus),
+            )
+          : [];
+      if (stopping.length > 0) {
+        const clock = await readClock(tx, tenant, now);
+        if (clock) {
+          for (const row of stopping) {
+            await evaluate(tx, tenant, clock, {
+              subjectType: 'ticket',
+              subjectId: row.id,
+              target: 'resolution',
+              startedAt: row.createdAt,
+              stoppedAt: now,
+            });
+          }
+        }
+      }
+    }
+
+    const updated = results.filter((row) => row.status === 'updated').length;
+    return { updated, failed: results.length - updated, results };
   }
 
   /**
@@ -803,6 +952,83 @@ function queryFilter(query: string | undefined): Record<string, unknown> {
   };
 }
 
+/** The fields an audit comparison needs — narrow on purpose, so the bulk path's
+ * lean `select` and the single path's full row both satisfy it. */
+interface AuditableTicketState {
+  status: string;
+  priority: number;
+  assigneeId: string | null;
+  groupId: bigint | null;
+}
+
+/**
+ * Record what actually changed about one ticket.
+ *
+ * The single writer for ticket-change entries, so `PATCH /tickets/{id}` and
+ * `POST /tickets/bulk` cannot drift. Only a *real* transition writes a row — a
+ * request that sets a field to what it already was should not litter the
+ * append-only log, and the bulk path makes that matter: "solve these fifty"
+ * over a queue where forty were already solved must add ten entries, not fifty.
+ */
+async function writeTicketChangeAudit(
+  tx: TenantClient,
+  audit: AuditContext,
+  ticketId: string,
+  before: AuditableTicketState,
+  patch: UpdateInput,
+): Promise<void> {
+  const target = `ticket:${ticketId}`;
+
+  if (patch.status !== undefined && patch.status !== before.status) {
+    await writeAuditEntry(tx, audit, {
+      action: 'ticket.status_changed',
+      target,
+      metadata: { from: before.status, to: patch.status },
+    });
+  }
+
+  if (patch.priority !== undefined && patch.priority !== before.priority) {
+    await writeAuditEntry(tx, audit, {
+      action: 'ticket.priority_changed',
+      target,
+      metadata: { from: before.priority, to: patch.priority },
+    });
+  }
+
+  // Assignee and team are one entry, not two: "who works this now" is a single
+  // decision even when a move between teams carries the person with it, and
+  // splitting it would make a reassignment read as two unrelated events.
+  const groupBefore = before.groupId != null ? Number(before.groupId) : null;
+  const assigneeMoved = patch.assignee_id !== undefined && patch.assignee_id !== before.assigneeId;
+  const groupMoved = patch.group_id !== undefined && patch.group_id !== groupBefore;
+  if (assigneeMoved || groupMoved) {
+    await writeAuditEntry(tx, audit, {
+      action: 'ticket.assigned',
+      target,
+      metadata: {
+        ...(assigneeMoved
+          ? { from_assignee: before.assigneeId, to_assignee: patch.assignee_id }
+          : {}),
+        ...(groupMoved ? { from_group: groupBefore, to_group: patch.group_id } : {}),
+      },
+    });
+  }
+}
+
+/**
+ * Can this caller see this ticket? The in-memory half of `visibilityFilter`,
+ * shared by the single load and the bulk selection so one ticket cannot be
+ * visible through one endpoint and invisible through the other.
+ */
+function isVisibleTo(
+  visibility: Visibility,
+  row: { assigneeId: string | null; groupId: bigint | null },
+): boolean {
+  if (visibility.unrestricted) return true;
+  if (row.assigneeId === visibility.actorId) return true;
+  return row.groupId != null && visibility.groupIds.includes(row.groupId);
+}
+
 async function loadVisible(
   tx: TenantClient,
   visibility: Visibility,
@@ -810,11 +1036,7 @@ async function loadVisible(
 ): Promise<TicketRow> {
   const ticket = await tx.ticket.findUnique({ where: { id: ticketId }, include: TICKET_INCLUDE });
   if (!ticket) throw ApiError.notFound('Ticket not found.');
-  if (visibility.unrestricted) return ticket;
-
-  const mine = ticket.assigneeId === visibility.actorId;
-  const viaTeam = ticket.groupId != null && visibility.groupIds.includes(ticket.groupId);
-  if (!mine && !viaTeam) throw ApiError.notFound('Ticket not found.');
+  if (!isVisibleTo(visibility, ticket)) throw ApiError.notFound('Ticket not found.');
   return ticket;
 }
 

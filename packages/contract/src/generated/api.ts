@@ -3968,6 +3968,110 @@ export interface paths {
     patch: operations['updateTicketRule'];
     trace?: never;
   };
+  '/settings/bots': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * List rule bots
+     * @description Every bot in the workspace with its rules (in evaluation order) and its
+     *     team assignments. A workspace has a handful of bots, so this is not paged.
+     */
+    get: operations['listRuleBots'];
+    put?: never;
+    /**
+     * Create a rule bot
+     * @description A bot starts with no rules and answers nobody until it has one. `groups`
+     *     may be supplied at creation; each team is validated against the workspace,
+     *     so a bot cannot be attached to a team that does not exist.
+     */
+    post: operations['createRuleBot'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/bots/{botId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /**
+     * Delete a rule bot
+     * @description Its rules and team assignments go with it.
+     */
+    delete: operations['deleteRuleBot'];
+    options?: never;
+    head?: never;
+    /**
+     * Rename a bot, switch it off, or change the teams it serves
+     * @description Only the fields present in the body change. `groups` replaces the whole
+     *     assignment list — a bot's teams are read as a set, so sending a shorter
+     *     list is how one is removed.
+     */
+    patch: operations['updateRuleBot'];
+    trace?: never;
+  };
+  '/settings/bots/{botId}/rules': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Add a rule to a bot
+     * @description Both a condition and an action are required: a rule that could match
+     *     nobody, or that would do nothing, is rejected rather than saved inert. An
+     *     empty condition is **not** "answer everything" — it is an unfinished rule.
+     */
+    post: operations['createRuleBotRule'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/settings/bots/{botId}/rules/{ruleId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a rule */
+    delete: operations['deleteRuleBotRule'];
+    options?: never;
+    head?: never;
+    /**
+     * Edit a rule or toggle it on/off
+     * @description Only the fields present in the body change. The result must still be a
+     *     valid rule — an edit cannot strip the condition or the action out of one.
+     */
+    patch: operations['updateRuleBotRule'];
+    trace?: never;
+  };
   '/settings/ticket-email-templates': {
     parameters: {
       query?: never;
@@ -9405,6 +9509,95 @@ export interface components {
       created_at: string;
     };
     /**
+     * @description A rule bot's trigger (FR-MOD-06.6). Every key set must hold (AND). An
+     *     empty predicate matches nothing, so a rule with no condition is rejected
+     *     rather than saved to answer every message.
+     *
+     *     There is no regular-expression condition, and that is a decision rather
+     *     than an omission: the string a rule matches against is the visitor's own
+     *     message, so a caller-supplied pattern is an unbounded matcher over
+     *     attacker-influenced text.
+     */
+    RuleBotConditions: {
+      /** @description The whole message, trimmed, compared case-insensitively. */
+      message_equals?: string;
+      /** @description Case-insensitive substring of the message. */
+      message_contains?: string;
+      /**
+       * @description Case-insensitive whole-word occurrence. `cancel` matches "cancel my
+       *     order" and not "cancellation policy", which is what separates it
+       *     from `message_contains`.
+       */
+      message_word?: string;
+      /**
+       * @description Case-insensitive substring of the page the visitor wrote from. A
+       *     message that arrived without a page never matches.
+       */
+      page_url_contains?: string;
+      /**
+       * @description Only inside — or only outside — the workspace's business hours. The
+       *     calendar is the union of the agents' saved work schedules, the same
+       *     one the SLA clock uses. A workspace with no saved schedules has no
+       *     calendar, and this condition then matches nothing.
+       * @enum {string}
+       */
+      office_hours?: 'open' | 'closed';
+    };
+    /**
+     * @description What a matching rule does (FR-MOD-06.6): reply, tag, transfer — or any
+     *     combination. At least one action must be set; a rule that does nothing is
+     *     rejected rather than saved inert.
+     */
+    RuleBotActions: {
+      /** @description Reply to the visitor, authored as the bot. */
+      send_message?: string;
+      /** @description Tag the conversation (created in the tag library if new). */
+      add_tag?: string;
+      /** @description Transfer the conversation to this team. */
+      transfer_to_group_id?: number;
+    };
+    /**
+     * @description A bot's place in one team, and how eagerly it is tried there. `priority`
+     *     is the same four-tier vocabulary an agent's team membership carries, so
+     *     the word means one thing across the console.
+     */
+    RuleBotGroupAssignment: {
+      group_id: number;
+      /** @enum {string} */
+      priority: 'primary' | 'first' | 'normal' | 'last';
+    };
+    /** @description One condition + action pair belonging to a rule bot (FR-MOD-06.6). */
+    RuleBotRule: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      conditions: components['schemas']['RuleBotConditions'];
+      actions: components['schemas']['RuleBotActions'];
+      /** @description Whether the rule fires. Off keeps it written down without acting. */
+      enabled: boolean;
+      /** @description Evaluation order within the bot; lower is tried first, and the first match wins. */
+      position: number;
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
+     * @description A deterministic, LLM-free chatbot (FR-MOD-06.6) — separate from the AI
+     *     Agent, tried before it, and reaching no model, embedding or knowledge
+     *     base on any path.
+     */
+    RuleBot: {
+      /** Format: uuid */
+      id: string;
+      name: string;
+      /** @description Off silences every rule the bot carries without deleting any of them. */
+      enabled: boolean;
+      groups: components['schemas']['RuleBotGroupAssignment'][];
+      /** @description In evaluation order — `position` ascending, then oldest first. */
+      rules: components['schemas']['RuleBotRule'][];
+      /** Format: date-time */
+      created_at: string;
+    };
+    /**
      * @description A branded, variabled ticket e-mail template (FR-MOD-08.7.5). The subject
      *     and body may carry `{{ group.field }}` placeholders from the fixed
      *     variable catalogue; both are validated on save, so a stored template can
@@ -13520,10 +13713,14 @@ export interface operations {
           /** Format: uuid */
           agent_id?: string;
           /**
+           * @description Who handed the conversation over. `ai_handoff` is the AI
+           *     Agent's and is what the AI report attributes a transfer to;
+           *     `bot_handoff` is the deterministic rule bot's (FR-MOD-06.6),
+           *     separate so a rule firing never reads as a model deciding.
            * @default manual
            * @enum {string}
            */
-          reason?: 'manual' | 'routing' | 'agent_disconnected' | 'ai_handoff';
+          reason?: 'manual' | 'routing' | 'agent_disconnected' | 'ai_handoff' | 'bot_handoff';
         };
       };
     };
@@ -17951,6 +18148,226 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['TicketRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  listRuleBots: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The rule bots */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            items: components['schemas']['RuleBot'][];
+            total: number;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createRuleBot: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          /** @description Whether the bot answers at all; defaults to true. */
+          enabled?: boolean;
+          groups?: components['schemas']['RuleBotGroupAssignment'][];
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RuleBot'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteRuleBot: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateRuleBot: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          enabled?: boolean;
+          groups?: components['schemas']['RuleBotGroupAssignment'][];
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RuleBot'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  createRuleBotRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name: string;
+          conditions: components['schemas']['RuleBotConditions'];
+          actions: components['schemas']['RuleBotActions'];
+          /** @description Whether the rule fires; defaults to true. */
+          enabled?: boolean;
+          /** @description Evaluation order within the bot; lower is tried first. */
+          position?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Created */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RuleBotRule'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  deleteRuleBotRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Deleted */
+      204: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content?: never;
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateRuleBotRule: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        botId: string;
+        ruleId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          name?: string;
+          conditions?: components['schemas']['RuleBotConditions'];
+          actions?: components['schemas']['RuleBotActions'];
+          enabled?: boolean;
+          position?: number;
+        };
+      };
+    };
+    responses: {
+      /** @description Updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RuleBotRule'];
         };
       };
       400: components['responses']['BadRequest'];

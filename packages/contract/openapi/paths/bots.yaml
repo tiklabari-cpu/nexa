@@ -1,0 +1,228 @@
+# Rule bots — deterministic, LLM-free chatbots (FR-MOD-06.6).
+#
+# A bot is a name, an on/off switch, an ordered list of condition+action rules,
+# and the teams it serves with a priority in each. When a visitor writes in, the
+# bots reachable from that conversation's teams are tried in priority order and
+# the first matching rule wins; only then, and only if no bot took the
+# conversation over, does the AI Agent see the message.
+#
+# Separate from `/ai-agents` on purpose — the requirement is a bot that is
+# deterministic by design rather than by accident, and nothing on this surface
+# reaches an LLM, an embedding or the knowledge base.
+#
+# Managed under /settings on the bot scopes the AI playbook already uses:
+# `agents-bot--all:ro` to read, `agents-bot--all:rw` to write. Configuring what
+# answers every visitor is an admin action.
+
+bots:
+  get:
+    tags: [Bots]
+    operationId: listRuleBots
+    summary: List rule bots
+    description: |
+      Every bot in the workspace with its rules (in evaluation order) and its
+      team assignments. A workspace has a handful of bots, so this is not paged.
+    responses:
+      "200":
+        description: The rule bots
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items, total]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: "../openapi.yaml#/components/schemas/RuleBot" }
+                total: { type: integer }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  post:
+    tags: [Bots]
+    operationId: createRuleBot
+    summary: Create a rule bot
+    description: |
+      A bot starts with no rules and answers nobody until it has one. `groups`
+      may be supplied at creation; each team is validated against the workspace,
+      so a bot cannot be attached to a team that does not exist.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              enabled:
+                type: boolean
+                description: Whether the bot answers at all; defaults to true.
+              groups:
+                type: array
+                maxItems: 25
+                items: { $ref: "../openapi.yaml#/components/schemas/RuleBotGroupAssignment" }
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RuleBot" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+bot:
+  parameters:
+    - name: botId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Bots]
+    operationId: updateRuleBot
+    summary: Rename a bot, switch it off, or change the teams it serves
+    description: |
+      Only the fields present in the body change. `groups` replaces the whole
+      assignment list — a bot's teams are read as a set, so sending a shorter
+      list is how one is removed.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              enabled: { type: boolean }
+              groups:
+                type: array
+                maxItems: 25
+                items: { $ref: "../openapi.yaml#/components/schemas/RuleBotGroupAssignment" }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RuleBot" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Bots]
+    operationId: deleteRuleBot
+    summary: Delete a rule bot
+    description: Its rules and team assignments go with it.
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+botRules:
+  parameters:
+    - name: botId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  post:
+    tags: [Bots]
+    operationId: createRuleBotRule
+    summary: Add a rule to a bot
+    description: |
+      Both a condition and an action are required: a rule that could match
+      nobody, or that would do nothing, is rejected rather than saved inert. An
+      empty condition is **not** "answer everything" — it is an unfinished rule.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [name, conditions, actions]
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              conditions: { $ref: "../openapi.yaml#/components/schemas/RuleBotConditions" }
+              actions: { $ref: "../openapi.yaml#/components/schemas/RuleBotActions" }
+              enabled:
+                type: boolean
+                description: Whether the rule fires; defaults to true.
+              position:
+                type: integer
+                minimum: 0
+                maximum: 1000
+                description: Evaluation order within the bot; lower is tried first.
+    responses:
+      "201":
+        description: Created
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RuleBotRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+botRule:
+  parameters:
+    - name: botId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    - name: ruleId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+
+  patch:
+    tags: [Bots]
+    operationId: updateRuleBotRule
+    summary: Edit a rule or toggle it on/off
+    description: |
+      Only the fields present in the body change. The result must still be a
+      valid rule — an edit cannot strip the condition or the action out of one.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            properties:
+              name: { type: string, minLength: 1, maxLength: 120 }
+              conditions: { $ref: "../openapi.yaml#/components/schemas/RuleBotConditions" }
+              actions: { $ref: "../openapi.yaml#/components/schemas/RuleBotActions" }
+              enabled: { type: boolean }
+              position: { type: integer, minimum: 0, maximum: 1000 }
+    responses:
+      "200":
+        description: Updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RuleBotRule" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  delete:
+    tags: [Bots]
+    operationId: deleteRuleBotRule
+    summary: Delete a rule
+    responses:
+      "204": { description: Deleted }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

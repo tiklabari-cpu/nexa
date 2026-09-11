@@ -79,6 +79,8 @@ tags:
     description: Marketplace of third-party integrations, connected through a (mock) OAuth flow.
   - name: Playbook
     description: AI agents, skills and the knowledge they answer from.
+  - name: Bots
+    description: Rule bots — deterministic, LLM-free chatbots, tried before the AI Agent.
   - name: Knowledge Base
     description: The reader-facing "SEO'lu self-servis" public KB — articles, categories, publish state.
   - name: Copilot
@@ -384,6 +386,14 @@ paths:
     $ref: "./paths/ticket-rules.yaml#/ticketRules"
   /settings/ticket-rules/{ruleId}:
     $ref: "./paths/ticket-rules.yaml#/ticketRule"
+  /settings/bots:
+    $ref: "./paths/bots.yaml#/bots"
+  /settings/bots/{botId}:
+    $ref: "./paths/bots.yaml#/bot"
+  /settings/bots/{botId}/rules:
+    $ref: "./paths/bots.yaml#/botRules"
+  /settings/bots/{botId}/rules/{ruleId}:
+    $ref: "./paths/bots.yaml#/botRule"
   /settings/ticket-email-templates:
     $ref: "./paths/ticket-email-templates.yaml#/ticketEmailTemplates"
   /settings/ticket-email-templates/{templateId}:
@@ -3332,6 +3342,121 @@ components:
         position:
           type: integer
           description: Evaluation order; lower runs first, so a later rule's assignment wins.
+        created_at: { type: string, format: date-time }
+
+    RuleBotConditions:
+      type: object
+      description: |
+        A rule bot's trigger (FR-MOD-06.6). Every key set must hold (AND). An
+        empty predicate matches nothing, so a rule with no condition is rejected
+        rather than saved to answer every message.
+
+        There is no regular-expression condition, and that is a decision rather
+        than an omission: the string a rule matches against is the visitor's own
+        message, so a caller-supplied pattern is an unbounded matcher over
+        attacker-influenced text.
+      properties:
+        message_equals:
+          type: string
+          maxLength: 2048
+          description: The whole message, trimmed, compared case-insensitively.
+        message_contains:
+          type: string
+          maxLength: 2048
+          description: Case-insensitive substring of the message.
+        message_word:
+          type: string
+          maxLength: 2048
+          description: |
+            Case-insensitive whole-word occurrence. `cancel` matches "cancel my
+            order" and not "cancellation policy", which is what separates it
+            from `message_contains`.
+        page_url_contains:
+          type: string
+          maxLength: 2048
+          description: |
+            Case-insensitive substring of the page the visitor wrote from. A
+            message that arrived without a page never matches.
+        office_hours:
+          type: string
+          enum: [open, closed]
+          description: |
+            Only inside — or only outside — the workspace's business hours. The
+            calendar is the union of the agents' saved work schedules, the same
+            one the SLA clock uses. A workspace with no saved schedules has no
+            calendar, and this condition then matches nothing.
+
+    RuleBotActions:
+      type: object
+      description: |
+        What a matching rule does (FR-MOD-06.6): reply, tag, transfer — or any
+        combination. At least one action must be set; a rule that does nothing is
+        rejected rather than saved inert.
+      properties:
+        send_message:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Reply to the visitor, authored as the bot.
+        add_tag:
+          type: string
+          minLength: 1
+          maxLength: 64
+          description: Tag the conversation (created in the tag library if new).
+        transfer_to_group_id:
+          type: integer
+          description: Transfer the conversation to this team.
+
+    RuleBotGroupAssignment:
+      type: object
+      description: |
+        A bot's place in one team, and how eagerly it is tried there. `priority`
+        is the same four-tier vocabulary an agent's team membership carries, so
+        the word means one thing across the console.
+      required: [group_id, priority]
+      properties:
+        group_id: { type: integer }
+        priority:
+          type: string
+          enum: [primary, first, normal, last]
+
+    RuleBotRule:
+      type: object
+      description: One condition + action pair belonging to a rule bot (FR-MOD-06.6).
+      required: [id, name, conditions, actions, enabled, position, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        conditions: { $ref: "#/components/schemas/RuleBotConditions" }
+        actions: { $ref: "#/components/schemas/RuleBotActions" }
+        enabled:
+          type: boolean
+          description: Whether the rule fires. Off keeps it written down without acting.
+        position:
+          type: integer
+          description: Evaluation order within the bot; lower is tried first, and the first match wins.
+        created_at: { type: string, format: date-time }
+
+    RuleBot:
+      type: object
+      description: |
+        A deterministic, LLM-free chatbot (FR-MOD-06.6) — separate from the AI
+        Agent, tried before it, and reaching no model, embedding or knowledge
+        base on any path.
+      required: [id, name, enabled, groups, rules, created_at]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        enabled:
+          type: boolean
+          description: Off silences every rule the bot carries without deleting any of them.
+        groups:
+          type: array
+          items: { $ref: "#/components/schemas/RuleBotGroupAssignment" }
+        rules:
+          type: array
+          description: In evaluation order — `position` ascending, then oldest first.
+          items: { $ref: "#/components/schemas/RuleBotRule" }
         created_at: { type: string, format: date-time }
 
     TicketEmailTemplate:

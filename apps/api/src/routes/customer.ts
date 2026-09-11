@@ -37,6 +37,7 @@ import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.j
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
+import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
 import type { Mailer } from '../services/mail/mailer.js';
@@ -284,7 +285,35 @@ export default async function customerRoutes(
   // (FR-MOD-13.3). The chat core holds its own for the close path.
   const goals = createGoalConversionRecorder(app.db, { logger: app.log });
   const ai = new AiResponder(chats, publisher);
+  const ruleBots = new RuleBotResponder(chats, publisher);
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
+
+  /**
+   * Answer an incoming customer message: the deterministic rule bot first
+   * (FR-MOD-06.6), the AI Agent second.
+   *
+   * The order is the decision, and it is made once, here, rather than inside
+   * either responder. A rule is a sentence the workspace wrote down and can
+   * predict exactly; the AI is a guess. When both could answer, the predictable
+   * one should — that is the whole reason somebody writes "if they ask about
+   * opening hours, say this".
+   *
+   * The AI is skipped only when the bot actually TOOK THE CONVERSATION OVER, not
+   * merely when a rule matched. A rule whose only action is a tag is an
+   * annotation; treating it as an answer would mean "tag anything containing
+   * 'refund' with billing" silently switched the AI off for every refund
+   * question, which is the kind of defect nobody finds by reading the rule.
+   */
+  async function respondToCustomerMessage(
+    request: FastifyRequest,
+    chatId: string,
+    text: string,
+    pageUrl: string | null,
+  ): Promise<void> {
+    const bot = await ruleBots.handle(request, chatId, text, pageUrl);
+    if (bot?.tookOver) return;
+    await ai.handle(request, chatId, text);
+  }
 
   /**
    * Tell the human assigned to a chat that their visitor wrote in
@@ -678,7 +707,9 @@ export default async function customerRoutes(
         // A replay is the same message arriving twice; running the skill again
         // would answer the customer twice for one question. An attachment with no
         // text gives the skill nothing to match, so it is left for a human.
-        if (!replayed && maskedText?.trim()) await ai.handle(request, existing.id, maskedText);
+        if (!replayed && maskedText?.trim()) {
+          await respondToCustomerMessage(request, existing.id, maskedText, body.url ?? null);
+        }
 
         // A replay is the same message arriving twice — do not notify again, on
         // either channel.
@@ -716,7 +747,9 @@ export default async function customerRoutes(
         request.log.warn({ err: error }, 'could not record campaign engagement');
       }
 
-      if (maskedText?.trim()) await ai.handle(request, chat.id, maskedText);
+      if (maskedText?.trim()) {
+        await respondToCustomerMessage(request, chat.id, maskedText, body.url ?? null);
+      }
 
       // Routing may have assigned this brand-new chat to an agent — that is the
       // "assignment" notification (FR-MOD-13.8). `new_chat` rather than

@@ -7,6 +7,12 @@
  * after the message is committed, and every failure path leaves the
  * conversation exactly as it would have been with no AI at all — which is a
  * working conversation waiting for a human.
+ *
+ * It is not the first thing an incoming message meets. The deterministic rule
+ * bot (FR-MOD-06.6, `services/bots/rule-bot-responder.ts`) is tried first and
+ * this runs only when no rule took the conversation over; the ordering, and why
+ * it is that way round, is written at the one place that decides it —
+ * `respondToCustomerMessage` in `routes/customer.ts`.
  */
 import type { FastifyRequest } from 'fastify';
 import type { BotPrincipal } from '../auth/principal.js';

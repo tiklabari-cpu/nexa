@@ -52,7 +52,22 @@ export type EventRecipients = (typeof EVENT_RECIPIENTS)[number];
 export const CHAT_USER_TYPES = ['agent', 'customer'] as const;
 export type ChatUserType = (typeof CHAT_USER_TYPES)[number];
 
-export const TRANSFER_REASONS = ['manual', 'routing', 'agent_disconnected', 'ai_handoff'] as const;
+/**
+ * Why a conversation changed hands.
+ *
+ * `bot_handoff` is the rule bot's (FR-MOD-06.6) and is deliberately NOT
+ * `ai_handoff`: the AI Agent report attributes every `ai_handoff` to the AI
+ * (`report-csv.ts#AI_HANDOFF_TRANSFER`, feeding FR-MOD-06.5's "Transferred %"),
+ * so a deterministic bot's transfer filed under that name would inflate a figure
+ * about a model that was never consulted.
+ */
+export const TRANSFER_REASONS = [
+  'manual',
+  'routing',
+  'agent_disconnected',
+  'ai_handoff',
+  'bot_handoff',
+] as const;
 export type TransferReason = (typeof TRANSFER_REASONS)[number];
 
 // --- Ticketing --------------------------------------------------------------

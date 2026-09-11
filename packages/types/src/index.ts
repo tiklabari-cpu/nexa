@@ -30,3 +30,4 @@ export * from './persona.js';
 export * from './rich-text.js';
 export * from './message-edit.js';
 export * from './ticket-bulk.js';
+export * from './rule-bot.js';

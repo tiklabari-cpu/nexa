@@ -179,6 +179,9 @@ model License {
   trackedSales           TrackedSale[]
   slaPolicy              SlaPolicy?
   slaBreaches            SlaBreach[]
+  bots                   Bot[]
+  botRules               BotRule[]
+  botGroups              BotGroup[]
 
   invitations Invitation[]
 
@@ -654,6 +657,7 @@ model Group {
 
   license License      @relation(fields: [licenseId], references: [id], onDelete: Cascade)
   agents  GroupAgent[]
+  bots    BotGroup[]
 
   @@id([licenseId, id])
   @@map("groups")
@@ -1474,6 +1478,87 @@ model AiAgent {
 
   @@index([licenseId, kind])
   @@map("ai_agents")
+}
+
+// ===========================================================================
+// Rule bot (FR-MOD-06.6) — deterministic, LLM-free, and its own entity
+// ===========================================================================
+
+/// A rule-based chatbot: a name, an on/off switch, an ordered list of rules and
+/// the teams it serves.
+///
+/// Deliberately NOT a third `ai_agents.kind`. PRD:577 asks for a bot "AI
+/// Agent'tan AYRI, LLM'siz", and sharing that table is the opposite of separate
+/// — measured, not assumed: `GET /ai-agents` filters on no `kind`, so a rule bot
+/// stored there would be listed and counted as an LLM-backed agent by the AI
+/// Agent console and the Team → Chatbots KPI. Every AI-shaped column on that
+/// model (`persona`, `tone`, `languages`, `instruction`, and the `skills` /
+/// `knowledge_sources` relations) is meaningless here as well.
+///
+/// The PRD's `Şema` column says `§8 bots` but §8.4 — the schema's single source
+/// of truth — defines no such table; the DDL below is this task's design and is
+/// recorded in PLAN §C as `Assumption: A37`.
+model Bot {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt   @map("license_id")
+  name      String
+  /// Off silences every rule this bot carries without deleting any of them.
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License    @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  rules   BotRule[]
+  groups  BotGroup[]
+
+  @@unique([licenseId, name])
+  @@index([licenseId, enabled])
+  @@map("bots")
+}
+
+/// One condition + action pair. The shapes live in JSON so a new predicate needs
+/// no migration, exactly as `ticket_rules` does; both are required, which the
+/// service enforces and the pure matcher enforces again for a row written around
+/// it. Rules run in `position` order and the FIRST match wins — unlike ticket
+/// rules, which accumulate, because a bot that answered three times would send
+/// the visitor three messages for one question.
+model BotRule {
+  id         String   @id @default(uuid()) @db.Uuid
+  licenseId  BigInt   @map("license_id")
+  botId      String   @map("bot_id") @db.Uuid
+  name       String
+  conditions Json     @default("{}")
+  actions    Json     @default("{}")
+  enabled    Boolean  @default(true)
+  position   Int      @default(0)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  bot     Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
+
+  @@index([licenseId, botId, enabled, position])
+  @@map("bot_rules")
+}
+
+/// The KK's second half — "gruplara priority ile atanır".
+///
+/// `group_agents` cannot carry this: its `agent_id` is a FK to `accounts`, and a
+/// bot is not an account. `priority` reuses the same four tiers an agent's team
+/// membership uses (`GROUP_PRIORITIES`) rather than inventing a second ordering
+/// vocabulary for the same word.
+model BotGroup {
+  licenseId BigInt @map("license_id")
+  botId     String @map("bot_id") @db.Uuid
+  groupId   BigInt @map("group_id")
+  priority  String @default("normal")
+
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  bot     Bot     @relation(fields: [botId], references: [id], onDelete: Cascade)
+  group   Group   @relation(fields: [licenseId, groupId], references: [licenseId, id], onDelete: Cascade)
+
+  @@id([licenseId, botId, groupId])
+  @@index([licenseId, groupId])
+  @@map("bot_groups")
 }
 
 /// A named capability, expressed as an ordered list of steps compiled from a

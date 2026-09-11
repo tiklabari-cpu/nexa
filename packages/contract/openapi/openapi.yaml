@@ -4205,12 +4205,20 @@ components:
 
     Invoice:
       type: object
+      description: |
+        One billing statement. A closed period is read back from the `invoices`
+        table exactly as it was frozen — re-pricing it from today's subscription
+        is what `origin` exists to make impossible to do silently. Only the
+        current period is computed live, and it says so.
       required:
         [
           number,
           period,
           period_label,
+          period_start,
+          period_end,
           issued_at,
+          origin,
           status,
           currency,
           line_items,
@@ -4221,13 +4229,43 @@ components:
         number: { type: string, description: "Invoice number, `NEXA-<yyyymm>`." }
         period: { type: string, description: "Billing period as `yyyymm`." }
         period_label: { type: string, description: "Friendly period label, e.g. `July 2026`." }
+        period_start:
+          type: string
+          format: date-time
+          description: "First instant of the period, UTC."
+        period_end:
+          type: string
+          format: date-time
+          description: |
+            Exclusive upper bound of the period — the first instant of the next
+            month, UTC. Half-open so two consecutive periods cannot both claim
+            the same moment.
         issued_at: { type: string, format: date-time }
+        origin:
+          type: string
+          enum: [issued, reconstructed, estimate]
+          description: |
+            Where the figures come from, so a reader can tell a statement from
+            an estimate.
+
+            * `issued` — frozen by the period-close sweep in the period right
+              after this one, from the subscription as it stood then. Never
+              changes again.
+            * `reconstructed` — frozen later, from the records that survive
+              (usage rows and package receipts carry their own prices, so those
+              lines are exact); the seat line is priced from the subscription as
+              it stood when the row was written, because per-period seat history
+              was never retained. Never changes again either.
+            * `estimate` — the current period, still accruing and computed on
+              read. It is not an invoice yet and its figures move with usage.
         status:
           type: string
           enum: [paid, open, trial]
           description: |
             `paid` for a settled past period, `open` for the current one still
-            accruing, `trial` while the workspace owes nothing.
+            accruing, `trial` when the workspace owed nothing for that period.
+            Frozen alongside the rest: a workspace leaving its trial does not
+            turn its trial months into paid ones.
         currency: { type: string, enum: [usd] }
         line_items:
           type: array

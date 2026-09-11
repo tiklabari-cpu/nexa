@@ -298,7 +298,7 @@ stack's `minio` on 9000/9001.
 
 ## Background jobs
 
-`apps/api` runs seven sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
+`apps/api` runs eight sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
 default: on outside tests). A Redis lock (`SET NX`, one key per job) keeps two running
 instances from double-running the same pass; `GET /health` reports each job's interval,
 enabled flag, and last run's time/status.
@@ -312,6 +312,7 @@ enabled flag, and last run's time/status.
 | `retention`          | 1 h              | Hard-deletes data past its retention window (NFR-C8)                             |
 | `webhook_redelivery` | 60 s             | Retries failed outbound webhooks (08.8.4 · NFR-S7)                               |
 | `knowledge_refresh`  | 1 h              | Re-crawls a `website` knowledge source past its freshness window (FR-MOD-06.3.3) |
+| `invoice_close`      | 1 h              | Freezes a closed billing period into a statement (FR-MOD-10.3)                   |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
@@ -330,6 +331,16 @@ has never opted in (`refresh_after_days: null`, every source's default) is never
 refused or failed crawl leaves the source's `content` and chunks exactly as they were — the
 stale answer is kept rather than replaced with nothing — and records why in
 `last_refresh_error`, cleared on the next successful pass.
+
+`invoice_close` (FR-MOD-10.3) turns a finished month into a statement. Invoice history used
+to be derived on read and priced from today's subscription, so a plan change rewrote past
+invoices; this job composes each closed period once and stores it, after which nothing moves
+it — the database withholds UPDATE and DELETE on `invoices` from the runtime role. Only closed
+periods are written: the current month is served as an `estimate` whose figures are still
+accruing. **After deploying the persistent-invoice migration, run
+`pnpm --filter @nexa/api invoice-close:run` once** — periods that closed before the table
+existed are written by the first pass, marked `reconstructed` because only their seat line has
+to be priced from the subscription as it stands rather than as it stood.
 
 `retention` stays off even when the scheduler is otherwise on: `RETENTION_ENABLED=false`
 by default. It is the one sweep here that deletes, and unlike the CLI's `--apply` flag — an

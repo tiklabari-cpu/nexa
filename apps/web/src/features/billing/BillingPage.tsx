@@ -90,7 +90,14 @@ interface Invoice {
   number: string;
   period: string;
   period_label: string;
+  period_start: string;
+  period_end: string;
   issued_at: string;
+  /**
+   * How the figures were arrived at (FR-MOD-10.3). `issued`/`reconstructed` are
+   * frozen rows and never move again; `estimate` is the period still running.
+   */
+  origin: 'issued' | 'reconstructed' | 'estimate';
   status: 'paid' | 'open' | 'trial';
   currency: string;
   line_items: InvoiceLineItem[];
@@ -188,9 +195,17 @@ export function BillingPage(): ReactElement {
     // without a refetch round trip. A plan change can also move the AI
     // allowance the usage meter compares against, so that query is invalidated
     // too rather than left showing figures from the plan just left behind.
+    //
+    // And the invoices list, for exactly one of its rows: the current period is
+    // an `estimate` composed from the subscription (FR-MOD-10.3), so a new plan,
+    // seat count or cycle changes it. Every *closed* period is read from a frozen
+    // row and comes back byte-identical — which is the whole reason this refetch
+    // is safe to ask for rather than something that would rewrite history on
+    // screen.
     onSuccess: (updated) => {
       queryClient.setQueryData(['billing', 'subscription'], updated);
       void queryClient.invalidateQueries({ queryKey: ['billing', 'usage'] });
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'invoices'] });
     },
   });
 
@@ -1572,11 +1587,35 @@ const INVOICE_STATUS_KEY: Record<Invoice['status'], string> = {
 };
 
 /**
+ * The note under a row's status, when the figures need one (FR-MOD-10.3).
+ *
+ * `issued` gets none — a statement frozen in the month after its period is the
+ * normal case, and a badge on every row would say nothing. The other two are
+ * exactly the rows a reader could otherwise mistake for one: an `estimate` is a
+ * month still running, and a `reconstructed` row was frozen late enough that its
+ * seat line is priced from a subscription that may not be the one that period
+ * ran on. Naming that on the screen is the point — the whole reason the API
+ * carries `origin` is that an unlabelled guess is worse than a visible one.
+ */
+const INVOICE_ORIGIN_NOTE: Partial<Record<Invoice['origin'], { label: string; hint: string }>> = {
+  estimate: {
+    label: 'billing.invoices.origin.estimate',
+    hint: 'billing.invoices.origin.estimateHint',
+  },
+  reconstructed: {
+    label: 'billing.invoices.origin.reconstructed',
+    hint: 'billing.invoices.origin.reconstructedHint',
+  },
+};
+
+/**
  * Invoices (FR-MOD-10.3, "fatura listesi/indirme").
  *
- * A list of statements, newest first, each downloadable as CSV. The figures are
- * derived server-side from the subscription and usage records (ADR-13) — the
- * current period's total matches the estimated total above.
+ * A list of statements, newest first, each downloadable as CSV. A closed period
+ * is read back frozen (ADR-13, no external provider issues these), so changing
+ * plan or seats leaves it exactly as it was; only the current period is computed
+ * on read, and its total matches the estimated total above. `origin` says which
+ * a row is, because the difference is the whole feature.
  *
  * Every row shows the line items behind its total, not just the total: seats,
  * either overage, and any API package bought in the period (09.3-e). The
@@ -1654,6 +1693,7 @@ function InvoicesSection(): ReactElement {
             <tbody>
               {invoices.map((invoice) => {
                 const statusClass = INVOICE_STATUS_CLASS[invoice.status];
+                const originNote = INVOICE_ORIGIN_NOTE[invoice.origin];
                 return (
                   <tr
                     key={invoice.period}
@@ -1687,8 +1727,19 @@ function InvoicesSection(): ReactElement {
                     <td className="px-4 py-2 text-content-secondary">
                       {formatDate(invoice.issued_at)}
                     </td>
-                    <td className={`px-4 py-2 font-medium ${statusClass}`}>
-                      {t(INVOICE_STATUS_KEY[invoice.status])}
+                    <td className="px-4 py-2">
+                      <span className={`font-medium ${statusClass}`}>
+                        {t(INVOICE_STATUS_KEY[invoice.status])}
+                      </span>
+                      {originNote ? (
+                        <span
+                          data-testid="invoice-origin"
+                          title={t(originNote.hint)}
+                          className="mt-0.5 block text-2xs font-normal text-content-tertiary"
+                        >
+                          {t(originNote.label)}
+                        </span>
+                      ) : null}
                     </td>
                     <td data-testid="invoice-total" className="tabular px-4 py-2 text-right">
                       {formatMoney(invoice.total_cents, invoice.currency.toUpperCase())}

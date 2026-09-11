@@ -23,6 +23,7 @@ import {
   ENTITLEMENT_LABEL,
   formatCount,
   formatDate,
+  formatInvoiceOrigin,
   formatInvoiceStatus,
   formatMoney,
 } from './format';
@@ -279,6 +280,14 @@ function InvoicesCard({ invoices, colors }: { invoices: Invoice[]; colors: Color
               <Text style={[styles.emptyText, { color: colors.textTertiary }]}>
                 {formatInvoiceStatus(invoice.status)}
               </Text>
+              {formatInvoiceOrigin(invoice.origin) === null ? null : (
+                <Text
+                  testID={`invoice-origin-${invoice.period}`}
+                  style={[styles.emptyText, { color: colors.textTertiary }]}
+                >
+                  {formatInvoiceOrigin(invoice.origin)}
+                </Text>
+              )}
             </View>
           </View>
         ))

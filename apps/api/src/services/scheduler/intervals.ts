@@ -19,7 +19,9 @@ import type { Env } from '../../config/env.js';
  * The first five are the sweeps that had no scheduler at all (§D113/K1); the
  * sixth carries a failed webhook delivery past the request that triggered it
  * (M-SCHED-e); the seventh re-crawls a `website` knowledge source past its
- * freshness window (FR-MOD-06.3.3, tm 198.4).
+ * freshness window (FR-MOD-06.3.3, tm 198.4); the eighth freezes a closed
+ * billing period into a statement so it stops being re-priced from today's
+ * subscription (FR-MOD-10.3, tm 230).
  */
 export const SCHEDULER_JOB_NAMES = [
   'chat_timeout',
@@ -29,6 +31,7 @@ export const SCHEDULER_JOB_NAMES = [
   'retention',
   'webhook_redelivery',
   'knowledge_refresh',
+  'invoice_close',
 ] as const;
 
 export type SchedulerJobName = (typeof SCHEDULER_JOB_NAMES)[number];
@@ -48,6 +51,7 @@ export type SchedulerIntervalEnv = Pick<
   | 'SCHEDULE_RETENTION_MS'
   | 'SCHEDULE_WEBHOOK_REDELIVERY_MS'
   | 'SCHEDULE_KNOWLEDGE_REFRESH_MS'
+  | 'SCHEDULE_INVOICE_CLOSE_MS'
 >;
 
 /**
@@ -66,6 +70,7 @@ export function jobIntervals(env: SchedulerIntervalEnv): Record<SchedulerJobName
     retention: env.SCHEDULE_RETENTION_MS,
     webhook_redelivery: env.SCHEDULE_WEBHOOK_REDELIVERY_MS,
     knowledge_refresh: env.SCHEDULE_KNOWLEDGE_REFRESH_MS,
+    invoice_close: env.SCHEDULE_INVOICE_CLOSE_MS,
   };
 }
 

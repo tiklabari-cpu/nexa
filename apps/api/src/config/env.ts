@@ -565,6 +565,16 @@ export const envSchema = z.object({
    */
   SCHEDULE_KNOWLEDGE_REFRESH_MS: z.coerce.number().int().positive().default(3_600_000),
   /**
+   * The billing period-close sweep (FR-MOD-10.3, tm 230). Hourly, and the
+   * coarsest thing on this list would be defensible too: it acts on a calendar
+   * month boundary, so all an interval buys is how soon after midnight on the
+   * first the previous month stops being an estimate and becomes a statement.
+   * Hourly keeps that under an hour without a per-tenant query every minute for
+   * a condition that changes twelve times a year. A pass with nothing to close
+   * is one indexed anti-join per workspace.
+   */
+  SCHEDULE_INVOICE_CLOSE_MS: z.coerce.number().int().positive().default(3_600_000),
+  /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:
    * this is the one sweep that hard-deletes data, and there is no operator

@@ -15,10 +15,14 @@ import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
 import { embed, toVectorLiteral } from '@nexa/ai-mock';
 import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@nexa/types';
+import { parseEnv } from '../src/config/env.js';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
 import { type AuditContext } from '../src/services/audit/audit-log.js';
 import { ADMIN_SCOPES, type AgentPrincipal } from '../src/services/auth/principal.js';
+import { InvoiceCloseSweeper } from '../src/services/billing/invoice-close-sweep.js';
+import { previousPeriod } from '../src/services/billing/invoice-service.js';
+import { currentPeriod } from '../src/services/billing/metering.js';
 import { CampaignService } from '../src/services/campaigns/campaign-service.js';
 import { GoalService } from '../src/services/goals/goal-service.js';
 import { ScheduledReportService } from '../src/services/reports/scheduled-report-service.js';
@@ -604,7 +608,15 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     },
   });
 
-  const period = new Date().toISOString().slice(0, 7).replace('-', '');
+  const period = currentPeriod();
+  // Last month, so the demo has a *closed* period as well as the running one
+  // (FR-MOD-10.3). Without one the Invoices list shows nothing but the
+  // estimate, and the whole point of the table — a statement that stops moving
+  // — has no example on screen. `seedInvoiceHistory` turns this into a frozen
+  // row at the end of the seed, through the same sweep production runs, rather
+  // than by writing amounts here that a second arithmetic would have to keep in
+  // step.
+  const closedPeriod = previousPeriod(period);
   await prisma.usageRecord.createMany({
     data: [
       {
@@ -624,6 +636,17 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
         included: 100_000n,
         overageUnit: 100_000,
         overageUnitPriceCents: 2_950,
+      },
+      {
+        licenseId,
+        metric: 'ai_resolutions',
+        period: closedPeriod,
+        // Over the allowance, so the closed statement has a second line and is
+        // visibly more than the standing seat charge.
+        quantity: spec.richDemo ? 231n : 0n,
+        included: 200n,
+        overageUnit: 50,
+        overageUnitPriceCents: 50,
       },
     ],
   });
@@ -1929,6 +1952,30 @@ async function seedOverdueTrialWorkspace(passwordHash: string): Promise<void> {
   console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
 }
 
+/**
+ * Turn every seeded workspace's closed period into a frozen statement
+ * (FR-MOD-10.3), through the same sweep a deployment runs.
+ *
+ * Deliberately not a `prisma.invoice.create` with amounts written out here. A
+ * demo invoice composed by a second arithmetic would drift from the real one the
+ * first time either changed — and drift between what a period cost and what its
+ * statement says is precisely the failure this table was added to end. Running
+ * the sweeper also means the seed exercises it, so a broken sweep shows up as a
+ * broken `make dev` rather than a month later.
+ *
+ * Runs after every tenant, not inside `seedTenant`: the sweep enumerates
+ * workspaces itself, so one pass at the end closes all of them. Idempotent by
+ * `UNIQUE (license_id, period)`, so a re-run over an already-seeded database
+ * writes nothing — the same contract the rest of this file holds to.
+ */
+async function seedInvoiceHistory(): Promise<void> {
+  const report = await new InvoiceCloseSweeper(prisma, parseEnv()).run();
+  const { issued, reconstructed, tenants } = report.totals;
+  console.log(
+    `  invoices     ${issued + reconstructed} closed period(s) frozen across ${tenants} workspace(s)`,
+  );
+}
+
 async function main(): Promise<void> {
   if (process.env['NODE_ENV'] === 'production') {
     throw new Error('The demo seed must never run against production.');
@@ -1952,6 +1999,7 @@ async function main(): Promise<void> {
   await seedMisplacedUsWorkspace(passwordHash);
   await seedPagingWorkspace(passwordHash);
   await seedOverdueTrialWorkspace(passwordHash);
+  await seedInvoiceHistory();
 
   console.log('');
   console.log('  ⚠  Seed credentials are public and identical on every machine.');

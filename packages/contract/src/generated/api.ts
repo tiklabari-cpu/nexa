@@ -6408,14 +6408,22 @@ export interface paths {
     /**
      * List invoices
      * @description Invoices for the workspace, newest period first (FR-MOD-10.3). Billing is
-     *     mocked (ADR-13): these are derived from the subscription and the per-period
-     *     usage records rather than issued by an external provider, so the current
-     *     invoice's total is exactly the `estimated_total_cents` the subscription
-     *     view quotes.
+     *     mocked (ADR-13): no external provider issues these, so the period-close
+     *     sweep freezes each one into the `invoices` table when its period ends and
+     *     this endpoint reads them back. A closed period is therefore never priced
+     *     from today's subscription — changing plan, seats or cycle leaves every
+     *     past statement exactly as it was.
      *
-     *     The current period always appears as an `open` invoice — the standing plan
-     *     charge is visible before the period closes. While the workspace is on a
-     *     trial the statement is `trial` and owes nothing.
+     *     The current period always appears, as an `open` invoice with
+     *     `origin: estimate` — it has not closed, so it is computed on read and its
+     *     total is exactly the `estimated_total_cents` the subscription view quotes.
+     *     While the workspace is on a trial the statement is `trial` and owes
+     *     nothing.
+     *
+     *     A period the sweep has not closed yet does not appear: a statement exists
+     *     because it was issued, not because someone asked for the list. See
+     *     `origin` on the schema for how a reconstructed period differs from an
+     *     issued one.
      */
     get: operations['listInvoices'];
     put?: never;
@@ -6438,6 +6446,10 @@ export interface paths {
      * @description The invoice for one period (`yyyymm`) as an injection-safe CSV download
      *     (FR-MOD-10.3, "indirme"). 404 if the workspace has no invoice for that
      *     period. Mocked billing — a real provider would hand back a PDF here.
+     *
+     *     The same rows the list returns: a closed period is read from the frozen
+     *     statement, so downloading last quarter's invoice twice across a plan
+     *     change yields byte-identical files.
      */
     get: operations['downloadInvoice'];
     put?: never;
@@ -9995,6 +10007,12 @@ export interface components {
         entitlements: components['schemas']['Entitlement'][];
       }[];
     };
+    /**
+     * @description One billing statement. A closed period is read back from the `invoices`
+     *     table exactly as it was frozen — re-pricing it from today's subscription
+     *     is what `origin` exists to make impossible to do silently. Only the
+     *     current period is computed live, and it says so.
+     */
     Invoice: {
       /** @description Invoice number, `NEXA-<yyyymm>`. */
       number: string;
@@ -10002,11 +10020,42 @@ export interface components {
       period: string;
       /** @description Friendly period label, e.g. `July 2026`. */
       period_label: string;
+      /**
+       * Format: date-time
+       * @description First instant of the period, UTC.
+       */
+      period_start: string;
+      /**
+       * Format: date-time
+       * @description Exclusive upper bound of the period — the first instant of the next
+       *     month, UTC. Half-open so two consecutive periods cannot both claim
+       *     the same moment.
+       */
+      period_end: string;
       /** Format: date-time */
       issued_at: string;
       /**
+       * @description Where the figures come from, so a reader can tell a statement from
+       *     an estimate.
+       *
+       *     * `issued` — frozen by the period-close sweep in the period right
+       *       after this one, from the subscription as it stood then. Never
+       *       changes again.
+       *     * `reconstructed` — frozen later, from the records that survive
+       *       (usage rows and package receipts carry their own prices, so those
+       *       lines are exact); the seat line is priced from the subscription as
+       *       it stood when the row was written, because per-period seat history
+       *       was never retained. Never changes again either.
+       *     * `estimate` — the current period, still accruing and computed on
+       *       read. It is not an invoice yet and its figures move with usage.
+       * @enum {string}
+       */
+      origin: 'issued' | 'reconstructed' | 'estimate';
+      /**
        * @description `paid` for a settled past period, `open` for the current one still
-       *     accruing, `trial` while the workspace owes nothing.
+       *     accruing, `trial` when the workspace owed nothing for that period.
+       *     Frozen alongside the rest: a workspace leaving its trial does not
+       *     turn its trial months into paid ones.
        * @enum {string}
        */
       status: 'paid' | 'open' | 'trial';

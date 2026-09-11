@@ -193,4 +193,10 @@ export const billing: Messages = {
   'billing.invoices.status.paid': 'Ödendi',
   'billing.invoices.status.open': 'Açık',
   'billing.invoices.status.trial': 'Deneme',
+  'billing.invoices.origin.estimate': 'Tahmin',
+  'billing.invoices.origin.estimateHint':
+    'Bu dönem hâlâ sürüyor, rakamlar kullanımla değişir. Ay kapandığında döküme dönüşür.',
+  'billing.invoices.origin.reconstructed': 'Yeniden oluşturuldu',
+  'billing.invoices.origin.reconstructedHint':
+    'Dönem kapandıktan sonra donduruldu. Sayaç satırları ve satın alımlar kendi fiyatlarını taşır, birebir doğrudur; koltuk ücreti bu satır yazılırkenki abonelikten fiyatlanmıştır.',
 };

@@ -33,7 +33,10 @@ interface InvoiceOpt {
   number: string;
   period: string;
   period_label: string;
+  period_start: string;
+  period_end: string;
   issued_at: string;
+  origin: 'issued' | 'reconstructed' | 'estimate';
   status: 'paid' | 'open' | 'trial';
   currency: string;
   line_items: { description: string; amount_cents: number }[];
@@ -152,7 +155,11 @@ const DEFAULT_INVOICE: InvoiceOpt = {
   number: 'NEXA-202607',
   period: '202607',
   period_label: 'July 2026',
+  period_start: '2026-07-01T00:00:00.000Z',
+  period_end: '2026-08-01T00:00:00.000Z',
   issued_at: '2026-07-31T00:00:00.000Z',
+  // The month still running: computed on read, not a statement yet.
+  origin: 'estimate',
   status: 'open',
   currency: 'usd',
   line_items: [{ description: 'Subscription — 3 seats (monthly)', amount_cents: 29700 }],
@@ -841,7 +848,10 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
           number: 'NEXA-202606',
           period: '202606',
           period_label: 'June 2026',
+          period_start: '2026-06-01T00:00:00.000Z',
+          period_end: '2026-07-01T00:00:00.000Z',
           issued_at: '2026-06-30T00:00:00.000Z',
+          origin: 'issued',
           status: 'paid',
           currency: 'usd',
           line_items: [{ description: 'Subscription — 3 seats (monthly)', amount_cents: 29700 }],
@@ -860,6 +870,46 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
     expect(rows[0]).toHaveTextContent('Open');
     expect(rows[1]).toHaveTextContent('NEXA-202606');
     expect(rows[1]).toHaveTextContent('Paid');
+  });
+
+  /**
+   * `origin` is the difference between a statement and a guess, so the screen
+   * has to say which a row is. A frozen `issued` invoice gets no badge — that is
+   * the normal case and a note on every row would say nothing; the two that need
+   * one are the month still accruing and a period reconstructed after the fact,
+   * whose seat line was priced from a subscription that may not be the one it
+   * ran on.
+   */
+  it('marks the running month an estimate and a backfilled period a reconstruction', async () => {
+    mockBilling({
+      invoices: [
+        DEFAULT_INVOICE,
+        {
+          ...DEFAULT_INVOICE,
+          number: 'NEXA-202606',
+          period: '202606',
+          origin: 'issued',
+          status: 'paid',
+        },
+        {
+          ...DEFAULT_INVOICE,
+          number: 'NEXA-202605',
+          period: '202605',
+          origin: 'reconstructed',
+          status: 'paid',
+        },
+      ],
+    });
+    renderBilling(<BillingPage />);
+
+    const rows = await screen.findAllByTestId('invoice-row');
+    expect(within(rows[0]!).getByTestId('invoice-origin')).toHaveTextContent('Estimate');
+    // A statement frozen in the month after its period claims nothing extra.
+    expect(within(rows[1]!).queryByTestId('invoice-origin')).toBeNull();
+    const reconstructed = within(rows[2]!).getByTestId('invoice-origin');
+    expect(reconstructed).toHaveTextContent('Reconstructed');
+    // And the caveat itself is reachable, not just the word.
+    expect(reconstructed).toHaveAttribute('title', expect.stringContaining('seat charge'));
   });
 
   /**

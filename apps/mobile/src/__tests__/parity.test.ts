@@ -856,7 +856,15 @@ describe('module parity matrix — what is still owed', () => {
       // to build a selection with, so this is a boundary rather than a gap —
       // the same reason `/tickets` itself has never been in `Inbox.endpoints`.
       // Nothing here re-scopes.
-      contractEndpoints: 211,
+      // 211 -> 215 with the four `/settings/bots*` paths (V8-RULEBOT, tm 238) —
+      // creating a rule bot, editing it, and writing and editing its rules.
+      // Workspace *configuration*, which this app has never carried: the phone
+      // is an inbox, not an admin console, and the same boundary already keeps
+      // every other `/settings/*` path out (routing rules, ticket rules, tags,
+      // trusted domains). A boundary rather than a gap, and the bot's actual
+      // output — its reply in a conversation — the app already reads, because
+      // it is an ordinary event in the transcript. Nothing here re-scopes.
+      contractEndpoints: 215,
       scopeBoundaries: 1,
     });
   });

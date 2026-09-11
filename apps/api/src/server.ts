@@ -33,6 +33,7 @@ import campaignRoutes from './routes/campaigns.js';
 import goalRoutes from './routes/goals.js';
 import ticketRoutes from './routes/tickets.js';
 import ticketRuleRoutes from './routes/ticket-rules.js';
+import botRoutes from './routes/bots.js';
 import ticketEmailTemplateRoutes from './routes/ticket-email-templates.js';
 import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
@@ -326,6 +327,7 @@ export async function buildServer({
       await api.register(goalRoutes);
       await api.register(ticketRoutes, { automations, mailer });
       await api.register(ticketRuleRoutes);
+      await api.register(botRoutes);
       await api.register(ticketEmailTemplateRoutes);
       await api.register(customFieldRoutes);
       await api.register(channelRoutes, { env, automations });

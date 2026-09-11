@@ -386,8 +386,13 @@ transfer:
               agent_id: { type: string, format: uuid }
               reason:
                 type: string
-                enum: [manual, routing, agent_disconnected, ai_handoff]
+                enum: [manual, routing, agent_disconnected, ai_handoff, bot_handoff]
                 default: manual
+                description: |
+                  Who handed the conversation over. `ai_handoff` is the AI
+                  Agent's and is what the AI report attributes a transfer to;
+                  `bot_handoff` is the deterministic rule bot's (FR-MOD-06.6),
+                  separate so a rule firing never reads as a model deciding.
     responses:
       "200":
         description: Transferred

@@ -19,6 +19,7 @@ import { useTranslate } from '../../lib/i18n.js';
 import { Th } from './TeamPage.js';
 import { TeamAiPerformance } from './TeamAiPerformance.js';
 import { CopilotKnowledge } from './CopilotKnowledge.js';
+import { RuleBots } from './RuleBots.js';
 import { TeamTabs } from './TeamTabs.js';
 
 interface Chatbot {
@@ -91,6 +92,11 @@ export function TeamAiAgentsPage(): ReactElement {
           )}
         </Card>
       </Section>
+
+      {/* The other kind of chatbot, directly under the AI-agent list because
+          the difference between them is the point: a rule bot answers from
+          rules a person wrote and reaches no model at all (FR-MOD-06.6). */}
+      <RuleBots />
 
       {/* AI agents (team side) — per-agent performance + Copilot knowledge
           management, the two AI entries the Team screen owns (FR-MOD-04.2). */}

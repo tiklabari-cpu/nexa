@@ -1755,6 +1755,57 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/customers/{customerId}/erase': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Erase a customer and everything that identifies them
+     * @description Hard-deletes this person and the data that identifies them (GDPR Art. 17):
+     *     their conversations and every message in them, their visit telemetry,
+     *     their tickets, their external channel identities and their custom field
+     *     values. Irreversible, and not a soft flag — the rows are gone.
+     *
+     *     **Not a ban.** Banning denies someone service and keeps the history the
+     *     decision rests on (`POST /customers/{customerId}/ban`); this removes the
+     *     history. The two are separate actions with separate scopes so neither can
+     *     be reached by mistake while aiming for the other.
+     *
+     *     **Its own scope: `customers.erase:rw`.** Deliberately not implied by
+     *     `customers:rw` — editing a misspelled name and erasing a person are not
+     *     the same authority, the split `customers.ban:rw` already makes. Paired
+     *     with `minimumRole: admin`, so a broad but agent-held token cannot reach
+     *     it either. This is the `erişim ≠ silme` line NFR-C8 names: a credential
+     *     that can read everything about a contact still cannot delete them.
+     *
+     *     **Refused while a conversation is live** (403,
+     *     `details.reason = "active_chat"`). The retention sweep holds the same
+     *     invariant — it only ever prunes threads that are closed — and erasing a
+     *     conversation out from under the agent and the visitor holding it open
+     *     would break the socket both sides are on. Close the conversation, then
+     *     erase.
+     *
+     *     **What deliberately survives.** Tracked sales are unlinked, not deleted:
+     *     a revenue record is the workspace's own accounting, and the FK already
+     *     drops the pointer to the person. The audit trail keeps one entry naming
+     *     the erased id and the counts — never the name, e-mail or any message —
+     *     because with the record gone that id identifies nobody, and it is the
+     *     only evidence the request was honoured.
+     */
+    post: operations['eraseCustomer'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/customers/{customerId}/custom-fields': {
     parameters: {
       query?: never;
@@ -4216,6 +4267,55 @@ export interface paths {
      *     limits; `null` is how a limit is turned off.
      */
     patch: operations['updateSecuritySettings'];
+    trace?: never;
+  };
+  '/settings/retention': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * How long this workspace keeps its data
+     * @description The workspace's own retention windows, the deployment defaults they fall
+     *     back to, and the windows the sweep will **actually** apply once a HIPAA
+     *     ceiling has been taken into account (NFR-C4 · C4-e).
+     *
+     *     All three are returned because the third is not derivable from the first
+     *     two by anyone outside the deployment: a covered workspace that chose
+     *     `unlimited` is swept at 365 days, and the only honest answer to "when will
+     *     this conversation be deleted" is the one the server computes.
+     *
+     *     `access_rules:ro` (or `:rw`) plus `minimumRole: admin`, the same gate
+     *     `GET /settings/compliance` carries — and for the same reason, since the
+     *     two settings interlock.
+     */
+    get: operations['getRetentionSettings'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    /**
+     * Choose how long this workspace keeps its data
+     * @description Sets one or both windows, or clears a choice back to the deployment
+     *     default with an explicit `null`.
+     *
+     *     **A window above the HIPAA ceiling is refused, not clamped** (403,
+     *     `details.reason = "hipaa_ceiling"`, with `details.max_days`). Silently
+     *     storing a longer window and applying a shorter one would leave the screen
+     *     claiming a retention period the workspace does not have — and this is the
+     *     one setting where the gap between what was saved and what happens is the
+     *     difference between a kept agreement and a broken one. `unlimited` is
+     *     refused on a covered workspace at any value: indefinite retention of PHI
+     *     is what a BAA is signed to prevent.
+     *
+     *     Writes `settings.security_updated` to the audit trail with the field names
+     *     touched, never their values — the same shape `/settings/security` and
+     *     `/settings/siem` use.
+     */
+    patch: operations['updateRetentionSettings'];
     trace?: never;
   };
   '/settings/compliance': {
@@ -8717,6 +8817,89 @@ export interface components {
       max_concurrent_sessions: number | null;
       /** Format: date-time */
       updated_at?: string | null;
+    };
+    /**
+     * @description One of the four windows NFR-C8 enumerates. A tier, not a day count, so `unlimited` cannot arrive as the number `0` — which is the one value the sweep's own guard refuses, because a zero window puts the cutoff at "now" and matches every row.
+     * @enum {string}
+     */
+    RetentionTier: '30d' | '60d' | '365d' | 'unlimited';
+    /**
+     * @description This workspace's data retention windows (NFR-C8) — what it keeps, and
+     *     for how long, before the sweep hard-deletes it.
+     *
+     *     Three facts are reported together because none of them is usable alone:
+     *     the **choice** (`*_window`, null when the workspace has made none), the
+     *     **default** it falls back to when it has not chosen, and the
+     *     **effective** window the sweep will actually apply — which is neither of
+     *     the first two when a HIPAA ceiling cuts it back (NFR-C4 · C4-e). An
+     *     admin asking "why did that conversation disappear a year early" has to
+     *     be able to answer it from this response rather than from the
+     *     deployment's environment file, which they cannot see.
+     *
+     *     Audit-log and outgoing-mail windows are deliberately **not** here.
+     *     NFR-S12 floors the audit trail at 30 days on every plan, and letting a
+     *     workspace shorten the record of its own deletions is the "erişim ≠
+     *     silme" tension the requirement exists to resolve; the mail spool is a
+     *     deployment-local artifact with no workspace on it at all.
+     */
+    RetentionSettings: {
+      /** @description The window this workspace chose for closed conversations, or null when it has made no choice and inherits the deployment default. Distinct values on purpose: "we never configured this" and "we decided never to delete" are different facts. */
+      thread_window: components['schemas']['RetentionTier'] | null;
+      /** @description The same, for visitor telemetry (`visits`). */
+      visit_window: components['schemas']['RetentionTier'] | null;
+      /** @description The deployment default a null `thread_window` inherits (`RETENTION_THREAD_DAYS`). Reported so the screen can say what "inherit" means instead of showing an empty field. */
+      default_thread_days: number;
+      /** @description The deployment default for `visit_window`. */
+      default_visit_days: number;
+      /** @description What the sweep will actually use, after the choice, the default and any ceiling have all been applied. Null means unlimited — nothing is pruned. */
+      effective_thread_days: number | null;
+      /** @description The same, for visitor telemetry. */
+      effective_visit_days: number | null;
+      /** @description The longest window this workspace may select, or null when nothing caps it. Non-null only under HIPAA scope (NFR-C4 · C4-e), where the ceiling also removes `unlimited` from the menu entirely. Returned rather than left for the caller to derive, the same reason `ComplianceSettings.baa_available` is — so a screen cannot offer a choice the endpoint will refuse. */
+      max_thread_days: number | null;
+      /** @description The same, for visitor telemetry. */
+      max_visit_days: number | null;
+      /** @description Whether a Business Associate Agreement is in force for this workspace, which is what puts the ceilings above in force. */
+      hipaa_scope: boolean;
+    };
+    /**
+     * @description A retention choice. An absent key leaves that window alone; an explicit
+     *     `null` clears the choice and returns the window to the deployment
+     *     default. Both are needed: without the distinction, saving a conversation
+     *     window would silently reset the telemetry one.
+     */
+    RetentionSettingsInput: {
+      thread_window?: components['schemas']['RetentionTier'] | null;
+      visit_window?: components['schemas']['RetentionTier'] | null;
+    };
+    /**
+     * @description What a "right to erasure" request actually removed (GDPR Art. 17).
+     *
+     *     A receipt rather than a bare 204, because the workspace answering the
+     *     request has to be able to tell the person what was erased, and because
+     *     the counts are the only evidence left once the rows are gone — the audit
+     *     entry records the same figures, never the data.
+     */
+    ErasureReceipt: {
+      /**
+       * Format: uuid
+       * @description The subject that was erased. Still reported (and still written to the audit trail) after the row is gone: with the record deleted the id identifies nobody, and it is what proves the request was honoured.
+       */
+      customer_id: string;
+      /** Format: date-time */
+      erased_at: string;
+      /** @description Conversations deleted. */
+      chats: number;
+      /** @description Threads inside those conversations. */
+      threads: number;
+      /** @description Messages and system events inside those threads. */
+      events: number;
+      /** @description Visit telemetry rows deleted. */
+      visits: number;
+      /** @description Tickets deleted. Deleted rather than unlinked: a ticket keeps the subject's own words in its `subject` line and its custom field values, so leaving it with a null customer would call erased something that is still readable. */
+      tickets: number;
+      /** @description External identities (phone number, Messenger id, …) the subject was reachable at. */
+      channel_identities: number;
     };
     /**
      * @description What NFR-C4 makes HIPAA cover conditional on: US hosting and a signed
@@ -14841,6 +15024,32 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  eraseCustomer: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        customerId: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Erased — a receipt of what went. */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['ErasureReceipt'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      404: components['responses']['NotFound'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   setCustomerCustomFields: {
     parameters: {
       query?: never;
@@ -18715,6 +18924,57 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['SecuritySettings'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getRetentionSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The current retention settings */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RetentionSettings'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  updateRetentionSettings: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['RetentionSettingsInput'];
+      };
+    };
+    responses: {
+      /** @description The settings after the change */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['RetentionSettings'];
         };
       };
       400: components['responses']['BadRequest'];

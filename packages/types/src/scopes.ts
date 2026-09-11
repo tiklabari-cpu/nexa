@@ -78,6 +78,15 @@ export const SCOPES = [
   'brands--all:rw',
   // Customer
   'customers.ban:rw',
+  // Erasing a person on request (GDPR Art. 17 · NFR-C8). A Nexa addition, and
+  // its own scope for the reason `customers.ban:rw` is: NFR-C8's own words are
+  // that the "erişim ≠ silme" tension has to be resolved, and a resource where
+  // the widest read/write scope also carries an irreversible delete has not
+  // resolved it. It is a sibling resource rather than a permission on
+  // `customers`, so `expandScope` cannot reach it from `customers:rw` — a
+  // token that may correct a misspelled name still cannot erase the person it
+  // belongs to.
+  'customers.erase:rw',
   'customers:own',
   'customers:ro',
   'customers:rw',

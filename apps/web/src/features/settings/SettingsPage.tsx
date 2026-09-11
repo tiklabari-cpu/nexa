@@ -24,6 +24,7 @@ import { ChannelsGrid } from './Channels.js';
 import { IpAllowlist } from './IpAllowlist.js';
 import { SsoConnection } from './SsoConnection.js';
 import { Compliance } from './Compliance.js';
+import { DataRetention } from './DataRetention.js';
 import { SiemExport } from './SiemExport.js';
 import { SlaPolicy } from './SlaPolicy.js';
 import { Sandbox } from './Sandbox.js';
@@ -92,6 +93,7 @@ export function SettingsPage(): ReactElement {
       <TwoFactor />
       <PersonalAccessTokens />
       <Compliance canEdit={canManageAccess} />
+      <DataRetention canEdit={canManageAccess} />
       <SiemExport canEdit={canManageAccess} />
       <SlaPolicy canEdit={canManageAccess} />
       <Sandbox canEdit={canManageAccess} />

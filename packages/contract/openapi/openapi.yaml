@@ -250,6 +250,8 @@ paths:
     $ref: "./paths/tickets.yaml#/ticketCustomFields"
   /customers/{customerId}/ban:
     $ref: "./paths/customers.yaml#/ban"
+  /customers/{customerId}/erase:
+    $ref: "./paths/customers.yaml#/erase"
   /customers/{customerId}/custom-fields:
     $ref: "./paths/customers.yaml#/customerCustomFields"
 
@@ -404,6 +406,8 @@ paths:
     $ref: "./paths/custom-fields.yaml#/customField"
   /settings/security:
     $ref: "./paths/settings.yaml#/securitySettings"
+  /settings/retention:
+    $ref: "./paths/settings.yaml#/retention"
   /settings/compliance:
     $ref: "./paths/settings.yaml#/compliance"
   /settings/compliance/baa:
@@ -2318,6 +2322,155 @@ components:
             Per-owner cap on simultaneous active sessions, or null to fall
             back to the fixed `MAX_ACTIVE_TOKENS_PER_OWNER` limit (25).
         updated_at: { type: string, format: date-time, nullable: true }
+
+    RetentionTier:
+      type: string
+      enum: ["30d", "60d", "365d", "unlimited"]
+      description: >-
+        One of the four windows NFR-C8 enumerates. A tier, not a day count, so
+        `unlimited` cannot arrive as the number `0` — which is the one value the
+        sweep's own guard refuses, because a zero window puts the cutoff at
+        "now" and matches every row.
+
+    RetentionSettings:
+      type: object
+      description: |
+        This workspace's data retention windows (NFR-C8) — what it keeps, and
+        for how long, before the sweep hard-deletes it.
+
+        Three facts are reported together because none of them is usable alone:
+        the **choice** (`*_window`, null when the workspace has made none), the
+        **default** it falls back to when it has not chosen, and the
+        **effective** window the sweep will actually apply — which is neither of
+        the first two when a HIPAA ceiling cuts it back (NFR-C4 · C4-e). An
+        admin asking "why did that conversation disappear a year early" has to
+        be able to answer it from this response rather than from the
+        deployment's environment file, which they cannot see.
+
+        Audit-log and outgoing-mail windows are deliberately **not** here.
+        NFR-S12 floors the audit trail at 30 days on every plan, and letting a
+        workspace shorten the record of its own deletions is the "erişim ≠
+        silme" tension the requirement exists to resolve; the mail spool is a
+        deployment-local artifact with no workspace on it at all.
+      required:
+        [
+          thread_window,
+          visit_window,
+          default_thread_days,
+          default_visit_days,
+          effective_thread_days,
+          effective_visit_days,
+          max_thread_days,
+          max_visit_days,
+          hipaa_scope,
+        ]
+      properties:
+        thread_window:
+          allOf: [{ $ref: "#/components/schemas/RetentionTier" }]
+          nullable: true
+          description: >-
+            The window this workspace chose for closed conversations, or null
+            when it has made no choice and inherits the deployment default.
+            Distinct values on purpose: "we never configured this" and "we
+            decided never to delete" are different facts.
+        visit_window:
+          allOf: [{ $ref: "#/components/schemas/RetentionTier" }]
+          nullable: true
+          description: The same, for visitor telemetry (`visits`).
+        default_thread_days:
+          type: integer
+          description: >-
+            The deployment default a null `thread_window` inherits
+            (`RETENTION_THREAD_DAYS`). Reported so the screen can say what
+            "inherit" means instead of showing an empty field.
+        default_visit_days:
+          type: integer
+          description: The deployment default for `visit_window`.
+        effective_thread_days:
+          type: integer
+          nullable: true
+          description: >-
+            What the sweep will actually use, after the choice, the default and
+            any ceiling have all been applied. Null means unlimited — nothing is
+            pruned.
+        effective_visit_days:
+          type: integer
+          nullable: true
+          description: The same, for visitor telemetry.
+        max_thread_days:
+          type: integer
+          nullable: true
+          description: >-
+            The longest window this workspace may select, or null when nothing
+            caps it. Non-null only under HIPAA scope (NFR-C4 · C4-e), where the
+            ceiling also removes `unlimited` from the menu entirely. Returned
+            rather than left for the caller to derive, the same reason
+            `ComplianceSettings.baa_available` is — so a screen cannot offer a
+            choice the endpoint will refuse.
+        max_visit_days:
+          type: integer
+          nullable: true
+          description: The same, for visitor telemetry.
+        hipaa_scope:
+          type: boolean
+          description: >-
+            Whether a Business Associate Agreement is in force for this
+            workspace, which is what puts the ceilings above in force.
+
+    RetentionSettingsInput:
+      type: object
+      description: |
+        A retention choice. An absent key leaves that window alone; an explicit
+        `null` clears the choice and returns the window to the deployment
+        default. Both are needed: without the distinction, saving a conversation
+        window would silently reset the telemetry one.
+      minProperties: 1
+      properties:
+        thread_window:
+          allOf: [{ $ref: "#/components/schemas/RetentionTier" }]
+          nullable: true
+        visit_window:
+          allOf: [{ $ref: "#/components/schemas/RetentionTier" }]
+          nullable: true
+
+    ErasureReceipt:
+      type: object
+      description: |
+        What a "right to erasure" request actually removed (GDPR Art. 17).
+
+        A receipt rather than a bare 204, because the workspace answering the
+        request has to be able to tell the person what was erased, and because
+        the counts are the only evidence left once the rows are gone — the audit
+        entry records the same figures, never the data.
+      required:
+        [customer_id, erased_at, chats, threads, events, visits, tickets, channel_identities]
+      properties:
+        customer_id:
+          type: string
+          format: uuid
+          description: >-
+            The subject that was erased. Still reported (and still written to
+            the audit trail) after the row is gone: with the record deleted the
+            id identifies nobody, and it is what proves the request was honoured.
+        erased_at: { type: string, format: date-time }
+        chats: { type: integer, description: Conversations deleted. }
+        threads: { type: integer, description: Threads inside those conversations. }
+        events:
+          type: integer
+          description: Messages and system events inside those threads.
+        visits: { type: integer, description: Visit telemetry rows deleted. }
+        tickets:
+          type: integer
+          description: >-
+            Tickets deleted. Deleted rather than unlinked: a ticket keeps the
+            subject's own words in its `subject` line and its custom field
+            values, so leaving it with a null customer would call erased
+            something that is still readable.
+        channel_identities:
+          type: integer
+          description: >-
+            External identities (phone number, Messenger id, …) the subject was
+            reachable at.
 
     ComplianceSettings:
       type: object

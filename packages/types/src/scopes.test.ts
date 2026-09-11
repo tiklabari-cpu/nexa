@@ -34,6 +34,10 @@ const NEXA_ADDED_SCOPES = [
   // it. Scheduled exports (PRD §5.3-Reports) add a mutation — which report leaves
   // the workspace, how often, to whom — that a read scope must not carry.
   'reports_manage',
+  // The source platform has no erasure endpoint; NFR-C8 requires one (GDPR
+  // Art. 17) and its own words make "erişim ≠ silme" the property to preserve,
+  // so an irreversible delete does not ride on `customers:rw`.
+  'customers.erase:rw',
 ];
 
 const SOURCE_SCOPE_COUNT = 58;
@@ -164,5 +168,35 @@ describe('error taxonomy', () => {
     expect(ERROR_STATUS.authorization).toBe(403);
     expect(ERROR_STATUS.authentication).toBe(401);
     expect(ERROR_STATUS.too_many_requests).toBe(429);
+  });
+});
+
+/**
+ * The one implication that must NOT hold (NFR-C8's "erişim ≠ silme").
+ *
+ * `customers.erase:rw` is deliberately a sibling resource rather than a
+ * permission on `customers`, and this is what makes that structural rather than
+ * a matter of how the route was written: if somebody later renames it
+ * `customers:erase` or adds an `erase` permission letter, `expandScope` starts
+ * handing it out with every full-access customer token and this goes red.
+ */
+describe('erasure is not reachable from ordinary customer access (NFR-C8)', () => {
+  it('customers:rw does not imply customers.erase:rw', () => {
+    expect(expandScope('customers:rw')).not.toContain('customers.erase:rw');
+    expect(hasAnyScope(['customers:rw'], ['customers.erase:rw'])).toBe(false);
+  });
+
+  it('neither does the ban scope, nor any other customer scope', () => {
+    for (const scope of ['customers.ban:rw', 'customers:ro', 'customers:own'] as const) {
+      expect(hasAnyScope([scope], ['customers.erase:rw'])).toBe(false);
+    }
+  });
+
+  it('and the erasure scope grants nothing else about customers', () => {
+    // The reverse direction matters too: a credential minted only to honour
+    // erasure requests should not thereby be able to read the directory.
+    expect(hasAnyScope(['customers.erase:rw'], ['customers:ro'])).toBe(false);
+    expect(hasAnyScope(['customers.erase:rw'], ['customers.ban:rw'])).toBe(false);
+    expect(hasAnyScope(['customers.erase:rw'], ['customers.erase:rw'])).toBe(true);
   });
 });

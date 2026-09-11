@@ -18,6 +18,10 @@ import {
   DEFAULT_WIDGET_APPEARANCE,
   EXPERTISE_NAME_MAX_LENGTH,
   isIanaTimeZone,
+  RETENTION_TIERS,
+  type RetentionTier,
+  retentionTierWindow,
+  retentionWindowDays,
   ROUTING_RULE_KINDS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MAX_DAYS,
   SALES_TRACKER_ATTRIBUTION_WINDOW_MIN_DAYS,
@@ -40,6 +44,7 @@ import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { constantTimeEqual, generateToken, hashToken } from '../lib/crypto.js';
 import { normaliseIp } from '../lib/banned-ip.js';
+import { inHipaaScope } from '../lib/hipaa.js';
 import { resolveBrandId } from '../lib/brand.js';
 import { formatAllowlistEntry, parseAllowlistEntry, wouldLockOut } from '../lib/ip-allowlist.js';
 import { hasEntitlement, poweredByFor, requireEntitlement } from '../lib/entitlements.js';
@@ -80,6 +85,13 @@ import {
   resetSandbox,
   sandboxResetRefused,
 } from '../services/billing/sandbox-service.js';
+import {
+  applyTenantWindows,
+  capRetentionForHipaa,
+  hipaaCeilingDays,
+  readTenantWindow,
+  resolveRetentionPolicy,
+} from '../services/retention/policy.js';
 import {
   readStoredPolicy,
   saveSlaPolicy,
@@ -716,6 +728,30 @@ const updateSiemBody = z
   .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
 
 /**
+ * Retention windows (NFR-C8).
+ *
+ * `.nullable().optional()` on each, and the two are different answers: an
+ * absent key leaves that window alone, an explicit `null` clears the choice and
+ * returns the window to the deployment default. Collapsing them would mean
+ * saving the conversation window silently reset the telemetry one — the same
+ * distinction `customers.ts`' `updateBody` keeps, for the same reason.
+ *
+ * The value is a *tier*, not a number of days. That is what makes "unlimited"
+ * unrepresentable as `0` — the one number the sweep's own guard exists to
+ * refuse, because a zero window puts the cutoff at "now" and matches every row.
+ * See `@nexa/types/retention.ts`.
+ *
+ * At least one field, like the other partial-update bodies here: an empty PATCH
+ * would write an audit entry for a change nobody made.
+ */
+const updateRetentionBody = z
+  .object({
+    thread_window: z.enum(RETENTION_TIERS).nullable().optional(),
+    visit_window: z.enum(RETENTION_TIERS).nullable().optional(),
+  })
+  .refine((body) => Object.keys(body).length > 0, 'at least one field is required');
+
+/**
  * SLA targets (FR-MOD-11.5 · 11.5-d).
  *
  * A full replacement rather than a patch, and every field required. The three
@@ -749,6 +785,74 @@ function serialiseCompliance(region: Region, signedAt: Date | null) {
     baa_available: region === 'us',
     hipaa_baa_signed_at: signedAt ? signedAt.toISOString() : null,
   };
+}
+
+/**
+ * The retention screen's whole answer (NFR-C8).
+ *
+ * Three things go out because none of them is usable alone: the workspace's
+ * **choice**, the deployment **default** it inherits when it has made none, and
+ * the **effective** window the sweep will actually apply — which is neither of
+ * the first two once a HIPAA ceiling cuts it back. Computed from the same
+ * `policy.ts` functions the sweep itself runs, so this cannot drift into
+ * describing a sweep that does something else; a second, screen-shaped copy of
+ * the arithmetic is exactly how a settings page starts lying.
+ */
+function serialiseRetention(
+  env: Env,
+  licence: {
+    hipaaBaaSignedAt: Date | null;
+    retentionThreadWindow: string | null;
+    retentionVisitWindow: string | null;
+  },
+) {
+  const defaults = resolveRetentionPolicy(env);
+  const hipaaScope = inHipaaScope(licence);
+  const chosen = applyTenantWindows(defaults, {
+    threadWindow: readTenantWindow(licence.retentionThreadWindow),
+    visitWindow: readTenantWindow(licence.retentionVisitWindow),
+  });
+  const effective = hipaaScope ? capRetentionForHipaa(chosen) : chosen;
+
+  return {
+    thread_window: readTenantWindow(licence.retentionThreadWindow),
+    visit_window: readTenantWindow(licence.retentionVisitWindow),
+    default_thread_days: retentionWindowDays(defaults.threadDays),
+    default_visit_days: retentionWindowDays(defaults.visitDays),
+    effective_thread_days: retentionWindowDays(effective.threadDays),
+    effective_visit_days: retentionWindowDays(effective.visitDays),
+    max_thread_days: hipaaCeilingDays('threadDays', hipaaScope),
+    max_visit_days: hipaaCeilingDays('visitDays', hipaaScope),
+    hipaa_scope: hipaaScope,
+  };
+}
+
+/**
+ * Refuse a window a covered workspace may not have (NFR-C4 · C4-e).
+ *
+ * `unlimited` is refused at any ceiling: indefinite retention of PHI is the
+ * thing a BAA is signed to prevent, so it is not a choice that can be made
+ * shorter — it is off the menu. A finite tier above the ceiling is refused with
+ * the ceiling in `details`, so the screen can say what *is* allowed instead of
+ * making the admin guess downward.
+ */
+function assertWithinHipaaCeiling(
+  field: 'threadDays' | 'visitDays',
+  tier: RetentionTier | null,
+  hipaaScope: boolean,
+): void {
+  const ceiling = hipaaCeilingDays(field, hipaaScope);
+  if (tier === null || ceiling === null) return;
+
+  const window = retentionTierWindow(tier);
+  const days = retentionWindowDays(window);
+  if (days !== null && days <= ceiling) return;
+
+  throw new ApiError(
+    'not_allowed',
+    `This workspace has a signed HIPAA Business Associate Agreement, so it cannot keep this data longer than ${ceiling} days.`,
+    { details: { reason: 'hipaa_ceiling', field, max_days: ceiling } },
+  );
 }
 
 function serialiseCompany(org: {
@@ -1922,6 +2026,115 @@ export default async function settingsRoutes(
       });
 
       return reply.send(serialiseSecurity(updated, brandId));
+    },
+  );
+
+  // --- Data retention (NFR-C8) -----------------------------------------------
+  //
+  // How long this workspace keeps its conversations and its visitor telemetry
+  // before the sweep hard-deletes them. Gated exactly like `/settings/compliance`
+  // next door — `access_rules` plus `minimumRole: admin` — and that is not a
+  // copied convention: the two settings *interlock*, because a signed BAA caps
+  // what can be chosen here, so whoever may read one has to be able to read the
+  // other to understand it.
+  //
+  // Licence-scoped, not brand-scoped: `threads` and `visits` are keyed by
+  // licence and carry no brand, so a per-brand window would need an invented
+  // rule for which of three brands decides one conversation's fate. See the
+  // migration `20260911190000_tenant_retention_windows` for the full argument.
+
+  app.get(
+    '/settings/retention',
+    { config: { scopes: ['access_rules:ro', 'access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const licenceId = request.tenant().licenseId;
+      // Addressed by id, like `/settings/compliance`: one organization may hold
+      // several licences and RLS narrows to the organization, so "the first row
+      // back" is not necessarily the one whose data is about to be swept.
+      const licence = await request.withTenant((tx) =>
+        tx.license.findUniqueOrThrow({
+          where: { id: licenceId },
+          select: {
+            hipaaBaaSignedAt: true,
+            retentionThreadWindow: true,
+            retentionVisitWindow: true,
+          },
+        }),
+      );
+      return reply.send(serialiseRetention(options.env, licence));
+    },
+  );
+
+  app.patch(
+    '/settings/retention',
+    { config: { scopes: ['access_rules:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const body = parse(updateRetentionBody, request.body);
+      const licenceId = request.tenant().licenseId;
+
+      const licence = await request.withTenant(async (tx) => {
+        const before = await tx.license.findUniqueOrThrow({
+          where: { id: licenceId },
+          select: { hipaaBaaSignedAt: true },
+        });
+        const hipaaScope = inHipaaScope(before);
+
+        // Refused, not clamped, and the refusal happens *here* rather than in
+        // the sweep. Storing a window longer than the ceiling and applying a
+        // shorter one would leave this screen stating a retention period the
+        // workspace does not actually have — and of every setting in this file
+        // this is the one where that gap is the difference between an agreement
+        // kept and an agreement broken. The admin is standing right here; tell
+        // them.
+        if (body.thread_window !== undefined) {
+          assertWithinHipaaCeiling('threadDays', body.thread_window, hipaaScope);
+        }
+        if (body.visit_window !== undefined) {
+          assertWithinHipaaCeiling('visitDays', body.visit_window, hipaaScope);
+        }
+
+        const updated = await tx.license.update({
+          where: { id: licenceId },
+          // An absent key leaves that window alone; an explicit `null` clears
+          // the choice back to the deployment default. Collapsing the two would
+          // mean saving the conversation window silently reset the telemetry
+          // one — the same distinction `updateBody` in `customers.ts` keeps.
+          data: {
+            ...(body.thread_window !== undefined
+              ? { retentionThreadWindow: body.thread_window }
+              : {}),
+            ...(body.visit_window !== undefined ? { retentionVisitWindow: body.visit_window } : {}),
+          },
+          select: {
+            hipaaBaaSignedAt: true,
+            retentionThreadWindow: true,
+            retentionVisitWindow: true,
+          },
+        });
+
+        // `settings.security_updated` with the resource in metadata, the shape
+        // `/settings/siem` and the SSO changes use — one closed vocabulary
+        // stays queryable, an action per verb would not. The chosen tiers are
+        // recorded as well as the field names, unlike `/settings/security`:
+        // these values are not a configuration detail but the workspace's
+        // answer to "how long do you keep people's conversations", and the
+        // trail that records a deletion has to be able to say under which
+        // policy it happened.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'settings.security_updated',
+          target: `retention:${licenceId}`,
+          metadata: {
+            resource: 'retention',
+            operation: 'updated',
+            fields: Object.keys(body),
+            thread_window: updated.retentionThreadWindow,
+            visit_window: updated.retentionVisitWindow,
+          },
+        });
+        return updated;
+      });
+
+      return reply.send(serialiseRetention(options.env, licence));
     },
   );
 

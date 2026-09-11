@@ -5,6 +5,10 @@
  * `customers.ban:rw`. The ban split is deliberate: it is the one action here
  * that denies a person service, and an agent who may correct a misspelled name
  * should not thereby be able to lock someone out.
+ *
+ * Erasure (GDPR Art. 17 · NFR-C8) follows that split one step further with
+ * `customers.erase:rw`, for the stronger version of the same reason: banning
+ * can be lifted, and this cannot.
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -14,6 +18,7 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
+import { eraseCustomer } from '../services/retention/erasure.js';
 
 /**
  * Not `z.coerce.boolean()`: that is `Boolean(value)`, and `Boolean('false')` is
@@ -226,6 +231,64 @@ export default async function customerDirectoryRoutes(app: FastifyInstance): Pro
     { config: { scopes: ['customers.ban:rw'], minimumRole: 'admin' } },
     async (request, reply) => {
       return reply.send(await setBanned(request, customers, false));
+    },
+  );
+
+  // --- Right to erasure (GDPR Art. 17 · NFR-C8) ------------------------------
+  //
+  // `customers.erase:rw`, which nothing else implies — NFR-C8's own wording is
+  // that the "erişim ≠ silme" tension has to be resolved, and it is not
+  // resolved by a resource where the read/write scope also carries an
+  // irreversible delete. `minimumRole: 'admin'` on top, so a broad PAT held by
+  // an agent-role account is refused here the way it is at every other
+  // workspace-level surface (tm 146's second half).
+  //
+  // The work itself is `services/retention/erasure.ts`, which explains what
+  // goes, what deliberately survives, and why an active conversation refuses.
+  app.post<{ Params: { customerId: string } }>(
+    '/customers/:customerId/erase',
+    { config: { scopes: ['customers.erase:rw'], minimumRole: 'admin' } },
+    async (request, reply) => {
+      const customerId = parse(customerIdSchema, request.params.customerId);
+      const now = new Date();
+
+      const receipt = await request.withTenant(async (tx) => {
+        const result = await eraseCustomer(tx, customerId, now);
+
+        // Written inside the same transaction as the deletes, so an erasure
+        // that fails halfway leaves no receipt claiming it happened — and a
+        // receipt that exists is backed by rows that are actually gone.
+        //
+        // Counts and the id only. The name, the e-mail, the phone number and
+        // every message are exactly what was just erased; copying any of them
+        // into an append-only table that outlives this request would undo the
+        // request while recording that it was honoured.
+        await writeAuditEntry(tx, request.auditContext(), {
+          action: 'data.subject_erased',
+          target: `customer:${customerId}`,
+          metadata: {
+            chats: result.chats,
+            threads: result.threads,
+            events: result.events,
+            visits: result.visits,
+            tickets: result.tickets,
+            channel_identities: result.channelIdentities,
+          },
+        });
+
+        return result;
+      });
+
+      return reply.send({
+        customer_id: receipt.customerId,
+        erased_at: receipt.erasedAt.toISOString(),
+        chats: receipt.chats,
+        threads: receipt.threads,
+        events: receipt.events,
+        visits: receipt.visits,
+        tickets: receipt.tickets,
+        channel_identities: receipt.channelIdentities,
+      });
     },
   );
 }

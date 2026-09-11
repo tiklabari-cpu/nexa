@@ -6,9 +6,13 @@
  */
 import { describe, expect, it } from 'vitest';
 import {
+  applyTenantWindows,
   capRetentionForHipaa,
   cutoffFor,
+  cutoffForWindow,
   HIPAA_RETENTION_CEILING,
+  hipaaCeilingDays,
+  readTenantWindow,
   resolveCutoffs,
   resolveRetentionPolicy,
   type RetentionPolicy,
@@ -45,8 +49,8 @@ describe('resolveCutoffs', () => {
       { threadDays: 365, visitDays: 90, mailDays: 30, auditDays: 30 },
       NOW,
     );
-    expect(cutoffs.threads.getTime()).toBe(NOW.getTime() - 365 * DAY);
-    expect(cutoffs.visits.getTime()).toBe(NOW.getTime() - 90 * DAY);
+    expect(cutoffs.threads?.getTime()).toBe(NOW.getTime() - 365 * DAY);
+    expect(cutoffs.visits?.getTime()).toBe(NOW.getTime() - 90 * DAY);
     expect(cutoffs.mail.getTime()).toBe(NOW.getTime() - 30 * DAY);
     expect(cutoffs.audit.getTime()).toBe(NOW.getTime() - 30 * DAY);
   });
@@ -142,11 +146,28 @@ describe('capRetentionForHipaa', () => {
     expect(capped.auditDays).toBe(2190);
   });
 
-  it('refuses an unlimited window rather than clamping it', () => {
-    // NFR-C8 offers "unlimited" beside 30/60/365. Whatever shape a per-workspace
-    // setting gives it, `Math.min` would return it unchanged and grant the
-    // covered workspace exactly the indefinite retention the agreement forbids —
-    // so it stops the sweep and says so instead.
+  it('clamps a deliberate "unlimited" to the ceiling rather than aborting the run', () => {
+    // NFR-C8 offers "unlimited" beside 30/60/365, and since tm 241 a workspace
+    // can actually choose it — which means it can be chosen *before* a BAA is
+    // signed and still be sitting there afterwards. That is an ordinary
+    // sequence of user actions, not a bug, so the sweep applies the ceiling
+    // instead of throwing: throwing would abort the whole run and leave every
+    // OTHER workspace unswept in order to punish this one. The write path is
+    // where the refusal belongs (`PATCH /settings/retention`), because that is
+    // where there is an admin to tell.
+    const capped = capRetentionForHipaa(
+      policy({ threadDays: 'unlimited', visitDays: 'unlimited' }),
+    );
+
+    expect(capped.threadDays).toBe(HIPAA_RETENTION_CEILING.threadDays);
+    expect(capped.visitDays).toBe(HIPAA_RETENTION_CEILING.visitDays);
+  });
+
+  it('still refuses a non-finite NUMBER — that is arithmetic junk, not a choice', () => {
+    // The distinction the string sentinel buys. `Infinity`/`NaN` cannot be
+    // selected by anyone; they are a bad coercion, and a sweep proceeding under
+    // a policy nobody chose is worse than a sweep that stops. `'unlimited'`
+    // above is a deliberate answer and is treated as one.
     expect(() => capRetentionForHipaa(policy({ threadDays: Number.POSITIVE_INFINITY }))).toThrow(
       /unlimited/,
     );
@@ -159,5 +180,154 @@ describe('capRetentionForHipaa', () => {
     expect(() => capRetentionForHipaa(policy({ mailDays: Number.POSITIVE_INFINITY }))).toThrow(
       /mailDays/,
     );
+  });
+});
+
+/**
+ * Per-workspace windows (NFR-C8) — the three layers, and the order they apply in.
+ *
+ * The requirement's word is "yapılandırılabilir": the deployment default is a
+ * fallback, not the answer. What has to be provable here is that a workspace's
+ * own choice actually reaches the sweep, that "no choice" is a different state
+ * from "unlimited", and that the HIPAA ceiling is still the last word.
+ */
+describe('applyTenantWindows (NFR-C8)', () => {
+  const DEPLOYMENT: RetentionPolicy = {
+    threadDays: 365,
+    visitDays: 90,
+    mailDays: 30,
+    auditDays: 30,
+  };
+
+  it('leaves the deployment default in place when the workspace has chosen nothing', () => {
+    expect(applyTenantWindows(DEPLOYMENT, { threadWindow: null, visitWindow: null })).toEqual(
+      DEPLOYMENT,
+    );
+  });
+
+  it('applies the workspace’s own tier over the default', () => {
+    const policy = applyTenantWindows(DEPLOYMENT, { threadWindow: '30d', visitWindow: '60d' });
+
+    expect(policy.threadDays).toBe(30);
+    expect(policy.visitDays).toBe(60);
+  });
+
+  it('moves one window without disturbing the other', () => {
+    // The `null` = "leave alone" half of the contract. A workspace setting only
+    // its conversation window must not have its telemetry window reset with it.
+    const policy = applyTenantWindows(DEPLOYMENT, { threadWindow: '60d', visitWindow: null });
+
+    expect(policy.threadDays).toBe(60);
+    expect(policy.visitDays).toBe(90);
+  });
+
+  it('never touches the mail or audit windows — they are not per workspace', () => {
+    // `mailDays`: the spool files carry no licence, so there is nothing to look
+    // a choice up against. `auditDays`: NFR-S12 floors the trail at 30 days on
+    // every plan, and a workspace that could shorten the record of its own
+    // deletions is precisely the "erişim ≠ silme" hole NFR-C8 names.
+    const policy = applyTenantWindows(DEPLOYMENT, { threadWindow: '30d', visitWindow: '30d' });
+
+    expect(policy.mailDays).toBe(DEPLOYMENT.mailDays);
+    expect(policy.auditDays).toBe(DEPLOYMENT.auditDays);
+  });
+
+  it('carries "unlimited" through as itself, not as a number', () => {
+    const policy = applyTenantWindows(DEPLOYMENT, { threadWindow: 'unlimited', visitWindow: null });
+
+    expect(policy.threadDays).toBe('unlimited');
+    // The defect this shape exists to prevent, asserted on the value: 0 would
+    // put the cutoff at "now" and delete everything the switch was meant to
+    // protect.
+    expect(policy.threadDays).not.toBe(0);
+  });
+
+  it('applies the HIPAA ceiling LAST, so it outranks the workspace’s choice', () => {
+    // Order is the design: choice over default, ceiling over choice. A covered
+    // workspace asking for unlimited retention of conversations gets 365.
+    const chosen = applyTenantWindows(DEPLOYMENT, {
+      threadWindow: 'unlimited',
+      visitWindow: '365d',
+    });
+
+    expect(capRetentionForHipaa(chosen)).toEqual({
+      threadDays: 365,
+      visitDays: 90,
+      mailDays: 30,
+      auditDays: 30,
+    });
+  });
+
+  it('a shorter choice survives the ceiling — it is a maximum, not a schedule', () => {
+    const chosen = applyTenantWindows(DEPLOYMENT, { threadWindow: '30d', visitWindow: '30d' });
+
+    expect(capRetentionForHipaa(chosen).threadDays).toBe(30);
+    expect(capRetentionForHipaa(chosen).visitDays).toBe(30);
+  });
+});
+
+describe('readTenantWindow', () => {
+  it('accepts the four tiers', () => {
+    expect(readTenantWindow('30d')).toBe('30d');
+    expect(readTenantWindow('unlimited')).toBe('unlimited');
+  });
+
+  it('reads an unknown or absent value as "no choice"', () => {
+    // The rollout case CONVENTIONS §6.3 is about: a replica of the previous
+    // release meeting a row a newer one wrote. Falling back to the deployment
+    // default keeps the sweep running under a window somebody configured;
+    // raising would stop retention for every workspace because one of them used
+    // a tier this build has not shipped yet.
+    expect(readTenantWindow('90d')).toBeNull();
+    expect(readTenantWindow(null)).toBeNull();
+    expect(readTenantWindow(undefined)).toBeNull();
+    // And never as zero, which is the value the sweep's guard refuses.
+    expect(readTenantWindow('0')).toBeNull();
+  });
+});
+
+describe('cutoffForWindow', () => {
+  it('is the ordinary cutoff for a finite window', () => {
+    expect(cutoffForWindow(30, NOW)?.getTime()).toBe(NOW.getTime() - 30 * DAY);
+  });
+
+  it('returns null for an unlimited window — no cutoff at all', () => {
+    // Not a very old date, and not epoch: a caller has to *branch*, and null is
+    // the only value that will not survive a `<` comparison by accident.
+    expect(cutoffForWindow('unlimited', NOW)).toBeNull();
+  });
+
+  it('still refuses a zero or negative window', () => {
+    expect(() => cutoffForWindow(0, NOW)).toThrow(RangeError);
+    expect(() => cutoffForWindow(-1, NOW)).toThrow(RangeError);
+  });
+});
+
+describe('resolveCutoffs with an unlimited window', () => {
+  it('hands back a null cutoff for the unlimited class and real ones for the rest', () => {
+    const cutoffs = resolveCutoffs(
+      { threadDays: 'unlimited', visitDays: 90, mailDays: 30, auditDays: 30 },
+      NOW,
+    );
+
+    expect(cutoffs.threads).toBeNull();
+    expect(cutoffs.visits?.getTime()).toBe(NOW.getTime() - 90 * DAY);
+    // The two windows that are never per-workspace keep their cutoffs: choosing
+    // unlimited conversations does not switch off the audit window NFR-S12
+    // floors.
+    expect(cutoffs.audit.getTime()).toBe(NOW.getTime() - 30 * DAY);
+    expect(cutoffs.mail.getTime()).toBe(NOW.getTime() - 30 * DAY);
+  });
+});
+
+describe('hipaaCeilingDays', () => {
+  it('is null when nothing caps the workspace', () => {
+    expect(hipaaCeilingDays('threadDays', false)).toBeNull();
+    expect(hipaaCeilingDays('visitDays', false)).toBeNull();
+  });
+
+  it('is the ceiling under HIPAA scope', () => {
+    expect(hipaaCeilingDays('threadDays', true)).toBe(365);
+    expect(hipaaCeilingDays('visitDays', true)).toBe(90);
   });
 });

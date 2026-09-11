@@ -613,6 +613,29 @@ export const settings: Messages = {
   'settings.compliance.entitlementError':
     'HIPAA kapsamı bir Enterprise özelliğidir. Sözleşmeyi kabul etmek için planı yükseltin.',
 
+  // Veri saklama — DataRetention.tsx
+  'settings.retention.title': 'Veri saklama',
+  'settings.retention.description':
+    'Bu çalışma alanı, görüşmeleri ve ziyaretçi verilerini kalıcı olarak silmeden önce ne kadar saklıyor.',
+  'settings.retention.loadError': 'Veri saklama ayarları yüklenemedi.',
+  'settings.retention.threadLabel': 'Kapanmış görüşmeler',
+  'settings.retention.threadHint':
+    'Kapanmış görüşmeleri ve içlerindeki tüm mesajları kapsar. Açık görüşmelere hiç dokunulmaz.',
+  'settings.retention.visitLabel': 'Ziyaretçi verisi',
+  'settings.retention.visitHint':
+    "Widget'ın kaydettiği ziyaretler — IP adresi, tarayıcı ve sayfalar.",
+  'settings.retention.inherit': 'Varsayılanı kullan ({days} gün)',
+  'settings.retention.tier.30d': '30 gün',
+  'settings.retention.tier.60d': '60 gün',
+  'settings.retention.tier.365d': '365 gün',
+  'settings.retention.tier.unlimited': 'Süresiz sakla',
+  'settings.retention.effectiveDays': '{days} gün sonra siliniyor.',
+  'settings.retention.effectiveUnlimited': 'Otomatik olarak hiç silinmiyor.',
+  'settings.retention.hipaaNote':
+    'Bu çalışma alanının imzalı bir HIPAA sözleşmesi var; veriler {days} günden uzun süre ve süresiz olarak saklanamaz.',
+  'settings.retention.auditNote':
+    'Denetim kaydının kendi 30 günlük penceresi vardır ve bu ayarlardan etkilenmez.',
+
   // SIEM dışa aktarımı — SiemExport.tsx
   'settings.siemExport.title': 'SIEM dışa aktarımı',
   'settings.siemExport.description':

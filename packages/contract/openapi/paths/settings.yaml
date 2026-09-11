@@ -939,6 +939,83 @@ securitySettings:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+# --- Data retention (NFR-C8) -----------------------------------------------
+#
+# PRD §7 NFR-C8 asks for a *configurable* retention window — 30/60/365/unlimited
+# — with a real hard-delete once it lapses. The hard-delete has shipped since
+# tm 24 (`services/retention/`); the configurability had not, because the
+# windows were read only from the environment and were therefore one number per
+# deployment rather than one per workspace. This pair is that half.
+#
+# Licence-scoped, not brand-scoped: the data these windows govern (`threads`,
+# `visits`) is keyed by licence and has no brand, so a per-brand window would
+# have needed an invented rule for which of three brands decides a
+# conversation's fate.
+
+retention:
+  get:
+    tags: [Settings]
+    operationId: getRetentionSettings
+    summary: How long this workspace keeps its data
+    description: |
+      The workspace's own retention windows, the deployment defaults they fall
+      back to, and the windows the sweep will **actually** apply once a HIPAA
+      ceiling has been taken into account (NFR-C4 · C4-e).
+
+      All three are returned because the third is not derivable from the first
+      two by anyone outside the deployment: a covered workspace that chose
+      `unlimited` is swept at 365 days, and the only honest answer to "when will
+      this conversation be deleted" is the one the server computes.
+
+      `access_rules:ro` (or `:rw`) plus `minimumRole: admin`, the same gate
+      `GET /settings/compliance` carries — and for the same reason, since the
+      two settings interlock.
+    responses:
+      "200":
+        description: The current retention settings
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RetentionSettings" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+  patch:
+    tags: [Settings]
+    operationId: updateRetentionSettings
+    summary: Choose how long this workspace keeps its data
+    description: |
+      Sets one or both windows, or clears a choice back to the deployment
+      default with an explicit `null`.
+
+      **A window above the HIPAA ceiling is refused, not clamped** (403,
+      `details.reason = "hipaa_ceiling"`, with `details.max_days`). Silently
+      storing a longer window and applying a shorter one would leave the screen
+      claiming a retention period the workspace does not have — and this is the
+      one setting where the gap between what was saved and what happens is the
+      difference between a kept agreement and a broken one. `unlimited` is
+      refused on a covered workspace at any value: indefinite retention of PHI
+      is what a BAA is signed to prevent.
+
+      Writes `settings.security_updated` to the audit trail with the field names
+      touched, never their values — the same shape `/settings/security` and
+      `/settings/siem` use.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/RetentionSettingsInput" }
+    responses:
+      "200":
+        description: The settings after the change
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/RetentionSettings" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 compliance:
   get:
     tags: [Settings]

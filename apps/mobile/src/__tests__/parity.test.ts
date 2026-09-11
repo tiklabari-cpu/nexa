@@ -864,7 +864,16 @@ describe('module parity matrix — what is still owed', () => {
       // trusted domains). A boundary rather than a gap, and the bot's actual
       // output — its reply in a conversation — the app already reads, because
       // it is an ordinary event in the transcript. Nothing here re-scopes.
-      contractEndpoints: 215,
+      // 215 -> 217 with `/settings/retention` and `/customers/{customerId}/erase`
+      // (V8-NFR-C8, tm 241) — choosing how long the workspace keeps its data,
+      // and honouring a "right to erasure" request. Both are workspace
+      // *administration*: the first is a `/settings/*` path, which this app has
+      // never carried, and the second is an irreversible compliance action
+      // behind `customers.erase:rw` + `minimumRole: admin`. The phone is an
+      // inbox — it reads a contact and cannot even ban one, so it certainly
+      // does not erase one. A boundary rather than a gap, and nothing here
+      // re-scopes.
+      contractEndpoints: 217,
       scopeBoundaries: 1,
     });
   });

@@ -91,6 +91,12 @@ export const ADMIN_SCOPES: Scope[] = [
   'tickets--all:rw',
   'customers:rw',
   'customers.ban:rw',
+  // Honouring a "right to erasure" request (GDPR Art. 17 · NFR-C8). Here and
+  // not in `DEFAULT_AGENT_SCOPES`, which is the whole point of it being a
+  // separate scope: an agent works the inbox, an admin answers the workspace's
+  // compliance post. The route pairs it with `minimumRole: admin`, so a PAT
+  // minted with this scope by an agent-role holder is refused there too.
+  'customers.erase:rw',
   'groups--all:rw',
   'tags--all:rw',
   'canned_responses--all:rw',

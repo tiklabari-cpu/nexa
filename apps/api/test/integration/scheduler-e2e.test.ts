@@ -103,6 +103,7 @@ const UNCONDITIONAL = [
   'scheduled_reports',
   'webhook_redelivery',
   'knowledge_refresh',
+  'invoice_close',
 ];
 
 /**
@@ -366,6 +367,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_RETENTION_MS: TICK_MS,
         SCHEDULE_WEBHOOK_REDELIVERY_MS: TICK_MS,
         SCHEDULE_KNOWLEDGE_REFRESH_MS: TICK_MS,
+        SCHEDULE_INVOICE_CLOSE_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -476,7 +478,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     expect(await owner.auditLogEntry.count({ where: { action: 'data.retention_pruned' } })).toBe(0);
   });
 
-  it("says so on /health — enabled, seven jobs, and what each one's last pass did", () => {
+  it("says so on /health — enabled, eight jobs, and what each one's last pass did", () => {
     expect(health.scheduler.enabled).toBe(true);
     expect(health.scheduler.jobs.map((job) => job.name)).toEqual([
       'chat_timeout',
@@ -486,6 +488,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'retention',
       'webhook_redelivery',
       'knowledge_refresh',
+      'invoice_close',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -539,6 +542,7 @@ describe('two API instances sharing one Redis', () => {
       SCHEDULE_SCHEDULED_REPORTS_MS: '1500',
       SCHEDULE_WEBHOOK_REDELIVERY_MS: '1500',
       SCHEDULE_KNOWLEDGE_REFRESH_MS: '1500',
+      SCHEDULE_INVOICE_CLOSE_MS: '1500',
     };
     // Booted together so the gap between the two `scheduler.start()` calls is
     // as small as two concurrent boots allow — it has to be under the lock's
@@ -644,6 +648,7 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_SCHEDULED_REPORTS_MS: NEVER_MS,
       SCHEDULE_WEBHOOK_REDELIVERY_MS: NEVER_MS,
       SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
+      SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 

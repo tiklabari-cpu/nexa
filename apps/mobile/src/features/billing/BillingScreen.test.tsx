@@ -55,7 +55,12 @@ function invoice(overrides: Partial<Invoice> & { period: string }): Invoice {
   return {
     number: `NEXA-${overrides.period}`,
     period_label: 'August 2026',
-    issued_at: '2026-08-01T00:00:00.000Z',
+    period_start: '2026-08-01T00:00:00.000Z',
+    period_end: '2026-09-01T00:00:00.000Z',
+    issued_at: '2026-08-31T00:00:00.000Z',
+    // The month still running — the phone's read-only surface (13.7-o) shows
+    // whatever the endpoint says, statement or estimate alike.
+    origin: 'estimate',
     status: 'open',
     currency: 'usd',
     line_items: [{ description: 'Growth plan · 5 seats', amount_cents: 49500 }],
@@ -205,6 +210,27 @@ describe('BillingScreen', () => {
     const row = within(await screen.findByTestId('invoice-row-202608'));
     expect(row.getByText('$495.00')).toBeOnTheScreen();
     expect(row.getByText('Open')).toBeOnTheScreen();
+  });
+
+  /**
+   * The phone shows a number and nothing else, so a figure that is still moving
+   * has to say so here as much as it does in the console (FR-MOD-10.3). A frozen
+   * `issued` statement carries no note — that is the ordinary case.
+   */
+  it('marks a running month an estimate and a backfilled one a reconstruction', async () => {
+    await mount(
+      api({
+        listInvoices: async () => [
+          invoice({ period: '202608', origin: 'estimate', status: 'open' }),
+          invoice({ period: '202607', origin: 'issued', status: 'paid' }),
+          invoice({ period: '202606', origin: 'reconstructed', status: 'paid' }),
+        ],
+      }),
+    );
+
+    expect(await screen.findByTestId('invoice-origin-202608')).toHaveTextContent('Estimate');
+    expect(screen.queryByTestId('invoice-origin-202607')).toBeNull();
+    expect(screen.getByTestId('invoice-origin-202606')).toHaveTextContent('Reconstructed');
   });
 
   it('shows the entitlement list for the workspace plan', async () => {

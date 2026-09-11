@@ -52,6 +52,7 @@ describe('buildSchedulerJobs', () => {
       'retention',
       'webhook_redelivery',
       'knowledge_refresh',
+      'invoice_close',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -67,6 +68,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_RETENTION_MS: '55000',
       SCHEDULE_WEBHOOK_REDELIVERY_MS: '66000',
       SCHEDULE_KNOWLEDGE_REFRESH_MS: '77000',
+      SCHEDULE_INVOICE_CLOSE_MS: '88000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -79,6 +81,7 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('retention')).toBe(55_000);
     expect(intervalOf('webhook_redelivery')).toBe(66_000);
     expect(intervalOf('knowledge_refresh')).toBe(77_000);
+    expect(intervalOf('invoice_close')).toBe(88_000);
   });
 
   it('registers retention disabled unless RETENTION_ENABLED is set — no other job is gated', () => {
@@ -175,6 +178,14 @@ describe('buildSchedulerJobs', () => {
       );
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({ tenants: 0, checked: 0, refreshed: 0, failed: 0 });
+    });
+
+    it('invoice_close finds no closed period and reports zero tenants', async () => {
+      const job = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() }).find(
+        (j) => j.name === 'invoice_close',
+      );
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({ tenants: 0, issued: 0, reconstructed: 0, skipped: 0 });
     });
   });
 });

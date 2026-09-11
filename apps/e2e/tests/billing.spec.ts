@@ -88,6 +88,22 @@ test.describe('billing checkout', () => {
     // entitlements alone reproduce that failure; entitlements alone is green.
     const startedOnGrowth = (await growthPlan.getAttribute('aria-pressed')) === 'true';
 
+    // Invoices list (10.3): the running month plus at least one closed period,
+    // both downloadable.
+    const invoices = agentPage.getByRole('region', { name: 'Invoices' });
+    await expect(invoices).toBeVisible();
+    const invoiceRows = invoices.getByTestId('invoice-row');
+    await expect(invoiceRows.first()).toBeVisible();
+    await expect(invoices.getByRole('button', { name: /Download invoice/i }).first()).toBeVisible();
+
+    // The running month says it is an estimate; the closed one below it is a
+    // statement and claims nothing extra.
+    const estimate = invoiceRows.first();
+    await expect(estimate.getByTestId('invoice-origin')).toHaveText('Estimate');
+    const settled = invoiceRows.nth(1);
+    await expect(settled).toBeVisible();
+    await expect(settled.getByTestId('invoice-origin')).toHaveCount(0);
+
     // Plan tier (FR-MOD-10.1.1): known starting point first, same discipline as
     // the cycle toggle above — growth is disabled only when already active.
     if (await growthPlan.isEnabled()) {
@@ -96,6 +112,17 @@ test.describe('billing checkout', () => {
     }
     await expect(growthPlan).toHaveAttribute('aria-pressed', 'true');
 
+    // What both rows say while the workspace is on growth. The tier is printed
+    // on the statement itself ("<plan> plan — free during trial" while
+    // trialing), so the plan switch below is observable in the list — which is
+    // exactly what makes the next assertion mean something.
+    //
+    // Waited for rather than read: a plan change invalidates the invoices query,
+    // and a plain `innerText()` here races that refetch — it read the *previous*
+    // tier on the first run of this assertion.
+    await expect(estimate.getByTestId('invoice-line-items')).toContainText('growth');
+    const settledBefore = await settled.innerText();
+
     await enterprisePlan.click();
     // Enterprise is quoted, not listed — the confirm step says so rather than
     // inventing a total for a price this product does not set.
@@ -103,6 +130,15 @@ test.describe('billing checkout', () => {
     await confirmPlanChange.click();
     await expect(enterprisePlan).toHaveAttribute('aria-pressed', 'true');
     await expect(growthPlan).toHaveAttribute('aria-pressed', 'false');
+
+    // The whole point of persisting invoices (FR-MOD-10.3), through the real
+    // screen: the plan change invalidates the invoices query, so both rows are
+    // re-read from the server — and only one of them moves. The running month
+    // now names the new tier; the closed statement is byte-identical to what it
+    // said a moment ago. Before the `invoices` table both were derived from the
+    // same subscription row, so the settled month followed the plan too.
+    await expect(estimate.getByTestId('invoice-line-items')).toContainText('enterprise');
+    expect(await settled.innerText()).toBe(settledBefore);
 
     // Put the plan back the way we found it.
     const startingPlan = startedOnGrowth ? growthPlan : enterprisePlan;
@@ -119,12 +155,6 @@ test.describe('billing checkout', () => {
     await expect(seatCount).toHaveText(String(before + 1));
     await manage.getByRole('button', { name: 'Remove a seat' }).click();
     await expect(seatCount).toHaveText(String(before));
-
-    // Invoices list (10.3): at least the current period's statement, downloadable.
-    const invoices = agentPage.getByRole('region', { name: 'Invoices' });
-    await expect(invoices).toBeVisible();
-    await expect(invoices.getByTestId('invoice-row').first()).toBeVisible();
-    await expect(invoices.getByRole('button', { name: /Download invoice/i }).first()).toBeVisible();
 
     // Payment method (10.3): the form saves the masked card and the section
     // then shows it — honest about being mocked, with no full card number field.
@@ -143,6 +173,10 @@ test.describe('billing checkout', () => {
     // Annual recomputes the summary and states the saving.
     await annual.click();
     await expect(summary).toContainText(/saving/i);
+
+    // And the cycle is another thing the closed statement does not follow.
+    expect(await settled.innerText()).toBe(settledBefore);
+
     await agentPage.screenshot({ path: 'kanit/14-billing-checkout.png', fullPage: true });
 
     // Put the demo back the way we found it.

@@ -4997,7 +4997,12 @@ describe('reports and billing', () => {
       expect(open.total_cents).toBe(0);
     });
 
-    it('lists a past period with usage as a settled invoice', async () => {
+    it('does not invent a statement for a closed period nobody has issued one for', async () => {
+      // Usage alone is not an invoice. It used to be: the endpoint derived one
+      // on the spot and priced it from *today's* subscription, which is exactly
+      // how a plan change rewrote history. Closing the period is the sweep's
+      // job (`invoice-close.test.ts`), and until it runs the month is simply
+      // absent rather than guessed at.
       await activate();
       await owner.usageRecord.create({
         data: {
@@ -5012,13 +5017,58 @@ describe('reports and billing', () => {
       });
 
       const invoices = (await server.get('/billing/invoices', auth)).json().invoices;
+      expect(invoices.map((i: { period: string }) => i.period)).toEqual([period]);
+    });
+
+    it('lists a frozen past period as a settled invoice, read back exactly as stored', async () => {
+      await activate();
+      // Written straight to the table rather than through the sweep: this test
+      // is about what the endpoint does with a stored statement. The amounts
+      // deliberately match no arithmetic the derived path would produce, so a
+      // read that recomputed anything would show it.
+      await owner.invoice.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          number: 'NEXA-202601',
+          period: '202601',
+          periodStart: new Date('2026-01-01T00:00:00Z'),
+          periodEnd: new Date('2026-02-01T00:00:00Z'),
+          issuedAt: new Date('2026-01-31T00:00:00Z'),
+          origin: 'issued',
+          status: 'paid',
+          currency: 'usd',
+          subtotalCents: 4_242,
+          totalCents: 4_242,
+          lineItems: {
+            create: [
+              { licenseId: fx.a.licenseId, position: 0, description: 'Seats', amountCents: 4_000 },
+              { licenseId: fx.a.licenseId, position: 1, description: 'Overage', amountCents: 242 },
+            ],
+          },
+        },
+      });
+
+      const invoices = (await server.get('/billing/invoices', auth)).json().invoices;
       const past = invoices.find((i: { period: string }) => i.period === '202601');
-      expect(past).toBeTruthy();
-      expect(past.status).toBe('paid');
-      // Seats ($198) + 60 over at $0.50 ($30) = $228.
-      expect(past.total_cents).toBe(2 * 9900 + 60 * 50);
-      // Newest first: the current period sorts ahead of an old one.
+      expect(past).toMatchObject({
+        number: 'NEXA-202601',
+        period_label: 'January 2026',
+        period_start: '2026-01-01T00:00:00.000Z',
+        period_end: '2026-02-01T00:00:00.000Z',
+        issued_at: '2026-01-31T00:00:00.000Z',
+        origin: 'issued',
+        status: 'paid',
+        currency: 'usd',
+        total_cents: 4_242,
+      });
+      // In stored order, not whatever a SELECT happened to return.
+      expect(past.line_items).toEqual([
+        { description: 'Seats', amount_cents: 4_000 },
+        { description: 'Overage', amount_cents: 242 },
+      ]);
+      // Newest first: the current period's estimate sorts ahead of an old one.
       expect(invoices[0].period.localeCompare('202601')).toBeGreaterThan(0);
+      expect(invoices[0].origin).toBe('estimate');
     });
 
     it('downloads one invoice as an injection-safe CSV', async () => {
@@ -5063,15 +5113,19 @@ describe('reports and billing', () => {
 
     it('never shows another tenant an invoice', async () => {
       await activate();
-      await owner.usageRecord.create({
+      await owner.invoice.create({
         data: {
           licenseId: fx.a.licenseId,
-          metric: 'ai_resolutions',
+          number: 'NEXA-202601',
           period: '202601',
-          quantity: 260n,
-          included: 200n,
-          overageUnit: 50,
-          overageUnitPriceCents: 50,
+          periodStart: new Date('2026-01-01T00:00:00Z'),
+          periodEnd: new Date('2026-02-01T00:00:00Z'),
+          issuedAt: new Date('2026-01-31T00:00:00Z'),
+          origin: 'issued',
+          status: 'paid',
+          currency: 'usd',
+          subtotalCents: 22_800,
+          totalCents: 22_800,
         },
       });
 

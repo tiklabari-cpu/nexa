@@ -21,14 +21,17 @@
  * leaves the source untouched by construction, not by a flag), and
  * `scheduled-reports:run`'s dry-run exists only for an operator eyeballing the
  * CLI's output — the sweeper it calls under `--apply` is the same
- * `ScheduledReportSweeper.run` used here. `webhook_redelivery` has no CLI
- * script at all (see README.md).
+ * `ScheduledReportSweeper.run` used here. `invoice_close` is the same shape as
+ * those: `invoice-close-run.ts` takes no `--apply` either, because freezing a
+ * closed period moves no money and cannot happen twice. `webhook_redelivery`
+ * has no CLI script at all (see README.md).
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
+import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
 import { ChatService } from '../chat/chat-service.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
 import { ChatTimeoutSweeper } from '../chat/chat-timeout.js';
@@ -224,6 +227,25 @@ export function buildSchedulerJobs({
             checked: report.totals.checked,
             refreshed: report.totals.refreshed,
             failed: report.totals.failed,
+          },
+        };
+      },
+    },
+    {
+      // Freezes a closed billing period into a statement (FR-MOD-10.3). Like
+      // the sweeps above it takes no `--apply`: the pass writes a row saying
+      // what a month already cost — no money moves, no quota changes, nothing
+      // leaves the building — and a period it has closed cannot be closed twice.
+      name: 'invoice_close',
+      intervalMs: intervals.invoice_close,
+      async run() {
+        const report = await new InvoiceCloseSweeper(db, env).run();
+        return {
+          counts: {
+            tenants: report.totals.tenants,
+            issued: report.totals.issued,
+            reconstructed: report.totals.reconstructed,
+            skipped: report.totals.skipped,
           },
         };
       },

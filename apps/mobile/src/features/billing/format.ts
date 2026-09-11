@@ -46,6 +46,25 @@ export function formatInvoiceStatus(status: Invoice['status']): string {
   return INVOICE_STATUS_LABEL[status];
 }
 
+/**
+ * The note a row needs beside its status, or `null` when it needs none
+ * (FR-MOD-10.3).
+ *
+ * `issued` is the normal case — a statement frozen in the month after its
+ * period — and labelling every one of those would say nothing. The other two
+ * are the rows a total alone would misrepresent: an `estimate` is a month still
+ * accruing, whose figure will move before it settles, and a `reconstructed`
+ * period had its seat line priced from the subscription as it stood when the
+ * row was written rather than as it stood during the period. Same wording the
+ * console uses (`billing.invoices.origin.*`), mirrored rather than imported for
+ * the reason at the top of this file.
+ */
+export function formatInvoiceOrigin(origin: Invoice['origin']): string | null {
+  if (origin === 'estimate') return 'Estimate';
+  if (origin === 'reconstructed') return 'Reconstructed';
+  return null;
+}
+
 /** The vocabulary order `EntitlementsView.entitlements` always carries — every
  * key present, so the list on screen never silently drops one. */
 export const ENTITLEMENT_LABEL: Record<keyof Entitlements['entitlements'], string> = {

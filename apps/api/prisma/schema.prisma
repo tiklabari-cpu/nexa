@@ -152,6 +152,8 @@ model License {
   usageRecords           UsageRecord[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
+  invoices               Invoice[]
+  invoiceLineItems       InvoiceLineItem[]
   paymentMethod          PaymentMethod?
   auditEntries           AuditLogEntry[]
   auditChainHead         AuditChainHead?
@@ -2087,6 +2089,104 @@ model AiPackagePurchase {
   @@unique([licenseId, idempotencyKey])
   @@index([licenseId, period])
   @@map("ai_package_purchases")
+}
+
+/// One frozen billing statement for one closed period (FR-MOD-10.3).
+///
+/// Before this table existed the invoice history was *derived on read*, and
+/// every past period was priced from whatever `subscriptions` said today — so a
+/// plan change silently rewrote statements the workspace had already been shown.
+/// A row here is written once, by the period-close sweep
+/// (`invoice-close-sweep.ts`), and never updated: `nexa_app` holds SELECT and
+/// INSERT only. That is the whole point of the table, and the reason the
+/// privilege is withheld rather than merely unused.
+///
+/// The *current* period is deliberately absent. It has not closed, nothing has
+/// been billed, and its figures are supposed to move with usage — it is served
+/// as an `estimate` computed on read. A period only becomes a row when it ends.
+///
+/// `origin` records how the figures were arrived at, because the two ways are
+/// not equally strong: `issued` was frozen in the month right after the period,
+/// from the subscription as it then stood; `reconstructed` was frozen later
+/// (the backfill of periods that closed before this table existed), where the
+/// metered and purchased lines are still exact — each carries its own price on
+/// its own row — but the seat line could only be priced from the subscription
+/// at write time, since per-period seat history was never retained.
+model Invoice {
+  id        String @id @default(uuid()) @db.Uuid
+  licenseId BigInt @map("license_id")
+
+  /// Human invoice number, `NEXA-<yyyymm>`. Frozen rather than derived: it is
+  /// the identity the customer quotes back, so it must not restate itself if
+  /// the format ever changes. Unique per workspace, not globally — every
+  /// workspace numbers its own statements, exactly as the derived path did.
+  number String
+
+  /// `yyyymm` — the same period key `usage_records` and both purchase tables use.
+  period      String   @db.Char(6)
+  /// First instant of the period, UTC.
+  periodStart DateTime @map("period_start") @db.Timestamptz(6)
+  /// Exclusive upper bound — the first instant of the next month, UTC.
+  periodEnd   DateTime @map("period_end") @db.Timestamptz(6)
+
+  /// Statement date: the last day of the period's month. Deterministic, so it
+  /// does not depend on when the sweep happened to run.
+  issuedAt DateTime @map("issued_at") @db.Timestamptz(6)
+
+  /// `issued` or `reconstructed` — see the model comment. `estimate` is not a
+  /// stored value: an estimate is precisely a period with no row.
+  origin String
+
+  /// `paid` or `trial`. Frozen with the rest, so leaving the trial does not
+  /// turn a workspace's trial months into paid ones. `open` is not storable
+  /// for the same reason `estimate` is not.
+  status String
+
+  currency String @db.Char(3)
+
+  subtotalCents Int @map("subtotal_cents")
+  totalCents    Int @map("total_cents")
+
+  /// When the row was written — distinct from `issuedAt`, and the only field
+  /// that says how long after the period the freeze actually happened.
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  license   License            @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+  lineItems InvoiceLineItem[]
+
+  /// The only index the table needs. It is the idempotency guarantee for the
+  /// sweep *and* the access path for the list, which reads one workspace's rows
+  /// newest first — a btree serves that backwards, so a second `DESC` index
+  /// would cost every insert and buy nothing.
+  @@unique([licenseId, period])
+  @@map("invoices")
+}
+
+/// One line on a frozen statement (FR-MOD-10.3).
+///
+/// A table rather than a JSON column on `invoices`: these are the amounts that
+/// explain a charge, so each wants a typed integer and a CHECK rather than
+/// whatever shape a blob happened to be written in. `position` keeps the order
+/// the statement was composed in — seats, then each overage, then each package
+/// bought — because a reordered statement reads as a different one.
+///
+/// `licenseId` is carried here as well as on the parent so the row can stand
+/// under the same RLS policy every other tenant table uses, rather than
+/// depending on a join for its isolation.
+model InvoiceLineItem {
+  id          String @id @default(uuid()) @db.Uuid
+  invoiceId   String @map("invoice_id") @db.Uuid
+  licenseId   BigInt @map("license_id")
+  position    Int
+  description String
+  amountCents Int    @map("amount_cents")
+
+  invoice Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  license License @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([invoiceId, position])
+  @@index([invoiceId])
+  @@map("invoice_line_items")
 }
 
 // ===========================================================================

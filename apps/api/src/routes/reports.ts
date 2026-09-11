@@ -109,9 +109,9 @@ import {
   type BillingCycle,
 } from '../services/billing/subscription-service.js';
 import {
-  buildInvoices,
   invoiceCsvRows,
   invoiceFilename,
+  listInvoices,
 } from '../services/billing/invoice-service.js';
 import {
   PAYMENT_BRANDS,
@@ -2158,15 +2158,18 @@ export default async function reportRoutes(
     },
   );
 
-  // Invoices (FR-MOD-10.3). Derived from the subscription and usage records, not
-  // an external provider (ADR-13) — the current invoice's total is the same
-  // `estimated_total_cents` the subscription view quotes.
+  // Invoices (FR-MOD-10.3). No external provider issues these (ADR-13), so the
+  // period-close sweep freezes each closed period into `invoices` and this
+  // reads them back — a plan change cannot re-price a statement that has
+  // already been issued. Only the current period is computed on read, as an
+  // `estimate` whose total is the same `estimated_total_cents` the subscription
+  // view quotes.
   app.get(
     '/billing/invoices',
     { config: { scopes: BILLING_READ_SCOPES } },
     async (request, reply) => {
       const tenant = request.tenant();
-      const invoices = await request.withTenant((tx) => buildInvoices(tx, tenant, env));
+      const invoices = await request.withTenant((tx) => listInvoices(tx, tenant, env));
       return reply.send({ invoices });
     },
   );
@@ -2181,7 +2184,7 @@ export default async function reportRoutes(
       const tenant = request.tenant();
 
       const invoice = await request.withTenant(async (tx) => {
-        const invoices = await buildInvoices(tx, tenant, env);
+        const invoices = await listInvoices(tx, tenant, env);
         return invoices.find((i) => i.period === period);
       });
       if (!invoice) throw ApiError.notFound(`No invoice for period ${period}.`);

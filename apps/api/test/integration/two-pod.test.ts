@@ -566,6 +566,7 @@ describe('two API processes sharing one Redis leader lock', () => {
       SCHEDULE_SCHEDULED_REPORTS_MS: NEVER_MS,
       SCHEDULE_RETENTION_MS: NEVER_MS,
       SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
+      SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
     };
 
     const [portOne, portTwo] = (await reserveFreePorts(2)) as [number, number];

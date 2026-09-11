@@ -197,4 +197,10 @@ export const billing: Messages = {
   'billing.invoices.status.paid': 'Paid',
   'billing.invoices.status.open': 'Open',
   'billing.invoices.status.trial': 'Trial',
+  'billing.invoices.origin.estimate': 'Estimate',
+  'billing.invoices.origin.estimateHint':
+    'This period is still running, so the figures move with usage. It becomes a statement when the month closes.',
+  'billing.invoices.origin.reconstructed': 'Reconstructed',
+  'billing.invoices.origin.reconstructedHint':
+    'Frozen after the period closed. Metered lines and purchases carry their own prices and are exact; the seat charge was priced from the subscription as it stood when this was written.',
 };

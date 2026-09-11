@@ -1164,14 +1164,22 @@ invoices:
     summary: List invoices
     description: |
       Invoices for the workspace, newest period first (FR-MOD-10.3). Billing is
-      mocked (ADR-13): these are derived from the subscription and the per-period
-      usage records rather than issued by an external provider, so the current
-      invoice's total is exactly the `estimated_total_cents` the subscription
-      view quotes.
+      mocked (ADR-13): no external provider issues these, so the period-close
+      sweep freezes each one into the `invoices` table when its period ends and
+      this endpoint reads them back. A closed period is therefore never priced
+      from today's subscription — changing plan, seats or cycle leaves every
+      past statement exactly as it was.
 
-      The current period always appears as an `open` invoice — the standing plan
-      charge is visible before the period closes. While the workspace is on a
-      trial the statement is `trial` and owes nothing.
+      The current period always appears, as an `open` invoice with
+      `origin: estimate` — it has not closed, so it is computed on read and its
+      total is exactly the `estimated_total_cents` the subscription view quotes.
+      While the workspace is on a trial the statement is `trial` and owes
+      nothing.
+
+      A period the sweep has not closed yet does not appear: a statement exists
+      because it was issued, not because someone asked for the list. See
+      `origin` on the schema for how a reconstructed period differs from an
+      issued one.
     responses:
       "200":
         description: The workspace's invoices
@@ -1197,6 +1205,10 @@ invoiceDownload:
       The invoice for one period (`yyyymm`) as an injection-safe CSV download
       (FR-MOD-10.3, "indirme"). 404 if the workspace has no invoice for that
       period. Mocked billing — a real provider would hand back a PDF here.
+
+      The same rows the list returns: a closed period is read from the frozen
+      statement, so downloading last quarter's invoice twice across a plan
+      change yields byte-identical files.
     parameters:
       - name: period
         in: path

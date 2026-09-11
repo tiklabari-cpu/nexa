@@ -24,6 +24,7 @@ import {
   useChat,
   useChatList,
   useConnectedChannels,
+  useEditMessage,
   useMarkSeen,
   useSendMessage,
   useTranscript,
@@ -271,6 +272,7 @@ export function InboxPage(): ReactElement {
   // so the server treats it as a replay of one message and not a second one.
   const failedSends = useFailedSends(onTickets ? null : selectedId);
   const retrySend = useSendMessage(selectedId);
+  const editMessage = useEditMessage(selectedId);
 
   // Read receipt (FR-MOD-02.2.2): only while the transcript pane is actually on
   // screen — the Tickets tab leaves `selectedId`/`transcript` fetching in the
@@ -766,6 +768,12 @@ export function InboxPage(): ReactElement {
                     onLoadOlder={transcript.loadOlder}
                     failedSends={failedSends}
                     onRetry={(entry) => retrySend.mutate(entry.input)}
+                    {...(chat.data.active
+                      ? {
+                          onEdit: (eventId: string, text: string) =>
+                            editMessage.mutateAsync({ eventId, text }),
+                        }
+                      : {})}
                   />
 
                   <TypingIndicator

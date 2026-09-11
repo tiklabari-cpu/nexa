@@ -174,8 +174,13 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     // joins them here rather than staying absent from the dropdown, which is
     // what it was before this group existed — the three answer one question,
     // and splitting them would mean asking it twice.
+    // `chat.message_edited` joins them for the same reason (FR-MOD-02.3.7): it
+    // is the one entry that records the transcript's contents actually
+    // *changing*, and the correction overwrites the old wording, so this row is
+    // all that is left of it. An entry nobody can find in the dropdown is
+    // reachable only by editing the URL.
     labelKey: 'audit.group.conversations',
-    actions: ['chat.archived', 'chat.reopened', 'chat.taken_over'],
+    actions: ['chat.archived', 'chat.reopened', 'chat.taken_over', 'chat.message_edited'],
   },
   {
     labelKey: 'audit.group.tickets',

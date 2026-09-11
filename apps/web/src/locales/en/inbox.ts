@@ -168,6 +168,14 @@ export const inbox: Messages = {
   'inbox.transcript.notSent': 'Not sent',
   'inbox.transcript.retry': 'Retry',
   'inbox.transcript.aiSuffix': 'AI',
+  'inbox.transcript.edit': 'Edit',
+  'inbox.transcript.editAriaLabel': 'Edit this message',
+  'inbox.transcript.editFieldLabel': 'Corrected message',
+  'inbox.transcript.editSave': 'Save',
+  'inbox.transcript.editCancel': 'Cancel',
+  'inbox.transcript.editSaving': 'Saving…',
+  'inbox.transcript.edited': 'edited',
+  'inbox.transcript.editFailed': 'The correction was not saved.',
 
   // "Visitor is typing…"
   'inbox.typing.visitorFallback': 'Visitor',

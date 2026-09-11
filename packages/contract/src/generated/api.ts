@@ -905,6 +905,50 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/chats/{chatId}/events/{eventId}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    /**
+     * Correct a message after it was sent
+     * @description Rewrites the text of a message the caller sent themselves, within
+     *     fifteen minutes of sending it (PRD §5.2 "Güvenlik" · FR-MOD-02.3.7). The
+     *     corrected text replaces the original **in place**: the requirement is
+     *     that the wrong sentence stops being readable, so a correction that left
+     *     the original quoted in reports, exports and the transcript e-mail would
+     *     not meet it.
+     *
+     *     Nothing about the event log's shape changes. No event is deleted, no id
+     *     is reused and no sequence number moves, so `after_event_id` and the
+     *     realtime replay still have exactly one answer. Subscribers are told
+     *     through the `event_updated` push, which carries the whole event rather
+     *     than a diff.
+     *
+     *     `audit_log` records `chat.message_edited` — actor, chat and event id,
+     *     never the retracted text. The old wording is not retained anywhere; that
+     *     is the point of the operation.
+     *
+     *     Refused (403 `not_allowed`, with `details.reason`) when the caller did
+     *     not write the message (`not_author`), when the fifteen minutes have
+     *     passed (`edit_window_expired`), when the event is not a plain message
+     *     (`not_editable_type`), or when the reply has already been handed to an
+     *     external channel (`channel_delivered`) — a message delivered as an SMS or
+     *     a Messenger reply cannot be recalled from the provider, and rewriting the
+     *     local transcript would make our record disagree with what the customer
+     *     actually received.
+     */
+    put: operations['updateEvent'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/chats/{chatId}/deactivate': {
     parameters: {
       query?: never;
@@ -7412,11 +7456,26 @@ export interface components {
        */
       recipients: 'all' | 'agents';
       attachment_url?: string | null;
+      /**
+       * @description Free-form, with two reserved keys the server owns: `edited_at`
+       *     (ISO-8601, present once the message has been corrected after
+       *     sending) and `edited_by` (the account that corrected it). Both are
+       *     stripped from a caller-supplied `properties` on send, so a client
+       *     cannot make a fresh message claim it was edited.
+       */
       properties?: {
         [key: string]: unknown;
       };
       /** Format: date-time */
       created_at: string;
+    };
+    EventEdit: {
+      /**
+       * @description The corrected wording. Replaces the original outright — there is no
+       *     partial edit, and an empty string is refused rather than treated as
+       *     a delete, which is a different operation with different rules.
+       */
+      text: string;
     };
     NewEvent: {
       /**
@@ -13236,6 +13295,47 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      404: components['responses']['NotFound'];
+      /** @description The conversation is not active */
+      409: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+    };
+  };
+  updateEvent: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        /** @description Short base32 chat token. */
+        chatId: components['parameters']['ChatId'];
+        /** @description `<thread_id>_<sequence>`, as returned by the send. */
+        eventId: string;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['EventEdit'];
+      };
+    };
+    responses: {
+      /** @description The event, carrying its new text and its `edited_at` marker */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Event'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       /** @description The conversation is not active */
       409: {

@@ -261,6 +261,66 @@ events:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
+event:
+  put:
+    tags: [Chats]
+    operationId: updateEvent
+    summary: Correct a message after it was sent
+    description: |
+      Rewrites the text of a message the caller sent themselves, within
+      fifteen minutes of sending it (PRD §5.2 "Güvenlik" · FR-MOD-02.3.7). The
+      corrected text replaces the original **in place**: the requirement is
+      that the wrong sentence stops being readable, so a correction that left
+      the original quoted in reports, exports and the transcript e-mail would
+      not meet it.
+
+      Nothing about the event log's shape changes. No event is deleted, no id
+      is reused and no sequence number moves, so `after_event_id` and the
+      realtime replay still have exactly one answer. Subscribers are told
+      through the `event_updated` push, which carries the whole event rather
+      than a diff.
+
+      `audit_log` records `chat.message_edited` — actor, chat and event id,
+      never the retracted text. The old wording is not retained anywhere; that
+      is the point of the operation.
+
+      Refused (403 `not_allowed`, with `details.reason`) when the caller did
+      not write the message (`not_author`), when the fifteen minutes have
+      passed (`edit_window_expired`), when the event is not a plain message
+      (`not_editable_type`), or when the reply has already been handed to an
+      external channel (`channel_delivered`) — a message delivered as an SMS or
+      a Messenger reply cannot be recalled from the provider, and rewriting the
+      local transcript would make our record disagree with what the customer
+      actually received.
+    parameters:
+      - $ref: "../openapi.yaml#/components/parameters/ChatId"
+      - name: eventId
+        in: path
+        required: true
+        description: "`<thread_id>_<sequence>`, as returned by the send."
+        schema: { type: string }
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema: { $ref: "../openapi.yaml#/components/schemas/EventEdit" }
+    responses:
+      "200":
+        description: The event, carrying its new text and its `edited_at` marker
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Event" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      # Also the answer for an event in another workspace or in a chat the
+      # caller's teams do not reach: a 403 would confirm the id is real (NFR-S5).
+      "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
+      "409":
+        description: The conversation is not active
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+
 deactivate:
   post:
     tags: [Chats]

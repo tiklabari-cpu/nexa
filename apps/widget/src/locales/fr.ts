@@ -31,6 +31,7 @@ export const fr: Record<string, string> = {
   'greeting.chat': 'Discutons',
   'greeting.browse': 'Je regarde seulement',
   'attachment.alt': 'Pièce jointe',
+  'message.edited': 'modifié',
   'typing.named': "{name} est en train d'écrire…",
   'typing.generic': "En train d'écrire…",
   'rating.menuLabel': "Plus d'options",

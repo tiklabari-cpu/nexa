@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId, licenseChannel } from '@nexa/types';
 import {
   grantToken,
   ownerClient,
@@ -563,6 +563,433 @@ describe('agent chat api', () => {
         auth(acmeAdminToken),
       );
       expect(response.json().text).toBe(payload);
+    });
+  });
+
+  // =========================================================================
+  // Editing a message after it was sent (FR-MOD-02.3.7)
+  // =========================================================================
+
+  describe('edit after send', () => {
+    const ORIGINAL = 'Order 12345 is on its way';
+
+    async function sentMessage(token: string, text = ORIGINAL) {
+      const chat = await startChat(token);
+      const sent = await server.post(
+        `/chats/${chat.id}/events`,
+        { type: 'message', text },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(201);
+      return { chat, event: sent.json() as { id: string; created_at: string } };
+    }
+
+    /** Push the event back in time so the correction window has closed. */
+    async function age(eventId: string, minutes: number) {
+      await owner.$executeRawUnsafe(
+        `UPDATE events SET created_at = created_at - interval '${minutes} minutes' WHERE id = $1`,
+        eventId,
+      );
+    }
+
+    async function connectSms(customerId: string) {
+      await owner.channelIdentity.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          channelType: 'sms',
+          externalId: `+1555${randomUUID().slice(0, 8)}`,
+          customerId,
+        },
+      });
+    }
+
+    it('rewrites the text in place and marks the event edited', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'Order 54321 is on its way' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().text).toBe('Order 54321 is on its way');
+      expect(response.json().properties.edited_at).toEqual(expect.any(String));
+      expect(response.json().properties.edited_by).toBe(fx.a.ownerAccountId);
+    });
+
+    // The append-only negative, and the reason this operation is safe at all.
+    // An edit must change the *text* of an event and nothing else about the
+    // log's shape: no row added, none removed, the id untouched and
+    // `created_at` still where it was — which is what `after_event_id`, the
+    // transcript's keyset paging and the RTM replay all decide ordering from.
+    it('does not delete, duplicate or re-sequence the original event', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+      const before = await owner.event.findMany({
+        where: { chatId: chat.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, createdAt: true },
+      });
+
+      await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'corrected' },
+        auth(acmeAdminToken),
+      );
+
+      const after = await owner.event.findMany({
+        where: { chatId: chat.id },
+        orderBy: { createdAt: 'asc' },
+        select: { id: true, createdAt: true, text: true },
+      });
+      expect(after.map((e) => e.id)).toEqual(before.map((e) => e.id));
+      expect(after.map((e) => e.createdAt.toISOString())).toEqual(
+        before.map((e) => e.createdAt.toISOString()),
+      );
+      expect(after.find((e) => e.id === event.id)?.text).toBe('corrected');
+    });
+
+    // The old wording is gone on purpose — that is what makes this a security
+    // operation rather than a convenience — so the audit row is all that is
+    // left of the edit, and it must not carry the sentence just retracted.
+    it('writes an audit entry naming the event and never the old text', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken, 'the passphrase is hunter2');
+
+      await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'sorry, ignore that' },
+        auth(acmeAdminToken),
+      );
+
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'chat.message_edited' },
+      });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.target).toBe(`chat:${chat.id}`);
+      const metadata = JSON.stringify(entries[0]!.metadata);
+      expect(metadata).toContain(event.id);
+      expect(metadata).not.toContain('hunter2');
+      expect(metadata).not.toContain('passphrase');
+    });
+
+    it('refuses a message written by somebody else', async () => {
+      // Sent by the owner; the regular agent shares the team and can read it,
+      // which is exactly why authorship has to be checked separately from
+      // visibility.
+      const { chat, event } = await sentMessage(acmeAdminToken);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'words I did not write' },
+        auth(acmeAgentToken),
+      );
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.details.reason).toBe('not_author');
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    it('refuses once the correction window has closed', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+      await age(event.id, 20);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'too late' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.details.reason).toBe('edit_window_expired');
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    it('refuses an event that is not a plain message', async () => {
+      const chat = await startChat(acmeAdminToken);
+      // The archive notice the close writes — a `system_message` whose words
+      // are the product's, not anybody's to correct. Reopened afterwards so the
+      // refusal under test is the type one and not `chat_inactive`.
+      await server.post(`/chats/${chat.id}/deactivate`, undefined, auth(acmeAdminToken));
+      const system = await owner.event.findFirst({
+        where: { chatId: chat.id, type: 'system_message' },
+      });
+      expect(system).not.toBeNull();
+      await server.post(`/chats/${chat.id}/resume`, undefined, auth(acmeAdminToken));
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${system!.id}`,
+        { text: 'rewritten history' },
+        auth(acmeAdminToken),
+      );
+
+      // Resuming starts a new thread, so the archived notice is no longer in
+      // the active one: this is a 404 on thread grounds before the type is ever
+      // reached, and either refusal is the right answer — what must not happen
+      // is the notice changing.
+      expect([403, 404]).toContain(response.statusCode);
+      const row = await owner.event.findFirst({ where: { id: system!.id } });
+      expect(row?.text).toBe(system!.text);
+    });
+
+    // A provider cannot recall a delivered SMS or Messenger message. Rewriting
+    // our copy would leave the transcript disagreeing with what the customer is
+    // actually holding, and the transcript of an external conversation is a
+    // record of what was *sent*.
+    it('refuses a reply already handed to an external channel', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+      await connectSms(fx.a.customerId);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'never mind' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(403);
+      expect(response.json().error.details.reason).toBe('channel_delivered');
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    // An internal note never leaves the building, so the channel refusal above
+    // must not catch it — otherwise connecting SMS would quietly freeze every
+    // note an agent writes about that customer.
+    it('still allows an internal note on a channel-backed conversation', async () => {
+      const chat = await startChat(acmeAdminToken);
+      const note = await server.post(
+        `/chats/${chat.id}/events`,
+        { type: 'message', text: 'called them, no answer', recipients: 'agents' },
+        auth(acmeAdminToken),
+      );
+      expect(note.statusCode).toBe(201);
+      await connectSms(fx.a.customerId);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${note.json().id}`,
+        { text: 'called them twice, no answer' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().recipients).toBe('agents');
+      expect(response.json().text).toBe('called them twice, no answer');
+    });
+
+    it("refuses an event id from another tenant's chat with a 404", async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'injected' },
+        auth(northwindToken),
+      );
+
+      // 404, not 403: a 403 would confirm both ids are real (NFR-S5).
+      expect(response.statusCode).toBe(404);
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    it('refuses an event that belongs to a different chat', async () => {
+      const { event } = await sentMessage(acmeAdminToken);
+      const second = await owner.customer.create({
+        data: { organizationId: fx.a.organizationId, name: 'Second visitor' },
+        select: { id: true },
+      });
+      const other = await startChat(acmeAdminToken, { customerId: second.id });
+
+      const response = await server.put(
+        `/chats/${other.id}/events/${event.id}`,
+        { text: 'cross-wired' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(404);
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    it('refuses an empty correction rather than treating it as a delete', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: '' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(400);
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    it('masks a card number introduced by the correction (NFR-C5)', async () => {
+      // The corrected text is what comes to rest in `events.text`, so an edit
+      // that skipped the mask would walk straight around the write-time rule.
+      const { chat, event } = await sentMessage(acmeAdminToken);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'use 4111 1111 1111 1111 instead' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json().text).toBe('use **** **** **** 1111 instead');
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).not.toContain('4111 1111 1111 1111');
+    });
+
+    it('will not let a send forge the edited marker', async () => {
+      const chat = await startChat(acmeAdminToken);
+
+      const sent = await server.post(
+        `/chats/${chat.id}/events`,
+        {
+          type: 'message',
+          text: 'never corrected',
+          properties: { edited_at: '2020-01-01T00:00:00.000Z', keep: 'me' },
+        },
+        auth(acmeAdminToken),
+      );
+
+      expect(sent.statusCode).toBe(201);
+      expect(sent.json().properties.edited_at).toBeUndefined();
+      expect(sent.json().properties.keep).toBe('me');
+    });
+
+    it('refuses to correct anything on an archived conversation', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+      await server.post(`/chats/${chat.id}/deactivate`, undefined, auth(acmeAdminToken));
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'reopening the past' },
+        auth(acmeAdminToken),
+      );
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().error.type).toBe('chat_inactive');
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    it('refuses a customer token outright', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+      const customer = await customerTokenFor(fx.a);
+
+      const response = await server.put(
+        `/chats/${chat.id}/events/${event.id}`,
+        { text: 'not yours to change' },
+        auth(customer.token),
+      );
+
+      // 404, not 403. The route's `principals` list stops this before
+      // authorship is ever considered — the widget has no edit surface, and a
+      // visitor's own words are theirs to keep — and a customer token reaching
+      // an agent route is a boundary violation rather than a permission
+      // shortfall, so the agent API stays unmappable from the widget side (I4,
+      // `plugins/auth.ts`).
+      expect(response.statusCode).toBe(404);
+      const row = await owner.event.findFirst({ where: { id: event.id } });
+      expect(row?.text).toBe(ORIGINAL);
+    });
+
+    /**
+     * Capture the realtime envelopes published on tenant A's channel while
+     * `run` runs — the `agent-conflict.test.ts` pattern.
+     *
+     * Subscribing first and reading after is what makes this a real assertion:
+     * the publish happens *after* the transaction commits, so a test that only
+     * re-read the database would stay green even if nothing was ever announced.
+     */
+    async function captureBus(run: () => Promise<void>): Promise<Array<Record<string, unknown>>> {
+      const sub = server.app.redis.duplicate();
+      const seen: Array<Record<string, unknown>> = [];
+      await sub.subscribe(licenseChannel(fx.a.licenseId));
+      sub.on('message', (_channel, raw) => {
+        try {
+          seen.push(JSON.parse(raw) as Record<string, unknown>);
+        } catch {
+          /* not our shape — ignore */
+        }
+      });
+      try {
+        await run();
+        await new Promise((resolve) => setTimeout(resolve, 150));
+      } finally {
+        await sub.unsubscribe(licenseChannel(fx.a.licenseId));
+        sub.disconnect();
+      }
+      return seen;
+    }
+
+    it('announces the correction as `event_updated`, carrying the whole event', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+
+      const envelopes = await captureBus(async () => {
+        const response = await server.put(
+          `/chats/${chat.id}/events/${event.id}`,
+          { text: 'Order 54321 is on its way' },
+          auth(acmeAdminToken),
+        );
+        expect(response.statusCode).toBe(200);
+      });
+
+      const updates = envelopes.filter((e) => e['action'] === 'event_updated');
+      expect(updates).toHaveLength(1);
+      const payload = updates[0]!['payload'] as { chat_id: string; event: Record<string, unknown> };
+      expect(payload.chat_id).toBe(chat.id);
+      expect(payload.event['id']).toBe(event.id);
+      expect(payload.event['text']).toBe('Order 54321 is on its way');
+      expect(payload.event['properties']).toMatchObject({ edited_by: fx.a.ownerAccountId });
+      // Not `incoming_event`: a reader that took this for a new message would
+      // print the conversation's middle twice, and the visitor's cursor would
+      // jump backwards onto an event they already had.
+      expect(envelopes.filter((e) => e['action'] === 'incoming_event')).toHaveLength(0);
+    });
+
+    it('addresses a corrected internal note to agents only', async () => {
+      const chat = await startChat(acmeAdminToken);
+      const note = await server.post(
+        `/chats/${chat.id}/events`,
+        { type: 'message', text: 'internal', recipients: 'agents' },
+        auth(acmeAdminToken),
+      );
+      expect(note.statusCode).toBe(201);
+
+      const envelopes = await captureBus(async () => {
+        const response = await server.put(
+          `/chats/${chat.id}/events/${note.json().id}`,
+          { text: 'internal, corrected' },
+          auth(acmeAdminToken),
+        );
+        expect(response.statusCode).toBe(200);
+      });
+
+      const updates = envelopes.filter((e) => e['action'] === 'event_updated');
+      expect(updates).toHaveLength(1);
+      // The customer id is what would put this on the visitor's socket. A note
+      // the customer never saw must not reach them because somebody fixed a
+      // typo in it — the same audience rule the send path applies.
+      expect(updates[0]!['audience']).not.toHaveProperty('customerId');
+    });
+
+    it('publishes nothing when the correction is refused', async () => {
+      const { chat, event } = await sentMessage(acmeAdminToken);
+
+      const envelopes = await captureBus(async () => {
+        const response = await server.put(
+          `/chats/${chat.id}/events/${event.id}`,
+          { text: 'words I did not write' },
+          auth(acmeAgentToken),
+        );
+        expect(response.statusCode).toBe(403);
+      });
+
+      expect(envelopes.filter((e) => e['action'] === 'event_updated')).toHaveLength(0);
     });
   });
 

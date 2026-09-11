@@ -30,6 +30,7 @@ export const en: Record<string, string> = {
   'greeting.chat': "Let's chat",
   'greeting.browse': 'Just browsing',
   'attachment.alt': 'Attachment',
+  'message.edited': 'edited',
   'typing.named': '{name} is typing…',
   'typing.generic': 'Typing…',
   'rating.menuLabel': 'More options',

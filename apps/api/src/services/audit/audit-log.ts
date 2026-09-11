@@ -329,6 +329,22 @@ export const AUDIT_ACTIONS = [
   // the content it would otherwise copy.
   'chat.archived',
   'chat.reopened',
+  // An agent corrected a message they had already sent (FR-MOD-02.3.7). It
+  // belongs beside the two lines above by their own reasoning: those are
+  // recorded because they are the moments at which the record of what was said
+  // starts or stops being able to change, and this is the only moment at which
+  // it actually *does* change.
+  //
+  // The edit rewrites `events.text` in place, so the previous wording is gone
+  // on purpose — that is what makes the operation a security one rather than a
+  // convenience. Which means this entry is the only remaining trace, and also
+  // why it must not carry the old text: `audit_log` is append-only and outlives
+  // every retention window that governs message content, so copying the
+  // retracted sentence here would move it somewhere it could never be erased
+  // from and defeat the erasure the agent just asked for. Metadata is the
+  // thread and the event id — enough to say exactly which message changed and
+  // when, and nothing about what it said.
+  'chat.message_edited',
   // Denying a visitor service (FR-MOD-08.9.2) — a moderation decision, not a
   // configuration change, so only the transition is recorded: repeating a ban
   // that already holds, or lifting one already lifted, leaves no second line.

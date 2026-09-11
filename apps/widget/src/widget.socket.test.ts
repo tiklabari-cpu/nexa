@@ -28,6 +28,7 @@ interface Event {
   created_at: string;
   type: string;
   attachment_url: string | null;
+  properties?: Record<string, unknown>;
 }
 
 function message(id: string, author: Event['author_type'], text: string): Event {
@@ -519,5 +520,78 @@ describe('widget RTM connection (FR-MOD-11.6)', () => {
 
     expect(root.querySelector<HTMLElement>('.nx-closed')!.hidden).toBe(false);
     expect(bubbles(root)).toEqual(['my order is late']);
+  });
+
+  // =========================================================================
+  // A message corrected after it was sent (FR-MOD-02.3.7)
+  // =========================================================================
+  //
+  // The visitor is who a correction is *for*. An agent who fixes a wrong order
+  // number, sees their own transcript change and leaves the person it was sent
+  // to reading the wrong one has not corrected anything.
+
+  it("replaces an agent's message in place when it is corrected", async () => {
+    eventsAt = () => [VISITOR_ASK, AGENT_REPLY];
+    const root = mountWidget();
+    const socket = await openLive(root);
+    expect(bubbles(root)).toEqual(['my order is late', 'let me look that up']);
+
+    socket.push('event_updated', {
+      chat_id: 'chat-1',
+      event: {
+        ...AGENT_REPLY,
+        text: 'your order ships tomorrow',
+        properties: { edited_at: '2026-09-06T10:05:00.000Z' },
+      },
+    });
+    await settle();
+
+    // Replaced, not appended: the old wording is gone and there is no second
+    // bubble beside it.
+    expect(bubbles(root)).toEqual(['my order is late', 'your order ships tomorrow']);
+    expect(root.textContent).not.toContain('let me look that up');
+    // The honest half — the visitor cannot see what it used to say, so they are
+    // told that it changed.
+    expect([...root.querySelectorAll('.nx-edited')].map((el) => el.textContent)).toEqual([
+      'edited',
+    ]);
+  });
+
+  it('marks nothing as edited when no message has been', async () => {
+    eventsAt = () => [VISITOR_ASK, AGENT_REPLY];
+    const root = mountWidget();
+    await openLive(root);
+
+    expect(root.querySelector('.nx-edited')).toBeNull();
+  });
+
+  it('ignores a correction for an event this transcript does not hold', async () => {
+    eventsAt = () => [VISITOR_ASK];
+    const root = mountWidget();
+    const socket = await openLive(root);
+
+    // A message the visitor never received. Adopting it here would show them
+    // something they were never sent, on the grounds that somebody edited it.
+    socket.push('event_updated', {
+      chat_id: 'chat-1',
+      event: { ...AGENT_REPLY, text: 'meant for somebody else' },
+    });
+    await settle();
+
+    expect(bubbles(root)).toEqual(['my order is late']);
+  });
+
+  it('ignores a correction addressed to a different conversation', async () => {
+    eventsAt = () => [VISITOR_ASK, AGENT_REPLY];
+    const root = mountWidget();
+    const socket = await openLive(root);
+
+    socket.push('event_updated', {
+      chat_id: 'chat-9',
+      event: { ...AGENT_REPLY, text: 'another visitor entirely' },
+    });
+    await settle();
+
+    expect(bubbles(root)).toEqual(['my order is late', 'let me look that up']);
   });
 });

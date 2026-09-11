@@ -31,6 +31,7 @@ export const ar: Record<string, string> = {
   'greeting.chat': 'لنتحدث',
   'greeting.browse': 'أتصفح فقط',
   'attachment.alt': 'مرفق',
+  'message.edited': 'تم التعديل',
   'typing.named': '{name} يكتب الآن…',
   'typing.generic': 'يكتب الآن…',
   'rating.menuLabel': 'خيارات أخرى',

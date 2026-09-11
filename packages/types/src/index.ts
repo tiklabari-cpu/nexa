@@ -28,3 +28,4 @@ export * from './company.js';
 export * from './knowledge-file.js';
 export * from './persona.js';
 export * from './rich-text.js';
+export * from './message-edit.js';

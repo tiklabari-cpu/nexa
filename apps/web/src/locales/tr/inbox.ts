@@ -152,6 +152,14 @@ export const inbox: Messages = {
   'inbox.transcript.notSent': 'Gönderilemedi',
   'inbox.transcript.retry': 'Yeniden dene',
   'inbox.transcript.aiSuffix': 'AI',
+  'inbox.transcript.edit': 'Düzenle',
+  'inbox.transcript.editAriaLabel': 'Bu mesajı düzenle',
+  'inbox.transcript.editFieldLabel': 'Düzeltilmiş mesaj',
+  'inbox.transcript.editSave': 'Kaydet',
+  'inbox.transcript.editCancel': 'Vazgeç',
+  'inbox.transcript.editSaving': 'Kaydediliyor…',
+  'inbox.transcript.edited': 'düzenlendi',
+  'inbox.transcript.editFailed': 'Düzeltme kaydedilemedi.',
 
   // "Visitor is typing…"
   'inbox.typing.visitorFallback': 'Ziyaretçi',

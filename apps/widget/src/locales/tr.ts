@@ -30,6 +30,7 @@ export const tr: Record<string, string> = {
   'greeting.chat': 'Sohbet edelim',
   'greeting.browse': 'Sadece bakıyorum',
   'attachment.alt': 'Ek',
+  'message.edited': 'düzenlendi',
   'typing.named': '{name} yazıyor…',
   'typing.generic': 'Yazıyor…',
   'rating.menuLabel': 'Diğer seçenekler',

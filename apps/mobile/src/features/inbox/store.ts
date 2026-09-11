@@ -329,6 +329,24 @@ export class InboxStore {
         return;
       }
 
+      case 'event_updated': {
+        // A message was corrected after it was sent (FR-MOD-02.3.7). Replace by
+        // id, and deliberately not through `#receiveEvent`: that one dedupes by
+        // id and would drop this, and it moves the cursor — which must not
+        // follow a correction to an event older than the newest one seen.
+        const event = payload['event'] as ChatEvent | undefined;
+        if (chatId === null || event === undefined || typeof event.id !== 'string') return;
+        const transcript = this.#state.transcripts[chatId];
+        if (transcript?.events.some((existing) => existing.id === event.id) === true) {
+          this.#patchTranscript(chatId, {
+            events: transcript.events.map((existing) =>
+              existing.id === event.id ? event : existing,
+            ),
+          });
+        }
+        return;
+      }
+
       case 'sync_truncated':
         // The gap was too large to replay. Refetch rather than show a
         // transcript with an invisible hole in it.

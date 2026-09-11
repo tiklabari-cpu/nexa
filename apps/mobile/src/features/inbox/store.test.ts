@@ -335,6 +335,64 @@ describe('realtime', () => {
     expect(store.transcriptOf('chat-1').events).toHaveLength(2);
   });
 
+  it('replaces a corrected message in place', async () => {
+    const api = fakeApi({
+      pages: [{ items: [event({ id: 'THREAD1_2' }), event({ id: 'THREAD1_1' })] }],
+    });
+    const store = new InboxStore({ api });
+    await store.loadTranscript('chat-1');
+
+    store.applyPush('event_updated', {
+      chat_id: 'chat-1',
+      event: event({
+        id: 'THREAD1_1',
+        text: 'corrected',
+        properties: { edited_at: '2026-08-16T10:05:00.000Z' },
+      }),
+    });
+
+    const events = store.transcriptOf('chat-1').events;
+    // Replaced, not appended — `#receiveEvent` would have deduped this away and
+    // left the old wording on screen.
+    expect(events.map((e) => e.id)).toEqual(['THREAD1_2', 'THREAD1_1']);
+    expect(events.find((e) => e.id === 'THREAD1_1')?.text).toBe('corrected');
+  });
+
+  it('does not move the resume cursor onto a corrected event', async () => {
+    const cursors: Array<{ chatId: string; eventId: string }> = [];
+    const api = fakeApi({ pages: [{ items: [event({ id: 'THREAD1_9' })] }] });
+    const store = new InboxStore({
+      api,
+      onCursor: (chatId, eventId) => cursors.push({ chatId, eventId }),
+    });
+    await store.loadTranscript('chat-1');
+    // Loading the transcript sets the cursor to its newest event; what is under
+    // test is whether the correction moves it again.
+    cursors.length = 0;
+
+    store.applyPush('event_updated', {
+      chat_id: 'chat-1',
+      event: event({ id: 'THREAD1_9', text: 'corrected' }),
+    });
+
+    // The cursor is "the newest event seen". A correction mints no new event,
+    // and one to an older message would drag the next sync backwards.
+    expect(cursors).toEqual([]);
+  });
+
+  it('ignores a correction for a transcript this phone has not opened', () => {
+    const api = fakeApi();
+    const store = new InboxStore({ api });
+
+    expect(() =>
+      store.applyPush('event_updated', {
+        chat_id: 'chat-1',
+        event: event({ id: 'THREAD1_1', text: 'corrected' }),
+      }),
+    ).not.toThrow();
+    expect(store.transcriptOf('chat-1').events).toEqual([]);
+  });
+
   it('replaces our own optimistic bubble when the socket echoes it back', async () => {
     const api = fakeApi();
     const store = new InboxStore({ api, accountId: 'agent-1' });

@@ -450,6 +450,38 @@ function patchChatInPages(
   return touched;
 }
 
+/**
+ * Rewrite one row where it already sits, leaving the order alone.
+ *
+ * The counterpart to `patchChatInPages`, which exists because a *new* message
+ * moves its conversation up the list. Nothing that reaches this one is
+ * activity — it changes what the row says, not where it belongs.
+ */
+function patchChatInPlace(
+  queryClient: QueryClient,
+  chatId: string,
+  patch: (chat: ChatSummary) => ChatSummary,
+): void {
+  for (const [queryKey] of queryClient.getQueriesData<ChatListCache>({ queryKey: ['chats'] })) {
+    queryClient.setQueryData<ChatListCache>(queryKey, (cache) => {
+      // The same guard `patchChatInPages` carries, for the same reason: the
+      // `['chats']` prefix also covers the rail's counter envelopes, and
+      // reaching for `.pages` on one would throw out of the push handler.
+      if (!cache || !Array.isArray(cache.pages) || cache.pages.length === 0) return cache;
+      let touched = false;
+      const pages = cache.pages.map((page) => {
+        if (!page.items.some((chat) => chat.id === chatId)) return page;
+        touched = true;
+        return {
+          ...page,
+          items: page.items.map((chat) => (chat.id === chatId ? patch(chat) : chat)),
+        };
+      });
+      return touched ? { ...cache, pages } : cache;
+    });
+  }
+}
+
 export function useChat(chatId: string | null) {
   const api = useApiClient();
   return useQuery({
@@ -689,6 +721,40 @@ export function useSendMessage(chatId: string | null) {
   });
 }
 
+/**
+ * Correct a message already sent (FR-MOD-02.3.7).
+ *
+ * Not optimistic, unlike `useSendMessage` beside it, and the difference is
+ * deliberate. A send has to feel instant because the agent is mid-conversation
+ * and the alternative is pressing enter twice; a correction is a deliberate act
+ * on a message that is already on screen, and the four ways the server refuses
+ * one (`not_author`, `edit_window_expired`, `not_editable_type`,
+ * `channel_delivered`) are exactly the cases where showing the new text first
+ * would tell the agent they had taken something back when they had not.
+ *
+ * The response carries the saved event, so the cache is written from it rather
+ * than invalidated — the same reasoning the `event_updated` push handler
+ * follows, and it means the editing agent and everyone watching converge on one
+ * object rather than on two roundings of it.
+ */
+export function useEditMessage(chatId: string | null) {
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ eventId, text }: { eventId: string; text: string }) =>
+      api.put<ChatEvent>(`/chats/${chatId}/events/${eventId}`, { text }),
+    onSuccess: (event) => {
+      if (!chatId) return;
+      applyPush(queryClient, 'event_updated', {
+        chat_id: chatId,
+        thread_id: event.thread_id,
+        event: event as unknown as Record<string, unknown>,
+      });
+    },
+  });
+}
+
 export function useChatAction(chatId: string | null) {
   const api = useApiClient();
   const queryClient = useQueryClient();
@@ -819,6 +885,11 @@ export function useRealtime(onPush?: PushHandler): void {
       pushes: [
         'incoming_chat',
         'incoming_event',
+        // A teammate corrected a message (FR-MOD-02.3.7). Subscribed beside
+        // `incoming_event` because the transcript that shows the message is the
+        // one that has to stop showing the old wording — including on the
+        // screen of an agent who merely has the conversation open.
+        'event_updated',
         'chat_deactivated',
         'chat_transferred',
         'routing_status_set',
@@ -905,6 +976,48 @@ export function applyPush(
         unread_count: 1,
       }));
       if (!found) refreshChatHeads();
+      return;
+    }
+
+    case 'event_updated': {
+      // A message was corrected after it was sent (FR-MOD-02.3.7). The whole
+      // event arrives, so the cached one is replaced by id rather than patched.
+      //
+      // Every page is searched, unlike `incoming_event` above, which only ever
+      // looks at the newest: a new event is by definition newer than every
+      // cursor the older pages were cut at, but a correction lands on the page
+      // its *original* is on — which may be several screens up if the agent
+      // scrolled back to find it.
+      const chatId = payload['chat_id'];
+      const event = payload['event'] as ChatEvent | undefined;
+      if (typeof chatId !== 'string' || !event) return;
+
+      queryClient.setQueryData<TranscriptCache>(eventsKey(chatId), (cache) => {
+        if (!cache) return cache;
+        let touched = false;
+        const pages = cache.pages.map((page) => {
+          if (!page.items.some((e) => e.id === event.id)) return page;
+          touched = true;
+          return { ...page, items: page.items.map((e) => (e.id === event.id ? event : e)) };
+        });
+        // Returning the same object when nothing matched keeps React Query from
+        // re-rendering every open transcript on a correction it does not hold.
+        return touched ? { ...cache, pages } : cache;
+      });
+
+      // The list row quotes the newest event, so a correction to *that* message
+      // has to reach it too — otherwise the preview goes on showing the wording
+      // the agent just retracted. Only when it is the one being quoted: an edit
+      // further up the thread changes nothing about the row.
+      //
+      // Not `patchChatInPages`: that one lifts the row and re-inserts it at the
+      // head of the list, which is right for a new message and wrong here.
+      // Correcting a typo is not activity, and a conversation that jumped to
+      // the top of every teammate's inbox because somebody fixed a word would
+      // be a lie about what just happened in it.
+      patchChatInPlace(queryClient, chatId, (chat) =>
+        chat.last_event?.id === event.id ? { ...chat, last_event: event } : chat,
+      );
       return;
     }
 

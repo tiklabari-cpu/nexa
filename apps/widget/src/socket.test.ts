@@ -68,6 +68,7 @@ interface Harness {
   socket: WidgetSocket;
   sockets: FakeSocket[];
   events: Array<{ chatId: string; event: WidgetEvent }>;
+  updated: Array<{ chatId: string; event: WidgetEvent }>;
   closed: string[];
   resyncs: number;
   statuses: boolean[];
@@ -78,6 +79,7 @@ function harness(options: { token?: string | null } = {}): Harness {
   const sockets: FakeSocket[] = [];
   const urls: string[] = [];
   const events: Array<{ chatId: string; event: WidgetEvent }> = [];
+  const updated: Array<{ chatId: string; event: WidgetEvent }> = [];
   const closed: string[] = [];
   const statuses: boolean[] = [];
   let resyncs = 0;
@@ -87,6 +89,7 @@ function harness(options: { token?: string | null } = {}): Harness {
     organizationId: 'org-1',
     getToken: () => (options.token === undefined ? 'nxc1.body.sig' : options.token),
     onEvent: (chatId, e) => events.push({ chatId, event: e }),
+    onEventUpdated: (chatId, e) => updated.push({ chatId, event: e }),
     onChatClosed: (chatId) => closed.push(chatId),
     onResync: () => {
       resyncs += 1;
@@ -104,6 +107,7 @@ function harness(options: { token?: string | null } = {}): Harness {
     socket,
     sockets,
     events,
+    updated,
     closed,
     statuses,
     urls,
@@ -142,7 +146,9 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     // id, a team or a `chats--all` scope has no place in it — the gateway
     // addresses this socket by the customer id inside the signed token and by
     // nothing the client asks for, so there is nothing here to ask wrongly.
-    expect(login.payload['pushes']).toEqual({ '3.6': ['incoming_event', 'chat_deactivated'] });
+    expect(login.payload['pushes']).toEqual({
+      '3.6': ['incoming_event', 'chat_deactivated', 'event_updated'],
+    });
     expect(Object.keys(login.payload).sort()).toEqual(['pushes', 'token']);
   });
 
@@ -162,6 +168,68 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     expect(h.events).toEqual([
       { chatId: 'chat-1', event: expect.objectContaining({ id: 'thr-1_2', text: 'text thr-1_2' }) },
     ]);
+  });
+
+  it('routes a correction to its own handler instead of the event stream', async () => {
+    const h = harness();
+    h.socket.connect();
+    h.sockets[0]!.onopen!();
+    await settle();
+    h.sockets[0]!.reply('login', {});
+    await settle();
+
+    h.sockets[0]!.push('incoming_event', { chat_id: 'chat-1', event: event('thr-1_2') });
+    h.sockets[0]!.push('event_updated', {
+      chat_id: 'chat-1',
+      event: {
+        ...event('thr-1_2'),
+        text: 'corrected',
+        properties: { edited_at: '2026-09-11T10:05:00.000Z' },
+      },
+    });
+
+    // Not a second `onEvent`. The caller replaces by id; handing this to the
+    // append path would either be swallowed by its already-seen guard, leaving
+    // the old wording on screen, or print the message twice.
+    expect(h.events).toHaveLength(1);
+    expect(h.updated).toEqual([
+      {
+        chatId: 'chat-1',
+        event: expect.objectContaining({
+          id: 'thr-1_2',
+          text: 'corrected',
+          properties: { edited_at: '2026-09-11T10:05:00.000Z' },
+        }),
+      },
+    ]);
+  });
+
+  it('does not move the resume cursor onto a corrected event', async () => {
+    const h = harness();
+    h.socket.connect();
+    h.sockets[0]!.onopen!();
+    await settle();
+    h.sockets[0]!.reply('login', {});
+    await settle();
+
+    h.sockets[0]!.push('incoming_event', { chat_id: 'chat-1', event: event('thr-1_9') });
+    // A correction to a message nine events back. If this advanced the cursor,
+    // the next reconnect would resume from `thr-1_2` and replay eight messages
+    // the visitor is already looking at.
+    h.sockets[0]!.push('event_updated', {
+      chat_id: 'chat-1',
+      event: { ...event('thr-1_2'), text: 'corrected' },
+    });
+
+    h.sockets[0]!.onclose!();
+    await vi.advanceTimersByTimeAsync(1_000);
+    h.sockets[1]!.onopen!();
+    await settle();
+    h.sockets[1]!.reply('login', {});
+    await settle();
+
+    const sync = h.sockets[1]!.sent.find((frame) => frame.action === 'sync')!;
+    expect(sync.payload['cursors']).toEqual({ 'chat-1': 'thr-1_9' });
   });
 
   it('resumes from the cursor the poll left, and replays the gap as ordinary events', async () => {
@@ -381,6 +449,7 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
       organizationId: 'org-1',
       getToken: () => token,
       onEvent: () => {},
+      onEventUpdated: () => {},
       onChatClosed: () => {},
       onResync: () => {},
       onStatusChange: () => {},
@@ -412,6 +481,7 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
       organizationId: 'org-1',
       getToken: () => 'nxc1.body.sig',
       onEvent: () => {},
+      onEventUpdated: () => {},
       onChatClosed: () => {},
       onResync: () => {},
       onStatusChange: () => {},

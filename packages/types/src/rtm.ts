@@ -187,6 +187,21 @@ export interface IncomingEventPush {
   event: ChatEvent;
 }
 
+/**
+ * A message that was already delivered has been corrected by its author
+ * (FR-MOD-02.3.7). The whole event is carried, not a diff, so a reader replaces
+ * the one it holds by id rather than patching it.
+ *
+ * Deliberately NOT a cursor-advancing push: the edited event may be older than
+ * anything the reader has seen, and treating it as new would rewind the
+ * missed-event cursor onto an id the client already has.
+ */
+export interface EventUpdatedPush {
+  chat_id: string;
+  thread_id: string;
+  event: ChatEvent;
+}
+
 export interface ChatDeactivatedPush {
   chat_id: string;
   thread_id: string;

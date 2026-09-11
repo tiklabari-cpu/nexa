@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, type ReactElement } from 'react';
+import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
+import { isEditableEventType, isWithinEditWindow, readEditedAt } from '@nexa/types';
 import type { ChatEvent } from './types.js';
 import type { FailedSend } from './failedSends.js';
 import { AttachmentView } from './Attachment.js';
@@ -39,6 +40,7 @@ export function Transcript({
   onLoadOlder,
   failedSends = [],
   onRetry,
+  onEdit,
 }: {
   /** Which conversation this is — the one thing that means "start over". */
   chatId: string;
@@ -56,6 +58,12 @@ export function Transcript({
    */
   failedSends?: readonly FailedSend[];
   onRetry?: (entry: FailedSend) => void;
+  /**
+   * Correct a message already sent (FR-MOD-02.3.7). Absent when the surface has
+   * no business offering it — an archived transcript, or a read-only view — in
+   * which case no bubble shows the control.
+   */
+  onEdit?: (eventId: string, text: string) => Promise<unknown>;
 }): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);
   const pinnedToBottom = useRef(true);
@@ -164,6 +172,7 @@ export function Transcript({
           event={event}
           isMine={event.author_id === currentAgentId}
           showDayDivider={needsDayDivider(events[index - 1], event)}
+          {...(onEdit ? { onEdit } : {})}
         />
       ))}
       {failedSends.map((entry) => (
@@ -245,15 +254,57 @@ function Bubble({
   event,
   isMine,
   showDayDivider,
+  onEdit,
 }: {
   event: ChatEvent;
   isMine: boolean;
   showDayDivider: boolean;
+  onEdit?: (eventId: string, text: string) => Promise<unknown>;
 }): ReactElement {
   const isNote = event.recipients === 'agents';
   const isSystem = event.type === 'system_message' || event.author_type === 'system';
   const pending = event.properties?.['pending'] === true;
+  const editedAt = readEditedAt(event.properties);
   const t = useTranslate();
+  const [draft, setDraft] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  /**
+   * Whether to offer the control at all (FR-MOD-02.3.7).
+   *
+   * The same four conditions the server checks, asked here so an agent is not
+   * offered a button that is certain to come back 403 — with one it cannot see:
+   * a conversation that arrives over SMS or Messenger is refused server-side,
+   * because the provider cannot recall a delivered message. That one surfaces
+   * as the inline failure below rather than as a hidden button, which is the
+   * honest way round — the agent finds out the message could not be taken back,
+   * instead of quietly believing it was.
+   *
+   * `isWithinEditWindow` is evaluated at render, so a bubble already on screen
+   * keeps its button for as long as nothing re-renders the transcript. The
+   * server is the authority either way; the worst case is a button that
+   * explains itself when pressed.
+   */
+  const canEdit =
+    onEdit !== undefined &&
+    isMine &&
+    !pending &&
+    event.author_type === 'agent' &&
+    isEditableEventType(event.type) &&
+    event.text !== null &&
+    isWithinEditWindow(event.created_at);
+
+  const save = (): void => {
+    const text = draft?.trim();
+    if (!onEdit || !text) return;
+    setSaving(true);
+    setFailed(false);
+    void onEdit(event.id, text)
+      .then(() => setDraft(null))
+      .catch(() => setFailed(true))
+      .finally(() => setSaving(false));
+  };
 
   return (
     <>
@@ -283,25 +334,92 @@ function Bubble({
               pending ? 'opacity-60' : ''
             }`}
           >
-            {/* React escapes this; there is no dangerouslySetInnerHTML anywhere.
-              A customer's own text is never run through `renderRichText`
-              (FR-MOD-02.3.5 decision, `#### K02.3.5`): their literal asterisks
-              read back exactly as typed rather than being reinterpreted as an
-              agent's formatting. */}
-            {event.text && (
-              <span className="whitespace-pre-wrap break-words">
-                {event.author_type === 'customer' ? event.text : renderRichText(event.text)}
-              </span>
-            )}
-            {event.attachment_url && (
-              <div className={event.text ? 'mt-2' : ''}>
-                <AttachmentView url={event.attachment_url} />
+            {draft !== null ? (
+              // The correction is typed where the message already is, rather
+              // than in a modal or back in the composer: the agent is fixing
+              // one sentence and needs to see the ones around it.
+              <div className="flex flex-col gap-2">
+                <textarea
+                  aria-label={t('inbox.transcript.editFieldLabel')}
+                  value={draft}
+                  rows={2}
+                  autoFocus
+                  onChange={(e) => setDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') setDraft(null);
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      save();
+                    }
+                  }}
+                  className="w-full resize-y rounded-sm border border-border bg-surface px-2 py-1 text-sm text-content"
+                />
+                <div className="flex items-center gap-2 text-2xs">
+                  <button
+                    type="button"
+                    onClick={save}
+                    disabled={saving || draft.trim().length === 0}
+                    className="rounded-sm border border-border bg-surface px-2 py-0.5 font-medium text-content disabled:opacity-50"
+                  >
+                    {saving ? t('inbox.transcript.editSaving') : t('inbox.transcript.editSave')}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDraft(null)}
+                    className="rounded-sm border border-border bg-surface px-2 py-0.5 font-medium text-content"
+                  >
+                    {t('inbox.transcript.editCancel')}
+                  </button>
+                </div>
               </div>
+            ) : (
+              <>
+                {/* React escapes this; there is no dangerouslySetInnerHTML anywhere.
+                  A customer's own text is never run through `renderRichText`
+                  (FR-MOD-02.3.5 decision, `#### K02.3.5`): their literal asterisks
+                  read back exactly as typed rather than being reinterpreted as an
+                  agent's formatting. */}
+                {event.text && (
+                  <span className="whitespace-pre-wrap break-words">
+                    {event.author_type === 'customer' ? event.text : renderRichText(event.text)}
+                  </span>
+                )}
+                {event.attachment_url && (
+                  <div className={event.text ? 'mt-2' : ''}>
+                    <AttachmentView url={event.attachment_url} />
+                  </div>
+                )}
+              </>
             )}
           </div>
-          <span className="tabular text-2xs text-content-tertiary">
-            {pending ? t('inbox.transcript.sending') : formatTime(event.created_at)}
-            {event.author_type === 'bot' && ` · ${t('inbox.transcript.aiSuffix')}`}
+          {failed && (
+            <span role="alert" className="text-2xs font-medium text-danger">
+              {t('inbox.transcript.editFailed')}
+            </span>
+          )}
+          <span className="tabular flex items-center gap-2 text-2xs text-content-tertiary">
+            <span>
+              {pending ? t('inbox.transcript.sending') : formatTime(event.created_at)}
+              {event.author_type === 'bot' && ` · ${t('inbox.transcript.aiSuffix')}`}
+              {/* The marker is the honest half of an in-place edit: the reader
+                cannot see the previous wording, so they are at least told the
+                wording changed (FR-MOD-02.3.7). Shown on every side of the
+                conversation, not only the author's. */}
+              {editedAt !== null && ` · ${t('inbox.transcript.edited')}`}
+            </span>
+            {canEdit && draft === null && (
+              <button
+                type="button"
+                aria-label={t('inbox.transcript.editAriaLabel')}
+                onClick={() => {
+                  setFailed(false);
+                  setDraft(event.text ?? '');
+                }}
+                className="font-medium text-content-secondary underline-offset-2 transition-colors hover:text-content hover:underline"
+              >
+                {t('inbox.transcript.edit')}
+              </button>
+            )}
           </span>
         </div>
       )}

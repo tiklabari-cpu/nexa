@@ -496,6 +496,80 @@ test.describe('realtime connection', () => {
   });
 });
 
+test.describe('rich text', () => {
+  /**
+   * FR-MOD-11.4 (tm 235): the agent's formatting as the visitor actually reads
+   * it, end to end — composed on the console's side of the wire, carried as
+   * plain text, rendered in a cross-origin iframe by the real bundle.
+   *
+   * The bug this guards was invisible from the answering side: the console's
+   * composer offered bold/italic/list and its own transcript rendered them, so
+   * the agent saw emphasis while the only person the message was for saw
+   * asterisks. A unit test of the renderer cannot catch a re-run of that — the
+   * two halves were each green apart. This asserts the visitor's screen.
+   *
+   * Both directions are in one walk on purpose, because the rule is a
+   * *difference*: the same markers mean formatting from the team and mean
+   * literal characters from the visitor, and a test of one side alone would
+   * stay green if the other were dropped.
+   */
+  test("shows the agent's formatting formatted, and the visitor's own markers literally (FR-MOD-11.4)", async ({
+    page,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const question = `Do you have the **big** one? ${stamp}`;
+    const bold = `in stock ${stamp}`;
+    const italic = `today ${stamp}`;
+    const answer = `Yes — **${bold}** and we ship *${italic}*\n- blue\n- red`;
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    await openWidget(page, organizationId);
+    await visitorSends(page, question);
+
+    const transcript = widgetFrame(page).getByRole('log', { name: 'Conversation' });
+    // What the visitor typed is what the visitor sees — markers and all.
+    await expect(transcript).toContainText(question);
+    await expect(transcript.locator('strong')).toHaveCount(0);
+
+    // Polled rather than read once: `visitorSends` is satisfied by the
+    // optimistic bubble, which is on screen before the chat exists server-side.
+    let chatId: string | undefined;
+    await expect
+      .poll(
+        async () => {
+          const chats = await request.get(`${API_BASE}/chats?view=all&limit=50`, { headers: auth });
+          if (!chats.ok()) return undefined;
+          const { items } = (await chats.json()) as {
+            items: Array<{ id: string; last_event?: { text?: string | null } | null }>;
+          };
+          chatId = items.find((c) => c.last_event?.text?.includes(stamp))?.id;
+          return chatId;
+        },
+        { timeout: 20_000, message: `no chat carrying "${stamp}"` },
+      )
+      .toBeTruthy();
+
+    const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
+      headers: auth,
+      data: { type: 'message', text: answer },
+    });
+    expect(sent.ok(), `agent reply failed: ${sent.status()} ${await sent.text()}`).toBe(true);
+
+    await expect(transcript.locator('strong')).toHaveText(bold, { timeout: 20_000 });
+    await expect(transcript.locator('em')).toHaveText(italic);
+    await expect(transcript).toContainText('• blue');
+    // The markers themselves never reached the screen — the actual complaint.
+    // The visitor's own line is still there with its asterisks, so this is not
+    // passing because the transcript is empty.
+    await expect(transcript).not.toContainText(answer);
+    await expect(transcript).toContainText(question);
+
+    await page.screenshot({ path: 'kanit/11.4-widget-rich-text.png', fullPage: true });
+  });
+});
+
 test.describe('unread badge', () => {
   /**
    * FR-MOD-11.1: a reply that lands while the panel is shut has to reach the

@@ -180,7 +180,15 @@ describe('AuditLogPage', () => {
       within(group)
         .getAllByRole('option')
         .map((option) => (option as HTMLOptionElement).value),
-    ).toEqual(['chat.archived', 'chat.reopened', 'chat.taken_over']);
+    ).toEqual([
+      'chat.archived',
+      'chat.reopened',
+      'chat.taken_over',
+      // The correction entry (FR-MOD-02.3.7). It belongs in this group for the
+      // reason the others do, and it is the only one whose subject — the words
+      // in the transcript — no longer exists anywhere else once it is written.
+      'chat.message_edited',
+    ]);
 
     await userEvent.selectOptions(filter, 'chat.archived');
     await waitFor(() =>

@@ -192,6 +192,8 @@ paths:
     $ref: "./paths/chats.yaml#/chat"
   /chats/{chatId}/events:
     $ref: "./paths/chats.yaml#/events"
+  /chats/{chatId}/events/{eventId}:
+    $ref: "./paths/chats.yaml#/event"
   /chats/{chatId}/deactivate:
     $ref: "./paths/chats.yaml#/deactivate"
   /chats/{chatId}/resume:
@@ -933,7 +935,26 @@ components:
         properties:
           type: object
           additionalProperties: true
+          description: |
+            Free-form, with two reserved keys the server owns: `edited_at`
+            (ISO-8601, present once the message has been corrected after
+            sending) and `edited_by` (the account that corrected it). Both are
+            stripped from a caller-supplied `properties` on send, so a client
+            cannot make a fresh message claim it was edited.
         created_at: { type: string, format: date-time }
+
+    EventEdit:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 10000
+          description: |
+            The corrected wording. Replaces the original outright — there is no
+            partial edit, and an empty string is refused rather than treated as
+            a delete, which is a different operation with different rules.
 
     NewEvent:
       type: object

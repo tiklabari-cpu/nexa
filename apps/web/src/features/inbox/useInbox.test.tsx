@@ -855,3 +855,192 @@ describe('useTranscript — reverse paging', () => {
     expect(flattenTranscript(undefined)).toEqual([]);
   });
 });
+
+/**
+ * A message corrected after it was sent (FR-MOD-02.3.7).
+ *
+ * The push carries the whole event, so the cached copy is replaced by id. Two
+ * things separate this from `incoming_event` and both are load-bearing: a
+ * correction can land on *any* page — its original may be several screens up —
+ * and it must not move the conversation in the list, because fixing a typo is
+ * not activity.
+ */
+describe('applyPush — event_updated', () => {
+  beforeEach(() => {
+    api.get.mockReset();
+  });
+
+  const corrected = (seq: number, text: string): ChatEvent => ({
+    ...event(seq),
+    text,
+    properties: { edited_at: '2026-08-27T10:05:00.000Z', edited_by: 'agent-1' },
+  });
+
+  it('replaces the message in place, keeping the transcript the same length', async () => {
+    api.get.mockResolvedValue(eventPage([event(3), event(2)]));
+    const { result, queryClient } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+
+    act(() => {
+      applyPush(queryClient, 'event_updated', {
+        chat_id: CHAT,
+        thread_id: `thread-${CHAT}`,
+        event: corrected(3, 'corrected'),
+      });
+    });
+
+    await waitFor(() => expect(texts(result.current.events)).toEqual(['m2', 'corrected']));
+    expect(result.current.events.at(-1)?.properties?.['edited_at']).toBe(
+      '2026-08-27T10:05:00.000Z',
+    );
+  });
+
+  it('finds the message on a page the agent scrolled back to', async () => {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('before_event_id=')
+          ? firstEverPage([event(1), event(0)])
+          : eventPage([event(3), event(2)]),
+      ),
+    );
+    const { result, queryClient } = renderTranscript();
+    await waitFor(() => expect(result.current.events).toHaveLength(2));
+    act(() => {
+      result.current.loadOlder();
+    });
+    await waitFor(() => expect(result.current.events).toHaveLength(4));
+    const requestsBefore = api.get.mock.calls.length;
+
+    // `m0` is on the *older* page. `incoming_event` only ever looks at the
+    // newest one, which is right for a new message and would silently drop this.
+    act(() => {
+      applyPush(queryClient, 'event_updated', {
+        chat_id: CHAT,
+        thread_id: `thread-${CHAT}`,
+        event: corrected(0, 'fixed the oldest'),
+      });
+    });
+
+    await waitFor(() =>
+      expect(texts(result.current.events)).toEqual(['fixed the oldest', 'm1', 'm2', 'm3']),
+    );
+    expect(api.get.mock.calls).toHaveLength(requestsBefore);
+  });
+
+  it('does not move the conversation in the list', async () => {
+    api.get.mockImplementation((url: string) =>
+      Promise.resolve(
+        url.includes('page_id=')
+          ? chatPage([chat('c3', 12)])
+          : chatPage([chat('c1', 14), chat('c2', 13)], 'cursor-1'),
+      ),
+    );
+    const { result, queryClient } = renderChatList();
+    await waitFor(() => expect(result.current.items).toHaveLength(2));
+    act(() => {
+      result.current.fetchNext();
+    });
+    await waitFor(() => expect(result.current.items).toHaveLength(3));
+
+    act(() => {
+      applyPush(queryClient, 'event_updated', {
+        chat_id: 'c3',
+        thread_id: 'thread-c3',
+        event: message('e1', 'c3', 'corrected'),
+      });
+    });
+
+    // `incoming_event` would have lifted `c3` to the top. Correcting a typo is
+    // not activity, and a conversation that jumped up every teammate's inbox
+    // because somebody fixed a word would be a lie about what happened in it.
+    await waitFor(() => expect(result.current.items.map((c) => c.id)).toEqual(['c1', 'c2', 'c3']));
+
+    // Asserted against the CACHE as well, because the line above cannot carry
+    // this claim on its own: `useChatList` re-sorts what it returns by
+    // recency, so swapping `patchChatInPlace` for the lifting
+    // `patchChatInPages` leaves `items` identical — measured, that mutation
+    // stayed green until this assertion existed. What the choice really
+    // decides is page membership, and a row that migrated out of the page its
+    // cursor cut it from is one the next `fetchNext` can drop or duplicate.
+    const chained = queryClient
+      .getQueriesData<{ pages: Array<{ items: ChatSummary[] }> }>({ queryKey: ['chats'] })
+      .map(([, cache]) => cache)
+      .find((cache) => Array.isArray(cache?.pages));
+    expect(chained?.pages.map((page) => page.items.map((c) => c.id))).toEqual([
+      ['c1', 'c2'],
+      ['c3'],
+    ]);
+  });
+
+  it('refreshes the list preview when the corrected message is the one quoted', async () => {
+    const quoted = message('e1', 'c1', 'Order 12345');
+    api.get.mockResolvedValue(chatPage([chat('c1', 14, { last_event: quoted })]));
+    const { result, queryClient } = renderChatList();
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    act(() => {
+      applyPush(queryClient, 'event_updated', {
+        chat_id: 'c1',
+        thread_id: 'thread-c1',
+        event: { ...quoted, text: 'Order 54321' },
+      });
+    });
+
+    await waitFor(() => expect(result.current.items[0]?.last_event?.text).toBe('Order 54321'));
+  });
+
+  it('leaves the preview alone when an older message is corrected', async () => {
+    const quoted = message('e2', 'c1', 'the newest thing said');
+    api.get.mockResolvedValue(chatPage([chat('c1', 14, { last_event: quoted })]));
+    const { result, queryClient } = renderChatList();
+    await waitFor(() => expect(result.current.items).toHaveLength(1));
+
+    act(() => {
+      applyPush(queryClient, 'event_updated', {
+        chat_id: 'c1',
+        thread_id: 'thread-c1',
+        event: message('e1', 'c1', 'corrected, but further up'),
+      });
+    });
+
+    await waitFor(() =>
+      expect(result.current.items[0]?.last_event?.text).toBe('the newest thing said'),
+    );
+  });
+
+  it('ignores a correction for a conversation nobody has open', () => {
+    const queryClient = new QueryClient();
+    applyPush(queryClient, 'event_updated', {
+      chat_id: CHAT,
+      thread_id: `thread-${CHAT}`,
+      event: corrected(1, 'nowhere to put this'),
+    });
+    expect(queryClient.getQueryData(['events', CHAT])).toBeUndefined();
+  });
+
+  it('never throws on a malformed payload', () => {
+    // A push handler that throws takes everything after it in the same push
+    // with it, so the guard matters more here than the payload does.
+    const queryClient = new QueryClient();
+    expect(() => applyPush(queryClient, 'event_updated', {})).not.toThrow();
+    expect(() => applyPush(queryClient, 'event_updated', { chat_id: CHAT })).not.toThrow();
+  });
+
+  it('does not reach for `.pages` on the rail’s counter caches', () => {
+    // `['chats']` is a prefix, not a namespace: the rail badges live under
+    // `['chats', 'count', …]` and hold an envelope, not a page chain.
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(['chats', 'count', 'unassigned'], { items: [], total: 4 });
+    expect(() =>
+      applyPush(queryClient, 'event_updated', {
+        chat_id: 'c1',
+        thread_id: 'thread-c1',
+        event: message('e1', 'c1', 'corrected'),
+      }),
+    ).not.toThrow();
+    expect(queryClient.getQueryData(['chats', 'count', 'unassigned'])).toEqual({
+      items: [],
+      total: 4,
+    });
+  });
+});

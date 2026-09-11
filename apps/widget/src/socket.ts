@@ -46,8 +46,15 @@ const RTM_VERSION = '3.6';
  * because the alternative — learning the conversation ended on the next poll —
  * is the one place where the fallback's latency is visible as a wrong screen
  * rather than a late one: the composer stays open for a chat that is gone.
+ *
+ * `event_updated` is the third because the visitor is who a correction is
+ * *for* (FR-MOD-02.3.7). An agent who fixes a wrong order number and sees their
+ * own transcript change, while the person it was sent to goes on reading the
+ * wrong one, is the defect the edit was meant to repair — and the poll would
+ * not catch it either, since the fallback appends what is new and a correction
+ * mints no new event.
  */
-const PUSHES = ['incoming_event', 'chat_deactivated'] as const;
+const PUSHES = ['incoming_event', 'chat_deactivated', 'event_updated'] as const;
 
 interface Frame {
   request_id?: string;
@@ -75,6 +82,12 @@ export interface WidgetSocketOptions {
   getToken: () => string | null;
   /** One event the visitor may see — from a push or from a reconnect replay. */
   onEvent: (chatId: string, event: WidgetEvent) => void;
+  /**
+   * An event already in the transcript has been corrected (FR-MOD-02.3.7).
+   * Separate from `onEvent` because the caller has to replace by id rather than
+   * append — and because the cursor must not move onto it.
+   */
+  onEventUpdated: (chatId: string, event: WidgetEvent) => void;
   /** That conversation has ended (agent archive, idle sweep, or their own close). */
   onChatClosed: (chatId: string) => void;
   /** The gap was wider than the gateway will replay — refetch the transcript. */
@@ -289,6 +302,15 @@ export class WidgetSocket {
       this.options.onEvent(chatId, event);
       return;
     }
+    if (frame.action === 'event_updated') {
+      const event = asEvent(payload['event']);
+      if (!event) return;
+      // No `noteEvent`. The cursor is "the newest event seen", and a correction
+      // can land on a message several older than that — advancing it onto one
+      // would make the next `sync` skip everything in between.
+      this.options.onEventUpdated(chatId, event);
+      return;
+    }
     if (frame.action === 'chat_deactivated') {
       this.#cursors.delete(chatId);
       this.options.onChatClosed(chatId);
@@ -389,6 +411,13 @@ function asEvent(raw: unknown): WidgetEvent | null {
       typeof value['created_at'] === 'string' ? value['created_at'] : new Date().toISOString(),
     type: typeof value['type'] === 'string' ? value['type'] : 'message',
     attachment_url: typeof value['attachment_url'] === 'string' ? value['attachment_url'] : null,
+    // Carried through so `event_updated` can bring the "edited" marker with it
+    // (FR-MOD-02.3.7). Narrowed rather than cast: everything else on this event
+    // is validated, and a `properties` that is not an object would reach
+    // `readEditedAt` from two paths instead of one.
+    ...(typeof value['properties'] === 'object' && value['properties'] !== null
+      ? { properties: value['properties'] as Record<string, unknown> }
+      : {}),
   };
 }
 

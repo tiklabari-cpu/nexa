@@ -26,6 +26,9 @@ import { useServices, useSessionState } from '../../app/services';
 const MOBILE_PUSHES: RtmPushAction[] = [
   'incoming_chat',
   'incoming_event',
+  // A teammate corrected a message (FR-MOD-02.3.7); the phone shows the same
+  // transcript the console does and must stop showing the old wording too.
+  'event_updated',
   'chat_deactivated',
   'chat_transferred',
   'chat_taken_over',

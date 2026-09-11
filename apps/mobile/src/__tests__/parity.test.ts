@@ -842,7 +842,15 @@ describe('module parity matrix — what is still owed', () => {
       // token, not an agent one, so it is not in this app's scope for the same
       // reason `/customer/chat/events` never was: this parity check measures
       // what an agent can do from a phone. Nothing here re-scopes.
-      contractEndpoints: 209,
+      // 209 -> 210 with `/chats/{chatId}/events/{eventId}` (V8-MSG-EDIT,
+      // tm 236) — correcting a message after sending it. The phone *does* hold
+      // the Inbox surface this belongs to, so this one is a genuine gap rather
+      // than a boundary: an agent can send from the phone and cannot yet
+      // correct what they sent there. Left out of `Inbox.endpoints` above on
+      // purpose, so the matrix keeps describing what the app really calls;
+      // recorded as owed work in PLAN §K02.3.7 rather than claimed here.
+      // Nothing here re-scopes.
+      contractEndpoints: 210,
       scopeBoundaries: 1,
     });
   });

@@ -10,7 +10,7 @@
  * place a message becomes more than a single text node is `appendRichText`
  * (`rich-text.ts`), which still builds elements rather than parsing markup.
  */
-import type { WidgetFormField, WidgetAppearance } from '@nexa/types';
+import { readEditedAt, type WidgetFormField, type WidgetAppearance } from '@nexa/types';
 import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import { appendRichText } from './rich-text.js';
@@ -1366,6 +1366,27 @@ export function mount(doc: Document = document, win: Window = window): void {
     syncUnread();
   }
 
+  /**
+   * An event already on screen has been corrected by the agent who sent it
+   * (FR-MOD-02.3.7).
+   *
+   * Replace by id, never append: the correction carries the same event, so a
+   * fallback to `applyIncomingEvent` would either be dropped by its
+   * already-seen guard (leaving the old wording) or, worse, print the message
+   * twice. An id the transcript does not hold is ignored rather than adopted —
+   * the visitor cannot be shown a message they never received on the grounds
+   * that somebody edited it.
+   */
+  function applyEventUpdated(chatId: string, event: WidgetEvent): void {
+    if (state.chatId !== chatId) return;
+    const index = state.events.findIndex((e) => e.id === event.id);
+    if (index === -1) return;
+    state.events[index] = event;
+    // A full rebuild rather than an append: `renderEvents` only ever adds to
+    // the end, and this changed something in the middle.
+    rerenderTranscript();
+  }
+
   /** The conversation ended — the socket learned it before the next poll would. */
   function applyChatClosed(chatId: string): void {
     if (state.chatId !== chatId) return;
@@ -1391,6 +1412,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       organizationId: config.organizationId,
       getToken: () => api.token,
       onEvent: applyIncomingEvent,
+      onEventUpdated: applyEventUpdated,
       onChatClosed: applyChatClosed,
       // Truncated replay or a conversation gained while away: the poll owns the
       // full transcript, so ask it rather than reconstructing one here.
@@ -2356,6 +2378,18 @@ function renderBubble(
   time.textContent = formatTime(event.created_at);
 
   row.append(bubble, time);
+
+  // The honest half of an in-place correction (FR-MOD-02.3.7): the visitor
+  // cannot see what the message used to say, so they are at least told it
+  // changed. Appended after the timestamp rather than folded into it, so the
+  // `<time>` element keeps holding a time and nothing else.
+  if (readEditedAt(event.properties) !== null) {
+    const edited = doc.createElement('span');
+    edited.className = 'nx-edited';
+    edited.textContent = t('message.edited');
+    row.append(edited);
+  }
+
   return row;
 }
 
@@ -2824,6 +2858,9 @@ body {
 .nx-row--customer .nx-bubble { background: var(--nx-brand); color: #fff; }
 .nx-system { margin: 0; font-size: 11px; color: var(--nx-muted); text-align: center; }
 .nx-time { font-size: 11px; color: var(--nx-muted); margin-top: 2px; }
+/* The "edited" marker sits under the timestamp and reads like one: same size
+   and colour, italic so the two are not mistaken for a single line. */
+.nx-edited { font-size: 11px; font-style: italic; color: var(--nx-muted); }
 .nx-status { margin: 0; padding: 0 14px 8px; font-size: 12px; color: var(--nx-muted); }
 .nx-status[data-tone="error"] { color: #c42a2a; }
 .nx-typing { margin: 0; padding: 0 14px 6px; font-size: 12px; font-style: italic; color: var(--nx-muted); }

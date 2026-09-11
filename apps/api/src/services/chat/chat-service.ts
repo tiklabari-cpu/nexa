@@ -18,8 +18,14 @@ import {
   AGENT_COMPOSING_TTL_SECONDS,
   buildEventId,
   composerStateKey,
+  EDITED_AT_PROPERTY,
+  EDITED_BY_PROPERTY,
   generateShortId,
+  isEditableEventType,
+  isWithinEditWindow,
+  MESSAGE_EDIT_WINDOW_SECONDS,
   SNEAK_PEEK_MAX_LENGTH,
+  stripEditMarkers,
   type AdapterChannelType,
   type AgentConflictWarningPush,
   type ChatTakenOverPush,
@@ -567,6 +573,178 @@ export class ChatService {
     }
 
     return { event: result.event, replayed: false };
+  }
+
+  /**
+   * Correct a message the caller already sent (FR-MOD-02.3.7 · PRD §5.2).
+   *
+   * The text is rewritten **in place** rather than superseded by a correction
+   * event, and that is the decision this method exists to carry. The
+   * requirement is filed under security: the point is that the wrong sentence
+   * stops being readable. An appended correction would leave the original in
+   * `events.text`, which is the column reports, CSV export, the transcript
+   * e-mail and the AI matcher all read — so the retracted wording would go on
+   * being quoted by five surfaces that have no idea an edit happened.
+   *
+   * The invariant the event log actually depends on is untouched. Nothing is
+   * deleted, no id is reused, `event_sequence` does not move, and `created_at`
+   * keeps the row in its partition — so `after_event_id`, the transcript's
+   * keyset paging and `apps/rtm/src/sync.ts`'s replay all still have exactly
+   * one answer. The negative test pins that: the row count and the id are the
+   * same before and after.
+   *
+   * Four refusals, all 403 with a machine-readable `details.reason`, because a
+   * client that cannot tell them apart cannot explain any of them:
+   *
+   *   `not_author`           somebody else's words. Editing them would be
+   *                          impersonation, and the two cases that look like
+   *                          exceptions are already served elsewhere — a card
+   *                          number is masked at write time (`cc-mask.ts`) and
+   *                          an erasure request goes through retention.
+   *   `edit_window_expired`  past `MESSAGE_EDIT_WINDOW_SECONDS`.
+   *   `not_editable_type`    not a plain message.
+   *   `channel_delivered`    the reply was handed to an external channel. A
+   *                          provider cannot recall a delivered SMS or
+   *                          Messenger message, so rewriting our copy would
+   *                          leave the transcript disagreeing with what the
+   *                          customer is actually holding — the same class of
+   *                          defect as an agent seeing formatting the visitor
+   *                          does not (tm 235), and the transcript of an
+   *                          external conversation is a record of what was
+   *                          *sent*.
+   *
+   * `audit` is required, not optional, on `deactivate`'s terms: this is a
+   * moment at which the record of what was said changes, and an optional
+   * context would mean a caller that forgot one edited a transcript silently.
+   * The entry names actor, chat and event and never the old text — `audit_log`
+   * is append-only and outlives the retention windows that govern message
+   * content, so copying the retracted sentence there would defeat the erasure
+   * this operation just performed.
+   */
+  async updateEventText(
+    tenant: TenantContext,
+    principal: Principal,
+    chatId: string,
+    eventId: string,
+    text: string,
+    audit: AuditContext,
+  ): Promise<SerialisedEvent> {
+    const actorId = actorOf(principal);
+    const editedAt = new Date();
+
+    const result = await withTenant(this.db, tenant, async (tx) => {
+      const visibility = await resolveVisibility(tx, principal, 'write');
+      const chat = await this.#loadVisibleChat(tx, visibility, chatId);
+
+      const thread = chat.threads.find((t) => t.active);
+      // An archived conversation is read-only — the same rule `deactivate`'s
+      // audit entry describes, applied from the other side.
+      if (!chat.active || !thread) {
+        throw ApiError.chatInactive('Chat is not active. An archived transcript is read-only.');
+      }
+
+      const rows = await tx.$queryRaw<RawEvent[]>`
+        SELECT id, chat_id, thread_id, type, text, author_id, author_type,
+               recipients, attachment_url, properties, created_at
+        FROM events WHERE id = ${eventId} AND chat_id = ${chatId} LIMIT 1
+      `;
+      const existing = rows[0] ? serialiseRawEvent(rows[0]) : null;
+      // Not in this chat, in another workspace, or in an older thread of this
+      // one: all 404. A 403 for the last would confirm the id is real (NFR-S5).
+      if (!existing || existing.thread_id !== thread.id)
+        throw ApiError.notFound('Event not found.');
+
+      if (existing.author_type !== 'agent' || existing.author_id !== actorId) {
+        throw editRefusal('not_author', 'Only the agent who sent a message can correct it.');
+      }
+      if (!isEditableEventType(existing.type)) {
+        throw editRefusal('not_editable_type', 'Only a plain message can be corrected.');
+      }
+      if (!isWithinEditWindow(existing.created_at, editedAt)) {
+        throw editRefusal(
+          'edit_window_expired',
+          `A message can be corrected within ${MESSAGE_EDIT_WINDOW_SECONDS / 60} minutes of sending it.`,
+        );
+      }
+      // Only what actually left the building. An internal note is addressed to
+      // `agents` and is never dispatched, so it stays editable on a chat that
+      // arrived over WhatsApp exactly like one that arrived through the widget.
+      if (existing.recipients === 'all' && (await this.#hasChannelIdentity(tx, chat.customerId))) {
+        throw editRefusal(
+          'channel_delivered',
+          'This reply was already delivered over a connected channel and cannot be recalled.',
+        );
+      }
+
+      const properties = {
+        ...stripEditMarkers(existing.properties),
+        [EDITED_AT_PROPERTY]: editedAt.toISOString(),
+        [EDITED_BY_PROPERTY]: actorId,
+      };
+
+      // `created_at` is deliberately absent from the SET list: it keeps the row
+      // in its monthly partition and is the sort key every transcript reader
+      // pages on. A correction is not a new message and must not jump the
+      // conversation's order.
+      //
+      // It is absent from the WHERE clause too, even though it is half the
+      // primary key. The column is `timestamptz(6)` and a JavaScript `Date`
+      // carries milliseconds, so round-tripping the value narrows it and the
+      // predicate matches nothing — measured, not assumed. The id alone
+      // identifies the row anyway (`<thread_id>_<sequence>`, and thread ids are
+      // unique), which is what `#findEventById` already relies on, and it is
+      // the leading column of the primary key so the planner still has an
+      // index to work from across the partitions.
+      const updated = await tx.$queryRaw<RawEvent[]>`
+        UPDATE events
+        SET text = ${text}, properties = ${JSON.stringify(properties)}::jsonb
+        WHERE id = ${eventId}
+        RETURNING id, chat_id, thread_id, type, text, author_id, author_type,
+                  recipients, attachment_url, properties, created_at
+      `;
+      const event = updated[0] ? serialiseRawEvent(updated[0]) : null;
+      if (!event) throw ApiError.notFound('Event not found.');
+
+      await writeAuditEntry(tx, audit, {
+        action: 'chat.message_edited',
+        target: `chat:${chat.id}`,
+        metadata: { thread_id: thread.id, event_id: event.id },
+      });
+
+      return { event, audience: this.#audienceFor(chat) };
+    });
+
+    // After the transaction, for the reason every other publish here is: a
+    // subscriber told about a correction it could then fail to read would be
+    // worse than one told a moment late.
+    await this.publisher?.publish(
+      tenant,
+      'event_updated',
+      result.event.recipients === 'agents'
+        ? { groupIds: result.audience.groupIds, agentIds: result.audience.agentIds }
+        : result.audience,
+      {
+        chat_id: result.event.chat_id,
+        thread_id: result.event.thread_id,
+        event: result.event,
+      },
+    );
+
+    return result.event;
+  }
+
+  /**
+   * Whether this customer is reachable on a connected channel — i.e. whether an
+   * agent reply to them leaves this system. The same lookup
+   * `ChannelService.dispatchAgentReply` makes before sending, asked here so the
+   * two cannot disagree about which conversations are externally delivered.
+   */
+  async #hasChannelIdentity(tx: TenantClient, customerId: string): Promise<boolean> {
+    const identity = await tx.channelIdentity.findFirst({
+      where: { customerId },
+      select: { channelType: true },
+    });
+    return identity !== null;
   }
 
   /**
@@ -1710,7 +1888,11 @@ export class ChatService {
     }
 
     const eventId = buildEventId(input.threadId, sequence);
-    const properties = input.input.properties ?? {};
+    // `properties` is free-form and comes from the caller, so the two keys the
+    // edit path owns are stripped here — the one place an event is appended.
+    // Without this a client could stamp `edited_at` on a message it is sending
+    // for the first time and have every transcript label it corrected.
+    const properties = stripEditMarkers(input.input.properties ?? {});
 
     const rows = await tx.$queryRaw<RawEvent[]>`
       INSERT INTO events (id, thread_id, chat_id, license_id, type, text, author_id,
@@ -2050,6 +2232,22 @@ const chatInclude = {
  * resolution. Reports showed 0% automated and the workspace was never billed
  * for the automation it used.
  */
+/**
+ * The four ways an edit is refused, as one 403 carrying a machine-readable
+ * reason.
+ *
+ * `not_allowed` rather than a new error type: `ERROR_TYPES` is the closed
+ * vocabulary clients switch on, and four near-synonyms for "no" would dilute it
+ * without telling anyone more than `details.reason` already does. The message
+ * is for the agent, the reason is for the client.
+ */
+function editRefusal(
+  reason: 'not_author' | 'not_editable_type' | 'edit_window_expired' | 'channel_delivered',
+  message: string,
+): ApiError {
+  return new ApiError('not_allowed', message, { details: { reason } });
+}
+
 function authorTypeOf(principal: Principal): 'agent' | 'bot' | 'customer' {
   switch (principal.kind) {
     case 'agent':

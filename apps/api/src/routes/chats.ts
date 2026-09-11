@@ -57,6 +57,15 @@ const newEventSchema = z.object({
   idempotency_key: z.string().min(1).max(128).optional(),
 });
 
+/**
+ * A correction replaces the wording outright, so `text` is required and
+ * non-empty: an empty string would be a delete, which is a different operation
+ * with different rules and no surface asking for it.
+ */
+const eventEditSchema = z.object({
+  text: z.string().min(1).max(10_000),
+});
+
 const startChatSchema = z.object({
   customer_id: z.string().uuid(),
   group_ids: z.array(z.coerce.bigint()).max(20).optional(),
@@ -308,6 +317,45 @@ export default async function chatRoutes(
 
       // 200 rather than 201 on replay: nothing was created this time.
       return reply.status(replayed ? 200 : 201).send(event);
+    },
+  );
+
+  /**
+   * Correct a message after sending it (FR-MOD-02.3.7 · PRD §5.2 "Güvenlik").
+   *
+   * `principals: ['agent']` is the first gate and the important one. A bot
+   * authors on behalf of the workspace and nobody is behind it to regret a
+   * sentence; a customer's own words are theirs, and the widget has no edit
+   * surface. The service then re-checks authorship per event, because the
+   * principal list only says *what kind* of caller this is.
+   *
+   * Card numbers are masked here for the same reason they are on the send
+   * path: the corrected text is what comes to rest in `events.text`, and an
+   * edit that reintroduced a raw PAN would walk straight around `cc-mask`
+   * (NFR-C5/S9).
+   */
+  app.put<{ Params: { chatId: string; eventId: string } }>(
+    '/chats/:chatId/events/:eventId',
+    {
+      config: {
+        scopes: ['chats--all:rw', 'chats--access:rw'],
+        principals: ['agent'],
+      },
+    },
+    async (request, reply) => {
+      const chatId = parse(chatIdSchema, request.params.chatId);
+      const body = parse(eventEditSchema, request.body);
+
+      const event = await chats.updateEventText(
+        request.tenant(),
+        request.requirePrincipal(),
+        chatId,
+        request.params.eventId,
+        maskCardNumbers(body.text),
+        request.auditContext(),
+      );
+
+      return reply.send(event);
     },
   );
 

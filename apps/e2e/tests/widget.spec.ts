@@ -570,6 +570,90 @@ test.describe('rich text', () => {
   });
 });
 
+test.describe('edit after send', () => {
+  /**
+   * FR-MOD-02.3.7 (tm 236): an agent corrects a message they already sent, and
+   * the visitor stops reading the wrong one.
+   *
+   * This is the assertion the feature exists for, and it can only be made from
+   * the visitor's side. The console's own transcript changing proves nothing —
+   * that was true of the defect tm 235 fixed too, where the agent saw the
+   * formatting and the customer saw asterisks. What matters is the copy in the
+   * cross-origin iframe, rendered by the real bundle.
+   *
+   * Three claims in one walk, because each covers a different way this could be
+   * quietly wrong: the new wording arrives, the old wording is *gone* (an
+   * appended correction would leave both on screen), and the bubble says it was
+   * edited (the visitor cannot see what it used to say, so being told it changed
+   * is the whole of what is left).
+   */
+  test('replaces the message the visitor is reading, and says it changed', async ({
+    page,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const question = `when does my order arrive? ${stamp}`;
+    const wrong = `It ships on Tuesday ${stamp}`;
+    const right = `It ships on Thursday ${stamp}`;
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    await openWidget(page, organizationId);
+    await visitorSends(page, question);
+
+    const transcript = widgetFrame(page).getByRole('log', { name: 'Conversation' });
+    await expect(transcript).toContainText(question);
+
+    // Polled rather than read once: `visitorSends` is satisfied by the
+    // optimistic bubble, which is on screen before the chat exists server-side.
+    let chatId: string | undefined;
+    await expect
+      .poll(
+        async () => {
+          const chats = await request.get(`${API_BASE}/chats?view=all&limit=50`, { headers: auth });
+          if (!chats.ok()) return undefined;
+          const { items } = (await chats.json()) as {
+            items: Array<{ id: string; last_event?: { text?: string | null } | null }>;
+          };
+          chatId = items.find((c) => c.last_event?.text?.includes(stamp))?.id;
+          return chatId;
+        },
+        { timeout: 20_000, message: `no chat carrying "${stamp}"` },
+      )
+      .toBeTruthy();
+
+    const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
+      headers: auth,
+      data: { type: 'message', text: wrong },
+    });
+    expect(sent.ok(), `agent reply failed: ${sent.status()} ${await sent.text()}`).toBe(true);
+    const { id: eventId } = (await sent.json()) as { id: string };
+
+    // The wrong answer reaches the visitor first — without this the "it is
+    // gone" assertion below would pass on a transcript that never had it.
+    await expect(transcript).toContainText(wrong, { timeout: 20_000 });
+    await expect(widgetFrame(page).locator('.nx-edited')).toHaveCount(0);
+
+    const corrected = await request.put(`${API_BASE}/chats/${chatId!}/events/${eventId}`, {
+      headers: auth,
+      data: { text: right },
+    });
+    expect(
+      corrected.ok(),
+      `correction failed: ${corrected.status()} ${await corrected.text()}`,
+    ).toBe(true);
+
+    await expect(transcript).toContainText(right, { timeout: 20_000 });
+    // The retraction, which is the actual point: one bubble, not two, and the
+    // sentence the agent took back is off the visitor's screen.
+    await expect(transcript).not.toContainText(wrong);
+    await expect(transcript).toContainText(question);
+    await expect(widgetFrame(page).locator('.nx-edited')).toHaveCount(1);
+
+    await page.screenshot({ path: 'kanit/02.3.7-widget-edit-after-send.png', fullPage: true });
+  });
+});
+
 test.describe('unread badge', () => {
   /**
    * FR-MOD-11.1: a reply that lands while the panel is shut has to reach the

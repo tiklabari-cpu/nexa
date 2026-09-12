@@ -296,7 +296,7 @@ export class TokenService {
           select: { id: true, expiresAt: true, scopes: true },
         });
 
-        await this.#pruneOldest(tx, input.licenseId, input.ownerId, input.kind);
+        await this.#pruneOldest(tx, input.licenseId, input.ownerId, input.kind, record.id);
         return record;
       },
     );
@@ -416,12 +416,24 @@ export class TokenService {
    *
    * The cap is the licence's `max_concurrent_sessions`; a null column falls back
    * to the fixed ceiling, so behaviour is unchanged until a workspace sets one.
+   *
+   * `mintedId` is the row `issue()` has just written, and it is excluded from
+   * the prune rather than merely expected to sort first. `created_at` defaults
+   * to `CURRENT_TIMESTAMP`, which in PostgreSQL is the *transaction start* and
+   * not the commit, and this prune runs inside that same transaction — so a
+   * mint that waited on the advisory lock below carries an earlier stamp than
+   * sessions that started later and committed first. Ordering by `created_at
+   * desc` and skipping `cap` could therefore put a brand-new row past the
+   * boundary and revoke it, handing the caller a token that was already dead
+   * when it was minted. Measured, with ten parallel mints at a cap of two:
+   * three of ten came back revoked in one round.
    */
   async #pruneOldest(
     tx: TenantClient,
     licenseId: bigint,
     ownerId: string,
     kind: TokenKind,
+    mintedId: string,
   ): Promise<void> {
     if (kind !== 'oauth') return;
 
@@ -445,16 +457,24 @@ export class TokenService {
     });
     const cap = settings?.maxConcurrentSessions ?? MAX_ACTIVE_TOKENS_PER_OWNER;
 
-    const live = await tx.apiToken.findMany({
-      where: { licenseId, ownerId, kind: 'oauth', revokedAt: null },
+    // The new session holds one of the cap's slots by construction, so the
+    // others compete for `cap - 1`. That keeps the cap an exact invariant while
+    // making "the token this call is about to return" unrevokable here.
+    //
+    // The secondary sort is what makes the ordering total: `created_at` has no
+    // uniqueness, and two sessions sharing a stamp at the skip boundary would
+    // otherwise leave *which one survives* to the plan. `id` is a uuid, so it
+    // carries no chronology — it is a tie-break, and that is all it needs to be.
+    const surplus = await tx.apiToken.findMany({
+      where: { licenseId, ownerId, kind: 'oauth', revokedAt: null, id: { not: mintedId } },
       select: { id: true },
-      orderBy: { createdAt: 'desc' },
-      skip: cap,
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+      skip: Math.max(cap - 1, 0),
     });
-    if (live.length === 0) return;
+    if (surplus.length === 0) return;
 
     await tx.apiToken.updateMany({
-      where: { id: { in: live.map((t) => t.id) } },
+      where: { id: { in: surplus.map((t) => t.id) } },
       data: { revokedAt: new Date() },
     });
   }

@@ -29,7 +29,12 @@ import {
   filterCampaigns,
   isCampaignActive,
 } from './campaigns.js';
-import type { Campaign, CampaignStatus, CampaignStatusFilter } from '@nexa/types';
+import type {
+  Campaign,
+  CampaignStatus,
+  CampaignStatusFilter,
+  CampaignWriteResult,
+} from '@nexa/types';
 
 const STATUS_TONE: Record<CampaignStatus, StatusTone> = {
   ongoing: 'success',
@@ -77,15 +82,18 @@ export function CampaignsPage(): ReactElement {
 
   const toggle = useMutation({
     mutationFn: (input: { id: string; active: boolean }) =>
-      api.patch<Campaign>(`/campaigns/${input.id}`, { active: input.active }),
+      api.patch<CampaignWriteResult>(`/campaigns/${input.id}`, { active: input.active }),
     onSuccess: (campaign, input) => {
       invalidate();
-      if (input.active && campaign.performance.displayed > 0) {
+      // `matched` — not `performance.displayed` — is how many were just
+      // reached: delivery is asynchronous (widget poll), so `displayed` is
+      // always 0 at this instant regardless of how many actually matched.
+      if (input.active && campaign.matched > 0) {
         setNotice(
           t('campaigns.page.notice.reached', {
             name: campaign.name,
-            count: campaign.performance.displayed,
-            formatted: formatCount(campaign.performance.displayed) ?? '0',
+            count: campaign.matched,
+            formatted: formatCount(campaign.matched) ?? '0',
           }),
         );
       }

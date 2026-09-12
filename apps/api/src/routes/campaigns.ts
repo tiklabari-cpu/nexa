@@ -112,7 +112,11 @@ export default async function campaignRoutes(app: FastifyInstance): Promise<void
     };
     const result = await request.withTenant((tx) => campaigns.create(tx, tenant, input));
     await announceInvited(tenant, result.invited);
-    return reply.status(201).send(result.campaign);
+    // `sent` is the freshly-written rows — exactly "how many were just
+    // targeted", the number a "reached N visitors" notification wants
+    // (FR-MOD-03.3.1-.3 · tm 244). `performance.displayed` stays untouched:
+    // it counts delivered sends, and nothing is delivered yet at this instant.
+    return reply.status(201).send({ ...result.campaign, matched: result.sent });
   });
 
   app.patch<{ Params: { campaignId: string } }>(
@@ -135,7 +139,7 @@ export default async function campaignRoutes(app: FastifyInstance): Promise<void
       };
       const result = await request.withTenant((tx) => campaigns.update(tx, tenant, id, patch));
       await announceInvited(tenant, result.invited);
-      return reply.send(result.campaign);
+      return reply.send({ ...result.campaign, matched: result.sent });
     },
   );
 }

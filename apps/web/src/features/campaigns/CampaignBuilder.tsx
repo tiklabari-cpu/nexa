@@ -15,7 +15,7 @@ import { ApiClientError, errorMessageKey, type ApiClient } from '../../lib/api-c
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { useTranslate } from '../../lib/i18n.js';
-import type { Campaign } from '@nexa/types';
+import type { Campaign, CampaignWriteResult } from '@nexa/types';
 
 /** An ISO instant as the `YYYY-MM-DDTHH:mm` a `datetime-local` input wants. */
 function toDateTimeLocal(iso: string | null): string {
@@ -47,8 +47,8 @@ export function CampaignBuilder({
   const save = useMutation({
     mutationFn: (body: unknown) =>
       campaign
-        ? api.patch<Campaign>(`/campaigns/${campaign.id}`, body)
-        : api.post<Campaign>('/campaigns', body),
+        ? api.patch<CampaignWriteResult>(`/campaigns/${campaign.id}`, body)
+        : api.post<CampaignWriteResult>('/campaigns', body),
   });
 
   const form = useForm({
@@ -73,9 +73,10 @@ export function CampaignBuilder({
           starts_at: fromDateTimeLocal(values.starts_at),
           ends_at: fromDateTimeLocal(values.ends_at),
         });
-        // `performance.displayed` is how many it just reached; on an edit that
-        // re-fires, only newly-matched visitors add to it.
-        onSaved({ campaign: saved, reached: saved.performance.displayed });
+        // `matched` is how many it just reached; on an edit that re-fires,
+        // only newly-matched visitors count (`performance.displayed` is
+        // always 0 here — delivery hasn't happened yet, see CampaignWriteResult).
+        onSaved({ campaign: saved, reached: saved.matched });
       } catch (failure) {
         // The window check is the one field-specific server verdict worth pinning;
         // the message text is inspected only to route it, never shown as-is.

@@ -1910,7 +1910,8 @@ export interface paths {
      * @description Both a trigger and a message are required (FR-MOD-03.3.2): a campaign that
      *     could not target or say anything is rejected, not saved inert. When the new
      *     campaign is running, it fires immediately at the matching live visitors —
-     *     the returned `performance.displayed` is how many it reached.
+     *     the returned `matched` is how many it just targeted (`performance.displayed`
+     *     stays `0` until the widget's poll actually delivers to them).
      */
     post: operations['createCampaign'];
     delete?: never;
@@ -1940,7 +1941,8 @@ export interface paths {
      *     on a schedule field clears it; omitting a field leaves it alone. An edit
      *     cannot strip the trigger or message out of a campaign that stays active.
      *     Toggling one active fires it at the matching visitors, exactly as create
-     *     does — idempotently, so no one already reached is messaged twice.
+     *     does — idempotently, so no one already reached is messaged twice, and
+     *     `matched` on a re-fire counts only the newly-targeted ones.
      */
     patch: operations['updateCampaign'];
     trace?: never;
@@ -9550,6 +9552,22 @@ export interface components {
       performance: components['schemas']['CampaignPerformance'];
     };
     /**
+     * @description A create/activate response (FR-MOD-03.3.1-.3): the saved campaign, plus
+     *     `matched` — how many live visitors this write just targeted, regardless
+     *     of delivery status.
+     *
+     *     `performance.displayed` counts only *delivered* sends, and delivery
+     *     happens later, off the widget's own poll — so at the instant a campaign
+     *     is created or turned on, `displayed` is always `0` no matter how many
+     *     visitors it just matched. `matched` is the number worth announcing in a
+     *     "just reached N visitors" notification; `displayed` stays the card's
+     *     own, separately-tracked metric and is not repurposed for this.
+     */
+    CampaignWriteResult: components['schemas']['Campaign'] & {
+      /** @description Live visitors newly targeted by this write (a re-fire does not recount one already reached by an earlier fire). */
+      matched: number;
+    };
+    /**
      * @description A goal's trigger predicate (FR-MOD-13.3) — same vocabulary as
      *     `CampaignConditions`.
      *
@@ -15199,7 +15217,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['Campaign'];
+          'application/json': components['schemas']['CampaignWriteResult'];
         };
       };
       400: components['responses']['BadRequest'];
@@ -15240,7 +15258,7 @@ export interface operations {
           [name: string]: unknown;
         };
         content: {
-          'application/json': components['schemas']['Campaign'];
+          'application/json': components['schemas']['CampaignWriteResult'];
         };
       };
       400: components['responses']['BadRequest'];

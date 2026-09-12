@@ -111,6 +111,22 @@ describe('CampaignsPage', () => {
     expect(api.patch).toHaveBeenCalledWith('/campaigns/c-Running', { active: false });
   });
 
+  // `matched` — not `performance.displayed` — is what the "reached" notice
+  // reads (tm 244): delivery is asynchronous, so `displayed` is always 0 in
+  // the write response no matter how many visitors were just targeted.
+  it('shows a reached-visitors banner when turning a campaign on matches visitors', async () => {
+    api.patch.mockResolvedValue({
+      ...campaign('ongoing', 'Off'),
+      matched: 5,
+    });
+    renderPage();
+    const card = (await screen.findByText('Off')).closest('div.rounded-lg') as HTMLElement;
+
+    await userEvent.click(within(card).getByRole('button', { name: 'Turn on' }));
+    expect(api.patch).toHaveBeenCalledWith('/campaigns/c-Off', { active: true });
+    expect(await screen.findByText('“Off” reached 5 on-site visitors.')).toBeInTheDocument();
+  });
+
   it('hides the write controls from a read-only agent', async () => {
     auth.scopes = ['customers:ro'];
     renderPage();
@@ -118,6 +134,27 @@ describe('CampaignsPage', () => {
     expect(screen.queryByRole('button', { name: 'New campaign' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Turn off' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument();
+  });
+
+  // Same fix, the other call site (tm 244): CampaignBuilder's create path
+  // reads `matched` too, not `performance.displayed`.
+  it('shows a reached-visitors banner when a newly-created campaign matches visitors', async () => {
+    api.post.mockResolvedValue({
+      ...campaign('ongoing', 'Pricing nudge'),
+      matched: 3,
+    });
+    renderPage();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'New campaign' }));
+    await userEvent.type(screen.getByLabelText('Name'), 'Pricing nudge');
+    await userEvent.type(screen.getByLabelText(/Trigger/), '/pricing');
+    await userEvent.type(screen.getByLabelText('Message'), 'Questions about pricing?');
+    await userEvent.click(screen.getByRole('button', { name: 'Create campaign' }));
+
+    expect(api.post).toHaveBeenCalledWith('/campaigns', expect.anything());
+    expect(
+      await screen.findByText('“Pricing nudge” reached 3 on-site visitors.'),
+    ).toBeInTheDocument();
   });
 });
 

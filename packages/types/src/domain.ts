@@ -482,6 +482,23 @@ export interface Campaign {
   performance: CampaignPerformance;
 }
 
+/**
+ * A create/activate response (FR-MOD-03.3.1-.3): the saved campaign, plus
+ * `matched` — how many live visitors this write just targeted, regardless of
+ * delivery status.
+ *
+ * `performance.displayed` counts only *delivered* sends, and delivery happens
+ * later, off the widget's own poll — so right after a create or activate,
+ * `displayed` is always `0` no matter how many visitors were just matched.
+ * `matched` is the number a "just reached N visitors" notification should
+ * read; `displayed` is not repurposed for it.
+ */
+export interface CampaignWriteResult extends Campaign {
+  /** Live visitors newly targeted by this write — a re-fire does not recount
+   * one already reached by an earlier fire. */
+  matched: number;
+}
+
 // --- Goals (FR-MOD-13.3) -----------------------------------------------------
 
 /**

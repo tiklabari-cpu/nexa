@@ -32,6 +32,9 @@ interface Campaign {
   performance: { displayed: number; chats: number; conversion: number };
 }
 
+/** A create/activate response — `Campaign` plus `matched` (tm 244). */
+type CampaignWriteResult = Campaign & { matched: number };
+
 describe('campaigns', () => {
   let owner: PrismaClient;
   let server: TestServer;
@@ -513,6 +516,58 @@ describe('campaigns', () => {
 
     const refreshed = (await list(writeToken, '?status=all')).find((c) => c.id === campaign.id);
     expect(refreshed?.performance).toEqual({ displayed: 1, chats: 0, conversion: 0 });
+  });
+
+  // --- `matched` — the "just reached" notification's number (tm 244) --------
+  //
+  // tm 214 correctly made `performance.displayed` count only *delivered*
+  // sends — but delivery only happens off the widget's own poll, so at the
+  // instant a campaign is created or activated nothing has been delivered
+  // yet and `displayed` is always 0, whatever just matched. `matched` is the
+  // separate, undelivered-safe count a "reached N visitors" notification
+  // reads instead; `performance.displayed` itself must stay 0 here.
+
+  it('reports `matched` as the freshly-targeted visitor count, independent of delivery (FR-MOD-03.3.1-.3)', async () => {
+    await seedVisitor(fx.a, 'On Pricing', 'https://shop.example/pricing');
+
+    const response = await create(writeToken, {
+      name: 'Pricing nudge',
+      conditions: { url_contains: '/pricing' },
+      content: { message: 'Questions about pricing?' },
+    });
+    const campaign = response.json() as CampaignWriteResult;
+    expect(campaign.matched).toBe(1);
+    expect(campaign.performance.displayed).toBe(0);
+  });
+
+  it('does not recount an already-reached visitor as `matched` on a re-fire', async () => {
+    const shopper = await seedVisitor(fx.a, 'On Pricing', 'https://shop.example/pricing');
+    const created = (
+      await create(writeToken, {
+        name: 'Draft',
+        active: false,
+        conditions: { url_contains: '/pricing' },
+        content: { message: 'hello' },
+      })
+    ).json() as CampaignWriteResult;
+    expect(created.matched).toBe(0);
+
+    // First activation reaches the one live visitor.
+    const activated = (
+      await server.patch(`/campaigns/${created.id}`, { active: true }, auth(writeToken))
+    ).json() as CampaignWriteResult;
+    expect(activated.matched).toBe(1);
+
+    // A second visitor arrives; saving again (still active) must report only
+    // the newly-matched one, not the one already reached.
+    const second = await seedVisitor(fx.a, 'Also On Pricing', 'https://shop.example/pricing');
+    const resaved = (
+      await server.patch(`/campaigns/${created.id}`, { name: 'Renamed' }, auth(writeToken))
+    ).json() as CampaignWriteResult;
+    expect(resaved.matched).toBe(1);
+    expect((await sendsFor(created.id)).map((s) => s.customerId).sort()).toEqual(
+      [shopper, second].sort(),
+    );
   });
 
   // --- Scope split -----------------------------------------------------------

@@ -57,7 +57,8 @@ campaigns:
       Both a trigger and a message are required (FR-MOD-03.3.2): a campaign that
       could not target or say anything is rejected, not saved inert. When the new
       campaign is running, it fires immediately at the matching live visitors —
-      the returned `performance.displayed` is how many it reached.
+      the returned `matched` is how many it just targeted (`performance.displayed`
+      stays `0` until the widget's poll actually delivers to them).
     requestBody:
       required: true
       content:
@@ -80,7 +81,7 @@ campaigns:
         description: Created (and fired, if running)
         content:
           application/json:
-            schema: { $ref: "../openapi.yaml#/components/schemas/Campaign" }
+            schema: { $ref: "../openapi.yaml#/components/schemas/CampaignWriteResult" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
@@ -102,7 +103,8 @@ campaign:
       on a schedule field clears it; omitting a field leaves it alone. An edit
       cannot strip the trigger or message out of a campaign that stays active.
       Toggling one active fires it at the matching visitors, exactly as create
-      does — idempotently, so no one already reached is messaged twice.
+      does — idempotently, so no one already reached is messaged twice, and
+      `matched` on a re-fire counts only the newly-targeted ones.
     requestBody:
       required: true
       content:
@@ -125,7 +127,7 @@ campaign:
         description: Updated
         content:
           application/json:
-            schema: { $ref: "../openapi.yaml#/components/schemas/Campaign" }
+            schema: { $ref: "../openapi.yaml#/components/schemas/CampaignWriteResult" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

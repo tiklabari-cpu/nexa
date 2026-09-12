@@ -7852,6 +7852,16 @@ export interface components {
        *     with no author, or if the authoring account was later deleted.
        */
       created_by_name: string | null;
+      /**
+       * Format: uuid
+       * @description The stable identity behind `created_by_name` (soft reference to
+       *     `accounts.id`, no FK). This is the human-owner filter key
+       *     (FR-MOD-05.4) — the name alone is not a safe filter axis, since two
+       *     accounts can share a name or one can be renamed. Null exactly when
+       *     `created_by_name` would resolve to null (no author, or the author
+       *     account was deleted).
+       */
+      created_by_id: string | null;
     };
     SkillPreview: {
       /**

@@ -39,6 +39,7 @@ function makeSkill(steps: SkillStep[], overrides: Partial<Skill> = {}): Skill {
     runs_count: 0,
     updated_at: '2026-01-01T00:00:00.000Z',
     created_by_name: null,
+    created_by_id: null,
     ...overrides,
   };
 }

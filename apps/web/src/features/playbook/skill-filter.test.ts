@@ -2,7 +2,8 @@
  * The controls must *narrow* — every filter can only drop rows, never add or
  * reorder them into existence — and sorting must be a pure reordering that
  * leaves the input alone. These tests pin each filter axis on its own and in
- * combination, plus the owner-option derivation the select is built from.
+ * combination, plus the agent/owner option derivation the selects are built
+ * from.
  */
 import { describe, expect, it } from 'vitest';
 import type { Skill } from './types.js';
@@ -10,6 +11,7 @@ import {
   DEFAULT_SKILL_CONTROLS,
   applySkillControls,
   hasActiveSkillFilters,
+  skillAgentOptions,
   skillMatchesControls,
   skillOwnerOptions,
   type SkillControls,
@@ -27,6 +29,7 @@ function makeSkill(overrides: Partial<Skill>): Skill {
     runs_count: 0,
     updated_at: '2026-07-26T00:00:00.000Z',
     created_by_name: null,
+    created_by_id: null,
     ...overrides,
   };
 }
@@ -35,10 +38,10 @@ function controls(overrides: Partial<SkillControls> = {}): SkillControls {
   return { ...DEFAULT_SKILL_CONTROLS, ...overrides };
 }
 
-const refunds = makeSkill({ id: 'a', name: 'Refunds', kind: 'ai_agent', active: true, ai_agent_id: 'ada', runs_count: 9, updated_at: '2026-07-20T00:00:00.000Z' }); // prettier-ignore
-const shipping = makeSkill({ id: 'b', name: 'Where is my order', kind: 'ai_agent', active: false, ai_agent_id: 'ada', runs_count: 2, updated_at: '2026-07-25T00:00:00.000Z' }); // prettier-ignore
-const escalate = makeSkill({ id: 'c', name: 'Escalate to billing', kind: 'workflow', active: true, ai_agent_id: null, runs_count: 40, updated_at: '2026-07-10T00:00:00.000Z' }); // prettier-ignore
-const greeting = makeSkill({ id: 'd', name: 'Greeting', kind: 'workflow', active: false, ai_agent_id: 'nova', runs_count: 0, updated_at: '2026-07-24T00:00:00.000Z' }); // prettier-ignore
+const refunds = makeSkill({ id: 'a', name: 'Refunds', kind: 'ai_agent', active: true, ai_agent_id: 'ada', created_by_id: 'u1', created_by_name: 'Uzay', runs_count: 9, updated_at: '2026-07-20T00:00:00.000Z' }); // prettier-ignore
+const shipping = makeSkill({ id: 'b', name: 'Where is my order', kind: 'ai_agent', active: false, ai_agent_id: 'ada', created_by_id: 'u1', created_by_name: 'Uzay', runs_count: 2, updated_at: '2026-07-25T00:00:00.000Z' }); // prettier-ignore
+const escalate = makeSkill({ id: 'c', name: 'Escalate to billing', kind: 'workflow', active: true, ai_agent_id: null, created_by_id: null, runs_count: 40, updated_at: '2026-07-10T00:00:00.000Z' }); // prettier-ignore
+const greeting = makeSkill({ id: 'd', name: 'Greeting', kind: 'workflow', active: false, ai_agent_id: 'nova', created_by_id: 'u2', created_by_name: 'Beste', runs_count: 0, updated_at: '2026-07-24T00:00:00.000Z' }); // prettier-ignore
 
 const all = [refunds, shipping, escalate, greeting];
 const ids = (skills: Skill[]) => skills.map((s) => s.id);
@@ -62,7 +65,7 @@ describe('search by name', () => {
   });
 });
 
-describe('type / status / owner filters', () => {
+describe('type / status / agent filters', () => {
   it('type filters by kind alone, regardless of on/off', () => {
     expect(ids(applySkillControls(all, controls({ type: 'ai' })))).toEqual(['a', 'b']);
     expect(ids(applySkillControls(all, controls({ type: 'workspace' })))).toEqual(['c', 'd']);
@@ -73,17 +76,51 @@ describe('type / status / owner filters', () => {
     expect(ids(applySkillControls(all, controls({ status: 'off' })))).toEqual(['d', 'b']);
   });
 
-  it('owner filters by owning agent, with "none" for unassigned', () => {
-    expect(ids(applySkillControls(all, controls({ owner: 'ada' })))).toEqual(['a', 'b']);
-    expect(ids(applySkillControls(all, controls({ owner: 'nova' })))).toEqual(['d']);
-    expect(ids(applySkillControls(all, controls({ owner: 'none' })))).toEqual(['c']);
+  it('agent filters by owning agent, with "none" for unassigned', () => {
+    expect(ids(applySkillControls(all, controls({ agent: 'ada' })))).toEqual(['a', 'b']);
+    expect(ids(applySkillControls(all, controls({ agent: 'nova' })))).toEqual(['d']);
+    expect(ids(applySkillControls(all, controls({ agent: 'none' })))).toEqual(['c']);
   });
 
   it('composes filters as an intersection', () => {
-    // AI + Off + owned by Ada → only "Where is my order".
+    // AI + Off + agent Ada → only "Where is my order".
     expect(
-      ids(applySkillControls(all, controls({ type: 'ai', status: 'off', owner: 'ada' }))),
+      ids(applySkillControls(all, controls({ type: 'ai', status: 'off', agent: 'ada' }))),
     ).toEqual(['b']);
+  });
+});
+
+// FR-MOD-05.4's kabul kriteri is a *human* owner filter, not the owning
+// agent — filtering by `created_by_id`, never by the display-only
+// `created_by_name` (two accounts can share a name; a name can change).
+describe('owner filter — human creator, not the owning agent (FR-MOD-05.4)', () => {
+  it('filters by created_by_id, with "none" for system/seed skills', () => {
+    expect(ids(applySkillControls(all, controls({ owner: 'u1' })))).toEqual(['a', 'b']);
+    expect(ids(applySkillControls(all, controls({ owner: 'u2' })))).toEqual(['d']);
+    expect(ids(applySkillControls(all, controls({ owner: 'none' })))).toEqual(['c']);
+  });
+
+  it('does not confuse two owners who happen to share a display name', () => {
+    const alsoUzay = makeSkill({
+      id: 'e',
+      name: 'Also Uzay',
+      created_by_id: 'u3',
+      created_by_name: 'Uzay',
+    });
+    const withHomonym = [...all, alsoUzay];
+    // Same name as u1's "Uzay", different id — must not be pulled in.
+    expect(ids(applySkillControls(withHomonym, controls({ owner: 'u1' })))).toEqual(['a', 'b']);
+    expect(ids(applySkillControls(withHomonym, controls({ owner: 'u3' })))).toEqual(['e']);
+  });
+
+  it('the agent axis and the owner axis narrow independently and compose', () => {
+    // Both refunds and shipping share agent 'ada' and owner 'u1' — asking for
+    // a different agent with owner 'u1' still intersects to nothing.
+    expect(ids(applySkillControls(all, controls({ agent: 'nova', owner: 'u1' })))).toEqual([]);
+    expect(ids(applySkillControls(all, controls({ agent: 'ada', owner: 'u1' })))).toEqual([
+      'a',
+      'b',
+    ]);
   });
 });
 
@@ -137,33 +174,61 @@ describe('hasActiveSkillFilters', () => {
     expect(hasActiveSkillFilters(controls({ query: 'x' }))).toBe(true);
     expect(hasActiveSkillFilters(controls({ type: 'ai' }))).toBe(true);
     expect(hasActiveSkillFilters(controls({ status: 'off' }))).toBe(true);
-    expect(hasActiveSkillFilters(controls({ owner: 'ada' }))).toBe(true);
+    expect(hasActiveSkillFilters(controls({ agent: 'ada' }))).toBe(true);
+    expect(hasActiveSkillFilters(controls({ owner: 'u1' }))).toBe(true);
   });
 });
 
-describe('skillOwnerOptions', () => {
+describe('skillAgentOptions', () => {
   const nameFor = (id: string) => ({ ada: 'Ada', nova: 'Nova' })[id];
 
-  it('lists All, then each distinct owner in first-seen order, then Unassigned', () => {
-    expect(skillOwnerOptions(all, nameFor)).toEqual([
-      { value: 'all', label: 'All owners' },
+  it('lists All, then each distinct agent in first-seen order, then Unassigned', () => {
+    expect(skillAgentOptions(all, nameFor)).toEqual([
+      { value: 'all', label: 'All agents' },
       { value: 'ada', label: 'Ada' },
       { value: 'nova', label: 'Nova' },
       { value: 'none', label: 'Unassigned' },
     ]);
   });
 
-  it('omits Unassigned when every skill has an owner', () => {
-    expect(skillOwnerOptions([refunds, shipping], nameFor)).toEqual([
-      { value: 'all', label: 'All owners' },
+  it('omits Unassigned when every skill has an agent', () => {
+    expect(skillAgentOptions([refunds, shipping], nameFor)).toEqual([
+      { value: 'all', label: 'All agents' },
       { value: 'ada', label: 'Ada' },
     ]);
   });
 
-  it('falls back to a placeholder when an owner id has no known name', () => {
-    expect(skillOwnerOptions([makeSkill({ ai_agent_id: 'ghost' })], () => undefined)).toEqual([
-      { value: 'all', label: 'All owners' },
+  it('falls back to a placeholder when an agent id has no known name', () => {
+    expect(skillAgentOptions([makeSkill({ ai_agent_id: 'ghost' })], () => undefined)).toEqual([
+      { value: 'all', label: 'All agents' },
       { value: 'ghost', label: 'Unknown agent' },
+    ]);
+  });
+});
+
+describe('skillOwnerOptions (FR-MOD-05.4)', () => {
+  it('lists All, then each distinct owner in first-seen order, then System', () => {
+    expect(skillOwnerOptions(all)).toEqual([
+      { value: 'all', label: 'All owners' },
+      { value: 'u1', label: 'Uzay' },
+      { value: 'u2', label: 'Beste' },
+      { value: 'none', label: 'System' },
+    ]);
+  });
+
+  it('omits System when every skill has an owner', () => {
+    expect(skillOwnerOptions([refunds, shipping])).toEqual([
+      { value: 'all', label: 'All owners' },
+      { value: 'u1', label: 'Uzay' },
+    ]);
+  });
+
+  it('falls back to a placeholder when an owner id resolved to no name (deleted account)', () => {
+    expect(
+      skillOwnerOptions([makeSkill({ created_by_id: 'ghost', created_by_name: null })]),
+    ).toEqual([
+      { value: 'all', label: 'All owners' },
+      { value: 'ghost', label: 'Unknown owner' },
     ]);
   });
 });

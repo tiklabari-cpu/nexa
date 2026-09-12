@@ -124,6 +124,14 @@ describe('playbook — skills', () => {
       expect(body.created_by_name).toBe('Owner a');
     });
 
+    it('also carries the raw creator id — the filter key behind the display name (FR-MOD-05.4)', async () => {
+      const token = await writeToken(fx.a);
+      const response = await createSkillViaApi(token);
+      expect(response.statusCode).toBe(201);
+      const body = response.json() as { created_by_id: string | null };
+      expect(body.created_by_id).toBe(fx.a.ownerAccountId);
+    });
+
     it('rejects a step list the engine could not run, naming the offending step', async () => {
       const token = await writeToken(fx.a);
       const response = await createSkillViaApi(token, {
@@ -207,10 +215,18 @@ describe('playbook — skills', () => {
 
       const list = await server.get('/skills', auth(token));
       const items = (
-        list.json() as { items: Array<{ id: string; created_by_name: string | null }> }
+        list.json() as {
+          items: Array<{
+            id: string;
+            created_by_name: string | null;
+            created_by_id: string | null;
+          }>;
+        }
       ).items;
       expect(items.find((s) => s.id === skillId)?.created_by_name).toBe('Owner a');
       expect(items.find((s) => s.id === seeded.id)?.created_by_name).toBeNull();
+      expect(items.find((s) => s.id === skillId)?.created_by_id).toBe(fx.a.ownerAccountId);
+      expect(items.find((s) => s.id === seeded.id)?.created_by_id).toBeNull();
 
       const read = await server.get(`/skills/${skillId}`, auth(token));
       expect((read.json() as { created_by_name: string | null }).created_by_name).toBe('Owner a');

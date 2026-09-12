@@ -1100,16 +1100,55 @@ export function applyPush(
       if (typeof agentId !== 'string' || typeof status !== 'string') return;
       if (!(ROUTING_STATUSES as readonly string[]).includes(status)) return;
 
-      for (const key of [['agents'], ['team', 'agents']]) {
+      /**
+       * Writes the pushed status into one roster cache, and says whether there
+       * was a roster there to write it into.
+       */
+      const fold = (key: readonly unknown[]): boolean => {
+        let hit = false;
         queryClient.setQueryData<{ items: Array<{ id: string; routing_status: string }> }>(
           key,
-          (current) =>
-            current && {
+          (current) => {
+            if (!current) return current;
+            hit = true;
+            return {
               items: current.items.map((agent) =>
                 agent.id === agentId ? { ...agent, routing_status: status } : agent,
               ),
-            },
+            };
+          },
         );
+        return hit;
+      };
+
+      for (const key of [['agents'], ['team', 'agents']]) {
+        if (fold(key)) continue;
+
+        // Nothing to fold into — the half of the race an in-place write
+        // structurally cannot cover (tm 247). The roster's *first* read is
+        // either still in flight or has not been asked for, so the updater was
+        // handed `undefined` and the push went on the floor. Marking the key
+        // stale is not enough on its own either: a query holding no data hands
+        // back the request that is already running rather than starting a fresh
+        // one (`query.ts` — `fetchStatus !== 'idle'` only cancels when
+        // `state.data !== undefined`), and the reply clears the invalidation on
+        // its way into the cache. So the reply that the server produced
+        // *before* this write wins, and is then held for the client's whole
+        // `staleTime`.
+        //
+        // Measured in a browser (tm 247, `command-palette.spec.ts:131`): roster
+        // reply produced at 195 ms, this push at 1451 ms, the pre-write reply
+        // delivered at 2020 ms, and the Team row still reading "Accepting
+        // chats" ten seconds later while the server held
+        // `not_accepting_chats`.
+        //
+        // Folding again once that read settles is what makes the push
+        // terminal: if the re-ask got the server's own word the second fold
+        // writes the value that is already there, and if the pre-write reply
+        // won the race it is corrected — without a third request either way.
+        void queryClient
+          .invalidateQueries({ queryKey: key, exact: true })
+          .then(() => void fold(key));
       }
 
       // The Team roster additionally gets marked stale, which the shell's

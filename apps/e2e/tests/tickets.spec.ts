@@ -16,7 +16,7 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { API_BASE, expect, ownerAccessToken, test } from './fixtures.js';
+import { API_BASE, chatOfAReachableCustomer, expect, ownerAccessToken, test } from './fixtures.js';
 
 test.describe('ticket HelpDesk surface', () => {
   // The transcript header is deliberately tight; at the default width its
@@ -249,13 +249,16 @@ test.describe('ticket e-mail template — a status change mails the customer (FR
 
     const before = (await markedMessages()).length;
 
-    // A ticket off a seeded conversation, whose customer has an address.
-    await agentPage.goto('/app/inbox');
-    await agentPage
-      .getByRole('region', { name: 'Conversations' })
-      .getByRole('button')
-      .first()
-      .click();
+    // A ticket off a conversation whose customer has an address — resolved
+    // through the API rather than by taking the first row of the list (tm 247).
+    // "The first conversation" is not a property of the fixture: the list is
+    // ordered by last activity and the suite files anonymous visitors all the
+    // way down it, so in a full run this landed on a Telegram handle with no
+    // e-mail and the notice picker below simply did not exist. Measured with
+    // two files — `telegram.spec.ts` then this one — which is the same red the
+    // full suite gave twice (§D163).
+    const chatId = await chatOfAReachableCustomer(apiRequest);
+    await agentPage.goto(`/app/inbox?chat=${chatId}`);
     await agentPage.getByRole('button', { name: 'Create ticket', exact: true }).click();
     await agentPage.getByRole('button', { name: 'Create', exact: true }).click();
 
@@ -266,7 +269,8 @@ test.describe('ticket e-mail template — a status change mails the customer (FR
     await expect(status).toBeVisible();
 
     // The picker only exists because the ticket has a customer to write to and
-    // the workspace has an enabled template — both of which are now true.
+    // the workspace has an enabled template — both of which the two steps above
+    // establish rather than assume.
     const notice = agentPage.getByLabel('Notify the customer');
     await expect(notice).toBeVisible();
     await notice.selectOption({ label: TEMPLATE_NAME });

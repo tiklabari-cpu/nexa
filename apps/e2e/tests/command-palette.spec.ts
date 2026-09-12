@@ -131,13 +131,37 @@ test.describe('command palette', () => {
   test('stops and restarts accepting chats, and the Team screen agrees', async ({ agentPage }) => {
     const palette = agentPage.getByRole('dialog', { name: 'Command palette' });
 
+    /**
+     * The write itself, not the keystroke that started it (tm 247).
+     *
+     * The palette closes on selection and fires its PUT without awaiting it, so
+     * a navigation that starts straight away can have the Team roster read the
+     * row *before* the write lands — and a roster that arrives pre-toggle is
+     * then held for the client's whole 30 s `staleTime`, which outlasts any
+     * assertion timeout. The second assertion below had already been armoured
+     * against that with a reload; this one had nothing, and the asymmetry was
+     * the whole of why the suite kept reporting it red in a full run and green
+     * on its own (§D163). Waiting for the response is also the more honest
+     * guard of the two: the claim being made is that the write reached the
+     * server, so the test may as well see it arrive.
+     */
+    const wrote = (): Promise<unknown> =>
+      agentPage.waitForResponse(
+        (response) =>
+          response.request().method() === 'PUT' &&
+          new URL(response.url()).pathname.endsWith('/agents/me/routing-status') &&
+          response.ok(),
+      );
+
     await agentPage.keyboard.press('ControlOrMeta+k');
     await agentPage.getByRole('combobox', { name: 'Search or jump to' }).fill('accepting');
+    let landed = wrote();
     await agentPage.getByRole('option', { name: 'Stop Accepting Chats' }).click();
 
     // The palette gets out of the way rather than holding the keyboard over a
     // request it has already shown the result of.
     await expect(palette).toBeHidden();
+    await landed;
 
     await agentPage.getByRole('link', { name: 'Team' }).click();
     await expect(agentPage.getByRole('heading', { name: 'Team', level: 1 })).toBeVisible();
@@ -149,8 +173,10 @@ test.describe('command palette', () => {
     // same search now offers the opposite action.
     await agentPage.keyboard.press('ControlOrMeta+k');
     await agentPage.getByRole('combobox', { name: 'Search or jump to' }).fill('accepting');
+    landed = wrote();
     await agentPage.getByRole('option', { name: 'Start Accepting Chats' }).click();
     await expect(palette).toBeHidden();
+    await landed;
 
     await agentPage.reload();
     await expect(rosterRow(agentPage)).toContainText('Accepting chats');

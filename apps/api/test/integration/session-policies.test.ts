@@ -264,6 +264,36 @@ describe('session policies', () => {
       }
     });
 
+    it('never revokes the session it is minting, whatever the other rows are dated (FR-MOD-08.9.6)', async () => {
+      const cap = 2;
+      await setPolicy(fx.a, { maxSessions: cap });
+
+      // `created_at` defaults to CURRENT_TIMESTAMP, which in PostgreSQL is the
+      // *transaction start* and not the commit. The prune runs inside the same
+      // transaction as the insert, so a mint that waited on the advisory lock
+      // above carries an earlier stamp than sessions that started later and
+      // committed first — and ordering by `created_at desc` then skipping `cap`
+      // can therefore place a brand-new row past the boundary and revoke it.
+      // The caller is handed a token that was already dead when it was minted.
+      //
+      // Two rows dated ahead of the next mint reproduce that inversion with a
+      // single mint, so nothing but that mint's own prune can be what kills it.
+      // They share one stamp on purpose: the ordering has to be total at the
+      // boundary too, or *which* session survives a tie is arbitrary.
+      const ahead = new Date(Date.now() + 60_000);
+      for (let i = 0; i < cap; i++) {
+        const existing = await issueOauth(fx.a, fx.a.ownerAccountId);
+        await owner.apiToken.update({ where: { id: existing.id }, data: { createdAt: ahead } });
+      }
+
+      const minted = await issueOauth(fx.a, fx.a.ownerAccountId);
+      expect(await revokedAtOf(minted.token)).toBeNull();
+      expect((await get('/auth/me', bearer(minted.token))).statusCode).toBe(200);
+      // And the cap is still an invariant: the new session took a slot rather
+      // than being denied one, so one of the older sessions lost its.
+      expect(await liveOauthCount(fx.a, fx.a.ownerAccountId)).toBe(cap);
+    });
+
     it('enforces the fixed ceiling, not a prune, while the cap is null (regression)', async () => {
       // No policy row: the cap falls back to 25, far above three sessions.
       await issueOauth(fx.a, fx.a.ownerAccountId);

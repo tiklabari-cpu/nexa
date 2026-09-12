@@ -232,6 +232,33 @@ export const useAuth = create<AuthState>((set, get) => {
   // A client with no token, for the endpoints that take none.
   const anonymous = new ApiClient();
 
+  /**
+   * The restore in flight, or null.
+   *
+   * A refresh token is single-use: the server rotates it and treats a second
+   * presentation as a stolen credential, revoking the whole family — including
+   * the access token the *successful* rotation has just minted. So two
+   * overlapping restores do not merely spend a wasted round trip, they end the
+   * session, and the agent lands back on the sign-in form.
+   *
+   * They do overlap. `App` restores from an effect, StrictMode mounts every
+   * effect twice in development, and neither call sets a status the other could
+   * see until its round trip is over — measured in a real browser, a signed-in
+   * reload sent two `POST /auth/token` carrying the same token. Both answered
+   * 200 only because neither rotation had committed when the other read;
+   * widening that gap (a loaded machine, a long test run) makes the second one
+   * reuse detection instead. The same single-use hazard is already guarded at
+   * the other exchange, in `AuthCallbackPage`.
+   *
+   * Single-flight rather than once-only: a later restore — a sign-out and back,
+   * a second session in the same tab — must still be able to refresh.
+   *
+   * What this does *not* cover is two tabs: they share `localStorage` and each
+   * has its own copy of this module, so simultaneous reloads still race. That
+   * needs a lock both tabs can see and is left named rather than half-built.
+   */
+  let restoring: Promise<void> | null = null;
+
   async function loadAgent(accessToken: string): Promise<CurrentAgent> {
     const client = new ApiClient({ getAccessToken: () => accessToken });
     const agent = await client.get<CurrentAgent>('/auth/me');
@@ -241,6 +268,34 @@ export const useAuth = create<AuthState>((set, get) => {
     // value has to arrive.
     cachePreferences(agent.notification_preferences);
     return agent;
+  }
+
+  /** The body of {@link AuthState.restore}, wrapped by the single-flight above. */
+  async function runRestore(): Promise<void> {
+    const refreshToken = readStored(REFRESH_KEY);
+    const clientId = readStored(CLIENT_ID_KEY);
+    if (!refreshToken || !clientId) {
+      set({ status: 'signed-out' });
+      return;
+    }
+
+    try {
+      const grant = await anonymous.post<{ access_token: string; refresh_token: string }>(
+        '/auth/token',
+        { grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId },
+      );
+      writeStored(REFRESH_KEY, grant.refresh_token);
+      set({
+        accessToken: grant.access_token,
+        agent: await loadAgent(grant.access_token),
+        status: 'signed-in',
+      });
+    } catch {
+      // A refresh token that no longer works means the family was revoked, or
+      // it simply expired. Either way, start clean rather than looping.
+      writeStored(REFRESH_KEY, null);
+      set({ status: 'signed-out' });
+    }
   }
 
   /** Mirror the server's answer into `localStorage` for `loadPrefs`. */
@@ -257,31 +312,13 @@ export const useAuth = create<AuthState>((set, get) => {
     error: null,
     busy: false,
 
-    async restore() {
-      const refreshToken = readStored(REFRESH_KEY);
-      const clientId = readStored(CLIENT_ID_KEY);
-      if (!refreshToken || !clientId) {
-        set({ status: 'signed-out' });
-        return;
-      }
-
-      try {
-        const grant = await anonymous.post<{ access_token: string; refresh_token: string }>(
-          '/auth/token',
-          { grant_type: 'refresh_token', refresh_token: refreshToken, client_id: clientId },
-        );
-        writeStored(REFRESH_KEY, grant.refresh_token);
-        set({
-          accessToken: grant.access_token,
-          agent: await loadAgent(grant.access_token),
-          status: 'signed-in',
-        });
-      } catch {
-        // A refresh token that no longer works means the family was revoked, or
-        // it simply expired. Either way, start clean rather than looping.
-        writeStored(REFRESH_KEY, null);
-        set({ status: 'signed-out' });
-      }
+    restore() {
+      // See `restoring` above: overlapping callers share one rotation instead
+      // of each spending the same token.
+      restoring ??= runRestore().finally(() => {
+        restoring = null;
+      });
+      return restoring;
     },
 
     async listWorkspaces(email, password) {

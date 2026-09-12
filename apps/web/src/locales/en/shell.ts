@@ -18,6 +18,10 @@ export const shell: Messages = {
   'shell.account.theme.dark': 'Dark',
   'shell.account.theme.light': 'Light',
   'shell.brand': 'Brand',
+  // App menu (FR-MOD-01.1.1). The logo's trigger label, plus the one
+  // destination in its panel that has no rail icon of its own.
+  'shell.menu': 'App menu',
+  'shell.menu.apps': 'Apps',
   'shell.sandbox.notice':
     'Sandbox workspace — nothing here is billed, and nothing here is production data.',
   'shell.nav.expand': 'Expand navigation',

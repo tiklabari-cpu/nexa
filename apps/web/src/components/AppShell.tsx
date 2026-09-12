@@ -12,7 +12,7 @@
  */
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, type ReactElement } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
@@ -195,9 +195,9 @@ function IconRail(): ReactElement {
         pinned ? 'w-60 items-stretch px-2' : 'w-rail items-center'
       }`}
     >
-      <NavPinToggle pinned={pinned} onToggle={() => setPinned(!pinned)} />
+      <AppMenu />
 
-      <BrandSwitcher />
+      <NavPinToggle pinned={pinned} onToggle={() => setPinned(!pinned)} />
 
       {MODULES.filter((item) => isNavVisible(item, scopes)).map((item) => (
         <RailButton
@@ -285,11 +285,69 @@ function useNavBadges(): Partial<Record<string, { count: number; ariaLabel: stri
 }
 
 /**
- * The rail's logo doubles as its pin/unpin control (FR-MOD-01.1.1 · 01.5) — a
- * `<button>` rather than the decorative `<span>` it replaces, so the state it
- * drives (`aria-expanded`) and the rail it drives (`aria-controls`) are both
- * exposed to assistive tech. A native button already answers Enter and Space,
- * so no extra keyboard wiring is needed.
+ * The logo opens the app menu (FR-MOD-01.1.1) — a control distinct from
+ * `NavPinToggle` right beside it, because a single `aria-expanded` cannot mean
+ * both "this menu is open" and "the rail is pinned" at once: PRD's
+ * "Logo/Hamburger" pairing becomes two adjacent buttons rather than one
+ * overloaded one (the audit that opened this gap flagged exactly that
+ * confusion risk).
+ *
+ * `BrandSwitcher` is nested inside this menu's panel rather than removed —
+ * the audit's complaint was that the rail had no *app* menu at all, not that
+ * brand-switching was the wrong feature. `brands.spec.ts` opens this menu
+ * before reaching for the brand switcher for the same reason: a closed
+ * `<details>` does not render its descendants (a real `display: none`, not
+ * just the `hidden group-open:block` override `Dropdown`'s own doc explains),
+ * so nesting one moves *when* the switcher is reachable, not just where.
+ *
+ * Beyond that, content is deliberately thin: the one destination the rail has
+ * no icon for. `Integrations.tsx`'s own comment says why — "the Apps route is
+ * not on the module rail, so without this entry it can only be reached by
+ * typing the URL." No new endpoint opens for it.
+ */
+function AppMenu(): ReactElement {
+  const t = useTranslate();
+
+  return (
+    <Dropdown
+      label={t('shell.menu')}
+      triggerTitle={t('shell.menu')}
+      trigger="N"
+      triggerClassName="mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white hover:bg-brand-600"
+      panelClassName="left-11 top-0 w-56 p-2"
+    >
+      {({ close }) => (
+        <div className="flex flex-col gap-1">
+          <BrandSwitcher />
+          <Link
+            to="/app/apps"
+            className="block rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
+            // Same dirty-guard courtesy as `RailButton` (FR-MOD-06.2.1) — this
+            // is another way out of the module holding unsaved work.
+            onClick={(event) => {
+              if (!confirmLeave()) {
+                event.preventDefault();
+                return;
+              }
+              close();
+            }}
+          >
+            {t('shell.menu.apps')}
+          </Link>
+        </div>
+      )}
+    </Dropdown>
+  );
+}
+
+/**
+ * The rail's pin/unpin control (FR-MOD-01.5) — a `<button>` rather than the
+ * decorative `<span>` it replaces, so the state it drives (`aria-expanded`)
+ * and the rail it drives (`aria-controls`) are both exposed to assistive
+ * tech. A native button already answers Enter and Space, so no extra
+ * keyboard wiring is needed. The hamburger glyph is deliberate — PRD's
+ * "Logo/Hamburger" pairing splits across this button and `AppMenu` above it,
+ * so this one no longer wears the brand mark that button now owns.
  */
 function NavPinToggle({
   pinned,
@@ -309,9 +367,9 @@ function NavPinToggle({
       aria-label={label}
       title={label}
       onClick={onToggle}
-      className="mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white hover:bg-brand-600"
+      className="mb-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-white/70 hover:bg-white/5 hover:text-white"
     >
-      N
+      <span aria-hidden="true">☰</span>
     </button>
   );
 }
@@ -564,9 +622,12 @@ interface BrandSummary {
 
 /**
  * Brand switcher (PRD §5.3-Marka) — hidden entirely on a single-brand license,
- * so the common case carries no extra chrome. The selection is persisted the
- * same way as the language preference (`lib/i18n.ts`), and every request
- * after a change picks it up through `api-client.ts`'s `X-Nexa-Brand` header.
+ * so the common case carries no extra chrome. Rendered from inside `AppMenu`
+ * (FR-MOD-01.1.1) rather than a rail-level sibling; nothing about its own
+ * behaviour changed, only what's now above it in the tree. The selection is
+ * persisted the same way as the language preference (`lib/i18n.ts`), and
+ * every request after a change picks it up through `api-client.ts`'s
+ * `X-Nexa-Brand` header.
  *
  * The reconciliation effect below is what makes "invalid/deleted brand id"
  * safe: a remembered selection that the license no longer has (or a license

@@ -10011,11 +10011,11 @@
         "description": "Ajan Inbox'tan Reports'a gectikten sonra acilan soket okunmamis uyarisini kaldiramiyor; sekme basligi 20 sn boyunca \"Nexa\" kaliyor, \"(1) Nexa\" olmuyor. tm 248 turunda tam suitte olculdu ve ATIF DOGRULANDI: tm 248'in butun kaynak degisiklikleri geri alinip kosuldugunda ayni kirmizi cikiyor, yani bu diff'ten gelmiyor. Ayni dosyanin :24'u paylasilan tohumdan sizan durumla donusumlu dusuyor. Izole kosuda 1,2 dk'da yeniden uretiliyor.",
         "details": "OLCUM (tm 248, 2026-09-12). Imza: apps/e2e/tests/notifications.spec.ts:163 -- await expect.poll(() => agentPage.title()).toBe(\"(1) Nexa\") 20 sn boyunca \"Nexa\" okuyor; ajanin sekme basligi rozeti hic yukselmiyor. Test, ajan Inbox'tan Reports'a gectikten SONRA acilan bir soketin hala okunmamis uyarisi kaldirabildigini iddia ediyor.",
         "testStrategy": "",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-09-12T18:31:10.825Z"
+        "updatedAt": "2026-09-12T19:48:23.073Z"
       },
       {
         "id": "251",
@@ -10031,9 +10031,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-12T18:31:10.825Z",
+      "lastModified": "2026-09-12T19:48:23.073Z",
       "taskCount": 251,
-      "completedCount": 243,
+      "completedCount": 244,
       "tags": [
         "master"
       ]

@@ -267,6 +267,13 @@ export const playbook: Messages = {
   'playbook.editor.compiling': 'Derleniyor…',
   'playbook.editor.save': 'Değişiklikleri kaydet',
   'playbook.editor.saving': 'Kaydediliyor…',
+  'playbook.editor.delete': 'Beceriyi sil',
+  'playbook.editor.deleteTitle': '"{name}" silinsin mi?',
+  'playbook.editor.deleteDescription':
+    'Bu, beceriyi ve çalıştırma kaydını kaldırır. Bu işlem geri alınamaz.',
+  'playbook.editor.deleteConfirm': 'Kalıcı olarak sil',
+  'playbook.editor.deleting': 'Siliniyor…',
+  'playbook.editor.deleteCancel': 'Vazgeç',
   'playbook.editor.nameRequired': 'Kaydetmeden önce beceriye bir ad verin.',
   'playbook.editor.discardConfirm':
     'Bu becerinin kaydedilmemiş değişiklikleri var. Ayrılıp bunları atmak istiyor musunuz?',
@@ -548,4 +555,30 @@ export const playbook: Messages = {
     'Bir şeyler ters gitti — bu makaleyi yeniden açıp tekrar deneyin.',
   'playbook.kbEditor.nameCategoryError': 'Yeni kategoriyi adlandırın ya da var olan birini seçin.',
   'playbook.kbEditor.discardConfirm': 'Kaydedilmemiş değişiklikleriniz atılsın mı?',
+  'playbook.kbEditor.delete': 'Sil',
+  'playbook.kbEditor.deleteConfirm': 'Kalıcı olarak sil',
+  'playbook.kbEditor.deleting': 'Siliniyor…',
+  'playbook.kbEditor.deleteCancel': 'Vazgeç',
+  'playbook.kbEditor.deleteExplainer':
+    'Bu, makaleyi kalıcı olarak kaldırır; yayınlanmışsa genel sayfası da dahil. Bu işlem geri alınamaz.',
+
+  // Genel bilgi bankası — açma/kapama anahtarı ve adresi (KbSettings.tsx)
+  'playbook.kbSettings.title': 'Genel bilgi bankası ayarları',
+  'playbook.kbSettings.description':
+    'Genel bilgi bankasını açın ve ziyaretçilerin onu okuyacağı adresi seçin.',
+  'playbook.kbSettings.loading': 'Yükleniyor…',
+  'playbook.kbSettings.loadError':
+    'Bilgi bankası ayarları yüklenemedi. API’ye erişilebildiğini kontrol edin.',
+  'playbook.kbSettings.on': 'Genel bilgi bankası açık',
+  'playbook.kbSettings.off': 'Genel bilgi bankası kapalı',
+  'playbook.kbSettings.enableLabel': 'Açık',
+  'playbook.kbSettings.restricted':
+    'Bunu yalnızca bir yönetici, ikinci sahip veya sahip değiştirebilir.',
+  'playbook.kbSettings.publicSlugLabel': 'Genel adres',
+  'playbook.kbSettings.publicSlugPlaceholder': 'acme-yardim',
+  'playbook.kbSettings.publicSlugRequired': 'Açmadan önce bilgi bankasına bir genel adres verin.',
+  'playbook.kbSettings.siteTitleLabel': 'Site başlığı',
+  'playbook.kbSettings.siteTitlePlaceholder': 'Acme Yardım Merkezi',
+  'playbook.kbSettings.save': 'Kaydet',
+  'playbook.kbSettings.saving': 'Kaydediliyor…',
 };

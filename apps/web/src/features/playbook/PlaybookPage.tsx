@@ -38,6 +38,7 @@ import {
 } from './knowledge-file-upload.js';
 import { RecommendedSkills } from './RecommendedSkills.js';
 import { KbArticleList } from './KbArticleList.js';
+import { KbSettings } from './KbSettings.js';
 import { templateToDraft, type SkillTemplate } from './templates.js';
 import { countSkillsByTab, filterSkillsByTab, type SkillTab } from './skill-tabs.js';
 import {
@@ -651,6 +652,7 @@ export function PlaybookPage(): ReactElement {
                         skill={selected}
                         canEdit={canEdit}
                         onSaved={invalidate}
+                        onDeleted={() => setSelectedId(null)}
                       />
                     ) : (
                       <Card>
@@ -675,7 +677,12 @@ export function PlaybookPage(): ReactElement {
               <KnowledgePanel canEdit={canEdit} aiAgentId={aiAgent?.id ?? null} />
             )}
 
-            {view === 'kb' && <KbArticleList canEdit={canEdit} />}
+            {view === 'kb' && (
+              <div className="flex flex-col gap-4">
+                <KbSettings canEdit={canEdit} />
+                <KbArticleList canEdit={canEdit} />
+              </div>
+            )}
           </div>
 
           <TemplateGallery

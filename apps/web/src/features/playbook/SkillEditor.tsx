@@ -13,17 +13,25 @@
  * finished editing is a detour with no reason. And leaving with unsaved edits
  * now asks first, on both paths out: the browser's and the app's own nav.
  *
+ * Delete asks through a `Modal`, not the inline swap the KB category row uses
+ * (tm 246): this screen is not itself nested inside one, so a confirmation
+ * dialog costs nothing extra and matches `DeveloperPortal.tsx`'s own delete —
+ * the app's one other single-entity delete off a detail screen. The server
+ * cascades a skill's run log with it (`SkillRun.skillId` is `onDelete:
+ * Cascade`), which the dialog says plainly rather than leaving as a surprise.
+ *
  * The step list is authored here as well as ordered (FR-MOD-06.2.4): each step
  * opens into the parameter form for its own type, can be added, deleted or
  * retyped. Until it could, a skill created from "New skill" was born with
  * `steps: []` and had no way to gain one — the whole ordered-steps surface was
  * reachable only by starting from a template.
  */
-import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { useMemo, useState, type ReactElement } from 'react';
 import { Link } from 'react-router-dom';
-import { Card } from '../../components/Page.js';
+import { Card, ErrorNotice } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { Modal } from '../../components/ui/index.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -142,10 +150,12 @@ export function SkillEditor({
   skill,
   canEdit,
   onSaved,
+  onDeleted,
 }: {
   skill: Skill;
   canEdit: boolean;
   onSaved: () => void;
+  onDeleted: () => void;
 }): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
@@ -165,6 +175,7 @@ export function SkillEditor({
   // reading top to bottom.
   const [openStepIds, setOpenStepIds] = useState<ReadonlySet<string>>(() => new Set());
   const [newStepType, setNewStepType] = useState<StepType>('detect_intent');
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const steps = useMemo(() => entries.map((entry) => entry.step), [entries]);
   // Gating (count, index) comes from the shared, tested `stepIssues` — the
@@ -328,6 +339,16 @@ export function SkillEditor({
                 className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2 disabled:opacity-50"
               >
                 {skill.active ? t('playbook.skills.disable') : t('playbook.skills.enable')}
+              </button>
+            )}
+
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+                className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:border-danger hover:bg-danger/10 hover:text-danger"
+              >
+                {t('playbook.editor.delete')}
               </button>
             )}
 
@@ -666,7 +687,69 @@ export function SkillEditor({
           )}
         </div>
       </Card>
+
+      {deleteOpen && (
+        <DeleteSkillModal
+          skill={skill}
+          onClose={() => setDeleteOpen(false)}
+          onDeleted={onDeleted}
+        />
+      )}
     </div>
+  );
+}
+
+/**
+ * Delete confirmation (FR-MOD-06.2.1, tm 246) — the one destructive action off
+ * this screen, and the only one that never had a caller: the skill could be
+ * created, edited and toggled, but never removed, so the list only ever grew.
+ */
+function DeleteSkillModal({
+  skill,
+  onClose,
+  onDeleted,
+}: {
+  skill: Skill;
+  onClose: () => void;
+  onDeleted: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const queryClient = useQueryClient();
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/skills/${skill.id}`),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['playbook'] });
+      onDeleted();
+    },
+  });
+
+  return (
+    <Modal
+      onClose={onClose}
+      title={t('playbook.editor.deleteTitle', { name: skill.name })}
+      description={t('playbook.editor.deleteDescription')}
+    >
+      {remove.isError && <ErrorNotice message={t(errorMessageKey(remove.error))} />}
+      <div className="mt-4 flex justify-end gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="rounded-md border border-border px-3 py-1.5 text-sm"
+        >
+          {t('playbook.editor.deleteCancel')}
+        </button>
+        <button
+          type="button"
+          onClick={() => remove.mutate()}
+          disabled={remove.isPending}
+          className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
+        >
+          {remove.isPending ? t('playbook.editor.deleting') : t('playbook.editor.deleteConfirm')}
+        </button>
+      </div>
+    </Modal>
   );
 }
 

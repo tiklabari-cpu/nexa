@@ -16,7 +16,9 @@ import { confirmLeave } from '../../lib/dirty-guard.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { Skill, SkillRun, SkillStep } from './types.js';
 
-const { api } = vi.hoisted(() => ({ api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() } }));
+const { api } = vi.hoisted(() => ({
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+}));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof AuthStore>();
@@ -55,12 +57,17 @@ function makeRun(overrides: Partial<SkillRun> = {}): SkillRun {
 
 // The run log deep-links to the conversation that set the run off, so the
 // editor now needs a router around it.
-function renderEditor(skill: Skill, canEdit = true, onSaved: () => void = () => {}): void {
+function renderEditor(
+  skill: Skill,
+  canEdit = true,
+  onSaved: () => void = () => {},
+  onDeleted: () => void = () => {},
+): void {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <MemoryRouter>
       <QueryClientProvider client={queryClient}>
-        <SkillEditor skill={skill} canEdit={canEdit} onSaved={onSaved} />
+        <SkillEditor skill={skill} canEdit={canEdit} onSaved={onSaved} onDeleted={onDeleted} />
       </QueryClientProvider>
     </MemoryRouter>,
   );
@@ -70,6 +77,7 @@ beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
+  api.delete.mockReset();
   api.patch.mockResolvedValue(makeSkill([]));
   api.get.mockResolvedValue({ items: [] });
 });
@@ -505,6 +513,7 @@ describe('SkillEditor localisation (NFR-I18N2)', () => {
           skill={makeSkill([{ type: 'tag', tag: 'shipping' }])}
           canEdit
           onSaved={() => {}}
+          onDeleted={() => {}}
         />
       </QueryClientProvider>,
       'tr',
@@ -666,5 +675,60 @@ describe('SkillEditor — leaving with unsaved changes (FR-MOD-06.2.1)', () => {
 
     // The prop is deliberately still the pre-save skill, as it would be mid-refetch.
     expect(confirmLeave(confirm)).toBe(true);
+  });
+});
+
+/**
+ * Delete (tm 246) — the gap the endpoint-ui audit tracked: a skill could be
+ * created, edited and toggled off, but never removed, so the list only ever
+ * grew. Asks through a `Modal` (not the inline swap the KB article editor
+ * uses) since this screen is not itself nested inside one.
+ */
+describe('SkillEditor — delete (tm 246)', () => {
+  it('asks before deleting, and sends nothing when the dialog is cancelled', async () => {
+    const user = userEvent.setup();
+    renderEditor(makeSkill([]));
+
+    await user.click(screen.getByRole('button', { name: 'Delete skill' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.textContent).toContain('Order help');
+    expect(api.delete).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole('button', { name: 'Never mind' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(api.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes only once the dialog is confirmed, and tells the parent', async () => {
+    api.delete.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    renderEditor(makeSkill([]), true, () => {}, onDeleted);
+
+    await user.click(screen.getByRole('button', { name: 'Delete skill' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete for good' }));
+
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/skills/skill-1'));
+    await waitFor(() => expect(onDeleted).toHaveBeenCalledTimes(1));
+  });
+
+  it('reports a failed delete on the dialog rather than closing it', async () => {
+    api.delete.mockRejectedValue(new Error('nope'));
+    const user = userEvent.setup();
+    const onDeleted = vi.fn();
+    renderEditor(makeSkill([]), true, () => {}, onDeleted);
+
+    await user.click(screen.getByRole('button', { name: 'Delete skill' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Delete for good' }));
+
+    expect(await within(dialog).findByRole('alert')).toBeInTheDocument();
+    expect(onDeleted).not.toHaveBeenCalled();
+  });
+
+  it('offers no delete control without edit permission', () => {
+    renderEditor(makeSkill([]), false);
+    expect(screen.queryByRole('button', { name: 'Delete skill' })).not.toBeInTheDocument();
   });
 });

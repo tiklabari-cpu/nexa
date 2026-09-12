@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 246 — V8-KB-SKILL-GAPS: **`TRACKED` boşaldı — public KB artık konsoldan açılıyor, skill ve KB makalesi silinebiliyor** — done — 2026-09-12 UTC
+
+- **Yapıldı:** tm 215'in `TRACKED` bıraktığı son üç kalem kapandı (`PUT /kb-settings` · `DELETE /kb-articles/{id}` · `DELETE /skills/{id}`) — yeni uç açılmadı, kontrat değişmedi, yalnız `apps/web` yüzeyi eklendi. `KbSettings.tsx` (yeni): Playbook → KB sekmesinin başına açma/kapama + genel adres + site başlığı; `KbArticleEditor.tsx`'in kapalıyken bastığı uyarı artık gerçek bir yere işaret ediyor. `KbArticleEditor.tsx`: satır içi silme onayı (`KbCategoryManager` deseni — ikinci `Modal` bir `Modal`'ın içinde çakışırdı). `SkillEditor.tsx`: `Modal` ile silme onayı (`DeveloperPortal` deseni), diyalog run log'un cascade sileceğini söylüyor.
+- **Doğrulama:** typecheck 13/13 · lint 10/10 · format:check temiz · build 8/8 · `db:check-drift` no drift (migration yok) · `audit:req-coverage` exit 0 · `audit:endpoint-ui` exit 0, `tracked` 3→0 · turbo `test --force` (api/web/e2e hariç) 10/10 · api `test:unit` 89/1443 + integration 3 shard 46+46+46=138/3454 (ikisi de değişmedi) · `apps/web` tam süit `--maxWorkers=4` 179/2219 (←178/2204, +1 dosya/+15 test) · e2e tam süit 293/1/294 (taban `tickets.spec.ts:226` ile birebir, bu turun diff'i değil); 150 `kanit/*.png` churn geri alındı.
+- **Varsayımlar:** Yok — üç yüzey de mevcut sunucu davranışını (`minimumRole:'admin'`, cascade delete) olduğu gibi yüzeye taşıdı.
+- **Sonraki pencereye not:** PLAN.md gereksinim tablosunda hiçbir satır dokunulmadı — `06.2.1`/`§5.3-KB` zaten `✅`, kanıt `#### KV8-DEADEND`'e eklendi. `scripts/audit/endpoint-ui.cjs`'in `TRACKED` listesi artık boş; bir sonraki metot-körlüğü taraması yeni kalem bulursa oraya eklenir.
+
 ## 245 — V8-EDIT-GAPS: **Üç ayarlar ekranında "yarat + sil var, DÜZENLE yok" kapandı — `audit:endpoint-ui`'nin `TRACKED` listesi tm 245'in üç kalemini bıraktı** — done — 2026-09-12 UTC
 
 - **Yapıldı:** tm 215'in `TRACKED` listesindeki üç kalem (`PATCH /settings/custom-fields/{fieldId}` · `PATCH /partner/apps/{clientId}` · `PATCH /reports/scheduled-exports/{scheduledExportId}`) kapatıldı — yeni uç açılmadı, kontrat değişmedi, yalnız `apps/web` yüzeyi eklendi. `CustomFieldsSettings.tsx`: satır içi düzenlenebilir etiket (`settings/Brands.tsx` deseni, blur'da PATCH). `DeveloperPortal.tsx`: `EditAppModal` (ad + yönlendirme URI'leri; `client_type`/`scopes` bilinçli dışarıda). `ScheduledExports.tsx`: satır başı `Edit` düğmesi → `EditScheduledExportModal` (grup/sıklık/alıcılar). Betiğin `TRACKED` listesinden üç kalem silindi (`scripts/audit/endpoint-ui.cjs`); tm 246'nın üç kalemi olduğu gibi kaldı.

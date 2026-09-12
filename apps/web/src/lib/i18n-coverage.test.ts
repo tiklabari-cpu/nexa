@@ -121,6 +121,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/features/playbook/KbArticleList.tsx',
   'src/features/playbook/KbArticleEditor.tsx',
   'src/features/playbook/KbCategoryManager.tsx',
+  'src/features/playbook/KbSettings.tsx',
   'src/features/apps/AppsMarketplace.tsx',
   'src/features/audit/AuditLogPage.tsx',
   'src/features/audit/AccessReviewExport.tsx',

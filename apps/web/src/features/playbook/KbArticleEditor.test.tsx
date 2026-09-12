@@ -14,7 +14,7 @@ import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { KbArticle, KbCategory } from './types.js';
 
 const { api } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
@@ -71,6 +71,7 @@ beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
   api.patch.mockReset();
+  api.delete.mockReset();
   api.get.mockImplementation((path: string) => {
     if (path === '/kb-settings') return Promise.resolve(SETTINGS_ENABLED);
     return Promise.reject(new Error(`unexpected GET ${path}`));
@@ -269,6 +270,69 @@ describe('KbArticleEditor', () => {
     ]) {
       expect(screen.getByLabelText(label)).toBeInTheDocument();
     }
+  });
+});
+
+/**
+ * Delete (tm 246) — the gap the endpoint-ui audit tracked: an article could be
+ * unpublished but never removed. The confirm swaps inline rather than opening
+ * a second `Modal`, so the assertions here are about the swap itself: nothing
+ * is sent until the second click, and the first click can be walked back.
+ */
+describe('KbArticleEditor — delete (tm 246)', () => {
+  it('offers no delete control for a still-unsaved article', () => {
+    renderEditor({ article: null });
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('offers no delete control without edit permission', () => {
+    renderEditor({ article: article({}), canEdit: false });
+    expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument();
+  });
+
+  it('asks before deleting, and sends nothing when walked back', async () => {
+    const user = userEvent.setup();
+    renderEditor({ article: article({}) });
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.getByRole('button', { name: 'Delete for good' })).toBeInTheDocument();
+    expect(api.delete).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Never mind' }));
+    expect(screen.queryByRole('button', { name: 'Delete for good' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(api.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes and closes only once the second click confirms', async () => {
+    api.delete.mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const existing = article({});
+    const onClose = vi.fn();
+    const onSaved = vi.fn();
+    renderEditor({ article: existing, onClose, onSaved });
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Delete for good' }));
+
+    await waitFor(() => expect(api.delete).toHaveBeenCalledWith(`/kb-articles/${existing.id}`));
+    // Closes through the raw `onClose`, not the dirty-guard prompt — there is
+    // nothing left to discard once the article itself is gone.
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('reports a failed delete rather than closing on it', async () => {
+    api.delete.mockRejectedValue(new Error('nope'));
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    renderEditor({ article: article({}), onClose });
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    await user.click(screen.getByRole('button', { name: 'Delete for good' }));
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
   });
 });
 

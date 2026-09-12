@@ -311,30 +311,7 @@ const INDIRECT = [
  * collection endpoint has a screen and one verb on the item does not, so a
  * thing can be made but not changed, or made but not removed.
  */
-const TRACKED = [
-  {
-    op: 'DELETE /skills/{skillId}',
-    owner: 'tm 246',
-    reason:
-      'a playbook skill can be created and edited and deactivated, never deleted; the console ' +
-      'accumulates them.',
-  },
-  {
-    op: 'DELETE /kb-articles/{articleId}',
-    owner: 'tm 246',
-    reason:
-      'a KB article can be unpublished but not removed. Unpublishing hides it; a wrong article ' +
-      'still cannot be taken off the workspace.',
-  },
-  {
-    op: 'PUT /kb-settings',
-    owner: 'tm 246',
-    reason:
-      'the public knowledge base cannot be switched on from the console at all. ' +
-      '`KbArticleEditor` READS `/kb-settings` and disables authoring when it is off, so the ' +
-      'one screen that knows about the setting is the one blocked by it.',
-  },
-];
+const TRACKED = [];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
 function pathMatcher(path) {

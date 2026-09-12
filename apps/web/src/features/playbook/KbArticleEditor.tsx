@@ -15,6 +15,12 @@
  * can keep editing a draft after publishing it, or unpublish without losing
  * unsaved content, because the backend already treats `status` as just one
  * more optional PATCH field.
+ *
+ * Delete (tm 246) asks inline rather than through a second `Modal`: this
+ * editor is already one, and a confirmation dialog stacked on top of it would
+ * fight the same Escape/backdrop handling both would register. The row-level
+ * swap `KbCategoryManager.tsx` uses for the same reason is the pattern here —
+ * a "Delete" button turns into "Delete for good" / "Keep it" in place.
  */
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
@@ -121,6 +127,7 @@ export function KbArticleEditor({
   const [slugEdited, setSlugEdited] = useState(!isNew);
   const [newCategoryName, setNewCategoryName] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const settings = useQuery({
     queryKey: ['playbook', 'kb-settings'],
@@ -212,6 +219,17 @@ export function KbArticleEditor({
     onSuccess: (updated) => {
       setCurrent(updated);
       onSaved();
+    },
+  });
+
+  const remove = useMutation({
+    mutationFn: () => {
+      if (!current) throw new Error('Save the article before deleting it.');
+      return api.delete(`/kb-articles/${current.id}`);
+    },
+    onSuccess: () => {
+      onSaved();
+      onClose();
     },
   });
 
@@ -500,27 +518,76 @@ export function KbArticleEditor({
           </div>
         )}
 
-        <div className="flex justify-end gap-2 border-t border-border pt-3">
-          <button
-            type="button"
-            onClick={close}
-            className="rounded-md border border-border px-3 py-1.5 text-sm"
-          >
-            {canEdit ? t('playbook.kbEditor.cancel') : t('playbook.kbEditor.close')}
-          </button>
-          {canEdit && (
-            <button
-              type="submit"
-              disabled={!form.canSubmit}
-              className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
-            >
-              {form.isSubmitting
-                ? t('playbook.kbEditor.saving')
-                : isNew
-                  ? t('playbook.kbEditor.createArticle')
-                  : t('playbook.kbEditor.saveChanges')}
-            </button>
+        <div className="flex flex-col gap-2 border-t border-border pt-3">
+          {confirmingDelete && (
+            <p className="text-2xs text-content-tertiary">
+              {t('playbook.kbEditor.deleteExplainer')}
+            </p>
           )}
+          {remove.isError && (
+            <p role="alert" className="text-2xs text-danger">
+              {t(errorMessageKey(remove.error))}
+            </p>
+          )}
+
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              {canEdit &&
+                current &&
+                (confirmingDelete ? (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => remove.mutate()}
+                      disabled={remove.isPending}
+                      className="rounded-md border border-danger px-3 py-1.5 text-sm font-medium text-danger transition-colors hover:bg-danger/10 disabled:opacity-50"
+                    >
+                      {remove.isPending
+                        ? t('playbook.kbEditor.deleting')
+                        : t('playbook.kbEditor.deleteConfirm')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(false)}
+                      className="rounded-md border border-border px-3 py-1.5 text-sm"
+                    >
+                      {t('playbook.kbEditor.deleteCancel')}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmingDelete(true)}
+                    className="rounded-md border border-border px-3 py-1.5 text-sm text-content-secondary transition-colors hover:border-danger hover:bg-danger/10 hover:text-danger"
+                  >
+                    {t('playbook.kbEditor.delete')}
+                  </button>
+                ))}
+            </div>
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={close}
+                className="rounded-md border border-border px-3 py-1.5 text-sm"
+              >
+                {canEdit ? t('playbook.kbEditor.cancel') : t('playbook.kbEditor.close')}
+              </button>
+              {canEdit && (
+                <button
+                  type="submit"
+                  disabled={!form.canSubmit}
+                  className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {form.isSubmitting
+                    ? t('playbook.kbEditor.saving')
+                    : isNew
+                      ? t('playbook.kbEditor.createArticle')
+                      : t('playbook.kbEditor.saveChanges')}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
       </form>
     </Modal>

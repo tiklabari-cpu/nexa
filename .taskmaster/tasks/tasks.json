@@ -9962,17 +9962,18 @@
         "description": "tm 215'in metot bazli taramasi uc ucu istemcisiz buldu: `DELETE /skills/{skillId}` · `DELETE /kb-articles/{articleId}` · `PUT /kb-settings`. Sonuncusu en agiri: public bilgi bankasi konsoldan HIC acilamiyor.",
         "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md`. DoD kapisi `CONVENTIONS.md` §1; git akisi §2; handoff §3. Sinirlar `CLAUDE.md`.\n\nKAYNAK: tm 215 (V8-DEADEND) `scripts/audit/endpoint-ui.cjs`'in `TRACKED` listesi. Kalemler orada gerekcesiyle yazili; bu gorev ucunun de sahibidir.\n\n(a) UC KALEM:\n1. `PUT /kb-settings` — EN ONEMLISI. `routes/kb.ts:453` `{ scopes: WRITE, minimumRole: 'admin' }` ile yaziyor; `KbArticleEditor.tsx:127` ucu yalniz OKUYOR ve `settings.enabled` false ise yazmayi kapatiyor. Yani ayari bilen tek ekran, o ayar yuzunden kilitli olan ekran — konsolda public KB'yi acan hicbir dugme yok. Kanit metni bunu \"the one screen that knows about the setting is the one blocked by it\" diye kaydediyor.\n2. `DELETE /kb-articles/{articleId}` — `KbArticleEditor` yayindan kaldirabiliyor (`status: 'draft'`), silemiyor. Yanlis bir makale gizleniyor ama calisma alanindan cikarilamiyor.\n3. `DELETE /skills/{skillId}` — `PlaybookPage.tsx:165/195` create, `SkillEditor.tsx:213` + `useSkillActiveToggle.ts:38` patch var; silme yok, liste birikiyor.\n\n(b) KAPSAM: YENI UC ACILMAZ, kontrat DEGISMEZ. Yalniz `apps/web` yuzeyi. KB ayarlari icin dogal yer `PlaybookPage`'in KB sekmesi (`kb-tabs.ts`) ya da `KbArticleList` basligi; `settings/PublicPages.tsx` ile CAKISMA kontrolu yapilmali — `kb-settings` ayri bir kayittir. Silme yuzeyleri icin emsal: tm 215'in `playbook/KbCategoryManager.tsx`'i (onay adimli satir ici silme) ve `DeveloperPortal.tsx`'in silme onayi.\n\n(c) TUZAK: `PUT /kb-settings` `minimumRole: 'admin'` — yuzey `Compliance.tsx`/`AccessReviewExport.tsx`'in nezaket gizlemesi desenini kullanmali (rol admin/viceowner/owner degilse dugme hic gorunmesin), ama sunucu gercek sinir olarak kalir. KB kapaliyken makale yazmayi engelleyen mevcut banner'in metni (\"Turn it on in KB settings\") artik gercek bir yere isaret etmeli.\n\n(d) KAPANIS OLCUTU: `pnpm audit:endpoint-ui` exit 0 ve kapatilan kalemler `TRACKED` listesinden CIKMIS (betik kalmis bir kaydi \"IS called now\" diye kirmizi yapar). `apps/api/src/config/endpoint-ui-audit.test.ts` degismeden yesil.",
         "testStrategy": "Web unit: KB ayarlari kaydediliyor (PUT govdesi dogru), rol yetersizken yuzey yok; makale silme onay istiyor ve DELETE cagiriyor; skill silme ayni. `pnpm audit:endpoint-ui` exit 0 + kapatilan kalemler `TRACKED`ten dusmus. E2E: public KB acildiktan sonra makale yazma banner'i kayboluyor (mevcut `playbook.spec.ts` akisina eklenebilir). Tam DoD kapisi exit 0.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-09-12T11:13:55.438Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-12T09:08:44.221Z",
+      "lastModified": "2026-09-12T11:13:55.439Z",
       "taskCount": 246,
-      "completedCount": 237,
+      "completedCount": 239,
       "tags": [
         "master"
       ]

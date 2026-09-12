@@ -270,6 +270,13 @@ export const playbook: Messages = {
   'playbook.editor.compiling': 'Compiling…',
   'playbook.editor.save': 'Save changes',
   'playbook.editor.saving': 'Saving…',
+  'playbook.editor.delete': 'Delete skill',
+  'playbook.editor.deleteTitle': 'Delete "{name}"?',
+  'playbook.editor.deleteDescription':
+    'This removes the skill and its run history. This cannot be undone.',
+  'playbook.editor.deleteConfirm': 'Delete for good',
+  'playbook.editor.deleting': 'Deleting…',
+  'playbook.editor.deleteCancel': 'Never mind',
   'playbook.editor.nameRequired': 'Give the skill a name before saving.',
   'playbook.editor.discardConfirm': 'This skill has unsaved changes. Leave and discard them?',
   'playbook.editor.runLogTitle': 'Run log',
@@ -547,4 +554,28 @@ export const playbook: Messages = {
   'playbook.kbEditor.reopenError': 'Something went wrong — reopen this article and try again.',
   'playbook.kbEditor.nameCategoryError': 'Name the new category, or pick an existing one.',
   'playbook.kbEditor.discardConfirm': 'Discard your unsaved changes?',
+  'playbook.kbEditor.delete': 'Delete',
+  'playbook.kbEditor.deleteConfirm': 'Delete for good',
+  'playbook.kbEditor.deleting': 'Deleting…',
+  'playbook.kbEditor.deleteCancel': 'Never mind',
+  'playbook.kbEditor.deleteExplainer':
+    'This removes the article for good, including its public page if it was published. This cannot be undone.',
+
+  // Public KB — on/off switch and address (KbSettings.tsx)
+  'playbook.kbSettings.title': 'Public KB settings',
+  'playbook.kbSettings.description':
+    'Turn the public knowledge base on and choose the address visitors read it at.',
+  'playbook.kbSettings.loading': 'Loading…',
+  'playbook.kbSettings.loadError': 'Could not load KB settings. Check that the API is reachable.',
+  'playbook.kbSettings.on': 'Public KB is on',
+  'playbook.kbSettings.off': 'Public KB is off',
+  'playbook.kbSettings.enableLabel': 'Enabled',
+  'playbook.kbSettings.restricted': 'Only an admin, vice owner or owner can change this.',
+  'playbook.kbSettings.publicSlugLabel': 'Public address',
+  'playbook.kbSettings.publicSlugPlaceholder': 'acme-help',
+  'playbook.kbSettings.publicSlugRequired': 'Give the KB a public address before turning it on.',
+  'playbook.kbSettings.siteTitleLabel': 'Site title',
+  'playbook.kbSettings.siteTitlePlaceholder': 'Acme Help Center',
+  'playbook.kbSettings.save': 'Save',
+  'playbook.kbSettings.saving': 'Saving…',
 };

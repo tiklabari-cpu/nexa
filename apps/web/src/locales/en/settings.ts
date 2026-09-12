@@ -196,6 +196,7 @@ export const settings: Messages = {
   'settings.customFields.empty.description':
     'Add fields your team needs on tickets and contacts, like a player id or a KYC status.',
   'settings.customFields.deleteAriaLabel': 'Delete field {label}',
+  'settings.customFields.labelFieldAriaLabel': '{label} label',
 
   // Chat forms (pre-chat/post-chat/ticket/prospect) — ChatFormsSettings.tsx
   'settings.chatForms.title': 'Chat forms',
@@ -739,6 +740,13 @@ export const settings: Messages = {
   'settings.scheduledExports.confirmCancelButton': 'Confirm cancel',
   'settings.scheduledExports.keepButton': 'Keep',
   'settings.scheduledExports.cancelAriaLabel': 'Cancel {group} export',
+  // EditScheduledExportModal (tm 215 TRACKED · tm 245)
+  'settings.scheduledExports.editButton': 'Edit',
+  'settings.scheduledExports.editAriaLabel': 'Edit {group} export',
+  'settings.scheduledExports.editModal.title': 'Edit scheduled export',
+  'settings.scheduledExports.editModal.description':
+    'Change the report group, frequency or recipients.',
+  'settings.scheduledExports.saving': 'Saving…',
 
   // Blocked IP addresses — BannedCustomerIps.tsx
   'settings.bannedIps.title': 'Blocked IP addresses',

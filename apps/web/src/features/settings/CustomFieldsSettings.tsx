@@ -59,11 +59,6 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
     onSuccess: invalidate,
   });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => api.delete(`/settings/custom-fields/${id}`),
-    onSuccess: invalidate,
-  });
-
   // Label, entity and type are all needed; the label is the one that can be
   // typed wrong, so it carries the field-under validation (FR-EK-A.1).
   const form = useForm({
@@ -219,35 +214,114 @@ export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactEl
           ) : (
             <ul className="divide-y divide-border">
               {list.data.items.map((field) => (
-                <li key={field.id} className="flex items-center gap-3 px-4 py-2.5">
-                  <span className="flex-1 text-sm font-medium">{field.label}</span>
-                  {field.show_in_table && (
-                    <span className="rounded-full bg-surface-2 px-2 py-0.5 text-2xs text-content-secondary">
-                      {t('settings.customFields.showInTableBadge')}
-                    </span>
-                  )}
-                  <span className="text-2xs text-content-tertiary">
-                    {entityLabel(field.entity)} · {field.type}
-                    {field.required ? t('settings.requiredSuffix') : ''}
-                  </span>
-                  {canEdit && (
-                    <button
-                      type="button"
-                      onClick={() => remove.mutate(field.id)}
-                      aria-label={t('settings.customFields.deleteAriaLabel', {
-                        label: field.label,
-                      })}
-                      className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
-                    >
-                      {t('settings.delete')}
-                    </button>
-                  )}
-                </li>
+                <CustomFieldRow
+                  key={field.id}
+                  field={field}
+                  entityLabel={entityLabel}
+                  canEdit={canEdit}
+                  onChanged={invalidate}
+                />
               ))}
             </ul>
           )}
         </Card>
       )}
     </Section>
+  );
+}
+
+/**
+ * One field: an inline-editable label (saved on blur, PATCH) plus its
+ * read-only shape (entity/type/required) and a Delete button. Renaming a
+ * label used to mean deleting the field and re-creating it — losing every
+ * value stored under it — because `PATCH /settings/custom-fields/{fieldId}`
+ * had no caller (tm 215 · tm 245). Shape follows `settings/Brands.tsx`: the
+ * server's rejection (a duplicate label, say) surfaces next to this row.
+ */
+function CustomFieldRow({
+  field,
+  entityLabel,
+  canEdit,
+  onChanged,
+}: {
+  field: CustomFieldDefinition;
+  entityLabel: (entity: string) => string;
+  canEdit: boolean;
+  onChanged: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const [label, setLabel] = useState(field.label);
+
+  const rename = useMutation({
+    mutationFn: (nextLabel: string) =>
+      api.patch<CustomFieldDefinition>(`/settings/custom-fields/${field.id}`, {
+        label: nextLabel,
+      }),
+    onSuccess: onChanged,
+    // Back to the label the server still holds, so the input never shows a
+    // value that was refused.
+    onError: () => setLabel(field.label),
+  });
+
+  const remove = useMutation({
+    mutationFn: () => api.delete(`/settings/custom-fields/${field.id}`),
+    onSuccess: onChanged,
+  });
+
+  function save(): void {
+    const trimmed = label.trim();
+    if (!trimmed || trimmed === field.label) {
+      setLabel(field.label);
+      return;
+    }
+    rename.mutate(trimmed);
+  }
+
+  const error = rename.error ?? remove.error;
+
+  return (
+    <li className="flex flex-col gap-1.5 px-4 py-2.5">
+      <div className="flex items-center gap-3">
+        <label htmlFor={`custom-field-label-${field.id}`} className="sr-only">
+          {t('settings.customFields.labelFieldAriaLabel', { label: field.label })}
+        </label>
+        <input
+          id={`custom-field-label-${field.id}`}
+          value={label}
+          disabled={!canEdit || rename.isPending}
+          onChange={(event) => setLabel(event.target.value)}
+          onBlur={save}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
+            if (event.key === 'Escape') setLabel(field.label);
+          }}
+          className="flex-1 rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none disabled:opacity-70"
+        />
+        {field.show_in_table && (
+          <span className="rounded-full bg-surface-2 px-2 py-0.5 text-2xs text-content-secondary">
+            {t('settings.customFields.showInTableBadge')}
+          </span>
+        )}
+        <span className="text-2xs text-content-tertiary">
+          {entityLabel(field.entity)} · {field.type}
+          {field.required ? t('settings.requiredSuffix') : ''}
+        </span>
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => remove.mutate()}
+            aria-label={t('settings.customFields.deleteAriaLabel', {
+              label: field.label,
+            })}
+            className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+          >
+            {t('settings.delete')}
+          </button>
+        )}
+      </div>
+
+      {error && <ErrorNotice message={t(errorMessageKey(error))} />}
+    </li>
   );
 }

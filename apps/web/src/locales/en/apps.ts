@@ -111,6 +111,8 @@ export const apps: Messages = {
   // AppRow
   'apps.developers.clientType.confidential': 'Confidential',
   'apps.developers.clientType.public': 'Public',
+  'apps.developers.edit': 'Edit',
+  'apps.developers.editFor': 'Edit {name}',
   'apps.developers.rotateSecretFor': 'Rotate secret for {name}',
   'apps.developers.rotateSecret': 'Rotate secret',
   'apps.developers.deleteFor': 'Delete {name}',
@@ -139,6 +141,14 @@ export const apps: Messages = {
   'apps.developers.form.selectScope': 'Select at least one scope.',
   'apps.developers.form.register': 'Register',
   'apps.developers.form.registering': 'Registering…',
+  'apps.developers.form.save': 'Save',
+  'apps.developers.form.saving': 'Saving…',
+
+  // EditAppModal (tm 215 TRACKED · tm 245) — name and redirect URIs only;
+  // client_type and scopes are not editable here, see the component's header.
+  'apps.developers.editModal.title': 'Edit {name}',
+  'apps.developers.editModal.description':
+    'Rename this app or update its redirect URIs. Client type and scopes are unchanged.',
 
   // SecretOncePanel — register + rotate both feed this
   'apps.developers.secret.registeredTitle': '{name} registered',

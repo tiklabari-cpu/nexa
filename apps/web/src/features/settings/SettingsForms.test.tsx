@@ -10,10 +10,11 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 vi.mock('../../lib/auth-store.js', async (importOriginal) => {
@@ -41,6 +42,7 @@ beforeEach(() => {
   api.get.mockReset();
   api.get.mockResolvedValue({ items: [] });
   api.post.mockReset();
+  api.patch.mockReset();
 });
 
 describe('CannedResponses validation', () => {
@@ -245,13 +247,93 @@ describe('CustomFieldsSettings — show in table (FR-MOD-03.2.3)', () => {
     });
     renderComponent(<CustomFieldsSettings canEdit />);
 
-    const playerRow = (await screen.findByText('Player ID')).closest('li');
+    // The label is now an inline-editable input (rename surface, tm 245), so a
+    // row is found by its display value rather than by text content.
+    const playerRow = (await screen.findByDisplayValue('Player ID')).closest('li');
     expect(playerRow).not.toBeNull();
     expect(within(playerRow!).getByText('In Contacts table')).toBeInTheDocument();
 
-    const noteRow = screen.getByText('Internal note').closest('li');
+    const noteRow = screen.getByDisplayValue('Internal note').closest('li');
     expect(noteRow).not.toBeNull();
     expect(within(noteRow!).queryByText('In Contacts table')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * `PATCH /settings/custom-fields/{fieldId}` (tm 215 TRACKED · tm 245): a
+ * field could be created and deleted but never renamed, so correcting a typo
+ * in the label meant deleting the field and every value stored under it.
+ */
+describe('CustomFieldsSettings — rename (tm 245)', () => {
+  const FIELD = {
+    id: 'cf-1',
+    entity: 'contact' as const,
+    label: 'Player ID',
+    type: 'text' as const,
+    required: false,
+    form_placement: null,
+    show_in_table: false,
+  };
+
+  it('renames a field by PATCHing on blur', async () => {
+    api.get.mockResolvedValue({ items: [FIELD] });
+    api.patch.mockResolvedValue({ ...FIELD, label: 'Player identifier' });
+    renderComponent(<CustomFieldsSettings canEdit />);
+
+    const field = await screen.findByDisplayValue('Player ID');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'Player identifier');
+    await userEvent.tab();
+
+    await vi.waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/settings/custom-fields/cf-1', {
+        label: 'Player identifier',
+      }),
+    );
+  });
+
+  it('does not PATCH when a rename is blurred back to the same label', async () => {
+    api.get.mockResolvedValue({ items: [FIELD] });
+    renderComponent(<CustomFieldsSettings canEdit />);
+
+    const field = await screen.findByDisplayValue('Player ID');
+    await userEvent.click(field);
+    await userEvent.tab();
+
+    expect(api.patch).not.toHaveBeenCalled();
+  });
+
+  it('shows a rename rejection as an ErrorNotice next to the row', async () => {
+    api.get.mockResolvedValue({ items: [FIELD] });
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 409,
+        message: 'Another field already uses this label.',
+        requestId: '-',
+      }),
+    );
+    renderComponent(<CustomFieldsSettings canEdit />);
+
+    const field = await screen.findByDisplayValue('Player ID');
+    await userEvent.clear(field);
+    await userEvent.type(field, 'Balance');
+    await userEvent.tab();
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Check the highlighted fields and try again.',
+    );
+    // The draft reverts to the label the server still holds.
+    expect(await screen.findByDisplayValue('Player ID')).toBeInTheDocument();
+  });
+
+  it('offers no rename or delete surface to a read-only viewer', async () => {
+    api.get.mockResolvedValue({ items: [FIELD] });
+    renderComponent(<CustomFieldsSettings canEdit={false} />);
+
+    const field = await screen.findByDisplayValue('Player ID');
+    expect(field).toBeDisabled();
+    expect(screen.queryByRole('button', { name: /Delete/ })).not.toBeInTheDocument();
   });
 });
 

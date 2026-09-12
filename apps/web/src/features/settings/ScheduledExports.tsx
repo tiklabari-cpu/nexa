@@ -18,6 +18,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
+import { Modal } from '../../components/ui/index.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
@@ -46,6 +47,7 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
   const t = useTranslate();
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const [editTarget, setEditTarget] = useState<ScheduledExport | null>(null);
 
   const list = useQuery({
     queryKey: ['settings', 'scheduled-exports'],
@@ -245,6 +247,7 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
                     scheduledExport.group
                   }
                   canEdit={canEdit}
+                  onEdit={() => setEditTarget(scheduledExport)}
                   onCancel={() => remove.mutate(scheduledExport.id)}
                   cancelling={remove.isPending}
                 />
@@ -252,6 +255,19 @@ export function ScheduledExports({ canEdit }: { canEdit: boolean }): ReactElemen
             </ul>
           )}
         </Card>
+      )}
+
+      {editTarget && (
+        <EditScheduledExportModal
+          scheduledExport={editTarget}
+          groupOptions={groupOptions}
+          agentOptions={agentOptions}
+          onClose={() => setEditTarget(null)}
+          onSaved={() => {
+            setEditTarget(null);
+            invalidate();
+          }}
+        />
       )}
     </Section>
   );
@@ -273,12 +289,14 @@ function ScheduledExportRow({
   scheduledExport,
   groupLabel,
   canEdit,
+  onEdit,
   onCancel,
   cancelling,
 }: {
   scheduledExport: ScheduledExport;
   groupLabel: string;
   canEdit: boolean;
+  onEdit: () => void;
   onCancel: () => void;
   cancelling: boolean;
 }): ReactElement {
@@ -321,6 +339,17 @@ function ScheduledExportRow({
 
       <StatusDot tone={badge.tone} label={badge.label} />
 
+      {canEdit && !confirming && (
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={t('settings.scheduledExports.editAriaLabel', { group: groupLabel })}
+          className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+        >
+          {t('settings.scheduledExports.editButton')}
+        </button>
+      )}
+
       {canEdit &&
         (confirming ? (
           <span className="flex items-center gap-2">
@@ -354,5 +383,146 @@ function ScheduledExportRow({
           </button>
         ))}
     </li>
+  );
+}
+
+/**
+ * Edit a schedule's report group, frequency or recipients (tm 215 TRACKED ·
+ * tm 245) — `PATCH /reports/scheduled-exports/{scheduledExportId}` had a
+ * server (recipients/group/frequency all accepted) but no caller: changing a
+ * single recipient meant cancelling the schedule and re-creating it. `format`
+ * and `enabled` are left alone — the create form above does not set them
+ * either, and toggling a schedule off is a separate action from editing what
+ * it sends.
+ */
+function EditScheduledExportModal({
+  scheduledExport,
+  groupOptions,
+  agentOptions,
+  onClose,
+  onSaved,
+}: {
+  scheduledExport: ScheduledExport;
+  groupOptions: ReportGroupOption[];
+  agentOptions: AgentOption[];
+  onClose: () => void;
+  onSaved: () => void;
+}): ReactElement {
+  const t = useTranslate();
+  const api = useApiClient();
+  const [group, setGroup] = useState(scheduledExport.group);
+  const [frequency, setFrequency] = useState<ScheduledExportFrequency>(scheduledExport.frequency);
+  const [recipients, setRecipients] = useState<Set<string>>(new Set(scheduledExport.recipients));
+
+  const update = useMutation({
+    mutationFn: () =>
+      api.patch<ScheduledExport>(`/reports/scheduled-exports/${scheduledExport.id}`, {
+        group,
+        frequency,
+        recipients: Array.from(recipients),
+      }),
+    onSuccess: onSaved,
+  });
+
+  function toggleRecipient(email: string): void {
+    setRecipients((current) => {
+      const next = new Set(current);
+      if (next.has(email)) next.delete(email);
+      else next.add(email);
+      return next;
+    });
+  }
+
+  const canSave = group !== '' && recipients.size > 0;
+
+  return (
+    <Modal
+      onClose={onClose}
+      title={t('settings.scheduledExports.editModal.title')}
+      description={t('settings.scheduledExports.editModal.description')}
+      className="w-[26rem]"
+    >
+      <div className="flex flex-col gap-3">
+        <label htmlFor="edit-scheduled-export-group" className="flex flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('settings.scheduledExports.reportLabel')}
+          </span>
+          <select
+            id="edit-scheduled-export-group"
+            value={group}
+            onChange={(event) => setGroup(event.target.value)}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          >
+            {groupOptions.map((option) => (
+              <option key={option.id} value={option.id}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label htmlFor="edit-scheduled-export-frequency" className="flex flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('settings.scheduledExports.frequencyLabel')}
+          </span>
+          <select
+            id="edit-scheduled-export-frequency"
+            value={frequency}
+            onChange={(event) => setFrequency(event.target.value as ScheduledExportFrequency)}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          >
+            {FREQUENCIES.map((value) => (
+              <option key={value} value={value}>
+                {frequencyLabel(t, value)}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('settings.scheduledExports.recipientsLegend')}
+          </legend>
+          {agentOptions.length === 0 ? (
+            <p className="text-2xs text-content-tertiary">
+              {t('settings.scheduledExports.noActiveAgents')}
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
+              {agentOptions.map((agent) => (
+                <label key={agent.id} className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={recipients.has(agent.email)}
+                    onChange={() => toggleRecipient(agent.email)}
+                  />
+                  {agent.name}
+                </label>
+              ))}
+            </div>
+          )}
+        </fieldset>
+
+        {update.isError && <ErrorNotice message={t(errorMessageKey(update.error))} />}
+
+        <div className="mt-1 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('settings.cancel')}
+          </button>
+          <button
+            type="button"
+            disabled={!canSave || update.isPending}
+            onClick={() => update.mutate()}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          >
+            {update.isPending ? t('settings.scheduledExports.saving') : t('settings.save')}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }

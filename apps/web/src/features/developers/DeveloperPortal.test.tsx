@@ -15,7 +15,7 @@ import { FOOTER, isNavVisible } from '../../components/navigation.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
-  api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() },
+  api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
 let currentScopes: string[] = ['access_rules:rw'];
@@ -68,6 +68,7 @@ describe('DeveloperPortal', () => {
     currentScopes = ['access_rules:rw'];
     api.get.mockReset();
     api.post.mockReset();
+    api.patch.mockReset();
     api.delete.mockReset();
   });
 
@@ -181,6 +182,78 @@ describe('DeveloperPortal', () => {
     await waitFor(() =>
       expect(api.delete).toHaveBeenCalledWith(`/partner/apps/${registeredApp.client_id}`),
     );
+  });
+
+  /**
+   * `PATCH /partner/apps/{clientId}` (tm 215 TRACKED · tm 245): the portal
+   * could register, rotate and delete an app but never edit one, so a new
+   * redirect URI cost the client id and every token issued under it.
+   */
+  describe('edit app', () => {
+    it('edits the name and redirect URIs by PATCHing the client', async () => {
+      api.get.mockResolvedValue({ items: [registeredApp] });
+      api.patch.mockResolvedValue({
+        ...registeredApp,
+        display_name: 'Acme Zap Connector v2',
+        redirect_uris: ['https://example.com/cb2'],
+      });
+      renderPortal();
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: `Edit ${registeredApp.display_name}` }),
+      );
+      const dialog = screen.getByRole('dialog', { name: `Edit ${registeredApp.display_name}` });
+
+      const nameField = within(dialog).getByLabelText('App name');
+      await userEvent.clear(nameField);
+      await userEvent.type(nameField, 'Acme Zap Connector v2');
+
+      const urisField = within(dialog).getByLabelText('Redirect URIs');
+      await userEvent.clear(urisField);
+      await userEvent.type(urisField, 'https://example.com/cb2');
+
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      await waitFor(() =>
+        expect(api.patch).toHaveBeenCalledWith(`/partner/apps/${registeredApp.client_id}`, {
+          display_name: 'Acme Zap Connector v2',
+          redirect_uris: ['https://example.com/cb2'],
+        }),
+      );
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('dialog', { name: `Edit ${registeredApp.display_name}` }),
+        ).not.toBeInTheDocument(),
+      );
+    });
+
+    it('reflects a server rejection as a visible error, dialog stays open', async () => {
+      api.get.mockResolvedValue({ items: [registeredApp] });
+      api.patch.mockRejectedValue(
+        new ApiClientError({
+          type: 'validation',
+          status: 400,
+          message: 'redirect_uri "javascript:alert(1)" is not acceptable: only https is allowed',
+          requestId: 'req_test',
+        }),
+      );
+      renderPortal();
+
+      await userEvent.click(
+        await screen.findByRole('button', { name: `Edit ${registeredApp.display_name}` }),
+      );
+      const dialog = screen.getByRole('dialog', { name: `Edit ${registeredApp.display_name}` });
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+      await waitFor(() =>
+        expect(within(dialog).getByRole('alert')).toHaveTextContent(
+          'redirect_uri "javascript:alert(1)" is not acceptable: only https is allowed',
+        ),
+      );
+      expect(
+        screen.getByRole('dialog', { name: `Edit ${registeredApp.display_name}` }),
+      ).toBeInTheDocument();
+    });
   });
 
   describe('tabs', () => {

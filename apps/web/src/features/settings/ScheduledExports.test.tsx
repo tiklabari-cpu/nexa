@@ -10,11 +10,12 @@
  * row leaves the list.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const { api } = vi.hoisted(() => ({
@@ -110,6 +111,7 @@ function mockGet(path: string): unknown {
 beforeEach(() => {
   api.get.mockReset();
   api.post.mockReset();
+  api.patch.mockReset();
   api.delete.mockReset();
   api.get.mockImplementation(mockGet);
   api.delete.mockResolvedValue(undefined);
@@ -235,7 +237,7 @@ describe('ScheduledExports', () => {
     );
   });
 
-  it('offers no create form or cancel controls to a read-only viewer', async () => {
+  it('offers no create form, edit or cancel controls to a read-only viewer', async () => {
     api.get.mockImplementation((path: string) => {
       if (path === '/reports/scheduled-exports')
         return Promise.resolve({ items: [SCHEDULED_EXPORTS[0]] });
@@ -250,6 +252,85 @@ describe('ScheduledExports', () => {
 
     expect(screen.queryByRole('button', { name: 'Schedule export' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Cancel .* export/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Edit .* export/ })).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * `PATCH /reports/scheduled-exports/{scheduledExportId}` (tm 215 TRACKED ·
+ * tm 245): a schedule could be created and cancelled but never edited, so
+ * changing a single recipient meant rebuilding the whole schedule.
+ */
+describe('ScheduledExports — edit (tm 245)', () => {
+  function mockRow(): void {
+    api.get.mockImplementation((path: string) => {
+      if (path === '/reports/scheduled-exports')
+        return Promise.resolve({ items: [SCHEDULED_EXPORTS[0]] });
+      if (path === '/reports/groups') return Promise.resolve(GROUPS);
+      if (path === '/agents') return Promise.resolve(AGENTS);
+      if (path.startsWith('/reports/scheduled-exports/se-1/runs'))
+        return Promise.resolve({ items: [] });
+      throw new Error(`unexpected GET ${path}`);
+    });
+  }
+
+  it('edits a schedule by PATCHing the group, frequency and recipients', async () => {
+    mockRow();
+    api.patch.mockResolvedValue({ ...SCHEDULED_EXPORTS[0], frequency: 'weekly' });
+    renderComponent(<ScheduledExports canEdit />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Overview export' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit scheduled export' });
+
+    await userEvent.selectOptions(within(dialog).getByLabelText('Frequency'), 'weekly');
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Grace Hopper' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/reports/scheduled-exports/se-1', {
+        group: 'overview',
+        frequency: 'weekly',
+        recipients: ['ada@example.com', 'grace@example.com'],
+      }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole('dialog', { name: 'Edit scheduled export' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('keeps Save disabled once every recipient is unchecked', async () => {
+    mockRow();
+    renderComponent(<ScheduledExports canEdit />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Overview export' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit scheduled export' });
+
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Ada Lovelace' }));
+    expect(within(dialog).getByRole('button', { name: 'Save' })).toBeDisabled();
+  });
+
+  it('shows a server rejection next to the form and keeps the dialog open', async () => {
+    mockRow();
+    api.patch.mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message: 'recipients must be on the team roster.',
+        requestId: 'req_test',
+      }),
+    );
+    renderComponent(<ScheduledExports canEdit />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Overview export' }));
+    const dialog = screen.getByRole('dialog', { name: 'Edit scheduled export' });
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Check the highlighted fields and try again.',
+    );
+    expect(screen.getByRole('dialog', { name: 'Edit scheduled export' })).toBeInTheDocument();
   });
 });
 

@@ -88,6 +88,8 @@ export const apps: Messages = {
 
   'apps.developers.clientType.confidential': 'Gizli',
   'apps.developers.clientType.public': 'Genel',
+  'apps.developers.edit': 'Düzenle',
+  'apps.developers.editFor': '{name} düzenle',
   'apps.developers.rotateSecretFor': '{name} için sırrı yenile',
   'apps.developers.rotateSecret': 'Sırrı yenile',
   'apps.developers.deleteFor': '{name} sil',
@@ -116,6 +118,12 @@ export const apps: Messages = {
   'apps.developers.form.selectScope': 'En az bir kapsam seçin.',
   'apps.developers.form.register': 'Kaydet',
   'apps.developers.form.registering': 'Kaydediliyor…',
+  'apps.developers.form.save': 'Kaydet',
+  'apps.developers.form.saving': 'Kaydediliyor…',
+
+  'apps.developers.editModal.title': '{name} düzenle',
+  'apps.developers.editModal.description':
+    'Bu uygulamayı yeniden adlandırın veya yönlendirme URI’lerini güncelleyin. İstemci türü ve kapsamlar değişmez.',
 
   'apps.developers.secret.registeredTitle': '{name} kaydedildi',
   'apps.developers.secret.rotatedTitle': '{name} sırrı yenilendi',

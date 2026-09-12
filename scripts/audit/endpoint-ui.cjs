@@ -313,27 +313,6 @@ const INDIRECT = [
  */
 const TRACKED = [
   {
-    op: 'PATCH /settings/custom-fields/{fieldId}',
-    owner: 'tm 245',
-    reason:
-      'a custom field can be created and deleted from Settings, never renamed or re-ordered — ' +
-      'correcting a typo means deleting the field and the values under it.',
-  },
-  {
-    op: 'PATCH /reports/scheduled-exports/{scheduledExportId}',
-    owner: 'tm 245',
-    reason:
-      'a scheduled export can be created and deleted, never edited: changing one recipient ' +
-      'means recreating the schedule.',
-  },
-  {
-    op: 'PATCH /partner/apps/{clientId}',
-    owner: 'tm 245',
-    reason:
-      'the developer portal registers, rotates and deletes an app but cannot edit one — a new ' +
-      'redirect URI costs the client id and every token issued under it.',
-  },
-  {
     op: 'DELETE /skills/{skillId}',
     owner: 'tm 246',
     reason:

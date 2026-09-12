@@ -190,6 +190,7 @@ export const settings: Messages = {
   'settings.customFields.empty.description':
     'Ekibinizin talep ve kişilerde ihtiyaç duyduğu alanları ekleyin — bir oyuncu kimliği ya da KYC durumu gibi.',
   'settings.customFields.deleteAriaLabel': '{label} alanını sil',
+  'settings.customFields.labelFieldAriaLabel': '{label} etiketi',
 
   // Sohbet formları (öncesi/sonrası/talep/aday) — ChatFormsSettings.tsx
   'settings.chatForms.title': 'Sohbet formları',
@@ -740,6 +741,12 @@ export const settings: Messages = {
   'settings.scheduledExports.confirmCancelButton': 'İptali onayla',
   'settings.scheduledExports.keepButton': 'Koru',
   'settings.scheduledExports.cancelAriaLabel': '{group} dışa aktarımını iptal et',
+  'settings.scheduledExports.editButton': 'Düzenle',
+  'settings.scheduledExports.editAriaLabel': '{group} dışa aktarımını düzenle',
+  'settings.scheduledExports.editModal.title': 'Zamanlanmış dışa aktarımı düzenle',
+  'settings.scheduledExports.editModal.description':
+    'Rapor grubunu, sıklığı veya alıcıları değiştirin.',
+  'settings.scheduledExports.saving': 'Kaydediliyor…',
 
   // Engellenen IP adresleri — BannedCustomerIps.tsx
   'settings.bannedIps.title': 'Engellenen IP adresleri',

@@ -100,6 +100,7 @@ function DeveloperPortalContent(): ReactElement {
   const [tab, setTab] = useState<TabId>('apps');
   const [registerOpen, setRegisterOpen] = useState(false);
   const [newRegistration, setNewRegistration] = useState<PartnerAppRegistration | null>(null);
+  const [editTarget, setEditTarget] = useState<PartnerApp | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<PartnerApp | null>(null);
   const [rotateTarget, setRotateTarget] = useState<PartnerApp | null>(null);
   const [newSecretRotation, setNewSecretRotation] = useState<PartnerAppSecretRotation | null>(null);
@@ -182,6 +183,7 @@ function DeveloperPortalContent(): ReactElement {
                         key={app.client_id}
                         app={app}
                         t={t}
+                        onEdit={() => setEditTarget(app)}
                         onDelete={() => setDeleteTarget(app)}
                         onRotate={() => setRotateTarget(app)}
                       />
@@ -219,6 +221,8 @@ function DeveloperPortalContent(): ReactElement {
         />
       )}
 
+      {editTarget && <EditAppModal app={editTarget} onClose={() => setEditTarget(null)} />}
+
       {deleteTarget && <DeleteAppModal app={deleteTarget} onClose={() => setDeleteTarget(null)} />}
 
       {rotateTarget && (
@@ -247,11 +251,13 @@ function DeveloperPortalContent(): ReactElement {
 function AppRow({
   app,
   t,
+  onEdit,
   onDelete,
   onRotate,
 }: {
   app: PartnerApp;
   t: TFunction;
+  onEdit: () => void;
   onDelete: () => void;
   onRotate: () => void;
 }): ReactElement {
@@ -264,6 +270,14 @@ function AppRow({
             ? t('apps.developers.clientType.confidential')
             : t('apps.developers.clientType.public')}
         </span>
+        <button
+          type="button"
+          onClick={onEdit}
+          aria-label={t('apps.developers.editFor', { name: app.display_name })}
+          className="shrink-0 rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
+        >
+          {t('apps.developers.edit')}
+        </button>
         {/* A public client authenticates with PKCE alone and has no secret to
             reissue (server 400s it) — hiding the button here is a known,
             client-side-only fact, not a second guess of a workspace decision. */}
@@ -486,6 +500,131 @@ function RegisterAppModal({
             {form.isSubmitting
               ? t('apps.developers.form.registering')
               : t('apps.developers.form.register')}
+          </button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/**
+ * Edit an app's name or redirect URIs (tm 215 TRACKED · tm 245) —
+ * `PATCH /partner/apps/{clientId}` had a server (`narrowScopes` applies to it
+ * exactly as it does to registration, so this surface opens no escalation
+ * path) but no caller: adding a redirect URI meant deleting the app and
+ * re-registering it, which costs the client id and every token issued under
+ * it. `client_type` and `scopes` are deliberately not editable here — the
+ * same two reasons `patchBody` on the route leaves `client_type` out and
+ * treats `scopes` as its own optional field: downgrading a confidential
+ * client would silently strip its secret requirement, and re-scoping is a
+ * separate, higher-stakes decision from renaming an app or fixing a callback.
+ */
+function EditAppModal({ app, onClose }: { app: PartnerApp; onClose: () => void }): ReactElement {
+  const api = useApiClient();
+  const t = useTranslate();
+  const queryClient = useQueryClient();
+
+  const update = useMutation({
+    mutationFn: (body: { display_name: string; redirect_uris: string[] }) =>
+      api.patch<PartnerApp>(`/partner/apps/${app.client_id}`, body),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: PARTNER_APPS_KEY });
+      onClose();
+    },
+  });
+
+  const form = useForm({
+    initial: { display_name: app.display_name, redirect_uris: app.redirect_uris.join('\n') },
+    validators: {
+      display_name: required(t('apps.developers.form.nameRequired')),
+      redirect_uris: redirectUrisRequired(t('apps.developers.form.redirectUrisRequired')),
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      try {
+        await update.mutateAsync({
+          display_name: values.display_name.trim(),
+          redirect_uris: splitList(values.redirect_uris),
+        });
+      } catch (error) {
+        // Same reasoning as the register form: the server names exactly which
+        // redirect URI was rejected and why.
+        if (error instanceof ApiClientError && error.type === 'validation') {
+          // i18n-ignore: server-specific validation detail, see RegisterAppModal.
+          setSubmitError(error.message);
+          return;
+        }
+        setSubmitError(t(errorMessageKey(error)));
+      }
+    },
+  });
+
+  const nameError = form.errorFor('display_name');
+  const urisError = form.errorFor('redirect_uris');
+
+  return (
+    <Modal
+      onClose={onClose}
+      title={t('apps.developers.editModal.title', { name: app.display_name })}
+      description={t('apps.developers.editModal.description')}
+      className="w-[30rem]"
+    >
+      <form onSubmit={form.handleSubmit} noValidate className="flex flex-col gap-3">
+        <label htmlFor="partner-app-edit-name" className="flex flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('apps.developers.form.appName')}
+          </span>
+          <input
+            id="partner-app-edit-name"
+            value={form.values.display_name}
+            onChange={(event) => form.setValue('display_name', event.target.value)}
+            onBlur={() => form.blur('display_name')}
+            aria-invalid={nameError ? true : undefined}
+            aria-describedby={nameError ? 'partner-app-edit-name-error' : undefined}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 text-sm outline-none"
+          />
+          <FieldError id="partner-app-edit-name-error" message={nameError} />
+        </label>
+
+        <label htmlFor="partner-app-edit-redirect-uris" className="flex flex-col gap-1">
+          <span className="text-2xs font-medium uppercase tracking-wide text-content-tertiary">
+            {t('apps.developers.form.redirectUris')}
+          </span>
+          <textarea
+            id="partner-app-edit-redirect-uris"
+            rows={3}
+            value={form.values.redirect_uris}
+            onChange={(event) => form.setValue('redirect_uris', event.target.value)}
+            onBlur={() => form.blur('redirect_uris')}
+            aria-invalid={urisError ? true : undefined}
+            aria-describedby={urisError ? 'partner-app-edit-redirect-uris-error' : undefined}
+            className="rounded-md border border-border bg-inset px-2 py-1.5 font-mono text-2xs outline-none"
+          />
+        </label>
+        <FieldError id="partner-app-edit-redirect-uris-error" message={urisError} />
+        <p className="-mt-2 text-2xs text-content-tertiary">
+          {t('apps.developers.form.oneUriPerLine')}
+        </p>
+
+        {form.submitError && (
+          <p role="alert" className="text-2xs text-danger">
+            {form.submitError}
+          </p>
+        )}
+
+        <div className="mt-1 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-border px-3 py-1.5 text-sm"
+          >
+            {t('apps.common.cancel')}
+          </button>
+          <button
+            type="submit"
+            disabled={!form.canSubmit}
+            className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600 disabled:opacity-50"
+          >
+            {form.isSubmitting ? t('apps.developers.form.saving') : t('apps.developers.form.save')}
           </button>
         </div>
       </form>

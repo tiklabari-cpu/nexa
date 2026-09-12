@@ -43,7 +43,20 @@ export default defineConfig({
     baseURL: WEB,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
-    video: 'retain-on-failure',
+    // No video, because a video turns a stalled clock into teardown work (tm 251).
+    // The recorder stamps frames with wall-clock time and fills every gap with
+    // copies of the last frame at 25 fps, and closing the context waits until
+    // ffmpeg has encoded all of them. The laptop hibernated on a critical battery
+    // for 20.6 minutes in the middle of a run; on wake that was ~30,900 frames at
+    // the ~280/s this machine encodes, so the red test's own teardown overran its
+    // 45 s slot and the file sat at 21.6 minutes. Freezing the worker for 12
+    // minutes reproduces both lines of that failure exactly, and with video off
+    // the teardown is immediate. Nothing was lost by it: the retained trace
+    // already carries the screencast, DOM snapshots and network log, and in that
+    // failure the video never got written anyway, because the teardown timed out
+    // first. A freeze is reported as one, next to the red it causes, by the
+    // `hostFreezeWatch` fixture in `tests/fixtures.ts`.
+    video: 'off',
     actionTimeout: 10_000,
   },
 

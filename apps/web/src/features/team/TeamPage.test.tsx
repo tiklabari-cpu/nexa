@@ -350,6 +350,57 @@ describe('Team roster — availability arrives over the socket (FR-MOD-04.5 · F
     await waitFor(() => expect(rosterRow('Alex Moreau')).toHaveTextContent('Not accepting'));
   });
 
+  it('a push that lands while the first roster read is in flight is not lost (tm 247)', async () => {
+    // The half of the race the in-place fold cannot cover, and the one the e2e
+    // suite kept tripping over (§D163). `setQueryData` needs something to fold
+    // into; when the roster's *first* read is still in flight there is no cache
+    // entry, the updater is handed `undefined`, and the push is dropped on the
+    // floor. The reply then lands carrying the value the server produced
+    // *before* the write committed and is cached fresh for the whole
+    // `staleTime` — 30 s of a screen insisting an agent accepts chats after
+    // they stopped.
+    //
+    // Measured in a browser before this was fixed (tm 247): roster reply
+    // produced at 195 ms, push at 1451 ms, stale reply delivered at 2020 ms,
+    // row still reading "Accepting chats" at 10319 ms while the server held
+    // `not_accepting_chats`.
+    let items = [agent('A1', { name: 'Alex Moreau' })];
+    let releaseRoster: () => void = () => {};
+    const rosterHeld = new Promise<void>((resolve) => {
+      releaseRoster = resolve;
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        if (url.includes('/agents?status=suspended')) return jsonResponse({ items: [] });
+        if (url.includes('/agents')) {
+          // Snapshot first, await second: this is a reply the server produced
+          // from pre-write state and only then took its time reaching us.
+          const produced = items;
+          await rosterHeld;
+          return jsonResponse({ items: produced });
+        }
+        if (url.includes('/ai-agents')) return jsonResponse({ items: [] });
+        if (url.includes('/groups')) return jsonResponse({ items: [] });
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
+    const client = renderWithClient();
+
+    // The push overtakes the reply, so there is no roster to fold it into.
+    act(() => {
+      applyPush(client, 'routing_status_set', { agent_id: 'A1', status: 'not_accepting_chats' });
+    });
+
+    // The server has committed by the time it publishes, so whatever is asked
+    // after this point answers with the new value.
+    items = [agent('A1', { name: 'Alex Moreau', routing_status: 'not_accepting_chats' })];
+    releaseRoster();
+
+    await screen.findByRole('table', { name: 'Agents on this licence' });
+    await waitFor(() => expect(rosterRow('Alex Moreau')).toHaveTextContent('Not accepting'));
+  });
+
   it('leaves the roster alone when the push names an agent it does not hold', async () => {
     stubMutableRoster([agent('A1', { name: 'Alex Moreau' })]);
     const client = renderWithClient();

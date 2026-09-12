@@ -463,3 +463,50 @@ export async function freeARoutingSlot(
   // `view=all` sorts newest first, so the tail is the oldest.
   for (const chat of held.slice(-surplus)) await archiveChat(request, auth, chat.id);
 }
+
+/**
+ * A conversation whose customer can actually be written to, resolved through
+ * the API (tm 247).
+ *
+ * Specs that need one used to take "whatever is first in the conversation
+ * list", which is a statement about the whole suite's history rather than about
+ * the fixture: the list is ordered by last activity, and every widget, channel
+ * and campaign spec files another anonymous visitor on its way past. Measured
+ * (tm 247, §D163): `telegram.spec.ts` on its own is enough to put
+ * `bisiklet_fan_316884` — a handle with no e-mail address — at the top, and the
+ * ticket pane then renders no "Notify the customer" picker at all, because
+ * there is nowhere for a notice to go. Two files reproduced exactly the failure
+ * the full suite gave twice.
+ *
+ * Returned as a chat id for `/app/inbox?chat=<id>` rather than as a row to
+ * click: the transcript is fetched by id (`useChat`), so the deep link does not
+ * care which page of the list the conversation ended up on either.
+ */
+export async function chatOfAReachableCustomer(request: APIRequestContext): Promise<string> {
+  const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+  const directory = await request.get(`${API_BASE}/customers?segment=all&limit=100`, {
+    headers: auth,
+  });
+  expect(directory.ok(), `customer directory failed: ${directory.status()}`).toBe(true);
+  const people = (
+    (await directory.json()) as { items: Array<{ id: string; name: string; email: string | null }> }
+  ).items.filter((person) => person.email);
+  expect(people.length, 'no customer in the directory carries an e-mail address').toBeGreaterThan(
+    0,
+  );
+
+  for (const person of people) {
+    const theirs = await request.get(
+      `${API_BASE}/chats?view=all&customer_id=${person.id}&limit=1`,
+      { headers: auth },
+    );
+    expect(theirs.ok(), `list chats failed: ${theirs.status()}`).toBe(true);
+    const chat = ((await theirs.json()) as { items: Array<{ id: string }> }).items[0];
+    if (chat) return chat.id;
+  }
+
+  throw new Error(
+    `none of the ${people.length} customers with an e-mail address has a conversation`,
+  );
+}

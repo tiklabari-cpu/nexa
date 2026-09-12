@@ -9589,10 +9589,11 @@
         "description": "Kabul kriterinin iki yarisindan biri eksik: 'Menu/uygulama secici acilir; nav pin/unpin'. Pin/unpin tam ve erisilebilir; logodan acilan bir menu yok.",
         "details": "PENCERE PROTOKOLU: `TASK-RUNNER-PROMPT.md` (bootstrap -> build -> dogrulama -> kapanis).\nDoD kapisi `CONVENTIONS.md` §1; git akisi §2; handoff bicimi §4. Sinirlar `CLAUDE.md`.\nBu gorev PLAN.md §6D (FAZ 8 — Kalan Gereksinim Borclari, §D149) kaleminin Task Master karsiligidir.\nDIKKAT: PLAN.md ~2,3 MB — BASTAN SONA OKUMA. Hedef satiri `grep -n` ile bul, cevresindeki ~30\nsatiri oku. Kanit metni tablo hucresinde DEGIL, `## K. Kanit Gecmisi` altindaki `#### K<kod>`\nblogundadir (CONVENTIONS §1.2) — ve gecerli olan blogun SON maddesidir, ortadaki `◐` glifleri\ntarihcedir.\nKAYITLI KARAR ARAMASI (§D149un dersi): damgayi degistirmeden once `grep -n \"D1[0-9][0-9] (\" PLAN.md`\nile ilgili kodu ara ve `git log --oneline --since=2026-08-30` ile denetimden SONRA is yapilmis mi bak.\nNUMARALANDIRMA: bu faz **8**dir — `Faz-7` §7Cnindir (tm 175-184). Onek `V8-`, `V7-` KULLANMA.\n\n(a) GEREKCE + KANIT:\nPRD `urun-gereksinim-dokumani-PRD.md:483`: \"Logo/Hamburger — marka + nav daraltma/genisletme\" ·\nKK: \"MENU/UYGULAMA SECICI ACILIR; nav pin/unpin\".\nKod `apps/web/src/components/AppShell.tsx`: `:198` `<NavPinToggle pinned={pinned} .../>` (logo\nkonumundaki dugme YALNIZ rayi pinliyor/acıyor; `:294` tanimi — `aria-expanded`/`aria-controls` +\nEnter/Space, erisilebilirlik TAM) · `:200` `<BrandSwitcher />` (`:577` tanimi) ve o da TEK LISANS\nICINDEKI MARKALARI degistiriyor — PRDnin sordugu \"uygulama/menu secici\" DEGIL.\n`#### K01.1` (PLAN.md ~6540) denetim maddesi birebir: \"logo bir menu acmiyor: 'Menu/uygulama secici\nacilir' karsiligi yok. Shelldeki tek secici BrandSwitcher ve o da tek license icindeki markalari...\"\nPLAN satiri 280, oncelik `Should/Could`.\n\n(b) DOKUNULACAK DOSYALAR:\n- `apps/web/src/components/AppShell.tsx` — `NavPinToggle` + `BrandSwitcher` cevresi.\n- `apps/web/src/components/ui/Dropdown.tsx` — MEVCUT primitif; klavye roving / Escape /\n  disari-tiklama orada kanitli. Ucuncu-parti bagimlilik EKLEME (tm 189.5 emsali).\n- `apps/web/src/locales/{en,tr}/*.ts` + gerekiyorsa `i18n-coverage.test.ts` `TRANSLATED_FILES`.\n\n(c) SIRA: menunun ICERIGINE karar ver (workspace/marka secimi + hesap kisayollari; yeni uc\nGEREKMIYORSA ACMA) -> `Dropdown` ile kur -> `BrandSwitcher`i menunun ICINE al (KALDIRMA) ->\nunit + a11y.\n\n(d) BILINEN TUZAKLAR:\n- `NavPinToggle`in `aria-expanded`/`aria-controls`i RAYA aittir; menunun kendi `aria-expanded`i\n  AYRIDIR. Ikisini ayni dugmede birlestirirsen ekran okuyucu icin anlam bozulur — pin/unpin ve\n  menu acma AYRI etkilesimler olmali (ya ayri dugmeler ya acik bir birincil/ikincil ayrimi).\n- Menu icindeki bir baglantinin etiketi baska bir dugmenin `aria-label`iyle CAKISIRSA\n  `getByRole`/`getByLabelText` sorgulari baska testlerde kirilir (bilinen tuzak).\n- `hover:underline` tasiyan metin-ici baglantilar axe `link-in-text-block` kuralini dusurur.\n\n(e) KAPSAM SINIRI: `BrandSwitcher`in marka degistirme DAVRANISI degismez · yeni backend uc\nACILMAZ · komut paleti (⌘K, 01.1.3) DEGISMEZ · nav pin/unpin davranisi DEGISMEZ.\n(f) KAPANIS: DoD kapisi yesil -> commit + push (Conventional Commit; PLAN.md satir damgasi\n`◐ → ✅` + `#### K<kod>` bloguna kanit maddesi + HANDOFF.md girisi AYNI commite girer) ->\nTask Master `done`. Calisma alanini kirli BIRAKMA.",
         "testStrategy": "Tam DoD kapisi exit 0 · `audit:req-coverage` exit 0 ve `FR-MOD-01.1.1` site sayisi ARTMIS. Birim (`apps/web`, `--maxWorkers=4`): (1) logo/menu tetikleyicisi `aria-expanded` tasiyor ve tiklaninca `true` oluyor; (2) klavye: Enter/Space acar, ok tuslari gezer, Escape kapatir ve odak tetikleyiciye DONER; (3) disari tiklama kapatir; (4) `BrandSwitcher`in mevcut marka degistirme testi YESIL kalir (regresyon); (5) pin/unpin testi degismeden yesil. a11y: e2e axe kosusunda iki temada da blocking ihlal 0 (ozellikle `link-in-text-block` ve `aria-*` kurallari). e2e: menu acilip bir ogeye gidildigi kanit PNG'siyle.",
-        "status": "pending",
+        "status": "done",
         "dependencies": [],
         "priority": "low",
-        "subtasks": []
+        "subtasks": [],
+        "updatedAt": "2026-09-12T22:49:56.533Z"
       },
       {
         "id": "218",
@@ -10032,9 +10033,9 @@
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-12T21:53:10.022Z",
+      "lastModified": "2026-09-12T22:49:56.533Z",
       "taskCount": 251,
-      "completedCount": 245,
+      "completedCount": 246,
       "tags": [
         "master"
       ]

@@ -5,11 +5,16 @@
  * pure function covered exhaustively in the web unit suite, and the e-mail
  * channel by an API integration test. What only a real browser can prove is
  * that the Settings surface exists and that turning notifications off actually
- * sticks: the preference lives in `localStorage`, so it must survive a reload
- * and gate the per-channel controls beneath it.
+ * sticks: it must survive a reload and gate the per-channel controls beneath it.
+ *
+ * The preference lives on the account, not in the browser (13.7-c) — so unlike
+ * `localStorage`, it is shared by every test that signs in as the demo owner,
+ * and a write this file loses is a write the next test inherits (tm 250).
  */
+import type { Page, Response } from '@playwright/test';
 import {
   ACME_OWNER,
+  API_BASE,
   expect,
   openWidget,
   ownerAccessTokenFor,
@@ -20,7 +25,22 @@ import {
 /** The RTM gateway's admin `/health`, where open connections are counted. */
 const RTM_BASE = 'http://localhost:4001';
 
-test.describe('notification settings', () => {
+const PREFERENCES_PATH = '/agents/me/notification-preferences';
+
+/**
+ * The server's answer to one write of the master switch. Start waiting before
+ * the click: on an idle machine the response can land before the next line.
+ */
+function masterSwitchSaved(page: Page, enabled: boolean): Promise<Response> {
+  return page.waitForResponse(
+    (response) =>
+      response.request().method() === 'PUT' &&
+      response.url().endsWith(PREFERENCES_PATH) &&
+      (response.request().postDataJSON() as { enabled?: boolean } | null)?.enabled === enabled,
+  );
+}
+
+test.describe('notification settings (FR-MOD-13.8)', () => {
   test('the notifications surface toggles and the choice persists', async ({ agentPage }) => {
     await agentPage.goto('/app/settings');
 
@@ -45,10 +65,22 @@ test.describe('notification settings', () => {
     await section.scrollIntoViewIfNeeded();
     await agentPage.screenshot({ path: 'kanit/16-notifications-settings.png' });
 
+    // Every toggle here is optimistic: the checkbox moves before the PUT has
+    // left the browser, so asserting on the checkbox proves React state and
+    // nothing more. Navigating on that alone raced the write, and the race had
+    // two losers, measured by holding each write back with `page.route` (tm
+    // 250): a reload that cancels the "off" write fails the reload assertion
+    // below, and a teardown that cancels the "back on" write leaves the account
+    // silenced for the next test — which then watched a tab title that could
+    // never rise. One or the other, never both, which is why they alternated.
+    // Each write therefore waits for the server's own answer.
+
     // Turning the master off disables the channels under it — the negative path
     // an agent takes to go quiet.
+    const turnedOff = masterSwitchSaved(agentPage, false);
     await master.uncheck();
     await expect(sound).toBeDisabled();
+    expect(await (await turnedOff).json()).toMatchObject({ enabled: false });
 
     // The choice is stored, not just in React state: it survives a reload.
     await agentPage.reload();
@@ -58,12 +90,14 @@ test.describe('notification settings', () => {
     await expect(masterAfter).not.toBeChecked();
 
     // Put it back on so the shared demo workspace is left as it was found.
+    const turnedOn = masterSwitchSaved(agentPage, true);
     await masterAfter.check();
     await expect(masterAfter).toBeChecked();
+    expect(await (await turnedOn).json()).toMatchObject({ enabled: true });
   });
 });
 
-test.describe('notifications away from the inbox', () => {
+test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
   /**
    * The socket used to belong to `InboxPage`, so its lifetime was one route's
    * lifetime: an agent who opened Reports closed their connection and was told
@@ -102,6 +136,18 @@ test.describe('notifications away from the inbox', () => {
       expect(body.connections, 'admin /health must report the connection count').toBeDefined();
       return body.connections!;
     };
+
+    // The badge only rises for an account with notifications on, and the test
+    // above turns them off and back on for this same account. State that here
+    // rather than inherit it: when that restore was lost, this test read "Nexa"
+    // for twenty seconds with a healthy socket, and the red named the socket.
+    // Before `goto`, because the page caches the preference when it loads the
+    // profile — a write after that would not reach `decideNotification`.
+    const enabled = await request.put(`${API_BASE}${PREFERENCES_PATH}`, {
+      headers: { authorization: `Bearer ${adminToken}` },
+      data: { enabled: true },
+    });
+    expect(enabled.ok(), `notification preferences: ${enabled.status()}`).toBe(true);
 
     await agentPage.goto('/app/inbox');
     // The app's own report that the socket is up, so the test starts from a

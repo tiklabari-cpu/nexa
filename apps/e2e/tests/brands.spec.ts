@@ -56,6 +56,10 @@ test.describe('multibrand cross-brand isolation', () => {
       page.getByRole('region', { name: 'Website widgets' });
     // `exact` so it never collides with the "Brand colour" controls.
     const switcher = page.getByRole('button', { name: 'Brand', exact: true });
+    // The switcher now lives inside the logo's app menu (FR-MOD-01.1.1) rather
+    // than being its own rail icon — closed by default, so it must be opened
+    // before the switcher is reachable at all.
+    const openAppMenu = (): Promise<void> => page.getByRole('button', { name: 'App menu' }).click();
     // Scoped to the switcher's own listbox, not the page. A bare
     // `getByRole('option', { name: 'Default' })` matched three elements once
     // Settings grew a `<select>` whose first entry reads "Use the default (365
@@ -69,6 +73,7 @@ test.describe('multibrand cross-brand isolation', () => {
     // --- The default brand, selected on first load -----------------------------
     // The switcher exists at all only because the license has two brands — a
     // single-brand workspace renders no switcher (BrandSwitcher returns null).
+    await openAppMenu();
     await expect(switcher).toBeVisible();
     await expect(colourHex).toHaveValue(NORTHWIND.defaultColor);
     await expect(websites().getByText(NORTHWIND.defaultSite)).toBeVisible();

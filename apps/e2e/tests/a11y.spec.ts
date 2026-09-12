@@ -463,6 +463,28 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       /**
+       * The logo's app menu, open (FR-MOD-01.1.1).
+       *
+       * Closed by default, so the inbox scan above never renders its panel —
+       * this is the one place the apps-marketplace shortcut (and, on a
+       * multi-brand license, the nested brand switcher) is in the
+       * accessibility tree.
+       */
+      test('the app menu has no serious or critical violations', async ({
+        agentPage,
+      }, testInfo) => {
+        await pinTheme(agentPage, theme);
+        await agentPage.goto('/app/inbox');
+        await scanPanel(agentPage, 'App menu', theme, testInfo, async () => {
+          const trigger = agentPage.getByRole('button', { name: 'App menu' });
+          await expect(trigger).toBeVisible();
+          await trigger.click();
+          await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+          await expect(agentPage.getByRole('link', { name: 'Apps' })).toBeVisible();
+        });
+      });
+
+      /**
        * The composer's "Internal note" tab, *selected*.
        *
        * Not reachable from the inbox scan above, and that is the whole point:

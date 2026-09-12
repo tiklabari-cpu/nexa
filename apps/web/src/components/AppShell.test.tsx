@@ -67,6 +67,15 @@ const BRAND_A = { id: 'brand-a', name: 'Acme Support', is_default: true };
 const BRAND_B = { id: 'brand-b', name: 'Beta Line', is_default: false };
 
 /**
+ * Open the logo's app menu — `BrandSwitcher`'s own trigger renders inside its
+ * panel (FR-MOD-01.1.1), so nothing behind it is reachable until this menu is
+ * open, the same way a real click would have to go through it first.
+ */
+async function openAppMenu(user: ReturnType<typeof userEvent.setup>) {
+  await user.click(screen.getByRole('button', { name: 'App menu' }));
+}
+
+/**
  * Stubs `fetch` for `/brands`; every other path (e.g. the trial banner's
  * billing read) errors, same as the unstubbed real fetch these tests would
  * otherwise get — `!data` either way, so the banner still renders nothing.
@@ -651,6 +660,49 @@ describe('quick create (FR-MOD-01.1.5 · FR-MOD-04.1)', () => {
   });
 });
 
+describe('app menu (FR-MOD-01.1.1)', () => {
+  it('starts closed', () => {
+    renderShell();
+    expect(screen.getByRole('button', { name: 'App menu' })).toHaveAttribute(
+      'aria-expanded',
+      'false',
+    );
+  });
+
+  it('opens on click and offers the apps marketplace shortcut', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    const trigger = screen.getByRole('button', { name: 'App menu' });
+    await user.click(trigger);
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('link', { name: 'Apps' })).toHaveAttribute('href', '/app/apps');
+  });
+
+  it('closes on Escape and returns focus to the trigger', async () => {
+    const user = userEvent.setup();
+    renderShell();
+
+    const trigger = screen.getByRole('button', { name: 'App menu' });
+    await user.click(trigger);
+    expect(trigger).toHaveAttribute('aria-expanded', 'true');
+
+    await user.keyboard('{Escape}');
+
+    expect(trigger).toHaveAttribute('aria-expanded', 'false');
+    expect(trigger).toHaveFocus();
+  });
+
+  it('leaves the pin/unpin toggle as its own separate control', () => {
+    renderShell();
+    // Distinct accessible names — a single overloaded button would collapse
+    // "open the app menu" and "pin the rail" into one `aria-expanded`.
+    expect(screen.getByRole('button', { name: 'App menu' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Expand navigation' })).toBeInTheDocument();
+  });
+});
+
 describe('brand switcher', () => {
   beforeEach(() => {
     localStorage.removeItem(BRAND_KEY);
@@ -662,8 +714,10 @@ describe('brand switcher', () => {
   });
 
   it('stays hidden on a single-brand license', async () => {
+    const user = userEvent.setup();
     const fetchMock = stubBrands([BRAND_A]);
     renderShell();
+    await openAppMenu(user);
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'Brand' })).toBeNull();
@@ -673,6 +727,7 @@ describe('brand switcher', () => {
     const user = userEvent.setup();
     stubBrands([BRAND_A, BRAND_B]);
     renderShell();
+    await openAppMenu(user);
 
     await user.click(await screen.findByRole('button', { name: 'Brand' }));
     expect(screen.getByRole('option', { name: /Acme Support/ })).toHaveAttribute(
@@ -692,6 +747,7 @@ describe('brand switcher', () => {
     const user = userEvent.setup();
 
     renderShell();
+    await openAppMenu(user);
     await user.click(await screen.findByRole('button', { name: 'Brand' }));
 
     expect(screen.getByRole('option', { name: /Beta Line/ })).toHaveAttribute(
@@ -717,6 +773,7 @@ describe('brand switcher', () => {
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
     renderShell('/app/inbox', queryClient);
+    await openAppMenu(user);
     await user.click(await screen.findByRole('button', { name: 'Brand' }));
     await user.click(screen.getByRole('option', { name: /Beta Line/ }));
 
@@ -730,6 +787,7 @@ describe('brand switcher', () => {
     const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
 
     renderShell('/app/inbox', queryClient);
+    await openAppMenu(user);
     await user.click(await screen.findByRole('button', { name: 'Brand' }));
     await user.click(screen.getByRole('option', { name: /Acme Support/ }));
 

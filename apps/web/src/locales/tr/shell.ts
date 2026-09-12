@@ -20,6 +20,10 @@ export const shell: Messages = {
   'shell.account.theme.dark': 'Koyu',
   'shell.account.theme.light': 'Açık',
   'shell.brand': 'Marka',
+  // Uygulama menüsü (FR-MOD-01.1.1). Logonun tetikleyici etiketi + panelindeki,
+  // rayda kendi ikonu olmayan tek hedef.
+  'shell.menu': 'Uygulama menüsü',
+  'shell.menu.apps': 'Uygulamalar',
   'shell.sandbox.notice':
     'Kum havuzu çalışma alanı — burada hiçbir şey faturalandırılmaz ve hiçbiri gerçek veri değildir.',
   'shell.nav.expand': 'Gezinmeyi genişlet',

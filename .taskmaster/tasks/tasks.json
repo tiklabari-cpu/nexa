@@ -10023,18 +10023,18 @@
         "description": "Tam suit kosu 2'de tek kirmizi buydu. Hata bir axe ihlali degil: beklenen HTTP cevabi 10 sn icinde gelmedi, ardindan context teardown'i asildi ve 45 sn'lik test timeout'unu 21,6 dakikaya tasidi -- suitin duvar saati 31,3 dk'dan 44,3 dk'ya cikti. Ayni test kosu 1'de ayni kodla YESILDI. tm 248'in diff'i (rtm sync + widget) bu yuzeye dokunmuyor. Asilan teardown, kirmizinin kendisinden daha onemli: her gelecekteki kirmizinin maliyetini ongorulemez yapiyor.",
         "details": "OLCUM (tm 248, 2026-09-12). Imza: apps/e2e/tests/a11y.spec.ts:947 (\"WCAG 2.1 AA (axe) > dark theme > the skill editor has no serious or critical violations\") tam suit kosu 2'de KIRMIZI dustu ve tek basina 21,6 DAKIKA surdu. Hata AXE IHLALI DEGIL:",
         "testStrategy": "",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "medium",
         "subtasks": [],
-        "updatedAt": "2026-09-12T19:50:55.316Z"
+        "updatedAt": "2026-09-12T21:53:10.022Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-12T19:50:55.317Z",
+      "lastModified": "2026-09-12T21:53:10.022Z",
       "taskCount": 251,
-      "completedCount": 244,
+      "completedCount": 245,
       "tags": [
         "master"
       ]

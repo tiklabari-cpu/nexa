@@ -27,7 +27,13 @@
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { licenseChannel, RTM_PATHS, type BusEnvelope, type PushAudience } from '@nexa/types';
+import {
+  licenseChannel,
+  MESSAGE_EDIT_WINDOW_SECONDS,
+  RTM_PATHS,
+  type BusEnvelope,
+  type PushAudience,
+} from '@nexa/types';
 import {
   createConversation,
   createCustomer,
@@ -338,6 +344,120 @@ describe('customer RTM socket (FR-MOD-11.6)', () => {
       // After the cursor, not from the top: replaying the message already on
       // screen is how a reconnect turns into a duplicated transcript.
       expect(chats[0]!.events.map((e) => e.text)).toEqual(['while you were away']);
+    });
+
+    /**
+     * The half a cursor structurally cannot carry (FR-MOD-02.3.7 · NFR-R2).
+     *
+     * A correction rewrites `events.text` in place and mints no
+     * `event_sequence`, so "everything after the cursor" — the replay above —
+     * is blind to it by construction. Measured before it was closed (tm 248):
+     * with the visitor's socket held shut across the edit, this same request
+     * answered `events: []` and the visitor went on reading the sentence the
+     * agent had retracted for a further 30.6 s, until the widget's 30-second
+     * heartbeat poll refetched the transcript.
+     */
+    it('replays a correction to a message already on screen (NFR-R2)', async () => {
+      const conversation = await createConversation(db, {
+        tenant: fx.a,
+        messages: ['when does my order arrive?', 'it ships on Tuesday'],
+      });
+      const { socket } = await loginVisitor(fx.a, fx.a.customerId);
+
+      // The agent corrects the second message while nobody is listening. Written
+      // the way the API writes it — in place, no new id, no new sequence.
+      await db.$executeRaw`
+        UPDATE events
+        SET text = 'it ships on Thursday',
+            properties = '{"edited_at":"2026-09-12T10:00:00.000Z"}'::jsonb
+        WHERE id = ${conversation.eventIds[1]}
+      `;
+
+      // The cursor is already past it — this is the case the replay misses.
+      const response = await socket.request('sync', {
+        cursors: { [conversation.chatId]: conversation.eventIds[1] },
+      });
+
+      expect(response.success).toBe(true);
+      const chats = response.payload['chats'] as Array<{
+        chat_id: string;
+        events: Array<{ text: string }>;
+        corrections: Array<{ id: string; text: string }>;
+      }>;
+      expect(chats).toHaveLength(1);
+      // Nothing new happened, so nothing is appended — the correction rides its
+      // own list precisely so the client replaces rather than appends.
+      expect(chats[0]!.events).toEqual([]);
+      expect(chats[0]!.corrections.map((e) => [e.id, e.text])).toEqual([
+        [conversation.eventIds[1], 'it ships on Thursday'],
+      ]);
+    });
+
+    it('replays no correction when nothing was corrected', async () => {
+      // The lookback must cost nothing on the overwhelmingly common reconnect:
+      // an untouched thread answers with an empty list, not with its tail.
+      const conversation = await createConversation(db, {
+        tenant: fx.a,
+        messages: ['hello', 'hi there'],
+      });
+      const { socket } = await loginVisitor(fx.a, fx.a.customerId);
+
+      const response = await socket.request('sync', {
+        cursors: { [conversation.chatId]: conversation.eventIds[1] },
+      });
+
+      const chats = response.payload['chats'] as Array<{ corrections: unknown[] }>;
+      expect(chats[0]!.corrections).toEqual([]);
+    });
+
+    it('withholds a corrected internal note from the replay (NFR-S9)', async () => {
+      // The note filter has to hold on the new list too, or the correction
+      // replay becomes the one path that leaks an agents-only event.
+      const conversation = await createConversation(db, { tenant: fx.a, messages: ['hello'] });
+      await db.event.create({
+        data: {
+          id: `${conversation.threadId}_2`,
+          threadId: conversation.threadId,
+          chatId: conversation.chatId,
+          licenseId: fx.a.licenseId,
+          type: 'message',
+          text: 'NOTE-EDITED-REFUND-RISK',
+          authorType: 'agent',
+          recipients: 'agents',
+          properties: { edited_at: new Date().toISOString() },
+        },
+      });
+
+      const { socket } = await loginVisitor(fx.a, fx.a.customerId);
+      const response = await socket.request('sync', {
+        cursors: { [conversation.chatId]: `${conversation.threadId}_2` },
+      });
+
+      expect(JSON.stringify(response.payload)).not.toContain('NOTE-EDITED-REFUND-RISK');
+    });
+
+    it('does not replay an edit to a message past the edit window', async () => {
+      // The lookback is bounded by the product's own rule rather than a round
+      // number: past `MESSAGE_EDIT_WINDOW_SECONDS` the API refuses the edit, so
+      // a message that old cannot have changed under a connected client and
+      // re-sending it every reconnect would be work with no answer behind it.
+      const conversation = await createConversation(db, { tenant: fx.a, messages: ['hello'] });
+      const longAgo = new Date(Date.now() - (MESSAGE_EDIT_WINDOW_SECONDS + 3600) * 1000);
+      await db.$executeRaw`
+        UPDATE events
+        SET created_at = ${longAgo},
+            text = 'corrected long ago',
+            properties = '{"edited_at":"2020-01-01T00:00:00.000Z"}'::jsonb
+        WHERE id = ${conversation.eventIds[0]}
+      `;
+
+      const { socket } = await loginVisitor(fx.a, fx.a.customerId);
+      const response = await socket.request('sync', {
+        cursors: { [conversation.chatId]: conversation.eventIds[0] },
+      });
+
+      const chats = response.payload['chats'] as Array<{ corrections: unknown[] }>;
+      expect(chats[0]!.corrections).toEqual([]);
     });
 
     it("refuses to replay another visitor's conversation, named by id", async () => {

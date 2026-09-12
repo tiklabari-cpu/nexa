@@ -262,6 +262,51 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     expect(h.socket.live).toBe(true);
   });
 
+  it('replays a correction to its own handler, and leaves the cursor alone', async () => {
+    // The half a cursor cannot carry (FR-MOD-02.3.7): an edit rewrites an event
+    // in place and mints no sequence, so `events` above is blind to it by
+    // construction and the gateway answers with a second list.
+    const h = harness();
+    h.socket.connect();
+    h.socket.noteEvent('chat-1', 'thr-1_6');
+    h.sockets[0]!.onopen!();
+    await settle();
+    h.sockets[0]!.reply('login', {});
+    await settle();
+    h.sockets[0]!.reply('sync', {
+      chats: [
+        {
+          chat_id: 'chat-1',
+          events: [],
+          corrections: [{ ...event('thr-1_4'), text: 'corrected while you were away' }],
+          truncated: false,
+        },
+      ],
+      removed_chat_ids: [],
+      new_chat_ids: [],
+    });
+    await settle();
+
+    // Through `onEventUpdated`, never `onEvent`: the caller replaces by id, and
+    // appending it would print the message a second time.
+    expect(h.events).toEqual([]);
+    expect(h.updated.map((u) => [u.chatId, u.event.id, u.event.text])).toEqual([
+      ['chat-1', 'thr-1_4', 'corrected while you were away'],
+    ]);
+
+    // And the cursor stayed where the transcript is, not where the correction
+    // was — dragging it back to `thr-1_4` would make the next sync replay
+    // `_5` and `_6` all over again.
+    h.sockets[0]!.close();
+    await vi.advanceTimersByTimeAsync(1_000);
+    h.sockets[1]!.onopen!();
+    await settle();
+    h.sockets[1]!.reply('login', {});
+    await settle();
+    const next = h.sockets[1]!.sent.find((frame) => frame.action === 'sync')!;
+    expect(next.payload['cursors']).toEqual({ 'chat-1': 'thr-1_6' });
+  });
+
   it('skips sync on a first connection — there is no gap to fill', async () => {
     const h = harness();
     h.socket.connect();

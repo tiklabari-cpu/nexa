@@ -1373,14 +1373,29 @@ export function mount(doc: Document = document, win: Window = window): void {
    * Replace by id, never append: the correction carries the same event, so a
    * fallback to `applyIncomingEvent` would either be dropped by its
    * already-seen guard (leaving the old wording) or, worse, print the message
-   * twice. An id the transcript does not hold is ignored rather than adopted —
-   * the visitor cannot be shown a message they never received on the grounds
-   * that somebody edited it.
+   * twice. An id the transcript does not hold is still never adopted — the
+   * visitor cannot be shown a message they never received on the grounds that
+   * somebody edited it — but it is no longer *dropped*, which is a different
+   * thing and was the defect (tm 248).
+   *
+   * A correction for an unknown id means this transcript is behind, and the
+   * window is real rather than theoretical: the snapshot that carries the
+   * original is in flight for the length of one request, and a correction
+   * landing inside it used to be discarded with nothing left to re-deliver it.
+   * A push is not replayed, and the socket's `sync` is structurally blind to
+   * edits (an edit mints no `event_sequence` — `apps/rtm/src/sync.ts`), so the
+   * only thing left was the 30-second heartbeat poll. Asking the server for the
+   * transcript answers the question the push raised without trusting the push's
+   * contents: if the event really does belong here it arrives corrected, and if
+   * it does not, the refetch shows exactly what it showed before.
    */
   function applyEventUpdated(chatId: string, event: WidgetEvent): void {
     if (state.chatId !== chatId) return;
     const index = state.events.findIndex((e) => e.id === event.id);
-    if (index === -1) return;
+    if (index === -1) {
+      void refresh();
+      return;
+    }
     state.events[index] = event;
     // A full rebuild rather than an append: `renderEvents` only ever adds to
     // the end, and this changed something in the middle.

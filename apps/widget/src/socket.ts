@@ -248,11 +248,22 @@ export class WidgetSocket {
     const chats = (payload['chats'] ?? []) as Array<{
       chat_id?: unknown;
       events?: unknown;
+      corrections?: unknown;
       truncated?: unknown;
     }>;
 
     for (const chat of chats) {
       if (typeof chat.chat_id !== 'string') continue;
+      // Corrections first, so an edit to a message already on screen is applied
+      // before anything new lands under it — and so the two lists cannot fight
+      // over an event that is in both.
+      for (const raw of Array.isArray(chat.corrections) ? chat.corrections : []) {
+        const event = asEvent(raw);
+        if (!event) continue;
+        // No `noteEvent`, for the same reason a live `event_updated` does not
+        // move the cursor: these sit *behind* it by construction.
+        this.options.onEventUpdated(chat.chat_id, event);
+      }
       for (const raw of Array.isArray(chat.events) ? chat.events : []) {
         const event = asEvent(raw);
         if (!event) continue;
@@ -308,6 +319,12 @@ export class WidgetSocket {
       // No `noteEvent`. The cursor is "the newest event seen", and a correction
       // can land on a message several older than that — advancing it onto one
       // would make the next `sync` skip everything in between.
+      //
+      // That leaves the cursor unable to describe a correction at all, which
+      // used to mean a push missed here was missed for good. It no longer does:
+      // `sync` answers with a `corrections` list beside `events` (see
+      // `#applySync`), so a socket that was down across the edit is caught up
+      // on reconnect.
       this.options.onEventUpdated(chatId, event);
       return;
     }

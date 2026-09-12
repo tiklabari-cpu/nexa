@@ -44,7 +44,9 @@ import { countSkillsByTab, filterSkillsByTab, type SkillTab } from './skill-tabs
 import {
   applySkillControls,
   hasActiveSkillFilters,
+  skillAgentOptions,
   skillOwnerOptions,
+  type SkillAgentFilter,
   type SkillControls,
   type SkillOwnerFilter,
   type SkillSort,
@@ -99,14 +101,22 @@ const EMPTY_BY_TAB_KEY: Record<SkillTab, string> = {
   drafts: 'playbook.skillsEmpty.drafts',
 };
 
-/** Static English labels `skillOwnerOptions` (skill-filter.ts) mints — mapped to
+/** Static English labels `skillAgentOptions` (skill-filter.ts) mints — mapped to
  * catalog keys here rather than touched at the source, since that file also
  * carries the dynamic, untranslatable agent names and its own pinned-English
  * test. */
+const AGENT_LABEL_KEYS: Record<string, string> = {
+  'All agents': 'playbook.skills.filterAgentAll',
+  Unassigned: 'playbook.skills.filterAgentUnassigned',
+  'Unknown agent': 'playbook.skills.filterAgentUnknown',
+};
+
+/** Same idea as {@link AGENT_LABEL_KEYS}, for `skillOwnerOptions`'s labels
+ * (the human-owner axis, FR-MOD-05.4). */
 const OWNER_LABEL_KEYS: Record<string, string> = {
   'All owners': 'playbook.skills.filterOwnerAll',
-  Unassigned: 'playbook.skills.filterOwnerUnassigned',
-  'Unknown agent': 'playbook.skills.filterOwnerUnknown',
+  System: 'playbook.skills.filterOwnerSystem',
+  'Unknown owner': 'playbook.skills.filterOwnerUnknown',
 };
 
 export function PlaybookPage(): ReactElement {
@@ -126,11 +136,14 @@ export function PlaybookPage(): ReactElement {
 
   // List controls (FR-MOD-05.4). `search` is the raw input; it settles into
   // `query` after a beat so filtering a long list does not run on every
-  // keystroke. Type/status/owner narrow; sort reorders.
+  // keystroke. Type/status/agent/owner narrow; sort reorders. `agent` is the
+  // AI agent a skill runs under; `owner` is the human account that created it
+  // — two independent axes, see skill-filter.ts's header for why.
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const [type, setType] = useState<SkillTypeFilter>('all');
   const [status, setStatus] = useState<SkillStatusFilter>('all');
+  const [agent, setAgent] = useState<SkillAgentFilter>('all');
   const [owner, setOwner] = useState<SkillOwnerFilter>('all');
   const [sort, setSort] = useState<SkillSort>('name-asc');
 
@@ -222,19 +235,22 @@ export function PlaybookPage(): ReactElement {
   const selected = items.find((s) => s.id === selectedId) ?? null;
   const tabCounts = countSkillsByTab(items);
 
-  const controls: SkillControls = { query, type, status, owner, sort };
-  // The tab is the coarse cut; the controls refine within it. Owner options are
-  // built from the whole list (not the current tab) so the choice survives a
-  // tab switch, and resolved to agent names from the roster.
+  const controls: SkillControls = { query, type, status, agent, owner, sort };
+  // The tab is the coarse cut; the controls refine within it. Agent/owner
+  // options are built from the whole list (not the current tab) so the choice
+  // survives a tab switch. Agent names come from the roster (a skill only
+  // carries the id); owner names travel with the skill row itself
+  // (`created_by_name`, FR-MOD-05.5), so no lookup map is needed for it.
   const agentNameById = useMemo(() => {
     const map = new Map<string, string>();
-    for (const agent of agents.data?.items ?? []) map.set(agent.id, agent.name);
+    for (const aiAgent of agents.data?.items ?? []) map.set(aiAgent.id, aiAgent.name);
     return map;
   }, [agents.data]);
-  const ownerOptions = useMemo(
-    () => skillOwnerOptions(items, (id) => agentNameById.get(id)),
+  const agentOptions = useMemo(
+    () => skillAgentOptions(items, (id) => agentNameById.get(id)),
     [items, agentNameById],
   );
+  const ownerOptions = useMemo(() => skillOwnerOptions(items), [items]);
   const tabItems = filterSkillsByTab(items, tab);
   const visibleItems = applySkillControls(tabItems, controls);
 
@@ -243,6 +259,7 @@ export function PlaybookPage(): ReactElement {
     setQuery('');
     setType('all');
     setStatus('all');
+    setAgent('all');
     setOwner('all');
   };
 
@@ -250,8 +267,13 @@ export function PlaybookPage(): ReactElement {
     if (selectedId && !items.some((s) => s.id === selectedId)) setSelectedId(null);
   }, [items, selectedId]);
 
-  // If the selected owner disappears from the list (e.g. its last skill was
-  // deleted), fall back to All rather than leave the select on a dead value.
+  // If the selected agent/owner disappears from the list (e.g. its last skill
+  // was deleted), fall back to All rather than leave the select on a dead
+  // value — otherwise the filter would show nothing and give no way out.
+  useEffect(() => {
+    if (agent !== 'all' && !agentOptions.some((option) => option.value === agent)) setAgent('all');
+  }, [agent, agentOptions]);
+
   useEffect(() => {
     if (owner !== 'all' && !ownerOptions.some((option) => option.value === owner)) setOwner('all');
   }, [owner, ownerOptions]);
@@ -479,6 +501,20 @@ export function PlaybookPage(): ReactElement {
                             ]}
                           />
                           <FilterSelect
+                            label={t('playbook.skills.filterAgent')}
+                            value={agent}
+                            onChange={setAgent}
+                            options={agentOptions.map(
+                              (option) =>
+                                [
+                                  option.value,
+                                  AGENT_LABEL_KEYS[option.label]
+                                    ? t(AGENT_LABEL_KEYS[option.label]!)
+                                    : option.label,
+                                ] as const,
+                            )}
+                          />
+                          <FilterSelect
                             label={t('playbook.skills.filterOwner')}
                             value={owner}
                             onChange={setOwner}
@@ -597,7 +633,7 @@ export function PlaybookPage(): ReactElement {
                                       title={t('playbook.skills.aiAgentBadge')}
                                     >
                                       {agentNameById.get(skill.ai_agent_id) ??
-                                        t('playbook.skills.filterOwnerUnknown')}
+                                        t('playbook.skills.filterAgentUnknown')}
                                     </span>
                                   )}
 

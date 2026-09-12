@@ -13,6 +13,12 @@
 
 ## Task log (newest-first)
 
+## 221 — V8-SKILL-OWNER: Playbook "sahip" filtresi artık insan sahibi süzüyor, ajan ekseni "Agent" adıyla ayrıldı — done — 2026-09-13 UTC
+
+- **Yapıldı:** `FR-MOD-05.4`'ün tracked gap'i (tm 184.4'ten beri `◐`) kapandı — karar (b): "owner" insana çevrildi, eski `ai_agent_id` filtresi kaybedilmeden "Agent" adıyla ayrı bir eksen oldu. Kontrata `Skill.created_by_id` (nullable uuid) eklendi — `created_by_name`'in arkasındaki filtrelenebilir kimlik (ad tek başına güvenli bir filtre anahtarı değil: iki hesap aynı adı taşıyabilir, yeniden adlandırılabilir). `skill-filter.ts` artık `agent` + `owner` iki bağımsız ekseni AND ile birleştiriyor; `PlaybookPage.tsx` iki `FilterSelect` gösteriyor, ikisinin de kendi "seçili değer listeden düştü → All" koruması var.
+- **Doğrulama (exit code'larla):** `typecheck`/`lint`/`format:check` temiz · `contract:generate` diff'i yalnız beklenen `created_by_id` (217 yol, mobil parity değişmedi) · `db:check-drift` no drift (migration yok, `createdBy` zaten şemadaydı) · `audit:req-coverage` exit 0, `tagged` 124→125 (`FR-MOD-05.4` artık 3 sitede) · web unit **180/2234** (+6) · api unit **89/1443** değişmedi · api integration **138/3456** (+1) · mobile 45/511 · widget 23/196 · rtm 15/187 · build 8/8 · **e2e tam süit 302/302** (20.2 dk, sıfır kırmızı).
+- **Sonraki pencereye not:** §6D Faz-8 F8-7 dilimi (tm 221·222·230) bu tur **tamamlandı** — 222 ve 230 zaten `done`'dı, bu satır (`05.4`) `✅` ile üçü de kapandı. F8-7'nin kendi satırının PLAN'da ayrı bir "durum" hücresi yok (yalnız Tema/Kalemler/Kapı açıklaması), dolayısıyla düzenlenecek bir hücre yok; Faz-8'in kapanışı hâlâ F8-8 (tm 232, GL-16) turunu bekliyor. `#### K05.4` bloğuna karar + kapsam tam yazıldı.
+
 ## 217 — V8-SHELL-MENU: logo bir menü açıyor, ayrı bir düğme olarak — pin/unpin ve `BrandSwitcher` davranışı değişmeden — done — 2026-09-13 UTC
 
 - **Yapıldı:** `AppMenu` yeni bir `Dropdown` — logo artık kendi tetikleyicisi (aria-label "App menu"), `NavPinToggle`'dan AYRI (o pin/unpin'i tutmaya devam ediyor, glifi "N"'den hamburgere `☰` döndü — PRD'nin "Logo/Hamburger" ikilisi iki bitişik düğmeye ayrıldı, tek `aria-expanded`'ın hem menü hem pin durumunu taşıması denetimin uyardığı tuzaktı). `BrandSwitcher` KALDIRILMADI, `AppMenu`'nün paneline taşındı (kendi kodu/testleri değişmedi). Panelin ikinci kalemi: Apps pazaryeri linki (`Integrations.tsx`'in kendi notu: rayda ikonu yok, aksi halde yalnız URL'yle ulaşılıyor) — yeni uç açılmadı.

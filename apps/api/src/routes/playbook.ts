@@ -1316,9 +1316,11 @@ function serialiseAgent(agent: {
 
 /**
  * `Skill.createdBy` is a soft reference to `accounts.id` (no FK, so deleting
- * an account never blocks or cascades into a skill it once wrote) — the wire
- * format never exposes the raw id, only the resolved name, since a bare UUID
- * tells an admin nothing (FR-MOD-05.5).
+ * an account never blocks or cascades into a skill it once wrote). The wire
+ * format carries both the resolved name (a bare UUID tells an admin nothing,
+ * FR-MOD-05.5) and the id itself — the id is what the human-owner filter
+ * narrows on, because two accounts can share a name and one can be renamed
+ * (FR-MOD-05.4).
  */
 async function creatorName(tx: TenantClient, createdBy: string | null): Promise<string | null> {
   if (!createdBy) return null;
@@ -1351,6 +1353,7 @@ function serialiseSkill(
     active: boolean;
     runsCount: number;
     updatedAt: Date;
+    createdBy: string | null;
   },
   createdByName: string | null,
 ) {
@@ -1365,5 +1368,6 @@ function serialiseSkill(
     runs_count: skill.runsCount,
     updated_at: skill.updatedAt.toISOString(),
     created_by_name: createdByName,
+    created_by_id: skill.createdBy,
   };
 }

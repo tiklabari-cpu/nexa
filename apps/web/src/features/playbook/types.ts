@@ -26,6 +26,7 @@ export interface Skill {
   runs_count: number;
   updated_at: string;
   created_by_name: string | null;
+  created_by_id: string | null;
 }
 
 export interface AiAgent {

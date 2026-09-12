@@ -1058,7 +1058,7 @@ components:
 
     Skill:
       type: object
-      required: [id, name, kind, steps, active, runs_count, created_by_name]
+      required: [id, name, kind, steps, active, runs_count, created_by_name, created_by_id]
       properties:
         id: { type: string, format: uuid }
         ai_agent_id: { type: string, format: uuid, nullable: true }
@@ -1078,6 +1078,17 @@ components:
             The account name of whoever created this skill, resolved server-side
             from the soft `created_by` reference. Null for a system/seed skill
             with no author, or if the authoring account was later deleted.
+        created_by_id:
+          type: string
+          format: uuid
+          nullable: true
+          description: |
+            The stable identity behind `created_by_name` (soft reference to
+            `accounts.id`, no FK). This is the human-owner filter key
+            (FR-MOD-05.4) — the name alone is not a safe filter axis, since two
+            accounts can share a name or one can be renamed. Null exactly when
+            `created_by_name` would resolve to null (no author, or the author
+            account was deleted).
 
     SkillPreview:
       type: object

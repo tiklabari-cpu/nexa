@@ -615,7 +615,7 @@ T6-b · T7-a** (= 9 alt-görev, 6 Must `◐`'yi kapatır) ✅ olduğunda Faz-0 `
 | 05.1 | Header — Browse templates + Create skill ▾        | Must (v1)   | ✅ → K05.1 |
 | 05.2 | Recommended skills (şablon kartları)              | Should (v1) |            ✅ → K05.2            |
 | 05.3 | Skill listesi sekmeleri (All/AI/Workspace/Drafts) | Must (v1)   | ✅ → K05.3 |
-| 05.4 | Liste kontrolleri (Search/Sort/Filter)            | Should      | ◐ → K05.4 |
+| 05.4 | Liste kontrolleri (Search/Sort/Filter)            | Should      | ✅ → K05.4 |
 | 05.5 | Skill satırı ("N runs" + sahip + toggle)          | Must (v1)   | ✅ → K05.5 |
 
 ### 4.2 FR-MOD-06 — AI Agent + Knowledge/RAG _(öne çekildi)_
@@ -8894,6 +8894,7 @@ _(Faz-7 · tm 184 — açıldı 2026-09-04. Alt-görevler kapandıkça bu bloğu
 #### K05.4 — 05.4 · Liste kontrolleri (Search/Sort/Filter)
 
 - ◐ **Denetim bulgusu — damga `✅` → `◐` indirildi (tm 184.4, denetim `prd-uyum-denetimi.md` Ek A, 2026-08-30):** `FR-MOD-05.4` [KISMİ ↓]: KK: 'Ada gore arama; tur/durum/sahip filtre'. Arama, durum ve siralama tam. Fakat (a) 'sahip' filtresi PRD'nin kastettigi sahip degil: `skillMatchesControls` owner'i `ai_agent_id`'ye esitliyor ve dosyanin kendi yorumu bunu itiraf ediyor ('The skill row carrie…
+- ✅ **İkinci bir eksen eklendi, damga `◐` → `✅` (tm 221):** Karar (b) seçeneğiydi — "owner" insana çevrildi, eski `ai_agent_id` ekseni "Agent" adıyla ayrıldı (kaybedilmedi). Kontrat `Skill` şemasına `created_by_id` (nullable uuid, `required`) eklendi — `created_by_name`'in arkasındaki kimlik; API zaten `createdBy`'ı biliyordu (`creatorName` ad çözümü için kullanıyordu), `serialiseSkill` artık ikisini birden döndürüyor. `skill-filter.ts` iki bağımsız ekseni AND ile birleştiriyor: `agent` (`ai_agent_id`, eski `owner` alanının yerini aldı — `skillAgentOptions`, roster'dan ad çözer) ve `owner` (`created_by_id`, yeni — `skillOwnerOptions`, adı skill satırının kendi `created_by_name`'inden okur, ayrı bir roster sorgusu gerekmez). Ada göre süzme bilerek YOK: iki hesap aynı adı taşıyabilir, bir hesap yeniden adlandırılabilir — testte homonim bir sahiple kanıtlandı. `PlaybookPage.tsx` iki `FilterSelect` gösteriyor ("Agent" + "Owner"), her biri kendi "seçili değer listeden düştü → All'a dön" korumasına sahip; `created_by_id` `null` olan skill'ler (seed/sistem) Owner'da "System" etiketiyle, silinmiş hesaba ait olanlar "Unknown" ile görünüyor. Test: `skill-filter.test.ts` (+9: agent/owner bağımsız süzme, homonim koruması, iki eksenin kesişimi, `skillAgentOptions`/`skillOwnerOptions` ayrımı — üçü `(FR-MOD-05.4)` etiketli), api `playbook.test.ts` (+2, `created_by_id` create+list/read'de doğru hesaba eşleniyor). Doğrulama: `typecheck`/`lint`/`format:check` temiz, `contract:generate` sonrası diff yalnız beklenen `created_by_id` alanı (217 yol, mobil parity sayacı değişmedi — mobil `Skill` tipi kontrattan türediği için iki mobil test fixture'ı da `created_by_id: null` aldı), `db:check-drift` "no drift" (migration yok — `createdBy` zaten şemadaydı), `pnpm audit:req-coverage` exit 0 (`tagged` 124→125, `FR-MOD-05.4` artık 3 sitede). Tam DoD: web unit 180/2234 (+6), api unit 89/1443 değişmedi, api integration 138/3456 (+1), mobile 45/511, widget 23/196, rtm 15/187, build 8/8, e2e tam süit **302/302** (20.2 dk, sıfır kırmızı).
 
 #### K05.5 — 05.5 · Skill satırı ("N runs" + sahip + toggle)
 

@@ -33,7 +33,19 @@ interface Fixtures {
 interface WorkerFixtures {
   /** Organization id of the seeded Acme tenant, resolved via the API. */
   organizationId: string;
+  /** Reports a worker that stopped running (sleep, hibernation, a debugger) — see below. */
+  hostFreezeWatch: void;
 }
+
+/** How often `hostFreezeWatch` checks the clock. */
+const FREEZE_HEARTBEAT_MS = 1_000;
+/**
+ * A stall this long counts as a freeze. It matches `actionTimeout`: a pause this
+ * long is enough on its own to fail any action that was waiting when it began.
+ */
+export const HOST_FREEZE_THRESHOLD_MS = 10_000;
+/** The annotation a frozen test carries, and the prefix of the line it prints. */
+export const HOST_FREEZE = 'host-freeze';
 
 export const test = base.extend<Fixtures, WorkerFixtures>({
   /**
@@ -64,6 +76,55 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     { scope: 'worker' },
   ],
 
+  /**
+   * Say so when the machine, not the product, stopped a test (tm 251).
+   *
+   * While a laptop sleeps or hibernates nothing in the worker runs. On wake
+   * every pending timer is overdue at once, so whichever `waitFor…` or
+   * `expect` was waiting fails with an ordinary timeout, and the test's
+   * duration includes the whole time the machine was down. tm 248's red read
+   * exactly like a flaky test (`page.waitForResponse: Timeout 10000ms
+   * exceeded`, 21.6 minutes), and it took a whole task and the Windows event
+   * log to learn it was a 20.6-minute hibernation on a critical battery.
+   *
+   * A heartbeat checks the monotonic clock once a second. A gap well past the
+   * interval means this process did not run for that long. It prints one
+   * `host-freeze` line into the run log and annotates the test that was
+   * running, so the red and its cause show up together. On wake, overdue timers
+   * fire in the order they were due, and the heartbeat always falls due within
+   * a second of the freeze starting. So the line is printed before the timeout
+   * it explains. This is detection only; nothing is retried and no result
+   * changes. `host-freeze.spec.ts` proves it fires.
+   */
+  hostFreezeWatch: [
+    // eslint-disable-next-line no-empty-pattern
+    async ({}, use) => {
+      let lastTick = performance.now();
+      const heartbeat = setInterval(() => {
+        const now = performance.now();
+        const stalledMs = now - lastTick - FREEZE_HEARTBEAT_MS;
+        lastTick = now;
+        if (stalledMs < HOST_FREEZE_THRESHOLD_MS) return;
+
+        const running = currentTestTitle();
+        const description =
+          `this worker did not run for at least ${(stalledMs / 1000).toFixed(1)} s ` +
+          `(resumed ${new Date().toISOString()})` +
+          (running ? ` during "${running}"` : ' between tests') +
+          ' — any timeout inside that window is the machine (sleep, hibernation, a debugger), not the product';
+        console.warn(`${HOST_FREEZE}: ${description}`);
+        if (running) base.info().annotations.push({ type: HOST_FREEZE, description });
+      }, FREEZE_HEARTBEAT_MS);
+      heartbeat.unref();
+      try {
+        await use();
+      } finally {
+        clearInterval(heartbeat);
+      }
+    },
+    { scope: 'worker', auto: true },
+  ],
+
   agentPage: async ({ page }, use) => {
     await signIn(page);
     await use(page);
@@ -71,6 +132,15 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
 });
 
 export { expect };
+
+/** The running test's title path, or `null` between tests (`test.info()` throws there). */
+function currentTestTitle(): string | null {
+  try {
+    return base.info().titlePath.slice(1).join(' › ');
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The seeded organization id changes on every reseed, so it has to be looked up

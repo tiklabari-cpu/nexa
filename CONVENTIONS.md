@@ -104,17 +104,18 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
 
   ```
   npx turbo run test --force --filter=!@nexa/e2e --filter=!@nexa/api   # ~1 dk
-  npx turbo run test:unit --force --filter=@nexa/api                   # ~30 sn (54 dosya)
+  npx turbo run test:unit --force --filter=@nexa/api                   # ~1 dk (89 dosya)
   # ×3 (shard 1/3, 2/3, 3/3) — ~5 / 4 / 2,5 dk
   cd apps/api
   npx tsx scripts/with-test-datastores.ts vitest run --dir test/integration --shard=1/3
   ```
 
   Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
-  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **80 + 129 = 209**; sayı
-  2026-09-07'de GL-13 · tm 208 turunda yeniden ölçüldü — metin "70 + 110 = 180" ile bayattı,
-  Faz-7 ve `◐` kapatma turları arayı doldurdu; ondan önce 2026-08-30'da GL-11 · tm 158
-  "54 + 90 = 144"ü düzeltmişti). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
+  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **89 + 138 = 227**; sayı
+  2026-09-12'de GL-15 · tm 210 turunda yeniden ölçüldü — metin "80 + 129 = 209" ile bayattı,
+  Faz-8 (tm 213–246) arayı doldurdu; ondan önce 2026-09-07'de GL-13 · tm 208 "70 + 110 = 180"i,
+  2026-08-30'da GL-11 · tm 158 "54 + 90 = 144"ü düzeltmişti. **Bu satır her kapanış turunda
+  bayat çıkıyor — sayıyı ölçmeden devralma.**). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
   eşleştirebilsin.
 
   **`apps/web` kendi süitini `--maxWorkers=4` ile ister.** Ölçüldü (GL-13): varsayılan işçi

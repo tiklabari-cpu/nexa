@@ -120,13 +120,18 @@ const WAIVERS = [
     id: 'FR-MOD-13.4',
     kind: 'product-decision',
     reason: 'Visual workflow builder — the editor is not built; the paradigm is Skill',
-    source: 'ADR-14 (PLAN.md:67, PLAN.md:1141) · schema.prisma:1425 says so in its own comment',
+    // Anchored to sections, not line numbers: all three of the line references
+    // this field used to carry (PLAN.md:67, PLAN.md:1141, schema.prisma:1425)
+    // pointed somewhere else by the time GL-15 (tm 210) read them back. A
+    // waiver's evidence trail has to survive the file growing under it.
+    source:
+      'ADR-14 (PLAN.md §0 ADR tablosu · §5.0 satır `13.4`) · `model Workflow` in schema.prisma says so in its own doc comment',
   },
   {
     id: 'SEMA-MIMARI.5.5',
     kind: 'product-decision',
     reason: 'The §5.5 phase matrix row for that same builder — one decision, two rows',
-    source: 'ADR-14 (PLAN.md:67)',
+    source: 'ADR-14 (PLAN.md §0 ADR tablosu · §5.5 faz matrisi satırı)',
   },
   {
     id: 'FR-MOD-08.4',

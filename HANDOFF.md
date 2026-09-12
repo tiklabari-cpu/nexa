@@ -13,6 +13,76 @@
 
 ## Task log (newest-first)
 
+## 210 — GL-15 · V2-KAPAT2: **Faz-2 (v2) §F.00 kapanış turu — `✅ KAPALI (yeniden)`** (§F.1 tam sürüm · §F.2 raporu) — done — 2026-09-12 UTC
+
+- **Yapıldı:** v2'nin **kalem** kuralı §5.0'ın DURUM sütunundan **sayılarak** okundu → **23 ✅ · 0 ◐ · 0 ⬜** (payda **23 SABİT** — tm 187'nin kararı; 30 satırın 7'si paydaya girmez: 3 `⛔` + `08.9.2`/`.3`/`.5` GL-5/6/7 + `06.2.3` v1'de teslim); §F.1'in 10 maddesi **koda karşı** koşuldu; üst tablo satır 22'nin `Kapanış` hücresi `❌ AÇIK (yeniden)` → **`✅ KAPALI (yeniden)`**. PLAN'a §F.00 v2 ikinci kapı paragrafı (sayım komutu **bölüm başlığına çıpalı**) + `#### KGL-15` + §D161–§D163. **GL-14 gibi bu tur da ürün koduna DOKUNMADI** — kapı ilk koşuşta yeşildi ("verify+close, don't rebuild"). **v2'nin taşınan `Should`/`Could` borcu YOK** — kapanan yedi fazın içinde buna özgü durum; `audit:sweep`in iki `PARTIAL`ı (`05.4` · `09.1`) v1'in satırlarıdır ve göreve bağlıdır (tm 221 · tm 229).
+- **Bulunan iki kusur (ikisi de §F.1'in kendi maddelerinden, ikisi de karara bağlandı):** **(a) §D162 — ADR-14'ün kanıt izi çürümüştü:** `req-coverage.cjs`'in `13.4` muafiyeti üç satır referansı taşıyordu ve **üçü de** başka yeri gösteriyordu (`PLAN.md:67` → tm 191 satırı · `PLAN.md:1141` → CC maskeleme · `schema.prisma:1425` → `TrackedSale`); dördüncüsü daha ağırdı — `model Workflow`'un doc yorumu _"ADR-14 defers the editor to v2"_ diyordu, oysa ADR-14 ertelemiyor **yapılmayacağını** söylüyor ve "v2" tam olarak `13.4`'ün kendi fazı. İkisi de **bölüm çıpasına** çevrildi (GL-14'ün dersi muafiyet kaynaklarına uygulandı); karar yeniden tartışılmadı, DDL değişmedi. **(b) §D163 — e2e süit-sırası sınıfı geri döndü ve FLAKE DEĞİL** → **tm 247** (`high`, tm 233'ün emsali).
+- **Doğrulama (exit code'larla):** `typecheck` **13/13** · `lint` **10/10** · `format:check` temiz · `build` **8/8** · `contract:generate` sonrası generated diff **boş** (**217 path**) · `db:check-drift` "no drift" · `audit:req-coverage` **exit 0** · `audit:endpoint-ui` **UNEXPLAINED 0 · TRACKED 0** · `audit:unpaged-lists` **UNPAGED 0**. Testler §1.3 gereği **parçalandı**: turbo `test --force` (api/web/e2e hariç) **113 dosya / 1.273 test** · `apps/web` **179 / 2.219** (`--maxWorkers=4`) · api `test:unit --force` **89 / 1.443** · api integration **3 shard** (46+46+46 = **138 dosya**, 1414+1170+870 = **3.454 test**) → birleşim **519 dosya / 8.389 test**; integration kapısı ayrıca rtm **8 / 107**. **e2e tam süit: 294 testin 292'si yeşil, ARDIŞIK İKİ KEZ, aynı iki kırmızı** (17,0 dk · 14,2 dk) — ikisi ayrı koşulduğunda **9/9 yeşil** (40,2 sn). `make demo` elle genişletildi (`make` kurulu değil) → altı servis healthy + `./scripts/smoke.sh` **17/17**; yığın `down` ile kaldırıldı (`-v` **KULLANILMADI**), dev datastore'lar ayakta kaldı.
+- **Sonraki pencereye not:** **`pnpm --filter @nexa/e2e test -- <dosya>` FİLTRELEMİYOR** — `--` passthrough yutuluyor ve tam süit koşuyor (bu turda bir kez ~15 dk yaktı; kazası bir yararlı veri verdi: iki kırmızının tekrarlanabilir olduğunu kanıtladı). Doğrusu `cd apps/e2e && npx playwright test <dosya>`. §D160'ın _"ardışık iki kez 279/279"_ ölçümü **bayattır**, tm 247'de düzeltilecek. CONVENTIONS §1.3'ün parçalı koşu sayısı **üst üste üçüncü kapanış turunda** bayat bulundu (`80+129` → **`89+138=227`**) — metne "ölçmeden devralma" uyarısı eklendi. **`tasks.json`'ın `id` normalizasyonu GEÇİCİ çıktı — tm 209/243'ün notu bir kez daha okunmalı:** `add-task` bu turda 247 üst-görev `id`'sinin **tümünü** `"246"` → `246` biçimine çevirdi (diff 517 satır), sonra `set-status` **hepsini string'e geri** yazdı ve nihai diff **22 satıra** indi (tm 210 `in-progress`→`done` · yeni tm 247 · sayaç). Yani dosyanın biçimi hangi komutun en son koştuğuna bağlı; **diff'in boyuna bakıp panik yapma, komutu bir kez daha koş.** prettier temiz, bu alanı okuyan script yok. Faz-8'in kalan altı kalemi (tm 217 · 221 · 229 · 232 · 234 · 240) ve **Faz-8'in kendi kapanış turu tm 232 (GL-16)** bu turun işi **değildi** ve dokunulmadı; üst tablo satır 20 ve 21'e dokunulmadı.
+
+---
+
+### §F.2 RAPORU — Faz-2 (v2) kapanış turu · GL-15 · tm 210 · 2026-09-12
+
+**1) Tamamlanan kapsam (PRD kimlikleriyle).** v2'de **`Must` yoktur** — PRD'de v2 kalemlerinin hepsi
+`Should`/`Could` — bu yüzden §F.00'ın **sayaç** kuralı değil GL-8'in kurduğu **kalem** kuralı geçerli:
+_23 açık kalemin hepsi ✅_. Envanter **30 satır**; kapanan **23**'ü: `06.3.2-bulk` · `07.5` · `07.6` ·
+`07.7` · `07.9` (Reports) · `08.5.7` (Instagram, MOCK) · `08.6.3` · `08.6.3-conflict` (Routing) ·
+`08.8.3` (MCP) · `08.9.6` · `08.9.7` (Güvenlik) · `09.2` · `09.3` · `09.4` (Marketplace/Partner) ·
+`01.1.3` (⌘K) · `12.4` (Copilot BI) · `13.2` · `13.3` · `13.5` (Engage/Goals/Sales) · `05.6` (31+
+şablon) · `§5.3-KB` · `§5.3-Vardiya` · `§5.3-Marka`. Yirmi üçü de bu turda **koda karşı** doğrulandı,
+damgaya güvenilmedi — ölçülen örnekler: `APP_CATALOG` **103** kalem · **36** skill şablonu · dört MCP
+aracının dördü · Essential/Pro/**Pro+** · `07.7`'nin üç eksiği (PDF · benchmark · Save view) yerinde.
+
+**Payda 23'tür ve tm 187'nin kararıyla SABİTTİR; bu tur onu ne değiştirdi ne değiştirmeyi denedi.**
+Paydaya girmeyen 7 satır: `13.4` (⛔ ADR-14) · §5.5 MOD-04 (⛔ §C-A12) · §5.5 MOD-06 (⛔ §C-A13) ·
+`08.9.2`/`08.9.3`/`08.9.5` (v2'den **önce** GL-5/6/7'de kapandı — §D52; G1 `3127638`'in maskeleme→spam
+sırası bu turda `channel-service.ts:275`/`:300`'de yeniden doğrulandı) · `06.2.3` (v1'de teslim).
+
+**2) Yarım kalan işler.** **v2'de yoktur — 23/23 `✅`.** Kapanan yedi fazın içinde buna özgü bir
+durum ve tesadüf değil: tm 187 triyajı sekiz şüpheli kalemin üçünü SIRALAMA düzeltmesiyle geri aldı,
+beşini görevleştirdi (tm 201–204) ve beşi de kapandı. `audit:sweep`in bugün `PARTIAL` verdiği **iki**
+satır **v1'indir**, v2'nin değil, ve ikisi de açık göreve bağlıdır:
+
+| PRD    | Ne eksik                                                       | Görev  |
+| ------ | -------------------------------------------------------------- | ------ |
+| `05.4` | Playbook "sahip" filtresi `ai_agent_id` süzüyor, insan sahibini değil | tm 221 |
+| `09.1` | Marketplace filtre taksonomisi (koleksiyonlar + ödeme/yerleşim) | tm 229 |
+
+**3) Bilinçli olarak yapılmayanlar.** `13.4` **görsel Workflow builder** `⛔ ADR-14` ile kapalıdır ve
+**öyle kalır** — ADR'ler yeniden tartışılmaz; hedefinin sayılabilir yarısı (31+ şablon) ADR-uyumlu
+ikameyle **fazlasıyla** onurlandırıldı (`05.6`, bugün **36** şablon). `workflows` tablosunun şemada
+kalması bu kararın sonucudur: `audit:schema-consumers`'ın **tek gerçek 0-tüketicili modeli**
+`Workflow`'dur ve bu **beklenen** sonuçtur (diğer üç "tüketicisi yok" SECURITY DEFINER körlüğüdür,
+tm 234). §5.5 MOD-04 ve MOD-06 `⛔`'leri değişmedi (§C-A12/§C-A13: somut `FR-MOD (v2)` satırı yok).
+§9'un 10 kapsam-dışı maddesi **10/10 temiz**; ikisi v2'ye özgü okundu — §9/7'nin "Instagram tam kanal"
+yasağı kalemi zaten v2'ye havale ediyor ve teslim edilen **MOCK** adaptördür, §9/6'nın yasakladığı
+"genel KB REST API'si" ise public KB değildir (yedi ucun **yedisi de `GET`**, çalışma-alanı kapsamlı,
+yalnız yayımlanmış makale).
+
+**4) Sessiz borç.** `pnpm audit:silent-debt` → izlenen **1.250** kaynak dosyası; TODO / FIXME / XXX /
+HACK / `@ts-expect-error` / `@ts-ignore` / atlanan test / odaklı test **hepsi 0**. Kalan dört kayıt
+gerekçe yorumlu (2 `eslint-disable` + 2 `istanbul ignore`). **Bu tur yeni borç eklemedi** — ürün koduna
+hiç dokunmadı. `schema-consumers`'ın SECURITY DEFINER körlüğü bilinen kusurdur (tm 234) ve **ikinci kez
+raporlandı, ikinci kez görevleştirilMEDİ** (aynı bulguya ikinci görev backlog'u kirletir).
+
+**5) Sapmalar (§D).** **D161** v2 ikinci kez kapandı (kalem kuralı + payda 23'ün gerekçesi + kapının
+ilk koşuşta yeşil bulunması) · **D162** ADR-14'ün kanıt izi çürümüştü — bir muafiyetin dört
+referansının dördü de yanlış yeri gösteriyordu, biri **yanlış kararı** anıyordu; bölüm çıpasına
+çevrildi · **D163** e2e süit-sırası sınıfı yeni bir çiftle geri döndü ve **flake değil** (ardışık iki
+tam koşu, aynı imza), §D160'ın "279/279 ×2" ölçümü bayatladı → tm 247.
+
+**6) Karar bekleyen açık sorular.**
+(a) **e2e kapısının güvenilirliği** — tm 247'nin asıl sorusu "bu iki testi yeşile çevir" değil,
+_"sınıfın nöbetçisi ne olacak"_: tm 233 dört örneği kapattı, sınıfı kapatmadı ve altı hafta sonra
+geri geldi. Yapısal bir önlem (paylaşılan durumu yazan testlerin izolasyonu ya da süit sonu nöbetçisi)
+olmadan üçüncü kez gelir.
+(b) **Sıradaki adım kullanıcınındır** (§F.3). Backlog: **Faz-8'in kendi kapanış turu tm 232 (GL-16)**
++ beş iş kalemi (tm 217 · 221 · 229 · 234 · 240) + bu turun açtığı **tm 247**. Faz-0 (GL-13), v1
+(GL-14) ve v2 (GL-15) artık **üçü de** `✅ KAPALI (yeniden)`.
+
+---
+
 ## 246 — V8-KB-SKILL-GAPS: **`TRACKED` boşaldı — public KB artık konsoldan açılıyor, skill ve KB makalesi silinebiliyor** — done — 2026-09-12 UTC
 
 - **Yapıldı:** tm 215'in `TRACKED` bıraktığı son üç kalem kapandı (`PUT /kb-settings` · `DELETE /kb-articles/{id}` · `DELETE /skills/{id}`) — yeni uç açılmadı, kontrat değişmedi, yalnız `apps/web` yüzeyi eklendi. `KbSettings.tsx` (yeni): Playbook → KB sekmesinin başına açma/kapama + genel adres + site başlığı; `KbArticleEditor.tsx`'in kapalıyken bastığı uyarı artık gerçek bir yere işaret ediyor. `KbArticleEditor.tsx`: satır içi silme onayı (`KbCategoryManager` deseni — ikinci `Modal` bir `Modal`'ın içinde çakışırdı). `SkillEditor.tsx`: `Modal` ile silme onayı (`DeveloperPortal` deseni), diyalog run log'un cascade sileceğini söylüyor.

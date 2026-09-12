@@ -1632,8 +1632,15 @@ model SkillRun {
   @@map("skill_runs")
 }
 
-/// Visual node/edge automation. The table exists so the schema matches PRD §8.4,
-/// but ADR-14 defers the editor to v2 — nothing writes here yet.
+/// Visual node/edge automation (FR-MOD-13.4). The table exists so the schema
+/// matches PRD §8.4; the editor is not deferred, it is **not being built** —
+/// ADR-14 settled on one paradigm, Skill, and the 31+ template target that row
+/// also carried was honoured by an ADR-compliant substitute (`05.6`). So
+/// nothing writes here, and nothing is expected to: this is the one model
+/// `audit:schema-consumers` reports with no consumer on purpose. (Text
+/// corrected in GL-15 · tm 210 — it used to say "ADR-14 defers the editor to
+/// v2", which named the wrong decision and the wrong phase: v2 is the phase
+/// `13.4` belongs to, and it closed with the row `⛔`.)
 model Workflow {
   id        String   @id @default(uuid()) @db.Uuid
   licenseId BigInt   @map("license_id")

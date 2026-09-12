@@ -32,11 +32,18 @@
  * A product decision the PRD does not make, so it is made here and written
  * down. Fifteen minutes is long enough for "I pasted the wrong customer's
  * order number" and short enough that the reader has almost certainly not acted
- * on it yet. It also bounds the one gap this design has: a client whose socket
- * was down across the edit and reconnects with a cursor already past the edited
- * event is not replayed the change (the cursor is a sequence number, and the
- * edit does not mint one), so it shows the old text until the transcript is
- * refetched. A short window keeps that gap small and rare rather than open.
+ * on it yet.
+ *
+ * It also bounds the one gap this design has, and since tm 248 it *closes* it
+ * rather than merely keeping it small. A client whose socket was down across
+ * the edit reconnects with a cursor already past the edited event, and the
+ * cursor is a sequence number the edit does not mint — so the replay is blind
+ * to the change by construction. Calling that "small and rare" was an
+ * assumption; measured, it left the visitor reading the sentence the agent had
+ * retracted for **30.6 s**, until the widget's heartbeat poll refetched the
+ * transcript. `apps/rtm/src/sync.ts` now answers a sync with the corrections
+ * made inside this window as well as the events after the cursor, and this
+ * constant is what bounds how far back it has to look.
  */
 export const MESSAGE_EDIT_WINDOW_SECONDS = 15 * 60;
 

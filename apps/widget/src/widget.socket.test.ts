@@ -572,6 +572,8 @@ describe('widget RTM connection (FR-MOD-11.6)', () => {
 
     // A message the visitor never received. Adopting it here would show them
     // something they were never sent, on the grounds that somebody edited it.
+    // The widget asks the server instead (see the test below); the server still
+    // does not have it, so the transcript is unchanged.
     socket.push('event_updated', {
       chat_id: 'chat-1',
       event: { ...AGENT_REPLY, text: 'meant for somebody else' },
@@ -579,6 +581,100 @@ describe('widget RTM connection (FR-MOD-11.6)', () => {
     await settle();
 
     expect(bubbles(root)).toEqual(['my order is late']);
+  });
+
+  it('recovers a correction that arrives before the message it corrects', async () => {
+    // The window is one request wide and it used to be fatal: the poll that
+    // carries the original is in flight, the correction's push lands, the
+    // transcript does not hold that id yet — and the push was simply dropped.
+    // Nothing re-delivered it: a push is not replayed, and `sync` cannot carry
+    // an edit because an edit mints no `event_sequence`. The visitor kept
+    // reading the retracted sentence until the 30-second heartbeat poll.
+    const corrected = {
+      ...AGENT_REPLY,
+      text: 'your order ships tomorrow',
+      properties: { edited_at: '2026-09-06T10:05:00.000Z' },
+    };
+    // The first poll predates the agent's message; every later one has it, in
+    // its corrected form — which is what the server would really answer.
+    eventsAt = (poll) => (poll <= 1 ? [VISITOR_ASK] : [VISITOR_ASK, corrected]);
+    const root = mountWidget();
+    const socket = await openLive(root);
+    expect(bubbles(root)).toEqual(['my order is late']);
+
+    socket.push('event_updated', { chat_id: 'chat-1', event: corrected });
+    await settle();
+
+    // No timer advanced: the recovery is the push's own doing, not the next
+    // scheduled poll thirty seconds away.
+    expect(bubbles(root)).toEqual(['my order is late', 'your order ships tomorrow']);
+    expect([...root.querySelectorAll('.nx-edited')].map((el) => el.textContent)).toEqual([
+      'edited',
+    ]);
+  });
+
+  it('applies the corrections a reconnect replays, without moving the cursor', async () => {
+    // The measured failure (tm 248): the socket is down across the edit, so no
+    // push exists to be missed — the gateway's `sync` is the only chance, and a
+    // cursor already past the edited event cannot express it. The gateway now
+    // answers with a `corrections` list beside `events`; this is the half that
+    // reads it.
+    vi.useFakeTimers();
+    const later = message('thr-1_3', 'agent', 'anything else?');
+    eventsAt = () => [VISITOR_ASK, AGENT_REPLY, later];
+    const root = mountWidget();
+    launcher(root).click();
+    await settle();
+    const socket = FakeSocket.instances[0]!;
+    socket.onopen?.();
+    await settle();
+    socket.acceptLogin();
+    await settle();
+
+    // The cursor names the newest event on screen, which sits *after* the one
+    // that was corrected — exactly the shape `events` is blind to.
+    expect(socket.syncRequest()!.payload['cursors']).toEqual({ 'chat-1': 'thr-1_3' });
+    socket.acceptSync({
+      chats: [
+        {
+          chat_id: 'chat-1',
+          thread_id: 'thr-1',
+          events: [],
+          corrections: [
+            {
+              ...AGENT_REPLY,
+              text: 'your order ships tomorrow',
+              properties: { edited_at: '2026-09-06T10:05:00.000Z' },
+            },
+          ],
+          truncated: false,
+        },
+      ],
+    });
+    await settle();
+
+    expect(bubbles(root)).toEqual([
+      'my order is late',
+      'your order ships tomorrow',
+      'anything else?',
+    ]);
+    expect([...root.querySelectorAll('.nx-edited')].map((el) => el.textContent)).toEqual([
+      'edited',
+    ]);
+
+    // And the cursor did not follow the correction backwards. It is "the newest
+    // event seen"; dragging it onto an older, corrected message would make the
+    // next reconnect skip everything in between.
+    socket.close();
+    await settle();
+    await vi.advanceTimersByTimeAsync(30_000);
+    await settle();
+    const reconnected = FakeSocket.instances[1]!;
+    reconnected.onopen?.();
+    await settle();
+    reconnected.acceptLogin();
+    await settle();
+    expect(reconnected.syncRequest()!.payload['cursors']).toEqual({ 'chat-1': 'thr-1_3' });
   });
 
   it('ignores a correction addressed to a different conversation', async () => {

@@ -100,6 +100,13 @@ export interface RtmSyncResult {
     chat_id: string;
     thread_id: string;
     events: ChatEvent[];
+    /**
+     * Events at or before the cursor whose text was corrected in place while
+     * the client was away (FR-MOD-02.3.7). Replaced by id, never appended, and
+     * they do not move the cursor — an edit mints no `event_sequence`, which is
+     * exactly why `events` above cannot carry them.
+     */
+    corrections: ChatEvent[];
     /** True when the gap was too large to replay and a full refetch is needed. */
     truncated: boolean;
   }>;

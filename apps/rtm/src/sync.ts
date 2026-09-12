@@ -22,6 +22,7 @@
  * new conversation must be told about it.
  */
 import type { PrismaClient } from '@prisma/client';
+import { EDITED_AT_PROPERTY, MESSAGE_EDIT_WINDOW_SECONDS } from '@nexa/types';
 import type { SocketPrincipal } from './auth.js';
 
 /**
@@ -36,6 +37,38 @@ export const MAX_REPLAY_PER_CHAT = 200;
 /** Refuse absurd cursor maps outright rather than doing the work first. */
 export const MAX_SYNC_CHATS = 200;
 
+/**
+ * How far back a sync looks for corrections the cursor cannot express.
+ *
+ * A correction rewrites an event in place: no id is minted and no
+ * `event_sequence` moves (`packages/types/src/message-edit.ts` explains why
+ * that shape was chosen over an append-only correction event). The consequence
+ * is that "everything after event N" — the whole of the replay above — is
+ * structurally blind to it, so a client whose socket was down across the edit
+ * reconnects and goes on showing the sentence the agent took back.
+ *
+ * Measured (tm 248), because the comment that described this gap called it
+ * "small and rare" without one: with the socket held shut across the edit, the
+ * gateway's sync answered `events: []` and the visitor read the retracted
+ * wording for a further **30.6 s** — until the widget's 30-second heartbeat
+ * poll refetched the transcript. FR-MOD-02.3.7 is filed under security and its
+ * acceptance criterion is that the wrong sentence stops being readable, so a
+ * half-minute of it is the defect, not the recovery.
+ *
+ * Two bounds, both of them the product's own rules rather than round numbers:
+ *
+ * - **Time.** Only an event still inside `MESSAGE_EDIT_WINDOW_SECONDS` can have
+ *   been corrected, so nothing older can have changed under a connected client.
+ *   This is also the bound `message-edit.ts` already claims keeps the gap small
+ *   — here it is enforced rather than hoped for.
+ * - **Count.** A range on `event_sequence` so the lookback is an index scan of
+ *   at most this many rows rather than the thread's whole history. Reaching it
+ *   needs 200 messages inside one 15-minute window in one conversation; past
+ *   that the client's own transcript refetch is the recovery, exactly as it is
+ *   past `MAX_REPLAY_PER_CHAT`.
+ */
+export const MAX_CORRECTION_LOOKBACK = 200;
+
 export interface SyncCursor {
   chatId: string;
   lastEventId: string | null;
@@ -45,6 +78,17 @@ export interface SyncedChat {
   chat_id: string;
   thread_id: string | null;
   events: unknown[];
+  /**
+   * Events at or before the cursor whose text was corrected in place while the
+   * client was away (FR-MOD-02.3.7) — see `MAX_CORRECTION_LOOKBACK`.
+   *
+   * Kept apart from `events` rather than merged into it because the two mean
+   * different things to a client: `events` are appended and advance the cursor,
+   * these are replaced by id and must not. A correction folded into `events`
+   * would either be dropped by the receiver's already-seen guard or, worse,
+   * print the message a second time.
+   */
+  corrections: unknown[];
   /** True when the gap exceeded the replay cap; the client must refetch. */
   truncated: boolean;
 }
@@ -103,6 +147,7 @@ export class SyncService {
             chat_id: chat.chat_id,
             thread_id: chat.thread_id,
             events: [],
+            corrections: [],
             truncated: true,
           });
           continue;
@@ -130,14 +175,43 @@ export class SyncService {
         const truncated = rows.length > MAX_REPLAY_PER_CHAT;
         const page = truncated ? rows.slice(0, MAX_REPLAY_PER_CHAT) : rows;
 
+        // Corrections the cursor cannot express (FR-MOD-02.3.7). Skipped when
+        // the replay was truncated: that client is already being told to
+        // refetch the whole transcript, which carries the corrected text
+        // anyway, so this would be a second query for an answer it discards.
+        //
+        // `created_at` first because `events` is partitioned on it — the cutoff
+        // prunes every partition but the current one before the sequence range
+        // is considered. The `properties` test is a plain filter over the ≤200
+        // rows that range returns, never an index condition: `events` carries
+        // row level security and a non-leakproof expression cannot be pushed
+        // below that barrier (see the `event_sequence` note above).
+        let corrections: EventRow[] = [];
+        if (!truncated && after > 0) {
+          const editedSince = new Date(Date.now() - MESSAGE_EDIT_WINDOW_SECONDS * 1000);
+          corrections = await tx.$queryRaw<EventRow[]>`
+            SELECT id, chat_id, thread_id, type, text, author_id, author_type,
+                   recipients, attachment_url, properties, created_at
+            FROM events
+            WHERE thread_id = ${chat.thread_id}
+              AND created_at > ${editedSince}
+              AND event_sequence <= ${after}
+              AND event_sequence > ${Math.max(0, after - MAX_CORRECTION_LOOKBACK)}
+              AND properties ->> ${EDITED_AT_PROPERTY} IS NOT NULL
+            ORDER BY event_sequence ASC
+          `;
+        }
+
+        // Internal notes are filtered for customers on both lists — a reconnect
+        // must not become the one path that leaks them.
+        const visibleToPrincipal = (row: EventRow): boolean =>
+          principal.kind !== 'customer' || row.recipients === 'all';
+
         chats.push({
           chat_id: chat.chat_id,
           thread_id: chat.thread_id,
-          // Internal notes are filtered for customers here too — a reconnect
-          // must not become the one path that leaks them.
-          events: page
-            .filter((row) => principal.kind !== 'customer' || row.recipients === 'all')
-            .map(serialiseEvent),
+          events: page.filter(visibleToPrincipal).map(serialiseEvent),
+          corrections: corrections.filter(visibleToPrincipal).map(serialiseEvent),
           truncated,
         });
       }

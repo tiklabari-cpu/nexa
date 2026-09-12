@@ -652,6 +652,97 @@ test.describe('edit after send', () => {
 
     await page.screenshot({ path: 'kanit/02.3.7-widget-edit-after-send.png', fullPage: true });
   });
+
+  /**
+   * The same requirement with the timing pinned instead of hoped for (tm 248).
+   *
+   * The test above was ~50% flaky, and the reason was a race it could not see:
+   * the widget's socket opens roughly a second into the walk, the agent's
+   * correction is published roughly a second into the walk, and whichever wins
+   * decides the outcome. Measured across two runs, the margin was **119 ms** and
+   * then **18 ms**. When the correction won, the push had nobody to be
+   * delivered to, and nothing re-delivered it: `sync` replays "everything after
+   * the cursor" and a correction mints no `event_sequence`, so the gateway
+   * answered `events: []` and the visitor went on reading the retracted
+   * sentence for a further **30.6 s** — until the widget's heartbeat poll
+   * refetched the transcript.
+   *
+   * Here the socket is held shut across the edit, so the losing side of that
+   * race is the only side. What is left to prove is that reconnecting is
+   * enough: no poll, no refresh, no second chance.
+   */
+  test('a correction made while the visitor was offline reaches them on reconnect', async ({
+    page,
+    request,
+    organizationId,
+  }) => {
+    const stamp = Date.now().toString().slice(-6);
+    const question = `is this still in stock? ${stamp}`;
+    const wrong = `Yes, ten left ${stamp}`;
+    const right = `Sorry — none left ${stamp}`;
+    const auth = { authorization: `Bearer ${await ownerAccessToken(request)}` };
+
+    // Hold the gateway handshake. The widget stays on its four-second poll,
+    // which is what a visitor behind a proxy that drops upgrades really does.
+    let connect: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      connect = resolve;
+    });
+    await page.routeWebSocket(/:4001\//, async (socket) => {
+      await held;
+      socket.connectToServer();
+    });
+
+    await openWidget(page, organizationId);
+    await visitorSends(page, question);
+    const transcript = widgetFrame(page).getByRole('log', { name: 'Conversation' });
+
+    let chatId: string | undefined;
+    await expect
+      .poll(
+        async () => {
+          const chats = await request.get(`${API_BASE}/chats?view=all&limit=50`, { headers: auth });
+          if (!chats.ok()) return undefined;
+          const { items } = (await chats.json()) as {
+            items: Array<{ id: string; last_event?: { text?: string | null } | null }>;
+          };
+          chatId = items.find((c) => c.last_event?.text?.includes(stamp))?.id;
+          return chatId;
+        },
+        { timeout: 20_000, message: `no chat carrying "${stamp}"` },
+      )
+      .toBeTruthy();
+
+    const sent = await request.post(`${API_BASE}/chats/${chatId!}/events`, {
+      headers: auth,
+      data: { type: 'message', text: wrong },
+    });
+    expect(sent.ok(), `agent reply failed: ${sent.status()} ${await sent.text()}`).toBe(true);
+    const { id: eventId } = (await sent.json()) as { id: string };
+
+    // Carried by the poll, not by a push — there is no socket. This is also what
+    // puts the visitor's cursor *past* the event about to be corrected, which is
+    // the shape the replay cannot express.
+    await expect(transcript).toContainText(wrong, { timeout: 20_000 });
+
+    const corrected = await request.put(`${API_BASE}/chats/${chatId!}/events/${eventId}`, {
+      headers: auth,
+      data: { text: right },
+    });
+    expect(
+      corrected.ok(),
+      `correction failed: ${corrected.status()} ${await corrected.text()}`,
+    ).toBe(true);
+
+    connect();
+
+    // Ten seconds, deliberately: the heartbeat poll that used to be the only
+    // recovery is thirty seconds away, so anything inside this window is the
+    // reconnect's own doing and nothing else's.
+    await expect(transcript).toContainText(right, { timeout: 10_000 });
+    await expect(transcript).not.toContainText(wrong);
+    await expect(widgetFrame(page).locator('.nx-edited')).toHaveCount(1);
+  });
 });
 
 test.describe('unread badge', () => {

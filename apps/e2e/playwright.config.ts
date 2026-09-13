@@ -89,7 +89,20 @@ export default defineConfig({
       // `apps/api/test/integration/scheduler-e2e.test.ts` boots real servers on
       // 200 ms intervals against its own isolated database and asserts each
       // sweep's actual effect.
-      env: { ...process.env, RATE_LIMIT_ANON_PER_MIN: '2000', SCHEDULER_ENABLED: 'false' },
+      //
+      // The per-agent budget (ADR-07, `RATE_LIMIT_AGENT_PER_MIN`) is raised for
+      // the same reason as the anonymous one above: `nfr-p4-fps.spec.ts` (tm 240)
+      // chains ~210 `GET /tickets` requests back to back to load its 10,500-row
+      // fixture, which alone is past the 180/min production default — measured,
+      // it flips the grid into its error empty-state mid-chain (`tickets.isError`)
+      // once the limiter starts returning 429. The limiter's own behaviour is
+      // covered by `apps/api/test/integration`, not here.
+      env: {
+        ...process.env,
+        RATE_LIMIT_ANON_PER_MIN: '2000',
+        RATE_LIMIT_AGENT_PER_MIN: '5000',
+        SCHEDULER_ENABLED: 'false',
+      },
     },
     {
       command: 'pnpm --filter @nexa/rtm dev',

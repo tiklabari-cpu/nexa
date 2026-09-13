@@ -125,7 +125,7 @@ const TELEGRAM = CASES.find((c) => c.type === 'telegram')!;
 const PAN = '4111111111111111';
 const MASKED = '**** **** **** 1111';
 
-describe('omnichannel adapters (FR-MOD-08.5.4-.6)', () => {
+describe('omnichannel adapters (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)', () => {
   let owner: PrismaClient;
   let server: TestServer;
   let fx: Fixtures;

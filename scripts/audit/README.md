@@ -6,8 +6,8 @@ koşulamaz; bunlar koşulabilir. Hepsi salt-okunurdur — hiçbiri dosya yazmaz.
 
 | Betik                  |  §F.1 maddesi  | Komut                         | Ne ölçer                                                                                                                                                                                                                                                   |
 | ---------------------- | :------------: | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sweep.cjs`            |       1        | `pnpm audit:sweep`            | PRD §6'nın 138 `FR-MOD` satırını çıkarır ve her birinin PLAN'daki damgasını bulur. Hücre-bazlı okur (glif saymaz — §D68–§D77'nin yanlış-pozitif tarihçesi).                                                                                                |
-| `schema-consumers.cjs` |       4        | `pnpm audit:schema-consumers` | `schema.prisma`'daki her modelin `apps/api` + `apps/rtm` kaynağında tüketicisi var mı. Ham SQL / SECURITY DEFINER ile okunan tabloları yanlış-pozitif verir — §8'in GL-9 notuna bak.                                                                       |
+| `sweep.cjs`            |       1        | `pnpm audit:sweep`            | PRD §6'nın 137 `FR-MOD` satırını çıkarır ve her birinin PLAN'daki damgasını bulur. Hücre-bazlı okur: durum yalnız **damgadan** gelir — glifle başlayan hücre ya da `<glif> → K<kod>` işaretçisi; not metnindeki glif sayılmaz (tm 234 · §D158).            |
+| `schema-consumers.cjs` |       4        | `pnpm audit:schema-consumers` | `schema.prisma`'daki her modelin `apps/api` + `apps/rtm` kaynağında tüketicisi var mı: Prisma çağrısı, ham SQL, ya da migration'daki bir SQL fonksiyonu (gövdesi tabloyu anan **ve** kaynakta çağrılan — SECURITY DEFINER yolu, tm 234).                   |
 | `silent-debt.cjs`      |       6        | `pnpm audit:silent-debt`      | `TODO`/`FIXME`/`XXX`/`HACK`/`@ts-expect-error`/`@ts-ignore`/`.skip`/`.only`/`eslint-disable` taraması, izlenen tüm kaynakta.                                                                                                                               |
 | `dead-code.cjs`        |       7        | `pnpm audit:dead-code`        | Referanssız api route'u, web `features/` modülü ve api servisi. CLI girişleri (`package.json` script'leri) yanlış-pozitif çıkar.                                                                                                                           |
 | `endpoint-ui.cjs`      |       7        | `pnpm audit:endpoint-ui`      | Sözleşmedeki hangi **operasyonun** (yol **+ metot**) web/widget/mobile'da çağıranı yok (önce `pnpm contract:generate` gerekir). Cevabı elle sınıflandırmaz — cagrilmayan her operasyon üç listeden birindedir, bulgu varsa **exit 1** (aşağı bak, tm 215). |
@@ -113,3 +113,11 @@ olmasını şart koşuyor, §7.4 ise böyle bir sıra dayatmıyor — `(400, NFR
 `(M-LOAD-CAP · NFR-R2)` grep'e görünmez. Bu yüzden §7.1'in tablosu 74 madde / 141 dosya derken
 betik **75 / 146** diyor. Ayrıca JS alternasyonu leftmost-**first** olduğu için §7.6'nın regex'i
 birebir taşınırsa `FR-MOD-04.RBAC` → `FR-MOD-04.` olur; betik dallanmayı düzeltti.
+
+**Kısaltma kovaları — eğik çizgi ve aralık (tm 234).** `NFR-S4/S5` de `FR-MOD-08.5.4-.6` de
+yalnız ilk ID'yi talep eder; geri kalanı sessizce etiketsiz görünür. İkisi ayrı kovada, sıfırken
+de yazdırılır (`slash abbreviations = 0` · `range abbreviations = 0`). Katalogun kendisinin tek
+madde olarak listelediği aralık (`FR-MOD-02.4.1–.6`, `TAG_ALIASES`) kısaltma sayılmaz; küçük harfli
+iş kalemi soneki (`FR-MOD-11.5-b`) de. tm 234 iki eğik çizgiyi ve sekiz aralığı açık ID'lere çevirdi
+— her ID, bloğun iddiası o maddenin kabul kriterini gerçekten ölçüyorsa (§7.2) — ve
+`req-coverage-audit.test.ts` iki kovayı sıfırda tutar; CLI'ın çıkış kodu değişmedi.

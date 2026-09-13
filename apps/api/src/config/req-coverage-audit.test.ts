@@ -55,13 +55,15 @@ interface Analysis {
   untagged: { id: string }[];
   unknownTags: Site[];
   lostClaims: { file: string; line: number }[];
+  slashAbbreviations: { file: string; line: number; abbreviation: string }[];
+  rangeAbbreviations: { file: string; line: number; abbreviation: string }[];
 }
 interface Module {
   analyse: () => Analysis;
   toJson: (analysis: Analysis) => Record<string, unknown>;
   blankBlockComments: (source: string) => string;
   readTitle: (line: string, openIndex: number, parameterised: boolean) => string | null;
-  idsInTitle: (title: string, slashed: string[]) => string[];
+  idsInTitle: (title: string, slashed: string[], ranged?: string[]) => string[];
   EXPECTED_ROWS: number;
   WAIVERS: { id: string; kind: string; reason: string; source: string }[];
 }
@@ -162,6 +164,44 @@ describe('requirement coverage report (CONVENTIONS §7)', () => {
     // claim is gone either way. Reporting it is the only honest option.
     expect(idsInTitle('brand isolation (Multibrand RLS · NFR-S4/S5)', slashed)).toEqual(['NFR-S4']);
     expect(slashed).toEqual(['NFR-S4/S5']);
+  });
+
+  it('reports a range abbreviation too, but not a range the catalogue lists as one item (tm 234)', () => {
+    const { idsInTitle } = load();
+    const slashed: string[] = [];
+    const ranged: string[] = [];
+
+    // The same loss as the slash, in the shape GL-17 found on channels.spec.ts:
+    // only `08.5.4` is claimed, and `08.5.5` / `08.5.6` read as untagged.
+    expect(idsInTitle('omnichannel adapters (FR-MOD-08.5.4-.6)', slashed, ranged)).toEqual([
+      'FR-MOD-08.5.4',
+    ]);
+    // En-dash, as the PLAN row codes write it.
+    expect(idsInTitle('plan, seats and billing cycle (FR-MOD-10.1.1–.3)', slashed, ranged)).toEqual(
+      ['FR-MOD-10.1.1'],
+    );
+    expect(ranged).toEqual(['FR-MOD-08.5.4-.6', 'FR-MOD-10.1.1–.3']);
+
+    ranged.length = 0;
+    // `FR-MOD-02.4.1–.6` IS a catalogue item (TAG_ALIASES) — nothing is lost.
+    expect(idsInTitle('assignment (FR-MOD-02.4.1–.6)', slashed, ranged)).toEqual(['FR-MOD-02.4.1']);
+    // A lower-case work-item suffix rides along; it is not a second ID.
+    expect(idsInTitle('MCP manifest (FR-MOD-08.8.3-b)', slashed, ranged)).toEqual([
+      'FR-MOD-08.8.3',
+    ]);
+    expect(idsInTitle('widget rating (FR-MOD-07.8-b)', slashed, ranged)).toEqual(['FR-MOD-07.8']);
+    expect(ranged).toEqual([]);
+    expect(slashed).toEqual([]);
+  });
+
+  it('holds the repo at zero slash and range abbreviations (CONVENTIONS §7.3)', () => {
+    const analysis = withRepoRoot(() => load().analyse());
+
+    // The CLI only reports these (§7.5 keeps its exit code for integrity
+    // errors), so without this pin the next abbreviated title would silently
+    // drop a claim again — tm 234 emptied both buckets: 2 slashes, 8 ranges.
+    expect(analysis.slashAbbreviations).toEqual([]);
+    expect(analysis.rangeAbbreviations).toEqual([]);
   });
 
   it('reads a title out of the call shapes that appear in this repo', () => {

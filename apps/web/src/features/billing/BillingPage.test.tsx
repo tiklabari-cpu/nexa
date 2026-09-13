@@ -492,7 +492,7 @@ describe('BillingPage — buying AI overage packs (FR-MOD-10.1.4)', () => {
   });
 });
 
-describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1–.3)', () => {
+describe('BillingPage — plan, seats and billing cycle (FR-MOD-10.1.1 · FR-MOD-10.1.3)', () => {
   it('switches to annual billing through a PATCH and reflects the reply', async () => {
     const user = userEvent.setup();
     mockBilling({ billingCycle: 'monthly', seats: 3 });

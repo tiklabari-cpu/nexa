@@ -59,6 +59,9 @@
  * abbreviation §7.3 forbids (`NFR-S4/S5`). No extractor can expand it, so the
  * second ID is lost either way; `slashAbbreviations` lists the titles that
  * still do it, since a silently lost claim is exactly what this exists to find.
+ * Its range twin (`FR-MOD-08.5.4-.6`) loses IDs the same way and is listed
+ * as `rangeAbbreviations` (tm 234). Both buckets were emptied in tm 234 and
+ * `req-coverage-audit.test.ts` holds them at zero; this CLI still only reports.
  *
  * ── HEURISTIC, and where it stops ───────────────────────────────────────────
  *
@@ -402,8 +405,17 @@ function readTitle(line, openIndex, parameterised) {
  *
  * `slashed` carries back the §7.3 violations found on the way — `NFR-S4/S5`
  * yields `NFR-S4` and loses `S5`, which is the whole reason the rule bans it.
+ *
+ * `ranged` carries back the same loss in range form (tm 234): `FR-MOD-08.5.4-.6`
+ * yields `FR-MOD-08.5.4` and loses `.5` and `.6`. GL-17 found it reading a
+ * title; measured, eight titles did it and four catalogue items (`08.5.5`,
+ * `08.5.6`, `10.1.2`, `10.1.3`) read as untagged because of it. A range the
+ * catalogue itself lists as ONE item (`FR-MOD-02.4.1–.6`, see TAG_ALIASES) is
+ * a whole ID, not an abbreviation. A lower-case suffix (`FR-MOD-11.5-b`) is a
+ * work-item id riding along and loses nothing.
  */
-function idsInTitle(title, slashed) {
+function idsInTitle(title, slashed, ranged = []) {
+  const aliased = new Set(TAG_ALIASES.values());
   const ids = [];
   for (const group of title.match(/\([^)]*\)/g) || []) {
     for (const match of group.matchAll(REQ_ID)) {
@@ -412,6 +424,9 @@ function idsInTitle(title, slashed) {
       const after = group.slice(match.index + match[0].length);
       if (/^\/[0-9A-Za-z]/.test(after))
         slashed.push(`${normalised}${after.split(/[^0-9A-Za-z/.]/)[0]}`);
+      const range = /^[-–]\.?[A-Z]*[0-9][0-9A-Za-z.]*/.exec(after);
+      if (range && !aliased.has(`${normalised}${range[0]}`))
+        ranged.push(`${normalised}${range[0]}`);
     }
   }
   return ids;
@@ -432,6 +447,7 @@ function scanTests() {
   const sites = [];
   const unscannable = [];
   const slashAbbreviations = [];
+  const rangeAbbreviations = [];
 
   for (const file of files) {
     const raw = fs.readFileSync(file, 'utf8');
@@ -452,15 +468,19 @@ function scanTests() {
         return;
       }
       const slashed = [];
-      const ids = idsInTitle(title, slashed);
+      const ranged = [];
+      const ids = idsInTitle(title, slashed, ranged);
       for (const abbreviation of slashed) {
         slashAbbreviations.push({ file, line: index + 1, abbreviation, title });
+      }
+      for (const abbreviation of ranged) {
+        rangeAbbreviations.push({ file, line: index + 1, abbreviation, title });
       }
       if (ids.length) sites.push({ file, line: index + 1, title, ids });
     });
   }
 
-  return { files, sites, unscannable, slashAbbreviations };
+  return { files, sites, unscannable, slashAbbreviations, rangeAbbreviations };
 }
 
 // ── analysis ────────────────────────────────────────────────────────────────
@@ -472,7 +492,7 @@ function scanTests() {
  */
 function analyse() {
   const { rows, items, duplicates, conflicts } = parseCatalogue();
-  const { files, sites, unscannable, slashAbbreviations } = scanTests();
+  const { files, sites, unscannable, slashAbbreviations, rangeAbbreviations } = scanTests();
 
   const errors = [];
   for (const { id, verdicts } of conflicts) {
@@ -545,6 +565,7 @@ function analyse() {
     files,
     unscannable,
     slashAbbreviations,
+    rangeAbbreviations,
     unknownTags,
     errors,
     waived,
@@ -588,6 +609,7 @@ function toJson(a) {
     })),
     unknownTags: a.unknownTags,
     slashAbbreviations: a.slashAbbreviations,
+    rangeAbbreviations: a.rangeAbbreviations,
     unscannable: { total: a.unscannable.length, nearACatalogueId: a.lostClaims },
     errors: a.errors,
   };
@@ -618,6 +640,7 @@ function main(argv) {
     files,
     unscannable,
     slashAbbreviations,
+    rangeAbbreviations,
     errors,
     waived,
     claims,
@@ -679,13 +702,19 @@ function main(argv) {
     console.log(`   ${''.padEnd(20)} ${''.padEnd(16)} source: ${w.source}`);
   }
 
-  if (slashAbbreviations.length) {
-    console.log(
-      `\n### slash abbreviations = ${slashAbbreviations.length}  (§7.3 forbids them: the second ID is lost)`,
-    );
-    for (const s of slashAbbreviations) {
-      console.log(`   ${s.file}:${s.line}  ${s.abbreviation}  in  ${s.title.slice(0, 70)}`);
-    }
+  // Printed at zero too: a closure nobody can see in the output is a claim, not a measurement.
+  console.log(
+    `\n### slash abbreviations = ${slashAbbreviations.length}  (§7.3 forbids them: the second ID is lost)`,
+  );
+  for (const s of slashAbbreviations) {
+    console.log(`   ${s.file}:${s.line}  ${s.abbreviation}  in  ${s.title.slice(0, 70)}`);
+  }
+
+  console.log(
+    `\n### range abbreviations = ${rangeAbbreviations.length}  (§7.3: only the first ID of the range is claimed)`,
+  );
+  for (const s of rangeAbbreviations) {
+    console.log(`   ${s.file}:${s.line}  ${s.abbreviation}  in  ${s.title.slice(0, 70)}`);
   }
 
   console.log(

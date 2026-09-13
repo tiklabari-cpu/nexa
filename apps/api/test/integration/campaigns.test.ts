@@ -432,7 +432,7 @@ describe('campaigns', () => {
 
   // --- Performance (FR-MOD-03.3.3) -------------------------------------------
 
-  it('counts displayed / chats / conversion from delivered sends, not raw send rows (FR-MOD-03.3.1-.3)', async () => {
+  it('counts displayed / chats / conversion from delivered sends, not raw send rows (FR-MOD-03.3.3)', async () => {
     const c1 = await seedVisitor(fx.a, 'Displayed only', 'https://shop.example/pricing');
     const c2 = await seedVisitor(fx.a, 'Engaged', 'https://shop.example/pricing');
     const c3 = await seedVisitor(fx.a, 'Converted', 'https://shop.example/pricing');
@@ -527,7 +527,7 @@ describe('campaigns', () => {
   // separate, undelivered-safe count a "reached N visitors" notification
   // reads instead; `performance.displayed` itself must stay 0 here.
 
-  it('reports `matched` as the freshly-targeted visitor count, independent of delivery (FR-MOD-03.3.1-.3)', async () => {
+  it('reports `matched` as the freshly-targeted visitor count, independent of delivery (FR-MOD-03.3.2 · FR-MOD-03.3.3)', async () => {
     await seedVisitor(fx.a, 'On Pricing', 'https://shop.example/pricing');
 
     const response = await create(writeToken, {

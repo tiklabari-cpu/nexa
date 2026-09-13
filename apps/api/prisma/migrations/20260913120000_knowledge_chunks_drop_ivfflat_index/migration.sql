@@ -1,0 +1,28 @@
+-- Retires the IVFFlat index on knowledge_chunks.embedding (tm 254 · PLAN §D173).
+--
+-- Alone in this file on purpose. `DROP INDEX CONCURRENTLY` cannot run inside a
+-- transaction block, and PostgreSQL wraps a multi-statement simple query in an
+-- implicit one -- a second statement beside this one fails the whole migration
+-- with 25001 (CONVENTIONS 6.3). Concurrently, because a plain `DROP INDEX` takes
+-- ACCESS EXCLUSIVE on the table, and every source an admin saves and every
+-- customer question the AI agent answers reads or writes `knowledge_chunks`.
+--
+-- WHY IT GOES. `20260722154008_domain_model` built `idx_chunks_embedding`
+-- (`USING ivfflat ... WITH (lists = 100)`) on an EMPTY table, and IVFFlat takes
+-- its list centroids from the rows present when it is built. With none present
+-- pgvector draws them at random, so every `migrate deploy` produced a different
+-- and useless partition of the vector space: a scan with the default
+-- `ivfflat.probes = 1` read one list in a hundred and lost whatever was filed
+-- under the other ninety-nine. That was the GL-16 defect -- a ready source not
+-- found at 0.58 similarity -- and tm 252 stopped retrieval from ever reading
+-- this index. Since then it only cost: it is as large as the vectors themselves
+-- (548 MB at 70,000 chunks), it is written on every chunk insert, and any new
+-- query ordered by a bare `<=>` could still be answered from it by accident.
+--
+-- Old and new code both tolerate its absence (CONVENTIONS 6.3): the release
+-- this ships beside searches exactly below its ceiling and through the HNSW
+-- index of the next migration above it, and the release before it never read
+-- this index at all. Dropped before the replacement is built so the two never
+-- coexist -- no window in which a bare `<=>` could pick the broken one, and no
+-- doubled index write during the build.
+DROP INDEX CONCURRENTLY IF EXISTS "idx_chunks_embedding";

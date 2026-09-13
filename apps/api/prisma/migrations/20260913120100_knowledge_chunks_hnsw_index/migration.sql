@@ -1,0 +1,40 @@
+-- The approximate index knowledge retrieval reads above its exact-search
+-- ceiling (tm 254 · PLAN §D173 · `KnowledgeService.search`).
+--
+-- Alone in this file on purpose: `CREATE INDEX CONCURRENTLY` cannot run inside
+-- a transaction block (CONVENTIONS 6.3). Concurrently, because on a populated
+-- table this build is long -- 38-42 s for 70,000 chunks on one core, measured
+-- -- and a plain `CREATE INDEX` would hold every chunk write for all of it.
+--
+-- HNSW, NOT IVFFLAT. IVFFlat learns its lists from the rows present at build
+-- time, and a migration builds on whatever the table holds: empty on every
+-- fresh install, which is exactly how the index the previous migration drops
+-- came to be useless. HNSW has no training step -- pgvector's README: it "can
+-- be created without any data in the table" -- so the graph a fresh install
+-- starts with is the graph production grows.
+--
+-- m AND ef_construction ARE PGVECTOR'S DEFAULTS, CHOSEN BY MEASUREMENT. One
+-- index serves every tenant, so every chunk any tenant writes pays for the
+-- graph. Indexing one 100,000-character source (502 chunks) into a 70,000-chunk
+-- table, through `KnowledgeService.index` as nexa_app, cost:
+--
+--   no vector index          0.63-0.68 s
+--   ivfflat (lists = 100)    0.57-0.74 s
+--   hnsw m = 16, efc = 64    1.8-3.1 s
+--   hnsw m = 24, efc = 128   4.4-7.6 s
+--   hnsw m = 32, efc = 200   8.6-15.7 s
+--
+-- and that write runs inside the admin's request, under the 10 s tenant
+-- transaction timeout. The bigger graphs do find more (PLAN §D173 has the recall
+-- tables), but the recall they buy is bought back at query time instead --
+-- `hnsw.ef_search`, iterative scan, re-sorted candidates, and an exact search
+-- whenever the approximate one finds nothing above the threshold -- where it is
+-- paid only by the tenants large enough to use this index.
+--
+-- NO `IF NOT EXISTS`. A concurrent build that fails leaves an INVALID index of
+-- this name behind; `IF NOT EXISTS` would make the retry skip the build and keep
+-- the invalid one, which the planner never uses and every write still maintains.
+-- Recover by dropping the leftover (`DROP INDEX CONCURRENTLY
+-- idx_chunks_embedding_hnsw`), then `prisma migrate resolve --rolled-back` this
+-- migration and deploy again.
+CREATE INDEX CONCURRENTLY "idx_chunks_embedding_hnsw" ON "knowledge_chunks" USING hnsw ("embedding" vector_cosine_ops) WITH (m = 16, ef_construction = 64);

@@ -21,6 +21,7 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:check-drift": "tsx scripts/check-drift.ts",
     "measure:concurrent-migrate": "tsx scripts/measure-concurrent-migrate.ts",
+    "measure:knowledge-retrieval": "tsx scripts/measure-knowledge-retrieval.ts",
     "measure:transcript-page": "tsx scripts/measure-transcript-page.ts",
     "retention:run": "tsx src/services/retention/run.ts",
     "chat-timeout:run": "tsx src/services/chat/chat-timeout-run.ts",

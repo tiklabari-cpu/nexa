@@ -1692,11 +1692,14 @@ model KnowledgeSource {
   @@map("knowledge_sources")
 }
 
-/// Retrieval unit. The embedding column is pgvector; its ivfflat index is
-/// created in the migration because Prisma cannot express index methods.
-/// That index was built on an empty table, so its lists are untrained: a query
-/// ordered by a bare `<=>` can be answered from it and silently miss rows.
-/// Retrieval searches exactly instead (`KnowledgeService.retrieve`, tm 252).
+/// Retrieval unit. The embedding column is pgvector; its hnsw index
+/// (`idx_chunks_embedding_hnsw`) is created in a migration because Prisma
+/// cannot express index methods. It is approximate, and only
+/// `KnowledgeService.search` reads it — above the exact-search ceiling, with
+/// the plan pinned and its settings rolled back (tm 254). Search through the
+/// service: the planner cannot see what a vector's TOAST read costs, so a new
+/// query ordered by a bare `<=>` gets the approximate index or a full scan by a
+/// hair, and on the index it can miss rows without saying so.
 model KnowledgeChunk {
   id         String                       @id @default(uuid()) @db.Uuid
   sourceId   String                       @map("source_id") @db.Uuid

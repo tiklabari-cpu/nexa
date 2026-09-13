@@ -111,9 +111,11 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   ```
 
   Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
-  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **89 + 138 = 227**; sayı
-  2026-09-12'de GL-15 · tm 210 turunda yeniden ölçüldü — metin "80 + 129 = 209" ile bayattı,
-  Faz-8 (tm 213–246) arayı doldurdu; ondan önce 2026-09-07'de GL-13 · tm 208 "70 + 110 = 180"i,
+  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **89 + 139 = 228**; sayı
+  2026-09-13'te GL-17 · tm 253 turunda yeniden ölçüldü — metin "89 + 138 = 227" ile bir dosya
+  bayattı, tm 252'nin `knowledge-retrieval-recall.test.ts`'i; GL-16 aynı gün 227'yi taze bulmuştu.
+  Ondan önce 2026-09-12'de GL-15 · tm 210 "80 + 129 = 209"u düzeltti, Faz-8 (tm 213–246) arayı
+  doldurmuştu; ondan önce 2026-09-07'de GL-13 · tm 208 "70 + 110 = 180"i,
   2026-08-30'da GL-11 · tm 158 "54 + 90 = 144"ü düzeltmişti. **Bu satır her kapanış turunda
   bayat çıkıyor — sayıyı ölçmeden devralma.**). HANDOFF'a "parçalandı" diye yaz ki bir sonraki pencere sayıları
   eşleştirebilsin.

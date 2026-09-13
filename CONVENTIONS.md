@@ -104,15 +104,17 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
 
   ```
   npx turbo run test --force --filter=!@nexa/e2e --filter=!@nexa/api   # ~1 dk
-  npx turbo run test:unit --force --filter=@nexa/api                   # ~1 dk (89 dosya)
+  npx turbo run test:unit --force --filter=@nexa/api                   # ~1 dk (91 dosya)
   # ×3 (shard 1/3, 2/3, 3/3) — ~5 / 4 / 2,5 dk
   cd apps/api
   npx tsx scripts/with-test-datastores.ts vitest run --dir test/integration --shard=1/3
   ```
 
   Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
-  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **89 + 139 = 228**; sayı
-  2026-09-13'te GL-17 · tm 253 turunda yeniden ölçüldü — metin "89 + 138 = 227" ile bir dosya
+  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **91 + 139 = 230**; aynı gün
+  tm 234 iki denetim testi ekledi — `src/config/schema-consumers-audit.test.ts` ·
+  `sweep-audit.test.ts` — ve unit shard'ı 91 dosya, integration 47 + 47 + 45 ölçüldü. Önce
+  "89 + 139 = 228" 2026-09-13'te GL-17 · tm 253 turunda yeniden ölçülmüştü — metin "89 + 138 = 227" ile bir dosya
   bayattı, tm 252'nin `knowledge-retrieval-recall.test.ts`'i; GL-16 aynı gün 227'yi taze bulmuştu.
   Ondan önce 2026-09-12'de GL-15 · tm 210 "80 + 129 = 209"u düzeltti, Faz-8 (tm 213–246) arayı
   doldurmuştu; ondan önce 2026-09-07'de GL-13 · tm 208 "70 + 110 = 180"i,
@@ -387,6 +389,13 @@ Katalog maddesi OLMAYAN iki şey etikete girmez — ikisi de yorumda serbesttir:
 var; çıkarıcı bunu genişletemez, yalnız ilk ID'yi görür ve ikincisi **sessizce kaybolur**.
 Etikette her ID tam yazılır: `(NFR-C5 · NFR-S9)`.
 
+**Aralık kısaltması da YASAK, aynı sebeple** (tm 234). `(FR-MOD-08.5.4-.6)` yalnız `08.5.4`'ü
+talep eder; ölçüldü, sekiz başlık bunu yapıyordu ve `08.5.5` · `08.5.6` · `10.1.2` · `10.1.3`
+bu yüzden etiketsiz görünüyordu. Aralık çoğu zaman PLAN satır kodundan (`03.3.1–.3`) gelir
+— o bir iş adıdır, iddia değil. Doğrusu, bloğun kriterini gerçekten ölçtüğü maddeleri tek tek
+yazmaktır (§7.2): `(FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)`. Tek istisna, katalogun
+**kendisinin** tek madde olarak listelediği aralıktır (`FR-MOD-02.4.1–.6`, §7.6).
+
 ### 7.4 Çoktan-çoğa
 
 - **Bir test → birden çok madde:** aynı parantezde `·` ile ayır — `(FR-MOD-08.9.5 · NFR-C5)`.
@@ -462,8 +471,10 @@ tm 184.2 · `--json` ile makine biçimi). Betiği yazarken yukarıdaki komutun *
   orada duruyor). Betik `FR-MOD-` dalını `[0-9]+(?:\.[0-9A-Za-z]+)*` yaparak kapattı.
 
 Üçüncü kusur düzeltilebilir değil, **raporlanıyor**: §7.3'ün yasakladığı eğik çizgi kısaltması
-(bugün iki başlıkta `NFR-S4/S5`) hiçbir çıkarıcı tarafından genişletilemez, ikinci ID her
-hâlükârda kayboluyor — betik bu başlıkları ayrı bir kovada listeliyor.
+(tm 234'e kadar iki başlıkta `NFR-S4/S5`) hiçbir çıkarıcı tarafından genişletilemez, ikinci ID her
+hâlükârda kayboluyor — betik bu başlıkları ayrı bir kovada listeliyor. tm 234 aralık
+kısaltmasını ikinci bir kovaya aldı; iki kova da o turdan beri **0** ve
+`req-coverage-audit.test.ts` onları sıfırda tutuyor (CLI'ın çıkış kodu §1.5'teki gibi kaldı).
 
 ### 7.7 Bu kuralın SATIN ALMADIĞI şey
 

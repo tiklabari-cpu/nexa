@@ -116,7 +116,7 @@ function scopeCoverageGaps(
 /** Sentinel that rolls an interactive transaction back after inspecting it. */
 const ROLLBACK_PROBE = new Error('rollback brand-scope probe');
 
-describe('brand isolation (Multibrand RLS · NFR-S4/S5)', () => {
+describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
   let owner: PrismaClient;
   let app: PrismaClient;
   let server: TestServer;
@@ -406,7 +406,7 @@ describe('brand isolation (Multibrand RLS · NFR-S4/S5)', () => {
   // v2-04:441 requires an isolation test for every brand-scoped repository
   // method. Generated from BRAND_SCOPED_TABLES so the requirement is met by
   // construction: the day a table joins the list, its test exists.
-  describe('cross-brand isolation matrix (every brand-scoped table · NFR-S4/S5)', () => {
+  describe('cross-brand isolation matrix (every brand-scoped table · NFR-S4 · NFR-S5)', () => {
     const countByBrand = (
       ctx: { licenseId: bigint; organizationId: string; brandId?: string },
       table: string,

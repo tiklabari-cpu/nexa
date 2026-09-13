@@ -207,7 +207,7 @@ describe('campaignPerformance', () => {
     ).toEqual({ displayed: 3, chats: 2, conversion: 1 });
   });
 
-  it('does not count a send that has not been delivered yet as displayed (FR-MOD-03.3.1-.3)', () => {
+  it('does not count a send that has not been delivered yet as displayed (FR-MOD-03.3.3)', () => {
     expect(
       campaignPerformance([
         { deliveredAt: delivered, engaged: false, converted: false },
@@ -216,7 +216,7 @@ describe('campaignPerformance', () => {
     ).toEqual({ displayed: 1, chats: 0, conversion: 0 });
   });
 
-  it('does not count an undelivered send as a conversion, even if the goal already fired (FR-MOD-03.3.1-.3)', () => {
+  it('does not count an undelivered send as a conversion, even if the goal already fired (FR-MOD-03.3.3)', () => {
     // GoalService.evaluate marks every one of a customer's sends `converted`
     // on a goal hit without checking delivery (campaign-trigger.ts's M-CAMP-e
     // note) — a send can carry `converted: true` with `deliveredAt: null`.
@@ -227,7 +227,7 @@ describe('campaignPerformance', () => {
     });
   });
 
-  it('is all zeros, not NaN/Infinity, when nothing has been delivered yet (FR-MOD-03.3.1-.3)', () => {
+  it('is all zeros, not NaN/Infinity, when nothing has been delivered yet (FR-MOD-03.3.3)', () => {
     expect(
       campaignPerformance([
         { deliveredAt: null, engaged: false, converted: false },

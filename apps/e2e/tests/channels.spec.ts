@@ -233,7 +233,7 @@ test.afterAll(async () => {
 // disconnect at the end is the "and it goes away again" half of the claim.
 test.describe.configure({ mode: 'serial' });
 
-test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4-.6)', () => {
+test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)', () => {
   /**
    * The "before" half of the acceptance criterion, asserted rather than
    * assumed. Without it the connected assertions prove far less — a rail row

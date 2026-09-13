@@ -13,6 +13,73 @@
 
 ## Task log (newest-first)
 
+## 232 — GL-16 · F8-KAPAT: **Faz-8 §F.00 kapanış turu — `✅ KAPALI`** (kalem kuralı 21/21 · §F.1 tam sürüm · §F.2 raporu) — **aynı tur v1 kapısını `06.3.3` `◐` ile yeniden AÇTI** — done — 2026-09-13 UTC
+
+- **Yapıldı:** §6D'nin GL-16 dışındaki 21 satırı **dört bağımsız kaynağa** karşı sayıldı → **21 ✅ · 0 ◐ · 0 ⬜** (payda 21 SABİT). Tablo tur başında **sekiz** satırda bayat `⬜` taşıyordu (213 · 214 · 216 · 217 · 221 · 229 · 230 · 231). Kaynaklar: Task Master `done` 21/21 · PRD kodunun gereksinim damgası · `## K`'da görevin kendi maddesi **37** · o maddelerin andığı **275/275** dosya diskte. PLAN: satır 28 `✅ KAPALI` · §6D kapanış paragrafı + tm 213–231 toplu SONUÇ · §F.00 Faz-8 kapısı · §F.3 · §D169 · `#### KGL-16`. **Bulgu — e2e'nin tek kırmızısı bir ÜRÜN kusuru:** `persona-answer.spec.ts:30` (302/303; tm 217'de de düşmüştü, tek başına 1/1). `skill_runs`: skill eşleşti, `send_message` "nothing in the knowledge base above 0.25" dedi — kaynak `ready`'di, aynı ajana bağlıydı. Aynı soru `embed()` + `retrieve()` sorgusuyla `nexa_app` altında: **IVFFlat indeks yolu 0 satır**, tam arama o pasajı **0,5810** ile buluyor (`ivfflat.probes=1`, `lists=100`, indeks boş tabloda inşa). `06.3.3` (`Must (v1)`, "kaynak retrieval'da kullanılır") **`◐`** → v1 **19 ✅ · 1 ◐** (GL-14 komutu `20 1 0`), satır 21 `❌ AÇIK (yeniden)`. Açıldı: **tm 252** (`high`, düzeltme) · **tm 253** (`high`, GL-17 v1 yeniden kapanış, 252'ye bağlı). Ürün kodu **değişmedi**.
+- **Doğrulama (exit code'larla):** typecheck **13/13** · lint **10/10** · build **8/8** (üçü `turbo --force`) · format:check temiz · `contract:generate` diff boş (217 path) · `db:check-drift` no drift · `audit:req-coverage` exit 0 (125 etiketli, 0 hata) · `audit:sweep` OPEN 0 · PARTIAL 0 tur başında, `06.3.3` kararından sonra PARTIAL 1 · `audit:endpoint-ui` UNEXPLAINED 0 · `audit:unpaged-lists` UNPAGED 0 · `audit:dead-code`/`silent-debt`/`schema-consumers` exit 0. Testler §1.3 parçalı, `--force`: turbo test api/web/e2e hariç **113 / 1.287** · web **180 / 2.235** · api unit **89 / 1.443** · api integration 3 shard **46+46+46 = 138 / 3.457** → **520 / 8.422**; rtm integration **8 / 111**. e2e **302/303** (20,6 dk · 88 axe taraması blocking 0 · 158 kanit PNG geri alındı). **§F.1/9 ilk kez gerçekten sıfırdan:** `-p nexa-demo-gl16` → 93 migration + seed, altı servis healthy, smoke **17/17**, `down -v` yalnız o proje.
+- **Varsayımlar:** kaynak 2 tablonun kendi `Damga` sütunu değil PRD kodunun §3/§4/§7.2 damgası olarak okundu (çevrilecek sütunu tanık saymak döngüsel olurdu). `06.3.2` `✅` bırakıldı — yazma tarafı ölçülen olayda da doğruydu; indeks DDL'i onun payı olduğundan `#### K06.3.2`'ye not düşüldü. Faz-0 satırının "Genel durum" sayısı §F.1/8 olarak 59/0/0'a düzeltildi (Faz-8'in kapattığı yedi satır); `Must` ve kapanış hücrelerine dokunulmadı.
+- **Sonraki pencereye not:** (a) **Temiz kurulum provasını varsayılan `nexa-demo` projesiyle KOŞMA** — volume'u 2026-09-07'den beri kalıcı, prova "sıfırdan" olmuyor; benzersiz `-p` adı + aynı adla `down -v` (önce `docker volume ls`; dev `nexa_*` etkilenmez). npm kayıt defteri bu turda hosttan 60 sn zaman aşımı verdi, build 759 sn sürdü. (b) Panel: `suspicious-done` `08.3`/`06.4` tarihçe yanlış-pozitifi (sonraki `✅` maddeleri ödemiş, "kapandı/hak edilmiş" demiyor) — Faz-8 satırı olmadıkları için dokunulmadı; `K08.7.7`'deki blok denetimi maddesi emsaldir. `phase-blockers` "Faz 1: 06.3.3 ◐" `info` ve doğru. (c) tm 252 için belirlenimci üretim `#### K06.3.3` son maddede; **chunk'ı kendi vektörüyle arayan recall testi kusuru YAKALAMAZ** (19/19 aynı top-3). (d) tm 234'ün `unpaged-lists` payı bugün zaten exit 0 — o pencere önce onu doğrulasın.
+
+---
+
+### §F.2 RAPORU — Faz-8 kapanış turu · GL-16 · tm 232 · 2026-09-13
+
+**1) Tamamlanan kapsam (PRD kimlikleriyle).** Faz-8 PRD dışı bir fazdır (§F.3, §D149) ve `Must`
+içermez → kalem kuralı, **21/21 `✅`**. İki triyaj: tm 211 (`07.7` v1 · `09.2` v1 · `11.7` · `13.7`
+damga işiydi; `06.6` → tm 238 kural botu, teslim) · tm 212 (§7.2'nin on bir NFR satırı: sekizi `✅`,
+üçü görevleşti — `P6` tm 239 · `C1/C2/C8` tm 241 · `M-STORE` tm 242 teslim; `P4` tm 240 açık). On dokuz
+iş kalemi: `02.1.1` gözetimi bırakma (213) · `03.3.1–.3` teslim edileni sayan `displayed` (214) · uç
+denetiminin metot körlüğü (215) · `00.4` beş adımlı onboarding (216) · `01.1.1` logo menüsü (217) ·
+`02.1.4` kanal görünümleri (218) · `02.3.2` bağlamlı ve i18n'li öneriler (219) · `03.1.1` RTM'e bağlı
+Traffic (220) · `05.4` insan sahibi filtresi (221) · `06.5` PRD'nin dört AI KPI'ı (222) · `07.1`
+Reports kenar çubuğu (223) · `07.3.1` paylaşılabilir rapor bağlantısı (224) · `07.3.3` karşılaştırmalı
+Chats kartları (225) · `07.8` Insights (226) · `08.7.5` şablon tüketicisi (227) · `08.7.7` ticket/
+prospect formları (228) · `09.1` marketplace taksonomisi (229) · `10.3` dondurulmuş fatura geçmişi
+(230) · `13.1` kişiselleştirilmiş Home (231). Turların doğurduğu 21 görevin 17'si `done` (233 e2e
+kapasite · 235 widget zengin metin · 236 mesaj düzenleme · 237 toplu eylemler · 238 kural botu · 239
+transkript sayfalaması · 241 retention/erasure · 242 depolama dağıtımı · 243 widget CORS talimatı · 244
+kampanya bildirimi · 245/246 düzenle-sil yüzeyleri · 247–251 e2e kırmızılarının kök nedenleri, ikisi
+ürün düzeltmesi). `audit:sweep`: PRD §6'nın 137 `FR-MOD` satırında tur başında **OPEN 0 · PARTIAL 0**;
+bu turun `06.3.3` kararından sonra **PARTIAL 1** (aşağıda, 2. madde).
+
+**2) Yarım kalan işler.**
+
+| PRD / kalem          | Ne eksik                                                                                                     | Görev                                  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------ | -------------------------------------- |
+| `06.3.3` (v1 `Must`) | Bilgi tabanı retrieval'ı IVFFlat yolunda hazır bir kaynağı kaçırıyor; müşteri cevap yerine kuyruğa düşüyor (aralıklı, sessiz) | tm 252 (`high`) → tm 253 v1 kapanışı |
+| NFR-P4 (`P4/P6` `◐`) | "10.000+ satırda 60 fps" ölçülmüyor (DOM yarısı tam ve testli)                                               | tm 240 (`low`)                         |
+| denetim betikleri    | `schema-consumers` SECURITY DEFINER körlüğü (3 yanlış-pozitif) · `req-coverage` 2 eğik çizgi kısaltması       | tm 234 (`low`)                         |
+
+**3) Bilinçli olarak yapılmayanlar.** `13.4` görsel Workflow builder `⛔ ADR-14` (`Workflow` şemadaki tek
+gerçek 0-tüketicili model, beklenen) · `P3`'ün CDN edge ayağı `⛔` (deploy/DNS sınırı; `immutable`
+başlıklar teslim) · `13.7` mağaza yüklemesi `⛔-süreç` · KVKK/VERBIS + Türkiye pazarı sahip kararıyla
+kapsam dışı (§7C) · `08.7.7`'nin *engelleyen* yaş/sorumlu-oyun onayı §C·A36'da ürün/hukuk kararı olarak
+adlandırıldı (bugün kaydediliyor, zorlanmıyor). §9'un 10 kapsam-dışı maddesi 10/10 temiz; tm 230 gerçek
+ödeme akışı açmadı, tm 224'ün paylaşım bağlantısı genel bir REST API değil (token'lı, süreli, iptal
+edilebilir, her ıska aynı 404).
+
+**4) Sessiz borç.** `audit:silent-debt` → 1.254 kaynak dosyası; TODO / FIXME / XXX / HACK /
+`@ts-expect-error` / `@ts-ignore` / atlanan / odaklı test **hepsi 0**. Beş gerekçeli kayıt: 3
+`eslint-disable` (biri yeni — tm 251'in `hostFreezeWatch` fikstüründe Playwright'ın zorunlu boş deseni,
+gerekçesi aynı dosyada) + 2 `istanbul ignore`. Bu tur yeni borç eklemedi.
+
+**5) Sapmalar (§D).** **D169** — Faz-8 kapandı (kalem kuralı, dört kaynak, sekiz bayat damga); e2e
+kırmızısının kök nedeni bir ürün kusuru olarak ölçüldü; `06.3.3` `◐`'ye çekildi ve v1 kapısı yeniden
+açıldı (ilk taslak damgayı bırakmıştı — panelin `plan-tm-reverse` bulgusu çelişkiyi gösterdi); §F.1/8'in
+beş düzeltmesi; §F.1/9'un ilk kez gerçekten boş volume'larla koşulması.
+
+**6) Karar bekleyen açık sorular.**
+(a) **v1'in yeniden kapanışı için tam bir kapanış turu gerekli mi?** Bu tur GL-15 emsaline uyup tm 253'ü
+(tam §F.1 + tam e2e + temiz kurulum) açtı. Tek bir satırın geri dönüşü için tm 252'nin DoD'u + sayaç
+yeterli sayılacaksa bu bir sahip kararıdır; o durumda tm 253 iptal edilir ve satır 21'i tm 252 kapatır.
+(b) **tm 252'nin düzeltme yolu:** HNSW indeksi (eğitim adımı yok, yeni migration) · `ivfflat.probes` /
+`iterative_scan` (en dar değişiklik) · küçük korpusta tam arama. Görev üçünü ölçüp gerekçeli seçecek;
+üretim ölçeği için bir tercih varsa önceden söylemek bir tur kazandırır.
+(c) **Sıradaki adım** (§F.3): run-loop'un kuyruğunda tm 252 → tm 253, sonra iki `low` kalem (234 · 240).
+Bunların ötesinde yeni faz açılmadı; seçim kullanıcınındır.
+
+---
+
 ## 229 — V8-APPS-FILTER: Marketplace filtre taksonomisi — koleksiyonlar + kategori/ödeme/yerleşim — done — 2026-09-13 UTC
 
 - **Yapıldı:** `FR-MOD-09.1`'in eksik saydığı taksonomi (koleksiyonlar By Text/AI-Powered/New/Staff Picks + kategori/ödeme/yerleşim filtreleri) kapandı. `@nexa/types/apps.ts`'e `appCollections`/`appPricing`/`appPlacement` — 102+ karta elle alan eklemeden (türetilmiş, `by_text`/`staff_picks` küçük küratörlü id kümesi, `ai_powered`=analytics kategorisi, `new`=katalog sırasının son 12'si, `pricing`/`placement` id-hash deterministik mock). `listQuery`/`AppService.list`/OpenAPI/`AppsMarketplace.tsx` üç yeni chip grubuyla ekseni taşıyor (yeni yol yok, mobil parite değişmedi).

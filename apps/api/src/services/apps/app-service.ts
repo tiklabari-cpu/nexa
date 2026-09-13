@@ -46,6 +46,9 @@ import {
   appApiKeyProblem,
   appAutomationChatData,
   appChatData,
+  appCollections,
+  appPlacement,
+  appPricing,
   filterAppCatalog,
   findApp,
   isAutomationApp,
@@ -56,8 +59,11 @@ import {
   type AppCatalogEntry,
   type AppCategory,
   type AppChatData,
+  type AppCollection,
   type AppListItem,
   type AppOAuthStart,
+  type AppPlacement,
+  type AppPricing,
   type AppProvider,
 } from '@nexa/types';
 import { ApiError } from '../../lib/api-error.js';
@@ -88,6 +94,12 @@ export interface AppListOptions {
   limit: number;
   query?: string;
   category?: AppCategory;
+  /** One collection tab (FR-MOD-09.1). */
+  collection?: AppCollection;
+  /** The pricing-model filter (FR-MOD-09.1). */
+  pricing?: AppPricing;
+  /** The placement filter (FR-MOD-09.1). */
+  placement?: AppPlacement;
   /** Keyset cursor: the `id` of the last card on the previous page. */
   pageId?: string;
 }
@@ -169,6 +181,9 @@ function toListItem(
     description: entry.description,
     scopes: [...entry.scopes],
     channel: entry.channel ?? null,
+    collections: appCollections(entry),
+    pricing: appPricing(entry),
+    placement: appPlacement(entry),
     installed: row !== null,
     installation: row
       ? {
@@ -238,6 +253,9 @@ export class AppService {
     const matches = filterAppCatalog(APP_CATALOG, {
       ...(options.query !== undefined ? { query: options.query } : {}),
       ...(options.category !== undefined ? { category: options.category } : {}),
+      ...(options.collection !== undefined ? { collection: options.collection } : {}),
+      ...(options.pricing !== undefined ? { pricing: options.pricing } : {}),
+      ...(options.placement !== undefined ? { placement: options.placement } : {}),
     });
 
     const page = paginateApps(matches, {

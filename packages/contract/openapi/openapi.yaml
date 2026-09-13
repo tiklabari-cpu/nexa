@@ -3968,7 +3968,21 @@ components:
         channel-typed app managed in Settings → Channels (09.2), which is set up
         there rather than connected here — for those, `installed` is always false.
       required:
-        [id, name, category, provider, icon, description, scopes, channel, installed, installation]
+        [
+          id,
+          name,
+          category,
+          provider,
+          icon,
+          description,
+          scopes,
+          channel,
+          collections,
+          pricing,
+          placement,
+          installed,
+          installation,
+        ]
       properties:
         id: { type: string }
         name: { type: string }
@@ -3993,6 +4007,20 @@ components:
               enum:
                 [website_widget, email, messenger, twilio, whatsapp, instagram, telegram, chat_page]
             - type: "null"
+        collections:
+          type: array
+          items:
+            type: string
+            enum: [by_text, ai_powered, new, staff_picks]
+          description: The curated collection tabs this card belongs to (FR-MOD-09.1).
+        pricing:
+          type: string
+          enum: [free, paid]
+          description: The card's pricing model (FR-MOD-09.1).
+        placement:
+          type: string
+          enum: [details, fullscreen, messagebox]
+          description: Where the connected card's data is meant to surface (FR-MOD-09.1).
         installed: { type: boolean }
         installation:
           oneOf:

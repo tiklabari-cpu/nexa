@@ -5,12 +5,18 @@ import {
   APP_API_KEY_MIN_LENGTH,
   APP_CATALOG,
   APP_CATEGORIES,
+  APP_COLLECTIONS,
+  APP_PLACEMENTS,
+  APP_PRICING_VALUES,
   APP_PROVIDERS,
   PRD_NAMED_INTEGRATIONS,
   appApiKeyLastFour,
   appApiKeyProblem,
   appAutomationChatData,
   appChatData,
+  appCollections,
+  appPlacement,
+  appPricing,
   automationApps,
   channelApps,
   connectableApps,
@@ -20,6 +26,7 @@ import {
   isAppId,
   isAutomationApp,
   isChannelApp,
+  isNewApp,
   maskApiKey,
   paginateApps,
 } from './apps.js';
@@ -209,6 +216,111 @@ describe('filterAppCatalog', () => {
     // A query that matches something outside the category yields nothing.
     const empty = filterAppCatalog(APP_CATALOG, { category: 'payments', query: 'lifecycle' });
     expect(empty).toEqual([]);
+  });
+
+  // FR-MOD-09.1's remaining filter taxonomy: collections, pricing, placement.
+  it('narrows by collection, pricing and placement, each alone', () => {
+    for (const collection of APP_COLLECTIONS) {
+      const result = filterAppCatalog(APP_CATALOG, { collection });
+      expect(result.length).toBeGreaterThan(0);
+      expect(result.length).toBeLessThan(APP_CATALOG.length);
+      for (const entry of result) expect(appCollections(entry)).toContain(collection);
+    }
+    for (const pricing of APP_PRICING_VALUES) {
+      const result = filterAppCatalog(APP_CATALOG, { pricing });
+      expect(result.length).toBeGreaterThan(0);
+      expect(result.length).toBeLessThan(APP_CATALOG.length);
+      for (const entry of result) expect(appPricing(entry)).toBe(pricing);
+    }
+    for (const placement of APP_PLACEMENTS) {
+      const result = filterAppCatalog(APP_CATALOG, { placement });
+      expect(result.length).toBeGreaterThan(0);
+      expect(result.length).toBeLessThan(APP_CATALOG.length);
+      for (const entry of result) expect(appPlacement(entry)).toBe(placement);
+    }
+  });
+
+  it('intersects collection, pricing and placement with each other and with category/query', () => {
+    const staffPicks = filterAppCatalog(APP_CATALOG, { collection: 'staff_picks' });
+    expect(staffPicks.map((e) => e.id)).toContain('hubspot');
+
+    // Narrowing further never grows the result.
+    const staffPicksCrm = filterAppCatalog(APP_CATALOG, {
+      collection: 'staff_picks',
+      category: 'crm',
+    });
+    expect(staffPicksCrm.length).toBeLessThanOrEqual(staffPicks.length);
+    for (const entry of staffPicksCrm) expect(entry.category).toBe('crm');
+
+    // pricing ∩ placement composes the same way as any other two axes.
+    const both = filterAppCatalog(APP_CATALOG, { pricing: 'free', placement: 'messagebox' });
+    for (const entry of both) {
+      expect(appPricing(entry)).toBe('free');
+      expect(appPlacement(entry)).toBe('messagebox');
+    }
+
+    // An axis that matches nothing in the other's result is an empty set, not
+    // a fallback to one side.
+    const impossible = filterAppCatalog(APP_CATALOG, {
+      collection: 'by_text',
+      category: 'channels',
+    });
+    expect(impossible).toEqual([]);
+  });
+});
+
+// FR-MOD-09.1's taxonomy beyond category: collections, pricing, placement —
+// none stored per catalogue entry, all derived so growing the catalogue never
+// means hand-authoring a new field on 100+ literals.
+describe('appCollections / appPricing / appPlacement', () => {
+  it('places the original five under "By Text" and a hand-picked set under "Staff Picks"', () => {
+    for (const id of ['hubspot', 'shopify', 'stripe', 'mailchimp', 'google-calendar']) {
+      expect(appCollections(findApp(id)!)).toContain('by_text');
+    }
+    for (const id of ['hubspot', 'shopify', 'stripe', 'slack', 'salesforce', 'zendesk']) {
+      expect(appCollections(findApp(id)!)).toContain('staff_picks');
+    }
+    // A card can carry more than one collection at once.
+    expect(appCollections(findApp('hubspot')!)).toEqual(
+      expect.arrayContaining(['by_text', 'staff_picks']),
+    );
+    // Not every card is in every collection.
+    expect(appCollections(findApp('jira')!)).not.toContain('by_text');
+  });
+
+  it('marks every analytics-category card "AI-Powered" and nothing else', () => {
+    for (const entry of APP_CATALOG) {
+      expect(appCollections(entry).includes('ai_powered')).toBe(entry.category === 'analytics');
+    }
+  });
+
+  it('marks "New" for the most recently added connectable cards, never a channel', () => {
+    const connectable = connectableApps();
+    const newOnes = connectable.filter((entry) => isNewApp(entry));
+    expect(newOnes.length).toBeGreaterThan(0);
+    expect(newOnes.length).toBeLessThan(connectable.length);
+    // They are a contiguous tail of the catalogue's own stable order.
+    expect(newOnes.map((e) => e.id)).toEqual(connectable.slice(-newOnes.length).map((e) => e.id));
+    for (const entry of channelApps()) expect(isNewApp(entry)).toBe(false);
+  });
+
+  it('is a stable, deterministic pricing split with both values represented', () => {
+    for (const entry of APP_CATALOG) {
+      expect(appPricing(entry)).toBe(appPricing(entry)); // same input, same output
+    }
+    const values = new Set(APP_CATALOG.map((entry) => appPricing(entry)));
+    expect(values).toEqual(new Set(APP_PRICING_VALUES));
+  });
+
+  it('places every channel-typed card at "messagebox" and splits the rest', () => {
+    for (const entry of channelApps()) expect(appPlacement(entry)).toBe('messagebox');
+
+    const dataPlacements = new Set(connectableApps().map((entry) => appPlacement(entry)));
+    // Never messagebox for a connectable (non-channel) card — that value is
+    // reserved for the channel cross-link.
+    expect(dataPlacements.has('messagebox')).toBe(false);
+    expect(dataPlacements.has('details')).toBe(true);
+    expect(dataPlacements.has('fullscreen')).toBe(true);
   });
 });
 

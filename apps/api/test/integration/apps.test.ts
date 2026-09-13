@@ -37,6 +37,9 @@ interface AppListItem {
   category: string;
   provider: string;
   channel: string | null;
+  collections: string[];
+  pricing: string;
+  placement: string;
   installed: boolean;
   installation: AppInstallation | null;
 }
@@ -524,6 +527,21 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
       type: 'validation',
     });
 
+    // FR-MOD-09.1's remaining filter taxonomy: an unknown value on any of the
+    // three new axes is refused exactly like an unknown category.
+    expect(await rejected(adminToken, '?collection=not-a-collection')).toEqual({
+      status: 400,
+      type: 'validation',
+    });
+    expect(await rejected(adminToken, '?pricing=not-a-pricing')).toEqual({
+      status: 400,
+      type: 'validation',
+    });
+    expect(await rejected(adminToken, '?placement=not-a-placement')).toEqual({
+      status: 400,
+      type: 'validation',
+    });
+
     // A cursor naming no card in the result set is a bad request, not an empty
     // page — otherwise pairing last page's cursor with a new filter would look
     // like "no more results" rather than the mistake it is.
@@ -575,6 +593,48 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     expect(none.next_page_id).toBeUndefined();
   });
 
+  it('narrows the directory by collection, pricing and placement — alone and intersected (FR-MOD-09.1)', async () => {
+    const all = await page(adminToken, '?limit=100');
+
+    // Each axis alone narrows to a proper, non-empty subset, and every
+    // returned card actually carries the value asked for.
+    const staffPicks = await page(adminToken, '?collection=staff_picks&limit=100');
+    expect(staffPicks.items.length).toBeGreaterThan(0);
+    expect(staffPicks.items.length).toBeLessThan(all.items.length);
+    for (const item of staffPicks.items) expect(item.collections).toContain('staff_picks');
+    expect(staffPicks.total).toBe(staffPicks.items.length);
+
+    const free = await page(adminToken, '?pricing=free&limit=100');
+    expect(free.items.length).toBeGreaterThan(0);
+    expect(free.items.length).toBeLessThan(all.items.length);
+    for (const item of free.items) expect(item.pricing).toBe('free');
+
+    const messagebox = await page(adminToken, '?placement=messagebox&limit=100');
+    expect(messagebox.items.length).toBeGreaterThan(0);
+    expect(messagebox.items.length).toBeLessThan(all.items.length);
+    for (const item of messagebox.items) expect(item.placement).toBe('messagebox');
+    // Placement's "messagebox" is exactly the channel cross-link.
+    expect(messagebox.items.map((item) => item.id).sort()).toEqual(
+      (await page(adminToken, '?category=channels&limit=100')).items.map((item) => item.id).sort(),
+    );
+
+    // Collection ∩ category composes (intersection, never union) — the same
+    // property already pinned for query ∩ category.
+    const staffPicksCrm = await page(adminToken, '?collection=staff_picks&category=crm&limit=100');
+    for (const item of staffPicksCrm.items) {
+      expect(item.category).toBe('crm');
+      expect(item.collections).toContain('staff_picks');
+    }
+    expect(staffPicksCrm.items.length).toBeLessThanOrEqual(staffPicks.items.length);
+
+    // pricing ∩ placement, a pair not sharing either of the above axes.
+    const both = await page(adminToken, '?pricing=paid&placement=details&limit=100');
+    for (const item of both.items) {
+      expect(item.pricing).toBe('paid');
+      expect(item.placement).toBe('details');
+    }
+  });
+
   it('pages the directory with next_page_id, covering it exactly once', async () => {
     // The catalogue now exceeds the route's page-size cap (100), so reading
     // the full, unfiltered directory in order takes a walk, not one page.
@@ -597,6 +657,19 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     expect(pagedChannels.ids).toEqual(channels.items.map((item) => item.id));
     expect(pagedChannels.totals.every((total) => total === channels.total)).toBe(true);
     expect(channels.total).toBeGreaterThan(2);
+
+    // The same holds for the new axes: the cursor stays sensitive to whichever
+    // filter is active, so page two never drifts back to the unfiltered set.
+    const staffPicks = await page(adminToken, '?collection=staff_picks&limit=100');
+    const pagedStaffPicks = await walk(adminToken, '?collection=staff_picks&limit=2');
+    expect(pagedStaffPicks.ids).toEqual(staffPicks.items.map((item) => item.id));
+    expect(pagedStaffPicks.totals.every((total) => total === staffPicks.total)).toBe(true);
+
+    // A cursor from the unfiltered walk is unknown once a new filter is applied.
+    const unrelatedCursor = all.ids.find((id) => !staffPicks.items.some((i) => i.id === id));
+    expect(
+      (await rejected(adminToken, `?collection=staff_picks&page_id=${unrelatedCursor}`)).status,
+    ).toBe(400);
   });
 
   it('keeps a connection visible through the filtered and paged read', async () => {
@@ -664,6 +737,14 @@ describe('apps marketplace (FR-MOD-09.1)', () => {
     );
     expect(
       (await page(bToken, '?category=crm&limit=100')).items.some((item) => item.installed),
+    ).toBe(false);
+    // The new axes are static catalogue metadata (like category), so they run
+    // the same tenant-independent narrowing — B's install status stays false
+    // under any of them too.
+    expect(
+      (await page(bToken, '?collection=staff_picks&limit=100')).items.some(
+        (item) => item.installed,
+      ),
     ).toBe(false);
     for (const pageSize of ['?limit=1', '?limit=3', '?limit=100']) {
       const { items } = await walk(bToken, pageSize);

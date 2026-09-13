@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## 229 — V8-APPS-FILTER: Marketplace filtre taksonomisi — koleksiyonlar + kategori/ödeme/yerleşim — done — 2026-09-13 UTC
+
+- **Yapıldı:** `FR-MOD-09.1`'in eksik saydığı taksonomi (koleksiyonlar By Text/AI-Powered/New/Staff Picks + kategori/ödeme/yerleşim filtreleri) kapandı. `@nexa/types/apps.ts`'e `appCollections`/`appPricing`/`appPlacement` — 102+ karta elle alan eklemeden (türetilmiş, `by_text`/`staff_picks` küçük küratörlü id kümesi, `ai_powered`=analytics kategorisi, `new`=katalog sırasının son 12'si, `pricing`/`placement` id-hash deterministik mock). `listQuery`/`AppService.list`/OpenAPI/`AppsMarketplace.tsx` üç yeni chip grubuyla ekseni taşıyor (yeni yol yok, mobil parite değişmedi).
+- **Varsayım (MASTER-PROMPT §4):** PRD "By Text"/"ödeme"/"yerleşim" terimlerini tanımlamıyor — "By Text" = Intercom'un "Built by Intercom" koleksiyonuna paralel (09.1'in ilk beş kartı), "ödeme" = bağımsız fiyatlandırma ekseni (`payments` kategorisiyle karıştırılmadı — görevin kendi uyarısı), "yerleşim" = `v2-02-teknik-mimari-derin.md` §2.6'nın GÖZLEM'lediği Agent App SDK yerleşim sözlüğü (Details/Fullscreen/Messagebox; kanal kartları gerçekten `messagebox`, gerisi deterministik mock). Detay + kanıt `PLAN.md` `#### K09.1`.
+- **Doğrulama:** typecheck 13/13 · lint 10/10 · format:check temiz · web unit 2235/180 (+1) · api unit 1443/89 · api integration 3457/138 (+1, 3 shard 1417+1170+870) · build 8/8 · contract:generate diff yalnız beklenen alanlar (217 yol) · db:check-drift no drift · audit:req-coverage exit 0 (tagged 125, `FR-MOD-09.1` site 1→2) · audit:dead-code/endpoint-ui/unpaged-lists exit 0 · **e2e tam süit 303/303, sıfır kırmızı** (20.5 dk); 161 ilgisiz `kanit` PNG churn'ü geri alındı, yalnız bu turun 4 dosyası (`09.1-apps-collection.png` yeni + 3 mevcut apps.spec.ts kanıtı) kaldı.
+- **Sonraki pencereye not:** Faz-8 kapanışı hâlâ F8-8 (tm 232, GL-16) turunu bekliyor — bu satır onun bağımlılıklarından biriydi (232'nin dependency listesinde 229 vardı).
+
 ## 221 — V8-SKILL-OWNER: Playbook "sahip" filtresi artık insan sahibi süzüyor, ajan ekseni "Agent" adıyla ayrıldı — done — 2026-09-13 UTC
 
 - **Yapıldı:** `FR-MOD-05.4`'ün tracked gap'i (tm 184.4'ten beri `◐`) kapandı — karar (b): "owner" insana çevrildi, eski `ai_agent_id` filtresi kaybedilmeden "Agent" adıyla ayrı bir eksen oldu. Kontrata `Skill.created_by_id` (nullable uuid) eklendi — `created_by_name`'in arkasındaki filtrelenebilir kimlik (ad tek başına güvenli bir filtre anahtarı değil: iki hesap aynı adı taşıyabilir, yeniden adlandırılabilir). `skill-filter.ts` artık `agent` + `owner` iki bağımsız ekseni AND ile birleştiriyor; `PlaybookPage.tsx` iki `FilterSelect` gösteriyor, ikisinin de kendi "seçili değer listeden düştü → All" koruması var.

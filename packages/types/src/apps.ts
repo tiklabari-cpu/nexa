@@ -97,6 +97,41 @@ export const APP_CATEGORIES = [
 export type AppCategory = (typeof APP_CATEGORIES)[number];
 
 /**
+ * A curated grouping shown as a browsing tab above the grid (FR-MOD-09.1's
+ * "koleksiyonlar"), distinct from `category`: a collection is an editorial
+ * pick that can (and does) cross category lines, where `category` is the
+ * card's own fixed section. Membership is derived by {@link appCollections},
+ * not stored per entry — see its doc comment for how each one is decided.
+ */
+export const APP_COLLECTIONS = ['by_text', 'ai_powered', 'new', 'staff_picks'] as const;
+export type AppCollection = (typeof APP_COLLECTIONS)[number];
+
+/**
+ * The marketplace's pricing-model filter (FR-MOD-09.1's "ödeme filtresi") —
+ * whether connecting the card is free or paid. This mock catalogue has no
+ * real billing relationship with any of these providers, so the value is a
+ * deterministic mock (see {@link appPricing}) rather than a researched claim
+ * about a named company's actual pricing — exactly like every other per-card
+ * detail here (`scopes`, `dataFields[].options`, …).
+ */
+export const APP_PRICING_VALUES = ['free', 'paid'] as const;
+export type AppPricing = (typeof APP_PRICING_VALUES)[number];
+
+/**
+ * Where a connected card's data is meant to surface (FR-MOD-09.1's "yerleşim
+ * filtresi") — named after the reference product's own Agent App SDK
+ * vocabulary (`v2-derin-analiz/v2-02-teknik-mimari-derin.md` §2.6, GÖZLEM:
+ * "Details/Fullscreen/Messagebox placement'ları"). A channel-typed card is
+ * always `messagebox` — truthfully, since it manages the conversation's
+ * message channel itself rather than a Details-pane data surface. Every other
+ * card is a deterministic mock split between `details` (today's one real
+ * surface: every connected data/automation card's fields render in the
+ * Details pane) and `fullscreen` — see {@link appPlacement}.
+ */
+export const APP_PLACEMENTS = ['details', 'fullscreen', 'messagebox'] as const;
+export type AppPlacement = (typeof APP_PLACEMENTS)[number];
+
+/**
  * One field an app surfaces about a customer in-chat. `options` is the closed
  * set the mock draws from — a real adapter would fetch the value, the stub
  * picks one deterministically from the customer's identity so the same customer
@@ -1603,19 +1638,26 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
   },
 ] as const;
 
-/** Narrowing controls for {@link filterAppCatalog} — both are optional. */
+/** Narrowing controls for {@link filterAppCatalog} — all optional. */
 export interface AppCatalogFilter {
   /** Case-insensitive substring match against a card's `name` + `description`. */
   query?: string;
   category?: AppCategory;
+  /** One collection tab (FR-MOD-09.1) — see {@link appCollections}. */
+  collection?: AppCollection;
+  /** The pricing-model filter (FR-MOD-09.1) — see {@link appPricing}. */
+  pricing?: AppPricing;
+  /** The placement filter (FR-MOD-09.1) — see {@link appPlacement}. */
+  placement?: AppPlacement;
 }
 
 /**
- * Narrows the catalogue by free-text search and/or category (09.2-v2-b, the
- * pure core behind `GET /settings/apps?query=&category=`). `query` is trimmed
- * first, so whitespace-only input behaves like no query at all; when a
- * `category` is also given the two narrow together (intersection, not union).
- * Order is preserved — callers that need pagination to make sense rely on it.
+ * Narrows the catalogue by free-text search, category, collection, pricing
+ * and/or placement (09.2-v2-b + 09.1's filter taxonomy) — the pure core
+ * behind `GET /settings/apps`. `query` is trimmed first, so whitespace-only
+ * input behaves like no query at all; every other axis given narrows
+ * together with the rest (intersection, never union). Order is preserved —
+ * callers that need pagination to make sense rely on it.
  */
 export function filterAppCatalog(
   entries: readonly AppCatalogEntry[],
@@ -1624,6 +1666,11 @@ export function filterAppCatalog(
   const query = filter.query?.trim().toLowerCase() ?? '';
   return entries.filter((entry) => {
     if (filter.category !== undefined && entry.category !== filter.category) return false;
+    if (filter.collection !== undefined && !appCollections(entry).includes(filter.collection)) {
+      return false;
+    }
+    if (filter.pricing !== undefined && appPricing(entry) !== filter.pricing) return false;
+    if (filter.placement !== undefined && appPlacement(entry) !== filter.placement) return false;
     if (!query) return true;
     return (
       entry.name.toLowerCase().includes(query) || entry.description.toLowerCase().includes(query)
@@ -1703,6 +1750,82 @@ export function channelApps(): AppCatalogEntry[] {
 /** The data apps — connected in the marketplace and surfacing in-chat data. */
 export function connectableApps(): AppCatalogEntry[] {
   return APP_CATALOG.filter((entry) => !isChannelApp(entry));
+}
+
+/**
+ * The catalogue's original five (09.1) — one representative data app per
+ * section, shipped first so the grid and the OAuth flow were real end to end
+ * before 09.2 grew the directory. The "By Text" collection surfaces exactly
+ * these: the integrations Nexa's own team built and proved the flow against,
+ * mirroring the reference product's own "Built by <vendor>" collection (e.g.
+ * Intercom's App Store, `app-store?category=built-by-intercom`).
+ */
+const BY_TEXT_APP_IDS = new Set(['hubspot', 'shopify', 'stripe', 'mailchimp', 'google-calendar']);
+
+/** Editorially "recommended" cards for the Staff Picks collection — a small, hand-picked set. */
+const STAFF_PICK_APP_IDS = new Set([
+  'hubspot',
+  'shopify',
+  'stripe',
+  'slack',
+  'salesforce',
+  'zendesk',
+]);
+
+/** How many of the catalogue's most-recently-added connectable cards count as "New". */
+const NEW_APP_COUNT = 12;
+
+/**
+ * True for the most recently added connectable cards, by {@link APP_CATALOG}'s
+ * own (stable) array order — the same order {@link paginateApps} relies on.
+ * Channel apps are never "new" here: they were part of the original 09.2
+ * channel cross-link, not the later v2 growth this collection tracks.
+ */
+export function isNewApp(entry: AppCatalogEntry): boolean {
+  if (isChannelApp(entry)) return false;
+  const connectable = connectableApps();
+  const index = connectable.findIndex((candidate) => candidate.id === entry.id);
+  return index !== -1 && index >= connectable.length - NEW_APP_COUNT;
+}
+
+/**
+ * The collections a card belongs to (FR-MOD-09.1) — zero, one or several, so
+ * a card such as Slack can be a Staff Pick without also being "By Text".
+ * Nothing is stored per entry: `by_text` and `staff_picks` are the two small
+ * curated id sets above, `ai_powered` is every analytics-category card (the
+ * section whose product is inherently about AI/ML-derived insight), and
+ * `new` is {@link isNewApp}. Deriving rather than authoring on all 100+ cards
+ * means growing the catalogue never means updating a membership list by hand.
+ */
+export function appCollections(entry: AppCatalogEntry): AppCollection[] {
+  const collections: AppCollection[] = [];
+  if (BY_TEXT_APP_IDS.has(entry.id)) collections.push('by_text');
+  if (entry.category === 'analytics') collections.push('ai_powered');
+  if (STAFF_PICK_APP_IDS.has(entry.id)) collections.push('staff_picks');
+  if (isNewApp(entry)) collections.push('new');
+  return collections;
+}
+
+/**
+ * The pricing-model mock (see {@link AppPricing}): a stable split derived
+ * from the card's id with the same {@link hash32} the customer-data mock
+ * uses, so every card gets one without hand-authoring a `pricing` field on
+ * 100+ catalogue entries — and a renamed or reordered card never flips it,
+ * since the hash keys on `id`, not position.
+ */
+export function appPricing(entry: AppCatalogEntry): AppPricing {
+  return hash32(`pricing:${entry.id}`) % 2 === 0 ? 'free' : 'paid';
+}
+
+/**
+ * The placement mock (see {@link AppPlacement}). A channel-typed card is
+ * always `messagebox`; every other card is split between `details` and
+ * `fullscreen` by the same id-hash technique as {@link appPricing} (a
+ * different salt, so the two axes vary independently of one another).
+ */
+export function appPlacement(entry: AppCatalogEntry): AppPlacement {
+  if (isChannelApp(entry)) return 'messagebox';
+  return hash32(`placement:${entry.id}`) % 2 === 0 ? 'details' : 'fullscreen';
 }
 
 /**
@@ -1810,6 +1933,12 @@ export interface AppListItem {
    * offering a Connect button (KK 09.2).
    */
   channel: ChannelType | null;
+  /** The collections this card belongs to (FR-MOD-09.1) — see {@link appCollections}. */
+  collections: AppCollection[];
+  /** The pricing-model filter's value for this card — see {@link appPricing}. */
+  pricing: AppPricing;
+  /** The placement filter's value for this card — see {@link appPlacement}. */
+  placement: AppPlacement;
   installed: boolean;
   installation: AppInstallation | null;
 }

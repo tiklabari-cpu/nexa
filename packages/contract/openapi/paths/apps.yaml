@@ -37,6 +37,24 @@ apps:
         schema:
           type: string
           enum: [crm, support, ecommerce, payments, marketing, productivity, analytics, channels]
+      - name: collection
+        in: query
+        description: One curated collection tab (By Text/AI-Powered/New/Staff Picks).
+        schema:
+          type: string
+          enum: [by_text, ai_powered, new, staff_picks]
+      - name: pricing
+        in: query
+        description: The card's pricing model.
+        schema:
+          type: string
+          enum: [free, paid]
+      - name: placement
+        in: query
+        description: Where the connected card's data is meant to surface.
+        schema:
+          type: string
+          enum: [details, fullscreen, messagebox]
       - $ref: "../openapi.yaml#/components/parameters/PageId"
       - $ref: "../openapi.yaml#/components/parameters/Limit"
     responses:

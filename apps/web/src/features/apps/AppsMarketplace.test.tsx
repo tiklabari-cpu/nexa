@@ -5,7 +5,7 @@
  * key form. Authorizing (or submitting a key) flips the card to Connected.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -311,8 +311,9 @@ describe('AppsMarketplace', () => {
     renderComponent(<AppsMarketplace />);
     await screen.findByText('HubSpot');
 
-    const allChip = screen.getByRole('button', { name: 'All' });
-    const crmChip = screen.getByRole('button', { name: 'CRM' });
+    const categoryGroup = screen.getByRole('group', { name: 'Filter by category' });
+    const allChip = within(categoryGroup).getByRole('button', { name: 'All' });
+    const crmChip = within(categoryGroup).getByRole('button', { name: 'CRM' });
     expect(allChip).toHaveAttribute('aria-pressed', 'true');
     expect(crmChip).toHaveAttribute('aria-pressed', 'false');
 
@@ -323,6 +324,44 @@ describe('AppsMarketplace', () => {
     await waitFor(() => {
       const lastUrl = api.get.mock.calls.at(-1)?.[0] as string;
       expect(lastUrl).toContain('category=crm');
+    });
+  });
+
+  // FR-MOD-09.1: the taxonomy beyond category/search — collections + pricing/placement.
+  it('filters by collection, pricing and placement, each composing with the others', async () => {
+    const user = userEvent.setup();
+    api.get.mockResolvedValue({ items: [notConnected], total: 1 });
+    renderComponent(<AppsMarketplace />);
+    await screen.findByText('HubSpot');
+
+    const collectionGroup = screen.getByRole('group', { name: 'Filter by collection' });
+    await user.click(within(collectionGroup).getByRole('button', { name: 'Staff Picks' }));
+    await waitFor(() => {
+      expect(api.get.mock.calls.at(-1)?.[0] as string).toContain('collection=staff_picks');
+    });
+
+    const pricingGroup = screen.getByRole('group', { name: 'Filter by pricing' });
+    await user.click(within(pricingGroup).getByRole('button', { name: 'Free' }));
+    await waitFor(() => {
+      const lastUrl = api.get.mock.calls.at(-1)?.[0] as string;
+      // Composes with the collection filter already selected, not replacing it.
+      expect(lastUrl).toContain('collection=staff_picks');
+      expect(lastUrl).toContain('pricing=free');
+    });
+
+    const placementGroup = screen.getByRole('group', { name: 'Filter by placement' });
+    await user.click(within(placementGroup).getByRole('button', { name: 'Fullscreen' }));
+    await waitFor(() => {
+      const lastUrl = api.get.mock.calls.at(-1)?.[0] as string;
+      expect(lastUrl).toContain('collection=staff_picks');
+      expect(lastUrl).toContain('pricing=free');
+      expect(lastUrl).toContain('placement=fullscreen');
+    });
+
+    // Back to "All" drops the param entirely rather than sending an empty one.
+    await user.click(within(placementGroup).getByRole('button', { name: 'All' }));
+    await waitFor(() => {
+      expect(api.get.mock.calls.at(-1)?.[0] as string).not.toContain('placement');
     });
   });
 
@@ -368,6 +407,9 @@ describe('AppsMarketplace', () => {
       description: 'A catalogue card.',
       scopes: ['contacts.read'],
       channel: null,
+      collections: [],
+      pricing: 'free',
+      placement: 'details',
       installed: false,
       installation: null,
     };

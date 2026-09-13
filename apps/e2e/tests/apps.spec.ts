@@ -155,6 +155,36 @@ test.describe('apps marketplace', () => {
     expect(await cards.count()).toBeGreaterThan(0);
   });
 
+  // FR-MOD-09.1's remaining filter taxonomy: collections, on top of category.
+  test('narrows the grid by collection', async ({ agentPage }) => {
+    await agentPage.goto('/app/apps');
+    const grid = agentPage.getByRole('list', { name: 'Apps' });
+    const cards = grid.getByRole('listitem');
+    await expect(cards.first()).toBeVisible();
+    const wholeCatalogueCount = await cards.count();
+
+    const collections = agentPage.getByRole('group', { name: 'Filter by collection' });
+    const staffPicks = collections.getByRole('button', { name: 'Staff Picks', exact: true });
+    await staffPicks.click();
+    await expect(staffPicks).toHaveAttribute('aria-pressed', 'true');
+
+    // A hand-picked card is still here; one outside the collection is gone —
+    // and the small curated set never reaches the "Load more" chain a
+    // 100+-card catalogue needs.
+    await expect(agentPage.getByTestId('app-hubspot')).toBeVisible();
+    await expect(agentPage.getByTestId('app-jira')).toHaveCount(0);
+    await expect(agentPage.getByRole('button', { name: 'Load more' })).toHaveCount(0);
+    expect(await cards.count()).toBeGreaterThan(0);
+    expect(await cards.count()).toBeLessThan(wholeCatalogueCount);
+
+    await agentPage.screenshot({ path: 'kanit/09.1-apps-collection.png', fullPage: true });
+
+    // "All" restores the full directory — the chip does not toggle itself off.
+    await collections.getByRole('button', { name: 'All', exact: true }).click();
+    await expect(staffPicks).toHaveAttribute('aria-pressed', 'false');
+    await expect(agentPage.getByTestId('app-jira')).toBeVisible();
+  });
+
   test('connects an api_key card with a pasted key, showing only its last four (FR-MOD-09.2)', async ({
     agentPage,
   }) => {

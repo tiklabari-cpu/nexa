@@ -17,7 +17,14 @@
  * `provider` back where 09.2 found it, describing nothing.
  */
 import type { FastifyInstance } from 'fastify';
-import { APP_API_KEY_MAX_LENGTH, APP_API_KEY_MIN_LENGTH, APP_CATEGORIES } from '@nexa/types';
+import {
+  APP_API_KEY_MAX_LENGTH,
+  APP_API_KEY_MIN_LENGTH,
+  APP_CATEGORIES,
+  APP_COLLECTIONS,
+  APP_PLACEMENTS,
+  APP_PRICING_VALUES,
+} from '@nexa/types';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -33,6 +40,9 @@ import { AppService } from '../services/apps/app-service.js';
 const listQuery = z.object({
   query: z.string().trim().max(320).optional(),
   category: z.enum(APP_CATEGORIES).optional(),
+  collection: z.enum(APP_COLLECTIONS).optional(),
+  pricing: z.enum(APP_PRICING_VALUES).optional(),
+  placement: z.enum(APP_PLACEMENTS).optional(),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   page_id: z.string().max(512).optional(),
 });
@@ -83,6 +93,9 @@ export default async function appRoutes(
           limit: query.limit,
           ...(query.query ? { query: query.query } : {}),
           ...(query.category ? { category: query.category } : {}),
+          ...(query.collection ? { collection: query.collection } : {}),
+          ...(query.pricing ? { pricing: query.pricing } : {}),
+          ...(query.placement ? { placement: query.placement } : {}),
           ...(query.page_id ? { pageId: query.page_id } : {}),
         }),
       );

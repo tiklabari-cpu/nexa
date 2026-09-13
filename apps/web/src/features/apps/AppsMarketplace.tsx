@@ -49,11 +49,17 @@ import {
   APP_API_KEY_MAX_LENGTH,
   APP_API_KEY_MIN_LENGTH,
   APP_CATEGORIES,
+  APP_COLLECTIONS,
+  APP_PLACEMENTS,
+  APP_PRICING_VALUES,
   appApiKeyProblem,
   type AppCategory,
+  type AppCollection,
   type AppListItem,
   type AppListResponse,
   type AppOAuthStart,
+  type AppPlacement,
+  type AppPricing,
 } from '@nexa/types';
 import { Card, CardSkeleton, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
@@ -87,6 +93,33 @@ const CATEGORY_KEY: Record<AppListItem['category'], string> = {
 type CategoryFilter = 'all' | AppCategory;
 const CATEGORY_FILTERS: readonly CategoryFilter[] = ['all', ...APP_CATEGORIES];
 
+/** The collection tab's translation key (FR-MOD-09.1: By Text/AI-Powered/New/Staff Picks). */
+const COLLECTION_KEY: Record<AppCollection, string> = {
+  by_text: 'apps.marketplace.collection.byText',
+  ai_powered: 'apps.marketplace.collection.aiPowered',
+  new: 'apps.marketplace.collection.new',
+  staff_picks: 'apps.marketplace.collection.staffPicks',
+};
+type CollectionFilter = 'all' | AppCollection;
+const COLLECTION_FILTERS: readonly CollectionFilter[] = ['all', ...APP_COLLECTIONS];
+
+/** The pricing chip's translation key (FR-MOD-09.1's "ödeme filtresi"). */
+const PRICING_KEY: Record<AppPricing, string> = {
+  free: 'apps.marketplace.pricing.free',
+  paid: 'apps.marketplace.pricing.paid',
+};
+type PricingFilter = 'all' | AppPricing;
+const PRICING_FILTERS: readonly PricingFilter[] = ['all', ...APP_PRICING_VALUES];
+
+/** The placement chip's translation key (FR-MOD-09.1's "yerleşim filtresi"). */
+const PLACEMENT_KEY: Record<AppPlacement, string> = {
+  details: 'apps.marketplace.placement.details',
+  fullscreen: 'apps.marketplace.placement.fullscreen',
+  messagebox: 'apps.marketplace.placement.messagebox',
+};
+type PlacementFilter = 'all' | AppPlacement;
+const PLACEMENT_FILTERS: readonly PlacementFilter[] = ['all', ...APP_PLACEMENTS];
+
 /** The skeleton grid, and the shape a row of real cards keeps. */
 const GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-3';
 
@@ -105,10 +138,20 @@ const PAGE_SIZE = 50;
 const ROW_HEIGHT = 188;
 
 /** The list request for one page of the current filters. */
-function buildListUrl(query: string, category: CategoryFilter, pageId?: string): string {
+function buildListUrl(
+  query: string,
+  category: CategoryFilter,
+  collection: CollectionFilter,
+  pricing: PricingFilter,
+  placement: PlacementFilter,
+  pageId?: string,
+): string {
   const params = new URLSearchParams();
   if (query) params.set('query', query);
   if (category !== 'all') params.set('category', category);
+  if (collection !== 'all') params.set('collection', collection);
+  if (pricing !== 'all') params.set('pricing', pricing);
+  if (placement !== 'all') params.set('placement', placement);
   params.set('limit', String(PAGE_SIZE));
   if (pageId) params.set('page_id', pageId);
   return `/settings/apps?${params.toString()}`;
@@ -152,6 +195,9 @@ export function AppsMarketplace(): ReactElement {
   const [search, setSearch] = useState('');
   const [debounced, setDebounced] = useState('');
   const [category, setCategory] = useState<CategoryFilter>('all');
+  const [collection, setCollection] = useState<CollectionFilter>('all');
+  const [pricing, setPricing] = useState<PricingFilter>('all');
+  const [placement, setPlacement] = useState<PlacementFilter>('all');
 
   // Debounced so typing a name does not fire a request per keystroke, each one
   // counting against the caller's rate limit (CustomersPage pattern).
@@ -160,15 +206,23 @@ export function AppsMarketplace(): ReactElement {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const hasActiveFilter = debounced !== '' || category !== 'all';
+  const hasActiveFilter =
+    debounced !== '' ||
+    category !== 'all' ||
+    collection !== 'all' ||
+    pricing !== 'all' ||
+    placement !== 'all';
 
   const apps = useInfiniteQuery({
-    // The filter state is part of the cache key — otherwise a category switch
-    // or a new search could show a stale, differently-filtered response. It also
-    // resets the page chain: pages from one filter never accumulate onto another.
-    queryKey: [...APPS_KEY, debounced, category],
+    // The filter state is part of the cache key — otherwise switching a filter
+    // or typing a new search could show a stale, differently-filtered response.
+    // It also resets the page chain: pages from one filter never accumulate
+    // onto another.
+    queryKey: [...APPS_KEY, debounced, category, collection, pricing, placement],
     queryFn: ({ pageParam }: { pageParam: string | undefined }) =>
-      api.get<AppListResponse>(buildListUrl(debounced, category, pageParam)),
+      api.get<AppListResponse>(
+        buildListUrl(debounced, category, collection, pricing, placement, pageParam),
+      ),
     initialPageParam: undefined as string | undefined,
     // Absent on the last page, which is what ends the chain.
     getNextPageParam: (lastPage) => lastPage.next_page_id,
@@ -216,6 +270,81 @@ export function AppsMarketplace(): ReactElement {
               }`}
             >
               {filter === 'all' ? t('apps.marketplace.category.all') : t(CATEGORY_KEY[filter])}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        role="group"
+        aria-label={t('apps.marketplace.filterByCollection')}
+        className="flex flex-wrap gap-1"
+      >
+        {COLLECTION_FILTERS.map((filter) => {
+          const active = collection === filter;
+          return (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setCollection(filter)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                  : 'text-content-secondary hover:bg-surface-2'
+              }`}
+            >
+              {filter === 'all' ? t('apps.marketplace.collection.all') : t(COLLECTION_KEY[filter])}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        role="group"
+        aria-label={t('apps.marketplace.filterByPricing')}
+        className="flex flex-wrap gap-1"
+      >
+        {PRICING_FILTERS.map((filter) => {
+          const active = pricing === filter;
+          return (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setPricing(filter)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                  : 'text-content-secondary hover:bg-surface-2'
+              }`}
+            >
+              {filter === 'all' ? t('apps.marketplace.pricing.all') : t(PRICING_KEY[filter])}
+            </button>
+          );
+        })}
+      </div>
+
+      <div
+        role="group"
+        aria-label={t('apps.marketplace.filterByPlacement')}
+        className="flex flex-wrap gap-1"
+      >
+        {PLACEMENT_FILTERS.map((filter) => {
+          const active = placement === filter;
+          return (
+            <button
+              key={filter}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setPlacement(filter)}
+              className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? 'bg-brand-100 font-medium text-brand-700 dark:bg-brand-950 dark:text-content'
+                  : 'text-content-secondary hover:bg-surface-2'
+              }`}
+            >
+              {filter === 'all' ? t('apps.marketplace.placement.all') : t(PLACEMENT_KEY[filter])}
             </button>
           );
         })}

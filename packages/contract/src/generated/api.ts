@@ -10110,6 +10110,18 @@ export interface components {
             | 'chat_page'
           )
         | null;
+      /** @description The curated collection tabs this card belongs to (FR-MOD-09.1). */
+      collections: ('by_text' | 'ai_powered' | 'new' | 'staff_picks')[];
+      /**
+       * @description The card's pricing model (FR-MOD-09.1).
+       * @enum {string}
+       */
+      pricing: 'free' | 'paid';
+      /**
+       * @description Where the connected card's data is meant to surface (FR-MOD-09.1).
+       * @enum {string}
+       */
+      placement: 'details' | 'fullscreen' | 'messagebox';
       installed: boolean;
       installation: components['schemas']['AppInstallation'] | null;
     };
@@ -19587,6 +19599,12 @@ export interface operations {
           | 'productivity'
           | 'analytics'
           | 'channels';
+        /** @description One curated collection tab (By Text/AI-Powered/New/Staff Picks). */
+        collection?: 'by_text' | 'ai_powered' | 'new' | 'staff_picks';
+        /** @description The card's pricing model. */
+        pricing?: 'free' | 'paid';
+        /** @description Where the connected card's data is meant to surface. */
+        placement?: 'details' | 'fullscreen' | 'messagebox';
         /** @description Opaque keyset cursor from the previous page. */
         page_id?: components['parameters']['PageId'];
         limit?: components['parameters']['Limit'];

@@ -13,6 +13,60 @@
 
 ## Task log (newest-first)
 
+## 253 — GL-17 · V1-KAPAT3: **Faz-1 (v1) §F.00 üçüncü kapanış turu — `✅ KAPALI (yeniden)`** (`Must` `20 0 0` · §F.1 tam sürüm · §F.2 raporu · ürün kodu değişmedi) — done — 2026-09-13 UTC
+
+- **Yapıldı:** Ön koşulun üçü doğrulandı (tm 252 `done` · `06.3.3` `✅ → K06.3.3` · `#### K06.3.3`'te tm 252 maddesi). GL-14'ün bölüm başlığına çıpalı sayacı birebir → `20 0 0`, yirmi satır GL-14'ün listesiyle aynı (kalın `08.8.4` dahil); önceliğe bakmadan §4.1–§4.3 **53 ✅ · 0 ◐ · 0 ⬜** → taşınan `Should` borcu yok. Yirmi `Must`'ın on ikisi etiketli nöbetçileriyle bu turun yeşil süitlerinde, etiketsiz sekizi artefaktına karşı okundu. PLAN: satır 21 `Kapanış` `✅ KAPALI (yeniden)` (eski damgalar sözcükle tarihçede) + `Genel durum` sayılarak + `Must` hücresine sayım notu · satır 28'e tarihli açık-görev notu · başlık şeridi · §F.00 v1 üçüncü kapı paragrafı · §F.3 DURUM · §D171 · `#### KGL-17` · `#### K06.4` blok denetimi. CONVENTIONS §1.3 `89 + 138 = 227` → `89 + 139 = 228`.
+- **Doğrulama (exit code'larla):** typecheck **13/13** · lint **10/10** · build **8/8** (üçü `turbo --force`) · format:check temiz · `contract:generate` diff boş (217 path) · `db:check-drift` no drift · `audit:req-coverage` exit 0 (125 etiketli, 0 hata) · `audit:sweep` OPEN 0 · PARTIAL 0 · `audit:endpoint-ui` UNEXPLAINED 0 · `audit:unpaged-lists` UNPAGED 0 · `audit:dead-code`/`silent-debt`/`schema-consumers` exit 0. Testler §1.3 parçalı, `--force`: turbo test api/web/e2e hariç **113 / 1.287** · web **180 / 2.235** · api unit **89 / 1.443** · api integration 3 shard **47+47+45 = 139 / 3.461** (`contract-parity` 5/5 shard 2'de) → **521 / 8.426**; rtm integration **8 / 111**. **e2e 303/303** (20,6 dk, flaky 0); `persona-answer.spec.ts:30` yeşil ve `skill_runs` iki ziyaretçide `answered from "Persona proof 786916" (0.581)`; 88 axe taraması blocking 0; 155 kanit PNG geri alındı. **§F.1/9:** `-p nexa-demo-gl17` → 93 migration sıfırdan + seed, altı servis healthy, smoke **17/17**, `down -v` yalnız o proje.
+- **Varsayımlar:** Satır 28'in (Faz-8) `Genel durum` hücresindeki açık görev notuna tarihli ek düşmek "Faz-8 kapısına dokunmak" sayılmadı — `Kapanış` hücresi ve sayılar değişmedi (GL-16'nın Faz-0 satırındaki emsali). `suspicious-done 06.4` bir v1 `Must` satırı olduğu için bu turun kapsamında okundu; `08.3` Faz-0'ın, dokunulmadı. Temiz kurulumda smoke bir mesaj turu yürümez; demo akışının kanıtı bu turun tam e2e'si.
+- **Sonraki pencereye not:** (a) **Açık üç görev, üçü `low` ve seçilebilir:** tm 234 · tm 240 · tm 254 — hiçbiri bir faz kapısını bloklamıyor. (b) **tm 234 için yeni gözlem:** `channels.spec.ts:236`'nın `(FR-MOD-08.5.4-.6)` tireli aralık etiketi `req-coverage`'ta yalnız `08.5.4` olarak sayılıyor; `08.5.5`/`.6` sessizce etiketsiz görünüyor, betiğin eğik çizgi kovası tireli aralığı görmüyor. (c) **Panel:** satır 22'nin (v2) `Kapanış` tarihçesi büyük harfli açık damgasını andığı için panel v2'yi hâlâ açık okuyor (bulgu üretmiyor); yeni bir `Kapanış` hücresine eski damga yazarken o büyük harfli sözcüğü kullanma. (d) npm kayıt defteri compose build'ini yine uzattı (876 sn; `pnpm install` katmanları ~780 sn) — provayı arka planda başlatıp aynı turda bloklayarak bekle.
+
+---
+
+### §F.2 RAPORU — Faz-1 (v1) üçüncü kapanış turu · GL-17 · tm 253 · 2026-09-13
+
+**1) Tamamlanan kapsam (PRD kimlikleriyle).** v1'in yirmi `Must` satırı `✅`: `05.1` · `05.3` · `05.5`
+(Playbook) · `06.1` · `06.2.1`–`.5` · `06.3.1`–`.3` · `06.4` (AI Agent + Knowledge/RAG) · `08.8.4` (webhooks) ·
+`02.1.2` (AI Agents inbox grubu) · `04.2` (AI Agents takım performansı) · `08.5.4`–`.6` (Messenger · SMS ·
+WhatsApp, MOCK) · `10.1.4` (AI resolutions meter). Kapıyı GL-16'da yeniden açan `06.3.3` kusuru (bilgi tabanı
+retrieval'ı IVFFlat yolunda hazır bir kaynağı kaçırıyordu) tm 252'de kapandı ve bu turun tam e2e'sinde canlı
+teyit edildi. `Must` dışında §4'ün otuz üç satırının otuz üçü `✅` — GL-14'ün on dört `Should` borcunu Faz-8
+kapattı (tm 211 · 218 · 219 · 221 · 222 · 226 · 227 · 228 · 229 · 230 · 231); FR-MOD satırı olmayan iki v1
+kalemi satır açılarak teslim edildi (`02.3.7` mesaj düzenleme tm 236 · `02.7.1` ticket toplu eylemleri tm 237).
+`audit:sweep`: 137 `FR-MOD` satırında **OPEN 0 · PARTIAL 0**.
+
+**2) Yarım kalan işler.** v1'de yok. Proje genelinde açık üç görev; hiçbiri bir faz kapısını bloklamıyor:
+
+| PRD / kalem          | Ne eksik                                                                                                   | Görev          |
+| -------------------- | ---------------------------------------------------------------------------------------------------------- | -------------- |
+| NFR-P4 (`P4/P6` `◐`) | "10.000+ satırda 60 fps" ölçülmüyor (DOM yarısı tam ve testli)                                             | tm 240 (`low`) |
+| denetim betikleri    | `schema-consumers` SECURITY DEFINER körlüğü (3 yanlış-pozitif) · `req-coverage` 2 eğik çizgi kısaltması + bu turda görülen tireli aralık (`08.5.4-.6`) | tm 234 (`low`) |
+| `06.3.3` ölçek tavanı | Tam arama ajan başına ~20k chunk üstünde yavaşlıyor (p95 96 ms @ 20k · 234 ms @ 50k); geri çağırması ölçülmüş bir ANN yolu + `idx_chunks_embedding` sahip kararı | tm 254 (`low`) |
+
+**3) Bilinçli olarak yapılmayanlar.** `05.1`'in "Workspace workflow" türü `⛔ ADR-14` (tek paradigma Skill;
+`Workflow` şemadaki tek gerçek 0-tüketicili model) · `06.3.2-bulk` v2 payıdır (§5.1, teslim) · `13.7` mağaza
+yüklemesi `⛔-süreç` · `idx_chunks_embedding` düşürülmedi — PRD §8.4 / `SEMA-MIMARI.8.4f` onu adıyla sayıyor,
+karar sahibin (§D170 → tm 254). §9'un 10 kapsam-dışı maddesi 10/10 temiz; tm 252 gerçek bir embedding
+sağlayıcısı ya da ayrı bir vektör ambarı getirmedi.
+
+**4) Sessiz borç.** `audit:silent-debt` → 1.255 kaynak dosyası; TODO / FIXME / XXX / HACK /
+`@ts-expect-error` / `@ts-ignore` / atlanan / odaklı test **hepsi 0**. Beş gerekçeli kayıt (3 `eslint-disable`
++ 2 `istanbul ignore`), GL-16 ile aynı. Bu tur yeni borç eklemedi.
+
+**5) Sapmalar (§D).** **D171** — v1 üçüncü kez kapandı; sayaç GL-14'ün komutuyla `20 0 0`; taşınan `Should`
+borcu yok (53/53); yirmi `Must` damgadan değil koşudan okundu; `suspicious-done 06.4` tarihçe yanlış-pozitifi
+olarak koda karşı kapatıldı; §F.1/8'in üç düzeltmesi; panelin v2'yi açık okuması gözlem olarak kaydedildi.
+
+**6) Karar bekleyen açık sorular.**
+(a) **Sıradaki adım (§F.3):** bütün faz kapıları kapalı (Faz-7 teslim, resmî turu yok). Run-loop'un kuyruğunda
+üç `low` görev var (234 · 240 · 254); bunların ötesinde yeni faz açılmadı, seçim kullanıcınındır.
+(b) **tm 254 — bilgi tabanı ölçeği:** gerçek müşteri korpusu ajan başına ~20k chunk'ı aşacak mı? Aşmayacaksa
+tm 254 ertelenebilir; aşacaksa HNSW (yeni migration) mı yoksa yeniden inşa edilmiş IVFFlat + daha yüksek
+`probes` mu tercih edilir, ve PRD §8.4'ün adıyla saydığı indeks değiştirilebilir mi?
+(c) **Faz-7'nin resmî kapanış turu** hiç koşulmadı (40 iş kaleminin 40'ı `done`). Bir GL turu isteniyorsa
+açılması gerekir; istenmiyorsa üst tablodaki "—" kalıcı karar olarak kalır.
+
+---
+
 ## 252 — V8-KB-RECALL: **bilgi tabanı retrieval'ı tam aramaya çevrildi — `06.3.3` yeniden `✅`, v1 `Must` sayacı `20 0 0`** (IVFFlat indeksi yerinde; `retrieve()` onu hiçbir planda kullanamıyor) — done — 2026-09-13 UTC
 
 - **Yapıldı:** Kök neden pgvector kaynağından okundu: `idx_chunks_embedding` boş tabloda inşa edilen IVFFlat. Boş tabloda merkezler `RandomCenters` ile rastgele çiziliyor (sabit tohum yalnız `IVFFLAT_BENCH` derlemesinde) ve `probes=1` yüz listenin birini okuyor; eski `ORDER BY embedding <=> $q`, planlayıcı indeksi seçince pasajı kaybediyordu. `knowledge-service.ts` `retrieve()` artık `(c.embedding <=> $q) + 0 AS distance … ORDER BY distance`: hiçbir plan indekse inemez; `+ 0` SELECT listesinde (TOAST okuması satır başına tek); sıra artan (sıfır vektörün NaN'ı sona). Üç seçenek ölçüldü (3 taze DB, 60 soru, indeks yoluna sabitli): IVFFlat 45–56/60 kaçırdı · `probes=10` 27–50 · HNSW 21–33 (`ef_search=400` + iterative scan ile de 30; `m=32/efc=200` ile 4) · tam arama 0. İndeks PRD §8.4 / rapor-2 §5.3 / `SEMA-MIMARI.8.4f` (TAM) gereği yerinde → migration yok; uyarı `schema.prisma` yorumunda. Yeni test `apps/api/test/integration/knowledge-retrieval-recall.test.ts` (4). PLAN: `06.3.3` `✅` · satır 21 `Must` hücresi `20 ✅ · 0 ◐ · 0 ⬜` (`Kapanış` hücresine dokunulmadı) · §D170 · `#### K06.3.3` + `#### K06.3.2`. Açıldı: **tm 254** (`low`, 252'ye bağlı — ~20k chunk/ajan üstü için geri çağırması ölçülmüş ANN yolu + indeks sahip kararı).

@@ -199,6 +199,17 @@ export const NORTHWIND_OWNER: TenantOwner = {
 };
 
 /**
+ * The tenant with a ten-thousand-plus-row Tickets grid (NFR-P4 ·
+ * `nfr-p4-fps.spec.ts`), seeded on demand by that spec's own `beforeAll`
+ * rather than by the shared seed — see `seed-fps-workspace.ts` for why.
+ */
+export const FPS_OWNER: TenantOwner = {
+  email: 'owner@fps-bench.localhost',
+  password: DEMO.password,
+  orgPrefix: 'FPS Bench',
+};
+
+/**
  * The seeded workspace that lives in `us` (NFR-C4 · C4-b) — the subject of the
  * residency refusals in `compliance.spec.ts`.
  *

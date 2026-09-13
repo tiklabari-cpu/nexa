@@ -1694,6 +1694,9 @@ model KnowledgeSource {
 
 /// Retrieval unit. The embedding column is pgvector; its ivfflat index is
 /// created in the migration because Prisma cannot express index methods.
+/// That index was built on an empty table, so its lists are untrained: a query
+/// ordered by a bare `<=>` can be answered from it and silently miss rows.
+/// Retrieval searches exactly instead (`KnowledgeService.retrieve`, tm 252).
 model KnowledgeChunk {
   id         String                       @id @default(uuid()) @db.Uuid
   sourceId   String                       @map("source_id") @db.Uuid

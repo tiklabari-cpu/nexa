@@ -63,7 +63,32 @@ export class KnowledgeService {
     return pieces.length;
   }
 
-  /** Nearest chunks to a question, best first. */
+  /**
+   * Nearest chunks to a question, best first — by exact search, on purpose.
+   *
+   * `idx_chunks_embedding` is approximate: IVFFlat, built by the domain-model
+   * migration on an empty table, so its list centroids are random and a scan
+   * with the default `ivfflat.probes` reads one list in a hundred. Ordering by
+   * the bare `embedding <=> …` let the planner answer from it whenever its
+   * statistics favoured the index, and a passage filed under another list was
+   * then simply not there — measured as a customer queued for a human while the
+   * answer sat in the knowledge base at 0.58 (GL-16), and as 17–22 of 24
+   * questions answered wrongly or not at all on that plan, per fresh database
+   * (tm 252). The miss is silent by nature: "nothing above the threshold" is
+   * also what an unanswerable question returns.
+   *
+   * An index can only serve an ORDER BY that is a bare distance operator, so the
+   * `+ 0` keeps every plan exact. It sits in the select list, not in the ORDER
+   * BY, so the distance — and the TOAST read of each vector — happens once per
+   * row. And it stays ascending: a chunk with no searchable word embeds to zero,
+   * its cosine distance is NaN, and Postgres sorts NaN above every number, so a
+   * descending similarity would hand those rows the LIMIT ahead of a real match.
+   *
+   * The cost is linear in the chunks in scope, which the tenant and agent filters
+   * narrow before any vector is read: p95 ≈ 27 ms at 5,000 chunks, 96 ms at
+   * 20,000, 234 ms at 50,000 (PLAN §D170). Past that the answer is an index
+   * trained on data with a measured recall, not the untrained one.
+   */
   async retrieve(
     tx: TenantClient,
     tenant: TenantContext,
@@ -83,13 +108,13 @@ export class KnowledgeService {
       }>
     >`
       SELECT c.id, c.source_id, s.name AS source_name, c.chunk_text,
-             (c.embedding <=> ${vector}::vector) AS distance
+             (c.embedding <=> ${vector}::vector) + 0 AS distance
       FROM knowledge_chunks c
       JOIN knowledge_sources s ON s.id = c.source_id
       WHERE c.license_id = ${tenant.licenseId}
         AND s.status = 'ready'
         ${options.aiAgentId ? Prisma.sql`AND s.ai_agent_id = ${options.aiAgentId}::uuid` : Prisma.empty}
-      ORDER BY c.embedding <=> ${vector}::vector
+      ORDER BY distance
       LIMIT ${limit}
     `;
 

@@ -7,13 +7,21 @@
  * similarity; the skill run logged "nothing in the knowledge base above 0.25"
  * and the chat went to the human queue. `retrieve()` ordered by the bare
  * distance operator, `ORDER BY embedding <=> $q LIMIT n`, which is the one shape
- * an approximate index can serve, and `idx_chunks_embedding` is approximate: an
- * IVFFlat index the domain-model migration builds on an EMPTY table. Built that
- * way its 100 list centroids are random (pgvector's `RandomCenters`), and with
- * `ivfflat.probes` at its default of 1 a scan reads one list in a hundred. A
- * passage filed under any other list does not exist for that question, and
- * nothing anywhere says so — "nothing above the threshold" is also what an
+ * an approximate index can serve, and `idx_chunks_embedding` was approximate: an
+ * IVFFlat index the domain-model migration built on an EMPTY table. Built that
+ * way its 100 list centroids were random (pgvector's `RandomCenters`), and with
+ * `ivfflat.probes` at its default of 1 a scan read one list in a hundred. A
+ * passage filed under any other list did not exist for that question, and
+ * nothing anywhere said so — "nothing above the threshold" is also what an
  * unanswerable question looks like.
+ *
+ * tm 254 dropped that index and built `idx_chunks_embedding_hnsw` in its place,
+ * which retrieval reads on purpose above its exact-search ceiling
+ * (`knowledge-retrieval-scale.test.ts`). This file's knowledge base sits below
+ * the ceiling, so what it holds is unchanged: with the planner pinned on the
+ * vector index — now the HNSW one — exact search still ranks every question
+ * exactly. An approximate index is approximate whatever its kind, and the pin
+ * is how a statistics shift would hand it the query.
  *
  * Two choices keep this reproduction from being a coin toss:
  *
@@ -25,9 +33,9 @@
  *    becomes the only cheap plan — the dev database's plan. The premise is
  *    checked below rather than assumed. Production statistics are exactly as
  *    unpredictable, so exact search has to hold under the pin, not only without.
- * 2. **One pair would not do.** `migrate deploy` draws new centroids every time
+ * 2. **One pair would not do.** `migrate deploy` drew new centroids every time
  *    (the seed pgvector fixes is compiled into its benchmark build only), so no
- *    single question misses in every database — GL-16's own pair is the first
+ *    single question missed in every database — GL-16's own pair is the first
  *    row below and, alone, would pass in some of them. The table holds 24 pairs
  *    on unrelated topics, all asked of one agent, and any one that ranks
  *    differently from exact search is a red. Measured before the fix, in ten
@@ -406,7 +414,7 @@ describe('knowledge retrieval — a ready source is found on any plan (FR-MOD-06
         agentId,
       );
     });
-    expect(plan.map((row) => row['QUERY PLAN']).join('\n')).toContain('idx_chunks_embedding');
+    expect(plan.map((row) => row['QUERY PLAN']).join('\n')).toContain('idx_chunks_embedding_hnsw');
   });
 
   it('ranks every question as exact search does, with the planner pinned on the vector index', async () => {

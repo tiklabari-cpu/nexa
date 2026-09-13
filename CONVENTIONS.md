@@ -111,9 +111,12 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   ```
 
   Bölünmüş koşu kapıyı zayıflatmaz: her parça kendi izole veritabanını alır (§1.1) ve parçaların
-  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **91 + 139 = 230**; aynı gün
-  tm 234 iki denetim testi ekledi — `src/config/schema-consumers-audit.test.ts` ·
-  `sweep-audit.test.ts` — ve unit shard'ı 91 dosya, integration 47 + 47 + 45 ölçüldü. Önce
+  birleşimi `pnpm -w test`'in dosya sayısıyla birebir aynıdır (api **92 + 140 = 232**; aynı gün
+  tm 254 bir birim ve bir entegrasyon dosyası ekledi — `src/services/ai/knowledge-service.test.ts`
+  · `test/integration/knowledge-retrieval-scale.test.ts` — ve unit shard'ı 92 dosya, integration
+  47 + 47 + 46 ölçüldü. Önce "91 + 139 = 230" tm 234'ündü: iki denetim testi ekledi —
+  `src/config/schema-consumers-audit.test.ts` · `sweep-audit.test.ts` — ve unit shard'ı 91 dosya,
+  integration 47 + 47 + 45 ölçüldü. Önce
   "89 + 139 = 228" 2026-09-13'te GL-17 · tm 253 turunda yeniden ölçülmüştü — metin "89 + 138 = 227" ile bir dosya
   bayattı, tm 252'nin `knowledge-retrieval-recall.test.ts`'i; GL-16 aynı gün 227'yi taze bulmuştu.
   Ondan önce 2026-09-12'de GL-15 · tm 210 "80 + 129 = 209"u düzeltti, Faz-8 (tm 213–246) arayı

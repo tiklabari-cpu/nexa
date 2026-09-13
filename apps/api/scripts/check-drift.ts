@@ -2,7 +2,7 @@
  * Fails if the database has drifted from schema.prisma.
  *
  * `prisma migrate diff` alone cannot be used as a gate, because Prisma has no
- * syntax for index *access methods*. The pgvector ivfflat index on
+ * syntax for index *access methods*. The pgvector hnsw index on
  * `knowledge_chunks.embedding` therefore always shows up as a difference even
  * though the migration creates it deliberately.
  *
@@ -38,9 +38,13 @@ const prismaBin = createRequire(import.meta.url).resolve('prisma/build/index.js'
  */
 const KNOWN_UNMODELLABLE = [
   {
-    // Created as `USING ivfflat (embedding vector_cosine_ops)` in 20260722154008_domain_model.
-    pattern: /CREATE INDEX "idx_chunks_embedding" ON "public"\."knowledge_chunks"/,
-    reason: 'pgvector ivfflat index — Prisma cannot express index access methods',
+    // Created as `USING hnsw (embedding vector_cosine_ops) WITH (m = 16,
+    // ef_construction = 64)` in 20260913120100_knowledge_chunks_hnsw_index. It
+    // replaced the ivfflat `idx_chunks_embedding` (20260722154008_domain_model),
+    // dropped in 20260913120000 — whose allowance this was, and which no longer
+    // matches: the name's closing quote keeps the old pattern off the new index.
+    pattern: /CREATE INDEX "idx_chunks_embedding_hnsw" ON "public"\."knowledge_chunks"/,
+    reason: 'pgvector hnsw index — Prisma cannot express index access methods',
   },
   {
     // Created as `ON brands(license_id) WHERE is_default` in 20260802100000_brands.

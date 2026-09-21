@@ -15,16 +15,19 @@ set -uo pipefail
 # --- Ayarlar -----------------------------------------------------------------
 # --- Model x efor matrisi (PLAN §5.1.1) -------------------------------------
 # Görev/alt-görev başlığındaki etiket hem MODELİ hem EFORU seçer:
-#   [SONNET-XHIGH] → sonnet + xhigh     [SONNET-MAX] → sonnet + max
-#   [OPUS-XHIGH]   → opus   + xhigh     [OPUS-MAX]   → opus   + max
+#   [SONNET-HIGH]  → sonnet + high      [OPUS-HIGH]  → opus   + high
+#   [SONNET-XHIGH] → sonnet + xhigh     [OPUS-XHIGH] → opus   + xhigh
+#   [SONNET-MAX]   → sonnet + max       [OPUS-MAX]   → opus   + max
 # Eski tek boyutlu etiketler (Faz-0/v1 tarihçesi) geriye dönük çalışır:
 #   [MAX] → opus+max · [XHIGH] veya etiketsiz → opus+xhigh
-# Efor tabanı xhigh'dır; güvenlik işi asla sonnet'e verilmez (PLAN §5.1.1).
+# Efor tabanı high'dır; xhigh görev detayında adı yazılı bir gerekçe ister
+# (2026-09-21 · PLAN §D175). Güvenlik işi asla sonnet'e verilmez (PLAN §5.1.1).
 MODEL="opus"                # varsayılan/geri-uyum modeli
 MODEL_BIG="opus"
 MODEL_SMALL="sonnet"
 EFFORT_MAX="max"            # opus 'max' desteklemiyorsa: "high"
-EFFORT_HIGH="xhigh"
+EFFORT_XHIGH="xhigh"
+EFFORT_HIGH="high"
 PERM="bypassPermissions"   # tam otonom, prompt YOK. Güvenli alt.: "auto"
 MAX_TURNS=250
 RUNNER_PROMPT_FILE="TASK-RUNNER-PROMPT.md"
@@ -61,7 +64,7 @@ WAIT_RESET_MAX_MIN="${LOOP_WAIT_RESET_MAX_MIN:-90}"
 COST_MAX_PCT="${LOOP_COST_MAX_PCT:-20}"
 COST_HIGH_PCT="${LOOP_COST_HIGH_PCT:-10}"
 
-pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_id":{"type":"string"},"model":{"type":"string","enum":["sonnet","opus"]},"effort":{"type":"string","enum":["max","high"]},"remaining":{"type":"integer"}},"required":["has_task"]}'
+pick_schema='{"type":"object","properties":{"has_task":{"type":"boolean"},"task_id":{"type":"string"},"model":{"type":"string","enum":["sonnet","opus"]},"effort":{"type":"string","enum":["max","xhigh","high"]},"remaining":{"type":"integer"}},"required":["has_task"]}'
 # `marked_in_progress` ZORUNLU alandır ve bunun tek amacı protokol §1'i görünür kılmak:
 # pencerenin başında task'ı 'in-progress' işaretlemek, protokolün geri besleme üretmeyen
 # TEK adımıydı — DoD kapısı bakmıyor, `git status` o noktada temiz, sonuç JSON'unda alanı
@@ -197,13 +200,16 @@ Hiçbir aday doğrulamadan geçmiyorsa has_task=false döndür — yanlış gör
    alt-görevler arasında kendi 'dependencies' sırasını gözet.
 İş YAPMA, kod okuma/yazma yok.
 Döndür: has_task, task_id, model, effort, remaining (kalan yapılabilir görev sayısı).
-MODEL ve EFOR seçilen işin BAŞLIĞINDAKİ ETİKETTEN okunur (PLAN §5.1.1 model x efor matrisi):
-  [SONNET-XHIGH] -> model=\"sonnet\", effort=\"high\"   (\"high\" burada xhigh anlamına gelir)
+MODEL ve EFOR seçilen işin BAŞLIĞINDAKİ ETİKETTEN okunur (PLAN §5.1.1 model x efor matrisi).
+Altı etiketin altısı da TANIMLIDIR; hiçbiri belirsiz sayılmaz:
+  [SONNET-HIGH]  -> model=\"sonnet\", effort=\"high\"
+  [SONNET-XHIGH] -> model=\"sonnet\", effort=\"xhigh\"
   [SONNET-MAX]   -> model=\"sonnet\", effort=\"max\"
-  [OPUS-XHIGH]   -> model=\"opus\",   effort=\"high\"
+  [OPUS-HIGH]    -> model=\"opus\",   effort=\"high\"
+  [OPUS-XHIGH]   -> model=\"opus\",   effort=\"xhigh\"
   [OPUS-MAX]     -> model=\"opus\",   effort=\"max\"
-Eski tek boyutlu etiketler (Faz-0/v1 tarihcesi): [MAX] -> opus+max; [XHIGH] veya etiket YOK -> opus+high.
-Etiket belirsizse GÜVENLİ tarafa düş: model=\"opus\", effort=\"max\"." \
+Eski tek boyutlu etiketler (Faz-0/v1 tarihcesi): [MAX] -> opus+max; [XHIGH] veya etiket YOK -> opus+xhigh.
+Etiket bu listede yoksa ya da çelişkiliyse GÜVENLİ tarafa düş: model=\"opus\", effort=\"max\"." \
     --model "$MODEL" --effort low --permission-mode "$PERM" --max-turns 10 $ALLOW \
     --output-format json --json-schema "$pick_schema" 2>>"$LOG_DIR/pick.err" \
     | jq -c '.structured_output' 2>/dev/null
@@ -368,8 +374,14 @@ while true; do
   fi
   task_id=$(echo "$pick" | jq -r '.task_id // "?"')
   remaining=$(echo "$pick" | jq -r '.remaining // "?"')
-  eff_label=$(echo "$pick" | jq -r '.effort // "high"')
-  [ "$eff_label" = "max" ] && eff="$EFFORT_MAX" || eff="$EFFORT_HIGH"
+  eff_label=$(echo "$pick" | jq -r '.effort // "xhigh"')
+  # Bilinmeyen ya da boş etiket xhigh'a düşer — 2026-09-21 öncesi davranış buydu;
+  # high yalnız açıkça seçildiğinde verilir (PLAN §D175).
+  case "$eff_label" in
+    max)  eff="$EFFORT_MAX" ;;
+    high) eff="$EFFORT_HIGH" ;;
+    *)    eff="$EFFORT_XHIGH" ;;
+  esac
   mdl=$(echo "$pick" | jq -r '.model // empty')
   case "$mdl" in sonnet) mdl="$MODEL_SMALL" ;; opus) mdl="$MODEL_BIG" ;; *) mdl="$MODEL_BIG" ;; esac
 

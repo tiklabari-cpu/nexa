@@ -368,9 +368,10 @@ describe('production configuration', () => {
    * provider, so the five keys stay optional in the schema, and an incomplete
    * choice has to stop the boot rather than fall back to `file` — which is
    * exactly the M-PROV-a regression this file's header describes, one provider
-   * over. Production-only, unlike S3: `createMailer('smtp', …)` itself throws
-   * in every environment until tm 255.3 builds a transport (see mailer.test.ts),
-   * so there is nothing this check needs to guard in development or test.
+   * over. Production-only, unlike S3: outside production an incomplete `smtp`
+   * still cannot boot, because `env.mail.smtp` stays `null` and
+   * `createMailer('smtp', …)` refuses it (see mailer.test.ts) — the schema does
+   * not need to refuse it a second time.
    */
   describe('MAIL_PROVIDER=smtp', () => {
     const SMTP: NodeJS.ProcessEnv = {
@@ -423,10 +424,75 @@ describe('production configuration', () => {
     });
 
     it('does not require any of this outside production', () => {
-      // `file` stays the effective behaviour until tm 255.3 exists — see
-      // mailer.test.ts — but the schema itself must not refuse a developer who
-      // sets MAIL_PROVIDER=smtp with nothing else, the way `file`/`null` do not.
+      // The schema itself does not refuse a developer who sets
+      // MAIL_PROVIDER=smtp with nothing else; `createMailer` does, from the
+      // `null` assembled below (mailer.test.ts).
       expect(() => parseEnv({ ...BASE, MAIL_PROVIDER: 'smtp' })).not.toThrow();
+      expect(parseEnv({ ...BASE, MAIL_PROVIDER: 'smtp' }).mail.smtp).toBeNull();
+    });
+
+    /**
+     * `env.mail` — what the carrier connects with (tm 255.3). Assembled once,
+     * like `env.storage`, and `null` whenever it would be half a configuration.
+     */
+    describe('env.mail', () => {
+      it('assembles the carrier configuration from the seven keys', () => {
+        const env = parseEnv({ ...PROD_BASE, ...SMTP, SMTP_TIMEOUT_MS: '2500' });
+
+        expect(env.mail).toEqual({
+          dir: env.MAIL_DIR,
+          smtp: {
+            host: 'mail.privateemail.com',
+            port: 587,
+            secure: false,
+            username: 'info@nolnk.net',
+            password: SMTP.SMTP_PASSWORD,
+            from: 'info@nolnk.net',
+            timeoutMs: 2500,
+          },
+        });
+      });
+
+      it('follows the port when SMTP_SECURE is unset: 465 is TLS from the first byte, anything else STARTTLS', () => {
+        const { SMTP_SECURE: _unset, ...withoutSecure } = SMTP;
+
+        expect(
+          parseEnv({ ...PROD_BASE, ...withoutSecure, SMTP_PORT: '465' }).mail.smtp?.secure,
+        ).toBe(true);
+        expect(
+          parseEnv({ ...PROD_BASE, ...withoutSecure, SMTP_PORT: '587' }).mail.smtp?.secure,
+        ).toBe(false);
+        // An explicit value wins over the port.
+        expect(
+          parseEnv({ ...PROD_BASE, ...SMTP, SMTP_PORT: '465', SMTP_SECURE: 'false' }).mail.smtp
+            ?.secure,
+        ).toBe(false);
+      });
+
+      it('defaults the per-step timeout to 10 s', () => {
+        expect(parseEnv({ ...PROD_BASE, ...SMTP }).mail.smtp?.timeoutMs).toBe(10_000);
+      });
+
+      it('is null for every other provider, even with the keys set', () => {
+        expect(parseEnv({ ...PROD_BASE, ...SMTP, MAIL_PROVIDER: 'file' }).mail.smtp).toBeNull();
+        expect(parseEnv({ ...PROD_BASE, ...SMTP, MAIL_PROVIDER: 'null' }).mail.smtp).toBeNull();
+      });
+
+      it('offers no key that relaxes TLS — the SMTP surface is exactly the seven keys', () => {
+        // Test strategy (8): certificate verification cannot be switched off,
+        // because no configuration reaches it. A future SMTP_TLS_REJECT_… or
+        // SMTP_INSECURE would have to be added here first, on purpose.
+        const smtpKeys = Object.keys(envSchema.shape).filter((key) => key.startsWith('SMTP_'));
+        expect(smtpKeys.sort()).toEqual([
+          'SMTP_FROM',
+          'SMTP_HOST',
+          'SMTP_PASSWORD',
+          'SMTP_PORT',
+          'SMTP_SECURE',
+          'SMTP_TIMEOUT_MS',
+          'SMTP_USERNAME',
+        ]);
+      });
     });
   });
 

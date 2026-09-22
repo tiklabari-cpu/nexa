@@ -51,7 +51,7 @@ async function main(): Promise<void> {
       undefined,
       undefined,
       { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
-      createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+      createMailer(env.MAIL_PROVIDER, env.mail),
       undefined,
       // And the same automation fan-out (FR-MOD-09.4): a chat this script
       // archives is as closed as one an agent archived, so the zap subscribed to

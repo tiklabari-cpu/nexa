@@ -10091,11 +10091,11 @@
             "description": "Pilotta gercek LLM ve gercek embedding kullanilacak, fakat saglayici henuz kesinlesmedi. Bu gorev kod degil KARAR uretir: adaylarin sohbet/embedding/streaming/tool-calling yuzeyini resmi dokumantasyondan dogrular, 'OpenAI uyumlu' iddiasini dogrulamadan kabul etmez, embedding boyutunu mevcut vector(1536) sozlesmesiyle karsilastirir ve 255.2/255.5/255.7'nin uygulayacagi env anahtar ADLARINI sabitler.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: ust gorev tm 255 details.\n\nKODDA BUGUN (2026-09-22 olculdu):\n- apps/api/src/config/env.ts:440 -> LLM_PROVIDER: z.enum(['mock']).default('mock'). Enum KAPALI; gercek saglayici bir config degeri degil, kod isi.\n- apps/api/src/services/ai/inference.ts (104 satir) -> yalnizca bolge/izin kapisi: resolveInferenceProvider, inferenceLeavesRegion, assertInferenceAllowed (NFR-C4 HIPAA). Adapter YOK.\n- Gercek uretim @nexa/ai-mock paketinde deterministik stub: intent.ts:29 INTENT_THRESHOLD=0.6, assist.ts summariseConversation/enhanceText, compiler.ts compileInstruction, topics.ts clusterTopics.\n- packages/ai-mock/src/embedding.ts:22 EMBEDDING_DIMENSIONS=1536; :168 embed(text): number[] -- SENKRON (gercek saglayici async olacak, 255.7'nin isi).\n- DB kolonu: apps/api/prisma/schema.prisma:1708 embedding Unsupported(\"vector(1536)\").\n\nKAPSAM -- su sekiz sorunun cevabi yazili olarak birakilir:\n1) Aday sohbet saglayicilari ve her birinin RESMI API yuzeyi. Kaynak resmi dokumantasyon olmali (WebSearch/WebFetch); ikinci el blog yazisi kanit degildir, URL ile birlikte yazilir.\n2) 'OpenAI uyumlu' iddiasi HER aday icin AYRI dogrulanir: /v1/chat/completions alan adlari, hata govdesi bicimi, akis (SSE) bicimi, tool/function calling semasi, embeddings ucunun VARLIGI. Uyum kismiysa NEREDE kirildigi tek tek yazilir. Dogrulanmadan 'uyumlu' kabul etmek bu gorevin reddidir.\n3) Embedding saglayicisi sohbet saglayicisindan AYRI secilebilir; ayni olmak zorunda DEGILDIR. Iki ayri karar olarak yazilir.\n4) Embedding boyutu: aday 1536 uretebiliyor mu (native ya da dimensions parametresiyle)? Uretemiyorsa migration + TAM yeniden gomme maliyeti yazilir; bu 255.7'nin dogrudan girdisidir.\n5) Streaming pilotta gerekli mi? Bugun urunde token akisi yuzeyi YOK (AI yaniti RTM olayi olarak tek parca gidiyor). Gerekli degilse acikca KAPSAM DISI yazilir.\n6) Tool/function calling pilotta gerekli mi? Skill adimlari bugun @nexa/ai-mock validateSteps kapisindan geciyor; model arac cagirmiyor. EVET/HAYIR yazilir.\n7) Bolge/veri yerlesimi: NFR-C4 kapisi (assertInferenceAllowed) KORUNUR. Secilen saglayicinin kostugu bolge LLM_PROVIDER_REGION ile nasil eslesecek, yazilir.\n8) Ucretlendirme sekli (token bazli / istek bazli) ve saglayici tarafi limitler -- 255.9'un girdisi.\n\nCIKTI:\n(a) ADR: docs/ altinda ya da PLAN.md S D kaydi (CONVENTIONS S1.2 bicimi).\n(b) env anahtar ADLARI tablosu -- DEGER YOK, yalnizca isim ve anlam. Onerilen taslak, bu gorevde kesinlesir: LLM_PROVIDER, LLM_API_BASE_URL, LLM_MODEL, LLM_API_KEY, LLM_TIMEOUT_MS, LLM_MAX_OUTPUT_TOKENS, EMBEDDING_PROVIDER, EMBEDDING_API_BASE_URL, EMBEDDING_MODEL, EMBEDDING_API_KEY, EMBEDDING_DIMENSIONS. 255.2/255.5/255.7 TAM BU isimleri uygular.\n(c) 255.5 / 255.6 / 255.7 / 255.9'un kapsamini daraltan net cumleler.\n\nKAPSAM DISI: kod yazimi, enum acma, adapter, gercek API cagrisi, anahtar edinimi veya girisi, fiyat pazarligi, saglayici hesabi acma.\n\nSAHIP KARARI BEKLIYORSA: saglayici sahibin secimiyse, matris tamamlanir ve ADR 'sahip karari bekleniyor: <hangi soru>' satiriyla kapatilir. Bu gorev yine de done olur; 255.5 baslamadan once sahip cevabi gerekir.\n\nPRD: NFR-C4 (bolge/HIPAA kapisi korunur) - FR-MOD-06.3.2 (embedding/index sozlesmesi) - FR-05-06.EK1 (skill motoru calisma zamani).",
             "testStrategy": "Kod uretmeyen karar gorevi; kapisi belgedir. (1) ADR dosyasi mevcut ve her aday satirinda RESMI dokuman URL'si var. (2) 'OpenAI uyumlu' iddiasi aday basina ayri dogrulanmis; uyumun kirildigi yer adiyla yazili. (3) Embedding boyut karari acik: 1536 uretilebiliyor mu EVET/HAYIR; HAYIR ise migration + yeniden gomme maliyeti yazili. (4) streaming ve tool/function calling icin acik EVET/HAYIR. (5) env anahtar ADLARI listesi tam (deger yok) -- grep ile dosyada gorulebilir. (6) Gercek saglayiciya istek atilmadi; yalnizca dokumantasyon okundu. (7) Kod degismedigi icin pnpm -w typecheck / lint / test / build yesil kalir; pnpm -w format:check exit 0 (ADR markdown'i dahil). (8) PLAN.md S D kaydi + K blogu yazildi.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-22T20:24:57.605Z"
+            "updatedAt": "2026-09-22T21:09:06.011Z"
           },
           {
             "id": 2,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-22T20:24:57.605Z"
+        "updatedAt": "2026-09-22T21:09:06.011Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-22T20:24:57.605Z",
+      "lastModified": "2026-09-22T21:09:06.013Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

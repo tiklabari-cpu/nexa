@@ -14,6 +14,20 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createMailer, FileMailer, MAIL_PROVIDERS, NullMailer } from './mailer.js';
+import { SmtpMailer, type SmtpConfig } from './smtp-mailer.js';
+
+/** Never connected to: these tests only ask which mailer the factory builds. */
+const SMTP: SmtpConfig = {
+  host: '127.0.0.1',
+  port: 587,
+  secure: false,
+  username: 'info@nolnk.test',
+  password: 'not-a-real-password',
+  from: 'info@nolnk.test',
+  timeoutMs: 1000,
+};
+
+const SILENT = { debug() {}, info() {}, warn() {}, error() {} };
 
 const MESSAGE = {
   to: 'someone@example.test',
@@ -60,17 +74,29 @@ describe('createMailer', () => {
     // zod enum off `MAIL_PROVIDERS`, so a value added there without a case here
     // would be a setting that boots fine and then picks nothing. The `switch`
     // is exhaustive at compile time; this is the runtime half of the same claim.
-    // `smtp` is excluded here on purpose (M-PROV-a's promise is a case exists,
-    // not that it returns a mailer) — the negative test below covers it.
     for (const provider of MAIL_PROVIDERS) {
-      if (provider === 'smtp') continue;
-      expect(createMailer(provider, { dir })).toBeDefined();
+      expect(createMailer(provider, { dir, smtp: SMTP, logger: SILENT })).toBeDefined();
     }
     expect(MAIL_PROVIDERS).toEqual(['file', 'null', 'smtp']);
   });
 
-  it('throws for "smtp" instead of silently falling back to "file" (tm 255.2 · carrier lands in tm 255.3)', async () => {
+  it('builds the SMTP carrier for "smtp" (tm 255.3)', () => {
+    expect(createMailer('smtp', { dir, smtp: SMTP, logger: SILENT })).toBeInstanceOf(SmtpMailer);
+  });
+
+  it('refuses a sender that is not a bare address at construction, not on the first send', () => {
+    expect(() =>
+      createMailer('smtp', {
+        dir,
+        smtp: { ...SMTP, from: 'Nexa <info@nolnk.test>' },
+        logger: SILENT,
+      }),
+    ).toThrow(/SMTP_FROM/);
+  });
+
+  it('throws for "smtp" without its configuration instead of silently falling back to "file" (tm 255.2 · 255.3)', async () => {
     expect(() => createMailer('smtp', { dir })).toThrow(/smtp/i);
+    expect(() => createMailer('smtp', { dir, smtp: null })).toThrow(/SMTP_HOST/);
 
     // Not merely "it throws" — confirm the throw happens before anything is
     // spooled, so a caller that swallowed the error could not mistake this

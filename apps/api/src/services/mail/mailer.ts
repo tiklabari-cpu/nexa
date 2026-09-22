@@ -1,17 +1,19 @@
 /**
- * Outgoing mail — written to disk, never sent (PLAN assumption A4).
+ * Outgoing mail — written to disk by default, sent only when asked (PLAN
+ * assumption A4 · tm 255.3).
  *
- * A real SMTP client would be a dependency this project is not allowed to use
- * and a network call the tests could not rely on. Writing a file keeps the
- * *shape* honest — the code that needs to send an email calls something that
- * takes a recipient, a subject and a body, and swapping in a provider means
- * replacing one method — while making delivery inspectable: the tests read the
- * file back rather than asserting on a mock's call log, and a developer can see
- * the reset link they just asked for.
+ * Writing a file keeps the *shape* honest — the code that needs to send an
+ * email calls something that takes a recipient, a subject and a body, and
+ * swapping in a provider means replacing one method — while making delivery
+ * inspectable: the tests read the file back rather than asserting on a mock's
+ * call log, and a developer can see the reset link they just asked for. That is
+ * still the default. `smtp` is the swap A4 promised (`smtp-mailer.ts`): the
+ * same method, a carrier that really sends, and the only mailer that can fail.
  */
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { SmtpMailer, type MailLogger, type SmtpConfig } from './smtp-mailer.js';
 
 export interface Message {
   to: string;
@@ -91,6 +93,13 @@ export type MailProvider = (typeof MAIL_PROVIDERS)[number];
 export interface MailerOptions {
   /** Where the `file` provider writes (`env.MAIL_DIR`). */
   dir: string;
+  /**
+   * What `smtp` connects with (`env.mail.smtp`). `null` unless `MAIL_PROVIDER`
+   * is `smtp` and every key it needs is set — see `mailOptions` in `env.ts`.
+   */
+  smtp?: SmtpConfig | null;
+  /** Where `smtp` logs connection and delivery events. Omitted, stderr. */
+  logger?: MailLogger;
 }
 
 /**
@@ -113,13 +122,16 @@ export function createMailer(provider: MailProvider, options: MailerOptions): Ma
     case 'null':
       return new NullMailer();
     case 'smtp':
-      // tm 255.3 builds the real transport (PrivateEmail, config from the
-      // SMTP_* keys in config/env.ts). Until then this throws rather than
-      // silently falling back to `file`: an operator who sets
-      // MAIL_PROVIDER=smtp today should see boot fail loudly, not spool mail
-      // nobody asked it to keep on disk.
-      throw new Error(
-        "MAIL_PROVIDER=smtp has no transport yet (tm 255.3) — use 'file' or 'null' until then.",
-      );
+      // Throws rather than falling back to `file`, as `createObjectStore` does
+      // for `s3`: a deployment that asked to send mail and quietly spooled it
+      // to disk would answer every password reset with "check your inbox" and
+      // deliver nothing. `parseEnv` refuses production without these keys; this
+      // is the same refusal everywhere else.
+      if (!options.smtp) {
+        throw new Error(
+          'MAIL_PROVIDER=smtp needs SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD and SMTP_FROM.',
+        );
+      }
+      return new SmtpMailer(options.smtp, { logger: options.logger });
   }
 }

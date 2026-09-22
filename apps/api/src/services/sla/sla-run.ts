@@ -31,12 +31,9 @@ async function main(): Promise<void> {
   const env = parseEnv();
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   try {
-    // Mail is written to disk like everything else outgoing (PLAN A4), so the
-    // alert is inspectable rather than sent.
-    const report = await new SlaSweeper(
-      db,
-      createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
-    ).run();
+    // Whatever `MAIL_PROVIDER` names: written to disk by default like
+    // everything else outgoing (PLAN A4), sent under `smtp` (tm 255.3).
+    const report = await new SlaSweeper(db, createMailer(env.MAIL_PROVIDER, env.mail)).run();
 
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.stderr.write(

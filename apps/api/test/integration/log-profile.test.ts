@@ -24,6 +24,7 @@
  *    already looks like without a bespoke serializer to keep in sync.
  */
 import { afterEach, describe, expect, it } from 'vitest';
+import { testEnv } from '../helpers/fixtures.js';
 import { startTestServer, type TestServer } from '../helpers/server.js';
 
 /** Collects the lines pino actually wrote, so the assertion is on output. */
@@ -147,6 +148,35 @@ describe('production log profile', () => {
     expect(completed).toBeDefined();
     expect((completed?.['res'] as { statusCode?: number } | undefined)?.statusCode).toBe(401);
     expect(typeof completed?.['responseTime']).toBe('number');
+  });
+
+  it('censors the SMTP credentials wherever the configuration holding them is logged (tm 255.3)', async () => {
+    // A production boot with MAIL_PROVIDER=smtp builds the carrier but does not
+    // connect — nothing here reaches a mail server. What is under test is the
+    // server's own logger: its redact paths include SMTP_SECRET_LOG_PATHS.
+    const smtp = {
+      MAIL_PROVIDER: 'smtp',
+      SMTP_HOST: '127.0.0.1',
+      SMTP_PORT: '587',
+      SMTP_USERNAME: 'smtp-user-7c1e@nolnk.test',
+      SMTP_PASSWORD: 'smtp-password-never-logged-7c1e',
+      SMTP_FROM: 'info@nolnk.test',
+    };
+    const sink = new LineSink();
+    server = await startTestServer(
+      { ...PRODUCTION_ENV, ...smtp },
+      { logStream: sink as unknown as NodeJS.WritableStream },
+    );
+    const env = testEnv({ ...PRODUCTION_ENV, ...smtp });
+    expect(env.mail.smtp?.password).toBe(smtp.SMTP_PASSWORD);
+
+    server.app.log.info({ env }, 'somebody logged the whole env');
+    server.app.log.info({ smtp: env.mail.smtp }, 'somebody logged the carrier config');
+
+    const written = sink.lines.join('\n');
+    expect(written).toContain('somebody logged the whole env');
+    expect(written).not.toContain(smtp.SMTP_PASSWORD);
+    expect(written).not.toContain(smtp.SMTP_USERNAME);
   });
 
   it('is a branch, not a constant — production requests are logged, unlike the test default', async () => {

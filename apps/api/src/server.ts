@@ -39,6 +39,7 @@ import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
+import { SMTP_SECRET_LOG_PATHS } from './services/mail/smtp-mailer.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
 import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
@@ -107,12 +108,7 @@ export interface BuildServerOptions {
 
 export async function buildServer({
   env,
-  // The provider is chosen by the setting that names it, not by `NODE_ENV`
-  // (M-PROV-a · §D113/K3). The branch that used to be here meant `MAIL_PROVIDER`
-  // was validated at boot and then never read, so an operator who set it got a
-  // different mailer than the one they asked for — and a test that wanted a real
-  // spool had to lie about the environment to get one.
-  mailer = createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+  mailer: injectedMailer,
   push = createPushProvider(env.PUSH_PROVIDER, { dir: env.PUSH_DIR }),
   telemetry,
   logStream,
@@ -157,13 +153,19 @@ export async function buildServer({
           // were sitting in the request log beside it.
           'req.body.api_key',
           'res.headers["set-cookie"]',
+          // The SMTP credentials, wherever someone might log the configuration
+          // that holds them (tm 255.3). The carrier itself never does.
+          ...SMTP_SECRET_LOG_PATHS,
           // The request line. This API puts personal data in query strings —
           // the customer search takes an address — so the URL is where PII
           // reaches the log first, and it is not covered by any secret path.
           'req.url',
         ],
-        censor: (value: unknown, path: string[]) =>
-          path.join('.') === 'req.url' && typeof value === 'string'
+        // `map(String)` before `join`: a leading `*` path walks every key of
+        // the log object, pino's own Symbol-keyed ones included, and `join`
+        // throws on a Symbol — which took the whole log call down with it.
+        censor: (value: unknown, path: Array<string | symbol>) =>
+          path.map(String).join('.') === 'req.url' && typeof value === 'string'
             ? logSafeUrl(value)
             : '[redacted]',
       },
@@ -224,6 +226,20 @@ export async function buildServer({
     // shutdown open for a full `keepAliveTimeout`.
     forceCloseConnections: false,
   });
+
+  // The provider is chosen by the setting that names it, not by `NODE_ENV`
+  // (M-PROV-a · §D113/K3). The branch that used to be here meant `MAIL_PROVIDER`
+  // was validated at boot and then never read, so an operator who set it got a
+  // different mailer than the one they asked for — and a test that wanted a real
+  // spool had to lie about the environment to get one. Built after the app
+  // rather than as a parameter default so the `smtp` carrier logs through this
+  // logger — its stream, its level and its redaction paths (tm 255.3).
+  const mailer =
+    injectedMailer ??
+    createMailer(env.MAIL_PROVIDER, {
+      ...env.mail,
+      logger: app.log.child({ component: 'mailer' }),
+    });
 
   await app.register(errorHandler);
   // First, and with no dependencies of its own: `/health/ready` has to be able

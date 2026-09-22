@@ -185,7 +185,7 @@ async function main(): Promise<void> {
 
     const report = await new ScheduledReportSweeper(
       db,
-      createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }),
+      createMailer(env.MAIL_PROVIDER, env.mail),
       readDb ?? db,
     ).run({ now });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);

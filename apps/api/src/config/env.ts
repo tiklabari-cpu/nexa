@@ -12,7 +12,8 @@ import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
 // modules reaches back into this one, so there is no import cycle.
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
 import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
-import { MAIL_PROVIDERS } from '../services/mail/mailer.js';
+import { MAIL_PROVIDERS, type MailerOptions } from '../services/mail/mailer.js';
+import { SMTP_DEFAULT_TIMEOUT_MS } from '../services/mail/smtp-mailer.js';
 import { PUSH_PROVIDERS } from '../services/push/push-provider.js';
 import { type ObjectStoreOptions, STORAGE_PROVIDERS } from '../services/storage/object-store.js';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
@@ -456,10 +457,11 @@ export const envSchema = z.object({
    */
   MAIL_PROVIDER: z.enum(MAIL_PROVIDERS).default('file'),
   /**
-   * PrivateEmail SMTP settings `MAIL_PROVIDER=smtp` will use once tm 255.3
-   * builds the transport (ADR docs/adr/pilot-llm-embedding-provider.md §9.3).
-   * The contract opens here first — schema, four-source parity and the
-   * production boot check — before the real client exists.
+   * PrivateEmail SMTP settings `MAIL_PROVIDER=smtp` sends with (ADR
+   * docs/adr/pilot-llm-embedding-provider.md §9.3). The contract opened here
+   * in tm 255.2 — schema, four-source parity and the production boot check —
+   * and the carrier that reads it is `services/mail/smtp-mailer.ts` (tm 255.3),
+   * through `env.mail` below.
    *
    * All optional at the schema level: which of them is actually required
    * depends on `MAIL_PROVIDER` (see `productionProblems` below), and a
@@ -472,7 +474,10 @@ export const envSchema = z.object({
   /**
    * `true` connects with TLS from the first byte (port 465); `false` starts
    * plaintext and upgrades with STARTTLS (port 587). There is no third,
-   * unencrypted value — PrivateEmail refuses a plaintext session either way.
+   * unencrypted value — PrivateEmail refuses a plaintext session either way,
+   * and the carrier refuses a server that does not offer STARTTLS. Unset, it
+   * follows the port: `true` on 465, STARTTLS otherwise. Nothing here, or
+   * anywhere, turns certificate verification off.
    */
   SMTP_SECURE: z
     .enum(['true', 'false'])
@@ -490,7 +495,10 @@ export const envSchema = z.object({
   SMTP_PASSWORD: z.string().min(1).optional(),
   /** Pilot: `info@nolnk.net` — an address, not a secret. */
   SMTP_FROM: z.string().min(1).optional(),
-  /** Connection + send ceiling for one message. */
+  /**
+   * Applied to the connection and to every reply the carrier waits for, not to
+   * the message as a whole. Unset: 10 s (`SMTP_DEFAULT_TIMEOUT_MS`).
+   */
   SMTP_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
   /**
    * Outgoing push (M-PROV-a). Same pair of mocks as the mailer, spooling under
@@ -691,6 +699,12 @@ export type Env = z.infer<typeof envSchema> & {
    * all three. Derived here instead, so that was the last time they change.
    */
   storage: ObjectStoreOptions;
+  /**
+   * Everything `createMailer` needs (tm 255.3), on `storage`'s terms: the four
+   * call sites pass this whole, so a provider that needs more settings changes
+   * this assembly, not them.
+   */
+  mail: MailerOptions;
   isProduction: boolean;
   isTest: boolean;
   /** Whether OpenTelemetry instrumentation is active for this process. */
@@ -890,6 +904,41 @@ function storageOptions(env: z.infer<typeof envSchema>): ObjectStoreOptions {
   };
 }
 
+/**
+ * `env.mail` — the single assembly of `MailerOptions` (tm 255.3).
+ *
+ * `smtp` is `null` unless the provider is `smtp` *and* every key it needs is
+ * present, for `storageOptions`'s reason: half a configuration must not look
+ * like a configured server downstream. `createMailer` refuses to boot on a
+ * `null`, and in production `productionProblems` has already named the missing
+ * keys before that.
+ */
+function mailOptions(env: z.infer<typeof envSchema>): MailerOptions {
+  const { SMTP_HOST, SMTP_PORT, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM } = env;
+  if (
+    env.MAIL_PROVIDER !== 'smtp' ||
+    !SMTP_HOST ||
+    !SMTP_PORT ||
+    !SMTP_USERNAME ||
+    !SMTP_PASSWORD ||
+    !SMTP_FROM
+  ) {
+    return { dir: env.MAIL_DIR, smtp: null };
+  }
+  return {
+    dir: env.MAIL_DIR,
+    smtp: {
+      host: SMTP_HOST,
+      port: SMTP_PORT,
+      secure: env.SMTP_SECURE ?? SMTP_PORT === 465,
+      username: SMTP_USERNAME,
+      password: SMTP_PASSWORD,
+      from: SMTP_FROM,
+      timeoutMs: env.SMTP_TIMEOUT_MS ?? SMTP_DEFAULT_TIMEOUT_MS,
+    },
+  };
+}
+
 function replicaEscalatesPrivilege(env: z.infer<typeof envSchema>): boolean {
   if (!env.DATABASE_REPLICA_URL || !env.DATABASE_APP_URL) return false;
   const owner = new URL(env.DATABASE_URL).username;
@@ -952,6 +1001,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     // every value this returns `null` for, so the boot is over before here.
     webOrigins: parseOriginList(env.WEB_ORIGIN) ?? [],
     storage: storageOptions(env),
+    mail: mailOptions(env),
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',

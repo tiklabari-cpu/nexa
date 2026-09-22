@@ -10115,13 +10115,13 @@
             "description": "Mailer arayuzu (send({to,subject,body,kind})) ve dokuz cagri yeri DEGISMEZ; degisen yalnizca tasiyicidir. XHIGH gerekcesi: (3) TESLIM GUVENCESI -- yeniden deneme mantigindaki bir hata e-postayi kaybettirir ya da iki kez gonderir; davet ve sifre sifirlama e-postasinin ikisi de tek kullanimlik token tasir.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami ve sir siniri: ust gorev tm 255 details.\n\nXHIGH GEREKCESI (PLAN S5.1.1 / S D175): (3) teslim guvencesi -- yeniden deneme/kuyruk mantigindaki bir hata mesaj kaybina ya da cift gonderime yol acar.\n\nKODDA BUGUN (2026-09-22 olculdu):\n- apps/api/src/services/mail/mailer.ts:36 interface Mailer { send(message: Message): Promise<void> } -- Message = { to, subject, body, kind }. kind: 'password_reset' | 'invitation' | 'notification' | 'scheduled_report' | 'ticket_notice'.\n- DOKUZ cagri yeri (hicbiri degismemeli): routes/account-lifecycle.ts:190 (sifre sifirlama), :418 (davet), routes/auth.ts:1187 (2FA acildi bildirimi), routes/customer.ts:389, routes/settings.ts:1582 (SSO alan dogrulama), routes/tickets.ts:335, services/chat/chat-service.ts:1230, services/reports/scheduled-report-sweeper.ts:278, services/sla/sla-sweep.ts:261.\n- FileMailer (mailer.ts:40) pratikte hic hata firlatmaz; bu yuzden bugun hicbir cagri yeri gercek bir gonderim hatasiyla karsilasmadi. Hata davranisi 255.4'un konusu, ama bu gorev HANGI hatanin firlatilacagini tanimlar.\n- Desen olarak izlenecek iki yer: services/webhooks/webhook-dispatcher.ts:367 createHttpWebhookSender(fetchImpl = fetch) -- enjekte edilebilir tasiyici, testte ag YOK; ve redeliveryBackoffMs (:90) -- geri cekilme egrisi.\n\nKAPSAM:\n1) SmtpMailer: 255.2'nin actigi createMailer('smtp') dalini doldurur.\n2) BAGIMLILIK KARARI PENCEREDE VERILIR ve gerekcesiyle yazilir: olgun bir kutuphane (ornek: nodemailer) mu, yoksa depodaki el-yazimi gelenek mi (s3-store.ts SigV4'u el-yazimi). Karar STARTTLS/implicit TLS, AUTH LOGIN/PLAIN, MIME ve basliklarin dogrulugu uzerinden verilir; secilen yol ADR/PLAN S D'ye yazilir. Yeni bir runtime bagimliligi ekleniyorsa pnpm-lock.yaml degisikligi commit'e dahildir.\n3) Baglanti: TLS zorunlu (SMTP_SECURE), sunucu sertifikasi dogrulanir -- dogrulamayi kapatan bir secenek EKLENMEZ.\n4) Zaman asimi: SMTP_TIMEOUT_MS; baglanti ve komut basina uygulanir; asilirsa gecici hata.\n5) HATA AYRIMI (bu gorevin kalbi): SMTP 4xx = gecici (yeniden denenebilir), 5xx = kalici (asla yeniden denenmez); kimlik dogrulama hatasi (535) KALICIDIR ve tekrar denenmez. Iki sinif ayri tiplerle temsil edilir; 255.4 bu tipe gore davranir.\n6) Yeniden deneme: yalnizca gecici hatada, ustel geri cekilme + ust sinir (webhook desenini izle). CIFT GONDERIM YASAK: sunucu mesaji kabul ettikten (250) sonra hicbir kosulda tekrar gonderilmez.\n7) Log: baglanti/gonderim olaylari pino ile; ALICI ADRESI ve mesaj govdesi log'a YAZILMAZ; SMTP_PASSWORD redaction listesinde (255.2).\n\nKAPSAM DISI: Mailer arayuzunun ve dokuz cagri yerinin degistirilmesi; kuyruk/outbox tablosu; bounce/complaint webhook'u; gelen e-posta; SPF/DKIM/DMARC DNS kaydi (bu turda DNS islemi yok); e-posta sablonlarinin HTML'e cevrilmesi.\n\nSIR SINIRI: gercek PrivateEmail host/kullanici/parolasi HICBIR yere yazilmaz ve bu gorevde GERCEK SMTP SUNUCUSUNA BAGLANILMAZ. Dogrulama, testte ayaga kaldirilan sahte bir SMTP sunucusuna (node:net ile konusan kucuk bir sunucu ya da enjekte edilen tasiyici) karsi yapilir.\n\nPRD: FR-MOD-08.2 - FR-MOD-04.4 - FR-MOD-00.3.",
             "testStrategy": "Ag erisimi olmadan, sahte SMTP sunucusuna karsi. (1) Mutlu yol: send() cagrisi sunucuya EHLO/AUTH/MAIL FROM/RCPT TO/DATA sirasiyla gider; 250 alinir; Promise resolve. (2) Zarf dogrulugu: MAIL FROM = SMTP_FROM; RCPT TO = message.to; Subject basligi ve UTF-8 govde dogru kodlanir (non-ASCII konu basligi testi). (3) 4xx -> gecici tip; yapilandirilan sayida yeniden denenir; deneme araliklari ustel. (4) 5xx -> kalici tip; SIFIR yeniden deneme -- negatif test. (5) 535 auth hatasi kalici sayilir. (6) Zaman asimi -> gecici tip; sunucu hic cevap vermeyen bir socket ile simule edilir. (7) CIFT GONDERIM YOK: 250 sonrasi baglanti kopsa bile ikinci DATA gonderilmez. (8) TLS dogrulamasi kapatilamaz -- boyle bir ayar yok (kod incelemesi + config testi). (9) Redaction: hata log'unda parola gecmez. (10) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "255.2"
             ],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-22T21:51:14.200Z"
           },
           {
             "id": 4,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-22T21:49:55.258Z"
+        "updatedAt": "2026-09-22T21:51:14.200Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-22T21:49:55.258Z",
+      "lastModified": "2026-09-22T21:51:14.201Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

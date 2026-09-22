@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 255.1 — PILOT-LLM-DECIDE: sohbet + embedding sağlayıcı kararı (ADR) — done — 2026-09-22 UTC
+
+- **Yapıldı:** `docs/adr/pilot-llm-embedding-provider.md` + PLAN §D176 (+ K06.3.2 · KC4 maddeleri, damgalar değişmedi). Sohbet `LLM_PROVIDER=openai` (native `/v1/chat/completions`); embedding ayrı yapılandırılır, OpenAI `text-embedding-3-small` native 1536 → migration yok, ama sahte→gerçek geçişi tam yeniden gömme ister. "OpenAI uyumlu" aday başına resmi belgeden doğrulandı (Anthropic katmanı "production-ready değil", Gemini beta + bölge taahhüdü yok, Mistral alan adları ayrışıyor + 1024 boyut). Streaming HAYIR, tool calling HAYIR. Env anahtar adları sabitlendi (yeni: `LLM_MAX_PROMPT_CHARS`, `EMBEDDING_PROVIDER_REGION`, `EMBEDDING_TIMEOUT_MS`; SMTP taslağı aynen). Kod değişmedi, hiçbir sağlayıcıya istek atılmadı, hiçbir sır yazılmadı.
+- **Doğrulama:** format:check exit 0 · yedi denetim betiği exit 0 (sweep OPEN 0 / PARTIAL 0, req-coverage exit 0) · typecheck 13/13 ve lint 10/10 `--force` (0 cached) · build 8/8 (Turbo önbelleği, TS girdisi değişmedi) · unit `--force`: api 92 dosya, web 180/2235 (`--maxWorkers=4`), diğer 10 görev · integration parçalandı: rtm 8/111, api shard 47+47+46 = 140 dosya (1431+1194+841) hepsi exit 0. e2e koşulmadı: ürün akışı değişmedi.
+- **Varsayımlar:** Pilotta HIPAA kapsamlı çalışma alanı açılmaz (sağlayıcıyla BAA sözleşme işi); NFR-C4 kapısı yine koşar. OpenAI bölgesel işleme fiyat farkı resmi sayfadan doğrulanamadı — fiyat koda gömülmüyor, sayaç token tutuyor.
+- **Sonraki pencereye not:** **Sahip kararı bekleniyor** (ADR §11): (a) OpenAI hesabı + faturalama onayı; (b) pilot bölgesi `eu`/`us` — `eu` ise OpenAI AB veri yerleşimi başvurusu. İkisi 255.5–255.9'u BLOKLAMAZ (hepsi ağsız), gerçek sağlayıcıyla açılışı bekletir. 255.5/255.6/255.7/255.9/255.15'in daraltılmış kapsamı ADR §10'da; host ↔ bölge eşleme kuralı §7'de.
+
 ## KULLANICI KARARI — Efor tabanı `xhigh` → `high`: `[SONNET-HIGH]`/`[OPUS-HIGH]` eklendi ve `run-loop.sh` onları gerçekten `high`'da koşuyor — done — 2026-09-21 UTC
 
 - **Yapıldı:** Kullanıcı 2026-08-01'den beri geçerli "high ile yapılabilecek işi xhigh'a yükselt" kuralını kaldırdı. PLAN §5.1.1 matrisi altı etikete çıktı; `xhigh` artık görev detayında adıyla yazılan dört gerekçeden birini (güvenlik yüzeyi · para doğruluğu · teslim güvencesi · pencere içinde verilecek karar) isteyen bir istisna. §5.1.2'nin tipik deseni ve §D175 yazıldı. `run-loop.sh`: seçici şeması `effort` için `max`/`xhigh`/`high` kabul ediyor, altı etiketin altısı tanımlı; pencere eforu `case` ile eşleniyor, bilinmeyen değer eski davranış olan `xhigh`'a düşüyor. Değişiklik öncesinde `[SONNET-HIGH]` gibi bir etiket "belirsiz" sayılıp opus+max'a düşebilirdi.

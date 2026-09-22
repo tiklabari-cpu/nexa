@@ -362,6 +362,74 @@ describe('production configuration', () => {
     );
   });
 
+  /**
+   * `MAIL_PROVIDER=smtp` (tm 255.2 · ADR docs/adr/pilot-llm-embedding-provider.md
+   * §9.3). Mirrors the `STORAGE_S3_*` pattern above: `smtp` is not the default
+   * provider, so the five keys stay optional in the schema, and an incomplete
+   * choice has to stop the boot rather than fall back to `file` — which is
+   * exactly the M-PROV-a regression this file's header describes, one provider
+   * over. Production-only, unlike S3: `createMailer('smtp', …)` itself throws
+   * in every environment until tm 255.3 builds a transport (see mailer.test.ts),
+   * so there is nothing this check needs to guard in development or test.
+   */
+  describe('MAIL_PROVIDER=smtp', () => {
+    const SMTP: NodeJS.ProcessEnv = {
+      MAIL_PROVIDER: 'smtp',
+      SMTP_HOST: 'mail.privateemail.com',
+      SMTP_PORT: '587',
+      SMTP_SECURE: 'false',
+      SMTP_USERNAME: 'info@nolnk.net',
+      SMTP_PASSWORD: realSecret('smtp'),
+      SMTP_FROM: 'info@nolnk.net',
+    };
+
+    it('boots when every required key is present', () => {
+      const env = parseEnv({ ...PROD_BASE, ...SMTP });
+      expect(env.MAIL_PROVIDER).toBe('smtp');
+      expect(env.SMTP_PORT).toBe(587);
+      expect(env.SMTP_SECURE).toBe(false);
+    });
+
+    it.each(['SMTP_HOST', 'SMTP_PORT', 'SMTP_USERNAME', 'SMTP_PASSWORD', 'SMTP_FROM'])(
+      'refuses to boot when %s is missing, naming the key and not its value',
+      (missing) => {
+        const { [missing]: _omitted, ...incomplete } = SMTP;
+        const message = (() => {
+          try {
+            parseEnv({ ...PROD_BASE, ...incomplete });
+            return '';
+          } catch (error) {
+            return (error as Error).message;
+          }
+        })();
+
+        expect(message).toMatch(new RegExp(missing));
+        expect(message).not.toMatch(/mail\.privateemail\.com/);
+        expect(message).not.toMatch(/info@nolnk\.net/);
+      },
+    );
+
+    it('reports every missing key at once', () => {
+      expect(() => parseEnv({ ...PROD_BASE, MAIL_PROVIDER: 'smtp' })).toThrow(
+        /SMTP_HOST[\s\S]*SMTP_PORT[\s\S]*SMTP_USERNAME[\s\S]*SMTP_PASSWORD[\s\S]*SMTP_FROM/,
+      );
+    });
+
+    it('refuses the published development placeholder for SMTP_PASSWORD', () => {
+      const source = { ...PROD_BASE, ...SMTP, SMTP_PASSWORD: 'dev-only-smtp-0123456789abcdef' };
+
+      expect(() => parseEnv(source)).toThrow(/SMTP_PASSWORD/);
+      expect(() => parseEnv(source)).toThrow(/placeholder/i);
+    });
+
+    it('does not require any of this outside production', () => {
+      // `file` stays the effective behaviour until tm 255.3 exists — see
+      // mailer.test.ts — but the schema itself must not refuse a developer who
+      // sets MAIL_PROVIDER=smtp with nothing else, the way `file`/`null` do not.
+      expect(() => parseEnv({ ...BASE, MAIL_PROVIDER: 'smtp' })).not.toThrow();
+    });
+  });
+
   it('reports every problem at once rather than one per deploy', () => {
     // A misconfigured deployment should be one readable failure, not a queue of
     // them: fix, redeploy, wait, discover the next line.

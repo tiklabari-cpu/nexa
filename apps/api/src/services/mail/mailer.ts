@@ -85,7 +85,7 @@ export class NullMailer implements Mailer {
 }
 
 /** The mailers this deployment can select between (`MAIL_PROVIDER`). */
-export const MAIL_PROVIDERS = ['file', 'null'] as const;
+export const MAIL_PROVIDERS = ['file', 'null', 'smtp'] as const;
 export type MailProvider = (typeof MAIL_PROVIDERS)[number];
 
 export interface MailerOptions {
@@ -112,5 +112,14 @@ export function createMailer(provider: MailProvider, options: MailerOptions): Ma
       return new FileMailer(options.dir);
     case 'null':
       return new NullMailer();
+    case 'smtp':
+      // tm 255.3 builds the real transport (PrivateEmail, config from the
+      // SMTP_* keys in config/env.ts). Until then this throws rather than
+      // silently falling back to `file`: an operator who sets
+      // MAIL_PROVIDER=smtp today should see boot fail loudly, not spool mail
+      // nobody asked it to keep on disk.
+      throw new Error(
+        "MAIL_PROVIDER=smtp has no transport yet (tm 255.3) — use 'file' or 'null' until then.",
+      );
   }
 }

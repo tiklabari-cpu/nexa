@@ -10103,11 +10103,11 @@
             "description": "Bugun MAIL_PROVIDERS = ['file','null']; gercek gonderim ne kodda ne config'te mumkun. Bu gorev yalniz SOZLESMEYI acar: enum'a smtp, env semasina SMTP anahtar adlari, dort kaynak arasindaki parite (env.ts / .env.example / turbo.json globalEnv / .env.production.example) ve MAIL_PROVIDER=smtp secildiginde eksik ayarla production'da boot'un REDDEDILMESI. Gercek SMTP istemcisi 255.3'un isi.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami ve sir siniri: ust gorev tm 255 details.\n\nKODDA BUGUN (2026-09-22 olculdu):\n- apps/api/src/services/mail/mailer.ts:88 -> export const MAIL_PROVIDERS = ['file','null'] as const. :109 createMailer bir switch; dosyanin kendi yorumu diyor ki 'enum'a smtp eklemek burada DERLEME HATASI vermeli, dosyaya dusmemeli' -- yani tasarim bu eklemeyi bekliyor.\n- .env.example:137 MAIL_PROVIDER=file - .env.production.example:142 MAIL_PROVIDER=file.\n- apps/api/src/routes/health.ts:160 providers.mail = env.MAIL_PROVIDER (yeni deger burada gorunur).\n- apps/api/src/config/env.ts:693 productionProblems() bugun dort seyi zorunlu kiliyor: DATABASE_APP_URL, dev-only- yer tutucusu kalmamis sirlar, INBOUND_EMAIL_SECRET, WEB_ORIGIN'in widget origin'ini icermesi. SMTP hakkinda HICBIR sey yok.\n- PARITE KAPISI GERCEK: apps/api/src/config/env.parity.test.ts env.ts'teki HER anahtarin .env.example'da ve turbo.json globalEnv'de bulunmasini, ayrica .env.example'da karsiligi olmayan anahtar BULUNMAMASINI test ediyor. apps/api/src/config/env.production-example.test.ts ayrica .env.production.example'i denetliyor. Eksik biri kapiyi kirmizi yapar.\n\nKAPSAM:\n1) mailer.ts: MAIL_PROVIDERS listesine 'smtp'; createMailer switch'ine smtp dali. Bu gorevde dal, 255.3'un dolduracagi tasiyiciyi cagirir; gecici olarak acik bir 'not implemented' hatasi firlatabilir AMA bu durum production'da boot'u engellemeli (asagidaki madde 3), sessizce file'a DUSMEMELI.\n2) env.ts: 255.1'in sabitledigi SMTP anahtar ADLARI (taslak: SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USERNAME, SMTP_PASSWORD, SMTP_FROM, SMTP_TIMEOUT_MS). Hepsi optional; zorunluluk saglayiciya baglidir (madde 3). SMTP_FROM pilotta info@nolnk.net olacak -- ADRES bir sir degildir, ama KULLANICI ADI ve PAROLA sirdir ve yalniz .env'de yasar.\n3) productionProblems(): MAIL_PROVIDER === 'smtp' ise SMTP_HOST / SMTP_PORT / SMTP_USERNAME / SMTP_PASSWORD / SMTP_FROM eksikse problem listesine eklenir -- boot reddedilir. Ayrica SMTP_PASSWORD dev-only- yer tutucusuyla gelemez (mevcut SECRET_KEYS deseni).\n4) Dort kaynak paritesi: env.ts + .env.example + turbo.json globalEnv + .env.production.example. .env.production.example'da MAIL_PROVIDER=smtp ornegi ve SMTP_* satirlari YORUM olarak, DEGERSIZ.\n5) health.ts/telemetry.ts yuzeyi: yeni deger kirilmadan gorunmeli.\n\nKAPSAM DISI: gercek SMTP istemcisi, baglanti havuzu, retry, MIME (255.3). Gelen e-posta webhook'u ve bounce/complaint islemesi (pilot disi). Cagri yerlerinin hata davranisi (255.4). SPF/DKIM/DMARC DNS kaydi -- bu turda DNS islemi YOK.\n\nSIR SINIRI: hicbir dosyaya gercek host/kullanici/parola yazilmaz. Testler sahte degerler kullanir. SMTP_PASSWORD, log-redact listesine eklenir (apps/api/src/lib/log-redact.ts) ve bunun testi yazilir.\n\nPRD: FR-MOD-08.2 (e-posta bildirim tercihleri gercek bir tasiyici varsayar) - FR-MOD-04.4 (davet) - FR-MOD-00.3 (sifre sifirlama).",
             "testStrategy": "(1) Birim: createMailer('smtp', ...) bir tasiyici dondurur ya da acikca hata verir; file'a DUSMEZ -- negatif test. (2) Birim: MAIL_PROVIDER=smtp + eksik SMTP_HOST/PORT/USERNAME/PASSWORD/FROM ile NODE_ENV=production parseEnv ATAR ve mesaj eksik anahtari ADIYLA soyler, DEGERINI degil. (3) Birim: SMTP_PASSWORD='dev-only-...' production'da reddedilir. (4) Parite: pnpm --filter @nexa/api test -- env.parity ve env.production-example YESIL (bu ucu birden kirilmadan gecmeli: env.ts, .env.example, turbo.json globalEnv). (5) Redaction: SMTP_PASSWORD iceren bir log satirinin '[redacted]' ile ciktigi test. (6) health: GET /api/v1/health providers.mail === 'smtp' donen integration testi. (7) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-22T21:20:34.592Z"
           },
           {
             "id": 3,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-22T21:09:06.011Z"
+        "updatedAt": "2026-09-22T21:20:34.592Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-22T21:09:06.013Z",
+      "lastModified": "2026-09-22T21:20:34.593Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

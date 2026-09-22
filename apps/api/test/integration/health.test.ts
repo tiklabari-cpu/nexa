@@ -20,6 +20,7 @@ import { Redis } from 'ioredis';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { grantToken, ownerClient, seedFixtures } from '../helpers/fixtures.js';
 import { startTestServer } from '../helpers/server.js';
+import { NullMailer } from '../../src/services/mail/mailer.js';
 
 interface SchedulerJobBody {
   name: string;
@@ -154,6 +155,32 @@ describe('GET /health — scheduler (admin caller)', () => {
         llm: 'mock',
         virus_scanner: 'mock',
       });
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('reflects MAIL_PROVIDER=smtp (tm 255.2 — the transport itself is tm 255.3)', async () => {
+    // `createMailer('smtp', …)` throws until tm 255.3 exists (mailer.test.ts),
+    // so this injects a stub the way `webhookSender` is injected elsewhere —
+    // `/health`'s `providers.mail` reads straight off `env.MAIL_PROVIDER`, never
+    // off which mailer instance actually got built, so this still proves the
+    // surface without waiting on the real transport.
+    const server = await startTestServer(
+      {
+        MAIL_PROVIDER: 'smtp',
+        SMTP_HOST: 'mail.privateemail.com',
+        SMTP_PORT: '587',
+        SMTP_SECURE: 'false',
+        SMTP_USERNAME: 'info@nolnk.net',
+        SMTP_PASSWORD: 'not-a-real-password',
+        SMTP_FROM: 'info@nolnk.net',
+      },
+      { mailer: new NullMailer() },
+    );
+    try {
+      const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+      expect(body.providers?.mail).toBe('smtp');
     } finally {
       await server.close();
     }

@@ -456,6 +456,43 @@ export const envSchema = z.object({
    */
   MAIL_PROVIDER: z.enum(MAIL_PROVIDERS).default('file'),
   /**
+   * PrivateEmail SMTP settings `MAIL_PROVIDER=smtp` will use once tm 255.3
+   * builds the transport (ADR docs/adr/pilot-llm-embedding-provider.md §9.3).
+   * The contract opens here first — schema, four-source parity and the
+   * production boot check — before the real client exists.
+   *
+   * All optional at the schema level: which of them is actually required
+   * depends on `MAIL_PROVIDER` (see `productionProblems` below), and a
+   * `file`/`null` deployment — including every test suite and CI — should
+   * not have to carry six settings for a provider it never selects.
+   */
+  SMTP_HOST: z.string().min(1).optional(),
+  /** 465 (implicit TLS) or 587 (STARTTLS) — PrivateEmail supports both. */
+  SMTP_PORT: z.coerce.number().int().min(1).max(65535).optional(),
+  /**
+   * `true` connects with TLS from the first byte (port 465); `false` starts
+   * plaintext and upgrades with STARTTLS (port 587). There is no third,
+   * unencrypted value — PrivateEmail refuses a plaintext session either way.
+   */
+  SMTP_SECURE: z
+    .enum(['true', 'false'])
+    .optional()
+    .transform((v) => (v === undefined ? undefined : v === 'true')),
+  /** PrivateEmail authenticates with the full mailbox address as the username. */
+  SMTP_USERNAME: z.string().min(1).optional(),
+  /**
+   * Not declared with `secret()`: unlike `SECRET_KEYS`, this is a credential
+   * the mail provider issues rather than key material this process mints, and
+   * `smtp` is not the default provider, so there is no `file`/`null`
+   * deployment to protect from a floor it can never meet. The `dev-only-`
+   * placeholder is still refused in production, by `productionProblems` below.
+   */
+  SMTP_PASSWORD: z.string().min(1).optional(),
+  /** Pilot: `info@nolnk.net` — an address, not a secret. */
+  SMTP_FROM: z.string().min(1).optional(),
+  /** Connection + send ceiling for one message. */
+  SMTP_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
+  /**
    * Outgoing push (M-PROV-a). Same pair of mocks as the mailer, spooling under
    * `PUSH_DIR` (13.7-d). A newer key than the rest — this channel arrived after
    * the others had theirs, and inherited the `NODE_ENV` branch instead.
@@ -702,6 +739,29 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
   for (const key of SECRET_KEYS) {
     if (env[key].startsWith('dev-only-')) {
       problems.push(`${key} still holds its development placeholder value.`);
+    }
+  }
+
+  // `smtp` is not the default provider, so these five stay optional in the
+  // schema above; choosing it is what makes them stop being optional. Reported
+  // by key name only, never by value — the same discipline as the SECRET_KEYS
+  // loop above, for the same reason: this message is exactly what a deployer
+  // pastes into a chat asking for help.
+  if (env.MAIL_PROVIDER === 'smtp') {
+    const required = [
+      'SMTP_HOST',
+      'SMTP_PORT',
+      'SMTP_USERNAME',
+      'SMTP_PASSWORD',
+      'SMTP_FROM',
+    ] as const;
+    for (const key of required) {
+      if (!env[key]) {
+        problems.push(`${key} is required in production when MAIL_PROVIDER=smtp.`);
+      }
+    }
+    if (env.SMTP_PASSWORD?.startsWith('dev-only-')) {
+      problems.push('SMTP_PASSWORD still holds its development placeholder value.');
     }
   }
 

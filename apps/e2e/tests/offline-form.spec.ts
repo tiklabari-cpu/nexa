@@ -70,7 +70,7 @@ test.describe('offline form — ticket + prospect (FR-MOD-08.7.7)', () => {
 
     try {
       // --- 1. The admin builds both questions in the real console ----------
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/chat-forms');
       const builder = agentPage.getByRole('region', { name: 'Chat forms' });
       await expect(builder).toBeVisible();
       const placement = builder.getByLabel('Asked');

@@ -61,7 +61,7 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
     await expect(agentPage.getByTestId('channel-promo')).toBeVisible();
     await expect(views.getByRole('button', { name: 'Instagram' })).toHaveCount(0);
 
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const card = agentPage
       .getByRole('region', { name: 'Channels' })
       .getByTestId('channel-instagram');
@@ -86,7 +86,7 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
     const dm = `Do you ship a frame to Iceland? ${stamp}`;
 
     // --- (i) Connect, through the mock OAuth handshake the card offers --------
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
     const card = channels.getByTestId('channel-instagram');
     await expect(card.getByText('Not connected')).toBeVisible();
@@ -157,7 +157,7 @@ test.describe('Instagram DMs (FR-MOD-08.5.7)', () => {
     await agentPage.screenshot({ path: 'kanit/08.5.7-instagram-inbox.png', fullPage: true });
 
     // --- (v) Disconnect, and every surface tells the truth again -------------
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const cardAgain = agentPage
       .getByRole('region', { name: 'Channels' })
       .getByTestId('channel-instagram');

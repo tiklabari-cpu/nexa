@@ -1030,7 +1030,7 @@ function ViewsGroup({
           >
             <p className="text-2xs text-content-secondary">{t('inbox.rail.channelPromo.text')}</p>
             <Link
-              to="/app/settings"
+              to="/app/settings/channels"
               className="mt-1.5 inline-block text-2xs font-medium text-content-brand hover:underline"
             >
               {t('inbox.rail.channelPromo.cta')}

@@ -346,7 +346,7 @@ describe('SignInPage under two-factor enforcement (S11-2FA-g)', () => {
     expect(screen.queryByRole('button', { name: 'Set it up now' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Go to Account Settings' })).toHaveAttribute(
       'href',
-      '/app/settings',
+      '/app/settings/two-factor',
     );
   });
 });

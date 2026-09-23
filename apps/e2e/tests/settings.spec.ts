@@ -29,7 +29,7 @@ test.describe('website widgets', () => {
   }) => {
     const domain = `widget-check-${Date.now()}.localhost`;
 
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/website-widgets');
     const section = agentPage.getByRole('region', { name: 'Website widgets' });
 
     // One add: the website *and* its trusted domain, so the widget works there.
@@ -43,9 +43,14 @@ test.describe('website widgets', () => {
     await expect(section.getByTestId('website-snippet')).toContainText('window.__nexa');
     await agentPage.screenshot({ path: 'kanit/7-website-pending.png', fullPage: true });
 
-    // No dual source: the same action put the domain on the trusted allowlist.
+    // No dual source: the same action put the domain on the trusted allowlist
+    // — its own Settings section since FR-MOD-08.1, so the check goes there and
+    // comes back.
+    await agentPage.goto('/app/settings/trusted-domains');
     const trusted = agentPage.getByRole('region', { name: 'Trusted domains' });
     await expect(trusted.getByText(domain)).toBeVisible();
+    await agentPage.goto('/app/settings/website-widgets');
+    await expect(row).toBeVisible();
 
     const visitorContext = await browser.newContext();
     const visitor = await visitorContext.newPage();
@@ -108,7 +113,7 @@ test.describe('channels', () => {
   // `Channels.test.tsx`; a full connect-and-see-it-in-the-inbox flow for all
   // three adapter channels together is tm 135.4's `channels.spec.ts`.
   test('shows a channel grid with a data-driven Website status', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
     await expect(channels).toBeVisible();
 
@@ -138,7 +143,7 @@ test.describe('channels', () => {
   // FR-MOD-08.5.3: Email is Ready, not "Coming soon" — Get address reveals the
   // per-workspace forwarding address a mail provider forwards support mail to.
   test('offers Email as a ready forwarding address', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
     await expect(channels).toBeVisible();
 
@@ -159,7 +164,7 @@ test.describe('channels', () => {
   // hold more than one forwarding address, and can find out whether one works
   // without waiting for a customer to write in.
   test('adds a second forwarding address and proves it receives', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const email = agentPage.getByRole('region', { name: 'Channels' }).getByTestId('channel-email');
     await email.getByRole('button', { name: 'Manage addresses' }).click();
 
@@ -199,15 +204,20 @@ test.describe('settings', () => {
   test('shows the trusted domain the widget actually depends on', async ({ agentPage }) => {
     await agentPage.getByRole('link', { name: 'Settings' }).click();
     await expect(agentPage.getByRole('heading', { name: 'Settings', level: 1 })).toBeVisible();
-    // Scoped to the allowlist: the seed's domain also appears as a Website widget
-    // row above, so an unscoped match would hit two elements.
+    // Each section has its own address since FR-MOD-08.1: the allowlist is one
+    // click into the Settings navigation's Security group.
+    await agentPage
+      .getByRole('navigation', { name: 'Settings navigation' })
+      .getByRole('link', { name: 'Trusted domains' })
+      .click();
+    // Scoped to the allowlist: the seed's domain is also a Website widget row.
     await expect(
       agentPage.getByRole('region', { name: 'Trusted domains' }).getByText('acme-bikes.localhost'),
     ).toBeVisible();
   });
 
   test('adds and removes a trusted domain', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/trusted-domains');
 
     const domain = `shop-${Date.now()}.example`;
     await agentPage.getByLabel('Domain', { exact: true }).fill(domain);
@@ -229,7 +239,7 @@ test.describe('settings', () => {
   test('normalises a pasted URL to the hostname the Origin check uses', async ({ agentPage }) => {
     // Storing anything else leaves an admin looking at a correct allowlist while
     // their widget is refused on that very site.
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/trusted-domains');
 
     const host = `pasted-${Date.now()}.example`;
     await agentPage
@@ -245,7 +255,7 @@ test.describe('settings', () => {
   // separate spellings. Created and removed in one test so the seed-skipped
   // tenant does not accumulate tags across runs.
   test('curates a tag in the library', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/tags');
 
     const section = (): ReturnType<typeof agentPage.getByRole> =>
       agentPage.getByRole('region', { name: 'Tags' });
@@ -294,7 +304,7 @@ test.describe('settings', () => {
       expect(createdGroup.ok()).toBe(true);
       groupId = ((await createdGroup.json()) as { id: number }).id;
 
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/tags');
       const section = (): ReturnType<typeof agentPage.getByRole> =>
         agentPage.getByRole('region', { name: 'Tags' });
       await expect(section().getByRole('heading', { name: 'Tags', level: 2 })).toBeVisible();
@@ -395,7 +405,7 @@ test.describe('settings', () => {
       expect(createdGroup.ok()).toBe(true);
       groupId = ((await createdGroup.json()) as { id: number }).id;
 
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/canned-responses');
       const section = (): ReturnType<typeof agentPage.getByRole> =>
         agentPage.getByRole('region', { name: 'Saved replies' });
       await expect(
@@ -471,7 +481,7 @@ test.describe('settings', () => {
   test('refuses to disable the fallback routing rule', async ({ agentPage }) => {
     // Disabling it would leave conversations matching nothing with nowhere to
     // go, while the configuration still looked healthy.
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/routing-rules');
 
     const fallback = agentPage.locator('li').filter({ hasText: 'fallback' });
     await expect(fallback).toBeVisible();
@@ -479,7 +489,7 @@ test.describe('settings', () => {
   });
 
   test('toggles a conditional routing rule', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/routing-rules');
 
     const rule = agentPage.locator('li').filter({ hasText: 'Pricing pages go to Sales' });
     await rule.getByRole('button', { name: 'Disable' }).click();
@@ -497,7 +507,7 @@ test.describe('settings', () => {
    * persists fails here.
    */
   test('surfaces the file sharing rules and saves an edit', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/file-sharing');
 
     // Re-resolved after every reload rather than held: the old handle points at
     // a detached node once the page navigates.
@@ -555,7 +565,7 @@ test.describe('settings', () => {
    * would exclude the caller's own address.
    */
   test('adds and removes an IP allowlist entry', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/ip-allowlist');
 
     const section = (): ReturnType<typeof agentPage.getByRole> =>
       agentPage.getByRole('region', { name: 'IP allowlist' });
@@ -617,7 +627,7 @@ test.describe('settings', () => {
   test('schedules a report export and cancels it back to the seeded state', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/scheduled-exports');
 
     // Re-resolved after each reload: the old handle points at a detached node.
     const section = (): ReturnType<typeof agentPage.getByRole> =>
@@ -690,8 +700,12 @@ test.describe('settings', () => {
    * An agent does not hold `reports_manage`, and the API gates even the *list* on
    * it — a definition names the mailboxes a workspace's figures go to. So the
    * right outcome is not a read-only list: it is no list and no action at all.
-   * Asserting the refusal notice as well as the absent controls is what
-   * separates "the server refused" from "the screen forgot to render".
+   *
+   * Since FR-MOD-08.1 (tm 255.10) the section is not even offered: the Settings
+   * navigation has no entry for it, and its address sends the agent back to
+   * the Settings landing section. It used to render with a refusal notice from
+   * the 403; asserting the redirect and the missing link together is what
+   * separates "hidden because the scope is absent" from "the page broke".
    */
   test('offers an agent no way to schedule or cancel an export', async ({ browser }) => {
     const context = await browser.newContext();
@@ -706,16 +720,17 @@ test.describe('settings', () => {
       await page.getByRole('button', { name: 'Sign in' }).click();
       await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
 
-      await page.goto('/app/settings');
-      const section = page.getByRole('region', { name: 'Scheduled exports' });
+      await page.goto('/app/settings/scheduled-exports');
+      await expect(page).toHaveURL(/\/app\/settings\/notifications$/);
+      await expect(page.getByRole('region', { name: 'Notifications' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Scheduled exports' })).toHaveCount(0);
       await expect(
-        section.getByRole('heading', { name: 'Scheduled exports', level: 2 }),
-      ).toBeVisible();
-
-      await expect(section.getByText('Could not load scheduled exports.')).toBeVisible();
-      await expect(section.getByRole('button', { name: 'Schedule export' })).toHaveCount(0);
-      await expect(section.getByLabel('Report')).toHaveCount(0);
-      await expect(section.getByRole('button', { name: /Cancel .* export/ })).toHaveCount(0);
+        page
+          .getByRole('navigation', { name: 'Settings navigation' })
+          .getByRole('link', { name: 'Scheduled exports' }),
+      ).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Schedule export' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /Cancel .* export/ })).toHaveCount(0);
     } finally {
       await context.close();
     }
@@ -725,7 +740,7 @@ test.describe('settings', () => {
   // Copy + Claude setup + örnek prompt", so this proves all four render together
   // on the real Settings page, fed by the live manifest (08.8.3-b).
   test('shows the MCP server connection details', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/mcp');
 
     const section = agentPage.getByRole('region', { name: 'MCP server' });
     await expect(section).toBeVisible();
@@ -779,7 +794,7 @@ test.describe('settings', () => {
     try {
       // Reached through the CTA's own anchor (13.5-e/-f), so this is the link
       // the empty state below points at, not a URL the test invented.
-      await agentPage.goto('/app/settings#section-sales-tracker');
+      await agentPage.goto('/app/settings/sales-tracker');
       const section = agentPage.getByRole('region', { name: 'Sales tracker' });
       await expect(section).toBeVisible();
 
@@ -800,11 +815,11 @@ test.describe('settings', () => {
       // is the failure mode "honest" is guarding against (FR-EK-B.1).
       await expect(ecommerce.getByText('Tracked sales', { exact: true })).toHaveCount(0);
       const cta = ecommerce.getByRole('link', { name: 'Configure sales platforms' });
-      await expect(cta).toHaveAttribute('href', '/app/settings#section-sales-tracker');
+      await expect(cta).toHaveAttribute('href', '/app/settings/sales-tracker');
       await agentPage.screenshot({ path: 'kanit/13.5-reports-not-configured.png', fullPage: true });
 
       // --- And back on again, through the same form -------------------------
-      await agentPage.goto('/app/settings#section-sales-tracker');
+      await agentPage.goto('/app/settings/sales-tracker');
       await agentPage.getByRole('checkbox', { name: /Track sales/ }).check();
       await agentPage
         .getByRole('region', { name: 'Sales tracker' })
@@ -846,7 +861,7 @@ test.describe('settings', () => {
       });
 
     try {
-      await agentPage.goto('/app/settings#section-chat-timeout');
+      await agentPage.goto('/app/settings/chat-timeout');
       const section = agentPage.getByRole('region', { name: 'Chat timeout' });
       await expect(section).toBeVisible();
 
@@ -902,7 +917,7 @@ test.describe('company details', () => {
   test('saves the sector, address and workspace clock, and reads them back', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/company');
 
     const section = (): ReturnType<typeof agentPage.getByRole> =>
       agentPage.getByRole('region', { name: 'Company details' });
@@ -972,7 +987,7 @@ test.describe('personal access tokens', () => {
     agentPage,
     request,
   }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/personal-access-tokens');
     const section = agentPage.getByRole('region', { name: 'Personal access tokens' });
     await expect(
       section.getByRole('heading', { name: 'Personal access tokens', level: 2 }),
@@ -1058,7 +1073,7 @@ test.describe('routing rules', () => {
     groupId = ((await created.json()) as { id: number }).id;
 
     try {
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/routing-rules');
       const section = agentPage.getByRole('region', { name: 'Routing' });
       await expect(section.getByRole('heading', { name: 'Routing', level: 2 })).toBeVisible();
 
@@ -1108,7 +1123,11 @@ test.describe('audit log', () => {
   // inside the default 30-day window and sorts first (newest first).
   test('shows the owner’s own sign-in in the audit trail', async ({ agentPage }) => {
     await agentPage.goto('/app/settings');
-    await agentPage.getByRole('link', { name: 'Open audit log' }).click();
+    // The door is the Settings navigation's own entry since FR-MOD-08.1.
+    await agentPage
+      .getByRole('navigation', { name: 'Settings navigation' })
+      .getByRole('link', { name: 'Audit log' })
+      .click();
 
     await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
     const table = agentPage.getByRole('table', { name: 'Audit log' });
@@ -1140,7 +1159,11 @@ test.describe('audit log', () => {
     expect(removed.status()).toBe(204);
 
     await agentPage.goto('/app/settings');
-    await agentPage.getByRole('link', { name: 'Open audit log' }).click();
+    // The door is the Settings navigation's own entry since FR-MOD-08.1.
+    await agentPage
+      .getByRole('navigation', { name: 'Settings navigation' })
+      .getByRole('link', { name: 'Audit log' })
+      .click();
     await expect(agentPage.getByRole('heading', { name: 'Audit log', level: 1 })).toBeVisible();
 
     const table = agentPage.getByRole('table', { name: 'Audit log' });
@@ -1223,7 +1246,7 @@ test.describe('composer shortcuts', () => {
     const replyText = `Free shipping this week — ${Date.now().toString().slice(-6)}`;
 
     // 1. An admin saves it.
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/canned-responses');
     await agentPage.getByLabel('Shortcut').fill(shortcut);
     await agentPage.getByLabel('Reply').fill(replyText);
     await agentPage.getByRole('button', { name: 'Save reply' }).click();

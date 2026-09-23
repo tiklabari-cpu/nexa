@@ -43,7 +43,7 @@ test.describe('session restore', () => {
     agentPage,
   }) => {
     const first = await refreshesDuring(agentPage, async () => {
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/personal-access-tokens');
       // The same region tm 249's red could not find, because the reload had
       // landed on the sign-in form instead.
       await expect(agentPage.getByRole('region', { name: 'Personal access tokens' })).toBeVisible();

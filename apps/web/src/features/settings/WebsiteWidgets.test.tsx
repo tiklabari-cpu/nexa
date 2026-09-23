@@ -2,6 +2,7 @@
  * Pilot form under the shared primitive (FR-EK-A.1): an invalid domain shows a
  * field-under error and keeps "Add website" disabled; a valid one enables it.
  */
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -23,7 +24,9 @@ function renderWidgets() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <WebsiteWidgets canEdit />
+      <MemoryRouter>
+        <WebsiteWidgets canEdit />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -183,7 +186,9 @@ describe('WebsiteWidgets localisation (NFR-I18N2)', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     renderWithLocale(
       <QueryClientProvider client={queryClient}>
-        <WebsiteWidgets canEdit />
+        <MemoryRouter>
+          <WebsiteWidgets canEdit />
+        </MemoryRouter>
       </QueryClientProvider>,
       'tr',
     );

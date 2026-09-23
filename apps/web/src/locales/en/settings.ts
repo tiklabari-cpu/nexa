@@ -35,6 +35,53 @@ export const settings: Messages = {
   'settings.pageTitle': 'Settings',
   'settings.pageDescription': 'Widget installation, saved replies and routing.',
 
+  // Side navigation — SettingsNav.tsx (FR-MOD-08.1). A section's label repeats
+  // its heading, except where it would repeat its own group's name or another
+  // link on the same screen (the rail's Billing).
+  'settings.nav.label': 'Settings navigation',
+  'settings.nav.pin': 'Pin side navigation',
+  'settings.nav.unpin': 'Unpin side navigation',
+  'settings.nav.group.general': 'General',
+  'settings.nav.group.channels': 'Channels',
+  'settings.nav.group.routing': 'Routing',
+  'settings.nav.group.inbox': 'Inbox',
+  'settings.nav.group.integrations': 'Integrations',
+  'settings.nav.group.security': 'Security',
+  'settings.nav.group.billing': 'Billing',
+  'settings.nav.section.notifications': 'Notifications',
+  'settings.nav.section.company': 'Company details',
+  'settings.nav.section.brands': 'Brands',
+  'settings.nav.section.channels': 'All channels',
+  'settings.nav.section.websiteWidgets': 'Website widgets',
+  'settings.nav.section.widget': 'Widget appearance',
+  'settings.nav.section.salesTracker': 'Sales tracker',
+  'settings.nav.section.routingRules': 'Chat routing',
+  'settings.nav.section.skills': 'Skills',
+  'settings.nav.section.ticketRules': 'Ticket rules',
+  'settings.nav.section.sla': 'SLA',
+  'settings.nav.section.cannedResponses': 'Saved replies',
+  'settings.nav.section.tags': 'Tags',
+  'settings.nav.section.chatTimeout': 'Chat timeout',
+  'settings.nav.section.ticketEmailTemplates': 'Ticket email templates',
+  'settings.nav.section.customFields': 'Custom fields',
+  'settings.nav.section.chatForms': 'Chat forms',
+  'settings.nav.section.integrations': 'App marketplace',
+  'settings.nav.section.mcp': 'MCP server',
+  'settings.nav.section.personalAccessTokens': 'Personal access tokens',
+  'settings.nav.section.scheduledExports': 'Scheduled exports',
+  'settings.nav.section.sandbox': 'Sandbox',
+  'settings.nav.section.trustedDomains': 'Trusted domains',
+  'settings.nav.section.bannedCustomers': 'Blocked IP addresses',
+  'settings.nav.section.fileSharing': 'File sharing',
+  'settings.nav.section.ipAllowlist': 'IP allowlist',
+  'settings.nav.section.sso': 'Single sign-on',
+  'settings.nav.section.twoFactor': 'Two-factor authentication',
+  'settings.nav.section.compliance': 'Data region and compliance',
+  'settings.nav.section.dataRetention': 'Data retention',
+  'settings.nav.section.auditLog': 'Audit log',
+  'settings.nav.section.siem': 'SIEM export',
+  'settings.nav.section.billing': 'Subscription and invoices',
+
   // Company details — CompanyDetails.tsx (FR-MOD-08.3)
   'settings.company.title': 'Company details',
   'settings.company.description':
@@ -761,13 +808,6 @@ export const settings: Messages = {
   'settings.bannedIps.empty.title': 'No blocked addresses',
   'settings.bannedIps.empty.description':
     'Add an IP address to refuse chats from it. Nothing is blocked until you do.',
-
-  // Audit log door — AuditLog.tsx (the page itself is the `audit.*` namespace)
-  'settings.auditLog.title': 'Audit log',
-  'settings.auditLog.description':
-    'Sign-ins, role changes, deletions and webhook changes — the last 30 days, kept for every plan.',
-  'settings.auditLog.body': 'Review who did what across this workspace.',
-  'settings.auditLog.openButton': 'Open audit log',
 
   // File sharing — FileSharing.tsx
   'settings.fileSharing.title': 'File sharing',

@@ -39,7 +39,7 @@ test.describe('data retention (NFR-C8)', () => {
   test('an admin chooses how long this workspace keeps its conversations', async ({
     agentPage,
   }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/data-retention');
 
     const section = agentPage.locator(RETENTION_SECTION);
     const conversations = agentPage.getByLabel('Closed conversations');

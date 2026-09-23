@@ -102,7 +102,7 @@ test.describe('skill-based routing + supervisor takeover (FR-MOD-08.6.3)', () =>
 
     try {
       // --- 1. Settings → create the skill through the UI --------------------
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/skills');
       const skills = agentPage.getByRole('region', { name: 'Skills' });
       await expect(skills.getByRole('heading', { name: 'Skills', level: 2 })).toBeVisible();
       // The new-skill box by role, exactly. `getByLabel('Skill')` matches

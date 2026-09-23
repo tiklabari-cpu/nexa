@@ -57,7 +57,7 @@ test.describe('single sign-on', () => {
     const metadata = (await (await request.get(`${MOCK_IDP}/metadata`)).json()) as IdpMetadata;
 
     // --- Configure, from the screen ------------------------------------------
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/sso');
     const section = (): ReturnType<typeof agentPage.getByRole> =>
       agentPage.getByRole('region', { name: 'Single sign-on' });
     await expect(

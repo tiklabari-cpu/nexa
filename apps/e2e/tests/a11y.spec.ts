@@ -443,6 +443,28 @@ async function scanInteractionStates(
   assertNoBlockingViolations(await scanScreen(page, `${screen} focus+hover (${theme})`, testInfo));
 }
 
+/**
+ * Every Settings section's own address (FR-MOD-08.1 · tm 255.10), read from the
+ * navigation catalogue itself so a section added there is scanned without
+ * anyone remembering to list it here. The two entries that link to a page of
+ * their own (`to:` — the audit log, billing) are scanned as those pages.
+ *
+ * Until tm 255.10 one scan of `/app/settings` covered every section, because
+ * they all rendered on one page; with one section per address the scan has to
+ * visit each, or the split would quietly shrink what axe looks at.
+ */
+const SETTINGS_SECTION_SLUGS: readonly string[] = [
+  ...readFileSync(
+    path.resolve(
+      path.dirname(fileURLToPath(import.meta.url)),
+      '../../web/src/features/settings/settings-sections.ts',
+    ),
+    'utf-8',
+  ).matchAll(/\{\s*slug: '([^']+)'([^}]*)\}/g),
+]
+  .filter((match) => !/\bto:/.test(match[2]!))
+  .map((match) => match[1]!);
+
 test.describe('WCAG 2.1 AA (axe)', () => {
   for (const theme of PANEL_THEMES) {
     test.describe(`${theme} theme`, () => {
@@ -708,7 +730,7 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         agentPage,
       }, testInfo) => {
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/settings');
+        await agentPage.goto('/app/settings/channels');
         await scanPanel(agentPage, 'Email addresses dialog', theme, testInfo, async () => {
           await agentPage.getByRole('button', { name: 'Manage addresses' }).click();
           const dialog = agentPage.getByRole('dialog', { name: 'Email forwarding addresses' });
@@ -721,13 +743,27 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       });
 
       test('settings has no serious or critical violations', async ({ agentPage }, testInfo) => {
+        // One scan per section address — see `SETTINGS_SECTION_SLUGS`. Thirty
+        // navigations in one test rather than thirty tests: one sign-in, not
+        // thirty against the login throttle.
+        test.setTimeout(300_000);
+        expect(SETTINGS_SECTION_SLUGS.length).toBeGreaterThanOrEqual(29);
         await pinTheme(agentPage, theme);
-        await agentPage.goto('/app/settings');
-        await scanPanel(agentPage, 'Settings', theme, testInfo, async () => {
-          await expect(
-            agentPage.getByRole('heading', { name: 'Settings', level: 1 }),
-          ).toBeVisible();
-        });
+        for (const slug of SETTINGS_SECTION_SLUGS) {
+          await agentPage.goto(`/app/settings/${slug}`);
+          await scanPanel(agentPage, `Settings › ${slug}`, theme, testInfo, async () => {
+            await expect(agentPage).toHaveURL(new RegExp(`/app/settings/${slug}$`));
+            await expect(
+              agentPage.getByRole('heading', { name: 'Settings', level: 1 }),
+            ).toBeVisible();
+            await expect(
+              agentPage
+                .getByRole('navigation', { name: 'Settings navigation' })
+                .locator('a[aria-current="page"]'),
+            ).toBeVisible();
+            await expect(agentPage.locator('section h2').first()).toBeVisible();
+          });
+        }
       });
 
       test('apps marketplace has no serious or critical violations', async ({
@@ -1302,7 +1338,9 @@ test.describe('WCAG 2.1 AA (axe)', () => {
     );
     expect(shellBlock, 'App.tsx no longer nests routes the way this pin expects').toBeTruthy();
 
-    const definedRoutes = [...shellBlock![1]!.matchAll(/<Route path="([^"]+)"/g)]
+    // `\s+`, not a space: a route whose `element` is long enough for Prettier
+    // to break (the Settings layout wrappers) puts `path` on its own line.
+    const definedRoutes = [...shellBlock![1]!.matchAll(/<Route\s+path="([^"]+)"/g)]
       .map((match) => `/app/${match[1]}`)
       .sort();
 
@@ -1321,6 +1359,8 @@ test.describe('WCAG 2.1 AA (axe)', () => {
       '/app/playbook',
       '/app/settings',
       '/app/settings/audit-log',
+      // Every section's address — scanned one by one in the settings test.
+      '/app/settings/:section',
       '/app/apps',
       '/app/developers',
     ].sort();

@@ -604,7 +604,7 @@ describe('ReportsPage — Reviews report (07.8)', () => {
     expect(screen.queryByText(/later release/)).not.toBeInTheDocument();
 
     const cta = screen.getByRole('link', { name: 'Configure sales platforms' });
-    expect(cta).toHaveAttribute('href', '/app/settings#section-sales-tracker');
+    expect(cta).toHaveAttribute('href', '/app/settings/sales-tracker');
   });
 
   it('renders tracked sales and the reporting currency once a source is configured', async () => {

@@ -25,6 +25,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';
@@ -150,7 +151,7 @@ export function channelsFor(
       description: 'The chat bubble on your own site.',
       status: websiteStatus,
       cta: websiteStatus === 'not_connected' ? 'Connect' : 'Manage',
-      href: '#section-website-widgets',
+      href: '/app/settings/website-widgets',
     },
     {
       id: 'chat-page',
@@ -687,6 +688,15 @@ function ChannelCardView({
           <InstagramChannelAction channel={channel} cta={cta} />
         ) : channel.id === 'telegram' ? (
           <TelegramChannelAction channel={channel} cta={cta} />
+        ) : channel.href ? (
+          // Its own Settings section since FR-MOD-08.1 split the page — a route,
+          // not an in-page anchor.
+          <Link
+            to={channel.href}
+            className="self-start rounded-md bg-brand-500 px-2.5 py-1 text-2xs font-medium text-white transition-colors hover:bg-brand-600"
+          >
+            {cta}
+          </Link>
         ) : (
           <a
             href={channel.href}

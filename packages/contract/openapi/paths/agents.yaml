@@ -135,6 +135,59 @@ notificationPreferences:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+uiPreferences:
+  get:
+    tags: [Configuration]
+    operationId: getMyUiPreferences
+    summary: Read the caller's console layout preferences
+    description: |
+      Per user and per license, like the notification preferences next door —
+      the same person may keep the Settings navigation pinned on one workspace
+      and folded away on another (FR-MOD-08.1).
+    responses:
+      "200":
+        description: The caller's preferences
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/UiPreferences" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+  put:
+    tags: [Configuration]
+    operationId: setMyUiPreferences
+    summary: Set the caller's console layout preferences
+    description: |
+      A partial update: send only what changed. At least one key is required,
+      and an unrecognised key is a `400` rather than a silently dropped switch.
+      The response is always the complete set.
+
+      Kept on the server rather than in `localStorage` because FR-MOD-08.1 asks
+      for the choice to follow the *user*: a person who unpinned the Settings
+      navigation should find it unpinned on their next browser too.
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            minProperties: 1
+            additionalProperties: false
+            properties:
+              settings_nav_pinned:
+                type: boolean
+                description: Whether the Settings side navigation is shown pinned (`true`) or folded away.
+    responses:
+      "200":
+        description: Preferences updated
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/UiPreferences" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 agents:
   get:
     tags: [Configuration]

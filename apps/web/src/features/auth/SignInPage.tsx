@@ -817,7 +817,7 @@ function EnrollmentPanel({
               {starting ? t('auth.signin.enroll.starting') : t('auth.signin.enroll.startButton')}
             </button>
           ) : (
-            <Link to="/app/settings" className="text-xs text-content-brand underline">
+            <Link to="/app/settings/two-factor" className="text-xs text-content-brand underline">
               {t('auth.signin.enrollmentRequiredLink')}
             </Link>
           )}

@@ -75,7 +75,7 @@ import { chunkIntoRows, columnsForWidth } from './app-grid.js';
 const APPS_KEY = ['settings', 'apps'] as const;
 
 /** Where a channel-typed card sends you to set the channel up (09.2 cross-link). */
-const CHANNELS_HREF = '/app/settings#section-channels';
+const CHANNELS_HREF = '/app/settings/channels';
 
 /** The category chip's translation key, keyed by the catalogue's own category id. */
 const CATEGORY_KEY: Record<AppListItem['category'], string> = {

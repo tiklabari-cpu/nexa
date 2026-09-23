@@ -42,7 +42,7 @@ function masterSwitchSaved(page: Page, enabled: boolean): Promise<Response> {
 
 test.describe('notification settings (FR-MOD-13.8)', () => {
   test('the notifications surface toggles and the choice persists', async ({ agentPage }) => {
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/notifications');
 
     const section = agentPage.getByRole('region', { name: 'Notifications' });
     await expect(section).toBeVisible();

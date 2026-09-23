@@ -101,7 +101,7 @@ const TRAFFIC_REFRESH_MS = 8_000;
 const TRAFFIC_PUSH_MIN_GAP_MS = 700;
 
 /** Where the all-tab empty state's CTA sends you to connect a channel (03.1.2-b). */
-const CHANNELS_HREF = '/app/settings#section-channels';
+const CHANNELS_HREF = '/app/settings/channels';
 
 function trafficKey(tab: TrafficTab, conditions: readonly TrafficCondition[]): unknown[] {
   return ['traffic', tab, conditions];

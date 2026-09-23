@@ -5,6 +5,7 @@
  * Messenger (FR-MOD-08.5.4), SMS (08.5.5), WhatsApp (08.5.6), Instagram
  * (08.5.7-e) and Telegram (08.5.8-d).
  */
+import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -26,7 +27,9 @@ function renderChannels() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
-      <ChannelsGrid />
+      <MemoryRouter>
+        <ChannelsGrid />
+      </MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -650,7 +653,9 @@ describe('Channels localisation (NFR-I18N2)', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     return renderWithLocale(
       <QueryClientProvider client={queryClient}>
-        <ChannelsGrid />
+        <MemoryRouter>
+          <ChannelsGrid />
+        </MemoryRouter>
       </QueryClientProvider>,
       'tr',
     );

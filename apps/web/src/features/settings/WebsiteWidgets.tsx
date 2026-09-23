@@ -14,6 +14,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type ReactElement } from 'react';
+import { Link } from 'react-router-dom';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
@@ -249,12 +250,12 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
               {t('settings.websiteWidgets.footerHintPrefix')} <code>&lt;/body&gt;</code>{' '}
               {t('settings.websiteWidgets.footerHintSuffix')}
             </p>
-            <a
-              href="#widget-customization"
+            <Link
+              to="/app/settings/widget"
               className="rounded-md border border-border px-2 py-1 text-2xs text-content-secondary transition-colors hover:bg-surface-2"
             >
               {t('settings.websiteWidgets.customizeWidget')}
-            </a>
+            </Link>
           </div>
         </Card>
       )}

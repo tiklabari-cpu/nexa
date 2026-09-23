@@ -47,7 +47,15 @@ test.describe('multibrand cross-brand isolation', () => {
     page,
   }) => {
     await signIn(page);
-    await page.goto('/app/settings');
+    // The widget's appearance and its website list are two Settings sections
+    // since FR-MOD-08.1, each at its own address; the brand stays selected
+    // while the navigation moves between them.
+    await page.goto('/app/settings/widget');
+    const settingsNav = page.getByRole('navigation', { name: 'Settings navigation' });
+    const showWebsites = (): Promise<void> =>
+      settingsNav.getByRole('link', { name: 'Website widgets' }).click();
+    const showAppearance = (): Promise<void> =>
+      settingsNav.getByRole('link', { name: 'Widget appearance' }).click();
 
     const colourHex = page.getByLabel('Brand colour hex');
     // The region title carries the brand name, so a substring match on
@@ -60,6 +68,12 @@ test.describe('multibrand cross-brand isolation', () => {
     // than being its own rail icon — closed by default, so it must be opened
     // before the switcher is reachable at all.
     const openAppMenu = (): Promise<void> => page.getByRole('button', { name: 'App menu' }).click();
+    // A click on the Settings navigation closes the menu; reopen it only then —
+    // the button toggles, so opening an open menu would shut it.
+    const reachSwitcher = async (): Promise<void> => {
+      if (!(await switcher.isVisible())) await openAppMenu();
+      await expect(switcher).toBeVisible();
+    };
     // Scoped to the switcher's own listbox, not the page. A bare
     // `getByRole('option', { name: 'Default' })` matched three elements once
     // Settings grew a `<select>` whose first entry reads "Use the default (365
@@ -76,30 +90,35 @@ test.describe('multibrand cross-brand isolation', () => {
     await openAppMenu();
     await expect(switcher).toBeVisible();
     await expect(colourHex).toHaveValue(NORTHWIND.defaultColor);
+    await showWebsites();
     await expect(websites().getByText(NORTHWIND.defaultSite)).toBeVisible();
     await expect(websites().getByText(NORTHWIND.secondSite)).toHaveCount(0);
     await page.screenshot({ path: 'kanit/78.8-brand-default.png', fullPage: true });
 
     // --- Switch to the second brand --------------------------------------------
+    await reachSwitcher();
     await switcher.click();
     await brandOption(NORTHWIND.secondBrand).click();
 
-    // The widget appearance follows the brand — a different colour and a title
-    // that names it.
+    // The website list follows the brand: this brand's site appears and the
+    // other brand's is gone — the isolation an admin can see.
+    await expect(websites().getByText(NORTHWIND.secondSite)).toBeVisible();
+    await expect(websites().getByText(NORTHWIND.defaultSite)).toHaveCount(0);
+    // …and so does the widget appearance — a different colour and a title that
+    // names it.
+    await showAppearance();
     await expect(colourHex).toHaveValue(NORTHWIND.secondColor);
     await expect(
       page.getByRole('region', { name: `Widget appearance · ${NORTHWIND.secondBrand}` }),
     ).toBeVisible();
-    // …and so does the website list: this brand's site appears and the other
-    // brand's is gone — the isolation an admin can see.
-    await expect(websites().getByText(NORTHWIND.secondSite)).toBeVisible();
-    await expect(websites().getByText(NORTHWIND.defaultSite)).toHaveCount(0);
     await page.screenshot({ path: 'kanit/78.8-brand-second.png', fullPage: true });
 
     // --- Switch back — the default brand's appearance and site return ----------
+    await reachSwitcher();
     await switcher.click();
     await brandOption(NORTHWIND.defaultBrand).click();
     await expect(colourHex).toHaveValue(NORTHWIND.defaultColor);
+    await showWebsites();
     await expect(websites().getByText(NORTHWIND.defaultSite)).toBeVisible();
     await expect(websites().getByText(NORTHWIND.secondSite)).toHaveCount(0);
   });

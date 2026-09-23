@@ -15,9 +15,9 @@ import type { ActivationStepKey, HomeDashboard } from '@nexa/types';
 
 /** Where each activation step's "do it" link points. */
 export const ACTIVATION_STEP_ROUTE: Record<ActivationStepKey, string> = {
-  install_widget: '/app/settings',
+  install_widget: '/app/settings/website-widgets',
   invite_teammate: '/app/team',
-  customize_widget: '/app/settings#section-widget',
+  customize_widget: '/app/settings/widget',
   add_canned_response: '/app/playbook',
   set_up_ai_agent: '/app/playbook',
 };

@@ -873,7 +873,11 @@ describe('module parity matrix — what is still owed', () => {
       // inbox — it reads a contact and cannot even ban one, so it certainly
       // does not erase one. A boundary rather than a gap, and nothing here
       // re-scopes.
-      contractEndpoints: 217,
+      // 217 -> 218 with `/agents/me/ui-preferences` (FR-MOD-08.1, tm 255.10) —
+      // whether the web console's Settings side navigation is pinned. The app
+      // has no Settings side navigation to pin, so it has nothing to read
+      // there; a web layout preference, not a gap, and nothing here re-scopes.
+      contractEndpoints: 218,
       scopeBoundaries: 1,
     });
   });

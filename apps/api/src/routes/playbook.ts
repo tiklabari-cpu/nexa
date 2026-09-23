@@ -16,7 +16,12 @@ import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
-import { KnowledgeService } from '../services/ai/knowledge-service.js';
+import {
+  refuseUnembeddable,
+  type KnowledgeService,
+  type PreparedChunks,
+} from '../services/ai/knowledge-service.js';
+import { EmbeddingProviderError } from '../services/ai/provider/embedding-error.js';
 import {
   isKnowledgeBulkHeaderError,
   mapKnowledgeBulkRow,
@@ -320,9 +325,21 @@ function requireValidSteps(steps: unknown[]): unknown[] {
 
 export default async function playbookRoutes(
   app: FastifyInstance,
-  { env, llm }: { env: Env; llm: LlmProvider },
+  {
+    env,
+    llm,
+    knowledge,
+  }: {
+    env: Env;
+    llm: LlmProvider;
+    /**
+     * The server's one knowledge service, over its configured embedding
+     * provider (tm 255.7) — the same instance the customer path searches with,
+     * so a source indexed here is in the space a question is asked in.
+     */
+    knowledge: KnowledgeService;
+  },
 ): Promise<void> {
-  const knowledge = new KnowledgeService();
   // The same provider and limits as the live path, for the reason the preview
   // shares the engine at all: a preview that answers differently is worse than
   // none (FR-MOD-06.2.5).
@@ -668,6 +685,11 @@ export default async function playbookRoutes(
         sourceUrl = url.toString();
       }
 
+      // Embedded before the transaction as well, for the crawl's reason: the
+      // provider is a network call with its own timeout (tm 255.7). A refusal
+      // is a 503 with nothing written.
+      const prepared = await knowledge.prepare(content).catch(refuseUnembeddable);
+
       const created = await request.withTenant(async (tx) => {
         const agent = await tx.aiAgent.findFirst({
           where: { id: body.ai_agent_id },
@@ -692,7 +714,7 @@ export default async function playbookRoutes(
 
         // Indexed in the same transaction: a source that exists but is not
         // searchable looks ready and answers nothing.
-        const chunks = await knowledge.index(tx, tenant, source.id, content);
+        const chunks = await knowledge.index(tx, tenant, source.id, prepared);
 
         return { source, chunks, addedByName: await creatorName(tx, addedBy) };
       });
@@ -718,9 +740,10 @@ export default async function playbookRoutes(
    * `Buffer` for the length of the request and what is kept is the text they
    * parsed to. The filename is a *title* and nothing else.
    *
-   * Chunk, embed and index happen in the same transaction as the insert, for
-   * the reason the endpoint above states: a source that exists but is not
-   * searchable looks ready and answers nothing.
+   * Chunks are written in the same transaction as the insert, for the reason
+   * the endpoint above states: a source that exists but is not searchable
+   * looks ready and answers nothing. They are embedded just before it opens,
+   * with the bytes already judged — the provider is not paid for a refusal.
    */
   app.post(
     '/knowledge-sources/file',
@@ -753,6 +776,8 @@ export default async function playbookRoutes(
       const title = body.name ?? titleFromFilename(body.filename);
       if (title === '') throw ApiError.validation('filename: a file needs a usable name.');
 
+      const prepared = await knowledge.prepare(parsed.text).catch(refuseUnembeddable);
+
       const created = await request.withTenant(async (tx) => {
         const agent = await tx.aiAgent.findFirst({
           where: { id: body.ai_agent_id },
@@ -777,7 +802,7 @@ export default async function playbookRoutes(
           },
         });
 
-        const chunks = await knowledge.index(tx, tenant, source.id, parsed.text);
+        const chunks = await knowledge.index(tx, tenant, source.id, prepared);
 
         return { source, chunks, addedByName: await creatorName(tx, addedBy) };
       });
@@ -985,6 +1010,29 @@ export default async function playbookRoutes(
           continue;
         }
 
+        // Embedded before the row's transaction, like its crawl (tm 255.7). A
+        // row the provider could not embed is a row-level verdict like any
+        // other — nothing is written for it, and the rows after it still get
+        // their chance; the provider's circuit breaker keeps an outage from
+        // costing every remaining row a full timeout.
+        let prepared: PreparedChunks;
+        try {
+          prepared = await knowledge.prepare(content);
+        } catch (error) {
+          if (!(error instanceof EmbeddingProviderError)) throw error;
+          request.log.warn(
+            { line, kind: error.kind },
+            'bulk knowledge import: row could not be embedded',
+          );
+          skip(
+            line,
+            name,
+            type,
+            `This row could not be indexed: the embedding provider did not answer (${error.kind}).`,
+          );
+          continue;
+        }
+
         try {
           const created = await request.withTenant(async (tx) => {
             const source = await tx.knowledgeSource.create({
@@ -1004,7 +1052,7 @@ export default async function playbookRoutes(
             // Same transaction as the create, exactly as the single-source path:
             // a source that exists but is not searchable looks ready and answers
             // nothing.
-            const chunks = await knowledge.index(tx, tenant, source.id, content);
+            const chunks = await knowledge.index(tx, tenant, source.id, prepared);
             return { source, chunks };
           });
 
@@ -1053,7 +1101,9 @@ export default async function playbookRoutes(
    *
    * Changed text is re-indexed inside the same transaction as the update. A
    * rename is not — the name is joined at retrieval time, so no chunk carries
-   * it and there is nothing to rebuild.
+   * it and there is nothing to rebuild. The new text is embedded before that
+   * transaction opens (tm 255.7); a refusal there is a 503 that, like a
+   * refused crawl, leaves the source exactly as it was — the rename included.
    */
   app.patch<{ Params: { sourceId: string } }>(
     '/knowledge-sources/:sourceId',
@@ -1100,6 +1150,8 @@ export default async function playbookRoutes(
         text = (await crawl(url)).text;
         sourceUrl = url.toString();
       }
+      const prepared =
+        text === null ? null : await knowledge.prepare(text).catch(refuseUnembeddable);
 
       // A schedule change or a fresh crawl both restart the countdown, from
       // now — the source is, in either case, as fresh as it has just been
@@ -1129,14 +1181,14 @@ export default async function playbookRoutes(
         // existed.
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
-        // Re-chunked and re-embedded in the same transaction as the update, so
+        // The new chunks are written in the same transaction as the update, so
         // the source can never be readable as edited while still answering from
         // the text it replaced. Untouched text needs no rebuild — chunks hold
         // the content, not the title.
         const chunks =
-          text === null
+          prepared === null
             ? await tx.knowledgeChunk.count({ where: { sourceId: id } })
-            : await knowledge.index(tx, tenant, id, text);
+            : await knowledge.index(tx, tenant, id, prepared);
 
         const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
         return { source, chunks, addedByName: await creatorName(tx, existing.addedBy) };
@@ -1201,6 +1253,9 @@ export default async function playbookRoutes(
       // the freshness sweep uses (`knowledge-refresh.ts`), so there is one
       // SSRF gate for "refresh this source", not two.
       const text = await fetchRefreshedText(existing);
+      // And embedded before the transaction too; a refusal keeps the stale
+      // answer, exactly as a refused crawl does (tm 255.7).
+      const prepared = await knowledge.prepare(text).catch(refuseUnembeddable);
       const now = new Date();
 
       const refreshed = await request.withTenant(async (tx) => {
@@ -1215,7 +1270,7 @@ export default async function playbookRoutes(
         });
         if (count === 0) throw ApiError.notFound('Knowledge source not found.');
 
-        const chunks = await knowledge.index(tx, tenant, id, text);
+        const chunks = await knowledge.index(tx, tenant, id, prepared);
         const source = await tx.knowledgeSource.findFirstOrThrow({ where: { id } });
         return { source, chunks, addedByName: await creatorName(tx, existing.addedBy) };
       });

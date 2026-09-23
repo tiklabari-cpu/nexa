@@ -30,7 +30,9 @@ import {
   startOfIsoWeek,
   startOfUtcDay,
 } from '../reports/scheduled-report-period.js';
-import { KnowledgeService, type RetrievedChunk } from './knowledge-service.js';
+import type { KnowledgeService, PreparedChunks, QueryEmbedding } from './knowledge-service.js';
+import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
+import type { TenantRunner } from './skill-engine.js';
 
 const COPILOT_KIND = 'copilot';
 /**
@@ -55,8 +57,35 @@ export interface CopilotDraft {
   sources: Array<{ name: string; score: number }>;
 }
 
+/**
+ * The chat's messages as plain turns, oldest first, for summary/draft input.
+ * A function of its own because two readers need only this — the summary
+ * route and the MCP `summarize_chat` tool — and neither has any business
+ * holding a knowledge service to get it.
+ */
+export async function readConversationTurns(
+  tx: TenantClient,
+  chatId: string,
+): Promise<ConversationTurn[]> {
+  const rows = await tx.event.findMany({
+    where: { chatId, type: 'message', text: { not: null } },
+    orderBy: { createdAt: 'asc' },
+    select: { text: true, authorType: true, recipients: true },
+  });
+  return (
+    rows
+      // An internal note is agent-to-agent chatter, not part of the customer
+      // conversation Copilot is summarising.
+      .filter((row) => row.recipients !== 'agents' && row.text)
+      .map((row) => ({
+        role: row.authorType === 'customer' ? ('customer' as const) : ('agent' as const),
+        text: row.text!,
+      }))
+  );
+}
+
 export class CopilotService {
-  constructor(private readonly knowledge: KnowledgeService = new KnowledgeService()) {}
+  constructor(private readonly knowledge: KnowledgeService) {}
 
   /** The copilot agent's id, if the license has one — no side effects. */
   async findAgentId(tx: TenantClient): Promise<string | null> {
@@ -147,11 +176,21 @@ export class CopilotService {
     return sources.map(serialiseSource);
   }
 
+  /**
+   * `prepared` is `content` already chunked and embedded
+   * (`KnowledgeService.prepare`), by the caller, before this transaction.
+   */
   async createSource(
     tx: TenantClient,
     tenant: TenantContext,
     principal: Principal,
-    input: { type: string; name: string; content: string; sourceUrl: string | null },
+    input: {
+      type: string;
+      name: string;
+      content: string;
+      sourceUrl: string | null;
+      prepared: PreparedChunks;
+    },
   ): Promise<CopilotSourceView> {
     const agentId = await this.ensureAgentId(tx, tenant);
     const source = await tx.knowledgeSource.create({
@@ -171,7 +210,7 @@ export class CopilotService {
 
     // Indexed in the same transaction: a source that exists but is not
     // searchable looks ready and answers nothing.
-    const chunks = await this.knowledge.index(tx, tenant, source.id, input.content);
+    const chunks = await this.knowledge.index(tx, tenant, source.id, input.prepared);
     return {
       ...serialiseSource(source),
       status: chunks > 0 ? 'ready' : 'empty',
@@ -194,23 +233,9 @@ export class CopilotService {
 
   // --- Assist (12.3) ---------------------------------------------------------
 
-  /** The chat's messages as plain turns, oldest first, for summary/draft input. */
+  /** The chat's messages as plain turns, oldest first — {@link readConversationTurns}. */
   async conversationTurns(tx: TenantClient, chatId: string): Promise<ConversationTurn[]> {
-    const rows = await tx.event.findMany({
-      where: { chatId, type: 'message', text: { not: null } },
-      orderBy: { createdAt: 'asc' },
-      select: { text: true, authorType: true, recipients: true },
-    });
-    return (
-      rows
-        // An internal note is agent-to-agent chatter, not part of the customer
-        // conversation Copilot is summarising.
-        .filter((row) => row.recipients !== 'agents' && row.text)
-        .map((row) => ({
-          role: row.authorType === 'customer' ? ('customer' as const) : ('agent' as const),
-          text: row.text!,
-        }))
-    );
+    return readConversationTurns(tx, chatId);
   }
 
   /**
@@ -218,20 +243,39 @@ export class CopilotService {
    * customer's latest message as the query. Returns an empty draft when there is
    * nothing to answer from, rather than inventing one — the same honesty the
    * customer-facing responder applies (RETRIEVAL_THRESHOLD).
+   *
+   * Three short steps through `db` rather than one transaction, because the
+   * question is embedded in between and the provider is never called with a
+   * transaction open (tm 255.7). When the provider cannot embed, the draft is
+   * empty and `failure` says why — the agent writes the reply, and no draft is
+   * better than one from a search that did not run.
    */
-  async draftReply(tx: TenantClient, tenant: TenantContext, chatId: string): Promise<CopilotDraft> {
-    const agentId = await this.findAgentId(tx);
-    const turns = await this.conversationTurns(tx, chatId);
+  async draftReply(
+    db: TenantRunner,
+    tenant: TenantContext,
+    chatId: string,
+  ): Promise<CopilotDraft & { failure?: EmbeddingFailureKind }> {
+    const { agentId, turns } = await db(async (tx) => ({
+      agentId: await this.findAgentId(tx),
+      turns: await this.conversationTurns(tx, chatId),
+    }));
     const lastCustomer = [...turns].reverse().find((turn) => turn.role === 'customer');
 
     if (!agentId || !lastCustomer) {
       return { draft: '', sources: [] };
     }
 
-    const chunks: RetrievedChunk[] = await this.knowledge.retrieve(tx, tenant, lastCustomer.text, {
-      aiAgentId: agentId,
-      limit: 2,
-    });
+    let question: QueryEmbedding;
+    try {
+      question = await this.knowledge.embedQuery(lastCustomer.text);
+    } catch (error) {
+      if (!(error instanceof EmbeddingProviderError)) throw error;
+      return { draft: '', sources: [], failure: error.kind };
+    }
+
+    const chunks = await db((tx) =>
+      this.knowledge.retrieve(tx, tenant, question, { aiAgentId: agentId, limit: 2 }),
+    );
     if (chunks.length === 0) return { draft: '', sources: [] };
 
     // Stitch the retrieved passages into a first-person draft the agent edits —

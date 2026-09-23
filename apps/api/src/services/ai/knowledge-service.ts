@@ -1,15 +1,73 @@
 /**
  * Knowledge indexing and retrieval (RAG).
  *
- * Chunks are embedded with the deterministic stub in `@nexa/ai-mock` and stored
- * in pgvector. Retrieval is a nearest-neighbour search restricted to the
- * caller's license — the `<=>` operator is cosine *distance*, so smaller is
- * closer, which is the opposite of the similarity score everything else here
- * talks in.
+ * Chunks are embedded by the configured `EmbeddingProvider` — the lexical stub
+ * unless a deployment names a model (tm 255.7) — and stored in pgvector.
+ * Retrieval is a nearest-neighbour search restricted to the caller's license —
+ * the `<=>` operator is cosine *distance*, so smaller is closer, which is the
+ * opposite of the similarity score everything else here talks in.
+ *
+ * **Two phases, and the network is never inside a transaction.** Embedding is
+ * a provider call that may take `EMBEDDING_TIMEOUT_MS`; a tenant transaction
+ * may not take more than 10 s, and holding a pooled connection open on a
+ * remote service is how one slow provider starves every other request. So the
+ * provider is called first — {@link KnowledgeService.prepare} for a source's
+ * text, {@link KnowledgeService.embedQuery} for a question — and only what it
+ * returned is carried into the transaction that writes
+ * ({@link KnowledgeService.index}) or searches ({@link KnowledgeService.search}).
+ * The types make the order the only one that compiles: nothing inside a
+ * transaction accepts text.
+ *
+ * **A question is compared only with chunks of its own space.** Every chunk
+ * records the space its vector is in (`knowledge_chunks.embedding_space`); a
+ * search is filtered to the space its question was embedded in. Two spaces'
+ * vectors side by side are neighbours by accident — a lexical hash and a
+ * model's coordinates share nothing but a length — so a knowledge base moving
+ * from one to the other (`knowledge:reembed`, PLAN §D182) answers only from
+ * the sources already moved, and a question the rest could have answered goes
+ * to a human rather than to a passage that happened to be near in the wrong
+ * space.
  */
 import { Prisma } from '@prisma/client';
-import { chunk, embed, toVectorLiteral } from '@nexa/ai-mock';
+import { chunk, toVectorLiteral } from '@nexa/ai-mock';
+import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import { EmbeddingProviderError } from './provider/embedding-error.js';
+import type { EmbeddingProvider } from './provider/embedding-provider.js';
+
+/**
+ * A source's text, chunked and embedded — everything {@link KnowledgeService.index}
+ * writes, produced before its transaction opens.
+ */
+export interface PreparedChunks {
+  /** The space every vector below is in. */
+  space: string;
+  chunks: Array<{ text: string; vector: string; tokenCount: number }>;
+}
+
+/**
+ * A question, embedded — what {@link KnowledgeService.search} compares chunks
+ * with. `vector` is `null` for a question with nothing in it to search for.
+ */
+export interface QueryEmbedding {
+  space: string;
+  vector: string | null;
+}
+
+/**
+ * For a request an admin is waiting on: `knowledge.prepare(text).catch(refuseUnembeddable)`.
+ * An embedding failure becomes the 503 the contract documents
+ * (`EmbeddingUnavailable`) — indexing fails and says so, having written
+ * nothing — and anything else propagates as the defect it is.
+ */
+export function refuseUnembeddable(error: unknown): never {
+  if (!(error instanceof EmbeddingProviderError)) throw error;
+  throw new ApiError(
+    'service_unavailable',
+    `This text could not be indexed: the embedding provider did not answer (${error.kind}). Nothing was saved — try again in a moment.`,
+    { details: { kind: error.kind } },
+  );
+}
 
 export interface RetrievedChunk {
   id: string;
@@ -93,61 +151,111 @@ interface ChunkRow {
  */
 const APPROXIMATE_SAVEPOINT = 'knowledge_approximate_search';
 
+export interface KnowledgeServiceOptions {
+  /** Who embeds — the server's one provider, so every caller shares its circuit breaker. */
+  embeddings: EmbeddingProvider;
+  /**
+   * Overrides {@link EXACT_SEARCH_CEILING}; tests lower it so a knowledge base
+   * of a few thousand chunks crosses it.
+   */
+  exactSearchCeiling?: number;
+}
+
 export class KnowledgeService {
+  readonly #embeddings: EmbeddingProvider;
   readonly #exactSearchCeiling: number;
 
-  /**
-   * @param options.exactSearchCeiling — overrides {@link EXACT_SEARCH_CEILING};
-   * tests lower it so a knowledge base of a few thousand chunks crosses it.
-   */
-  constructor(options: { exactSearchCeiling?: number } = {}) {
+  constructor(options: KnowledgeServiceOptions) {
     const ceiling = options.exactSearchCeiling ?? EXACT_SEARCH_CEILING;
     if (!Number.isSafeInteger(ceiling) || ceiling < 0) {
       throw new RangeError(`exactSearchCeiling must be a non-negative integer, got ${ceiling}`);
     }
+    this.#embeddings = options.embeddings;
     this.#exactSearchCeiling = ceiling;
   }
 
+  /** The space this service embeds into — and therefore the one its questions search. */
+  get space(): string {
+    return this.#embeddings.space;
+  }
+
   /**
-   * Re-chunk and re-embed a source.
+   * Chunk a source's text and embed every chunk — in one call, so one request
+   * for any realistic source. The provider call; never inside a transaction.
+   *
+   * Rejects with the provider's `EmbeddingProviderError` when it could not
+   * embed, before anything has been written: indexing fails whole and says so.
+   * Text that chunks to nothing asks the provider for nothing.
+   */
+  async prepare(content: string): Promise<PreparedChunks> {
+    const pieces = chunk(content);
+    if (pieces.length === 0) return { space: this.space, chunks: [] };
+    const { vectors } = await this.#embeddings.embed(pieces);
+    return {
+      space: this.space,
+      chunks: pieces.map((text, position) => ({
+        text,
+        vector: toVectorLiteral(vectors[position]!),
+        tokenCount: text.split(/\s+/).length,
+      })),
+    };
+  }
+
+  /**
+   * Replace a source's chunks with prepared ones, inside the caller's
+   * transaction.
    *
    * Replaces every chunk rather than diffing: sources are edited rarely and
    * wholesale, and a partial update leaves orphaned chunks that keep answering
-   * from text the admin already deleted.
+   * from text the admin already deleted. Every row names the space its vector
+   * is in — never left to the column's default, which describes the stub.
    */
   async index(
     tx: TenantClient,
     tenant: TenantContext,
     sourceId: string,
-    content: string,
+    prepared: PreparedChunks,
   ): Promise<number> {
     await tx.knowledgeChunk.deleteMany({ where: { sourceId } });
 
-    const pieces = chunk(content);
-    for (const [position, text] of pieces.entries()) {
-      const vector = toVectorLiteral(embed(text));
+    for (const [position, piece] of prepared.chunks.entries()) {
       // Raw SQL because Prisma has no vector type; the parameters are still
       // bound, not interpolated.
       await tx.$executeRaw`
-        INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, token_count, position)
-        VALUES (gen_random_uuid(), ${sourceId}::uuid, ${tenant.licenseId}, ${text},
-                ${vector}::vector, ${text.split(/\s+/).length}, ${position})
+        INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding,
+                                      embedding_space, token_count, position)
+        VALUES (gen_random_uuid(), ${sourceId}::uuid, ${tenant.licenseId}, ${piece.text},
+                ${piece.vector}::vector, ${prepared.space}, ${piece.tokenCount}, ${position})
       `;
     }
 
     await tx.knowledgeSource.update({
       where: { id: sourceId },
-      data: { status: pieces.length > 0 ? 'ready' : 'empty', updatedAt: new Date() },
+      data: { status: prepared.chunks.length > 0 ? 'ready' : 'empty', updatedAt: new Date() },
     });
 
-    return pieces.length;
+    return prepared.chunks.length;
+  }
+
+  /**
+   * Embed a question — the provider call; never inside a transaction.
+   *
+   * A question with nothing but whitespace in it has nothing to search for:
+   * the provider is not asked, and {@link search} answers it with no chunks —
+   * what the stub's zero vector always amounted to. Rejects with the
+   * provider's `EmbeddingProviderError` when it could not embed.
+   */
+  async embedQuery(query: string): Promise<QueryEmbedding> {
+    if (query.trim() === '') return { space: this.space, vector: null };
+    const { vectors } = await this.#embeddings.embed([query]);
+    return { space: this.space, vector: toVectorLiteral(vectors[0]!) };
   }
 
   /** Nearest chunks to a question, best first. How they are found: {@link search}. */
   async retrieve(
     tx: TenantClient,
     tenant: TenantContext,
-    query: string,
+    query: QueryEmbedding,
     options: { aiAgentId?: string; limit?: number } = {},
   ): Promise<RetrievedChunk[]> {
     return (await this.search(tx, tenant, query, options)).chunks;
@@ -170,16 +278,22 @@ export class KnowledgeService {
    *
    * The scope is counted first, and only up to one past the ceiling, so the
    * count stops reading as soon as the answer is "above".
+   *
+   * The scope is the question's own embedding space — see the file header. A
+   * chunk in any other space is not in scope: not counted, not ranked, never
+   * returned, however close its vector happens to be.
    */
   async search(
     tx: TenantClient,
     tenant: TenantContext,
-    query: string,
+    query: QueryEmbedding,
     options: { aiAgentId?: string; limit?: number } = {},
   ): Promise<KnowledgeSearch> {
-    const vector = toVectorLiteral(embed(query));
+    if (query.vector === null) return { strategy: 'exact', chunksInScope: 0, chunks: [] };
+    const vector = query.vector;
     const limit = options.limit ?? 3;
     const scope = Prisma.sql`c.license_id = ${tenant.licenseId}
+        AND c.embedding_space = ${query.space}
         AND s.status = 'ready'
         ${options.aiAgentId ? Prisma.sql`AND s.ai_agent_id = ${options.aiAgentId}::uuid` : Prisma.empty}`;
 

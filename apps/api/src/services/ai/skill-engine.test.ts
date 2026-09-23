@@ -17,8 +17,10 @@ import {
   refusedConnection,
   type FakeOpenAiFetch,
 } from '../../../test/helpers/fake-openai.js';
+import { FakeLlmProvider } from '../../../test/helpers/fake-llm-provider.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import type { KnowledgeService, RetrievedChunk } from './knowledge-service.js';
+import type { KnowledgeSearch, KnowledgeService, RetrievedChunk } from './knowledge-service.js';
+import { EMBEDDING_FAILURE_KINDS, EmbeddingProviderError } from './provider/embedding-error.js';
 import { LLM_FAILURE_KINDS, type LlmFailureKind } from './provider/llm-error.js';
 import type { LlmProvider } from './provider/llm-provider.js';
 import { MockLlmProvider } from './provider/mock-llm-provider.js';
@@ -69,11 +71,33 @@ function workspace(steps: unknown[]) {
   return { db, runs };
 }
 
-const knowledge = {
-  retrieve: async (): Promise<RetrievedChunk[]> => [
-    { id: 'chunk-1', sourceId: 'source-1', sourceName: 'Delivery', text: PASSAGE, score: 0.91 },
-  ],
-} as unknown as KnowledgeService;
+const HIT: RetrievedChunk = {
+  id: 'chunk-1',
+  sourceId: 'source-1',
+  sourceName: 'Delivery',
+  text: PASSAGE,
+  score: 0.91,
+};
+
+/**
+ * Stands in for the knowledge service's two phases: the question is embedded
+ * (no transaction), then searched (inside one). `chunksInScope` is what the
+ * search counted in the question's space.
+ */
+function knowledgeWith(
+  embedQuery: KnowledgeService['embedQuery'],
+  {
+    chunks = [HIT],
+    chunksInScope = chunks.length,
+  }: { chunks?: RetrievedChunk[]; chunksInScope?: number } = {},
+): KnowledgeService {
+  return {
+    embedQuery,
+    search: async (): Promise<KnowledgeSearch> => ({ strategy: 'exact', chunksInScope, chunks }),
+  } as unknown as KnowledgeService;
+}
+
+const knowledge = knowledgeWith(async () => ({ space: 'test:space', vector: '[1]' }));
 
 const quiet = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
@@ -84,8 +108,12 @@ function openai(net: FakeOpenAiFetch, circuit?: { failureThreshold: number }): O
   );
 }
 
-function engine(llm: LlmProvider, timeoutMs = 20_000): SkillEngine {
-  return new SkillEngine({ llm, maxOutputTokens: 400, timeoutMs, knowledge });
+function engine(
+  llm: LlmProvider,
+  timeoutMs = 20_000,
+  knowledgeService: KnowledgeService = knowledge,
+): SkillEngine {
+  return new SkillEngine({ llm, maxOutputTokens: 400, timeoutMs, knowledge: knowledgeService });
 }
 
 const problem = (status: number, code: string) =>
@@ -165,7 +193,7 @@ describe('a model that cannot answer hands the conversation to a human (FR-05-06
     });
 
     expect(result.outcome).toBe('handed_off');
-    expect(result.failure).toBe(kind);
+    expect(result.failure).toEqual({ provider: 'llm', kind });
     expect(result.reply).toBeNull();
     expect(result.transferTo).toBeNull();
 
@@ -218,7 +246,7 @@ describe('after a failure the AI stops talking; the steps for the human still ru
     const result = await engine(openai(net)).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
 
     expect(result.outcome).toBe('handed_off');
-    expect(result.failure).toBe('auth');
+    expect(result.failure).toEqual({ provider: 'llm', kind: 'auth' });
     expect(result.reply).toBeNull();
     expect(result.tags).toEqual(['delivery']);
     expect(result.summary).toMatch(/^Customer asked: How long does delivery take\?/);
@@ -287,7 +315,118 @@ describe('what the hand-off does not swallow', () => {
       message: MESSAGE,
     });
 
-    expect(preview).toMatchObject({ outcome: 'handed_off', failure: 'unavailable', reply: null });
+    expect(preview).toMatchObject({
+      outcome: 'handed_off',
+      failure: { provider: 'llm', kind: 'unavailable' },
+      reply: null,
+    });
     expect(preview.errors).toEqual([]);
+  });
+});
+
+/**
+ * The other provider on the answer's path (tm 255.7): the question is embedded
+ * before anything is searched, and when that fails there is nothing to ground
+ * an answer in. The run ends the way a model failure does — and the model is
+ * never asked, because an answer without passages is the silent wrong answer.
+ */
+describe('a knowledge search that cannot run hands the conversation to a human (FR-MOD-06.3.2)', () => {
+  const failingSearch = (error: Error) =>
+    knowledgeWith(async () => {
+      throw error;
+    });
+
+  it.each([...EMBEDDING_FAILURE_KINDS])('%s', async (kind) => {
+    const llm = new FakeLlmProvider();
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+
+    const result = await engine(llm, 20_000, failingSearch(new EmbeddingProviderError(kind))).run(
+      db,
+      TENANT,
+      { message: MESSAGE, chatId: 'chat-1' },
+    );
+
+    expect(result.outcome).toBe('handed_off');
+    expect(result.failure).toEqual({ provider: 'embedding', kind });
+    expect(result.reply).toBeNull();
+    expect(llm.calls).toHaveLength(0);
+    expect(result.log.find((entry) => entry.step === 'send_message')).toEqual({
+      step: 'send_message',
+      detail: `the knowledge search could not run (${kind}) — handed to a human`,
+      ok: false,
+    });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.status).toBe('failed');
+    expect(runs[0]!.log.outcome).toBe('handed_off');
+  });
+
+  it('withdraws a queued question and still tags, summarises and transfers', async () => {
+    const llm = new FakeLlmProvider();
+    const { db } = workspace([
+      { type: 'detect_intent', intent: 'delivery', phrases: ['delivery'] },
+      { type: 'request_info', field: 'order number', prompt: 'What is your order number?' },
+      { type: 'send_message', source: 'knowledge' },
+      { type: 'send_message', source: 'text', text: 'Anything else I can help with?' },
+      { type: 'tag', tag: 'delivery' },
+      { type: 'summarize' },
+      { type: 'transfer_to_team', group: 'Logistics' },
+    ]);
+
+    const result = await engine(
+      llm,
+      20_000,
+      failingSearch(new EmbeddingProviderError('timeout')),
+    ).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(result).toMatchObject({
+      outcome: 'handed_off',
+      failure: { provider: 'embedding', kind: 'timeout' },
+      reply: null,
+      tags: ['delivery'],
+      transferTo: 'Logistics',
+    });
+    expect(result.summary).toMatch(/^Customer asked: How long does delivery take\?/);
+    expect(llm.calls).toHaveLength(0);
+  });
+
+  it('lets a defect in the search propagate rather than filing it as a provider failure', async () => {
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+
+    await expect(
+      engine(
+        new FakeLlmProvider(),
+        20_000,
+        failingSearch(new TypeError('a bug, not an outage')),
+      ).run(db, TENANT, { message: MESSAGE, chatId: 'c' }),
+    ).rejects.toThrow('a bug, not an outage');
+    expect(runs).toHaveLength(0);
+  });
+
+  it('tells a knowledge base with nothing searchable apart from one that did not match', async () => {
+    const embedded = async () => ({ space: 'openai:text-embedding-3-small', vector: '[1]' });
+
+    // Nothing in the question's space at all: empty, or still in another space.
+    const unsearchable = await engine(
+      new FakeLlmProvider(),
+      20_000,
+      knowledgeWith(embedded, { chunks: [], chunksInScope: 0 }),
+    ).run(workspace(KNOWLEDGE_ANSWER).db, TENANT, { message: MESSAGE, chatId: 'c' });
+    // Something to search, and none of it close enough.
+    const missed = await engine(
+      new FakeLlmProvider(),
+      20_000,
+      knowledgeWith(embedded, { chunks: [], chunksInScope: 12 }),
+    ).run(workspace(KNOWLEDGE_ANSWER).db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    // Both are a miss, not a failure: a human picks the conversation up.
+    for (const result of [unsearchable, missed]) {
+      expect(result).toMatchObject({ outcome: 'skipped', failure: null, reply: null });
+    }
+    const detail = (result: typeof missed) =>
+      result.log.find((entry) => entry.step === 'send_message')!.detail;
+    expect(detail(unsearchable)).toBe(
+      'nothing searchable in the knowledge base — empty, or not yet re-embedded for openai:text-embedding-3-small',
+    );
+    expect(detail(missed)).toBe('nothing in the knowledge base above 0.25 similarity');
   });
 });

@@ -15,11 +15,27 @@
  *   2. overlapping words → higher cosine similarity, so retrieval ranks by
  *      something real rather than by row order.
  *
- * Swapping in a real provider means replacing this one function. Nothing else
- * knows how the numbers were produced.
+ * A real model does not replace this function; it arrives beside it, through
+ * the API's `EmbeddingProvider` seam (tm 255.7). What this function is now is
+ * the algorithm behind `EMBEDDING_PROVIDER=mock`, and the feature extractor the
+ * topic report clusters with (`topics.ts` — kept here on purpose, PLAN §D182).
+ * Its vectors live in their own space, {@link LEXICAL_EMBEDDING_SPACE}, and are
+ * never compared with a model's.
  */
 
 export const EMBEDDING_DIMENSIONS = 1536;
+
+/**
+ * The vector space {@link embed} produces — `<provider>:<algorithm>`, the same
+ * shape as a real provider's `<provider>:<model>`. Stored beside every vector
+ * (`knowledge_chunks.embedding_space`, whose default is this value), because a
+ * vector is only comparable with vectors of its own space.
+ *
+ * Bump the version whenever `embed`'s output changes — a new stop word, a
+ * different stem — so the vectors already stored are recognised as another
+ * space and re-embedded, rather than silently compared with the new ones.
+ */
+export const LEXICAL_EMBEDDING_SPACE = 'mock:lexical-v1';
 
 /** Words carrying no signal; keeping them makes every document look alike. */
 const STOP_WORDS = new Set([

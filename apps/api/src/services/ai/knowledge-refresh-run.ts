@@ -21,13 +21,24 @@ loadEnvFile();
 
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
+import { resolveEmbeddingInferenceProvider } from './inference.js';
 import { KnowledgeRefreshSweeper } from './knowledge-refresh-sweep.js';
+import { KnowledgeService } from './knowledge-service.js';
+import { createEmbeddingProvider } from './provider/create-embedding-provider.js';
 
 async function main(): Promise<void> {
   const env = parseEnv();
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
+  // The configured provider, exactly as the server builds it: a refresh
+  // embedded with anything else would land in a space questions never search.
+  const knowledge = new KnowledgeService({
+    embeddings: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+  });
   try {
-    const report = await new KnowledgeRefreshSweeper(db).run();
+    const report = await new KnowledgeRefreshSweeper(db, {
+      knowledge,
+      embeddingInference: resolveEmbeddingInferenceProvider(env),
+    }).run();
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.stderr.write(
       `knowledge-refresh: refreshed ${report.totals.refreshed}, failed ${report.totals.failed} ` +

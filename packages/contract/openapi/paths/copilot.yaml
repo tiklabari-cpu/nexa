@@ -31,7 +31,9 @@ knowledge:
     description: |
       Chunked and embedded on save, answerable immediately. A `website` source is
       crawled from `source_url` (guarded against private/internal targets, SSRF —
-      NFR-S7); every other type indexes `content`. Exactly one is required.
+      NFR-S7); every other type indexes `content`. Exactly one is required. When
+      the embedding provider cannot index the text the answer is a 503 and
+      nothing is created.
     requestBody:
       required: true
       content:
@@ -60,6 +62,7 @@ knowledge:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
 knowledgeSource:
   parameters:
@@ -135,7 +138,9 @@ reply:
       Retrieves from the copilot knowledge base using the customer's latest
       message and returns a suggested reply for the agent to edit and send
       (FR-MOD-12.3). Returns an empty draft when nothing relevant is found rather
-      than inventing an answer.
+      than inventing an answer — and equally when the search could not run
+      because the embedding provider did not answer: the agent writes the reply
+      themselves, and no draft is better than one from a search that failed.
     responses:
       "200":
         description: A suggested reply

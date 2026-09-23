@@ -41,6 +41,7 @@ import {
   type KnowledgeSearch,
   type RetrievedChunk,
 } from '../../src/services/ai/knowledge-service.js';
+import { MockEmbeddingProvider } from '../../src/services/ai/provider/mock-embedding-provider.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -268,18 +269,21 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
   /** Every source of the agent the questions are asked of. */
   const bigSources = new Set<string>();
 
+  /** The lexical stub the fixture's rows are written with. */
+  const embeddings = new MockEmbeddingProvider();
   /** The service under test, with the lowered ceiling. */
-  const scaled = new KnowledgeService({ exactSearchCeiling: CEILING });
+  const scaled = new KnowledgeService({ embeddings, exactSearchCeiling: CEILING });
   /** Exact search whatever the scope — the reference every answer is held to. */
-  const exact = new KnowledgeService({ exactSearchCeiling: 1_000_000 });
+  const exact = new KnowledgeService({ embeddings, exactSearchCeiling: 1_000_000 });
 
-  function search(
+  async function search(
     service: KnowledgeService,
     agent: string,
     question: string,
   ): Promise<KnowledgeSearch> {
+    const asked = await service.embedQuery(question);
     return withTenant(app, tenant, (tx) =>
-      service.search(tx, tenant, question, { aiAgentId: agents.get(agent)!, limit: LIMIT }),
+      service.search(tx, tenant, asked, { aiAgentId: agents.get(agent)!, limit: LIMIT }),
     );
   }
 
@@ -291,7 +295,7 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
     tenant = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
 
     const corpus = helpCentre(254);
-    const indexer = new KnowledgeService();
+    const indexer = new KnowledgeService({ embeddings });
     for (const { tenant: key, agent, sources, topic, writer } of LAYOUT) {
       const context = { licenseId: fx[key].licenseId, organizationId: fx[key].organizationId };
       const created = await owner.aiAgent.create({
@@ -314,7 +318,12 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
         });
         if (agent === 'Big') bigSources.add(source.id);
         if (writer === 'service') {
-          await indexer.index(owner as TenantClient, context, source.id, content);
+          await indexer.index(
+            owner as TenantClient,
+            context,
+            source.id,
+            await indexer.prepare(content),
+          );
         } else {
           // The rows `index()` writes — a paragraph under 600 characters is one
           // chunk — without one round trip per chunk.
@@ -363,8 +372,9 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
   it('answers above the ceiling from the HNSW index, under the settings it was measured with', async () => {
     const observed: Observed[] = [];
     const client = observingClient(app, (entry) => observed.push(entry));
+    const asked = await scaled.embedQuery(questions[1]!);
     const result = await withTenant(client, tenant, (tx) =>
-      scaled.search(tx, tenant, questions[1]!, { aiAgentId: agents.get('Big')!, limit: LIMIT }),
+      scaled.search(tx, tenant, asked, { aiAgentId: agents.get('Big')!, limit: LIMIT }),
     );
 
     expect(result.strategy).not.toBe('exact');
@@ -387,6 +397,7 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
              current_setting('hnsw.ef_search') AS ef_search,
              current_setting('hnsw.iterative_scan') AS iterative_scan`;
 
+    const asked = await scaled.embedQuery(questions[2]!);
     const [before, after, plan] = await withTenant(app, tenant, async (tx) => {
       // Values of the caller's own, none of them the search's, set the way a
       // caller would set them.
@@ -394,7 +405,7 @@ describe('knowledge retrieval above the exact-search ceiling', () => {
       await tx.$executeRawUnsafe('SET LOCAL hnsw.iterative_scan = strict_order');
       await tx.$executeRawUnsafe('SET LOCAL jit = on');
       const settingsBefore = await read(tx);
-      const result = await scaled.search(tx, tenant, questions[2]!, {
+      const result = await scaled.search(tx, tenant, asked, {
         aiAgentId: agents.get('Big')!,
         limit: LIMIT,
       });
@@ -491,11 +502,14 @@ describe('knowledge retrieval on a warm connection', () => {
       },
       select: { id: true },
     });
-    await new KnowledgeService().index(
+    const indexer = new KnowledgeService({ embeddings: new MockEmbeddingProvider() });
+    await indexer.index(
       owner as TenantClient,
       tenant,
       source.id,
-      'Standard delivery takes 3 to 5 working days.\n\nReturns are accepted within 30 days.',
+      await indexer.prepare(
+        'Standard delivery takes 3 to 5 working days.\n\nReturns are accepted within 30 days.',
+      ),
     );
   });
 
@@ -513,12 +527,15 @@ describe('knowledge retrieval on a warm connection', () => {
    * connection, so the test reads what a warm connection actually runs.
    */
   it('parses the question once per search, not once per row, on the plan Postgres caches', async () => {
-    const service = new KnowledgeService({ exactSearchCeiling: 0 });
+    const embeddings = new MockEmbeddingProvider();
+    const service = new KnowledgeService({ embeddings, exactSearchCeiling: 0 });
+    const shipped = new KnowledgeService({ embeddings });
+    const asked = await shipped.embedQuery('how long does delivery take');
     await withTenant(single, tenant, (tx) =>
-      service.search(tx, tenant, 'how long does delivery take', { aiAgentId: agentId, limit: 2 }),
+      service.search(tx, tenant, asked, { aiAgentId: agentId, limit: 2 }),
     );
     await withTenant(single, tenant, (tx) =>
-      new KnowledgeService().search(tx, tenant, 'how long does delivery take', {
+      shipped.search(tx, tenant, asked, {
         aiAgentId: agentId,
       }),
     );

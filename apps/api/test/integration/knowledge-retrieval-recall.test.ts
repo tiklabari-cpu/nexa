@@ -67,6 +67,7 @@ import {
   RETRIEVAL_THRESHOLD,
   type RetrievedChunk,
 } from '../../src/services/ai/knowledge-service.js';
+import { MockEmbeddingProvider } from '../../src/services/ai/provider/mock-embedding-provider.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
 const APP_URL = process.env['DATABASE_APP_URL'];
@@ -265,7 +266,8 @@ describe('knowledge retrieval — a ready source is found on any plan (FR-MOD-06
   /** Every score the question has against every chunk, for the fixture guard. */
   const allScores = new Map<string, number[]>();
 
-  const knowledge = new KnowledgeService();
+  // The lexical stub: the oracle below is computed with its `embed()`.
+  const knowledge = new KnowledgeService({ embeddings: new MockEmbeddingProvider() });
 
   async function seedKnowledgeBase(key: 'a' | 'b'): Promise<string> {
     const context: TenantContext = {
@@ -282,7 +284,12 @@ describe('knowledge retrieval — a ready source is found on any plan (FR-MOD-06
         select: { id: true },
       });
       // The writer the route uses, so the chunks are exactly what production stores.
-      await knowledge.index(owner as TenantClient, context, source.id, content);
+      await knowledge.index(
+        owner as TenantClient,
+        context,
+        source.id,
+        await knowledge.prepare(content),
+      );
     }
     return agent.id;
   }
@@ -301,10 +308,12 @@ describe('knowledge retrieval — a ready source is found on any plan (FR-MOD-06
    * The pair's question through `retrieve()`, as the request path runs it: the
    * `nexa_app` role, RLS on, scoped to the agent the skill belongs to.
    */
-  function retrieve(question: string, pin: boolean): Promise<RetrievedChunk[]> {
+  async function retrieve(question: string, pin: boolean): Promise<RetrievedChunk[]> {
+    // Embedded first and outside the transaction, as the engine does it.
+    const asked = await knowledge.embedQuery(question);
     return withTenant(pin ? pinned : app, tenant, async (tx) => {
       if (pin) await pinIndexPlan(tx);
-      return knowledge.retrieve(tx, tenant, question, { aiAgentId: agentId, limit: LIMIT });
+      return knowledge.retrieve(tx, tenant, asked, { aiAgentId: agentId, limit: LIMIT });
     });
   }
 

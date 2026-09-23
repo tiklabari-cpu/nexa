@@ -1,5 +1,6 @@
 /**
- * OpenAI's chat endpoint, as far as the adapter can tell (tm 255.6).
+ * OpenAI's chat endpoint (tm 255.6) and embeddings endpoint (tm 255.7), as
+ * far as the adapters can tell.
  *
  * The adapter takes its `fetch` as an argument (`OpenAiLlmProvider`'s
  * `fetchImpl`, `buildServer`'s `llmFetch`), so a test hands it one of these and
@@ -62,6 +63,32 @@ export function openAiCompletion(
     usage: { prompt_tokens: 120, completion_tokens: 12, total_tokens: 132 },
     ...extra,
   });
+}
+
+/**
+ * An embeddings answer (tm 255.7) for whatever `input` the request carried:
+ * one entry per input, `{ object: 'embedding', index, embedding }`, in
+ * OpenAI's documented list shape, with `usage.prompt_tokens`. `extra`
+ * overrides fields of the body — a test breaks the shape through it.
+ */
+export function openAiEmbeddings(
+  vectorFor: (text: string, index: number) => number[],
+  extra: (inputs: string[]) => Record<string, unknown> = () => ({}),
+): OpenAiHandler {
+  return (init) => {
+    const inputs = (JSON.parse(String(init.body)) as { input: string[] }).input;
+    return openAiJson(200, {
+      object: 'list',
+      model: 'text-embedding-3-small',
+      data: inputs.map((text, index) => ({
+        object: 'embedding',
+        index,
+        embedding: vectorFor(text, index),
+      })),
+      usage: { prompt_tokens: inputs.length * 7, total_tokens: inputs.length * 7 },
+      ...extra(inputs),
+    })(init);
+  };
 }
 
 /** An error response in OpenAI's shape. */

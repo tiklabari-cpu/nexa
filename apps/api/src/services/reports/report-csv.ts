@@ -1251,6 +1251,13 @@ interface TopicsReport {
  * analyzed, or a topic absent from the previous window (new, so its trend is
  * unknown, not a 100% rise) — the same "unknown is not zero" rule the Overview
  * and Reviews reports carry.
+ *
+ * The vectors are the lexical stub's `embed`, whatever `EMBEDDING_PROVIDER`
+ * says — a decision, not a leftover (tm 255.7 · PLAN §D182). A model here would
+ * send up to two windows of {@link TOPIC_WINDOW_LIMIT} customer texts to a third
+ * party on every report view, breaking the promise {@link clusterableDocs}
+ * makes, and `TOPIC_SIMILARITY_THRESHOLD` is calibrated for this space alone.
+ * Nothing computed here is stored or compared with the knowledge index.
  */
 export async function buildTopicsReport(
   tx: TenantClient,

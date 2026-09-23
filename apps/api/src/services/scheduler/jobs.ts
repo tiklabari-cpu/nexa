@@ -28,7 +28,10 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
+import { resolveEmbeddingInferenceProvider } from '../ai/inference.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
+import { KnowledgeService } from '../ai/knowledge-service.js';
+import { createEmbeddingProvider } from '../ai/provider/create-embedding-provider.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
@@ -80,6 +83,13 @@ export interface SchedulerJobsOptions {
    * worse than one that never existed.
    */
   automations?: WorkspaceEventDispatcher;
+  /**
+   * Indexes what the freshness sweep re-crawls — the server's one instance,
+   * so the sweep embeds with the provider (and the circuit breaker) requests
+   * use (tm 255.7). Omitted, one is built from `env` the way the CLI builds it:
+   * the configured provider, never a silent stub.
+   */
+  knowledge?: KnowledgeService;
 }
 
 /**
@@ -92,6 +102,9 @@ export function buildSchedulerJobs({
   env,
   mailer,
   automations,
+  knowledge = new KnowledgeService({
+    embeddings: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+  }),
 }: SchedulerJobsOptions): JobDefinition[] {
   const intervals = jobIntervals(env);
 
@@ -221,7 +234,10 @@ export function buildSchedulerJobs({
       name: 'knowledge_refresh',
       intervalMs: intervals.knowledge_refresh,
       async run() {
-        const report = await new KnowledgeRefreshSweeper(db).run();
+        const report = await new KnowledgeRefreshSweeper(db, {
+          knowledge,
+          embeddingInference: resolveEmbeddingInferenceProvider(env),
+        }).run();
         return {
           counts: {
             tenants: report.totals.tenants,

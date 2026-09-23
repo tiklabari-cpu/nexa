@@ -35,6 +35,13 @@
  * With no transfer step the conversation stays with whoever routing gave it to
  * when it opened (`ChatService.start`), which is already a human: nothing here
  * ever took it away from one.
+ *
+ * **So is a knowledge search that could not run (tm 255.7).** The question is
+ * embedded by the configured `EmbeddingProvider` before any transaction opens;
+ * when that fails, retrieval has nothing, the model is never asked — a model
+ * asked without passages is the silent wrong answer this rules out — and the
+ * run ends exactly as a model failure does, with `failure` naming the
+ * embedding provider and its kind.
  */
 import { matchIntent, validateSteps, type SendMessageStep, type SkillStep } from '@nexa/ai-mock';
 import {
@@ -46,8 +53,13 @@ import {
   type PersonaLanguage,
 } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import { KnowledgeService, RETRIEVAL_THRESHOLD } from './knowledge-service.js';
+import {
+  RETRIEVAL_THRESHOLD,
+  type KnowledgeService,
+  type QueryEmbedding,
+} from './knowledge-service.js';
 import { buildAnswerPrompt } from './provider/answer-prompt.js';
+import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
 import { LlmProviderError, type LlmFailureKind } from './provider/llm-error.js';
 import type { LlmCompletion, LlmProvider } from './provider/llm-provider.js';
 
@@ -64,10 +76,19 @@ export interface SkillEngineOptions {
   maxOutputTokens: number;
   /** `LLM_TIMEOUT_MS`, passed on every call. */
   timeoutMs: number;
-  knowledge?: KnowledgeService;
+  /**
+   * Finds the passages an answer is grounded in — the server's one instance,
+   * over its configured embedding provider. Required: a default would be the
+   * lexical stub, searching a space the knowledge base may no longer be in.
+   */
+  knowledge: KnowledgeService;
 }
 
 export type SkillOutcome = 'answered' | 'handed_off' | 'skipped';
+
+/** Which provider could not do its part, and how — never its words. */
+export type SkillFailure =
+  { provider: 'llm'; kind: LlmFailureKind } | { provider: 'embedding'; kind: EmbeddingFailureKind };
 
 export interface SkillRunLogEntry {
   step: string;
@@ -87,8 +108,11 @@ export interface SkillRunResult {
   /** Team to transfer to, when the skill handed off. */
   transferTo: string | null;
   summary: string | null;
-  /** Why the model did not answer, when that is what handed the conversation off. */
-  failure: LlmFailureKind | null;
+  /**
+   * Why the AI could not answer, when that is what handed the conversation
+   * off: the model failed, or the knowledge search it needed could not run.
+   */
+  failure: SkillFailure | null;
   log: SkillRunLogEntry[];
 }
 
@@ -110,7 +134,7 @@ export class SkillEngine {
   readonly #limits: { maxOutputTokens: number; timeoutMs: number };
 
   constructor(options: SkillEngineOptions) {
-    this.#knowledge = options.knowledge ?? new KnowledgeService();
+    this.#knowledge = options.knowledge;
     this.#llm = options.llm;
     this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
   }
@@ -290,7 +314,7 @@ export class SkillEngine {
     let reply: string | null = null;
     let transferTo: string | null = null;
     let summary: string | null = null;
-    let failure: LlmFailureKind | null = null;
+    let failure: SkillFailure | null = null;
 
     for (const step of input.steps) {
       // A transfer ends the skill: everything after it would be acting on a
@@ -397,7 +421,7 @@ export class SkillEngine {
       persona: Persona;
       answerIn: PersonaLanguage | null;
     },
-  ): Promise<{ text: string | null; detail: string; failure?: LlmFailureKind }> {
+  ): Promise<{ text: string | null; detail: string; failure?: SkillFailure }> {
     if (step.source === 'text') {
       // Deliberately unshaped (FR-MOD-06.4 · `#### K06.4`). A fixed reply is
       // wording an admin typed by hand and asked to be sent; trimming it to an
@@ -407,9 +431,25 @@ export class SkillEngine {
       return { text: step.text ?? null, detail: 'sent the fixed reply' };
     }
 
+    // Outside any transaction, like the model call below (see the file header).
+    let question: QueryEmbedding;
+    try {
+      question = await this.#knowledge.embedQuery(input.message);
+    } catch (error) {
+      if (!(error instanceof EmbeddingProviderError)) throw error;
+      // Nothing retrieved, so nothing to ground an answer in: the model is not
+      // asked at all. The provider logged its status and code; its message
+      // never travels (`embedding-error.ts`).
+      return {
+        text: null,
+        failure: { provider: 'embedding', kind: error.kind },
+        detail: `the knowledge search could not run (${error.kind}) — handed to a human`,
+      };
+    }
+
     const passages = this.#passageBudget(input.persona);
-    const hits = await db((tx) =>
-      this.#knowledge.retrieve(tx, tenant, input.message, {
+    const { chunks: hits, chunksInScope } = await db((tx) =>
+      this.#knowledge.search(tx, tenant, question, {
         ...(input.skill.aiAgentId ? { aiAgentId: input.skill.aiAgentId } : {}),
         // Never below the two this always fetched, so an unset persona issues the
         // identical query; a `long` answer is the only thing that widens it.
@@ -423,7 +463,13 @@ export class SkillEngine {
       // picks the conversation up.
       return {
         text: null,
-        detail: `nothing in the knowledge base above ${RETRIEVAL_THRESHOLD} similarity`,
+        detail:
+          chunksInScope === 0
+            ? // Said apart from a miss, because it is read by whoever has to fix
+              // it: an empty knowledge base, or one still stored in another
+              // embedding space than the one questions are asked in (PLAN §D182).
+              `nothing searchable in the knowledge base — empty, or not yet re-embedded for ${question.space}`
+            : `nothing in the knowledge base above ${RETRIEVAL_THRESHOLD} similarity`,
       };
     }
 
@@ -450,7 +496,7 @@ export class SkillEngine {
       // status and code; its message never travels (`llm-error.ts`).
       return {
         text: null,
-        failure: error.kind,
+        failure: { provider: 'llm', kind: error.kind },
         detail: `the model could not answer (${error.kind}) — handed to a human`,
       };
     }

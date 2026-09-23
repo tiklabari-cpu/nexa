@@ -22,6 +22,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { KnowledgeService } from '../../src/services/ai/knowledge-service.js';
+import { MockEmbeddingProvider } from '../../src/services/ai/provider/mock-embedding-provider.js';
 import type { TenantClient, TenantContext } from '../../src/lib/tenant.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -50,7 +51,9 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
   let fx: Fixtures;
   let agentIdA: string;
 
-  const knowledge = new KnowledgeService();
+  // The server under test embeds with the default provider, the lexical stub;
+  // a question has to be asked in the space its sources were written in.
+  const knowledge = new KnowledgeService({ embeddings: new MockEmbeddingProvider() });
 
   const auth = async (tenant: 'a' | 'b') => ({
     authorization: `Bearer ${await grantToken(owner, {
@@ -71,7 +74,12 @@ describe('knowledge source — edit and reindex (FR-MOD-06.3.3)', () => {
       licenseId: fx[tenant].licenseId,
       organizationId: fx[tenant].organizationId,
     };
-    const hits = await knowledge.retrieve(owner as TenantClient, context, question, { limit: 10 });
+    const hits = await knowledge.retrieve(
+      owner as TenantClient,
+      context,
+      await knowledge.embedQuery(question),
+      { limit: 10 },
+    );
     return hits.map((hit) => hit.text);
   }
 

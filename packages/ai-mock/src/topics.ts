@@ -9,8 +9,16 @@
  * replacing this one module and nothing else.
  *
  * It leans on `embedding.ts` as a pure consumer — `embed`, `similarity` and
- * `tokenize` are used exactly as RAG uses them and are not touched here, so the
- * knowledge/RAG suite that shares them cannot break from this file.
+ * `tokenize` are used exactly as the `mock` embedding provider uses them and are
+ * not touched here, so the knowledge/RAG suite that shares them cannot break
+ * from this file.
+ *
+ * **The lexical embedding stays the clusterer's, whatever `EMBEDDING_PROVIDER`
+ * says (tm 255.7 · PLAN §D182).** Knowledge retrieval moved to the provider
+ * seam; topic clustering did not, deliberately: a report view would otherwise
+ * send up to two windows × 1,000 customer messages to a third party on every
+ * refresh, the report promises that customer text never leaves its transaction,
+ * and {@link TOPIC_SIMILARITY_THRESHOLD} is calibrated for this space alone.
  *
  * Three properties the report actually depends on, and why each is load-bearing:
  *

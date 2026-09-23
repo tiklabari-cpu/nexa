@@ -20,7 +20,7 @@ import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { scopesOf } from '../services/auth/principal.js';
 import { CopilotService } from '../services/ai/copilot-service.js';
-import { KnowledgeService } from '../services/ai/knowledge-service.js';
+import { refuseUnembeddable, type KnowledgeService } from '../services/ai/knowledge-service.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { ChatService } from '../services/chat/chat-service.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -110,13 +110,15 @@ export default async function copilotRoutes(
   {
     env,
     automations,
+    knowledge,
   }: {
     env: Env;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
+    /** The server's one knowledge service, over its configured embedding provider (tm 255.7). */
+    knowledge: KnowledgeService;
   },
 ): Promise<void> {
-  const knowledge = new KnowledgeService();
   const copilot = new CopilotService(knowledge);
   const chats = new ChatService(
     app.db,
@@ -161,12 +163,17 @@ export default async function copilotRoutes(
         sourceUrl = url.toString();
       }
 
+      // Embedded before the transaction too (tm 255.7); a refusal is a 503
+      // with nothing written.
+      const prepared = await knowledge.prepare(content).catch(refuseUnembeddable);
+
       const source = await request.withTenant((tx) =>
         copilot.createSource(tx, tenant, principal, {
           type: body.type,
           name: body.name,
           content,
           sourceUrl,
+          prepared,
         }),
       );
       return reply.status(201).send(source);
@@ -251,15 +258,30 @@ export default async function copilotRoutes(
       // cannot draft from a conversation their team was never given.
       await chats.get(tenant, principal, chatId);
 
-      const result = await request.withTenant(async (tx) => {
-        const draft = await copilot.draftReply(tx, tenant, chatId);
-        // Only a draft that found something counts as an assist — an empty
-        // suggestion helped no one and should not flip the chat to "assisted".
-        if (draft.draft) await copilot.recordAssist(tx, tenant, chatId, 'reply', draft.draft);
-        return draft;
-      });
+      // A runner rather than one transaction: the question is embedded between
+      // the reads, and never with a transaction open (tm 255.7).
+      const { failure, ...draft } = await copilot.draftReply(
+        (fn) => request.withTenant(fn),
+        tenant,
+        chatId,
+      );
+      if (failure) {
+        // The provider logged its status and code (component `embedding`);
+        // this ties the empty draft to the chat an agent was working on.
+        request.log.warn(
+          { chat_id: chatId, provider: 'embedding', kind: failure },
+          'copilot draft: the knowledge search could not run; returning no draft',
+        );
+      }
+      // Only a draft that found something counts as an assist — an empty
+      // suggestion helped no one and should not flip the chat to "assisted".
+      if (draft.draft) {
+        await request.withTenant((tx) =>
+          copilot.recordAssist(tx, tenant, chatId, 'reply', draft.draft),
+        );
+      }
 
-      return reply.send(result);
+      return reply.send(draft);
     },
   );
 

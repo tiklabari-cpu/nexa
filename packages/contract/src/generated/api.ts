@@ -2284,6 +2284,38 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/agents/me/ui-preferences': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Read the caller's console layout preferences
+     * @description Per user and per license, like the notification preferences next door —
+     *     the same person may keep the Settings navigation pinned on one workspace
+     *     and folded away on another (FR-MOD-08.1).
+     */
+    get: operations['getMyUiPreferences'];
+    /**
+     * Set the caller's console layout preferences
+     * @description A partial update: send only what changed. At least one key is required,
+     *     and an unrecognised key is a `400` rather than a silently dropped switch.
+     *     The response is always the complete set.
+     *
+     *     Kept on the server rather than in `localStorage` because FR-MOD-08.1 asks
+     *     for the choice to follow the *user*: a person who unpinned the Settings
+     *     navigation should find it unpinned on their next browser too.
+     */
+    put: operations['setMyUiPreferences'];
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/notifications/devices': {
     parameters: {
       query?: never;
@@ -7504,6 +7536,18 @@ export interface components {
       desktop: boolean;
       push: boolean;
       email: boolean;
+    };
+    /**
+     * @description How one person has arranged the console, for one workspace
+     *     (FR-MOD-08.1).
+     *
+     *     `settings_nav_pinned` is the Settings side navigation's "Unpin side
+     *     navigation" switch. It defaults to `true` — the navigation is the only
+     *     way between Settings sections, so a new member sees it and folds it away
+     *     rather than having to discover it.
+     */
+    UiPreferences: {
+      settings_nav_pinned: boolean;
     };
     /**
      * @description `status` + `service` are always present. Every other field is
@@ -15794,6 +15838,60 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['NotificationPreferences'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getMyUiPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The caller's preferences */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UiPreferences'];
+        };
+      };
+      401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  setMyUiPreferences: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          /** @description Whether the Settings side navigation is shown pinned (`true`) or folded away. */
+          settings_nav_pinned?: boolean;
+        };
+      };
+    };
+    responses: {
+      /** @description Preferences updated */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['UiPreferences'];
         };
       };
       400: components['responses']['BadRequest'];

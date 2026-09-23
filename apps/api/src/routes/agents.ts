@@ -29,11 +29,13 @@ import {
   GROUP_PRIORITIES,
   NOTIFICATION_CHANNELS,
   ROUTING_STATUSES,
+  UI_PREFERENCE_KEYS,
   hasAnyScope,
   isWorkScheduleProblem,
   normalizeWorkSchedule,
   type AgentRole,
   type NotificationChannel,
+  type UiPreferenceKey,
   type WorkSchedule,
 } from '@nexa/types';
 import { ApiError } from '../lib/api-error.js';
@@ -57,6 +59,7 @@ import {
   readNotificationPreferences,
   writeNotificationPreferences,
 } from '../services/notifications/preferences.js';
+import { readUiPreferences, writeUiPreferences } from '../services/team/ui-preferences.js';
 
 const routingStatusBody = z.object({ routing_status: z.enum(ROUTING_STATUSES) });
 
@@ -166,6 +169,16 @@ const notificationPrefsBody = z
   .object(
     Object.fromEntries(NOTIFICATION_CHANNELS.map((c) => [c, z.boolean().optional()])) as Record<
       NotificationChannel,
+      z.ZodOptional<z.ZodBoolean>
+    >,
+  )
+  .strict()
+  .refine((body) => Object.values(body).some((v) => v !== undefined), 'at least one is required');
+/** Same contract as `notificationPrefsBody`: partial, strict, never empty. */
+const uiPrefsBody = z
+  .object(
+    Object.fromEntries(UI_PREFERENCE_KEYS.map((k) => [k, z.boolean().optional()])) as Record<
+      UiPreferenceKey,
       z.ZodOptional<z.ZodBoolean>
     >,
   )
@@ -445,6 +458,49 @@ export default async function agentRoutes(app: FastifyInstance): Promise<void> {
         }),
       );
 
+      return reply.send(prefs);
+    },
+  );
+
+  // The Settings side navigation's pin (FR-MOD-08.1), on the caller's own
+  // membership — the notification preferences' scopes and shape, one key.
+  app.get(
+    '/agents/me/ui-preferences',
+    { config: { scopes: ['agents--my:ro', 'agents--all:ro'], principals: ['agent'] } },
+    async (request, reply) => {
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') throw ApiError.authorization();
+
+      const tenant = request.tenant();
+      const prefs = await request.withTenant((tx) =>
+        readUiPreferences(tx, { licenseId: tenant.licenseId, agentId: principal.accountId }),
+      );
+      return reply.send(prefs);
+    },
+  );
+
+  app.put(
+    '/agents/me/ui-preferences',
+    { config: { scopes: ['agents--my:rw', 'agents--all:rw'], principals: ['agent'] } },
+    async (request, reply) => {
+      const parsed = uiPrefsBody.safeParse(request.body);
+      if (!parsed.success) {
+        throw ApiError.validation(
+          `Send at least one of ${UI_PREFERENCE_KEYS.join(', ')} as a boolean.`,
+        );
+      }
+
+      const principal = request.requirePrincipal();
+      if (principal.kind !== 'agent') throw ApiError.authorization();
+
+      const tenant = request.tenant();
+      const prefs = await request.withTenant((tx) =>
+        writeUiPreferences(tx, {
+          licenseId: tenant.licenseId,
+          agentId: principal.accountId,
+          patch: parsed.data,
+        }),
+      );
       return reply.send(prefs);
     },
   );

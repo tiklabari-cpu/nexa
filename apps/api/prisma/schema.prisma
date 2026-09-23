@@ -255,6 +255,10 @@ model AgentMembership {
   /// a preference that does not apply to the one channel reaching a closed
   /// laptop. That is what moved all four onto the membership.
   notifyPush           Boolean   @default(true) @map("notify_push")
+  /// Whether the Settings side navigation is shown pinned (FR-MOD-08.1 ·
+  /// "Unpin side navigation"). Per user and per license, like the notify_*
+  /// columns above, and read by `/agents/me/ui-preferences`.
+  settingsNavPinned    Boolean   @default(true) @map("settings_nav_pinned")
   awaitingApproval     Boolean   @default(false) @map("awaiting_approval")
   suspended            Boolean   @default(false) @map("suspended")
   /// Tie-breaker for round-robin assignment (ADR-08 step 4).

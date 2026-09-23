@@ -25,6 +25,51 @@ export const settings: Messages = {
   'settings.pageTitle': 'Ayarlar',
   'settings.pageDescription': 'Widget kurulumu, kayıtlı yanıtlar ve yönlendirme.',
 
+  // Yan gezinme — SettingsNav.tsx (FR-MOD-08.1)
+  'settings.nav.label': 'Ayarlar gezinmesi',
+  'settings.nav.pin': 'Yan gezinmeyi sabitle',
+  'settings.nav.unpin': 'Yan gezinmenin sabitlemesini kaldır',
+  'settings.nav.group.general': 'Genel',
+  'settings.nav.group.channels': 'Kanallar',
+  'settings.nav.group.routing': 'Yönlendirme',
+  'settings.nav.group.inbox': 'Gelen kutusu',
+  'settings.nav.group.integrations': 'Entegrasyonlar',
+  'settings.nav.group.security': 'Güvenlik',
+  'settings.nav.group.billing': 'Faturalandırma',
+  'settings.nav.section.notifications': 'Bildirimler',
+  'settings.nav.section.company': 'Şirket bilgileri',
+  'settings.nav.section.brands': 'Markalar',
+  'settings.nav.section.channels': 'Tüm kanallar',
+  'settings.nav.section.websiteWidgets': "Web sitesi widget'ları",
+  'settings.nav.section.widget': 'Widget görünümü',
+  'settings.nav.section.salesTracker': 'Satış takibi',
+  'settings.nav.section.routingRules': 'Sohbet yönlendirme',
+  'settings.nav.section.skills': 'Yetenekler',
+  'settings.nav.section.ticketRules': 'Talep kuralları',
+  'settings.nav.section.sla': 'SLA',
+  'settings.nav.section.cannedResponses': 'Kayıtlı yanıtlar',
+  'settings.nav.section.tags': 'Etiketler',
+  'settings.nav.section.chatTimeout': 'Sohbet zaman aşımı',
+  'settings.nav.section.ticketEmailTemplates': 'Talep e-posta şablonları',
+  'settings.nav.section.customFields': 'Özel alanlar',
+  'settings.nav.section.chatForms': 'Sohbet formları',
+  'settings.nav.section.integrations': 'Uygulama pazaryeri',
+  'settings.nav.section.mcp': 'MCP sunucusu',
+  'settings.nav.section.personalAccessTokens': 'Kişisel erişim jetonları',
+  'settings.nav.section.scheduledExports': 'Zamanlanmış dışa aktarımlar',
+  'settings.nav.section.sandbox': 'Sandbox',
+  'settings.nav.section.trustedDomains': 'Güvenilir alan adları',
+  'settings.nav.section.bannedCustomers': 'Engellenen IP adresleri',
+  'settings.nav.section.fileSharing': 'Dosya paylaşımı',
+  'settings.nav.section.ipAllowlist': 'IP izin listesi',
+  'settings.nav.section.sso': 'Tek oturum açma',
+  'settings.nav.section.twoFactor': 'İki adımlı doğrulama',
+  'settings.nav.section.compliance': 'Veri bölgesi ve uyumluluk',
+  'settings.nav.section.dataRetention': 'Veri saklama',
+  'settings.nav.section.auditLog': 'Denetim günlüğü',
+  'settings.nav.section.siem': 'SIEM dışa aktarımı',
+  'settings.nav.section.billing': 'Abonelik ve faturalar',
+
   // Şirket bilgileri — CompanyDetails.tsx (FR-MOD-08.3)
   'settings.company.title': 'Şirket bilgileri',
   'settings.company.description':
@@ -761,13 +806,6 @@ export const settings: Messages = {
   'settings.bannedIps.empty.title': 'Engellenen adres yok',
   'settings.bannedIps.empty.description':
     'Ondan gelen sohbetleri reddetmek için bir IP adresi ekleyin. Siz eklemedikçe hiçbir şey engellenmez.',
-
-  // Denetim günlüğü kapısı — AuditLog.tsx (sayfanın kendisi `audit.*` ad alanında)
-  'settings.auditLog.title': 'Denetim günlüğü',
-  'settings.auditLog.description':
-    'Oturum açmalar, rol değişiklikleri, silmeler ve webhook değişiklikleri — son 30 gün, her planda saklanır.',
-  'settings.auditLog.body': 'Bu çalışma alanında kimin ne yaptığını inceleyin.',
-  'settings.auditLog.openButton': 'Denetim günlüğünü aç',
 
   // Dosya paylaşımı — FileSharing.tsx
   'settings.fileSharing.title': 'Dosya paylaşımı',

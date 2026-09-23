@@ -284,6 +284,8 @@ paths:
     $ref: "./paths/agents.yaml#/routingStatus"
   /agents/me/notification-preferences:
     $ref: "./paths/agents.yaml#/notificationPreferences"
+  /agents/me/ui-preferences:
+    $ref: "./paths/agents.yaml#/uiPreferences"
   /notifications/devices:
     $ref: "./paths/notifications.yaml#/devices"
   /notifications/devices/{deviceId}:
@@ -645,6 +647,19 @@ components:
         desktop: { type: boolean }
         push: { type: boolean }
         email: { type: boolean }
+    UiPreferences:
+      type: object
+      description: |
+        How one person has arranged the console, for one workspace
+        (FR-MOD-08.1).
+
+        `settings_nav_pinned` is the Settings side navigation's "Unpin side
+        navigation" switch. It defaults to `true` — the navigation is the only
+        way between Settings sections, so a new member sees it and folds it away
+        rather than having to discover it.
+      required: [settings_nav_pinned]
+      properties:
+        settings_nav_pinned: { type: boolean }
     Health:
       type: object
       description: |

@@ -282,7 +282,7 @@ test.describe('the compliance card (NFR-C4 · C4-d · C4-f · C4-g)', () => {
     await page.getByRole('button', { name: 'Skip setup' }).click();
     await expect(page).toHaveURL(/\/app\/inbox/);
 
-    await page.goto('/app/settings');
+    await page.goto('/app/settings/compliance');
     const card = page.getByRole('region', { name: 'Data region and compliance' });
     await expect(card.getByRole('heading', { name: 'Data region and compliance' })).toBeVisible();
 

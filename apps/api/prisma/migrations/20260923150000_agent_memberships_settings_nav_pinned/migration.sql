@@ -1,0 +1,15 @@
+-- The Settings side navigation's "Unpin side navigation" switch (tm 255.10 ·
+-- FR-MOD-08.1), kept per user and per license beside the notification
+-- preferences on the same membership row.
+--
+-- On the server, not in `localStorage`: the requirement is that the choice
+-- follows the user, and a browser key would forget it on the next device.
+--
+-- TRUE FOR EVERY EXISTING ROW. The navigation is the only way between Settings
+-- sections, so everybody starts with it shown. The previous release, still
+-- serving during the rollout, never reads or writes the column and inserts
+-- memberships that get the default (CONVENTIONS 6.3).
+--
+-- Metadata-only on PostgreSQL 11+: a constant default lives in the catalogue,
+-- so this is a brief lock and no table rewrite.
+ALTER TABLE "agent_memberships" ADD COLUMN "settings_nav_pinned" BOOLEAN NOT NULL DEFAULT true;

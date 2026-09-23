@@ -32,3 +32,4 @@ export * from './message-edit.js';
 export * from './ticket-bulk.js';
 export * from './rule-bot.js';
 export * from './retention.js';
+export * from './ui-preferences.js';

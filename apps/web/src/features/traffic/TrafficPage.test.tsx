@@ -202,7 +202,7 @@ describe('TrafficPage status tabs', () => {
     renderPage();
 
     const cta = await screen.findByRole('link', { name: 'Add more channels' });
-    expect(cta).toHaveAttribute('href', '/app/settings#section-channels');
+    expect(cta).toHaveAttribute('href', '/app/settings/channels');
   });
 
   it('hides the "Add more channels" CTA for a caller without channel-management scope (03.1.2-b)', async () => {

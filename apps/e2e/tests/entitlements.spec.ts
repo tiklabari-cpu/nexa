@@ -108,7 +108,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
 
     try {
       await signIn(admin);
-      await admin.goto('/app/settings#widget-customization');
+      await admin.goto('/app/settings/widget');
       const appearance = admin.getByRole('region', { name: /Widget appearance/ });
       const branding = appearance.getByLabel(/Powered by Nexa/);
       const save = appearance.getByRole('button', { name: 'Save appearance' });
@@ -266,7 +266,7 @@ test.describe('sandbox workspace (11.5-f · 11.5-g)', () => {
     ).toBeVisible();
 
     // --- Mint the sandbox from the screen ----------------------------------
-    await page.goto('/app/settings#section-sandbox');
+    await page.goto('/app/settings/sandbox');
     const section = page.getByRole('region', { name: 'Sandbox' });
     await section.getByRole('button', { name: 'Create sandbox' }).click();
     await expect(section).toContainText('Sandbox created');
@@ -320,7 +320,7 @@ test.describe('sandbox workspace (11.5-f · 11.5-g)', () => {
       await expect(sandbox.getByText('Sample visitor')).toHaveCount(0);
 
       // Inside, reset is offered — the mirror of the refusal on production.
-      await sandbox.goto('/app/settings#section-sandbox');
+      await sandbox.goto('/app/settings/sandbox');
       const inside = sandbox.getByRole('region', { name: 'Sandbox' });
       await expect(inside).toContainText('This is a sandbox');
       await expect(inside.getByRole('button', { name: 'Reset sandbox' })).toBeVisible();
@@ -396,7 +396,7 @@ test.describe('SLA targets (11.5-d · 11.5-e)', () => {
       await agent.getByLabel('Availability').selectOption('accepting_chats');
 
       // --- The promise ------------------------------------------------------
-      await agent.goto('/app/settings#section-sla');
+      await agent.goto('/app/settings/sla');
       const sla = agent.getByRole('region', { name: 'SLA' });
       await expect(sla).toBeVisible();
       await sla.getByLabel('First response target (minutes)').fill('1');
@@ -499,7 +499,7 @@ test.describe('single sign-on (FR-MOD-11.5 · S11-g)', () => {
     try {
       await setPlan(request, token, 'growth');
 
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/sso');
       const section = agentPage.getByRole('region', { name: 'Single sign-on' });
       await expect(section).toBeVisible();
 
@@ -546,7 +546,7 @@ test.describe('SIEM export (NFR-C6 · C6-f)', () => {
     try {
       await setPlan(request, token, 'growth');
 
-      await agentPage.goto('/app/settings');
+      await agentPage.goto('/app/settings/siem');
       const section = agentPage.getByRole('region', { name: 'SIEM export' });
       await expect(section).toBeVisible();
 

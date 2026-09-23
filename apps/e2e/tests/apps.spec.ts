@@ -70,7 +70,7 @@ test.describe('apps marketplace', () => {
 
     // The Apps route is not on the module rail — Settings → Integrations is the
     // only door to it, so the walk starts there rather than at a typed URL.
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/integrations');
     await agentPage.getByRole('link', { name: 'Open marketplace' }).click();
     await expect(agentPage).toHaveURL(/\/app\/apps$/);
     await expect(agentPage.getByRole('heading', { name: 'Apps', level: 1 })).toBeVisible();
@@ -326,7 +326,7 @@ test.describe('apps marketplace', () => {
     await expect(manage).toBeVisible();
 
     await manage.click();
-    await expect(agentPage).toHaveURL(/\/app\/settings#section-channels$/);
+    await expect(agentPage).toHaveURL(/\/app\/settings\/channels$/);
     await expect(agentPage.getByRole('region', { name: 'Channels' })).toBeVisible();
   });
 });

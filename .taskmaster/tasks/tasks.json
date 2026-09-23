@@ -10214,11 +10214,11 @@
             "description": "PRD FR-MOD-08.1 Must/MVP olarak gruplu kenar cubugu (Notifications / Company details / Desktop app / Channels / Routing / Inbox / Integrations / Security / Billing), izin bazli gorunurluk ve daraltma istiyor. Kodda Settings tek bir Page icinde 31 bolumu alt alta render ediyor; izin gorunurlugu VAR, navigasyon YOK. PLAN.md'de bu PRD satiri hic yok -- damga duzeltmesi degil, satirin EKLENMESI gerekiyor.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7 (etiket TEST BASLIGINDA, parantez icinde). Pilot kapsami: ust gorev tm 255 details.\n\nKANIT (2026-09-22 olculdu):\n- PRD satir 596: 'FR-MOD-08.1 -- Settings kabugu/kenar cubugu: Notifications, Company details, Desktop app; Channels; Routing; Inbox; Integrations; Security; Billing gruplu navigasyon; izin bazli gorunurluk; \"Unpin side navigation\" ile daraltma. (Must, MVP)'. Ayni satirda 'Nexa iyilestirmesi: Settings ici arama (20+ alt sayfa)' -- arama 255.11'in isi.\n- PRD satir 861 (S8.1 IA iyilestirmeleri): 'Settings ici arama eklenir (20+ alt sayfa)'.\n- KOD: apps/web/src/features/settings/SettingsPage.tsx (114 satir) tek bir <Page> icinde 31 bolum bileseni render ediyor (CompanyDetails ... ScheduledExports). Gruplama, kenar cubugu, daraltma YOK. Izin bazli gorunurluk VAR (scopes -> canEdit/canManage proplari, :69-77) -- bu KORUNUR.\n- ROTA: apps/web/src/App.tsx:116 'settings' tek rota; :117 yalnizca 'settings/audit-log' ayri. Bolum basina deep-link YOK.\n- prd-uyum-denetimi.md:371 ayni bulguyu 2026-08-30'da KISMI/Onemli olarak kaydetmis (o gun 28 bolum, bugun 31) -- bulgu eskimemis, buyumus.\n- PLAN.md: 'FR-MOD-08.1' dizesi PLAN.md'de SIFIR kez geciyor; S3.7 'FR-MOD-08 -- Settings (yalniz MVP payi)' tablosunda 11 satir var ve 08.1 ARALARINDA DEGIL. Yani bu bir yanlis damga degil, EKSIK SATIR: audit:sweep bu satiri hic gormedigi icin '0 acik' diyor.\n\nKAPSAM:\n1) Settings kabugu: PRD'nin adlandirdigi gruplara gore kenar cubugu; mevcut 31 bolum bu gruplara DAGITILIR (hicbiri kaybolmaz; esleme tablosu kapanista yazilir).\n2) Bolum basina deep-link: /app/settings/<bolum> rotalari; mevcut /app/settings/audit-log rotasi kirilmaz; /app/settings kok rotasi anlamli bir varsayilana yonlenir.\n3) Izin bazli gorunurluk: kullanicinin scope'u yoksa grup/bolum BASLIGI da gorunmez (bugunku canEdit=false davranisi korunur, ustune navigasyon gorunurlugu eklenir).\n4) Daraltma ('Unpin side navigation'): tercih kullanici bazinda kalici olmali. DIKKAT (olculmus tuzak): iyimser bir tercih anahtarinin e2e'de yarisa girdigi ve hesap kapsamli tercihlerin sonraki teste sizdigi daha once yasandi (tm 250) -- tercih yazma yolunun testi gezinmeden ONCE yaniti beklemeli.\n5) PLAN.md: S3.7 tablosuna FR-MOD-08.1 satiri EKLENIR, damgasi bu gorevin gercekte teslim ettigi kadar olur (arama 255.11'de ise dogru damga '(0)' degil kismi olabilir -- CONVENTIONS S1.2 bicimi, kanit K blogunda).\n\nKAPSAM DISI: Settings ici ARAMA (255.11); bolum iceriklerinin yeniden yazilmasi; Billing sayfasinin tasinmasi; mobil davranis ve klavye erisilebilirligi ayrintilari (255.11).\n\nPRD: FR-MOD-08.1 - SEMA-MIMARI.8.1c (kismi).",
             "testStrategy": "(1) Birim (apps/web): navigasyon 31 bolumun hepsini bir gruba esler -- esleme tablosunun tam oldugu testle kanitlanir (kayip bolum = kirmizi). (2) Birim: scope'u olmayan kullanici icin grup basligi ve bolum linki RENDER EDILMEZ -- negatif test. (3) e2e (apps/e2e): /app/settings/<bolum> dogrudan acilir ve o bolum gorunur; /app/settings/audit-log ESKI davranisiyla calisir (regresyon). (4) e2e: daraltma tercihi sayfa yenilendikten sonra korunur; tercih yazma yaniti beklenerek dogrulanir (tm 250 tuzagi). (5) a11y: mevcut a11y kosusu yeni navigasyonla yesil kalir. (6) Test basliklari (FR-MOD-08.1) etiketli; yeni dosyalar icin once git add, sonra pnpm audit:req-coverage exit 0. (7) PLAN.md S3.7'ye FR-MOD-08.1 satiri eklendi + K blogu yazildi (CONVENTIONS S1.2). (8) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / test:e2e / build exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-23T10:27:58.371Z"
           },
           {
             "id": 11,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-23T10:26:08.444Z"
+        "updatedAt": "2026-09-23T10:27:58.371Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-23T10:26:08.445Z",
+      "lastModified": "2026-09-23T10:27:58.372Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

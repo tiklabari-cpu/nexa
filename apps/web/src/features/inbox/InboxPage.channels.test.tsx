@@ -287,7 +287,7 @@ describe('channel views (FR-MOD-02.1.4)', () => {
     expect(await screen.findByTestId('channel-promo')).toBeInTheDocument();
     expect(within(rail()).getByRole('link', { name: 'Connect a channel →' })).toHaveAttribute(
       'href',
-      '/app/settings',
+      '/app/settings/channels',
     );
     // And no request ever carried a channel the workspace has not connected.
     await waitFor(() => expect(chatUrls().length).toBeGreaterThan(0));

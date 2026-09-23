@@ -131,7 +131,7 @@ test.describe('the trail leaves the building (NFR-C6 · C6-g)', () => {
     const start = await drainExport(request, token);
 
     // --- The screen (C6-f) ---------------------------------------------------
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/siem');
     const card = agentPage.getByRole('region', { name: 'SIEM export' });
     await expect(card.getByRole('heading', { name: 'SIEM export' })).toBeVisible();
 

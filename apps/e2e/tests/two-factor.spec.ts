@@ -205,7 +205,7 @@ test.describe('two-factor authentication', () => {
     const owner = await signUpAndEnterTheApp(page, 'journey');
 
     // --- 1. Enable it, from the account settings screen ----------------------
-    await page.goto('/app/settings');
+    await page.goto('/app/settings/two-factor');
     const section = page.getByRole('region', { name: 'Two-factor authentication' });
     await expect(
       section.getByText('Your account currently signs in with a password alone.'),
@@ -307,7 +307,7 @@ test.describe('two-factor authentication', () => {
     await expect(page.getByRole('link', { name: 'Inbox' })).toBeVisible();
 
     // Two spent, eight left — the count the settings screen warns from.
-    await page.goto('/app/settings');
+    await page.goto('/app/settings/two-factor');
     await expect(section.getByText('8 recovery codes left')).toBeVisible();
   });
 
@@ -330,7 +330,7 @@ test.describe('two-factor authentication', () => {
     });
 
     // --- The switch, from Settings → Session policy --------------------------
-    await page.goto('/app/settings');
+    await page.goto('/app/settings/ip-allowlist');
     const policy = page.getByRole('region', { name: 'Session policy' });
     // `click`, not `check`: the box is controlled by the saved setting, and
     // ticking it opens the confirmation instead of changing anything. It only

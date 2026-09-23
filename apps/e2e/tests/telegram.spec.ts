@@ -72,7 +72,7 @@ test.describe('Telegram (FR-MOD-08.5.8)', () => {
     await expect(agentPage.getByTestId('channel-promo')).toBeVisible();
     await expect(views.getByRole('button', { name: 'Telegram' })).toHaveCount(0);
 
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const card = agentPage
       .getByRole('region', { name: 'Channels' })
       .getByTestId('channel-telegram');
@@ -99,7 +99,7 @@ test.describe('Telegram (FR-MOD-08.5.8)', () => {
     const answer = `Evet, Izlanda'ya gonderiyoruz — ${stamp}`;
 
     // --- (i) Connect, with the credentials @BotFather hands out --------------
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
     const card = channels.getByTestId('channel-telegram');
     await expect(card.getByText('Not connected')).toBeVisible();
@@ -191,7 +191,7 @@ test.describe('Telegram (FR-MOD-08.5.8)', () => {
     await agentPage.screenshot({ path: 'kanit/08.5.8-telegram.png', fullPage: true });
 
     // --- (vi) Disconnect, and every surface tells the truth again ------------
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const cardAgain = agentPage
       .getByRole('region', { name: 'Channels' })
       .getByTestId('channel-telegram');

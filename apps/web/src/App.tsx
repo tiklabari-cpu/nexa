@@ -15,7 +15,7 @@ import { TrafficPage } from './features/traffic/TrafficPage.js';
 import { CampaignsPage } from './features/campaigns/CampaignsPage.js';
 import { GoalsPage } from './features/goals/GoalsPage.js';
 import { PlaybookPage } from './features/playbook/PlaybookPage.js';
-import { SettingsPage } from './features/settings/SettingsPage.js';
+import { SettingsIndex, SettingsLayout, SettingsPage } from './features/settings/SettingsPage.js';
 import { AuditLogPage } from './features/audit/AuditLogPage.js';
 import { AppsMarketplacePage } from './features/apps/AppsMarketplace.js';
 import { DeveloperPortalPage } from './features/developers/DeveloperPortal.js';
@@ -113,8 +113,34 @@ export function App(): ReactElement {
         <Route path="reports" element={<ReportsPage />} />
         <Route path="billing" element={<BillingPage />} />
         <Route path="playbook" element={<PlaybookPage />} />
-        <Route path="settings" element={<SettingsPage />} />
-        <Route path="settings/audit-log" element={<AuditLogPage />} />
+        {/* FR-MOD-08.1: one address per section, behind the grouped side
+            navigation. The audit log keeps the address it always had. Flat
+            rather than nested so every route under the shell stays
+            self-closing — the a11y suite's route pin reads them that way. */}
+        <Route
+          path="settings"
+          element={
+            <SettingsLayout>
+              <SettingsIndex />
+            </SettingsLayout>
+          }
+        />
+        <Route
+          path="settings/audit-log"
+          element={
+            <SettingsLayout>
+              <AuditLogPage />
+            </SettingsLayout>
+          }
+        />
+        <Route
+          path="settings/:section"
+          element={
+            <SettingsLayout>
+              <SettingsPage />
+            </SettingsLayout>
+          }
+        />
         <Route path="apps" element={<AppsMarketplacePage />} />
         <Route path="developers" element={<DeveloperPortalPage />} />
       </Route>

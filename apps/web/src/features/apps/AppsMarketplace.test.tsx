@@ -200,7 +200,7 @@ describe('AppsMarketplace', () => {
 
     expect(await screen.findByText('WhatsApp')).toBeInTheDocument();
     const link = screen.getByRole('link', { name: 'Manage in Channels' });
-    expect(link).toHaveAttribute('href', '/app/settings#section-channels');
+    expect(link).toHaveAttribute('href', '/app/settings/channels');
     // No marketplace connect for a channel — it is set up in Channels.
     expect(screen.queryByRole('button', { name: 'Connect' })).toBeNull();
     expect(screen.getByText('In Channels')).toBeInTheDocument();

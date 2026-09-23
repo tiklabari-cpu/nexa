@@ -1291,7 +1291,7 @@ function ReviewsTab(props: TabProps): ReactElement {
               description={t('reports.reviews.ecommerce.emptyDescription')}
               action={
                 <Link
-                  to="/app/settings#section-sales-tracker"
+                  to="/app/settings/sales-tracker"
                   className="rounded-md bg-brand-500 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-600"
                 >
                   {t('reports.reviews.ecommerce.cta')}

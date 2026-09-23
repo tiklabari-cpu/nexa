@@ -262,7 +262,7 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-
       await expect(views.getByRole('button', { name: subject.view })).toHaveCount(0);
     }
 
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
 
     for (const subject of SUBJECTS) {
@@ -288,7 +288,7 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-
     // Three modals, three round trips, on a dev server that may still be cold.
     test.slow();
 
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
 
     for (const subject of SUBJECTS) {
@@ -515,7 +515,7 @@ test.describe('Messenger + WhatsApp + SMS (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-
   test('disconnects all three, and every surface tells the truth again', async ({ agentPage }) => {
     test.slow();
 
-    await agentPage.goto('/app/settings');
+    await agentPage.goto('/app/settings/channels');
     const channels = agentPage.getByRole('region', { name: 'Channels' });
 
     for (const subject of SUBJECTS) {

@@ -1,0 +1,490 @@
+{
+  "$comment": "The retrieval recall gate's golden set (tm 255.8 · FR-MOD-06.3.2 · PLAN §D183). Every answerable question names the one passage that answers it; every seed passage is the seed's own chunk text, verbatim (prisma/seed.ts — a test holds that). The other sources are the rest of a small help centre, written to compete: they share words with the seed passages without answering the questions. The unanswerable questions have no answer anywhere in their agent's knowledge base, and are what RETRIEVAL_THRESHOLD is for. Loaded, validated and scored by test/helpers/knowledge-recall.ts; asked by test/integration/knowledge-recall-gate.test.ts (the fake provider, in CI) and by `pnpm --filter @nexa/api measure:knowledge-recall` (a real provider, by hand).",
+  "version": 1,
+  "agents": {
+    "ai_agent": "The customer-facing AI agent — the seed's Ada.",
+    "copilot": "The agent-only copilot — the seed's Copilot, answering agents' questions."
+  },
+  "sources": [
+    {
+      "id": "seed-delivery-returns",
+      "agent": "ai_agent",
+      "origin": "seed",
+      "name": "Delivery and returns",
+      "passages": [
+        "Standard delivery takes 3 to 5 working days across the EU.",
+        "Returns are accepted within 30 days if the item is unused and in its original packaging.",
+        "Refunds are issued to the original payment method within 5 working days of receipt."
+      ]
+    },
+    {
+      "id": "seed-agent-playbook",
+      "agent": "copilot",
+      "origin": "seed",
+      "name": "Agent playbook",
+      "passages": [
+        "A refund over five hundred dollars must be approved by a manager before it is promised.",
+        "Escalate an angry or threatening customer to the duty lead rather than handling it alone.",
+        "Always confirm the order number before giving a delivery date."
+      ]
+    },
+    {
+      "id": "order-tracking",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Order tracking",
+      "passages": [
+        "Every order gets a tracking link by email as soon as it leaves the warehouse.",
+        "Orders placed before 2 pm on a working day are packed and dispatched the same day."
+      ]
+    },
+    {
+      "id": "international-shipping",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "International shipping",
+      "passages": [
+        "We also ship to the United Kingdom, Norway and Switzerland, where customs duties are paid by the recipient.",
+        "Shipments outside the EU take 7 to 10 working days and cannot be sent to a PO box."
+      ]
+    },
+    {
+      "id": "payment-methods",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Payment methods",
+      "passages": [
+        "We accept Visa, Mastercard, PayPal and bank transfer at checkout.",
+        "Your card is charged when the order is dispatched, not when it is placed."
+      ]
+    },
+    {
+      "id": "exchanges",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Exchanges",
+      "passages": [
+        "An item can be exchanged for another size or colour within 30 days of delivery.",
+        "The replacement is sent free of charge once the original item reaches our warehouse."
+      ]
+    },
+    {
+      "id": "damaged-parcels",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Damaged or missing items",
+      "passages": [
+        "If a parcel arrives damaged, photograph it and contact support within 48 hours.",
+        "A missing item is resent at no cost once the courier confirms the loss."
+      ]
+    },
+    {
+      "id": "click-and-collect",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Click and collect",
+      "passages": [
+        "Click and collect orders wait at the store desk for seven days before they are sent back."
+      ]
+    },
+    {
+      "id": "gift-cards",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Gift cards",
+      "passages": [
+        "Gift cards never expire and cannot be exchanged for cash.",
+        "A lost gift card is replaced if you still have the purchase receipt."
+      ]
+    },
+    {
+      "id": "account-access",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Account access",
+      "passages": [
+        "Reset a forgotten password with the Forgot password link on the sign-in page; the link is valid for one hour."
+      ]
+    },
+    {
+      "id": "cancelling-orders",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Cancelling an order",
+      "passages": [
+        "An order can be cancelled free of charge until it has been packed; after that it has to be returned."
+      ]
+    },
+    {
+      "id": "warranty",
+      "agent": "ai_agent",
+      "origin": "help-centre",
+      "name": "Warranty",
+      "passages": [
+        "Electronics carry a two-year warranty, and the order confirmation email counts as proof of purchase."
+      ]
+    },
+    {
+      "id": "tone-guide",
+      "agent": "copilot",
+      "origin": "help-centre",
+      "name": "Tone guide",
+      "passages": [
+        "Greet the customer by name and keep every reply under five sentences.",
+        "Never promise a delivery date the courier has not confirmed."
+      ]
+    },
+    {
+      "id": "shift-handover",
+      "agent": "copilot",
+      "origin": "help-centre",
+      "name": "Shift handover",
+      "passages": [
+        "Leave an internal note on every open chat before your shift ends.",
+        "A chat still waiting on a manager's approval is handed to the next shift's duty lead."
+      ]
+    },
+    {
+      "id": "goodwill-credit",
+      "agent": "copilot",
+      "origin": "help-centre",
+      "name": "Goodwill credit",
+      "passages": [
+        "Agents may offer goodwill store credit of up to twenty dollars without asking anyone."
+      ]
+    }
+  ],
+  "questions": [
+    {
+      "id": "delivery-direct",
+      "question": "How long does standard delivery take?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 0
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "delivery-eu-days",
+      "question": "How many working days does delivery take in the EU?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 0
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "delivery-arrive",
+      "question": "When will my parcel arrive?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 0
+      },
+      "wording": "paraphrase"
+    },
+    {
+      "id": "delivery-europe",
+      "question": "Is shipping within Europe quick?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 0
+      },
+      "wording": "paraphrase"
+    },
+    {
+      "id": "returns-unused",
+      "question": "Can I return an unused item?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 1
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "returns-packaging",
+      "question": "Do returns need the original packaging?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 1
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "returns-window",
+      "question": "How many days are returns accepted for?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 1
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "returns-send-back",
+      "question": "Can I send something back if I change my mind?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 1
+      },
+      "wording": "paraphrase"
+    },
+    {
+      "id": "refund-when",
+      "question": "When are refunds issued?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 2
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "refund-payment-method",
+      "question": "Is my refund paid to the original payment method?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 2
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "refund-after-receipt",
+      "question": "How many working days after receipt is the refund issued?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 2
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "refund-money-back",
+      "question": "Which card does my money go back to?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 2
+      },
+      "wording": "paraphrase"
+    },
+    {
+      "id": "large-refund-manager",
+      "question": "Does a refund over five hundred dollars need a manager?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 0
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "large-refund-promise",
+      "question": "Can I promise a customer a refund before it is approved?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 0
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "large-refund-approval",
+      "question": "Who approves a large refund?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 0
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "large-refund-signoff",
+      "question": "Does paying back 700 euros need sign-off from my boss?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 0
+      },
+      "wording": "paraphrase"
+    },
+    {
+      "id": "escalate-threatening",
+      "question": "What do I do with a threatening customer?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 1
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "escalate-angry",
+      "question": "Should I escalate an angry customer?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 1
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "escalate-duty-lead",
+      "question": "Should I pass a threatening customer to the duty lead?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 1
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "escalate-shouting",
+      "question": "Someone is shouting abuse at me in chat, who takes over?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 1
+      },
+      "wording": "paraphrase"
+    },
+    {
+      "id": "order-number-first",
+      "question": "What should I confirm before giving a delivery date?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 2
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "order-number-needed",
+      "question": "Do I need the order number before quoting a delivery date?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 2
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "order-number-confirm",
+      "question": "Must I always confirm the order number?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 2
+      },
+      "wording": "shared"
+    },
+    {
+      "id": "order-number-package",
+      "question": "A customer wants to know when their package comes, what do I check first?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 2
+      },
+      "wording": "paraphrase"
+    },
+    {
+      "id": "refund-card-charged",
+      "question": "My card was charged, when is the refund issued?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 2
+      },
+      "wording": "competing"
+    },
+    {
+      "id": "returns-exchange-instead",
+      "question": "Instead of an exchange, can I return the item within 30 days?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 1
+      },
+      "wording": "competing"
+    },
+    {
+      "id": "delivery-tracking-days",
+      "question": "The tracking email came, how many working days until standard delivery?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 0
+      },
+      "wording": "competing"
+    },
+    {
+      "id": "order-number-courier",
+      "question": "The courier has not confirmed, so what should I check before I give a delivery date?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 2
+      },
+      "wording": "competing"
+    },
+    {
+      "id": "large-refund-shift",
+      "question": "My shift is ending and a refund over five hundred dollars waits for approval, can I promise it?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 0
+      },
+      "wording": "competing"
+    },
+    {
+      "id": "delivery-before-2pm",
+      "question": "Orders placed before 2 pm on a working day: how long does standard delivery take?",
+      "expected": {
+        "source": "seed-delivery-returns",
+        "passage": 0
+      },
+      "wording": "competing"
+    },
+    {
+      "id": "escalate-large-refund",
+      "question": "A threatening customer wants a refund over five hundred dollars, who do I escalate to?",
+      "expected": {
+        "source": "seed-agent-playbook",
+        "passage": 1
+      },
+      "wording": "competing"
+    }
+  ],
+  "unanswerable": [
+    {
+      "id": "sunday-hours",
+      "question": "What are your opening hours on Sunday?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "crypto",
+      "question": "Can I pay with bitcoin?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "loyalty",
+      "question": "Do you have a loyalty programme?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "student-discount",
+      "question": "Is there a student discount?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "repair-booking",
+      "question": "Can I book a repair appointment?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "vegan",
+      "question": "Are your products vegan?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "newsletter",
+      "question": "How do I unsubscribe from the newsletter?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "gift-wrap",
+      "question": "Do you offer gift wrapping?",
+      "agent": "ai_agent"
+    },
+    {
+      "id": "holiday-pay",
+      "question": "How do I request holiday leave?",
+      "agent": "copilot"
+    },
+    {
+      "id": "payslip",
+      "question": "Where do I find my payslip?",
+      "agent": "copilot"
+    }
+  ]
+}

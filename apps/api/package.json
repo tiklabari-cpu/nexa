@@ -23,6 +23,7 @@
     "db:check-drift": "tsx scripts/check-drift.ts",
     "seed:fps-bench": "tsx scripts/seed-fps-workspace.ts",
     "measure:concurrent-migrate": "tsx scripts/measure-concurrent-migrate.ts",
+    "measure:knowledge-recall": "tsx scripts/measure-knowledge-recall.ts",
     "measure:knowledge-retrieval": "tsx scripts/measure-knowledge-retrieval.ts",
     "measure:transcript-page": "tsx scripts/measure-transcript-page.ts",
     "retention:run": "tsx src/services/retention/run.ts",

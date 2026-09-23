@@ -54,6 +54,7 @@ import {
 } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import {
+  ANSWER_RETRIEVAL_LIMIT,
   RETRIEVAL_THRESHOLD,
   type KnowledgeService,
   type QueryEmbedding,
@@ -453,7 +454,7 @@ export class SkillEngine {
         ...(input.skill.aiAgentId ? { aiAgentId: input.skill.aiAgentId } : {}),
         // Never below the two this always fetched, so an unset persona issues the
         // identical query; a `long` answer is the only thing that widens it.
-        limit: Math.max(2, passages),
+        limit: Math.max(ANSWER_RETRIEVAL_LIMIT, passages),
       }),
     );
 

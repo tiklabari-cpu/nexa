@@ -251,6 +251,36 @@ describe('KnowledgeService.search — which search runs, and in what order', () 
     expect(() => service({ exactSearchCeiling: 1.5 })).toThrow(RangeError);
     expect(() => service({ exactSearchCeiling: Infinity })).toThrow(RangeError);
   });
+
+  it('cuts at an overridden threshold, on the exact and the approximate path alike (tm 255.8)', async () => {
+    const rows = [row('a', 0.2), row('b', 0.5), row('c', 0.9)];
+    // Similarities 0.8 · 0.5 · 0.1: the default keeps two, 0.6 keeps one, -1 all three.
+    for (const [threshold, kept] of [
+      [undefined, ['a', 'b']],
+      [0.6, ['a']],
+      [-1, ['a', 'b', 'c']],
+    ] as const) {
+      const knowledge = service({
+        exactSearchCeiling: CEILING,
+        ...(threshold === undefined ? {} : { retrievalThreshold: threshold }),
+      });
+      expect(knowledge.threshold).toBe(threshold ?? RETRIEVAL_THRESHOLD);
+      const exact = scriptedTx({ chunksInScope: CEILING, exact: rows });
+      const approximate = scriptedTx({ chunksInScope: CEILING + 1, approximate: rows });
+      for (const { tx } of [exact, approximate]) {
+        const { chunks } = await knowledge.search(tx, TENANT, await question('refund'), {
+          limit: 3,
+        });
+        expect(chunks.map((chunk) => chunk.id)).toEqual(kept);
+      }
+    }
+  });
+
+  it('refuses a threshold that is not a similarity', () => {
+    expect(() => service({ retrievalThreshold: 1.5 })).toThrow(RangeError);
+    expect(() => service({ retrievalThreshold: -2 })).toThrow(RangeError);
+    expect(() => service({ retrievalThreshold: Number.NaN })).toThrow(RangeError);
+  });
 });
 
 /**

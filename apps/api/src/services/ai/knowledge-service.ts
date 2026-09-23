@@ -86,6 +86,15 @@ export interface RetrievedChunk {
 export const RETRIEVAL_THRESHOLD = 0.25;
 
 /**
+ * How many passages an answer is drafted from: the copilot searches this many,
+ * the skill engine this many or its persona's passage budget, whichever is
+ * more. It is the k of the recall gate's recall@k (tm 255.8), so a change here
+ * moves the gate with it — a passage ranked just past it is one no answer is
+ * written from.
+ */
+export const ANSWER_RETRIEVAL_LIMIT = 2;
+
+/**
  * The most chunks one question is searched against exactly.
  *
  * Exact search reads every vector in scope, and every vector is a 6 KB TOAST
@@ -159,24 +168,44 @@ export interface KnowledgeServiceOptions {
    * of a few thousand chunks crosses it.
    */
   exactSearchCeiling?: number;
+  /**
+   * Overrides {@link RETRIEVAL_THRESHOLD}. The server never sets it: the recall
+   * gate raises and lowers it to prove it goes red when the threshold moves,
+   * and `measure:knowledge-recall` sets it to -1 to read every score a
+   * question has (tm 255.8 · PLAN §D183).
+   */
+  retrievalThreshold?: number;
 }
 
 export class KnowledgeService {
   readonly #embeddings: EmbeddingProvider;
   readonly #exactSearchCeiling: number;
+  readonly #threshold: number;
 
   constructor(options: KnowledgeServiceOptions) {
     const ceiling = options.exactSearchCeiling ?? EXACT_SEARCH_CEILING;
     if (!Number.isSafeInteger(ceiling) || ceiling < 0) {
       throw new RangeError(`exactSearchCeiling must be a non-negative integer, got ${ceiling}`);
     }
+    const threshold = options.retrievalThreshold ?? RETRIEVAL_THRESHOLD;
+    // A cosine similarity is in [-1, 1]; anything else would be a typo that
+    // silently answers everything or nothing.
+    if (!Number.isFinite(threshold) || threshold < -1 || threshold > 1) {
+      throw new RangeError(`retrievalThreshold must be a number in [-1, 1], got ${threshold}`);
+    }
     this.#embeddings = options.embeddings;
     this.#exactSearchCeiling = ceiling;
+    this.#threshold = threshold;
   }
 
   /** The space this service embeds into — and therefore the one its questions search. */
   get space(): string {
     return this.#embeddings.space;
+  }
+
+  /** The similarity below which a chunk is not an answer — {@link RETRIEVAL_THRESHOLD} unless overridden. */
+  get threshold(): number {
+    return this.#threshold;
   }
 
   /**
@@ -369,7 +398,7 @@ export class KnowledgeService {
       ORDER BY distance
       LIMIT ${limit}
     `;
-    return toRetrievedChunks(rows, limit);
+    return toRetrievedChunks(rows, limit, this.#threshold);
   }
 
   /**
@@ -421,7 +450,7 @@ export class KnowledgeService {
       await tx.$executeRawUnsafe(`RELEASE SAVEPOINT ${APPROXIMATE_SAVEPOINT}`);
     }
     // `relaxed_order` returns rows only roughly by distance.
-    return toRetrievedChunks([...rows].sort(byDistance), limit);
+    return toRetrievedChunks([...rows].sort(byDistance), limit, this.#threshold);
   }
 }
 
@@ -434,7 +463,7 @@ function byDistance(left: ChunkRow, right: ChunkRow): number {
   return a - b;
 }
 
-function toRetrievedChunks(rows: ChunkRow[], limit: number): RetrievedChunk[] {
+function toRetrievedChunks(rows: ChunkRow[], limit: number, threshold: number): RetrievedChunk[] {
   return (
     rows
       .slice(0, limit)
@@ -446,6 +475,6 @@ function toRetrievedChunks(rows: ChunkRow[], limit: number): RetrievedChunk[] {
         text: row.chunk_text,
         score: Number((1 - Number(row.distance)).toFixed(4)),
       }))
-      .filter((row) => row.score >= RETRIEVAL_THRESHOLD)
+      .filter((row) => row.score >= threshold)
   );
 }

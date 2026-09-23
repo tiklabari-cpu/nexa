@@ -24,6 +24,7 @@
  * that can disagree.
  */
 import { MockLlmProvider } from './mock-llm-provider.js';
+import { OpenAiLlmProvider, type LlmLogger } from './openai-llm-provider.js';
 
 /**
  * Closed, like `MAIL_PROVIDERS`: a new vendor is a new value *and* its own
@@ -68,6 +69,12 @@ export interface LlmCompletion {
 export interface LlmProvider {
   /** Which implementation answers — the value `LLM_PROVIDER` names. */
   readonly id: LlmProviderId;
+  /**
+   * Write the reply. When the model could not answer — timeout, provider
+   * error, an open circuit, a reply with nothing in it — this rejects with an
+   * `LlmProviderError` (`llm-error.ts`), and the skill engine hands the
+   * conversation to a human. Any other rejection is a defect and propagates.
+   */
   complete(request: LlmCompletionRequest): Promise<LlmCompletion>;
 }
 
@@ -89,16 +96,29 @@ export interface LlmProviderOptions {
 }
 
 /**
+ * What the environment does not carry: where a provider logs, and how it
+ * reaches the network. `buildServer` passes its own logger — its stream, level
+ * and redaction paths — and a test passes a `fetch` recorder (tm 255.6).
+ */
+export interface LlmProviderRuntime {
+  logger?: LlmLogger;
+  fetchImpl?: typeof fetch;
+}
+
+/**
  * Build the provider `LLM_PROVIDER` names.
  *
- * `openai` throws, twice over and on purpose. Without its three keys it throws
- * the way `createMailer('smtp')` does — a deployment that asked for a model and
- * quietly got the stub would answer customers with stitched passages while
- * everyone believed a model was writing. With them it still throws, because the
- * adapter is tm 255.6's work and does not exist yet; falling back to the stub
- * would be the same lie told one task earlier.
+ * `openai` without its three keys throws the way `createMailer('smtp')` does
+ * — a deployment that asked for a model and quietly got the stub would answer
+ * customers with stitched passages while everyone believed a model was
+ * writing. With them it builds the chat adapter (tm 255.6), which throws in
+ * turn on a base URL or key it could not send a request with.
  */
-export function createLlmProvider(id: LlmProviderId, options: LlmProviderOptions): LlmProvider {
+export function createLlmProvider(
+  id: LlmProviderId,
+  options: LlmProviderOptions,
+  runtime: LlmProviderRuntime = {},
+): LlmProvider {
   switch (id) {
     case 'mock':
       return new MockLlmProvider();
@@ -106,9 +126,7 @@ export function createLlmProvider(id: LlmProviderId, options: LlmProviderOptions
       if (!options.openai) {
         throw new Error('LLM_PROVIDER=openai needs LLM_API_BASE_URL, LLM_MODEL and LLM_API_KEY.');
       }
-      throw new Error(
-        'LLM_PROVIDER=openai has no adapter in this build yet (tm 255.6); use LLM_PROVIDER=mock.',
-      );
+      return new OpenAiLlmProvider(options.openai, runtime);
     default:
       return unhandledLlmProvider(id);
   }

@@ -7,7 +7,8 @@
  *   answered  — the AI replied and the conversation stands on its own. If the
  *               thread later closes with no agent-authored event this counts as
  *               an AI resolution (ADR-09), which is what the invoice meters.
- *   handed_off— the AI decided a human is needed and transferred.
+ *   handed_off— the AI decided a human is needed and transferred, or the model
+ *               could not answer (below).
  *   skipped   — no skill matched. Routing proceeds exactly as before.
  *
  * The engine never decides *not* to involve a human on its own. `send_message`
@@ -21,6 +22,19 @@
  * remote model may take up to `LLM_TIMEOUT_MS`, and holding a pooled connection
  * and an open transaction for that long would collide with
  * `TENANT_TRANSACTION_TIMEOUT_MS` (10 s) before the model did.
+ *
+ * **A model that cannot answer is a hand-off (tm 255.6).** Timeout, provider
+ * error, open circuit or an empty reply — every `LlmProviderError` ends the same
+ * way: the outcome is `handed_off`, the run is recorded as failed with the
+ * failure's kind (never the provider's words — the run log is read in the admin
+ * UI), and the AI says nothing more in this run: a `send_message` or
+ * `request_info` after the failure is skipped, and a reply an earlier step
+ * queued is withdrawn, because a half-finished automated exchange is worse
+ * than a human starting clean. The steps that serve the human who takes over
+ * still run — `tag`, `summarize` and a `transfer_to_team` the skill declares.
+ * With no transfer step the conversation stays with whoever routing gave it to
+ * when it opened (`ChatService.start`), which is already a human: nothing here
+ * ever took it away from one.
  */
 import { matchIntent, validateSteps, type SendMessageStep, type SkillStep } from '@nexa/ai-mock';
 import {
@@ -34,7 +48,8 @@ import {
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { KnowledgeService, RETRIEVAL_THRESHOLD } from './knowledge-service.js';
 import { buildAnswerPrompt } from './provider/answer-prompt.js';
-import type { LlmProvider } from './provider/llm-provider.js';
+import { LlmProviderError, type LlmFailureKind } from './provider/llm-error.js';
+import type { LlmCompletion, LlmProvider } from './provider/llm-provider.js';
 
 /**
  * Runs `fn` in a tenant-scoped transaction — `request.withTenant`, in the
@@ -72,6 +87,8 @@ export interface SkillRunResult {
   /** Team to transfer to, when the skill handed off. */
   transferTo: string | null;
   summary: string | null;
+  /** Why the model did not answer, when that is what handed the conversation off. */
+  failure: LlmFailureKind | null;
   log: SkillRunLogEntry[];
 }
 
@@ -83,6 +100,7 @@ const NOTHING_RAN: SkillRunResult = {
   tags: [],
   transferTo: null,
   summary: null,
+  failure: null,
   log: [],
 };
 
@@ -272,12 +290,24 @@ export class SkillEngine {
     let reply: string | null = null;
     let transferTo: string | null = null;
     let summary: string | null = null;
+    let failure: LlmFailureKind | null = null;
 
     for (const step of input.steps) {
       // A transfer ends the skill: everything after it would be acting on a
       // conversation the AI no longer owns.
       if (transferTo) {
         log.push({ step: step.type, detail: 'skipped — already handed off', ok: true });
+        continue;
+      }
+
+      // A failed model call ends the AI's side of the exchange, not the skill:
+      // what it would still *say* is skipped, what a human needs still runs.
+      if (failure && (step.type === 'send_message' || step.type === 'request_info')) {
+        log.push({
+          step: step.type,
+          detail: 'skipped — the model could not answer, a human replies',
+          ok: true,
+        });
         continue;
       }
 
@@ -320,7 +350,15 @@ export class SkillEngine {
             persona: input.persona,
             answerIn: input.answerIn,
           });
-          if (outcome.text) reply = outcome.text;
+          if (outcome.failure) {
+            failure = outcome.failure;
+            // Withdrawn, not just left unset: a question a `request_info` queued
+            // earlier would reach the customer as the AI's last word before a
+            // silence (see the file header).
+            reply = null;
+          } else if (outcome.text) {
+            reply = outcome.text;
+          }
           log.push({ step: 'send_message', detail: outcome.detail, ok: outcome.text !== null });
           break;
         }
@@ -337,13 +375,14 @@ export class SkillEngine {
     }
 
     return {
-      outcome: transferTo ? 'handed_off' : reply ? 'answered' : 'skipped',
+      outcome: transferTo || failure ? 'handed_off' : reply ? 'answered' : 'skipped',
       skillId: input.skill.id,
       skillName: input.skill.name,
       reply,
       tags,
       transferTo,
       summary,
+      failure,
       log,
     };
   }
@@ -358,7 +397,7 @@ export class SkillEngine {
       persona: Persona;
       answerIn: PersonaLanguage | null;
     },
-  ): Promise<{ text: string | null; detail: string }> {
+  ): Promise<{ text: string | null; detail: string; failure?: LlmFailureKind }> {
     if (step.source === 'text') {
       // Deliberately unshaped (FR-MOD-06.4 · `#### K06.4`). A fixed reply is
       // wording an admin typed by hand and asked to be sent; trimming it to an
@@ -392,15 +431,29 @@ export class SkillEngine {
     // Outside any transaction (see the file header). The persona travels in the
     // prompt: the provider — model or stub — is what applies it now, so the
     // run log records what was *asked for* rather than what a trimmer did.
-    const completion = await this.#llm.complete({
-      ...buildAnswerPrompt({
-        message: input.message,
-        passages: hits.map((hit) => hit.text),
-        persona: input.persona,
-        answerIn: input.answerIn,
-      }),
-      ...this.#limits,
-    });
+    let completion: LlmCompletion;
+    try {
+      completion = await this.#llm.complete({
+        ...buildAnswerPrompt({
+          message: input.message,
+          passages: hits.map((hit) => hit.text),
+          persona: input.persona,
+          answerIn: input.answerIn,
+        }),
+        ...this.#limits,
+      });
+    } catch (error) {
+      // A defect is not a provider failure: it propagates to the responder's
+      // catch and is logged with its stack rather than filed as a hand-off.
+      if (!(error instanceof LlmProviderError)) throw error;
+      // The kind is all the run log keeps. The provider already logged its
+      // status and code; its message never travels (`llm-error.ts`).
+      return {
+        text: null,
+        failure: error.kind,
+        detail: `the model could not answer (${error.kind}) — handed to a human`,
+      };
+    }
     const cited = hits.slice(0, Math.min(passages, hits.length));
     const asked = personaRequest(input.persona, input.answerIn);
 

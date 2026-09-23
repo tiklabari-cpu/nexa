@@ -23,6 +23,7 @@ import {
   type LlmProviderId,
 } from './llm-provider.js';
 import { MockLlmProvider } from './mock-llm-provider.js';
+import { OpenAiLlmProvider } from './openai-llm-provider.js';
 import { OPENAI_REGIONAL_HOSTS, llmEndpointProblem } from './provider-hosts.js';
 
 const LIMITS = { maxOutputTokens: 400, timeoutMs: 20_000 };
@@ -46,17 +47,27 @@ describe('createLlmProvider', () => {
     );
   });
 
-  it("refuses 'openai' with its keys until the adapter exists, without echoing the key", () => {
+  it("builds the chat adapter for 'openai' with its keys (tm 255.6)", () => {
+    const provider = createLlmProvider(
+      'openai',
+      { openai: { baseUrl: 'https://eu.api.openai.com/v1', model: 'm', apiKey: 'sk-test-only' } },
+      { fetchImpl: (async () => new Response(null, { status: 500 })) as typeof fetch },
+    );
+    expect(provider).toBeInstanceOf(OpenAiLlmProvider);
+    expect(provider.id).toBe('openai');
+  });
+
+  it("refuses an 'openai' base URL it could not send to, without echoing the key", () => {
     const apiKey = 'sk-test-never-printed-0123456789';
     let message = '';
     try {
       createLlmProvider('openai', {
-        openai: { baseUrl: 'https://eu.api.openai.com/v1', model: 'm', apiKey },
+        openai: { baseUrl: `https://user:${apiKey}@eu.api.openai.com/v1`, model: 'm', apiKey },
       });
     } catch (error) {
       message = (error as Error).message;
     }
-    expect(message).toMatch(/no adapter in this build yet \(tm 255\.6\)/);
+    expect(message).toMatch(/must not carry credentials/);
     expect(message).not.toContain(apiKey);
   });
 

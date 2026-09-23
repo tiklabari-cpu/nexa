@@ -10185,13 +10185,13 @@
             "description": "Gercek embedding'e gecildiginde 'arama hala dogru pasaji buluyor mu' sorusunu olcen bir kapi yok. tm 252 (V8-KB-RECALL) bir kez elle olcmustu; bu gorev onu tekrarlanabilir bir gerileme kapisina cevirir. Kapi sahte saglayiciyla deterministik kosar; gercek saglayici icin ayni kume elle kosulabilir kalir.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami: ust gorev tm 255 details.\n\nBAGLAM: tm 252 ve tm 254 (tasks.json'da done) retrieval'i olctu: tam arama dogru, maliyet chunk sayisiyla dogrusal; IVFFlat indeksi dogru pasaji kacirabiliyordu. services/ai/knowledge-service.ts:33-47 ve :160-235 yorumlari bugunku yolu ve HNSW parametrelerinin neden oyle secildigini anlatiyor; RETRIEVAL_THRESHOLD ayni dosyada.\n\nKAPSAM:\n1) Altin kume: en az 20 soru-beklenen pasaj cifti, seed bilgi tabanindan uretilir; repoda veri dosyasi olarak yasar.\n2) Olcut: recall@k (k= urunun gercekten kullandigi limit) ve esigin altinda kalan sorularin listesi. Esik SAYIYLA yazilir ve gerekcesi kaydedilir.\n3) Kapi: sahte embedding saglayicisiyla deterministik kosar ve CI'da kosabilecek surede kalir. Gercek saglayiciyla kosmak icin ayni kumeyi kullanan elle bir komut birakilir (varsayilan olarak KOSMAZ, anahtar ister).\n4) Gerileme: esigin altina dusus testi KIRMIZI yapar.\n5) RETRIEVAL_THRESHOLD'un gercek embedding uzayinda hala anlamli olup olmadigi olculur; degisiyorsa yeni deger gerekcesiyle yazilir.\n\nKAPSAM DISI: model kalite degerlendirmesi (yanit metninin iyiligi); ANN/olcek calismasi (tm 254); gercek saglayiciya CI'da cagri.\n\nSIR SINIRI: CI yolunda gercek saglayiciya cagri YOK; anahtar gerektiren komut varsayilan olarak kapali.\n\nPRD: FR-MOD-06.3.2.",
             "testStrategy": "(1) Altin kume dosyasi repoda ve en az 20 cift iceriyor. (2) recall@k sahte saglayiciyla olculur ve yazili esigi gecer. (3) NEGATIF: kasitli bozulmus bir retrieval (esik ya da limit degistirilerek) kapiyi KIRMIZI yapar -- kapinin bos yere yesil olmadiginin kaniti. (4) Kosu suresi CI icin kabul edilebilir ve kayitli. (5) Gercek saglayici komutu anahtarsiz cagrildiginda ACIKCA atlanir, sessizce yesil vermez. (6) Test basligi (FR-MOD-06.3.2) etiketli; pnpm audit:req-coverage exit 0. (7) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "255.7"
             ],
             "parentId": "255",
             "priority": "medium",
-            "updatedAt": "2026-09-23T08:04:33.201Z"
+            "updatedAt": "2026-09-23T09:04:18.240Z"
           },
           {
             "id": 9,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-23T08:04:33.201Z"
+        "updatedAt": "2026-09-23T09:04:18.240Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-23T08:04:33.202Z",
+      "lastModified": "2026-09-23T09:04:18.242Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

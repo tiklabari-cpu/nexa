@@ -10143,13 +10143,13 @@
             "description": "Bugun AI metni uretmiyor: cagri yerleri dogrudan @nexa/ai-mock'tan import ediyor, LLM_PROVIDER enum'u ['mock'] ile kapali ve inference.ts yalnizca bolge kapisi. Bu gorev DIKISI acar: bir LlmProvider arayuzu, createLlmProvider fabrikasi (mailer/object-store deseni), server.ts'te enjeksiyon ve testlerin kullanacagi deterministik sahte saglayici. Gercek saglayici adapteri 255.6, embedding 255.7.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami ve sir siniri: ust gorev tm 255 details. 255.1'in ADR'sini OKU: anahtar adlari, streaming ve tool-calling karari oradan gelir.\n\nKODDA BUGUN (2026-09-22 olculdu):\n- apps/api/src/config/env.ts:440 LLM_PROVIDER: z.enum(['mock']).default('mock'); :448 LLM_PROVIDER_REGION optional.\n- apps/api/src/services/ai/inference.ts: resolveInferenceProvider / inferenceLeavesRegion / inferenceAllowed / assertInferenceAllowed. Bu KAPI KORUNUR -- gercek saglayici eklenirken NFR-C4 davranisi degismez.\n- Cagri yerleri dogrudan pakete bagli: routes/copilot.ts:15 (ENHANCE_MODES, enhanceText, summariseConversation), routes/playbook.ts:13 (compileInstruction, validateSteps), routes/command-palette.ts:19 (matchPaletteTopic), services/ai/copilot-service.ts:24, services/ai/skill-engine.ts:17 (matchIntent, validateSteps), services/ai/knowledge-service.ts:11 (chunk, embed, toVectorLiteral), services/mcp/tools/summarize-chat.ts:35, services/reports/report-csv.ts:27.\n- Izlenecek DESEN: server.ts:41 import { createMailer } ... :115 mailer = createMailer(env.MAIL_PROVIDER, { dir: env.MAIL_DIR }) -- fabrika env'den kurulur, secenek olarak enjekte edilir, test kendi sahtesini verir.\n\nKAPSAM:\n1) LlmProvider arayuzu (apps/api/src/services/ai/provider/ altinda): en az complete({ system, messages, maxOutputTokens, timeoutMs }) -> { text, usage } . Akis ve arac cagrisi YALNIZCA 255.1 EVET dediyse arayuze girer; HAYIR ise arayuz dar tutulur ve gerekcesi yorumda yazilir.\n2) createLlmProvider(env) fabrikasi + LLM_PROVIDER enum'una 255.1'in sectigi deger(ler) ve 'mock'. Enum kapali kalmaya devam eder (switch derleme hatasi verir), ama artik iki degeri vardir.\n3) server.ts enjeksiyonu: provider bir secenek olarak gecer; test sunucusu kendi sahtesini verir (test/helpers/fixtures.ts deseni).\n4) FakeLlmProvider: deterministik, agsiz, testlerde kullanilir; kayit tutar (kac cagri, hangi istem) ki 255.9 sayaci dogrulayabilsin.\n5) ILK TUKETICI olarak yalnizca skill-engine'in yanit uretme yolu arayuze baglanir (SkillEngine -> knowledge + persona -> send_message). Digerleri (copilot, ozet, enhance, command palette, konu kumeleme) BU GOREVDE degismez; 255.6'dan sonra ayri bir tur.\n6) NFR-C4 kapisi: gercek saglayici secildiginde assertInferenceAllowed hala calisir -- HIPAA kapsamli bir workspace icin bolge disi cikarim REDDEDILIR. Bunun testi bu gorevde yazilir.\n\nKAPSAM DISI: gercek HTTP adapteri (255.6), embedding (255.7), token/maliyet olcumu (255.9), intent esiginin modele tasinmasi (pilot disi), @nexa/ai-mock'un silinmesi -- mock saglayici KALIR, testler ve AI kapali kurulumlar onu kullanir.\n\nSIR SINIRI: anahtar ADI env semasina girer, DEGERI hicbir yere yazilmaz; bu gorevde ag cagrisi YOK.\n\nPRD: FR-05-06.EK1 (skill motoru calisma zamani) - FR-MOD-06.4 (persona) - NFR-C4 (bolge kapisi korunur).",
             "testStrategy": "(1) Birim: createLlmProvider('mock') mevcut deterministik davranisi aynen verir -- regresyon. (2) Birim: enum'a yeni deger eklendiginde createLlmProvider switch'i derleme zamaninda eksik dali yakalar (tip testi / kasitli eksik dal ile kanit). (3) Integration: test sunucusu FakeLlmProvider ile ayaga kalkar; bir skill calismasi AI yanitini bu sahteden alir (cagri sayaci artmis olur). (4) NFR-C4 negatif: HIPAA kapsamli workspace + bolge disi LLM_PROVIDER_REGION -> AI yolu ApiError ile reddedilir, saglayiciya HIC cagri gitmez (sahtenin sayaci 0). (5) env paritesi: yeni anahtarlar icin env.parity + env.production-example testleri yesil. (6) Mevcut AI testleri (apps/api ai/*.test.ts, ai-mock birimleri) kirilmadan gecer. (7) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "255.1"
             ],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-23T02:57:50.335Z"
           },
           {
             "id": 6,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-23T02:54:08.843Z"
+        "updatedAt": "2026-09-23T02:57:50.335Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-23T02:54:08.844Z",
+      "lastModified": "2026-09-23T02:57:50.336Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

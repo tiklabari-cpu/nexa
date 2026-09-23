@@ -37,6 +37,8 @@ import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.j
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
+import type { LlmProvider } from '../services/ai/provider/llm-provider.js';
+import { SkillEngine } from '../services/ai/skill-engine.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
@@ -253,10 +255,13 @@ export default async function customerRoutes(
     mailer,
     push,
     automations,
+    llm,
   }: {
     env: Env;
     mailer: Mailer;
     push: PushProvider;
+    /** Writes the AI Agent's knowledge answers (tm 255.5). */
+    llm: LlmProvider;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
   },
@@ -284,7 +289,15 @@ export default async function customerRoutes(
   // that makes them a lead, a reported sale — goes through the one recorder
   // (FR-MOD-13.3). The chat core holds its own for the close path.
   const goals = createGoalConversionRecorder(app.db, { logger: app.log });
-  const ai = new AiResponder(chats, publisher);
+  const ai = new AiResponder(
+    chats,
+    publisher,
+    new SkillEngine({
+      llm,
+      maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+      timeoutMs: env.LLM_TIMEOUT_MS,
+    }),
+  );
   const ruleBots = new RuleBotResponder(chats, publisher);
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
 

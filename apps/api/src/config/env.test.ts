@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ZodTypeAny } from 'zod';
 import { REGIONS } from '@nexa/types';
+import { LLM_PROVIDERS } from '../services/ai/provider/llm-provider.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
 import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
 import { MAIL_PROVIDERS } from '../services/mail/mailer.js';
@@ -73,6 +74,7 @@ describe('provider selection', () => {
     { key: 'STRIPE_PROVIDER', vocabulary: PAYMENT_PROVIDERS, fallback: 'mock' },
     { key: 'SIEM_PROVIDER', vocabulary: SIEM_PROVIDERS, fallback: 'file' },
     { key: 'OTEL_EXPORTER', vocabulary: OTEL_EXPORTERS, fallback: 'console' },
+    { key: 'LLM_PROVIDER', vocabulary: LLM_PROVIDERS, fallback: 'mock' },
   ] as const;
 
   /**
@@ -493,6 +495,132 @@ describe('production configuration', () => {
           'SMTP_USERNAME',
         ]);
       });
+    });
+  });
+
+  /**
+   * `LLM_PROVIDER=openai` in production (tm 255.5 · NFR-C4 · ADR §7).
+   *
+   * A remote model is a third party the conversation goes to, so production
+   * asks for three things the stub never needed: the keys that reach it, a
+   * *declared* region (the default, "this process's own", is true only of the
+   * stub), and a host that actually answers in the declared region — the
+   * residency gate trusts the declaration, so a mismatch would pass a covered
+   * workspace's content across the border with the gate reporting it had not.
+   */
+  describe('LLM_PROVIDER=openai', () => {
+    const OPENAI: NodeJS.ProcessEnv = {
+      LLM_PROVIDER: 'openai',
+      LLM_PROVIDER_REGION: 'eu',
+      LLM_API_BASE_URL: 'https://eu.api.openai.com/v1',
+      LLM_MODEL: 'a-model-id',
+      LLM_API_KEY: realSecret('llm'),
+    };
+
+    const problemsOf = (source: NodeJS.ProcessEnv): string => {
+      try {
+        parseEnv(source);
+        return '';
+      } catch (error) {
+        return (error as Error).message;
+      }
+    };
+
+    it('boots on a regional host that matches the declared region', () => {
+      const env = parseEnv({ ...PROD_BASE, ...OPENAI });
+      expect(env.LLM_PROVIDER).toBe('openai');
+      expect(env.llm.openai).toEqual({
+        baseUrl: 'https://eu.api.openai.com/v1',
+        model: 'a-model-id',
+        apiKey: OPENAI.LLM_API_KEY,
+      });
+      expect(
+        parseEnv({
+          ...PROD_BASE,
+          ...OPENAI,
+          LLM_PROVIDER_REGION: 'us',
+          LLM_API_BASE_URL: 'https://us.api.openai.com/v1',
+        }).LLM_PROVIDER_REGION,
+      ).toBe('us');
+    });
+
+    it.each(['LLM_API_BASE_URL', 'LLM_MODEL', 'LLM_API_KEY', 'LLM_PROVIDER_REGION'])(
+      'refuses to boot without %s, naming the key',
+      (missing) => {
+        const { [missing]: _omitted, ...incomplete } = OPENAI;
+        expect(problemsOf({ ...PROD_BASE, ...incomplete })).toContain(
+          `${missing} is required in production when LLM_PROVIDER=openai.`,
+        );
+      },
+    );
+
+    it('refuses the global host, which no region can truthfully be claimed for', () => {
+      const message = problemsOf({
+        ...PROD_BASE,
+        ...OPENAI,
+        LLM_API_BASE_URL: 'https://api.openai.com/v1',
+      });
+      expect(message).toMatch(/api\.openai\.com, which does not say where/);
+      expect(message).toContain('eu.api.openai.com');
+    });
+
+    it('refuses a declared region the host does not answer in', () => {
+      const message = problemsOf({
+        ...PROD_BASE,
+        ...OPENAI,
+        LLM_PROVIDER_REGION: 'eu',
+        LLM_API_BASE_URL: 'https://us.api.openai.com/v1',
+      });
+      expect(message).toMatch(/LLM_PROVIDER_REGION=eu but LLM_API_BASE_URL is the us host/);
+    });
+
+    it('refuses a host that is not an OpenAI regional host, and plain http', () => {
+      expect(
+        problemsOf({ ...PROD_BASE, ...OPENAI, LLM_API_BASE_URL: 'https://llm.example.test/v1' }),
+      ).toMatch(/not an OpenAI regional host/);
+      expect(
+        problemsOf({ ...PROD_BASE, ...OPENAI, LLM_API_BASE_URL: 'http://eu.api.openai.com/v1' }),
+      ).toMatch(/must use https/);
+    });
+
+    it('refuses the development placeholder key, and never prints a key it was given', () => {
+      const placeholder = 'dev-only-llm-0123456789abcdef';
+      const message = problemsOf({
+        ...PROD_BASE,
+        ...OPENAI,
+        LLM_API_KEY: placeholder,
+        LLM_API_BASE_URL: 'https://api.openai.com/v1',
+      });
+      expect(message).toMatch(/LLM_API_KEY still holds its development placeholder value/);
+      expect(message).not.toContain(placeholder);
+    });
+
+    it('asks nothing of the mock, in production or anywhere else', () => {
+      // The stub runs in this process, so its region *is* this process's and
+      // there is nothing to reach. `.env.production.example` still ships it.
+      const env = parseEnv({ ...PROD_BASE, LLM_PROVIDER: 'mock' });
+      expect(env.llm.openai).toBeNull();
+      expect(parseEnv({ ...BASE, ...OPENAI, LLM_PROVIDER: 'mock' }).llm.openai).toBeNull();
+    });
+
+    it('leaves development free to point anywhere; the factory, not the schema, refuses a half configuration', () => {
+      const env = parseEnv({
+        ...BASE,
+        NODE_ENV: 'development',
+        LLM_PROVIDER: 'openai',
+        LLM_API_BASE_URL: 'http://127.0.0.1:9999/v1',
+      });
+      expect(env.llm.openai).toBeNull();
+    });
+
+    it('defaults the per-call limits the engine passes on', () => {
+      const env = parseEnv(BASE);
+      expect(env.LLM_TIMEOUT_MS).toBe(20_000);
+      expect(env.LLM_MAX_OUTPUT_TOKENS).toBe(400);
+      expect(() => parseEnv({ ...BASE, LLM_TIMEOUT_MS: '0' })).toThrow(/LLM_TIMEOUT_MS/);
+      expect(() => parseEnv({ ...BASE, LLM_MAX_OUTPUT_TOKENS: '-1' })).toThrow(
+        /LLM_MAX_OUTPUT_TOKENS/,
+      );
     });
   });
 

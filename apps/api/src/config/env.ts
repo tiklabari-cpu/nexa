@@ -10,6 +10,8 @@ import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
 // schema accepts and no factory implements is exactly the drift M-PROV-a exists
 // to close, and one list read from both ends cannot drift. None of these
 // modules reaches back into this one, so there is no import cycle.
+import { LLM_PROVIDERS, type LlmProviderOptions } from '../services/ai/provider/llm-provider.js';
+import { llmEndpointProblem } from '../services/ai/provider/provider-hosts.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
 import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
 import { MAIL_PROVIDERS, type MailerOptions } from '../services/mail/mailer.js';
@@ -438,7 +440,15 @@ export const envSchema = z.object({
   API_CALLS_INCLUDED: z.coerce.number().int().nonnegative().default(100_000),
   API_CALL_OVERAGE_CENTS: z.coerce.number().int().nonnegative().default(2_950),
 
-  LLM_PROVIDER: z.enum(['mock']).default('mock'),
+  /**
+   * Who writes AI text (tm 255.5 · ADR docs/adr/pilot-llm-embedding-provider.md
+   * §9.1). `mock` is the in-process deterministic stub and stays the default —
+   * every test suite and any deployment without a model runs on it. `openai`
+   * needs the three `LLM_API_*`/`LLM_MODEL` keys below; its adapter is tm 255.6,
+   * so until then choosing it refuses to boot rather than quietly running the
+   * stub (`createLlmProvider`).
+   */
+  LLM_PROVIDER: z.enum(LLM_PROVIDERS).default('mock'),
   /**
    * Where `LLM_PROVIDER` runs the inference (NFR-C4 · C4-e). Unset means "the
    * same region as this process", which is the truth for the in-process stub and
@@ -447,6 +457,32 @@ export const envSchema = z.object({
    * content inferred outside its own region. See services/ai/inference.ts.
    */
   LLM_PROVIDER_REGION: z.enum(REGIONS).optional(),
+  /**
+   * The provider's `/v1` base URL. Its host has to be the regional host that
+   * matches `LLM_PROVIDER_REGION` in production (`productionProblems`,
+   * `services/ai/provider/provider-hosts.ts`); the schema only asks for a URL,
+   * so a developer can point it anywhere locally.
+   */
+  LLM_API_BASE_URL: z.string().url().optional(),
+  /** The model id. The operator's choice; the code names none. */
+  LLM_MODEL: z.string().min(1).optional(),
+  /**
+   * Bearer key for `LLM_PROVIDER≠mock`. A credential the provider issues, not
+   * key material this process mints — so not a `secret()`, for `SMTP_PASSWORD`'s
+   * reason. Its value is never logged, echoed or written anywhere but `.env`.
+   */
+  LLM_API_KEY: z.string().min(1).optional(),
+  /**
+   * How long one inference may take before it is abandoned. Handed to the
+   * provider on every call (`LlmCompletionRequest.timeoutMs`).
+   */
+  LLM_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(20_000),
+  /**
+   * Reply ceiling per call, in tokens. 400 covers the longest persona budget
+   * (`long`: 1,200 characters, roughly 300 tokens) with room for a language
+   * that tokenises worse than English.
+   */
+  LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(16_384).default(400),
   /**
    * Outgoing mail (M-PROV-a). `file` writes each message under `MAIL_DIR`
    * instead of sending it (PLAN A4); `null` discards, which is what the test
@@ -705,6 +741,8 @@ export type Env = z.infer<typeof envSchema> & {
    * this assembly, not them.
    */
   mail: MailerOptions;
+  /** Everything `createLlmProvider` needs (tm 255.5), on `mail`'s terms. */
+  llm: LlmProviderOptions;
   isProduction: boolean;
   isTest: boolean;
   /** Whether OpenTelemetry instrumentation is active for this process. */
@@ -776,6 +814,37 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     }
     if (env.SMTP_PASSWORD?.startsWith('dev-only-')) {
       problems.push('SMTP_PASSWORD still holds its development placeholder value.');
+    }
+  }
+
+  // A remote model is a third party the conversation is sent to, so the three
+  // keys that reach it are required and the region it answers in has to be
+  // *declared*: unset, `LLM_PROVIDER_REGION` defaults to this process's own,
+  // which is true for the stub and an unchecked claim about anyone else
+  // (NFR-C4 · ADR §7). The declaration is then checked against the host the
+  // requests actually go to. Key names only, never values — as above.
+  if (env.LLM_PROVIDER !== 'mock') {
+    const required = [
+      'LLM_API_BASE_URL',
+      'LLM_MODEL',
+      'LLM_API_KEY',
+      'LLM_PROVIDER_REGION',
+    ] as const;
+    for (const key of required) {
+      if (!env[key]) {
+        problems.push(`${key} is required in production when LLM_PROVIDER=${env.LLM_PROVIDER}.`);
+      }
+    }
+    if (env.LLM_API_KEY?.startsWith('dev-only-')) {
+      problems.push('LLM_API_KEY still holds its development placeholder value.');
+    }
+    if (env.LLM_API_BASE_URL && env.LLM_PROVIDER_REGION) {
+      const endpoint = llmEndpointProblem(
+        env.LLM_PROVIDER,
+        env.LLM_API_BASE_URL,
+        env.LLM_PROVIDER_REGION,
+      );
+      if (endpoint) problems.push(endpoint);
     }
   }
 
@@ -939,6 +1008,19 @@ function mailOptions(env: z.infer<typeof envSchema>): MailerOptions {
   };
 }
 
+/**
+ * `env.llm` — the single assembly of `LlmProviderOptions` (tm 255.5), on
+ * `mailOptions`' terms: `openai` is `null` unless it is the provider and all
+ * three of its keys are present, and `createLlmProvider` refuses a `null`.
+ */
+function llmOptions(env: z.infer<typeof envSchema>): LlmProviderOptions {
+  const { LLM_API_BASE_URL, LLM_MODEL, LLM_API_KEY } = env;
+  if (env.LLM_PROVIDER !== 'openai' || !LLM_API_BASE_URL || !LLM_MODEL || !LLM_API_KEY) {
+    return { openai: null };
+  }
+  return { openai: { baseUrl: LLM_API_BASE_URL, model: LLM_MODEL, apiKey: LLM_API_KEY } };
+}
+
 function replicaEscalatesPrivilege(env: z.infer<typeof envSchema>): boolean {
   if (!env.DATABASE_REPLICA_URL || !env.DATABASE_APP_URL) return false;
   const owner = new URL(env.DATABASE_URL).username;
@@ -1002,6 +1084,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     webOrigins: parseOriginList(env.WEB_ORIGIN) ?? [],
     storage: storageOptions(env),
     mail: mailOptions(env),
+    llm: llmOptions(env),
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',

@@ -10171,13 +10171,13 @@
             "description": "Bugun embedding hash'lenmis kelime torbasi ve embed() SENKRON. Gercek saglayici async oldugu icin bu, imza degisikligi gerektiren gercek bir refaktordur. vector(1536) DB sozlesmesi korunursa migration gerekmez; saglayici 1536 uretemiyorsa migration + tam yeniden gomme gerekir -- karar 255.1'den gelir.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1 (S1.3 parcali kosu); git S2; handoff S3; MIGRATION POLITIKASI S6.3 (genislet-sonra-daralt; CREATE INDEX CONCURRENTLY kendi dosyasinda tek ifade). Pilot kapsami ve sir siniri: ust gorev tm 255 details. 255.1 ADR'sindeki BOYUT kararini OKU.\n\nKODDA BUGUN (2026-09-22 olculdu):\n- packages/ai-mock/src/embedding.ts:22 EMBEDDING_DIMENSIONS = 1536; :168 export function embed(text: string): number[] -- SENKRON; :213 toVectorLiteral; :225 chunk.\n- DB: apps/api/prisma/schema.prisma:1708 embedding Unsupported(\"vector(1536)\"); ilk migration 20260722154008_domain_model.\n- embed() CAGRI YERLERI (bes): services/ai/knowledge-service.ts:128 (indeksleme, INSERT ... ${vector}::vector), :180 (sorgu vektoru), services/reports/report-csv.ts:1277 ve :1291 (konu kumeleme -- rapor basina COK sayida cagri), packages/ai-mock/src/topics.ts:157.\n- knowledge-service.ts:44-47 yorumu: HNSW parametreleri 'gercek OpenAI embedding'lerine ve stub'a karsi' secilmis; :232-235 sorgu vektorunun skaler alt-sorgu olarak yazilmasinin sebebi (generic plan'da $1::vector her satirda yeniden ayristiriliyor).\n\nKAPSAM:\n1) EmbeddingProvider arayuzu: embed(texts: string[]) -> Promise<number[][]>; toplu cagri (batch) ZORUNLU -- her chunk icin ayri istek pilotta hem yavas hem pahali.\n2) createEmbeddingProvider(env) fabrikasi; EMBEDDING_PROVIDER enum'u ('mock' + secilen). Sohbet saglayicisindan AYRI yapilandirilir (255.1 karari).\n3) embed() senkron->async gecisi: bes cagri yeri de async yola tasinir. report-csv.ts'teki konu kumeleme icin ACIK KARAR verilir ve yazilir: rapor basina gercek saglayiciya yuzlerce cagri kabul edilemezse kumeleme stub'da BIRAKILIR (mesru bir secim; gerekcesi PLAN S D'ye yazilir).\n4) BOYUT SOZLESMESI: saglayici 1536 uretiyorsa migration YOK. Uretmiyorsa: yeni kolon + geri doldurma + eski kolonun dusurulmesi (S6.3 genislet-sonra-daralt), HNSW indeksinin yeniden insasi ve db:check-drift temiz. Bu dal 255.1'in kararina bagli; hangi dalin kosuldugu kapanista yazilir.\n5) YENIDEN GOMME YOLU: mevcut bilgi tabani stub vektorleriyle dolu. Geri alinabilir ve kesintisiz bir yeniden gomme yordami (script ya da bakim komutu): kaynak kaynak ilerler, yarida kalirsa kaldigi yerden devam eder, calisirken retrieval BOZULMAZ. Karisik durum (bir kismi stub, bir kismi gercek) OLCULUR ve davranisi yazilir -- iki farkli uzayin vektorleri ayni indekste anlamsiz komsuluk uretir; bu yuzden yeniden gomme kaynak bazinda ATOMIK olmali.\n6) Hata davranisi: embedding saglayicisi erisilemezse INDEKSLEME basarisiz olur ve bunu soyler; SORGU yolunda hata, retrieval'i bos donduruP AI'yi insana devretmeli (sessiz yanlis cevap YOK).\n\nKAPSAM DISI: sohbet adapteri (255.6); recall kapisi (255.8); ANN/olcek tavani (tm 254, pilot disi); yeni bir vektor veritabani.\n\nSIR SINIRI: EMBEDDING_API_KEY adi env semasina girer, degeri hicbir yere yazilmaz; testler sahte saglayiciyla, agsiz kosar.\n\nPRD: FR-MOD-06.3.2 (chunk + embedding + index) - SEMA-MIMARI.8.4c'ye dokunulmaz.",
             "testStrategy": "(1) Birim: FakeEmbeddingProvider ile embed toplu cagriliyor -- N metin icin 1 istek (cagri sayaci). (2) Birim: saglayici 1536 disinda boyut donerse ACIK hata; sessizce kirpilmaz/doldurulmaz -- negatif test. (3) Integration (gercek Postgres): indeksleme yolu vektorleri yazar, retrieval ayni metni geri bulur (mevcut knowledge-service testleri async imzayla yesil kalir). (4) Integration: sorgu yolunda saglayici hatasi -> retrieval bos + AI insana devir; sessiz yanlis cevap YOK. (5) Yeniden gomme: kaynak bazinda atomik; yarida kesilip devam ettirildiginde ayni sonuc; calisirken yapilan bir arama HATA VERMEZ. (6) Karisik uzay: kismen gommus bir kaynagin aranmasi tanimli davranisi verir (testte yazili). (7) Boyut degistiyse: pnpm -w db:check-drift exit 0 ve migration S6.3'e uygun (ayri dosyada CONCURRENTLY). (8) Test basliklari (FR-MOD-06.3.2) etiketli; pnpm audit:req-coverage exit 0. (9) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "255.5"
             ],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-23T05:18:03.597Z"
+            "updatedAt": "2026-09-23T08:02:16.231Z"
           },
           {
             "id": 8,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-23T05:18:03.597Z"
+        "updatedAt": "2026-09-23T08:02:16.231Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-23T05:18:03.598Z",
+      "lastModified": "2026-09-23T08:02:16.232Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

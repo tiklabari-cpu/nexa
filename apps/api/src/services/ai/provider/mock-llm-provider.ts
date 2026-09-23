@@ -12,6 +12,13 @@
  * It answers one kind of prompt: the grounded answer `buildAnswerPrompt` builds.
  * Anything else throws. Returning an empty string instead would make a caller
  * wired to the wrong prompt look like a knowledge miss, and nobody would look.
+ *
+ * **Its usage is zero (tm 255.9).** It used to estimate four characters a token
+ * so its `usage` looked like a model's. Once `usage` is recorded on the run and
+ * summed in the AI Agent report, an estimate is a count of tokens no provider
+ * billed: a deployment that moves from the stub to a model mid-month would see
+ * a total that is part invoice and part invention, and one on the stub would
+ * report spend it never had. The stub consumed nothing, so it says so.
  */
 import { shapeAnswer } from '@nexa/types';
 import { readAnswerGrounding } from './answer-prompt.js';
@@ -37,20 +44,6 @@ export class MockLlmProvider implements LlmProvider {
       { language: grounding.answerIn },
     );
 
-    const prompt = request.system + request.messages.map((m) => m.content).join('');
-    return {
-      text,
-      usage: { inputTokens: estimateTokens(prompt), outputTokens: estimateTokens(text) },
-    };
+    return { text, usage: { inputTokens: 0, outputTokens: 0 } };
   }
-}
-
-/**
- * Four characters a token — the usual rule of thumb for English, and the same
- * character-for-token trade the ADR makes for `LLM_MAX_PROMPT_CHARS`. The stub
- * has no tokenizer and bills nobody; this only keeps its `usage` in the right
- * order of magnitude for whatever tm 255.9 hangs off it.
- */
-function estimateTokens(text: string): number {
-  return Math.ceil(text.length / 4);
 }

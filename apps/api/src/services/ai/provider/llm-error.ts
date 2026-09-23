@@ -1,5 +1,5 @@
 /**
- * How a model call fails (tm 255.6).
+ * How a model call fails (tm 255.6), or is refused before it is made (tm 255.9).
  *
  * One error class and a closed list of reasons. Whatever the reason, the skill
  * engine does the same thing with it — the AI stops and the conversation stays
@@ -22,6 +22,13 @@
  * | `bad_response`    | an answer that is not a chat completion — a redirect, an unreadable body    |
  * | `no_answer`       | a well-formed completion with nothing to send: refused, filtered, cut off   |
  * | `circuit_open`    | the circuit breaker is open, so no request was made                         |
+ * | `prompt_too_long` | the prompt is over `LLM_MAX_PROMPT_CHARS`, so no request was made           |
+ *
+ * The two refusals at the end are the only kinds no provider produced: the
+ * breaker (`circuit-breaker.ts`) and the prompt ceiling (`refuseOverlongPrompt`
+ * in `llm-provider.ts`) stop the call in this process. They are kinds all the
+ * same, so they reach the human, the run log and the operator by the same road
+ * as every failure the provider did cause.
  *
  * **What an instance never carries:** the API key, the prompt, the reply, or
  * the provider's `error.message`. The last is the one that is easy to let
@@ -47,6 +54,7 @@ export const LLM_FAILURE_KINDS = [
   'bad_response',
   'no_answer',
   'circuit_open',
+  'prompt_too_long',
 ] as const;
 export type LlmFailureKind = (typeof LLM_FAILURE_KINDS)[number];
 
@@ -64,8 +72,9 @@ const TRANSIENT: ReadonlySet<LlmFailureKind> = new Set<LlmFailureKind>([
 
 /**
  * Failures that say something about the *provider* rather than about this one
- * request, and so count toward opening the circuit. `bad_request` and
- * `no_answer` stay out on purpose: both can be caused by what a customer wrote.
+ * request, and so count toward opening the circuit. `bad_request`, `no_answer`
+ * and `prompt_too_long` stay out on purpose: all three can be caused by what a
+ * customer wrote.
  * A visitor who can make the model refuse five messages in a row must not be
  * able to switch the AI off for every workspace this process serves.
  */
@@ -88,7 +97,8 @@ export interface LlmFailureDetails {
   /**
    * The detail inside a kind: for `no_answer` the finish reason, `refusal` or
    * `empty`; for `bad_response` what was wrong (`redirect`, `not_json`,
-   * `shape`, `too_large`).
+   * `shape`, `too_large`); for `prompt_too_long` the length against the
+   * ceiling (`20412/16000`).
    */
   reason?: string | null;
   /** Tokens the call spent anyway — a `no_answer` is billed like an answer. */
@@ -103,7 +113,7 @@ export class LlmProviderError extends Error {
   readonly requestId: string | null;
   readonly reason: string | null;
   readonly usage: LlmUsage | null;
-  /** Requests made before giving up; 0 when the circuit refused the call. */
+  /** Requests made before giving up; 0 when the call was refused before one was made. */
   attempts = 0;
 
   constructor(kind: LlmFailureKind, details: LlmFailureDetails = {}) {

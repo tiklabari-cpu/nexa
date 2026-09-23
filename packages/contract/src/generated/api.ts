@@ -5913,7 +5913,8 @@ export interface paths {
      * AI Agent performance
      * @description AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09,
      *     the invoice's number), the share of closed chats resolved without a human,
-     *     hand-offs to a human and how many skills ran. Defaults to the last 30 days.
+     *     hand-offs to a human, how many skills ran and the provider tokens those runs
+     *     reported. Defaults to the last 30 days.
      */
     get: operations['getReportsAiAgent'];
     put?: never;
@@ -11092,6 +11093,19 @@ export interface components {
       transfer_rate?: number | null;
       /** @description Skills that ran in the window. */
       skill_runs: number;
+      /**
+       * @description What `skill_runs` cost, in the providers' own unit — summed from the
+       *     same runs, where the skill engine wrote each run's usage as the
+       *     providers reported it. Chat-model input and output and the question
+       *     embeddings are separate because they are priced separately. Tokens,
+       *     not money: the price is the operator's contract with the provider. A
+       *     stub provider bills nothing and reports 0.
+       */
+      tokens: {
+        llm_input: number;
+        llm_output: number;
+        embedding_input: number;
+      };
       /** @description Average open-to-close time of automated chats. Null when none. */
       avg_automated_duration_seconds?: number | null;
     };

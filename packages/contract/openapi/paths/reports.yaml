@@ -75,7 +75,8 @@ aiAgent:
     description: |
       AI-specific metrics for the AI Agent tab (FR-MOD-07.4): resolutions (ADR-09,
       the invoice's number), the share of closed chats resolved without a human,
-      hand-offs to a human and how many skills ran. Defaults to the last 30 days.
+      hand-offs to a human, how many skills ran and the provider tokens those runs
+      reported. Defaults to the last 30 days.
     parameters:
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeFrom"
       - $ref: "../openapi.yaml#/components/parameters/ReportRangeTo"

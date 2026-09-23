@@ -305,6 +305,7 @@ export default async function customerRoutes(
       knowledge,
       maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
       timeoutMs: env.LLM_TIMEOUT_MS,
+      maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
     }),
   );
   const ruleBots = new RuleBotResponder(chats, publisher);

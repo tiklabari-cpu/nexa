@@ -31,6 +31,81 @@ import { maskCardNumbers } from './cc-mask.js';
 const CENSOR = '[redacted]';
 
 /**
+ * The provider credentials no log line may carry (tm 255.9 · ADR
+ * docs/adr/pilot-llm-embedding-provider.md §10): the chat model's key, the
+ * embedding provider's key, and the SMTP login. The code knows these by name
+ * only — their values live in the deployment's `.env` — and each has its paths
+ * below, which the server's pino `redact.paths` spreads
+ * ({@link PROVIDER_SECRET_LOG_PATHS}) and each carrier's fallback logger uses.
+ * `log-redact.test.ts` holds every name here to a path at the top of a log
+ * object and one level down.
+ */
+export const PROVIDER_SECRET_ENV_KEYS = [
+  'LLM_API_KEY',
+  'EMBEDDING_API_KEY',
+  'SMTP_USERNAME',
+  'SMTP_PASSWORD',
+] as const;
+
+/**
+ * Where the chat model's key would sit if anyone logged the configuration or a
+ * request (tm 255.6): the env key, `env.llm.openai.apiKey` and the adapter's
+ * `openai.apiKey`, and an outbound request's `headers.authorization` — each at
+ * the top of a log object and one level down, since pino paths do not recurse.
+ */
+export const LLM_SECRET_LOG_PATHS = [
+  'LLM_API_KEY',
+  '*.LLM_API_KEY',
+  'openai.apiKey',
+  '*.openai.apiKey',
+  'llm.openai.apiKey',
+  '*.llm.openai.apiKey',
+  'headers.authorization',
+  '*.headers.authorization',
+];
+
+/**
+ * The embedding provider's key, on the same terms (tm 255.7): the env key,
+ * `env.embedding.openai.apiKey`, the adapter's `openai.apiKey`, and an outbound
+ * request's `headers.authorization`.
+ */
+export const EMBEDDING_SECRET_LOG_PATHS = [
+  'EMBEDDING_API_KEY',
+  '*.EMBEDDING_API_KEY',
+  'openai.apiKey',
+  '*.openai.apiKey',
+  'embedding.openai.apiKey',
+  '*.embedding.openai.apiKey',
+  'headers.authorization',
+  '*.headers.authorization',
+];
+
+/**
+ * The SMTP login (tm 255.3): the env keys, the carrier's
+ * `smtp.{username,password}`, and `env.mail.smtp` — each at the top of a log
+ * object and one level down (`{ env }`, `{ config }`).
+ */
+export const SMTP_SECRET_LOG_PATHS = [
+  'SMTP_USERNAME',
+  'SMTP_PASSWORD',
+  '*.SMTP_USERNAME',
+  '*.SMTP_PASSWORD',
+  'smtp.username',
+  'smtp.password',
+  '*.smtp.username',
+  '*.smtp.password',
+  'mail.smtp.username',
+  'mail.smtp.password',
+  '*.mail.smtp.username',
+  '*.mail.smtp.password',
+];
+
+/** Every provider credential path, once — what the server's pino `redact.paths` spreads. */
+export const PROVIDER_SECRET_LOG_PATHS: readonly string[] = [
+  ...new Set([...SMTP_SECRET_LOG_PATHS, ...LLM_SECRET_LOG_PATHS, ...EMBEDDING_SECRET_LOG_PATHS]),
+];
+
+/**
  * An e-mail address, accepting both the raw `@` and its percent-encoded form —
  * a URL carries `jane%40example.test`, and a pattern that only knows `@` would
  * pass exactly the case this exists for. Deliberately whole-address: keeping the

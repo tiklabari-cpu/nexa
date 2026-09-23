@@ -23,6 +23,7 @@
  * no workspace to check it against, and a second copy of the rule is a copy
  * that can disagree.
  */
+import { LlmProviderError } from './llm-error.js';
 import { MockLlmProvider } from './mock-llm-provider.js';
 import { OpenAiLlmProvider, type LlmLogger } from './openai-llm-provider.js';
 
@@ -53,8 +54,10 @@ export interface LlmCompletionRequest {
 
 /**
  * What the call cost, in tokens — the unit every candidate provider bills in
- * (ADR §8). Money is deliberately absent: the price is the owner's contract,
- * and tm 255.9 attaches these numbers to the existing AI counters.
+ * (ADR §8). Money is deliberately absent: the price is the owner's contract.
+ * The skill engine records these on the run that made the call
+ * (`skill_runs.llm_input_tokens` / `llm_output_tokens`, tm 255.9), where the AI
+ * Agent report sums them beside the run count it already reported.
  */
 export interface LlmUsage {
   inputTokens: number;
@@ -64,6 +67,35 @@ export interface LlmUsage {
 export interface LlmCompletion {
   text: string;
   usage: LlmUsage;
+}
+
+/** The part of a request that is prompt — what `LLM_MAX_PROMPT_CHARS` measures. */
+export type LlmPrompt = Pick<LlmCompletionRequest, 'system' | 'messages'>;
+
+/**
+ * A prompt's length in characters: the system prompt and every message, the
+ * text a provider bills as input. Counted in UTF-16 code units, which is what
+ * `String.length` gives and never fewer than the characters a person sees.
+ */
+export function promptLength(prompt: LlmPrompt): number {
+  return prompt.messages.reduce(
+    (sum, message) => sum + message.content.length,
+    prompt.system.length,
+  );
+}
+
+/**
+ * The per-call prompt ceiling (tm 255.9 · ADR §9.1 `LLM_MAX_PROMPT_CHARS`):
+ * throws `prompt_too_long` for a prompt over `maxChars`, before any provider
+ * sees it. Called by the caller that builds the prompt, immediately before
+ * `complete()`, so a refused prompt costs no request, no tokens and no circuit
+ * breaker count — it fails the way any other call does and a human answers.
+ */
+export function refuseOverlongPrompt(prompt: LlmPrompt, maxChars: number): void {
+  const length = promptLength(prompt);
+  if (length > maxChars) {
+    throw new LlmProviderError('prompt_too_long', { reason: `${length}/${maxChars}` });
+  }
 }
 
 export interface LlmProvider {

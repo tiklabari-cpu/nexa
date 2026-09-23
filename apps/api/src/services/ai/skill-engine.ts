@@ -42,6 +42,19 @@
  * asked without passages is the silent wrong answer this rules out — and the
  * run ends exactly as a model failure does, with `failure` naming the
  * embedding provider and its kind.
+ *
+ * **And so is a prompt over `LLM_MAX_PROMPT_CHARS` (tm 255.9).** It is refused
+ * before the provider sees it — no request, no tokens — as `prompt_too_long`,
+ * and ends the run like every other failure: a transient outage, a refused key
+ * and a refused prompt all leave the customer with a human, and only the
+ * operator's log tells them apart (`failure.transient`, the provider's status
+ * and code).
+ *
+ * **What the run cost is written on the run (tm 255.9).** The model's input and
+ * output tokens and the question's embedding tokens — from a success, and from
+ * a failure that was billed anyway (`no_answer`) — go into the `skill_runs` row
+ * in the same transaction that counts the run, so the AI Agent report reads
+ * runs and their cost from one place and the two cannot drift.
  */
 import { matchIntent, validateSteps, type SendMessageStep, type SkillStep } from '@nexa/ai-mock';
 import {
@@ -56,13 +69,17 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import {
   ANSWER_RETRIEVAL_LIMIT,
   RETRIEVAL_THRESHOLD,
+  type EmbeddedQuery,
   type KnowledgeService,
-  type QueryEmbedding,
 } from './knowledge-service.js';
 import { buildAnswerPrompt } from './provider/answer-prompt.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
 import { LlmProviderError, type LlmFailureKind } from './provider/llm-error.js';
-import type { LlmCompletion, LlmProvider } from './provider/llm-provider.js';
+import {
+  refuseOverlongPrompt,
+  type LlmCompletion,
+  type LlmProvider,
+} from './provider/llm-provider.js';
 
 /**
  * Runs `fn` in a tenant-scoped transaction — `request.withTenant`, in the
@@ -77,6 +94,8 @@ export interface SkillEngineOptions {
   maxOutputTokens: number;
   /** `LLM_TIMEOUT_MS`, passed on every call. */
   timeoutMs: number;
+  /** `LLM_MAX_PROMPT_CHARS`: a longer prompt is never sent (tm 255.9). */
+  maxPromptChars: number;
   /**
    * Finds the passages an answer is grounded in — the server's one instance,
    * over its configured embedding provider. Required: a default would be the
@@ -87,9 +106,41 @@ export interface SkillEngineOptions {
 
 export type SkillOutcome = 'answered' | 'handed_off' | 'skipped';
 
-/** Which provider could not do its part, and how — never its words. */
-export type SkillFailure =
-  { provider: 'llm'; kind: LlmFailureKind } | { provider: 'embedding'; kind: EmbeddingFailureKind };
+/**
+ * Which provider could not do its part, and how — never its words.
+ *
+ * The product does one thing with every failure (a human answers), so what
+ * follows the kind is for the operator only (tm 255.9): whether another attempt
+ * could have worked, and the provider's HTTP status, error code and request id
+ * — the facts its support desk asks for — plus the adapter's detail inside the
+ * kind. All of them already passed the error class's own filter
+ * (`llm-error.ts`); none is the provider's prose.
+ */
+export type SkillFailure = (
+  { provider: 'llm'; kind: LlmFailureKind } | { provider: 'embedding'; kind: EmbeddingFailureKind }
+) & {
+  transient: boolean;
+  status: number | null;
+  code: string | null;
+  requestId: string | null;
+  reason: string | null;
+};
+
+/**
+ * What a run's inference cost, in tokens, as the providers reported it
+ * (tm 255.9). Written on the run's `skill_runs` row. A stub reports 0.
+ */
+export interface SkillRunUsage {
+  llmInputTokens: number;
+  llmOutputTokens: number;
+  embeddingTokens: number;
+}
+
+const NOTHING_SPENT: SkillRunUsage = Object.freeze({
+  llmInputTokens: 0,
+  llmOutputTokens: 0,
+  embeddingTokens: 0,
+});
 
 export interface SkillRunLogEntry {
   step: string;
@@ -114,6 +165,8 @@ export interface SkillRunResult {
    * off: the model failed, or the knowledge search it needed could not run.
    */
   failure: SkillFailure | null;
+  /** Tokens the run's provider calls cost — recorded on the run. */
+  usage: SkillRunUsage;
   log: SkillRunLogEntry[];
 }
 
@@ -126,6 +179,7 @@ const NOTHING_RAN: SkillRunResult = {
   transferTo: null,
   summary: null,
   failure: null,
+  usage: NOTHING_SPENT,
   log: [],
 };
 
@@ -133,11 +187,13 @@ export class SkillEngine {
   readonly #knowledge: KnowledgeService;
   readonly #llm: LlmProvider;
   readonly #limits: { maxOutputTokens: number; timeoutMs: number };
+  readonly #maxPromptChars: number;
 
   constructor(options: SkillEngineOptions) {
     this.#knowledge = options.knowledge;
     this.#llm = options.llm;
     this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
+    this.#maxPromptChars = options.maxPromptChars;
   }
 
   /**
@@ -316,6 +372,7 @@ export class SkillEngine {
     let transferTo: string | null = null;
     let summary: string | null = null;
     let failure: SkillFailure | null = null;
+    let usage = NOTHING_SPENT;
 
     for (const step of input.steps) {
       // A transfer ends the skill: everything after it would be acting on a
@@ -375,6 +432,7 @@ export class SkillEngine {
             persona: input.persona,
             answerIn: input.answerIn,
           });
+          usage = addUsage(usage, outcome.spent);
           if (outcome.failure) {
             failure = outcome.failure;
             // Withdrawn, not just left unset: a question a `request_info` queued
@@ -408,6 +466,7 @@ export class SkillEngine {
       transferTo,
       summary,
       failure,
+      usage,
       log,
     };
   }
@@ -422,7 +481,13 @@ export class SkillEngine {
       persona: Persona;
       answerIn: PersonaLanguage | null;
     },
-  ): Promise<{ text: string | null; detail: string; failure?: SkillFailure }> {
+  ): Promise<{
+    text: string | null;
+    detail: string;
+    failure?: SkillFailure;
+    /** Tokens this step's provider calls cost, billed whether or not it answered. */
+    spent?: Partial<SkillRunUsage>;
+  }> {
     if (step.source === 'text') {
       // Deliberately unshaped (FR-MOD-06.4 · `#### K06.4`). A fixed reply is
       // wording an admin typed by hand and asked to be sent; trimming it to an
@@ -433,7 +498,7 @@ export class SkillEngine {
     }
 
     // Outside any transaction, like the model call below (see the file header).
-    let question: QueryEmbedding;
+    let question: EmbeddedQuery;
     try {
       question = await this.#knowledge.embedQuery(input.message);
     } catch (error) {
@@ -443,10 +508,12 @@ export class SkillEngine {
       // never travels (`embedding-error.ts`).
       return {
         text: null,
-        failure: { provider: 'embedding', kind: error.kind },
+        failure: { provider: 'embedding', kind: error.kind, ...failureFacts(error) },
+        spent: { embeddingTokens: error.usage?.inputTokens ?? 0 },
         detail: `the knowledge search could not run (${error.kind}) — handed to a human`,
       };
     }
+    const embeddingTokens = question.usage.inputTokens;
 
     const passages = this.#passageBudget(input.persona);
     const { chunks: hits, chunksInScope } = await db((tx) =>
@@ -464,6 +531,7 @@ export class SkillEngine {
       // picks the conversation up.
       return {
         text: null,
+        spent: { embeddingTokens },
         detail:
           chunksInScope === 0
             ? // Said apart from a miss, because it is read by whoever has to fix
@@ -478,26 +546,35 @@ export class SkillEngine {
     // Outside any transaction (see the file header). The persona travels in the
     // prompt: the provider — model or stub — is what applies it now, so the
     // run log records what was *asked for* rather than what a trimmer did.
+    const prompt = buildAnswerPrompt({
+      message: input.message,
+      passages: hits.map((hit) => hit.text),
+      persona: input.persona,
+      answerIn: input.answerIn,
+    });
     let completion: LlmCompletion;
     try {
-      completion = await this.#llm.complete({
-        ...buildAnswerPrompt({
-          message: input.message,
-          passages: hits.map((hit) => hit.text),
-          persona: input.persona,
-          answerIn: input.answerIn,
-        }),
-        ...this.#limits,
-      });
+      // Measured where the prompt is whole, so the refusal comes before the
+      // provider — any provider — is reached (tm 255.9).
+      refuseOverlongPrompt(prompt, this.#maxPromptChars);
+      completion = await this.#llm.complete({ ...prompt, ...this.#limits });
     } catch (error) {
       // A defect is not a provider failure: it propagates to the responder's
       // catch and is logged with its stack rather than filed as a hand-off.
       if (!(error instanceof LlmProviderError)) throw error;
-      // The kind is all the run log keeps. The provider already logged its
-      // status and code; its message never travels (`llm-error.ts`).
+      // The kind is all the run log keeps; the facts beside it go to the
+      // operator's log (`ai-responder.ts`). The provider's message never
+      // travels (`llm-error.ts`).
       return {
         text: null,
-        failure: { provider: 'llm', kind: error.kind },
+        failure: { provider: 'llm', kind: error.kind, ...failureFacts(error) },
+        // A `no_answer` was generated, so it was billed; the other kinds carry
+        // no usage and cost 0 here.
+        spent: {
+          embeddingTokens,
+          llmInputTokens: error.usage?.inputTokens ?? 0,
+          llmOutputTokens: error.usage?.outputTokens ?? 0,
+        },
         detail: `the model could not answer (${error.kind}) — handed to a human`,
       };
     }
@@ -506,6 +583,11 @@ export class SkillEngine {
 
     return {
       text: completion.text,
+      spent: {
+        embeddingTokens,
+        llmInputTokens: completion.usage.inputTokens,
+        llmOutputTokens: completion.usage.outputTokens,
+      },
       detail: [
         `answered from "${best.sourceName}" (${best.score})`,
         cited.length > 1 ? `+ ${cited.length - 1} more passage(s)` : '',
@@ -555,6 +637,11 @@ export class SkillEngine {
           ? 'failed'
           : 'succeeded',
         log: { outcome: result.outcome, entries: result.log } as unknown as object,
+        // What the run cost, on the row that counts the run (tm 255.9) — the AI
+        // Agent report sums these beside `skill_runs`, never from a second tally.
+        llmInputTokens: result.usage.llmInputTokens,
+        llmOutputTokens: result.usage.llmOutputTokens,
+        embeddingTokens: result.usage.embeddingTokens,
       },
     });
     // The count an admin sees in the Playbook list. Incremented in the same
@@ -590,6 +677,28 @@ function declined(
         ok: true,
       },
     ],
+  };
+}
+
+/** The operator's half of a {@link SkillFailure}: everything but the kind. */
+function failureFacts(
+  error: LlmProviderError | EmbeddingProviderError,
+): Omit<SkillFailure, 'provider' | 'kind'> {
+  return {
+    transient: error.transient,
+    status: error.status,
+    code: error.code,
+    requestId: error.requestId,
+    reason: error.reason,
+  };
+}
+
+/** A running total plus one step's spend. */
+function addUsage(total: SkillRunUsage, spent: Partial<SkillRunUsage> = {}): SkillRunUsage {
+  return {
+    llmInputTokens: total.llmInputTokens + (spent.llmInputTokens ?? 0),
+    llmOutputTokens: total.llmOutputTokens + (spent.llmOutputTokens ?? 0),
+    embeddingTokens: total.embeddingTokens + (spent.embeddingTokens ?? 0),
   };
 }
 

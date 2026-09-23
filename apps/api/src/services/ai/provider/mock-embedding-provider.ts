@@ -14,6 +14,10 @@
  * `embedding-seam-audit.test.ts` holds the line — because a second caller would
  * be a second way for vectors to reach the index without a space to go with
  * them.
+ *
+ * Its usage is zero, for `MockLlmProvider`'s reason (tm 255.9): the hashing
+ * runs in this process and no provider bills a token of it, so a count
+ * recorded from here would be spend that never happened.
  */
 import { embed, LEXICAL_EMBEDDING_SPACE } from '@nexa/ai-mock';
 import type { EmbeddingProvider, Embeddings } from './embedding-provider.js';
@@ -25,9 +29,7 @@ export class MockEmbeddingProvider implements EmbeddingProvider {
   async embed(texts: readonly string[]): Promise<Embeddings> {
     return {
       vectors: texts.map((text) => embed(text)),
-      // Four characters a token, the stub's usual estimate (`MockLlmProvider`):
-      // it bills nobody, this only keeps `usage` the right order of magnitude.
-      usage: { inputTokens: texts.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0) },
+      usage: { inputTokens: 0 },
     };
   }
 }

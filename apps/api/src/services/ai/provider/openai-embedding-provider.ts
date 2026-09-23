@@ -48,6 +48,7 @@
  * covers the configuration and the outbound request, as the chat adapter's do.
  */
 import pino from 'pino';
+import { EMBEDDING_SECRET_LOG_PATHS } from '../../../lib/log-redact.js';
 import { CircuitBreaker, type CircuitPermit } from './circuit-breaker.js';
 import { EmbeddingProviderError } from './embedding-error.js';
 import {
@@ -106,21 +107,11 @@ const RESPONSE_ENVELOPE_BYTES = 65_536;
 const PROBLEM_MAX_BYTES = 65_536;
 
 /**
- * Where the key would sit if anyone logged the configuration or a request:
- * the env key, `env.embedding.openai.apiKey`, the adapter's `openai.apiKey`,
- * and an outbound request's `headers.authorization` — each at the top of a log
- * object and one level down, since pino paths do not recurse.
+ * Where the key would sit if anyone logged the configuration or a request.
+ * Kept with every other provider credential in `lib/log-redact.ts` (tm 255.9),
+ * which the server's `redact.paths` spreads; used here by the fallback logger.
  */
-export const EMBEDDING_SECRET_LOG_PATHS = [
-  'EMBEDDING_API_KEY',
-  '*.EMBEDDING_API_KEY',
-  'openai.apiKey',
-  '*.openai.apiKey',
-  'embedding.openai.apiKey',
-  '*.embedding.openai.apiKey',
-  'headers.authorization',
-  '*.headers.authorization',
-];
+export { EMBEDDING_SECRET_LOG_PATHS };
 
 /** The narrow log surface the adapter needs — satisfied by Fastify's logger and by pino. */
 export interface EmbeddingLogger {

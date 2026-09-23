@@ -117,7 +117,9 @@ describe("the 'mock' provider keeps every stored vector where it was (FR-MOD-06.
     const { vectors, usage } = await new MockEmbeddingProvider().embed(texts);
 
     expect(vectors).toEqual(texts.map((text) => embed(text)));
-    expect(usage.inputTokens).toBeGreaterThan(0);
+    // The hashing runs in-process and bills nobody, so it reports no tokens —
+    // an estimate would be counted as spend on the run (tm 255.9).
+    expect(usage).toEqual({ inputTokens: 0 });
   });
 
   it('answers an empty batch with nothing', async () => {

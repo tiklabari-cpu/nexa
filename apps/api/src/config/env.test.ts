@@ -624,6 +624,19 @@ describe('production configuration', () => {
         /LLM_MAX_OUTPUT_TOKENS/,
       );
     });
+
+    it('defaults the prompt ceiling above every ordinary prompt, and refuses one no prompt fits (tm 255.9)', () => {
+      // 12,361 is the longest prompt built from ordinary passages (a 10,000-
+      // character message, three of them, the instructions); the default leaves
+      // room above it (`llm-provider.test.ts` measures it).
+      expect(parseEnv(BASE).LLM_MAX_PROMPT_CHARS).toBe(16_000);
+      expect(parseEnv({ ...BASE, LLM_MAX_PROMPT_CHARS: '8000' }).LLM_MAX_PROMPT_CHARS).toBe(8_000);
+      // Below the instructions and one passage every conversation would go to a
+      // human — a misconfiguration, refused at boot rather than in production.
+      expect(() => parseEnv({ ...BASE, LLM_MAX_PROMPT_CHARS: '500' })).toThrow(
+        /LLM_MAX_PROMPT_CHARS/,
+      );
+    });
   });
 
   /**

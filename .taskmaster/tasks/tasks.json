@@ -10199,14 +10199,14 @@
             "description": "AI kullanimi bugun fatura ve raporlarda sayiliyor ama saydigi sey sahte bir cikarim; gercek saglayiciyla token ve maliyet gercek olur. XHIGH gerekcesi: (2) PARA DOGRULUGU -- bu sayilar AI resolution sayacina ve faturaya gidiyor.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami ve sir siniri: ust gorev tm 255 details.\n\nXHIGH GEREKCESI (PLAN S5.1.1 / S D175): (2) para dogrulugu -- faturaya giden sayilar.\n\nKODDA BUGUN: AI kullanim sayaclari ve kota yuzeyi mevcut (reports/billing yolu; AI_RESOLUTIONS_INCLUDED / AI_OVERAGE_CENTS env anahtarlari .env.example'da). 255.5'in FakeLlmProvider'i cagri sayisini zaten tutuyor. Eksik olan: gercek token kullanimi, istek basina tavan ve maliyet.\n\nKAPSAM:\n1) Kullanim kaydi: her cikarimdan donen usage (girdi/cikti token) kaydedilir ve MEVCUT AI sayaclarina baglanir -- yeni bir paralel sayac YARATILMAZ; once mevcut sayacin nerede tutuldugu okunur, oraya eklenir.\n2) Istek basina tavan: LLM_MAX_OUTPUT_TOKENS (255.1'in adlandirmasi) adapter'a gecer ve saglayiciya iletilir; ayrica istem uzunlugu icin ust sinir -- asan istek saglayiciya GONDERILMEDEN reddedilir ve insana devredilir.\n3) Hata taksonomisi: 255.6'nin gecici/kalici siniflari urun tarafinda tek bir anlasilir sonuca baglanir (insana devir) ve log'da saglayici hata kodu ile ayirt edilebilir olur.\n4) Sir redaction denetimi: LLM_API_KEY, EMBEDDING_API_KEY ve SMTP_PASSWORD apps/api/src/lib/log-redact.ts listesinde; istem ve yanit METNI log'a ve telemetriye yazilmaz. Bunun testi bu gorevde toplu olarak yazilir.\n5) Kota davranisi: kota asildiginda bugunku davranis ne ise KORUNUR; degistirilmez (pilot kapsami). Yalnizca sayilan seyin gercek olmasi saglanir.\n\nKAPSAM DISI: fiyatlandirma modeli degisikligi; %80 kota uyari e-postasi (denetim bulgusu N2, pilot disi); faturalama/tahsilat (G9-PAY, kapsam disi); saglayici tarafi rate-limit pazarligi.\n\nSIR SINIRI: anahtar degerleri hicbir yerde; istem/yanit metni log'da yok.\n\nPRD: FR-MOD-07.3.2 (Manual/Assisted/Automated + billing AI resolution iliskisi) - FR-05-06.EK1.",
             "testStrategy": "(1) Birim: sahte saglayici usage dondurur; kayit mevcut AI sayacina yansir (yeni paralel sayac olmadigi kod incelemesiyle + testle gosterilir). (2) Birim: LLM_MAX_OUTPUT_TOKENS adapter istegine gecer. (3) NEGATIF: tavani asan istem saglayiciya GONDERILMEZ (fetch sayaci 0) ve konusma insana duser. (4) Hata taksonomisi: gecici ve kalici hata ayni urun sonucunu (insana devir) verir, log'da ayirt edilir. (5) REDACTION TESTI: LLM_API_KEY / EMBEDDING_API_KEY / SMTP_PASSWORD iceren log cagrilari '[redacted]' ile cikar; istem ve yanit metni log kaydinda BULUNMAZ -- negatif assertion. (6) Integration: bir AI yaniti sonrasi raporlardaki AI sayaci beklenen kadar artar. (7) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "255.6",
               "255.7"
             ],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-23T09:05:51.628Z"
           },
           {
             "id": 10,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-23T09:04:18.240Z"
+        "updatedAt": "2026-09-23T09:05:51.628Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-23T09:04:18.242Z",
+      "lastModified": "2026-09-23T09:05:51.629Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

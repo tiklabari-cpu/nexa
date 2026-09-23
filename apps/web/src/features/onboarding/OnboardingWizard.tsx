@@ -450,12 +450,21 @@ function TeamStep(): ReactElement {
   const t = useTranslate();
   const api = useApiClient();
   const [sent, setSent] = useState<number | null>(null);
+  const [notEmailed, setNotEmailed] = useState<string[]>([]);
 
   const invite = useMutation({
     mutationFn: (list: string[]) =>
-      api.post<{ items: unknown[] }>('/invitations', { emails: list, role: 'agent' }),
+      api.post<{ items: unknown[]; undelivered?: Array<{ email: string }> }>('/invitations', {
+        emails: list,
+        role: 'agent',
+      }),
     onSuccess: (result) => {
-      setSent(result.items.length);
+      // The invitations all exist; "sent" counts only the emails that went out
+      // (tm 255.4). This step has no link to hand over, so the rest are named
+      // and sent to the Team page, whose invite modal shows one.
+      const missed = result.undelivered ?? [];
+      setSent(result.items.length - missed.length);
+      setNotEmailed(missed.map((miss) => miss.email));
     },
   });
 
@@ -512,9 +521,14 @@ function TeamStep(): ReactElement {
           </button>
         </div>
       </form>
-      {sent !== null && (
+      {sent !== null && sent > 0 && (
         <p role="status" className="text-2xs text-success">
           {t('auth.onboarding.team.sent', { count: sent })}
+        </p>
+      )}
+      {notEmailed.length > 0 && (
+        <p role="status" className="text-2xs text-content-secondary">
+          {t('auth.onboarding.team.undelivered', { emails: notEmailed.join(', ') })}
         </p>
       )}
       {form.submitError && (

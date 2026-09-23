@@ -38,6 +38,7 @@
 import { type PrismaClient } from '@prisma/client';
 import type { SlaSubjectType, SlaTarget } from '@nexa/types';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
+import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import { evaluate, readClock, type SlaClock } from './sla-service.js';
 
@@ -51,13 +52,18 @@ export interface TenantSweepResult {
   marked: number;
   /** Breaches announced this pass, marked here or by an earlier request. */
   notified: number;
+  /**
+   * Breaches whose alert did not go out this pass (tm 255.4). Still
+   * unannounced, so the next pass finds them and tries again.
+   */
+  unannounced: number;
 }
 
 export interface SlaSweepReport {
   startedAt: string;
   finishedAt: string;
   tenants: TenantSweepResult[];
-  totals: { tenants: number; marked: number; notified: number };
+  totals: { tenants: number; marked: number; notified: number; unannounced: number };
 }
 
 interface TenantRow {
@@ -110,6 +116,7 @@ export class SlaSweeper {
         tenants: results.length,
         marked: results.reduce((sum, r) => sum + r.marked, 0),
         notified: results.reduce((sum, r) => sum + r.notified, 0),
+        unannounced: results.reduce((sum, r) => sum + r.unannounced, 0),
       },
     };
   }
@@ -135,11 +142,11 @@ export class SlaSweeper {
     };
 
     const clock = await withTenant(this.#db, context, (tx) => readClock(tx, context, now));
-    if (!clock) return { ...base, measured: false, marked: 0, notified: 0 };
+    if (!clock) return { ...base, measured: false, marked: 0, notified: 0, unannounced: 0 };
 
     const marked = await this.#markOverdue(context, clock, now);
-    const notified = await this.#notify(context, now);
-    return { ...base, measured: true, marked, notified };
+    const { notified, unannounced } = await this.#notify(context, now);
+    return { ...base, measured: true, marked, notified, unannounced };
   }
 
   /** Judge every still-running clock that could possibly be late, and mark the ones that are. */
@@ -234,8 +241,19 @@ export class SlaSweeper {
    * alerts is a mailbox nobody reads. `notified_at` is stamped *after* the send
    * succeeds — a crash between the two re-sends an alert on the next pass,
    * which is the harmless direction; the other order loses it silently.
+   *
+   * A send that fails is the same case, reached without a crash (tm 255.4): the
+   * rows stay unannounced and the next pass tries again. It is reported, not
+   * thrown — this loop runs every workspace in turn, and one owner's mailbox
+   * refusing a message used to end the pass for every workspace after it,
+   * breaches unmarked. An `unconfirmed` send is stamped: the digest very likely
+   * arrived, and re-sending it every pass is the noise this method batches to
+   * avoid.
    */
-  async #notify(context: TenantContext, now: Date): Promise<number> {
+  async #notify(
+    context: TenantContext,
+    now: Date,
+  ): Promise<{ notified: number; unannounced: number }> {
     const pending = await withTenant(this.#db, context, (tx) =>
       tx.slaBreach.findMany({
         where: { notifiedAt: null },
@@ -250,7 +268,7 @@ export class SlaSweeper {
         },
       }),
     );
-    if (pending.length === 0) return 0;
+    if (pending.length === 0) return { notified: 0, unannounced: 0 };
 
     const recipient = await this.#recipient(context);
     // Nobody to tell is not a reason to keep re-finding the same rows every
@@ -258,12 +276,13 @@ export class SlaSweeper {
     // them. Marking them announced keeps the sweep's report honest about what
     // is outstanding.
     if (recipient) {
-      await this.#mailer.send({
+      const outcome = await deliver(this.#mailer, {
         to: recipient,
         subject: `Nexa: ${pending.length} SLA target${pending.length === 1 ? '' : 's'} missed`,
         body: renderBreachDigest(pending),
         kind: 'notification',
       });
+      if (outcome.status === 'failed') return { notified: 0, unannounced: pending.length };
     }
 
     await withTenant(this.#db, context, (tx) =>
@@ -272,7 +291,7 @@ export class SlaSweeper {
         data: { notifiedAt: now },
       }),
     );
-    return pending.length;
+    return { notified: pending.length, unannounced: 0 };
   }
 
   /**

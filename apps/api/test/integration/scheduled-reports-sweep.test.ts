@@ -44,6 +44,7 @@ import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
+import { PermanentMailError } from '../../src/services/mail/mail-error.js';
 import { periodFor, startOfUtcDay } from '../../src/services/reports/scheduled-report-period.js';
 import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
 import {
@@ -303,6 +304,32 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
     expect(retry.totals).toMatchObject({ delivered: 0, skipped: 1 });
     expect(await mailbox()).toHaveLength(0);
     expect(await runsOf(fx.a)).toHaveLength(1);
+  });
+
+  it('still mails the other recipients when one refuses, and records what landed (tm 255.4)', async () => {
+    // The period is consumed, not retried — so before tm 255.4, the first
+    // recipient's refusal ended the loop and everyone after them in the list
+    // never got this period's report at all.
+    await defineSchedule(fx.a, { recipients: [fx.a.agentEmail, fx.a.ownerEmail] });
+    const refusing: Mailer = {
+      send: async (message) => {
+        if (message.to === fx.a.agentEmail) {
+          throw new PermanentMailError({ code: 'rejected', phase: 'rcpt_to', smtpCode: 550 });
+        }
+        await mailer.send(message);
+      },
+    };
+
+    const report = await sweep(refusing);
+
+    expect(report.totals).toMatchObject({ delivered: 0, failed: 1 });
+    expect((await mailbox()).map((m) => m.to)).toEqual([fx.a.ownerEmail]);
+    const [run] = await runsOf(fx.a);
+    expect(run?.status).toBe('failed');
+    expect(run?.recipientCount).toBe(1);
+    // The carrier's classification, never the address it refused.
+    expect(run?.error).toContain('rejected');
+    expect(run?.error).not.toContain(fx.a.agentEmail);
   });
 
   it('keeps sweeping the rest of the workspace after one definition fails', async () => {

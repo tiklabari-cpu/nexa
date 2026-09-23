@@ -532,6 +532,16 @@ ssoDomainChallenge:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503":
+        description: >-
+          The challenge was recorded but its message could not be sent
+          (`service_unavailable`). The owner is the only person who can learn
+          that, so it is not hidden; another challenge may be sent a minute
+          later. A message whose delivery was handed over but never confirmed
+          is answered as sent (202) — it may already be in the mailbox.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
 ssoDomainVerify:
   parameters:

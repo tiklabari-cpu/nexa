@@ -29,7 +29,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from
 import { generateShortId, WORK_SCHEDULE_DAYS } from '@nexa/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { ChatService } from '../../src/services/chat/chat-service.js';
-import { FileMailer } from '../../src/services/mail/mailer.js';
+import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
+import { PermanentMailError } from '../../src/services/mail/mail-error.js';
 import type { AgentPrincipal } from '../../src/services/auth/principal.js';
 import { SlaSweeper } from '../../src/services/sla/sla-sweep.js';
 import {
@@ -556,6 +557,47 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
     expect(second.totals.notified).toBe(0);
     expect(await breaches(fx.a)).toHaveLength(1);
     expect(await mailer.outbox()).toHaveLength(1);
+  });
+
+  it("finishes the pass when one workspace's alert cannot be sent, and retries it next pass (tm 255.4)", async () => {
+    // A and B are both late. A's owner's mailbox refuses the alert. Before tm
+    // 255.4 the refusal was thrown out of the loop: the pass ended there, so
+    // any workspace after A went unswept — breaches unmarked, owners untold.
+    const now = new Date();
+    await setPolicy(fx.a, { firstResponseMinutes: 30 });
+    await setPolicy(fx.b, { firstResponseMinutes: 30 });
+    await seedChat(fx.a, new Date(now.getTime() - 2 * HOUR));
+    await seedChat(fx.b, new Date(now.getTime() - 2 * HOUR));
+
+    const spool = new FileMailer(mailDir);
+    let refuseA = true;
+    const mailer: Mailer = {
+      send: async (message) => {
+        if (refuseA && message.to === fx.a.ownerEmail) {
+          throw new PermanentMailError({ code: 'rejected', phase: 'rcpt_to', smtpCode: 550 });
+        }
+        await spool.send(message);
+      },
+    };
+
+    const report = await new SlaSweeper(appRole, mailer).run({ now });
+
+    const a = report.tenants.find((r) => r.licenseId === fx.a.licenseId.toString());
+    const b = report.tenants.find((r) => r.licenseId === fx.b.licenseId.toString());
+    expect(a).toMatchObject({ measured: true, marked: 1, notified: 0, unannounced: 1 });
+    expect(b).toMatchObject({ measured: true, marked: 1, notified: 1, unannounced: 0 });
+    expect(report.totals.unannounced).toBe(1);
+
+    // A's breach is recorded but still owed its alert; B's went out.
+    expect((await breaches(fx.a))[0]?.notifiedAt).toBeNull();
+    expect((await breaches(fx.b))[0]?.notifiedAt).not.toBeNull();
+    expect((await spool.outbox()).map((m) => m.to)).toEqual([fx.b.ownerEmail]);
+
+    // The next pass, with the mailbox back, owes A exactly one alert.
+    refuseA = false;
+    const next = await new SlaSweeper(appRole, mailer).run({ now });
+    expect(next.totals).toMatchObject({ marked: 0, notified: 1, unannounced: 0 });
+    expect((await breaches(fx.a))[0]?.notifiedAt).not.toBeNull();
   });
 
   it('marks a breach once, whichever writer gets there first', async () => {

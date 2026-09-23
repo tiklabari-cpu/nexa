@@ -45,6 +45,8 @@ export interface FakeSmtpOptions {
   password?: string;
   /** Override any step; `undefined` keeps the default behaviour. */
   respond?: (step: FakeStep) => FakeReply | undefined;
+  /** A fixed port — the e2e stand-in needs one the API can be configured with. Default: any free port. */
+  port?: number;
 }
 
 export interface FakeSession {
@@ -81,7 +83,10 @@ export class FakeSmtpServer {
 
   static async start(options: FakeSmtpOptions): Promise<FakeSmtpServer> {
     const server = new FakeSmtpServer(options);
-    await new Promise<void>((resolve) => server.#server.listen(0, '127.0.0.1', resolve));
+    await new Promise<void>((resolve, reject) => {
+      server.#server.once('error', reject);
+      server.#server.listen(options.port ?? 0, '127.0.0.1', resolve);
+    });
     server.#port = (server.#server.address() as net.AddressInfo).port;
     return server;
   }

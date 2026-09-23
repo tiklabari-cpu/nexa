@@ -175,6 +175,12 @@ export const team: Messages = {
   'team.invite.linkSentNotice':
     'Davetler gönderildi. Bu bağlantı yalnızca bir kez çalışır ve yedi gün geçerlidir — bir daha gösterilmez.',
   'team.invite.copyLink': 'Davet bağlantısını kopyala',
+  'team.invite.undelivered.summary':
+    'Davetler oluşturuldu, ancak her e-postanın gönderildiği doğrulanamadı. Bağlantılar çalışıyor — kendiniz iletin:',
+  'team.invite.undelivered.failed': '{email} — e-posta gönderilemedi.',
+  'team.invite.undelivered.unconfirmed':
+    '{email} — e-posta ulaşmamış olabilir. Görmezlerse bağlantıyı kendiniz gönderin.',
+  'team.invite.undelivered.copy': '{email} için bağlantıyı kopyala',
   'team.invite.discardConfirm': 'Yazdığınız adresler atılsın mı?',
   'team.invite.cancel': 'İptal',
   'team.invite.done': 'Bitti',

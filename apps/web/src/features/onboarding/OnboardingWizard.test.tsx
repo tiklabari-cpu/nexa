@@ -223,6 +223,43 @@ describe('OnboardingWizard step count and resume (FR-MOD-00.4)', () => {
   });
 });
 
+describe('OnboardingWizard team step when an email does not go out (tm 255.4)', () => {
+  it('counts only the emails that went out and names the rest', async () => {
+    // The server keeps every invitation and answers 201; `undelivered` says
+    // which emails did not leave. "Sent 2" here would be the step claiming a
+    // mail the carrier refused.
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      const u = String(url);
+      if (u.includes('/invitations') && init?.method === 'POST') {
+        return okJson({
+          items: [
+            { id: 'i-1', email: 'ada@example.test', accept_url: 'http://app/join?token=a' },
+            { id: 'i-2', email: 'bob@example.test', accept_url: 'http://app/join?token=b' },
+          ],
+          undelivered: [{ id: 'i-2', email: 'bob@example.test', reason: 'failed' }],
+        });
+      }
+      if (u.includes('/onboarding/state')) {
+        return okJson({ ...NOT_SET_UP_STATE, demo_seeded: true, demo_seeded_at: 'now' });
+      }
+      return okJson({});
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    renderWizard();
+    await screen.findByRole('heading', { name: 'Invite your team' });
+    await userEvent.type(
+      screen.getByLabelText('Teammate emails'),
+      'ada@example.test, bob@example.test',
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+
+    expect(await screen.findByText('Sent 1 invitation.')).toBeInTheDocument();
+    expect(screen.getByText(/not confirmed as sent for: bob@example\.test/)).toBeInTheDocument();
+    expect(screen.queryByText('Sent 2 invitations.')).toBeNull();
+  });
+});
+
 describe('OnboardingWizard localisation (NFR-I18N2)', () => {
   afterEach(() => resetLocale());
 

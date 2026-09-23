@@ -182,6 +182,12 @@ export const team: Messages = {
   'team.invite.linkSentNotice':
     'Invitations sent. This link works once and lasts seven days — it is not shown again.',
   'team.invite.copyLink': 'Copy invite link',
+  'team.invite.undelivered.summary':
+    'The invitations were created, but not every email was confirmed as sent. Their links work — pass them on yourself:',
+  'team.invite.undelivered.failed': '{email} — the email could not be sent.',
+  'team.invite.undelivered.unconfirmed':
+    '{email} — the email may not have arrived. If they do not see it, send them the link.',
+  'team.invite.undelivered.copy': 'Copy link for {email}',
   'team.invite.discardConfirm': 'Discard the addresses you have typed?',
   'team.invite.cancel': 'Cancel',
   'team.invite.done': 'Done',

@@ -76,10 +76,14 @@ describe('provider selection (M-PROV-a)', () => {
     /**
      * Password reset is the cheapest route that sends mail without a token: it
      * is public, and it mails only an address that really exists — the property
-     * `account-lifecycle.test.ts` owns. Here it is only the trigger.
+     * `account-lifecycle.test.ts` owns. Here it is only the trigger. Its mail
+     * leaves after the answer (tm 255.4), so the trigger waits for it.
      */
-    const requestReset = (server: TestServer) =>
-      server.post('/auth/password-reset', { email: fx.a.ownerEmail });
+    const requestReset = async (server: TestServer) => {
+      const response = await server.post('/auth/password-reset', { email: fx.a.ownerEmail });
+      await server.app.backgroundMail.settled();
+      return response;
+    };
 
     it('spools the message when the key says "file", under NODE_ENV=test', async () => {
       const server = await startTestServer({ MAIL_PROVIDER: 'file', MAIL_DIR: dir });

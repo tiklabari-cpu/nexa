@@ -218,6 +218,8 @@ export const auth: Messages = {
   'auth.onboarding.team.submitting': 'Sending…',
   'auth.onboarding.team.sent.one': 'Sent {count} invitation.',
   'auth.onboarding.team.sent.other': 'Sent {count} invitations.',
+  'auth.onboarding.team.undelivered':
+    'Invited, but the email was not confirmed as sent for: {emails}. Invite them again from Team to get a link you can copy.',
   'auth.onboarding.sample.addLabel': 'Add sample data',
   'auth.onboarding.sample.body':
     'Populate your workspace with a few saved replies, tags and one sample conversation so you have something to explore straight away. You can archive or delete it any time.',

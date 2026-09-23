@@ -116,7 +116,7 @@ describe('buildSchedulerJobs', () => {
         (j) => j.name === 'sla',
       );
       const outcome = await job?.run(context());
-      expect(outcome?.counts).toEqual({ tenants: 0, marked: 0, notified: 0 });
+      expect(outcome?.counts).toEqual({ tenants: 0, marked: 0, notified: 0, unannounced: 0 });
     });
 
     it('siem finds nothing to export and reports zero tenants', async () => {

@@ -123,10 +123,15 @@ describe('account lifecycle', () => {
       const mailer = new FileMailer(dir);
       const mailed = await startTestServer({}, { mailer });
 
+      // The mail leaves after the answer (tm 255.4), so wait for what the
+      // request started before reading the spool — including for the unknown
+      // address, where "nothing" must mean nothing rather than "not yet".
       await mailed.post('/auth/password-reset', { email: 'nobody-at-all@example.test' });
+      await mailed.app.backgroundMail.settled();
       expect(await mailer.outbox()).toHaveLength(0);
 
       await mailed.post('/auth/password-reset', { email: fx.a.ownerEmail });
+      await mailed.app.backgroundMail.settled();
       const outbox = await mailer.outbox();
       expect(outbox).toHaveLength(1);
       expect(outbox[0]!.to).toBe(fx.a.ownerEmail);

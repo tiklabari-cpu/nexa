@@ -210,3 +210,87 @@ describe('InviteTeammates seat cost (FR-MOD-04.4)', () => {
     ).toBeVisible();
   });
 });
+
+describe('InviteTeammates when an email does not go out (FR-MOD-04.4 · tm 255.4)', () => {
+  /** `GET /invitations` as usual; `POST` answers with the carrier's verdict per address. */
+  function stubCreate(undelivered: Array<{ id: string; email: string; reason: string }>): void {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (!url.includes('/invitations')) throw new Error(`unexpected fetch: ${url}`);
+        const body =
+          init?.method === 'POST'
+            ? {
+                items: [
+                  {
+                    id: 'i-1',
+                    email: 'ada@example.test',
+                    role: 'admin',
+                    accept_url: 'http://app/join?token=a',
+                  },
+                  {
+                    id: 'i-2',
+                    email: 'bob@example.test',
+                    role: 'admin',
+                    accept_url: 'http://app/join?token=b',
+                  },
+                  {
+                    id: 'i-3',
+                    email: 'cy@example.test',
+                    role: 'admin',
+                    accept_url: 'http://app/join?token=c',
+                  },
+                ],
+                undelivered,
+              }
+            : { items: [], seats: SEATS };
+        return {
+          ok: true,
+          status: init?.method === 'POST' ? 201 : 200,
+          headers: { get: () => null },
+          json: async () => body,
+        } as unknown as Response;
+      }),
+    );
+  }
+
+  async function invite(addresses: string): Promise<void> {
+    renderInvite();
+    await openModal();
+    await userEvent.type(screen.getByLabelText('Email addresses'), addresses);
+    await userEvent.click(screen.getByRole('button', { name: /^Invite \d/ }));
+  }
+
+  it("names each address that was not emailed and hands over that address's own link", async () => {
+    stubCreate([
+      { id: 'i-2', email: 'bob@example.test', reason: 'failed' },
+      { id: 'i-3', email: 'cy@example.test', reason: 'unconfirmed' },
+    ]);
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+    await invite('ada@example.test, bob@example.test, cy@example.test');
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('bob@example.test — the email could not be sent.');
+    expect(status).toHaveTextContent('cy@example.test — the email may not have arrived.');
+    // "Invitations sent" would be false for two of the three.
+    expect(screen.queryByText(/Invitations sent/)).toBeNull();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy link for bob@example.test' }));
+    expect(writeText).toHaveBeenLastCalledWith('http://app/join?token=b');
+    await userEvent.click(screen.getByRole('button', { name: 'Copy link for cy@example.test' }));
+    expect(writeText).toHaveBeenLastCalledWith('http://app/join?token=c');
+    // The one that was emailed gets no row of its own.
+    expect(screen.queryByRole('button', { name: 'Copy link for ada@example.test' })).toBeNull();
+  });
+
+  it('keeps the ordinary notice when every email went out', async () => {
+    stubCreate([]);
+
+    await invite('ada@example.test, bob@example.test, cy@example.test');
+
+    expect(await screen.findByText(/Invitations sent/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Copy link for/ })).toBeNull();
+  });
+});

@@ -128,6 +128,7 @@ export function buildSchedulerJobs({
             tenants: report.totals.tenants,
             marked: report.totals.marked,
             notified: report.totals.notified,
+            unannounced: report.totals.unannounced,
           },
         };
       },

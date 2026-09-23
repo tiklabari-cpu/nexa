@@ -45,6 +45,7 @@ import { withTenant, type TenantClient, type TenantContext } from '../../lib/ten
 import type { Principal } from '../auth/principal.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { recordAiResolution, threadWasAiResolved } from '../billing/metering.js';
+import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import {
   renderTranscript,
@@ -1227,7 +1228,10 @@ export class ChatService {
         });
         // Nothing worth sending this party (e.g. a chat of only system events).
         if (!content) continue;
-        await mailer.send({
+        // Each party on its own (tm 255.4): `deliver` does not throw, so the
+        // visitor's copy failing no longer costs the agent theirs. The carrier
+        // logs its own failure; this service holds no logger to add to it.
+        await deliver(mailer, {
           to: recipient.to,
           kind: 'notification',
           subject: content.subject,

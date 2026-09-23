@@ -102,6 +102,12 @@ passwordReset:
       (FR-MOD-00.3). The work done is also kept comparable in both branches, so
       response time does not answer the question the body refuses to.
 
+      That includes the email. Only an existing account is mailed, so the send
+      starts **after** this response has been written and nothing about it —
+      the carrier's latency, a timeout, a refusal — can reach the answer. A
+      failed send is logged without the address; asking again sends a new link
+      and spends the old one.
+
       The token is random, stored only as a hash, single-use and short-lived.
       Consuming it revokes existing sessions — a password reset is what someone
       does when they think another person has their account, and leaving that
@@ -267,16 +273,50 @@ invitations:
                   invitable — ownership transfers deliberately, not by email.
     responses:
       "201":
-        description: Created
+        description: |
+          Created. The invitations are committed before any email is sent, and
+          an email that does not go out does not undo them: every item's
+          `accept_url` works either way. Which emails did not go out is in
+          `undelivered` — the answer is still 201, because what was asked for
+          (the invitations) happened.
         content:
           application/json:
             schema:
               type: object
-              required: [items]
+              required: [items, undelivered]
               properties:
                 items:
                   type: array
                   items: { $ref: "../openapi.yaml#/components/schemas/Invitation" }
+                undelivered:
+                  type: array
+                  description: |
+                    The invitations from `items` whose email was not confirmed
+                    as sent. Empty when every email went out. Their links are
+                    live; "Copy invite link" is how they reach the person.
+                    Inviting the same address again replaces the invitation (a
+                    new link, the old one stops working) rather than adding a
+                    second.
+                  items:
+                    type: object
+                    required: [id, email, reason]
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        description: The invitation's id, as in `items`.
+                      email: { type: string }
+                      reason:
+                        type: string
+                        enum: [failed, unconfirmed]
+                        description: |
+                          `failed` — the email did not go out: the mail server
+                          refused it, or could not be reached after retries.
+                          `unconfirmed` — it was handed to the mail server but
+                          acceptance was never confirmed, so it may have
+                          arrived. It is not sent again: the link inside is
+                          single-use, and two copies are two chances for the
+                          wrong person to use it.
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }

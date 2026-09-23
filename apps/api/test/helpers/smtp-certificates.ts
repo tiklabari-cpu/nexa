@@ -12,20 +12,22 @@
  * Validity is pinned to 2025-01-01 → 2125-01-01 so the fixtures cannot change
  * meaning with the calendar.
  */
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-/** Self-signed test CA, `CN=Nexa SMTP Test CA`. The trust anchor the tests hand the carrier. */
-export const SMTP_TEST_CA_PEM = `-----BEGIN CERTIFICATE-----
-MIIBoDCCAUWgAwIBAgIUHvOV6Ue/SX5vadeA331jwS+xrukwCgYIKoZIzj0EAwIw
-HDEaMBgGA1UEAwwRTmV4YSBTTVRQIFRlc3QgQ0EwIBcNMjUwMTAxMDAwMDAwWhgP
-MjEyNTAxMDEwMDAwMDBaMBwxGjAYBgNVBAMMEU5leGEgU01UUCBUZXN0IENBMFkw
-EwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEZTVMSVsAjoalypFXq1ZeXY1BxHmwEhT6
-EBAu0W5qHH4uie/BuojWuXLb7r49QhpmqEHbAokeFY7FxRkpjk+v16NjMGEwHQYD
-VR0OBBYEFOK9mg3W0ZxGFLBnTIau9etcAlibMB8GA1UdIwQYMBaAFOK9mg3W0ZxG
-FLBnTIau9etcAlibMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMAoG
-CCqGSM49BAMCA0kAMEYCIQCo3NoRTF6Be/+vxr9lRRlpE3MgMA3S8G/qief04Lq1
-awIhAKQLYT82uvEpYtg/R6IMmpX3BlfYg8dndWyLtQFKLH5X
------END CERTIFICATE-----
-`;
+/**
+ * Self-signed test CA, `CN=Nexa SMTP Test CA`. The trust anchor the tests hand the carrier.
+ *
+ * Kept as a file (tm 255.4) because the e2e stack needs it as one: the API
+ * there is a real process using the real carrier, and the only way to add a
+ * trust anchor to a process without an option that relaxes verification is
+ * `NODE_EXTRA_CA_CERTS`, which takes a path. One copy, read by both. `.crt`
+ * rather than `.pem` because `.gitignore` refuses `*.pem` as key material, and
+ * that guard is worth more than the conventional extension; this file is a
+ * public certificate, and the key that signed it was never kept.
+ */
+export const SMTP_TEST_CA_PEM_PATH = fileURLToPath(new URL('./smtp-test-ca.crt', import.meta.url));
+export const SMTP_TEST_CA_PEM = readFileSync(SMTP_TEST_CA_PEM_PATH, 'utf8');
 
 /** Signed by {@link SMTP_TEST_CA_PEM}; SAN `DNS:localhost, IP:127.0.0.1`. */
 export const SMTP_SERVER_CERT_PEM = `-----BEGIN CERTIFICATE-----

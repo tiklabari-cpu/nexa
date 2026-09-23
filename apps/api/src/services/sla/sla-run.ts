@@ -38,7 +38,11 @@ async function main(): Promise<void> {
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.stderr.write(
       `sla: marked ${report.totals.marked} breach(es) and announced ` +
-        `${report.totals.notified} across ${report.totals.tenants} tenant(s)\n`,
+        `${report.totals.notified} across ${report.totals.tenants} tenant(s)` +
+        (report.totals.unannounced > 0
+          ? `; ${report.totals.unannounced} left unannounced (alert not sent, retried next pass)`
+          : '') +
+        '\n',
     );
   } finally {
     await db.$disconnect();

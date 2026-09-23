@@ -397,6 +397,12 @@ export interface paths {
      *     (FR-MOD-00.3). The work done is also kept comparable in both branches, so
      *     response time does not answer the question the body refuses to.
      *
+     *     That includes the email. Only an existing account is mailed, so the send
+     *     starts **after** this response has been written and nothing about it —
+     *     the carrier's latency, a timeout, a refusal — can reach the answer. A
+     *     failed send is logged without the address; asking again sends a new link
+     *     and spends the old one.
+     *
      *     The token is random, stored only as a hash, single-use and short-lived.
      *     Consuming it revokes existing sessions — a password reset is what someone
      *     does when they think another person has their account, and leaving that
@@ -13186,7 +13192,13 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Created */
+      /**
+       * @description Created. The invitations are committed before any email is sent, and
+       *     an email that does not go out does not undo them: every item's
+       *     `accept_url` works either way. Which emails did not go out is in
+       *     `undelivered` — the answer is still 201, because what was asked for
+       *     (the invitations) happened.
+       */
       201: {
         headers: {
           [name: string]: unknown;
@@ -13194,6 +13206,33 @@ export interface operations {
         content: {
           'application/json': {
             items: components['schemas']['Invitation'][];
+            /**
+             * @description The invitations from `items` whose email was not confirmed
+             *     as sent. Empty when every email went out. Their links are
+             *     live; "Copy invite link" is how they reach the person.
+             *     Inviting the same address again replaces the invitation (a
+             *     new link, the old one stops working) rather than adding a
+             *     second.
+             */
+            undelivered: {
+              /**
+               * Format: uuid
+               * @description The invitation's id, as in `items`.
+               */
+              id: string;
+              email: string;
+              /**
+               * @description `failed` — the email did not go out: the mail server
+               *     refused it, or could not be reached after retries.
+               *     `unconfirmed` — it was handed to the mail server but
+               *     acceptance was never confirmed, so it may have
+               *     arrived. It is not sent again: the link inside is
+               *     single-use, and two copies are two chances for the
+               *     wrong person to use it.
+               * @enum {string}
+               */
+              reason: 'failed' | 'unconfirmed';
+            }[];
           };
         };
       };
@@ -17260,6 +17299,15 @@ export interface operations {
         };
       };
       429: components['responses']['TooManyRequests'];
+      /** @description The challenge was recorded but its message could not be sent (`service_unavailable`). The owner is the only person who can learn that, so it is not hidden; another challenge may be sent a minute later. A message whose delivery was handed over but never confirmed is answered as sent (202) — it may already be in the mailbox. */
+      503: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
     };
   };
   verifySsoDomain: {

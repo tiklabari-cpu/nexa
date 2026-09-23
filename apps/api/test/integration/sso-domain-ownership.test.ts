@@ -30,6 +30,7 @@ import { VALID_CERTIFICATE_PEM } from '../helpers/certificates.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 import { FileMailer } from '../../src/services/mail/mailer.js';
+import { PermanentMailError, TransientMailError } from '../../src/services/mail/mail-error.js';
 
 /** The domain nobody in this test controls — the victim in §D116 MEDIUM (a). */
 const VICTIM_DOMAIN = 'victim-corp.example';
@@ -361,6 +362,65 @@ describe('sso domain ownership', () => {
       data: { challengeSentAt: new Date(Date.now() - 61_000) },
     });
     expect((await challenge(created.id, 'acme.test')).statusCode).toBe(202);
+  });
+
+  describe('when the challenge cannot be mailed (tm 255.4)', () => {
+    /** The same database, a mailer that fails the way the carrier does. */
+    async function challengeThrough(failure: Error, domain: string, id: string) {
+      const failing = await startTestServer(
+        {},
+        {
+          mailer: {
+            send: async () => {
+              throw failure;
+            },
+          },
+        },
+      );
+      try {
+        return await failing.post(
+          `/settings/sso/${id}/domains/${domain}/challenge`,
+          {},
+          auth(ownerWriteToken),
+        );
+      } finally {
+        await failing.close();
+      }
+    }
+
+    it('tells the owner it did not go out, and lets them try again a minute later', async () => {
+      // Before tm 255.4 the carrier's exception became a bare 500: the owner
+      // could not tell a server fault from a mail that never left.
+      const created = await createConnection(['acme.test']);
+
+      const failed = await challengeThrough(
+        new TransientMailError({ code: 'timeout', phase: 'greeting' }),
+        'acme.test',
+        created.id,
+      );
+      expect(failed.statusCode).toBe(503);
+      expect(errorType(failed)).toBe('service_unavailable');
+      expect(message(failed)).toContain('Try again in a minute');
+
+      await owner.ssoDomainVerification.updateMany({
+        where: { domain: 'acme.test' },
+        data: { challengeSentAt: new Date(Date.now() - 61_000) },
+      });
+      const retried = await challenge(created.id, 'acme.test');
+      expect(retried.statusCode).toBe(202);
+      expect(await mailedToken('acme.test')).toBeTruthy();
+    });
+
+    it('answers a send it cannot confirm as sent — the code may already be there', async () => {
+      const created = await createConnection(['acme.test']);
+
+      const unconfirmed = await challengeThrough(
+        new PermanentMailError({ code: 'unconfirmed', phase: 'message' }),
+        'acme.test',
+        created.id,
+      );
+      expect(unconfirmed.statusCode).toBe(202);
+    });
   });
 
   it('will not challenge a domain that is already proved', async () => {

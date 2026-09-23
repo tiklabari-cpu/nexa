@@ -20,7 +20,8 @@ import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { generateShortId } from '@nexa/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
-import { FileMailer } from '../../src/services/mail/mailer.js';
+import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
+import { PermanentMailError } from '../../src/services/mail/mail-error.js';
 import type { AgentPrincipal } from '../../src/services/auth/principal.js';
 import {
   auditContextFor,
@@ -219,6 +220,29 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
 
     // The team copy carries everything, including the note.
     expect(toTeam!.body).toContain('refund pre-approved');
+  });
+
+  it("still mails the assignee when the visitor's copy is refused, and still closes (tm 255.4)", async () => {
+    // The visitor is mailed first. Before tm 255.4 a refusal there was thrown
+    // into the method's catch-all, and the agent's copy was never attempted.
+    const { chatId } = await seedChat(fx.a, { assigneeId: fx.a.agentAccountId });
+    const refusing: Mailer = {
+      send: async (message) => {
+        if (message.to === 'visitor@example.test') {
+          throw new PermanentMailError({ code: 'rejected', phase: 'rcpt_to', smtpCode: 550 });
+        }
+        await mailer.send(message);
+      },
+    };
+    const service = new ChatService(appRole, NO_REDIS, undefined, undefined, undefined, refusing);
+
+    await expect(
+      service.deactivate(ctx(fx.a), agent(fx.a), chatId, audit(fx.a)),
+    ).resolves.toBeDefined();
+
+    expect((await notifications()).map((m) => m.to)).toEqual([fx.a.agentEmail]);
+    const closed = await owner.chat.findUnique({ where: { id: chatId }, select: { active: true } });
+    expect(closed?.active).toBe(false);
   });
 
   it('mails a transcript when the idle-timeout sweep closes the chat', async () => {

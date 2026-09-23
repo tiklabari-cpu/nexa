@@ -43,6 +43,7 @@ import { Prisma, type PrismaClient } from '@prisma/client';
 import type { ScheduledExportFrequency } from '@nexa/types';
 import { type TenantContext, withTenant, withTenantRead } from '../../lib/tenant.js';
 import { exportFilename, reportGroup, toCsv } from '../../routes/reports-export.js';
+import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import { buildGroupCsv } from './report-csv.js';
 import { buildScheduledReportMail } from './scheduled-report-mail.js';
@@ -274,15 +275,25 @@ export class ScheduledReportSweeper {
       // recipients are colleagues, but a combined header would still tell each
       // of them who else receives the workspace's figures. Counted as they go
       // out, so a provider that fails halfway records what actually landed.
+      //
+      // Every recipient is tried (tm 255.4). A failure used to end the loop, and
+      // because the period is consumed rather than retried, one colleague's
+      // full mailbox cost everyone after them in the list this period's report
+      // for good. The first failure is still what the run records, after the
+      // others have had their turn. `unconfirmed` is not counted — it may have
+      // landed, and this count only claims what is known to have.
+      let firstFailure: { error: unknown } | null = null;
       for (const to of definition.recipients) {
-        await this.#mailer.send({
+        const outcome = await deliver(this.#mailer, {
           to,
           subject: mail.subject,
           body: mail.body,
           kind: 'scheduled_report',
         });
-        recipientCount += 1;
+        if (outcome.status === 'sent') recipientCount += 1;
+        else firstFailure ??= { error: outcome.error };
       }
+      if (firstFailure) throw firstFailure.error;
 
       await this.#resolve(context, runId, definition.id, {
         status: 'sent',

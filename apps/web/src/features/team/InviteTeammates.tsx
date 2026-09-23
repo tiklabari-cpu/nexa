@@ -9,6 +9,12 @@
  * "Copy invite link" copies the link for the *first* invitation created. The
  * server only ever returns a token once, so this is the one moment it exists;
  * the list on the team page cannot re-issue it.
+ *
+ * Which is also why an email that did not go out is shown here, per address,
+ * with that address's own link (tm 255.4). The invitations exist either way —
+ * the server keeps them and answers 201 — so the modal's job is to say which
+ * people will not hear about it by mail and hand over the one thing that
+ * reaches them instead.
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -27,6 +33,19 @@ interface Invitation {
   invited_by_name: string | null;
   expires_at: string;
   accept_url?: string;
+}
+
+/** An invitation whose email did not go out, as `POST /invitations` reports it. */
+interface Undelivered {
+  id: string;
+  email: string;
+  /** `unconfirmed`: handed to the mail server, never confirmed — it may have arrived. */
+  reason: 'failed' | 'unconfirmed';
+}
+
+/** What the modal shows for one of them: its own link, since the mail did not carry it. */
+interface UndeliveredLink extends Undelivered {
+  link: string;
 }
 
 /** What accepting these invitations would cost (FR-MOD-04.4). */
@@ -78,6 +97,7 @@ export function InviteTeammates({
   const [open, setOpen] = useState(false);
   const [role, setRole] = useState<'admin' | 'agent'>('admin');
   const [copied, setCopied] = useState<string | null>(null);
+  const [undelivered, setUndelivered] = useState<UndeliveredLink[]>([]);
 
   const api = useApiClient();
   const client = useQueryClient();
@@ -89,9 +109,16 @@ export function InviteTeammates({
 
   const invite = useMutation({
     mutationFn: (body: { emails: string[]; role: string }) =>
-      api.post<{ items: Invitation[] }>('/invitations', body),
+      api.post<{ items: Invitation[]; undelivered?: Undelivered[] }>('/invitations', body),
     onSuccess: async (result) => {
       await client.invalidateQueries({ queryKey: ['invitations'] });
+      const links = new Map(result.items.map((item) => [item.id, item.accept_url]));
+      setUndelivered(
+        (result.undelivered ?? []).flatMap((miss) => {
+          const link = links.get(miss.id);
+          return link ? [{ ...miss, link }] : [];
+        }),
+      );
       const link = result.items[0]?.accept_url;
       if (link) setCopied(link);
     },
@@ -141,6 +168,7 @@ export function InviteTeammates({
       setOpen(false);
       setRole('admin');
       setCopied(null);
+      setUndelivered([]);
       form.reset();
       invite.reset();
     },
@@ -201,7 +229,7 @@ export function InviteTeammates({
           <option value="agent">{t('team.role.agent')}</option>
         </select>
 
-        {pending.data && !copied && (
+        {pending.data && !copied && undelivered.length === 0 && (
           <SeatNotice
             seats={pending.data.seats}
             outstanding={pending.data.items.length}
@@ -209,7 +237,7 @@ export function InviteTeammates({
           />
         )}
 
-        {copied && (
+        {copied && undelivered.length === 0 && (
           <div className="mb-4 rounded-md border border-border bg-inset p-3">
             <p role="status" className="mb-2 text-xs text-content-secondary">
               {t('team.invite.linkSentNotice')}
@@ -221,6 +249,32 @@ export function InviteTeammates({
             >
               {t('team.invite.copyLink')}
             </button>
+          </div>
+        )}
+
+        {undelivered.length > 0 && (
+          <div role="status" className="mb-4 rounded-md border border-border bg-inset p-3">
+            <p className="mb-2 text-xs text-content-secondary">
+              {t('team.invite.undelivered.summary')}
+            </p>
+            <ul className="flex flex-col gap-2">
+              {undelivered.map((miss) => (
+                <li key={miss.id} className="text-xs">
+                  <p className="mb-1 text-content-secondary">
+                    {miss.reason === 'failed'
+                      ? t('team.invite.undelivered.failed', { email: miss.email })
+                      : t('team.invite.undelivered.unconfirmed', { email: miss.email })}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => void navigator.clipboard?.writeText(miss.link)}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs font-medium"
+                  >
+                    {t('team.invite.undelivered.copy', { email: miss.email })}
+                  </button>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
 

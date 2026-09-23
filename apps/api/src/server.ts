@@ -10,6 +10,7 @@ import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
 import auth from './plugins/auth.js';
 import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
+import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
 import { logSafeUrl } from './lib/log-redact.js';
@@ -286,6 +287,9 @@ export async function buildServer({
   // After both stores it reads through, before anything request-facing: the
   // five sweeps are background work, not part of answering a request.
   await app.register(scheduler, { env, mailer, telemetry: telemetryInstance, automations });
+  // Mail a response must not wait for (tm 255.4) — the password reset's, so its
+  // answer cannot depend on the carrier. Before the routes that use it.
+  await app.register(backgroundMail, { mailer });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
   // phase in registration order — so this is what puts the rate limiter's

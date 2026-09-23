@@ -4,9 +4,10 @@
  *
  * The security-shaped part of this file is `POST /auth/password-reset`: it must
  * answer identically whether or not the address is real, in body, in status and
- * as closely as it can in time. Everything it does — generate a token, hash it,
- * call the database, hand the mailer a job — happens on both branches, so the
- * only difference is whether the mailer had a recipient.
+ * as closely as it can in time. Everything it does before answering — generate
+ * a token, hash it, call the database — happens on both branches. The mail is
+ * the one thing only a real address gets, which is why it is sent after the
+ * answer rather than before it (tm 255.4).
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -20,6 +21,7 @@ import { pricingForPlan } from '../services/billing/subscription-service.js';
 import { REGIONS, servesRegion, type AgentRole } from '@nexa/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
+import { deliver, mailFailureFields } from '../services/mail/delivery.js';
 
 const NEUTRAL_RESET_MESSAGE = 'If an account exists for that address, we sent a link.';
 
@@ -187,16 +189,38 @@ export default async function accountLifecycleRoutes(
 
     const token = await lifecycle.requestPasswordReset(body.email);
     if (token) {
-      await mailer.send({
-        to: body.email,
-        kind: 'password_reset',
-        subject: 'Reset your Nexa password',
-        body: `Open this link to choose a new password:\n\n${env.WEB_APP_URL}/reset-password?token=${encodeURIComponent(token)}\n\nIt expires in one hour and works once.`,
-      });
+      // Handed off, never awaited (tm 255.4). Only this branch mails, so
+      // anything the mail does to the response — a carrier error turned into a
+      // 500, or just the SMTP round trip the unknown-address branch never makes
+      // — tells the caller the account exists. The send starts after this
+      // response has gone; its outcome goes to the log, and the log gets the
+      // carrier's classification, not the address (`mailFailureFields`).
+      app.backgroundMail.send(
+        {
+          to: body.email,
+          kind: 'password_reset',
+          subject: 'Reset your Nexa password',
+          body: `Open this link to choose a new password:\n\n${env.WEB_APP_URL}/reset-password?token=${encodeURIComponent(token)}\n\nIt expires in one hour and works once.`,
+        },
+        (outcome) => {
+          if (outcome.status === 'sent') return;
+          // `unconfirmed` is not "failed": the link may have arrived, and it
+          // must not be sent twice. Either way the person can ask again, which
+          // spends this token and mails a fresh one.
+          request.log.warn(
+            {
+              event: 'password_reset.mail',
+              outcome: outcome.status,
+              mail: mailFailureFields(outcome.error),
+            },
+            'password reset email not confirmed as sent',
+          );
+        },
+      );
     }
 
-    // Same body, same status, either way (FR-MOD-00.3). The branch above is the
-    // only difference and it is invisible from here.
+    // Same body, same status, either way (FR-MOD-00.3) — and, because the mail
+    // above is not awaited, the same work before answering: one database call.
     return reply.code(202).send({ message: NEUTRAL_RESET_MESSAGE });
   });
 
@@ -413,9 +437,16 @@ export default async function accountLifecycleRoutes(
       return records;
     });
 
-    await Promise.all(
+    // After the commit, and never able to undo it (tm 255.4). The invitations
+    // exist and their links work whatever the carrier says next, so a mail
+    // failure is reported *about* them rather than instead of them: a 500 here
+    // used to tell the admin that invitations had failed which were in fact
+    // live. Awaited, unlike the reset's mail, because this caller is the one
+    // person who can act on the answer — `undelivered` names each address the
+    // modal should offer "Copy invite link" for instead.
+    const outcomes = await Promise.all(
       created.map((invite) =>
-        mailer.send({
+        deliver(mailer, {
           to: invite.email,
           kind: 'invitation',
           subject: 'You have been invited to a Nexa workspace',
@@ -423,8 +454,23 @@ export default async function accountLifecycleRoutes(
         }),
       ),
     );
+    const undelivered = created.flatMap((invite, index) => {
+      const outcome = outcomes[index];
+      if (!outcome || outcome.status === 'sent') return [];
+      // The invitation id, not the address — the row already holds that.
+      request.log.warn(
+        {
+          event: 'invitation.mail',
+          invitation_id: invite.id,
+          outcome: outcome.status,
+          mail: mailFailureFields(outcome.error),
+        },
+        'invitation email not confirmed as sent',
+      );
+      return [{ id: invite.id, email: invite.email, reason: outcome.status }];
+    });
 
-    return reply.code(201).send({ items: created });
+    return reply.code(201).send({ items: created, undelivered });
   });
 
   app.delete<{ Params: { invitationId: string } }>(

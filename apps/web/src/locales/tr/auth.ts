@@ -217,6 +217,8 @@ export const auth: Messages = {
   // for the same note), so both plural categories read the same.
   'auth.onboarding.team.sent.one': '{count} davet gönderildi.',
   'auth.onboarding.team.sent.other': '{count} davet gönderildi.',
+  'auth.onboarding.team.undelivered':
+    'Davet edildi, ancak e-postanın gönderildiği doğrulanamadı: {emails}. Kopyalanabilir bir bağlantı için onları Ekip sayfasından yeniden davet edin.',
   'auth.onboarding.sample.addLabel': 'Örnek veri ekle',
   'auth.onboarding.sample.body':
     'Çalışma alanınıza hemen keşfedebileceğiniz birkaç hazır yanıt, etiket ve bir örnek konuşma ekleyin. Dilediğiniz zaman arşivleyebilir veya silebilirsiniz.',

@@ -13,10 +13,9 @@
  * created *or reopened*, priority is set to the same level each run, and adding a
  * follower is a server-side no-op when it is already there.
  */
-import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import type { APIRequestContext } from '@playwright/test';
 import { API_BASE, chatOfAReachableCustomer, expect, ownerAccessToken, test } from './fixtures.js';
+import { mailbox, type Mail } from './mailbox.js';
 
 test.describe('ticket HelpDesk surface', () => {
   // The transcript header is deliberately tight; at the default width its
@@ -189,12 +188,13 @@ test.describe('ticket HelpDesk surface', () => {
  * The integration suite proves the rendering, the refusals and the tenant
  * boundary against an injected mailer. What only the live stack proves is that
  * the loop closes at all: a template an admin authored through the product, a
- * status change an agent made in a browser, and a message on the spool whose
+ * status change an agent made in a browser, and a message in the mailbox whose
  * body came from that template with this ticket's values in it.
  *
- * The spool is the `file` mailer's directory (`MAIL_DIR`, PLAN assumption A4 —
- * no real SMTP in this build). Reading it back is the honest evidence: the claim
- * is not "mail was delivered" but "what left carried the template".
+ * The message is read from the SMTP stand-in's mailbox (`mailbox.ts`): since
+ * tm 255.4 this stack's API sends over the real carrier rather than writing the
+ * `file` mailer's spool. Reading it back is the honest evidence: the claim is
+ * not "mail was delivered" but "what left carried the template".
  */
 test.describe('ticket e-mail template — a status change mails the customer (FR-MOD-08.7.5)', () => {
   test.use({ viewport: { width: 1680, height: 1050 } });
@@ -204,23 +204,9 @@ test.describe('ticket e-mail template — a status change mails the customer (FR
   const SUBJECT = `${MARKER} {{ticket.id}} is {{ticket.status}}`;
   const BODY = `Hello {{customer.name}}, "{{ticket.subject}}" is now {{ticket.status}}. ${MARKER}`;
 
-  /** Where the `file` provider spools, relative to the API package that runs it. */
-  const MAIL_DIR = fileURLToPath(new URL('../../api/.data/mail', import.meta.url));
-
-  /** Messages carrying our marker, so a shared spool from other suites cannot fool us. */
-  async function markedMessages(): Promise<Array<{ to: string; subject: string; body: string }>> {
-    let names: string[];
-    try {
-      names = await readdir(MAIL_DIR);
-    } catch {
-      return [];
-    }
-    const messages = await Promise.all(
-      names
-        .filter((name) => name.includes('-ticket_notice-') && name.endsWith('.json'))
-        .map(async (name) => JSON.parse(await readFile(join(MAIL_DIR, name), 'utf8'))),
-    );
-    return messages.filter((message) => String(message.subject).includes(MARKER));
+  /** Messages carrying our marker, so a mailbox shared with other suites cannot fool us. */
+  async function markedMessages(request: APIRequestContext): Promise<Mail[]> {
+    return (await mailbox(request)).filter((message) => message.subject.includes(MARKER));
   }
 
   test('renders the authored template into the message that goes out', async ({
@@ -247,7 +233,7 @@ test.describe('ticket e-mail template — a status change mails the customer (FR
       expect(created.ok(), `template failed: ${created.status()}`).toBe(true);
     }
 
-    const before = (await markedMessages()).length;
+    const before = (await markedMessages(apiRequest)).length;
 
     // A ticket off a conversation whose customer has an address — resolved
     // through the API rather than by taking the first row of the list (tm 247).
@@ -281,12 +267,12 @@ test.describe('ticket e-mail template — a status change mails the customer (FR
     await status.selectOption(next);
     await expect(status).toHaveValue(next);
 
-    // The message on the spool, with this ticket's values substituted in.
+    // The message in the mailbox, with this ticket's values substituted in.
     await expect
-      .poll(async () => (await markedMessages()).length, { timeout: 10_000 })
+      .poll(async () => (await markedMessages(apiRequest)).length, { timeout: 10_000 })
       .toBeGreaterThan(before);
 
-    const sent = (await markedMessages()).at(-1)!;
+    const sent = (await markedMessages(apiRequest)).at(-1)!;
     expect(sent.to).toContain('@');
     expect(sent.subject).toContain(`is ${next}`);
     expect(sent.body).toContain(`is now ${next}.`);

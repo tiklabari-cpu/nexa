@@ -238,8 +238,12 @@ pnpm --filter @nexa/e2e exec playwright install chromium   # one-time browser do
 pnpm test:e2e
 ```
 
-Playwright starts five real servers for you (api, rtm, web, widget, mock-idp) on their
-usual ports, then a global setup step reseeds the demo tenant with `NEXA_SEED_RESET=1`.
+Playwright starts six real servers for you (mock-smtp, api, rtm, web, widget, mock-idp) on
+their usual ports, then a global setup step reseeds the demo tenant with `NEXA_SEED_RESET=1`.
+The api it starts sends mail for real (`MAIL_PROVIDER=smtp`, TLS verified) to the mock-smtp
+stand-in on 127.0.0.1:4625, and the tests read what arrived from its mailbox at
+`http://127.0.0.1:4626/messages`. An api server that is already running is reused as it is
+— with its own `.env` mailer and rate limits — so stop a `make dev` stack before a full run.
 
 **This resets your local dev database** — the reset truncates the tenant tables (it
 neither drops the database nor touches the schema) so every run starts from the same

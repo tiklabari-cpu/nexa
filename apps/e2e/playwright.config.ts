@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
@@ -21,6 +22,17 @@ const WEB = 'http://localhost:5173';
 const WIDGET = 'http://localhost:5174';
 /** The stand-in identity provider a federated sign-in is redirected to (S11-i). */
 const MOCK_IDP = 'http://127.0.0.1:4599';
+/** The mail server the API sends to, and the mailbox the tests read (tm 255.4 · `tests/mailbox.ts`). */
+const MOCK_SMTP_PORT = 4625;
+const MOCK_SMTP_MAILBOX = 'http://127.0.0.1:4626';
+/**
+ * The test CA that signed the stand-in's certificate. Handed to the API process
+ * the only way a trust anchor can be without relaxing verification — which the
+ * carrier has no switch for (§D178).
+ */
+const SMTP_TEST_CA = fileURLToPath(
+  new URL('../api/test/helpers/smtp-test-ca.crt', import.meta.url),
+);
 /** Same server as WIDGET, different origin — this is the "customer's website". */
 export const HOST_PAGE = 'http://acme-bikes.localhost:5174';
 
@@ -64,6 +76,15 @@ export default defineConfig({
 
   webServer: [
     {
+      // Before the API, so the first mail it sends has somewhere to go. See
+      // `apps/api/scripts/mock-smtp-server.ts`.
+      command: 'pnpm --filter @nexa/api mock-smtp',
+      url: `${MOCK_SMTP_MAILBOX}/health`,
+      reuseExistingServer: !process.env['CI'],
+      timeout: 60_000,
+      cwd: '../..',
+    },
+    {
       command: 'pnpm --filter @nexa/api dev',
       url: `${API}/api/v1/health`,
       reuseExistingServer: !process.env['CI'],
@@ -97,11 +118,25 @@ export default defineConfig({
       // it flips the grid into its error empty-state mid-chain (`tickets.isError`)
       // once the limiter starts returning 429. The limiter's own behaviour is
       // covered by `apps/api/test/integration`, not here.
+      //
+      // And the real mail carrier (tm 255.4). Every invitation, reset and notice
+      // this suite causes goes out over SMTP — STARTTLS, AUTH, the certificate
+      // verified — to the stand-in above, and the tests read it back from there.
+      // The credentials are the stand-in's fake ones, not anybody's; the pilot's
+      // live only in an operator's `.env`, which these override.
       env: {
         ...process.env,
         RATE_LIMIT_ANON_PER_MIN: '2000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
         SCHEDULER_ENABLED: 'false',
+        MAIL_PROVIDER: 'smtp',
+        SMTP_HOST: '127.0.0.1',
+        SMTP_PORT: String(MOCK_SMTP_PORT),
+        SMTP_SECURE: 'false',
+        SMTP_USERNAME: 'info@nolnk.test',
+        SMTP_PASSWORD: 'fake-smtp-password-not-a-secret',
+        SMTP_FROM: 'info@nolnk.test',
+        NODE_EXTRA_CA_CERTS: SMTP_TEST_CA,
       },
     },
     {

@@ -72,6 +72,7 @@ import {
 } from '../lib/sso-connection.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
 import type { Mailer } from '../services/mail/mailer.js';
+import { deliver, mailFailureFields } from '../services/mail/delivery.js';
 import {
   readSiemExportRow,
   readSiemExportStatus,
@@ -1579,12 +1580,30 @@ export default async function settingsRoutes(
       // that the transaction then rolled back. The reverse — a committed
       // challenge whose mail fails — costs one retry a minute later and leaves
       // nothing false behind.
-      await mailer.send({
+      //
+      // The failure reaches the caller (tm 255.4): the owner asked for this one
+      // message, and this answer is the only way they learn it did not leave.
+      // As a 503 that says what to do, rather than the bare 500 the carrier's
+      // exception used to become. `unconfirmed` is answered as sent — the
+      // message may be in the mailbox already, and "not sent" would invite a
+      // second token for the same domain on the owner's say-so.
+      const outcome = await deliver(mailer, {
         to: mailbox,
         kind: 'notification',
         subject: `Verify ${domain} for single sign-on`,
         body: domainChallengeBody(domain, token),
       });
+      if (outcome.status === 'failed') {
+        // The domain, not the mailbox: the mailbox is an address.
+        request.log.warn(
+          { event: 'sso_domain.challenge_mail', domain, mail: mailFailureFields(outcome.error) },
+          'sso domain challenge email not sent',
+        );
+        throw new ApiError(
+          'service_unavailable',
+          'The verification message could not be sent. Try again in a minute.',
+        );
+      }
 
       return reply.status(202).send(serialiseSsoDomain(domain, state));
     },

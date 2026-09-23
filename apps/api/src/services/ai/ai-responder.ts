@@ -18,7 +18,7 @@ import type { FastifyRequest } from 'fastify';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
-import { SkillEngine, type SkillRunResult } from './skill-engine.js';
+import type { SkillEngine, SkillRunResult } from './skill-engine.js';
 
 /** Author id the AI's own events and actions carry. */
 export const AI_BOT_ID = 'ai-agent';
@@ -29,7 +29,7 @@ export class AiResponder {
   constructor(
     private readonly chats: ChatService,
     private readonly publisher: RealtimePublisher,
-    engine = new SkillEngine(),
+    engine: SkillEngine,
   ) {
     this.#engine = engine;
   }
@@ -65,9 +65,12 @@ export class AiResponder {
     }
 
     try {
-      const result = await request.withTenant((tx) =>
-        this.#engine.run(tx, tenant, { message, chatId }),
-      );
+      // A runner, not one transaction around the whole run: the engine opens a
+      // short one per database step so the model call waits in none of them.
+      const result = await this.#engine.run((fn) => request.withTenant(fn), tenant, {
+        message,
+        chatId,
+      });
       if (result.outcome === 'skipped') return result;
 
       // Sent as a *bot* principal, which is what makes the event

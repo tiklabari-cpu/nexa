@@ -36,6 +36,8 @@ import {
 } from '../services/ai/knowledge-bulk-crawl.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
+import type { Env } from '../config/env.js';
+import type { LlmProvider } from '../services/ai/provider/llm-provider.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 import type { TenantClient } from '../lib/tenant.js';
 
@@ -316,9 +318,20 @@ function requireValidSteps(steps: unknown[]): unknown[] {
   return steps;
 }
 
-export default async function playbookRoutes(app: FastifyInstance): Promise<void> {
+export default async function playbookRoutes(
+  app: FastifyInstance,
+  { env, llm }: { env: Env; llm: LlmProvider },
+): Promise<void> {
   const knowledge = new KnowledgeService();
-  const engine = new SkillEngine(knowledge);
+  // The same provider and limits as the live path, for the reason the preview
+  // shares the engine at all: a preview that answers differently is worse than
+  // none (FR-MOD-06.2.5).
+  const engine = new SkillEngine({
+    knowledge,
+    llm,
+    maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+    timeoutMs: env.LLM_TIMEOUT_MS,
+  });
 
   // --- AI agents -------------------------------------------------------------
 
@@ -543,13 +556,11 @@ export default async function playbookRoutes(app: FastifyInstance): Promise<void
 
       // The real engine, no writes. A preview running different logic would be
       // worse than no preview.
-      const result = await request.withTenant((tx) =>
-        engine.preview(tx, tenant, {
-          steps: body.steps,
-          message: body.message,
-          aiAgentId: body.ai_agent_id ?? null,
-        }),
-      );
+      const result = await engine.preview((fn) => request.withTenant(fn), tenant, {
+        steps: body.steps,
+        message: body.message,
+        aiAgentId: body.ai_agent_id ?? null,
+      });
 
       return reply.send({
         outcome: result.outcome,

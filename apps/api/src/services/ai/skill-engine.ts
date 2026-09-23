@@ -13,6 +13,14 @@
  * The engine never decides *not* to involve a human on its own. `send_message`
  * answers; only an explicit `transfer_to_team` step, or the absence of any
  * answer, changes who owns the conversation.
+ *
+ * A knowledge answer is written by the configured `LlmProvider` (tm 255.5) —
+ * the in-process stub unless a deployment names a model. The engine runs its
+ * database work through a `TenantRunner` rather than inside one transaction the
+ * caller opened, so that the model call happens *between* transactions: a
+ * remote model may take up to `LLM_TIMEOUT_MS`, and holding a pooled connection
+ * and an open transaction for that long would collide with
+ * `TENANT_TRANSACTION_TIMEOUT_MS` (10 s) before the model did.
  */
 import { matchIntent, validateSteps, type SendMessageStep, type SkillStep } from '@nexa/ai-mock';
 import {
@@ -20,12 +28,29 @@ import {
   DEFAULT_ANSWER_PASSAGES,
   personaLanguageVerdict,
   readPersona,
-  shapeAnswer,
   type Persona,
   type PersonaLanguage,
 } from '@nexa/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { KnowledgeService, RETRIEVAL_THRESHOLD } from './knowledge-service.js';
+import { buildAnswerPrompt } from './provider/answer-prompt.js';
+import type { LlmProvider } from './provider/llm-provider.js';
+
+/**
+ * Runs `fn` in a tenant-scoped transaction — `request.withTenant`, in the
+ * shape the engine needs so each database step gets its own short transaction.
+ */
+export type TenantRunner = <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>;
+
+export interface SkillEngineOptions {
+  /** Writes the answer a knowledge `send_message` step composes. */
+  llm: LlmProvider;
+  /** `LLM_MAX_OUTPUT_TOKENS`, passed on every call. */
+  maxOutputTokens: number;
+  /** `LLM_TIMEOUT_MS`, passed on every call. */
+  timeoutMs: number;
+  knowledge?: KnowledgeService;
+}
 
 export type SkillOutcome = 'answered' | 'handed_off' | 'skipped';
 
@@ -62,7 +87,15 @@ const NOTHING_RAN: SkillRunResult = {
 };
 
 export class SkillEngine {
-  constructor(private readonly knowledge = new KnowledgeService()) {}
+  readonly #knowledge: KnowledgeService;
+  readonly #llm: LlmProvider;
+  readonly #limits: { maxOutputTokens: number; timeoutMs: number };
+
+  constructor(options: SkillEngineOptions) {
+    this.#knowledge = options.knowledge ?? new KnowledgeService();
+    this.#llm = options.llm;
+    this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
+  }
 
   /**
    * Pick and run the first matching skill.
@@ -72,25 +105,27 @@ export class SkillEngine {
    * different answers has no way to see which fired first.
    */
   async run(
-    tx: TenantClient,
+    db: TenantRunner,
     tenant: TenantContext,
     input: { message: string; chatId: string; history?: string[] },
   ): Promise<SkillRunResult> {
-    const skills = await tx.skill.findMany({
-      where: { active: true, kind: 'ai_agent', aiAgent: { active: true } },
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        name: true,
-        steps: true,
-        aiAgentId: true,
-        // The persona travels with the skill because it belongs to the agent
-        // that owns it: two agents in one workspace answer in two voices, so
-        // "which persona applies" is only decidable once a skill has been
-        // picked (FR-MOD-06.4).
-        aiAgent: { select: { tone: true, languages: true, persona: true } },
-      },
-    });
+    const skills = await db((tx) =>
+      tx.skill.findMany({
+        where: { active: true, kind: 'ai_agent', aiAgent: { active: true } },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          name: true,
+          steps: true,
+          aiAgentId: true,
+          // The persona travels with the skill because it belongs to the agent
+          // that owns it: two agents in one workspace answer in two voices, so
+          // "which persona applies" is only decidable once a skill has been
+          // picked (FR-MOD-06.4).
+          aiAgent: { select: { tone: true, languages: true, persona: true } },
+        },
+      }),
+    );
 
     for (const skill of skills) {
       const parsed = validateSteps(skill.steps);
@@ -116,7 +151,7 @@ export class SkillEngine {
       // it would with no AI and a human picks the conversation up.
       const result = language.unsupported
         ? declined(identity, gate.log, language.detected)
-        : await this.#execute(tx, tenant, {
+        : await this.#execute(db, tenant, {
             skill: identity,
             steps: parsed.steps,
             message: input.message,
@@ -126,7 +161,7 @@ export class SkillEngine {
             answerIn: language.answerIn,
           });
 
-      await this.#record(tx, tenant, skill.id, input.chatId, result);
+      await this.#record(db, tenant, skill.id, input.chatId, result);
       return result;
     }
 
@@ -140,7 +175,7 @@ export class SkillEngine {
    * actually do, and a preview that runs different logic is worse than none.
    */
   async preview(
-    tx: TenantClient,
+    db: TenantRunner,
     tenant: TenantContext,
     input: { steps: unknown; message: string; aiAgentId?: string | null },
   ): Promise<SkillRunResult & { errors: string[] }> {
@@ -164,11 +199,14 @@ export class SkillEngine {
     // The preview loads the same persona the live path would, for the same
     // reason the preview shares this method at all: a preview that shows an
     // unshaped answer promises something the product does not do.
-    const agent = input.aiAgentId
-      ? await tx.aiAgent.findFirst({
-          where: { id: input.aiAgentId },
-          select: { tone: true, languages: true, persona: true },
-        })
+    const aiAgentId = input.aiAgentId;
+    const agent = aiAgentId
+      ? await db((tx) =>
+          tx.aiAgent.findFirst({
+            where: { id: aiAgentId },
+            select: { tone: true, languages: true, persona: true },
+          }),
+        )
       : null;
     const persona = readPersona(agent);
     const language = personaLanguageVerdict(input.message, persona);
@@ -178,7 +216,7 @@ export class SkillEngine {
       return { ...declined(identity, gate.log, language.detected), errors: [] };
     }
 
-    const result = await this.#execute(tx, tenant, {
+    const result = await this.#execute(db, tenant, {
       skill: identity,
       steps: parsed.steps,
       message: input.message,
@@ -217,7 +255,7 @@ export class SkillEngine {
   }
 
   async #execute(
-    tx: TenantClient,
+    db: TenantRunner,
     tenant: TenantContext,
     input: {
       skill: { id: string; name: string; aiAgentId: string | null };
@@ -276,7 +314,7 @@ export class SkillEngine {
           break;
 
         case 'send_message': {
-          const outcome = await this.#sendMessage(tx, tenant, step, {
+          const outcome = await this.#sendMessage(db, tenant, step, {
             message: input.message,
             skill: input.skill,
             persona: input.persona,
@@ -311,7 +349,7 @@ export class SkillEngine {
   }
 
   async #sendMessage(
-    tx: TenantClient,
+    db: TenantRunner,
     tenant: TenantContext,
     step: SendMessageStep,
     input: {
@@ -331,12 +369,14 @@ export class SkillEngine {
     }
 
     const passages = this.#passageBudget(input.persona);
-    const hits = await this.knowledge.retrieve(tx, tenant, input.message, {
-      ...(input.skill.aiAgentId ? { aiAgentId: input.skill.aiAgentId } : {}),
-      // Never below the two this always fetched, so an unset persona issues the
-      // identical query; a `long` answer is the only thing that widens it.
-      limit: Math.max(2, passages),
-    });
+    const hits = await db((tx) =>
+      this.#knowledge.retrieve(tx, tenant, input.message, {
+        ...(input.skill.aiAgentId ? { aiAgentId: input.skill.aiAgentId } : {}),
+        // Never below the two this always fetched, so an unset persona issues the
+        // identical query; a `long` answer is the only thing that widens it.
+        limit: Math.max(2, passages),
+      }),
+    );
 
     if (hits.length === 0) {
       // Answering from an unrelated article is worse than admitting there is no
@@ -349,19 +389,28 @@ export class SkillEngine {
     }
 
     const best = hits[0]!;
-    const shaped = shapeAnswer(
-      hits.map((hit) => hit.text),
-      input.persona,
-      { language: input.answerIn },
-    );
+    // Outside any transaction (see the file header). The persona travels in the
+    // prompt: the provider — model or stub — is what applies it now, so the
+    // run log records what was *asked for* rather than what a trimmer did.
+    const completion = await this.#llm.complete({
+      ...buildAnswerPrompt({
+        message: input.message,
+        passages: hits.map((hit) => hit.text),
+        persona: input.persona,
+        answerIn: input.answerIn,
+      }),
+      ...this.#limits,
+    });
     const cited = hits.slice(0, Math.min(passages, hits.length));
+    const asked = personaRequest(input.persona, input.answerIn);
 
     return {
-      text: shaped.text,
+      text: completion.text,
       detail: [
         `answered from "${best.sourceName}" (${best.score})`,
         cited.length > 1 ? `+ ${cited.length - 1} more passage(s)` : '',
-        shaped.notes.length > 0 ? `persona: ${shaped.notes.join('; ')}` : '',
+        `written by ${this.#llm.id}`,
+        asked ? `persona: ${asked}` : '',
       ]
         .filter(Boolean)
         .join(' · '),
@@ -376,6 +425,16 @@ export class SkillEngine {
   }
 
   async #record(
+    db: TenantRunner,
+    tenant: TenantContext,
+    skillId: string,
+    chatId: string,
+    result: SkillRunResult,
+  ): Promise<void> {
+    await db((tx) => this.#writeRun(tx, tenant, skillId, chatId, result));
+  }
+
+  async #writeRun(
     tx: TenantClient,
     tenant: TenantContext,
     skillId: string,
@@ -432,6 +491,21 @@ function declined(
       },
     ],
   };
+}
+
+/**
+ * The persona settings the answer was asked to follow, for the run log, or
+ * `''` when it asked for nothing. Stated as a request because that is all the
+ * engine knows: the provider applies it.
+ */
+function personaRequest(persona: Persona, answerIn: PersonaLanguage | null): string {
+  return [
+    persona.answerLength ? `${persona.answerLength} answer` : '',
+    persona.tone ? `${persona.tone} tone` : '',
+    answerIn ? `in ${answerIn}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 /**

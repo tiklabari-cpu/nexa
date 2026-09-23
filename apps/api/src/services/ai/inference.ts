@@ -10,13 +10,14 @@
  * summarised in another region has a residency guarantee on paper and not in
  * fact; that account is exactly what C4-e exists to make impossible.
  *
- * **The provider is mocked, the decision is not.** `LLM_PROVIDER` has only ever
- * had one value (`mock`, an in-process deterministic stub — CLAUDE.md's external
- * services rule) and nothing read it. It is read here, together with the region
- * that provider answers in, because the gate has to exist *before* a real
- * provider is configured: the day someone sets a hosted endpoint, the choice
- * that matters is already written down and already refused where it must be. A
- * gate added afterwards is a gate added after the first request went out.
+ * **The gate came before the provider.** For a long time `LLM_PROVIDER` had only
+ * one value (`mock`, an in-process deterministic stub — CLAUDE.md's external
+ * services rule). It was read here, together with the region that provider
+ * answers in, because the gate had to exist *before* a real provider was
+ * configured: a gate added afterwards is a gate added after the first request
+ * went out. tm 255.5 opened the enum to `openai` behind `createLlmProvider`
+ * (`services/ai/provider/`); this rule did not change, and every caller still
+ * passes it before any provider is reached.
  *
  * **The constraint is HIPAA scope, not region.** Out-of-region inference is a
  * legitimate configuration for an uncovered workspace — that is what the mock
@@ -30,7 +31,7 @@ import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
 
 export interface InferenceProvider {
-  /** Which implementation answers. Today only the in-process stub. */
+  /** Which implementation answers — the value `LLM_PROVIDER` names. */
   id: Env['LLM_PROVIDER'];
   /** Where that implementation physically runs the inference. */
   region: Region;

@@ -40,6 +40,7 @@ import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
+import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
 import { SMTP_SECRET_LOG_PATHS } from './services/mail/smtp-mailer.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
@@ -105,6 +106,13 @@ export interface BuildServerOptions {
    * (MASTER-PROMPT §5), never contacted.
    */
   webhookSender?: WebhookSender;
+  /**
+   * Who writes AI text (tm 255.5). Omitted, whatever `LLM_PROVIDER` names —
+   * the deterministic in-process stub by default. A test passes its own
+   * recorder on the mailer's terms, which is how a suite counts the calls a
+   * skill run makes without any network (MASTER-PROMPT §5).
+   */
+  llm?: LlmProvider;
 }
 
 export async function buildServer({
@@ -114,6 +122,7 @@ export async function buildServer({
   telemetry,
   logStream,
   webhookSender,
+  llm = createLlmProvider(env.LLM_PROVIDER, env.llm),
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -340,7 +349,7 @@ export async function buildServer({
       await api.register(chatRoutes, { env, mailer, push, automations });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
-      await api.register(customerRoutes, { env, mailer, push, automations });
+      await api.register(customerRoutes, { env, mailer, push, automations, llm });
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
@@ -365,7 +374,7 @@ export async function buildServer({
         version: VERSION,
       });
       await api.register(uploadRoutes, { env });
-      await api.register(playbookRoutes);
+      await api.register(playbookRoutes, { env, llm });
       await api.register(kbRoutes);
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {

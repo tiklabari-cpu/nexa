@@ -444,9 +444,9 @@ export const envSchema = z.object({
    * Who writes AI text (tm 255.5 · ADR docs/adr/pilot-llm-embedding-provider.md
    * §9.1). `mock` is the in-process deterministic stub and stays the default —
    * every test suite and any deployment without a model runs on it. `openai`
-   * needs the three `LLM_API_*`/`LLM_MODEL` keys below; its adapter is tm 255.6,
-   * so until then choosing it refuses to boot rather than quietly running the
-   * stub (`createLlmProvider`).
+   * is the chat adapter (tm 255.6, `services/ai/provider/openai-llm-provider.ts`)
+   * and needs the three `LLM_API_*`/`LLM_MODEL` keys below; without them it
+   * refuses to boot rather than quietly running the stub (`createLlmProvider`).
    */
   LLM_PROVIDER: z.enum(LLM_PROVIDERS).default('mock'),
   /**

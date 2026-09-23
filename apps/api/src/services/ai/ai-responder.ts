@@ -71,6 +71,15 @@ export class AiResponder {
         message,
         chatId,
       });
+      if (result.failure) {
+        // The provider's own lines (component `llm`) carry the status and the
+        // code but not the conversation; this one, on the request's logger,
+        // ties the failure to the chat a human now has to answer (tm 255.6).
+        request.log.warn(
+          { chat_id: chatId, skill_id: result.skillId, kind: result.failure },
+          'ai model could not answer; the conversation stays with a human',
+        );
+      }
       if (result.outcome === 'skipped') return result;
 
       // Sent as a *bot* principal, which is what makes the event

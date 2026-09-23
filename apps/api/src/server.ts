@@ -41,6 +41,7 @@ import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
+import { LLM_SECRET_LOG_PATHS } from './services/ai/provider/openai-llm-provider.js';
 import { SMTP_SECRET_LOG_PATHS } from './services/mail/smtp-mailer.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
@@ -113,6 +114,13 @@ export interface BuildServerOptions {
    * skill run makes without any network (MASTER-PROMPT §5).
    */
   llm?: LlmProvider;
+  /**
+   * How the `openai` adapter reaches the network (tm 255.6). Omitted, the
+   * global `fetch`. A test passes a recorder here rather than a whole `llm`
+   * when the point is the adapter the *server* builds from `env` — its logger,
+   * its redaction and its circuit breaker — with no request leaving the process.
+   */
+  llmFetch?: typeof fetch;
 }
 
 export async function buildServer({
@@ -122,7 +130,8 @@ export async function buildServer({
   telemetry,
   logStream,
   webhookSender,
-  llm = createLlmProvider(env.LLM_PROVIDER, env.llm),
+  llm: injectedLlm,
+  llmFetch,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -166,6 +175,9 @@ export async function buildServer({
           // The SMTP credentials, wherever someone might log the configuration
           // that holds them (tm 255.3). The carrier itself never does.
           ...SMTP_SECRET_LOG_PATHS,
+          // The model's API key and an outbound request's Authorization header,
+          // on the same terms (tm 255.6). The chat adapter never logs either.
+          ...LLM_SECRET_LOG_PATHS,
           // The request line. This API puts personal data in query strings —
           // the customer search takes an address — so the URL is where PII
           // reaches the log first, and it is not covered by any secret path.
@@ -249,6 +261,14 @@ export async function buildServer({
     createMailer(env.MAIL_PROVIDER, {
       ...env.mail,
       logger: app.log.child({ component: 'mailer' }),
+    });
+  // After the app for the mailer's reason: the `openai` adapter logs its
+  // retries, failures and circuit changes through this logger (tm 255.6).
+  const llm =
+    injectedLlm ??
+    createLlmProvider(env.LLM_PROVIDER, env.llm, {
+      logger: app.log.child({ component: 'llm' }),
+      ...(llmFetch ? { fetchImpl: llmFetch } : {}),
     });
 
   await app.register(errorHandler);

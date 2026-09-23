@@ -30,7 +30,12 @@ import {
   startOfIsoWeek,
   startOfUtcDay,
 } from '../reports/scheduled-report-period.js';
-import type { KnowledgeService, PreparedChunks, QueryEmbedding } from './knowledge-service.js';
+import {
+  ANSWER_RETRIEVAL_LIMIT,
+  type KnowledgeService,
+  type PreparedChunks,
+  type QueryEmbedding,
+} from './knowledge-service.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
 import type { TenantRunner } from './skill-engine.js';
 
@@ -274,7 +279,10 @@ export class CopilotService {
     }
 
     const chunks = await db((tx) =>
-      this.knowledge.retrieve(tx, tenant, question, { aiAgentId: agentId, limit: 2 }),
+      this.knowledge.retrieve(tx, tenant, question, {
+        aiAgentId: agentId,
+        limit: ANSWER_RETRIEVAL_LIMIT,
+      }),
     );
     if (chunks.length === 0) return { draft: '', sources: [] };
 

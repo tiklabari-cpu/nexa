@@ -75,13 +75,22 @@ export class AiResponder {
         // The provider's own lines (component `llm` or `embedding`) carry the
         // status and the code but not the conversation; this one, on the
         // request's logger, ties the failure to the chat a human now has to
-        // answer (tm 255.6), and says which provider it was (tm 255.7).
+        // answer (tm 255.6), and says which provider it was (tm 255.7). The
+        // customer's outcome is the same for every failure, so this line is
+        // where one is told from another (tm 255.9): transient or not, and the
+        // provider's own status, code and request id — never its words.
+        const { provider, kind, transient, status, code, requestId, reason } = result.failure;
         request.log.warn(
           {
             chat_id: chatId,
             skill_id: result.skillId,
-            provider: result.failure.provider,
-            kind: result.failure.kind,
+            provider,
+            kind,
+            transient,
+            ...(status !== null ? { status } : {}),
+            ...(code !== null ? { code } : {}),
+            ...(requestId !== null ? { provider_request_id: requestId } : {}),
+            ...(reason !== null ? { reason } : {}),
           },
           result.failure.provider === 'llm'
             ? 'ai model could not answer; the conversation stays with a human'

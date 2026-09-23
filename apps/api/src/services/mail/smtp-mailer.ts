@@ -33,7 +33,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import pino from 'pino';
-import { maskPii } from '../../lib/log-redact.js';
+import { maskPii, SMTP_SECRET_LOG_PATHS } from '../../lib/log-redact.js';
 import { composeMessage } from './mime.js';
 import type { Mailer, Message } from './mailer.js';
 import { PermanentMailError, isMailDeliveryError, type MailDeliveryError } from './mail-error.js';
@@ -61,26 +61,11 @@ export function smtpRetryBackoffMs(attempt: number): number {
 }
 
 /**
- * Where an SMTP credential would sit if anyone logged the configuration: the
- * env keys, the carrier's `smtp.{username,password}`, and `env.mail.smtp` —
- * each at the top of a log object and one level down (`{ env }`, `{ config }`),
- * since pino paths do not recurse. Spread into the server's pino
- * `redact.paths` and used by {@link defaultMailLogger}.
+ * Where an SMTP credential would sit if anyone logged the configuration. Kept
+ * with every other provider credential in `lib/log-redact.ts` (tm 255.9), which
+ * the server's `redact.paths` spreads; used here by {@link defaultMailLogger}.
  */
-export const SMTP_SECRET_LOG_PATHS = [
-  'SMTP_USERNAME',
-  'SMTP_PASSWORD',
-  '*.SMTP_USERNAME',
-  '*.SMTP_PASSWORD',
-  'smtp.username',
-  'smtp.password',
-  '*.smtp.username',
-  '*.smtp.password',
-  'mail.smtp.username',
-  'mail.smtp.password',
-  '*.mail.smtp.username',
-  '*.mail.smtp.password',
-];
+export { SMTP_SECRET_LOG_PATHS };
 
 /** The narrow log surface the carrier needs — satisfied by Fastify's logger and by pino. */
 export interface MailLogger {

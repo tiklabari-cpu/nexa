@@ -13,7 +13,7 @@ import aiResidency from './plugins/ai-residency.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
-import { logSafeUrl } from './lib/log-redact.js';
+import { logSafeUrl, PROVIDER_SECRET_LOG_PATHS } from './lib/log-redact.js';
 import licenseGate from './plugins/license-gate.js';
 import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
@@ -41,12 +41,9 @@ import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
-import { LLM_SECRET_LOG_PATHS } from './services/ai/provider/openai-llm-provider.js';
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
 import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
-import { EMBEDDING_SECRET_LOG_PATHS } from './services/ai/provider/openai-embedding-provider.js';
-import { SMTP_SECRET_LOG_PATHS } from './services/mail/smtp-mailer.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
 import { createPushProvider, type PushProvider } from './services/push/push-provider.js';
@@ -186,14 +183,12 @@ export async function buildServer({
           // were sitting in the request log beside it.
           'req.body.api_key',
           'res.headers["set-cookie"]',
-          // The SMTP credentials, wherever someone might log the configuration
-          // that holds them (tm 255.3). The carrier itself never does.
-          ...SMTP_SECRET_LOG_PATHS,
-          // The model's API key and an outbound request's Authorization header,
-          // on the same terms (tm 255.6). The chat adapter never logs either.
-          ...LLM_SECRET_LOG_PATHS,
-          // The embedding provider's key, likewise (tm 255.7).
-          ...EMBEDDING_SECRET_LOG_PATHS,
+          // The provider credentials — the SMTP login (tm 255.3), the model's
+          // key (tm 255.6), the embedding provider's key (tm 255.7) — and an
+          // outbound request's Authorization header, wherever someone might log
+          // the configuration or the request that holds them. The carriers
+          // themselves never do. One list, in `lib/log-redact.ts` (tm 255.9).
+          ...PROVIDER_SECRET_LOG_PATHS,
           // The request line. This API puts personal data in query strings —
           // the customer search takes an address — so the URL is where PII
           // reaches the log first, and it is not covered by any secret path.

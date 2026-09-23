@@ -47,6 +47,7 @@
  * — somebody logging the configuration.
  */
 import pino from 'pino';
+import { LLM_SECRET_LOG_PATHS } from '../../../lib/log-redact.js';
 import { CircuitBreaker, type CircuitPermit } from './circuit-breaker.js';
 import { LlmProviderError } from './llm-error.js';
 import type {
@@ -107,22 +108,11 @@ export const LLM_MAX_RESPONSE_BYTES = 1_048_576;
 const PROBLEM_MAX_BYTES = 65_536;
 
 /**
- * Where the key would sit if anyone logged the configuration or a request: the
- * env key, `env.llm.openai.apiKey` and the adapter's `openai.apiKey`, and an
- * outbound request's `headers.authorization` — each at the top of a log object
- * and one level down, since pino paths do not recurse. Spread into the server's
- * `redact.paths` and used by {@link defaultLlmLogger}.
+ * Where the key would sit if anyone logged the configuration or a request.
+ * Kept with every other provider credential in `lib/log-redact.ts` (tm 255.9),
+ * which the server's `redact.paths` spreads; used here by {@link defaultLlmLogger}.
  */
-export const LLM_SECRET_LOG_PATHS = [
-  'LLM_API_KEY',
-  '*.LLM_API_KEY',
-  'openai.apiKey',
-  '*.openai.apiKey',
-  'llm.openai.apiKey',
-  '*.llm.openai.apiKey',
-  'headers.authorization',
-  '*.headers.authorization',
-];
+export { LLM_SECRET_LOG_PATHS };
 
 /** The narrow log surface the adapter needs — satisfied by Fastify's logger and by pino. */
 export interface LlmLogger {

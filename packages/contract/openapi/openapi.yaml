@@ -5202,7 +5202,7 @@ components:
         AI Agent performance for its own report tab (FR-MOD-07.4). `resolutions`
         is ADR-09's figure — the same one the invoice's AI-resolution counter
         uses — so this surface never disagrees with the bill.
-      required: [range, previous_period, resolutions, transfers, skill_runs]
+      required: [range, previous_period, resolutions, transfers, skill_runs, tokens]
       properties:
         range:
           type: object
@@ -5246,6 +5246,20 @@ components:
         skill_runs:
           type: integer
           description: Skills that ran in the window.
+        tokens:
+          type: object
+          description: |
+            What `skill_runs` cost, in the providers' own unit — summed from the
+            same runs, where the skill engine wrote each run's usage as the
+            providers reported it. Chat-model input and output and the question
+            embeddings are separate because they are priced separately. Tokens,
+            not money: the price is the operator's contract with the provider. A
+            stub provider bills nothing and reports 0.
+          required: [llm_input, llm_output, embedding_input]
+          properties:
+            llm_input: { type: integer, minimum: 0 }
+            llm_output: { type: integer, minimum: 0 }
+            embedding_input: { type: integer, minimum: 0 }
         avg_automated_duration_seconds:
           type: integer
           nullable: true

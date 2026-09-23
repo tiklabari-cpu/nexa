@@ -492,6 +492,22 @@ export const envSchema = z.object({
    */
   LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(16_384).default(400),
   /**
+   * Prompt ceiling per call, in characters (tm 255.9 · ADR §9.1): a prompt
+   * longer than this is never sent — the conversation goes to a human, the way
+   * any other failed call does. Characters rather than tokens because the
+   * server has no tokenizer, and a character is a conservative upper bound on
+   * a token. 16,000 admits every prompt built from passages the chunker cut to
+   * its 600-character target: the longest — a 10,000-character customer
+   * message, three such passages and the instructions — measures 12,361, and
+   * 14,161 when every passage character is one JSON has to escape. What it
+   * stops is the passage the chunker could not cut (it breaks only between
+   * sentences, so an unpunctuated page stays one piece of any length), which
+   * would otherwise reach the model whole on every question it matched. Below
+   * 2,000 not even the instructions and one passage fit, and every
+   * conversation would be refused.
+   */
+  LLM_MAX_PROMPT_CHARS: z.coerce.number().int().min(2_000).max(500_000).default(16_000),
+  /**
    * Who turns text into vectors for knowledge retrieval (tm 255.7 · ADR
    * docs/adr/pilot-llm-embedding-provider.md §9.2). Configured apart from
    * `LLM_PROVIDER`: its own key, host, model and region. `mock` is the lexical

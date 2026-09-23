@@ -22,7 +22,8 @@ import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { KnowledgeSearch, KnowledgeService, RetrievedChunk } from './knowledge-service.js';
 import { EMBEDDING_FAILURE_KINDS, EmbeddingProviderError } from './provider/embedding-error.js';
 import { LLM_FAILURE_KINDS, type LlmFailureKind } from './provider/llm-error.js';
-import type { LlmProvider } from './provider/llm-provider.js';
+import { buildAnswerPrompt } from './provider/answer-prompt.js';
+import { promptLength, type LlmProvider } from './provider/llm-provider.js';
 import { MockLlmProvider } from './provider/mock-llm-provider.js';
 import { OpenAiLlmProvider } from './provider/openai-llm-provider.js';
 import { SkillEngine, type SkillRunLogEntry, type TenantRunner } from './skill-engine.js';
@@ -42,6 +43,9 @@ const KNOWLEDGE_ANSWER = [
 interface RecordedRun {
   status: string;
   log: { outcome: string; entries: SkillRunLogEntry[] };
+  llmInputTokens: number;
+  llmOutputTokens: number;
+  embeddingTokens: number;
 }
 
 /** The two tables a run reads and writes, in memory, with one active skill. */
@@ -97,7 +101,14 @@ function knowledgeWith(
   } as unknown as KnowledgeService;
 }
 
-const knowledge = knowledgeWith(async () => ({ space: 'test:space', vector: '[1]' }));
+/** What the stand-in question embedding says it cost — distinct from every chat figure below. */
+const QUESTION_TOKENS = 7;
+
+const knowledge = knowledgeWith(async () => ({
+  space: 'test:space',
+  vector: '[1]',
+  usage: { inputTokens: QUESTION_TOKENS },
+}));
 
 const quiet = { debug: () => {}, info: () => {}, warn: () => {}, error: () => {} };
 
@@ -108,12 +119,22 @@ function openai(net: FakeOpenAiFetch, circuit?: { failureThreshold: number }): O
   );
 }
 
+/** `LLM_MAX_PROMPT_CHARS`' default — every prompt these tests build fits under it. */
+const MAX_PROMPT_CHARS = 16_000;
+
 function engine(
   llm: LlmProvider,
   timeoutMs = 20_000,
   knowledgeService: KnowledgeService = knowledge,
+  maxPromptChars = MAX_PROMPT_CHARS,
 ): SkillEngine {
-  return new SkillEngine({ llm, maxOutputTokens: 400, timeoutMs, knowledge: knowledgeService });
+  return new SkillEngine({
+    llm,
+    maxOutputTokens: 400,
+    timeoutMs,
+    maxPromptChars,
+    knowledge: knowledgeService,
+  });
 }
 
 const problem = (status: number, code: string) =>
@@ -128,6 +149,9 @@ const FAILURES: Array<{
   kind: LlmFailureKind;
   llm: () => Promise<{ provider: LlmProvider; net: FakeOpenAiFetch }>;
   timeoutMs?: number;
+  maxPromptChars?: number;
+  /** Refused in this process, so no request may reach the provider. */
+  refused?: boolean;
 }> = [
   { kind: 'timeout', timeoutMs: 50, llm: () => viaOpenAi(fakeOpenAiFetch(hangingRequest)) },
   { kind: 'network', llm: () => viaOpenAi(fakeOpenAiFetch(refusedConnection('ECONNRESET'))) },
@@ -170,6 +194,15 @@ const FAILURES: Array<{
         .catch(() => undefined);
       return { provider, net };
     },
+    refused: true,
+  },
+  {
+    // A provider that would answer, behind a ceiling the prompt is over: the
+    // test fails with `answered` if the ceiling is not what stops it (tm 255.9).
+    kind: 'prompt_too_long',
+    maxPromptChars: 2_000,
+    llm: () => viaOpenAi(fakeOpenAiFetch(openAiCompletion(ANSWER))),
+    refused: true,
   },
 ];
 
@@ -182,18 +215,23 @@ describe('a model that cannot answer hands the conversation to a human (FR-05-06
     expect(FAILURES.map((failure) => failure.kind).sort()).toEqual([...LLM_FAILURE_KINDS].sort());
   });
 
-  it.each(FAILURES)('$kind', async ({ kind, llm, timeoutMs }) => {
+  it.each(FAILURES)('$kind', async ({ kind, llm, timeoutMs, maxPromptChars, refused }) => {
     const { provider, net } = await llm();
     const before = net.calls.length;
     const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+    // Long enough to cross a 2,000-character ceiling with the instructions, well
+    // under the default one; the other kinds are asked the usual question.
+    const message = maxPromptChars
+      ? `${MESSAGE} ${'Please check parcel QX-44917. '.repeat(60)}`
+      : MESSAGE;
 
-    const result = await engine(provider, timeoutMs).run(db, TENANT, {
-      message: MESSAGE,
+    const result = await engine(provider, timeoutMs, knowledge, maxPromptChars).run(db, TENANT, {
+      message,
       chatId: 'chat-1',
     });
 
     expect(result.outcome).toBe('handed_off');
-    expect(result.failure).toEqual({ provider: 'llm', kind });
+    expect(result.failure).toMatchObject({ provider: 'llm', kind });
     expect(result.reply).toBeNull();
     expect(result.transferTo).toBeNull();
 
@@ -210,7 +248,7 @@ describe('a model that cannot answer hands the conversation to a human (FR-05-06
     expect(runs[0]!.status).toBe('failed');
     expect(runs[0]!.log.outcome).toBe('handed_off');
 
-    if (kind === 'circuit_open') expect(net.calls.length).toBe(before);
+    if (refused) expect(net.calls.length).toBe(before);
   });
 
   it('answers normally when the model does', async () => {
@@ -246,7 +284,7 @@ describe('after a failure the AI stops talking; the steps for the human still ru
     const result = await engine(openai(net)).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
 
     expect(result.outcome).toBe('handed_off');
-    expect(result.failure).toEqual({ provider: 'llm', kind: 'auth' });
+    expect(result.failure).toMatchObject({ provider: 'llm', kind: 'auth' });
     expect(result.reply).toBeNull();
     expect(result.tags).toEqual(['delivery']);
     expect(result.summary).toMatch(/^Customer asked: How long does delivery take\?/);
@@ -347,7 +385,7 @@ describe('a knowledge search that cannot run hands the conversation to a human (
     );
 
     expect(result.outcome).toBe('handed_off');
-    expect(result.failure).toEqual({ provider: 'embedding', kind });
+    expect(result.failure).toMatchObject({ provider: 'embedding', kind });
     expect(result.reply).toBeNull();
     expect(llm.calls).toHaveLength(0);
     expect(result.log.find((entry) => entry.step === 'send_message')).toEqual({
@@ -403,7 +441,11 @@ describe('a knowledge search that cannot run hands the conversation to a human (
   });
 
   it('tells a knowledge base with nothing searchable apart from one that did not match', async () => {
-    const embedded = async () => ({ space: 'openai:text-embedding-3-small', vector: '[1]' });
+    const embedded = async () => ({
+      space: 'openai:text-embedding-3-small',
+      vector: '[1]',
+      usage: { inputTokens: 0 },
+    });
 
     // Nothing in the question's space at all: empty, or still in another space.
     const unsearchable = await engine(
@@ -428,5 +470,256 @@ describe('a knowledge search that cannot run hands the conversation to a human (
       'nothing searchable in the knowledge base — empty, or not yet re-embedded for openai:text-embedding-3-small',
     );
     expect(detail(missed)).toBe('nothing in the knowledge base above 0.25 similarity');
+  });
+});
+
+/**
+ * What a run cost, written on the run (tm 255.9). The engine is the only
+ * writer of these three columns and `aiAgentTokenUsage` their only reader, so
+ * each figure is pinned here at the source: which call's usage lands in which
+ * column, that a billed failure is still counted, and that a call never made
+ * costs nothing.
+ */
+describe('the run records what its provider calls cost', () => {
+  it('writes the model tokens and the question embedding on the run that made them', async () => {
+    const llm = new FakeLlmProvider({
+      reply: ANSWER,
+      usage: { inputTokens: 321, outputTokens: 54 },
+    });
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+
+    const result = await engine(llm).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(result.outcome).toBe('answered');
+    expect(result.usage).toEqual({
+      llmInputTokens: 321,
+      llmOutputTokens: 54,
+      embeddingTokens: QUESTION_TOKENS,
+    });
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      llmInputTokens: 321,
+      llmOutputTokens: 54,
+      embeddingTokens: QUESTION_TOKENS,
+    });
+  });
+
+  it("reads the real adapter's usage — OpenAI's prompt_tokens and completion_tokens", async () => {
+    // `openAiCompletion` reports 120 in / 12 out, as OpenAI's `usage` does.
+    const net = fakeOpenAiFetch(openAiCompletion(ANSWER));
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+
+    await engine(openai(net)).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(runs[0]).toMatchObject({ llmInputTokens: 120, llmOutputTokens: 12 });
+  });
+
+  it('counts a reply the model wrote but could not send — a no_answer is billed', async () => {
+    const net = fakeOpenAiFetch(openAiCompletion('Delivery takes', { finish_reason: 'length' }));
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+
+    const result = await engine(openai(net)).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(result.failure).toMatchObject({ provider: 'llm', kind: 'no_answer' });
+    expect(runs[0]).toMatchObject({
+      status: 'failed',
+      llmInputTokens: 120,
+      llmOutputTokens: 12,
+      embeddingTokens: QUESTION_TOKENS,
+    });
+  });
+
+  it('counts nothing for a call that was never made, and still counts the question', async () => {
+    const llm = new FakeLlmProvider({ usage: { inputTokens: 999, outputTokens: 999 } });
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+
+    await engine(llm, 20_000, knowledge, 2_000).run(db, TENANT, {
+      message: 'delivery '.repeat(400),
+      chatId: 'c',
+    });
+
+    expect(llm.calls).toHaveLength(0);
+    expect(runs[0]).toMatchObject({
+      llmInputTokens: 0,
+      llmOutputTokens: 0,
+      embeddingTokens: QUESTION_TOKENS,
+    });
+  });
+
+  it('counts the embedding a failed search was billed for, and no model call', async () => {
+    const llm = new FakeLlmProvider();
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+    const failing = knowledgeWith(async () => {
+      throw new EmbeddingProviderError('bad_response', {
+        reason: 'dimensions',
+        usage: { inputTokens: 11 },
+      });
+    });
+
+    await engine(llm, 20_000, failing).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(runs[0]).toMatchObject({ llmInputTokens: 0, llmOutputTokens: 0, embeddingTokens: 11 });
+  });
+
+  it('adds up a skill that answers twice from knowledge', async () => {
+    const llm = new FakeLlmProvider({ usage: { inputTokens: 100, outputTokens: 10 } });
+    const { db, runs } = workspace([
+      { type: 'send_message', source: 'knowledge' },
+      { type: 'send_message', source: 'knowledge' },
+    ]);
+
+    await engine(llm).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(llm.calls).toHaveLength(2);
+    expect(runs[0]).toMatchObject({
+      llmInputTokens: 200,
+      llmOutputTokens: 20,
+      embeddingTokens: 2 * QUESTION_TOKENS,
+    });
+  });
+
+  it('records 0 for the in-process stub, which bills no one', async () => {
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+
+    await engine(new MockLlmProvider()).run(db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(runs[0]).toMatchObject({ llmInputTokens: 0, llmOutputTokens: 0 });
+  });
+});
+
+/** The per-call limits `LLM_MAX_OUTPUT_TOKENS` and `LLM_MAX_PROMPT_CHARS` (tm 255.9). */
+describe('the per-call ceilings reach the provider, or stop the call before it', () => {
+  it('passes the output ceiling to the provider, and the adapter sends it as max_completion_tokens', async () => {
+    const fake = new FakeLlmProvider();
+    await new SkillEngine({
+      llm: fake,
+      maxOutputTokens: 123,
+      timeoutMs: 20_000,
+      maxPromptChars: MAX_PROMPT_CHARS,
+      knowledge,
+    }).run(workspace(KNOWLEDGE_ANSWER).db, TENANT, { message: MESSAGE, chatId: 'c' });
+    expect(fake.calls[0]!.maxOutputTokens).toBe(123);
+
+    const net = fakeOpenAiFetch(openAiCompletion(ANSWER));
+    await new SkillEngine({
+      llm: openai(net),
+      maxOutputTokens: 123,
+      timeoutMs: 20_000,
+      maxPromptChars: MAX_PROMPT_CHARS,
+      knowledge,
+    }).run(workspace(KNOWLEDGE_ANSWER).db, TENANT, { message: MESSAGE, chatId: 'c' });
+    const body = JSON.parse(String(net.calls[0]!.init.body)) as { max_completion_tokens: number };
+    expect(body.max_completion_tokens).toBe(123);
+  });
+
+  it('never sends a prompt over the character ceiling: no call, a human answers, the length is on record (FR-05-06.EK1)', async () => {
+    const llm = new FakeLlmProvider();
+    const { db, runs } = workspace(KNOWLEDGE_ANSWER);
+    const message = `delivery ${'x'.repeat(3_000)}`;
+
+    const result = await engine(llm, 20_000, knowledge, 2_000).run(db, TENANT, {
+      message,
+      chatId: 'c',
+    });
+
+    expect(llm.calls).toHaveLength(0);
+    expect(result).toMatchObject({ outcome: 'handed_off', reply: null });
+    const length = promptLength(
+      buildAnswerPrompt({
+        message,
+        passages: [PASSAGE],
+        persona: { tone: null, languages: [], answerLength: null },
+        answerIn: null,
+      }),
+    );
+    expect(length).toBeGreaterThan(2_000);
+    expect(result.failure).toEqual({
+      provider: 'llm',
+      kind: 'prompt_too_long',
+      transient: false,
+      status: null,
+      code: null,
+      requestId: null,
+      reason: `${length}/2000`,
+    });
+    expect(runs[0]!.status).toBe('failed');
+    expect(runs[0]!.log.entries.find((entry) => entry.step === 'send_message')?.detail).toBe(
+      'the model could not answer (prompt_too_long) — handed to a human',
+    );
+  });
+
+  it('sends a prompt exactly at the ceiling — the limit is inclusive', async () => {
+    const probe = new FakeLlmProvider();
+    await engine(probe).run(workspace(KNOWLEDGE_ANSWER).db, TENANT, {
+      message: MESSAGE,
+      chatId: 'c',
+    });
+    const exact = promptLength(probe.calls[0]!);
+
+    const llm = new FakeLlmProvider();
+    const atLimit = await engine(llm, 20_000, knowledge, exact).run(
+      workspace(KNOWLEDGE_ANSWER).db,
+      TENANT,
+      { message: MESSAGE, chatId: 'c' },
+    );
+    const overByOne = await engine(new FakeLlmProvider(), 20_000, knowledge, exact - 1).run(
+      workspace(KNOWLEDGE_ANSWER).db,
+      TENANT,
+      { message: MESSAGE, chatId: 'c' },
+    );
+
+    expect(llm.calls).toHaveLength(1);
+    expect(atLimit.outcome).toBe('answered');
+    expect(overByOne.failure).toMatchObject({ kind: 'prompt_too_long' });
+  });
+});
+
+/**
+ * Transient and permanent failures, side by side (tm 255.9): one outcome for
+ * the customer, told apart only by what the operator reads.
+ */
+describe('every failure class ends the same way for the customer (FR-05-06.EK1)', () => {
+  it('hands a transient outage and a refused key to a human alike, and keeps the facts that tell them apart', async () => {
+    const outage = await engine(openai(fakeOpenAiFetch(problem(503, 'server_is_overloaded')))).run(
+      workspace(KNOWLEDGE_ANSWER).db,
+      TENANT,
+      { message: MESSAGE, chatId: 'c' },
+    );
+    const refusedKey = await engine(openai(fakeOpenAiFetch(problem(401, 'invalid_api_key')))).run(
+      workspace(KNOWLEDGE_ANSWER).db,
+      TENANT,
+      { message: MESSAGE, chatId: 'c' },
+    );
+
+    // What the customer gets, and what the run log says, is the same shape…
+    const productSide = (result: typeof outage) => ({
+      outcome: result.outcome,
+      reply: result.reply,
+      transferTo: result.transferTo,
+      steps: result.log.map((entry) => [entry.step, entry.ok]),
+    });
+    expect(productSide(outage)).toEqual(productSide(refusedKey));
+    expect(outage.outcome).toBe('handed_off');
+
+    // …and only the operator's facts differ.
+    expect(outage.failure).toEqual({
+      provider: 'llm',
+      kind: 'unavailable',
+      transient: true,
+      status: 503,
+      code: 'server_is_overloaded',
+      requestId: 'req_abc123',
+      reason: null,
+    });
+    expect(refusedKey.failure).toEqual({
+      provider: 'llm',
+      kind: 'auth',
+      transient: false,
+      status: 401,
+      code: 'invalid_api_key',
+      requestId: 'req_abc123',
+      reason: null,
+    });
+    expect(JSON.stringify([outage.failure, refusedKey.failure])).not.toContain('Incorrect API key');
   });
 });

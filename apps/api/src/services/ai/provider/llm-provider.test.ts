@@ -3,7 +3,9 @@
  * guarantee, and the prompt the stub and a real model both read.
  */
 import { describe, expect, expectTypeOf, it } from 'vitest';
+import { chunk } from '@nexa/ai-mock';
 import {
+  ANSWER_BUDGETS,
   shapeAnswer,
   type AnswerLength,
   type Persona,
@@ -16,9 +18,14 @@ import {
   readAnswerGrounding,
   type AnswerPromptInput,
 } from './answer-prompt.js';
+import { envSchema } from '../../../config/env.js';
+import { ANSWER_RETRIEVAL_LIMIT } from '../knowledge-service.js';
+import { LlmProviderError } from './llm-error.js';
 import {
   LLM_PROVIDERS,
   createLlmProvider,
+  promptLength,
+  refuseOverlongPrompt,
   unhandledLlmProvider,
   type LlmProviderId,
 } from './llm-provider.js';
@@ -126,8 +133,8 @@ describe("the 'mock' provider keeps the product's answers exactly as they were (
 
       // What `SkillEngine` produced before the seam existed, computed the old way.
       expect(completion.text).toBe(shapeAnswer(PASSAGES, persona, { language: answerIn }).text);
-      expect(completion.usage.inputTokens).toBeGreaterThan(0);
-      expect(completion.usage.outputTokens).toBe(Math.ceil(completion.text.length / 4));
+      // No provider billed this, so the run it is recorded on says 0 (tm 255.9).
+      expect(completion.usage).toEqual({ inputTokens: 0, outputTokens: 0 });
     },
   );
 });
@@ -232,5 +239,97 @@ describe('llmEndpointProblem (NFR-C4)', () => {
 
   it('compares hosts case-insensitively', () => {
     expect(llmEndpointProblem('openai', 'https://EU.API.OPENAI.COM/v1', 'eu')).toBeNull();
+  });
+});
+
+/**
+ * The prompt ceiling (tm 255.9 · ADR §9.1 `LLM_MAX_PROMPT_CHARS`). The engine
+ * calls `refuseOverlongPrompt` before `complete()`; what is pinned here is the
+ * measure itself and that the default leaves every prompt the product can
+ * build alone — a ceiling that refused real conversations would hand them to
+ * a human for nothing.
+ */
+describe('LLM_MAX_PROMPT_CHARS', () => {
+  it('measures the system prompt and every message', () => {
+    expect(
+      promptLength({
+        system: 'abcd',
+        messages: [
+          { role: 'user', content: 'ef' },
+          { role: 'assistant', content: 'g' },
+        ],
+      }),
+    ).toBe(7);
+  });
+
+  it('refuses a longer prompt as prompt_too_long — not transient, not the provider’s fault', () => {
+    const prompt = { system: 'x'.repeat(10), messages: [{ role: 'user' as const, content: 'y' }] };
+
+    expect(() => refuseOverlongPrompt(prompt, 11)).not.toThrow();
+    let refused: unknown;
+    try {
+      refuseOverlongPrompt(prompt, 10);
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(LlmProviderError);
+    const error = refused as LlmProviderError;
+    expect(error.kind).toBe('prompt_too_long');
+    expect(error.reason).toBe('11/10');
+    // A customer's long message causes it, so it must never retry or count
+    // toward opening the circuit for everyone else.
+    expect(error.transient).toBe(false);
+    expect(error.providerFault).toBe(false);
+    expect(error.attempts).toBe(0);
+    expect(error.usage).toBeNull();
+  });
+
+  it('defaults above the longest prompt the product builds from passages the chunker cut', () => {
+    const ceiling = envSchema.shape.LLM_MAX_PROMPT_CHARS.parse(undefined);
+    // The widget's message limit (routes/customer.ts, OpenAPI maxLength 10000),
+    // the chunker's longest piece of ordinary prose, and as many passages as
+    // the engine ever retrieves for the longest persona.
+    const message = 'm'.repeat(10_000);
+    const prose = 'Delivery takes three to five working days in the EU. '.repeat(400);
+    const longestChunk = Math.max(...chunk(prose).map((piece) => piece.length));
+    const passages = Math.max(ANSWER_RETRIEVAL_LIMIT, ANSWER_BUDGETS.long.passages);
+    const persona: Persona = { tone: 'friendly', languages: ['en'], answerLength: 'long' };
+    const longest = (fill: string) =>
+      promptLength(
+        buildAnswerPrompt({
+          message,
+          passages: Array.from({ length: passages }, () => fill.repeat(longestChunk)),
+          persona,
+          answerIn: 'en',
+        }),
+      );
+
+    expect(longestChunk).toBeLessThanOrEqual(600);
+    expect(longest('a')).toBeLessThanOrEqual(ceiling);
+    // A passage of nothing but quote marks doubles in the JSON grounding line.
+    expect(longest('"')).toBeLessThanOrEqual(ceiling);
+  });
+
+  it('is the only bound on a passage the chunker could not cut', () => {
+    // `chunk` cuts at paragraph and sentence breaks, never inside a sentence:
+    // a paragraph with no full stop stays one piece however long it is. Such a
+    // passage — an unpunctuated page, a pasted table — would reach the model
+    // whole, on every question it matched; the ceiling is what sends that
+    // conversation to a human instead.
+    const ceiling = envSchema.shape.LLM_MAX_PROMPT_CHARS.parse(undefined);
+    const [unbroken] = chunk('word '.repeat(4_000));
+
+    expect(unbroken!.length).toBeGreaterThan(ceiling);
+    expect(() =>
+      refuseOverlongPrompt(
+        buildAnswerPrompt({
+          message: 'How long does delivery take?',
+          passages: [unbroken!],
+          persona: { tone: null, languages: [], answerLength: null },
+          answerIn: null,
+        }),
+        ceiling,
+      ),
+    ).toThrow(LlmProviderError);
   });
 });

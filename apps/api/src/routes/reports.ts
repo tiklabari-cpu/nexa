@@ -39,6 +39,7 @@ import {
   achievedGoalCount,
   aiAgentBenchmark,
   aiAgentSkillRunCount,
+  aiAgentTokenUsage,
   breakdownByChannel,
   breakdownByDay,
   breakdownByHour,
@@ -818,6 +819,8 @@ export async function buildAiAgentReport(
   const transfers = await transferCount(tx, licenseId, from, to);
 
   const skillRuns = await aiAgentSkillRunCount(tx, licenseId, from, to);
+  // What those runs cost, read off the same rows (tm 255.9).
+  const tokens = await aiAgentTokenUsage(tx, licenseId, from, to);
 
   const automated = Number(totals.automated);
   const closed = Number(totals.closed_chats);
@@ -834,6 +837,7 @@ export async function buildAiAgentReport(
       transfers,
       transfer_rate: finished === 0 ? null : round(transfers / finished),
       skill_runs: skillRuns,
+      tokens,
       avg_automated_duration_seconds: roundOrNull(totals.avg_automated_duration_seconds),
     },
     from,

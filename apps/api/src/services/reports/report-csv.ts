@@ -1031,9 +1031,44 @@ export async function aiAgentSkillRunCount(
   from: Date,
   to: Date,
 ): Promise<number> {
-  return tx.skillRun.count({
-    where: { licenseId, ranAt: { gte: from, lte: to }, skill: { kind: 'ai_agent' } },
+  return tx.skillRun.count({ where: aiAgentRunsIn(licenseId, from, to) });
+}
+
+/** The provider tokens the AI Agent's runs reported, summed over a window (tm 255.9). */
+export interface AiAgentTokens {
+  llm_input: number;
+  llm_output: number;
+  embedding_input: number;
+}
+
+/**
+ * What {@link aiAgentSkillRunCount}'s runs cost, in tokens: the same rows under
+ * the same filter, summed. Not a second counter — the tokens were written on
+ * each run by the skill engine in the transaction that created it
+ * (`skill-engine.ts`), so a window's run count and its token total are two
+ * readings of one set of rows and cannot disagree about which runs happened.
+ * Tokens, not money: the price is the owner's contract with the provider.
+ */
+export async function aiAgentTokenUsage(
+  tx: TenantClient,
+  licenseId: bigint,
+  from: Date,
+  to: Date,
+): Promise<AiAgentTokens> {
+  const { _sum } = await tx.skillRun.aggregate({
+    where: aiAgentRunsIn(licenseId, from, to),
+    _sum: { llmInputTokens: true, llmOutputTokens: true, embeddingTokens: true },
   });
+  return {
+    llm_input: _sum.llmInputTokens ?? 0,
+    llm_output: _sum.llmOutputTokens ?? 0,
+    embedding_input: _sum.embeddingTokens ?? 0,
+  };
+}
+
+/** The AI Agent's runs in a window — the one filter the count and the token sum share. */
+function aiAgentRunsIn(licenseId: bigint, from: Date, to: Date) {
+  return { licenseId, ranAt: { gte: from, lte: to }, skill: { kind: 'ai_agent' } } as const;
 }
 
 interface AgentPerformanceRow {

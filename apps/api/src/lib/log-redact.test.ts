@@ -7,8 +7,16 @@
  * string, which is why every case below also names what is still readable
  * afterwards.
  */
+import pino from 'pino';
 import { describe, expect, it } from 'vitest';
-import { logSafeUrl, maskPii, requestPath } from './log-redact.js';
+import { envSchema } from '../config/env.js';
+import {
+  logSafeUrl,
+  maskPii,
+  PROVIDER_SECRET_ENV_KEYS,
+  PROVIDER_SECRET_LOG_PATHS,
+  requestPath,
+} from './log-redact.js';
 
 describe('maskPii', () => {
   it('masks an e-mail address', () => {
@@ -104,5 +112,69 @@ describe('requestPath', () => {
 
   it('returns an empty string untouched', () => {
     expect(requestPath('')).toBe('');
+  });
+});
+
+/**
+ * The provider credentials (tm 255.9 · ADR docs/adr/pilot-llm-embedding-provider.md
+ * §10). The server's logger spreads {@link PROVIDER_SECRET_LOG_PATHS}; what is
+ * checked here is the list itself — that it names every credential the ADR
+ * does, and that a logger built on it removes each one wherever a careless
+ * line would put it. `test/integration/ai-secret-redaction.test.ts` asks the
+ * same of the real server.
+ */
+describe('provider credentials', () => {
+  const VALUES = {
+    LLM_API_KEY: 'sk-llm-never-logged-5d1f',
+    EMBEDDING_API_KEY: 'sk-emb-never-logged-8c2a',
+    SMTP_USERNAME: 'smtp-user-never-logged@nolnk.test',
+    SMTP_PASSWORD: 'smtp-password-never-logged-3b7e',
+  } as const;
+
+  it('names the four the ADR names, each a key the environment declares', () => {
+    expect([...PROVIDER_SECRET_ENV_KEYS].sort()).toEqual(Object.keys(VALUES).sort());
+    for (const key of PROVIDER_SECRET_ENV_KEYS) {
+      expect(Object.keys(envSchema.shape)).toContain(key);
+    }
+  });
+
+  it('covers each at the top of a log object and one level down', () => {
+    // pino paths do not recurse, so `{ env }` needs its own `*.` path.
+    for (const key of PROVIDER_SECRET_ENV_KEYS) {
+      expect(PROVIDER_SECRET_LOG_PATHS).toContain(key);
+      expect(PROVIDER_SECRET_LOG_PATHS).toContain(`*.${key}`);
+    }
+  });
+
+  it('censors every credential wherever a line would carry it — and nothing else', () => {
+    const lines: string[] = [];
+    const logger = pino(
+      { redact: { paths: [...PROVIDER_SECRET_LOG_PATHS], censor: '[redacted]' } },
+      { write: (line: string) => lines.push(line) },
+    );
+
+    logger.info({ ...VALUES }, 'the environment, spread');
+    logger.info({ env: { ...VALUES, LLM_MODEL: 'test-model' } }, 'the environment, nested');
+    logger.info(
+      {
+        llm: { openai: { apiKey: VALUES.LLM_API_KEY, baseUrl: 'https://eu.api.openai.com/v1' } },
+        embedding: { openai: { apiKey: VALUES.EMBEDDING_API_KEY } },
+        mail: { smtp: { username: VALUES.SMTP_USERNAME, password: VALUES.SMTP_PASSWORD } },
+      },
+      'the parsed configuration',
+    );
+    logger.info(
+      { init: { headers: { authorization: `Bearer ${VALUES.LLM_API_KEY}` } } },
+      'a request',
+    );
+
+    const written = lines.join('\n');
+    expect(lines).toHaveLength(4);
+    for (const value of Object.values(VALUES)) expect(written).not.toContain(value);
+    // Removed, not dropped: a reader sees that something was there.
+    for (const line of lines) expect(line).toContain('[redacted]');
+    // Only the credentials go — a model id and a host are not secrets.
+    expect(written).toContain('test-model');
+    expect(written).toContain('https://eu.api.openai.com/v1');
   });
 });

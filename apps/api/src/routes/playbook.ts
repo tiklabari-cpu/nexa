@@ -348,6 +348,7 @@ export default async function playbookRoutes(
     llm,
     maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
     timeoutMs: env.LLM_TIMEOUT_MS,
+    maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
   });
 
   // --- AI agents -------------------------------------------------------------

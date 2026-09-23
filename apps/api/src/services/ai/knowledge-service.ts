@@ -33,7 +33,7 @@ import { chunk, toVectorLiteral } from '@nexa/ai-mock';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { EmbeddingProviderError } from './provider/embedding-error.js';
-import type { EmbeddingProvider } from './provider/embedding-provider.js';
+import type { EmbeddingProvider, EmbeddingUsage } from './provider/embedding-provider.js';
 
 /**
  * A source's text, chunked and embedded — everything {@link KnowledgeService.index}
@@ -52,6 +52,15 @@ export interface PreparedChunks {
 export interface QueryEmbedding {
   space: string;
   vector: string | null;
+}
+
+/**
+ * A question as {@link KnowledgeService.embedQuery} returns it: the embedding,
+ * and what the provider billed for it (tm 255.9) — the skill engine records
+ * that on the run the question was asked in.
+ */
+export interface EmbeddedQuery extends QueryEmbedding {
+  usage: EmbeddingUsage;
 }
 
 /**
@@ -274,10 +283,10 @@ export class KnowledgeService {
    * what the stub's zero vector always amounted to. Rejects with the
    * provider's `EmbeddingProviderError` when it could not embed.
    */
-  async embedQuery(query: string): Promise<QueryEmbedding> {
-    if (query.trim() === '') return { space: this.space, vector: null };
-    const { vectors } = await this.#embeddings.embed([query]);
-    return { space: this.space, vector: toVectorLiteral(vectors[0]!) };
+  async embedQuery(query: string): Promise<EmbeddedQuery> {
+    if (query.trim() === '') return { space: this.space, vector: null, usage: { inputTokens: 0 } };
+    const { vectors, usage } = await this.#embeddings.embed([query]);
+    return { space: this.space, vector: toVectorLiteral(vectors[0]!), usage };
   }
 
   /** Nearest chunks to a question, best first. How they are found: {@link search}. */

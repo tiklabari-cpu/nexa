@@ -19,6 +19,16 @@
  * ordinary case — an in-process stub in the region it serves — is two string
  * comparisons, and the lookup happens exactly in the configuration that needs
  * deciding.
+ *
+ * **Both providers (tm 255.7).** Content reaches the embedding provider as well
+ * as the model — a customer's question is embedded before anything answers it,
+ * an uploaded article is embedded to be indexed — so the check covers both, and
+ * a covered workspace is refused when either would carry its content out of
+ * region. The surface is gated as one, as it always was: `/skills/compile`
+ * calls neither provider today and is still refused, because the refusal
+ * message promises "no AI feature" and a per-route list of which provider each
+ * handler happens to reach would be the list somebody forgets to update. The
+ * audit entry names the provider that tripped it (`provider_kind`).
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
@@ -28,6 +38,7 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
   assertInferenceAllowed,
   inferenceLeavesRegion,
+  resolveEmbeddingInferenceProvider,
   resolveInferenceProvider,
 } from '../services/ai/inference.js';
 
@@ -51,15 +62,23 @@ declare module 'fastify' {
 }
 
 async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
-  const provider = resolveInferenceProvider(options.env);
+  // The model first: when both are out of region, the entry names the one
+  // this gate has always reported.
+  const providers = [
+    { kind: 'llm', ...resolveInferenceProvider(options.env) },
+    { kind: 'embedding', ...resolveEmbeddingInferenceProvider(options.env) },
+  ] as const;
 
   app.decorateRequest('requireAiInference', async function (this: FastifyRequest): Promise<void> {
     const workspaceRegion = this.requireRegion();
 
-    // The common case, and deliberately first: an in-region provider raises no
+    // The common case, and deliberately first: in-region providers raise no
     // question for anyone, covered or not, so nothing is read and nothing is
     // recorded.
-    if (!inferenceLeavesRegion(provider, workspaceRegion)) return;
+    const provider = providers.find((candidate) =>
+      inferenceLeavesRegion(candidate, workspaceRegion),
+    );
+    if (!provider) return;
 
     const licenseId = this.tenant().licenseId;
     const hipaaScope = await this.withTenant((tx) => readHipaaScope(tx, licenseId));
@@ -87,6 +106,7 @@ async function aiResidencyPlugin(app: FastifyInstance, options: { env: Env }): P
           region: workspaceRegion,
           provider_region: provider.region,
           provider: provider.id,
+          provider_kind: provider.kind,
           route: this.routeOptions.url ?? this.url,
         },
       }),

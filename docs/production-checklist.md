@@ -65,6 +65,14 @@ connection storm, suspected cross-tenant data exposure.
       `NODE_ENV=production` — proved unconditional (not test-only) by
       `apps/api/test/integration/log-profile.test.ts` and
       `apps/rtm/test/integration/log-profile.test.ts`.
+- [ ] After `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL` changes — the stub to a model, or one
+      model to another — re-embed the stored knowledge base:
+      `pnpm --filter @nexa/api knowledge:reembed`, then `… knowledge:reembed --status` must
+      report `pendingChunks: 0`. Until a source is re-embedded, questions asked in the new space
+      cannot find it and go to a human (never to a passage from the other space). The run is
+      per source and atomic, resumable (`--limit N`, or just run it again) and reversible (run
+      it with the previous provider configured). Evidence:
+      `apps/api/test/integration/knowledge-reembed.test.ts`, PLAN §D182.
 
 ## 3. Capacity
 

@@ -13,7 +13,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { embed, toVectorLiteral } from '@nexa/ai-mock';
+import { embed, LEXICAL_EMBEDDING_SPACE, toVectorLiteral } from '@nexa/ai-mock';
 import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@nexa/types';
 import { parseEnv } from '../src/config/env.js';
 import { loadEnvFile } from '../src/config/load-env-file.js';
@@ -696,14 +696,18 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   ];
   for (const [index, text] of copilotChunks.entries()) {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, token_count, position)
-       VALUES (gen_random_uuid(), $1::uuid, $2::bigint, $3, $4::vector, $5, $6)`,
+      `INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, embedding_space, token_count, position)
+       VALUES (gen_random_uuid(), $1::uuid, $2::bigint, $3, $4::vector, $7, $5, $6)`,
       copilotSource.id,
       licenseId.toString(),
       text,
       toVectorLiteral(embed(text)),
       Math.ceil(text.length / 4),
       index,
+      // Named, not left to the column default: the seed embeds with the
+      // lexical stub whatever EMBEDDING_PROVIDER says, and a deployment on a
+      // model re-embeds these with `knowledge:reembed` (tm 255.7).
+      LEXICAL_EMBEDDING_SPACE,
     );
   }
 
@@ -752,14 +756,18 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   ];
   for (const [index, text] of chunks.entries()) {
     await prisma.$executeRawUnsafe(
-      `INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, token_count, position)
-       VALUES (gen_random_uuid(), $1::uuid, $2::bigint, $3, $4::vector, $5, $6)`,
+      `INSERT INTO knowledge_chunks (id, source_id, license_id, chunk_text, embedding, embedding_space, token_count, position)
+       VALUES (gen_random_uuid(), $1::uuid, $2::bigint, $3, $4::vector, $7, $5, $6)`,
       knowledgeSource.id,
       licenseId.toString(),
       text,
       toVectorLiteral(embed(text)),
       Math.ceil(text.length / 4),
       index,
+      // Named, not left to the column default: the seed embeds with the
+      // lexical stub whatever EMBEDDING_PROVIDER says, and a deployment on a
+      // model re-embeds these with `knowledge:reembed` (tm 255.7).
+      LEXICAL_EMBEDDING_SPACE,
     );
   }
 

@@ -35,12 +35,10 @@
 import { summariseConversation } from '@nexa/ai-mock';
 import { ApiError } from '../../../lib/api-error.js';
 import { maskCardNumbers } from '../../../lib/cc-mask.js';
-import { CopilotService } from '../../ai/copilot-service.js';
+import { readConversationTurns } from '../../ai/copilot-service.js';
 import { chatVisibilityFilter, resolveVisibility } from '../../chat/access.js';
 import type { SummarizeChatArgs } from '../tool-catalog.js';
 import type { McpToolExecutor } from '../tool-dispatch.js';
-
-const copilot = new CopilotService();
 
 export const runSummarizeChat: McpToolExecutor = async (ctx, args) => {
   // The tool-call surface validated `args` against the catalogue's
@@ -58,8 +56,8 @@ export const runSummarizeChat: McpToolExecutor = async (ctx, args) => {
   });
   if (!chat) throw ApiError.notFound('Chat not found.');
 
-  // Read-only: `conversationTurns` reads events; the summary is not written back.
-  const turns = await copilot.conversationTurns(ctx.tx, chat_id);
+  // Read-only: `readConversationTurns` reads events; the summary is not written back.
+  const turns = await readConversationTurns(ctx.tx, chat_id);
   const summary = summariseConversation(turns);
 
   // Re-mask on the read path — a raw PAN must never leave through a tool result.

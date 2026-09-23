@@ -42,6 +42,10 @@ import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
 import { LLM_SECRET_LOG_PATHS } from './services/ai/provider/openai-llm-provider.js';
+import { KnowledgeService } from './services/ai/knowledge-service.js';
+import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
+import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
+import { EMBEDDING_SECRET_LOG_PATHS } from './services/ai/provider/openai-embedding-provider.js';
 import { SMTP_SECRET_LOG_PATHS } from './services/mail/smtp-mailer.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
 import type { WebhookSender } from './services/webhooks/webhook-dispatcher.js';
@@ -121,6 +125,14 @@ export interface BuildServerOptions {
    * its redaction and its circuit breaker — with no request leaving the process.
    */
   llmFetch?: typeof fetch;
+  /**
+   * Who embeds knowledge and questions (tm 255.7). Omitted, whatever
+   * `EMBEDDING_PROVIDER` names — the lexical stub by default. A test passes a
+   * recorder, on `llm`'s terms, to count and fail embedding calls.
+   */
+  embeddings?: EmbeddingProvider;
+  /** How the `openai` embedding adapter reaches the network — `llmFetch`'s counterpart. */
+  embeddingFetch?: typeof fetch;
 }
 
 export async function buildServer({
@@ -132,6 +144,8 @@ export async function buildServer({
   webhookSender,
   llm: injectedLlm,
   llmFetch,
+  embeddings: injectedEmbeddings,
+  embeddingFetch,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -178,6 +192,8 @@ export async function buildServer({
           // The model's API key and an outbound request's Authorization header,
           // on the same terms (tm 255.6). The chat adapter never logs either.
           ...LLM_SECRET_LOG_PATHS,
+          // The embedding provider's key, likewise (tm 255.7).
+          ...EMBEDDING_SECRET_LOG_PATHS,
           // The request line. This API puts personal data in query strings —
           // the customer search takes an address — so the URL is where PII
           // reaches the log first, and it is not covered by any secret path.
@@ -270,6 +286,17 @@ export async function buildServer({
       logger: app.log.child({ component: 'llm' }),
       ...(llmFetch ? { fetchImpl: llmFetch } : {}),
     });
+  // One provider and one knowledge service for the whole process (tm 255.7):
+  // the customer path, the playbook and copilot routes and the freshness sweep
+  // all index and search through it, so they write and read one space and
+  // share one circuit breaker. Before, each built its own over the stub.
+  const embeddings =
+    injectedEmbeddings ??
+    createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding, {
+      logger: app.log.child({ component: 'embedding' }),
+      ...(embeddingFetch ? { fetchImpl: embeddingFetch } : {}),
+    });
+  const knowledge = new KnowledgeService({ embeddings });
 
   await app.register(errorHandler);
   // First, and with no dependencies of its own: `/health/ready` has to be able
@@ -315,7 +342,13 @@ export async function buildServer({
   });
   // After both stores it reads through, before anything request-facing: the
   // five sweeps are background work, not part of answering a request.
-  await app.register(scheduler, { env, mailer, telemetry: telemetryInstance, automations });
+  await app.register(scheduler, {
+    env,
+    mailer,
+    telemetry: telemetryInstance,
+    automations,
+    knowledge,
+  });
   // Mail a response must not wait for (tm 255.4) — the password reset's, so its
   // answer cannot depend on the carrier. Before the routes that use it.
   await app.register(backgroundMail, { mailer });
@@ -369,7 +402,7 @@ export async function buildServer({
       await api.register(chatRoutes, { env, mailer, push, automations });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
-      await api.register(customerRoutes, { env, mailer, push, automations, llm });
+      await api.register(customerRoutes, { env, mailer, push, automations, llm, knowledge });
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
@@ -394,7 +427,7 @@ export async function buildServer({
         version: VERSION,
       });
       await api.register(uploadRoutes, { env });
-      await api.register(playbookRoutes, { env, llm });
+      await api.register(playbookRoutes, { env, llm, knowledge });
       await api.register(kbRoutes);
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {
@@ -403,7 +436,7 @@ export async function buildServer({
       await api.register(publicKbSitemapRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
       });
-      await api.register(copilotRoutes, { env, automations });
+      await api.register(copilotRoutes, { env, automations, knowledge });
       await api.register(commandPaletteRoutes);
       await api.register(appRoutes, { env });
       await api.register(auditLogRoutes, { env });

@@ -1,0 +1,29 @@
+-- Which vector space each chunk's embedding lives in (tm 255.7 · PLAN §D182).
+--
+-- Vectors are only comparable inside the space that produced them. Until now
+-- one space existed — the lexical hash `@nexa/ai-mock` computes in process —
+-- so the column had nothing to say. A real embedding provider is a second
+-- space, and a knowledge base moves from one to the other source by source
+-- (`knowledge:reembed`): between the first source and the last, the table
+-- holds both. Measured against each other the two produce neighbours by
+-- accident, not by meaning, so retrieval compares a question only with chunks
+-- of its own space, and this column is what it filters on.
+--
+-- NOT A DIMENSION CHANGE. `embedding` stays `vector(1536)` and the HNSW index
+-- `idx_chunks_embedding_hnsw` is untouched: the pilot's model returns 1536
+-- values natively (ADR docs/adr/pilot-llm-embedding-provider.md §4.2), so the
+-- expand/backfill/contract migration that a different dimension would need
+-- (§4.3) does not run.
+--
+-- THE DEFAULT IS THE LEXICAL SPACE, AND THAT IS TRUE, NOT A PLACEHOLDER. Every
+-- vector written before this migration came from the lexical stub, and so does
+-- every vector the previous release still writes while it serves traffic during
+-- the rollout (CONVENTIONS 6.3: a migration must suit the old code and the new).
+-- The new code always names the space it writes. The value is
+-- `LEXICAL_EMBEDDING_SPACE` in packages/ai-mock/src/embedding.ts, and a test
+-- pins the two to each other.
+--
+-- Metadata-only on PostgreSQL 11+: a constant default is stored once in the
+-- catalogue rather than written into every row, so this takes a brief ACCESS
+-- EXCLUSIVE lock and no table rewrite, however many chunks exist.
+ALTER TABLE "knowledge_chunks" ADD COLUMN "embedding_space" TEXT NOT NULL DEFAULT 'mock:lexical-v1';

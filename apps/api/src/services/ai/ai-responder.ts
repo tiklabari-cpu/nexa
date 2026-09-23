@@ -72,12 +72,20 @@ export class AiResponder {
         chatId,
       });
       if (result.failure) {
-        // The provider's own lines (component `llm`) carry the status and the
-        // code but not the conversation; this one, on the request's logger,
-        // ties the failure to the chat a human now has to answer (tm 255.6).
+        // The provider's own lines (component `llm` or `embedding`) carry the
+        // status and the code but not the conversation; this one, on the
+        // request's logger, ties the failure to the chat a human now has to
+        // answer (tm 255.6), and says which provider it was (tm 255.7).
         request.log.warn(
-          { chat_id: chatId, skill_id: result.skillId, kind: result.failure },
-          'ai model could not answer; the conversation stays with a human',
+          {
+            chat_id: chatId,
+            skill_id: result.skillId,
+            provider: result.failure.provider,
+            kind: result.failure.kind,
+          },
+          result.failure.provider === 'llm'
+            ? 'ai model could not answer; the conversation stays with a human'
+            : 'ai knowledge search could not run; the conversation stays with a human',
         );
       }
       if (result.outcome === 'skipped') return result;

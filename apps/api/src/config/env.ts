@@ -10,8 +10,16 @@ import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
 // schema accepts and no factory implements is exactly the drift M-PROV-a exists
 // to close, and one list read from both ends cannot drift. None of these
 // modules reaches back into this one, so there is no import cycle.
+import {
+  EMBEDDING_DIMENSIONS,
+  EMBEDDING_PROVIDERS,
+  type EmbeddingProviderOptions,
+} from '../services/ai/provider/embedding-provider.js';
 import { LLM_PROVIDERS, type LlmProviderOptions } from '../services/ai/provider/llm-provider.js';
-import { llmEndpointProblem } from '../services/ai/provider/provider-hosts.js';
+import {
+  embeddingEndpointProblem,
+  llmEndpointProblem,
+} from '../services/ai/provider/provider-hosts.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
 import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
 import { MAIL_PROVIDERS, type MailerOptions } from '../services/mail/mailer.js';
@@ -484,6 +492,51 @@ export const envSchema = z.object({
    */
   LLM_MAX_OUTPUT_TOKENS: z.coerce.number().int().positive().max(16_384).default(400),
   /**
+   * Who turns text into vectors for knowledge retrieval (tm 255.7 · ADR
+   * docs/adr/pilot-llm-embedding-provider.md §9.2). Configured apart from
+   * `LLM_PROVIDER`: its own key, host, model and region. `mock` is the lexical
+   * stub every test and the seed use; `openai` is the adapter in
+   * `services/ai/provider/openai-embedding-provider.ts` and needs the three
+   * keys below, or it refuses to boot rather than quietly embedding with the
+   * stub. Changing it moves new vectors into another space — the knowledge
+   * already stored is re-embedded with `knowledge:reembed` (PLAN §D182).
+   */
+  EMBEDDING_PROVIDER: z.enum(EMBEDDING_PROVIDERS).default('mock'),
+  /**
+   * Where `EMBEDDING_PROVIDER` embeds (NFR-C4). The query path embeds the
+   * customer's own message, so this is held to the rule `LLM_PROVIDER_REGION`
+   * is: unset means "this process's region", true only of the stub, and a
+   * covered workspace refuses every AI feature when either provider is out of
+   * its region (`services/ai/inference.ts`).
+   */
+  EMBEDDING_PROVIDER_REGION: z.enum(REGIONS).optional(),
+  /** The provider's `/v1` base URL; the regional host for the region in production. */
+  EMBEDDING_API_BASE_URL: z.string().url().optional(),
+  /** The model id (pilot: `text-embedding-3-small`). Part of the space vectors are stored in. */
+  EMBEDDING_MODEL: z.string().min(1).optional(),
+  /** Bearer key for `EMBEDDING_PROVIDER≠mock`; `LLM_API_KEY`'s rules. May hold the same value. */
+  EMBEDDING_API_KEY: z.string().min(1).optional(),
+  /**
+   * Not a setting — an assertion (ADR §9.2). `knowledge_chunks.embedding` is
+   * `vector(1536)`, so any other value is refused here, at boot, instead of
+   * as a failed insert on the first upload. A model that is not 1536 wide
+   * needs a migration and a full re-embed (ADR §4.3), not a new number.
+   */
+  EMBEDDING_DIMENSIONS: z.coerce
+    .number()
+    .refine(
+      (value) => value === EMBEDDING_DIMENSIONS,
+      `must be ${EMBEDDING_DIMENSIONS}: knowledge_chunks.embedding is vector(${EMBEDDING_DIMENSIONS}), and a model of another width needs a migration and a full re-embed, not a setting`,
+    )
+    .default(EMBEDDING_DIMENSIONS),
+  /**
+   * How long one embedding request — its retries included — may take. Separate
+   * from `LLM_TIMEOUT_MS` (ADR §9.2): on the query path it is added to the
+   * customer's wait before the model is even asked, and a question embeds in a
+   * fraction of a second, so it is kept well under the chat timeout.
+   */
+  EMBEDDING_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(10_000),
+  /**
    * Outgoing mail (M-PROV-a). `file` writes each message under `MAIL_DIR`
    * instead of sending it (PLAN A4); `null` discards, which is what the test
    * fixture asks for so a suite that sends hundreds of invitations leaves
@@ -743,6 +796,8 @@ export type Env = z.infer<typeof envSchema> & {
   mail: MailerOptions;
   /** Everything `createLlmProvider` needs (tm 255.5), on `mail`'s terms. */
   llm: LlmProviderOptions;
+  /** Everything `createEmbeddingProvider` needs (tm 255.7), on `llm`'s terms. */
+  embedding: EmbeddingProviderOptions;
   isProduction: boolean;
   isTest: boolean;
   /** Whether OpenTelemetry instrumentation is active for this process. */
@@ -843,6 +898,36 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
         env.LLM_PROVIDER,
         env.LLM_API_BASE_URL,
         env.LLM_PROVIDER_REGION,
+      );
+      if (endpoint) problems.push(endpoint);
+    }
+  }
+
+  // The same rule for the embedding provider, under its own keys (tm 255.7 ·
+  // ADR §7): the query path embeds the customer's message, so a remote
+  // embedder is as much a third party the conversation reaches as a model is.
+  if (env.EMBEDDING_PROVIDER !== 'mock') {
+    const required = [
+      'EMBEDDING_API_BASE_URL',
+      'EMBEDDING_MODEL',
+      'EMBEDDING_API_KEY',
+      'EMBEDDING_PROVIDER_REGION',
+    ] as const;
+    for (const key of required) {
+      if (!env[key]) {
+        problems.push(
+          `${key} is required in production when EMBEDDING_PROVIDER=${env.EMBEDDING_PROVIDER}.`,
+        );
+      }
+    }
+    if (env.EMBEDDING_API_KEY?.startsWith('dev-only-')) {
+      problems.push('EMBEDDING_API_KEY still holds its development placeholder value.');
+    }
+    if (env.EMBEDDING_API_BASE_URL && env.EMBEDDING_PROVIDER_REGION) {
+      const endpoint = embeddingEndpointProblem(
+        env.EMBEDDING_PROVIDER,
+        env.EMBEDDING_API_BASE_URL,
+        env.EMBEDDING_PROVIDER_REGION,
       );
       if (endpoint) problems.push(endpoint);
     }
@@ -1021,6 +1106,32 @@ function llmOptions(env: z.infer<typeof envSchema>): LlmProviderOptions {
   return { openai: { baseUrl: LLM_API_BASE_URL, model: LLM_MODEL, apiKey: LLM_API_KEY } };
 }
 
+/**
+ * `env.embedding` — the single assembly of `EmbeddingProviderOptions`
+ * (tm 255.7), on `llmOptions`' terms: `openai` is `null` unless it is the
+ * provider and all three of its keys are present, and
+ * `createEmbeddingProvider` refuses a `null`.
+ */
+function embeddingOptions(env: z.infer<typeof envSchema>): EmbeddingProviderOptions {
+  const { EMBEDDING_API_BASE_URL, EMBEDDING_MODEL, EMBEDDING_API_KEY } = env;
+  if (
+    env.EMBEDDING_PROVIDER !== 'openai' ||
+    !EMBEDDING_API_BASE_URL ||
+    !EMBEDDING_MODEL ||
+    !EMBEDDING_API_KEY
+  ) {
+    return { openai: null };
+  }
+  return {
+    openai: {
+      baseUrl: EMBEDDING_API_BASE_URL,
+      model: EMBEDDING_MODEL,
+      apiKey: EMBEDDING_API_KEY,
+      timeoutMs: env.EMBEDDING_TIMEOUT_MS,
+    },
+  };
+}
+
 function replicaEscalatesPrivilege(env: z.infer<typeof envSchema>): boolean {
   if (!env.DATABASE_REPLICA_URL || !env.DATABASE_APP_URL) return false;
   const owner = new URL(env.DATABASE_URL).username;
@@ -1085,6 +1196,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     storage: storageOptions(env),
     mail: mailOptions(env),
     llm: llmOptions(env),
+    embedding: embeddingOptions(env),
     isProduction: env.NODE_ENV === 'production',
     isTest: env.NODE_ENV === 'test',
     otelEnabled: env.OTEL_ENABLED ?? env.NODE_ENV !== 'test',

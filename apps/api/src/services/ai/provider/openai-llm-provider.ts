@@ -48,7 +48,7 @@
  */
 import pino from 'pino';
 import { CircuitBreaker, type CircuitPermit } from './circuit-breaker.js';
-import { LlmProviderError, type LlmFailureKind } from './llm-error.js';
+import { LlmProviderError } from './llm-error.js';
 import type {
   LlmCompletion,
   LlmCompletionRequest,
@@ -56,6 +56,26 @@ import type {
   LlmUsage,
   OpenAiSettings,
 } from './llm-provider.js';
+import {
+  classifyHttpFailure,
+  equalJitterBackoffMs,
+  HEADER_SAFE,
+  isCount,
+  isRecord,
+  networkCode,
+  openAiEndpointUrl,
+  readCapped,
+  readProblem,
+  ResponseTooLarge,
+  retryAfterMs,
+  SAFE_CODE,
+  SAFE_REQUEST_ID,
+  safeToken,
+} from './openai-http.js';
+
+// Moved to `openai-http.ts` when the embedding adapter needed them too
+// (tm 255.7); still exported from here, where 255.6 published them.
+export { classifyHttpFailure, OPENAI_QUOTA_CODES, retryAfterMs } from './openai-http.js';
 
 /**
  * Attempts per call, first included. Three, like the mail carrier and the
@@ -85,21 +105,6 @@ export const LLM_CIRCUIT_OPEN_MS = 30_000;
 export const LLM_MAX_RESPONSE_BYTES = 1_048_576;
 /** Ceiling on an error body: only `error.code` and `error.type` are read from it. */
 const PROBLEM_MAX_BYTES = 65_536;
-
-/**
- * 429 codes that mean money, not pace (ADR §3.1, OpenAI's error-code guide):
- * retrying "won't restore API access", and it would spend the customer's wait
- * on requests that cannot succeed. `insufficient_quota` is the code OpenAI's
- * API long answered the same condition with; today's guide no longer lists it,
- * and recognising it costs nothing.
- */
-export const OPENAI_QUOTA_CODES: ReadonlySet<string> = new Set([
-  'credit_balance_exhausted',
-  'organization_spend_limit_exceeded',
-  'project_spend_limit_exceeded',
-  'organization_usage_limit_exceeded',
-  'insufficient_quota',
-]);
 
 /**
  * Where the key would sit if anyone logged the configuration or a request: the
@@ -159,91 +164,27 @@ export interface OpenAiLlmProviderOptions {
  * millisecond, half fixed so a retry is never immediate.
  */
 export function llmRetryBackoffMs(attempt: number, random: () => number = Math.random): number {
-  const step = Math.min(
-    LLM_RETRY_BACKOFF_CAP_MS,
-    LLM_RETRY_BACKOFF_BASE_MS * 2 ** Math.max(0, attempt - 1),
-  );
-  return Math.round(step / 2 + random() * (step / 2));
+  return equalJitterBackoffMs(attempt, random, {
+    baseMs: LLM_RETRY_BACKOFF_BASE_MS,
+    capMs: LLM_RETRY_BACKOFF_CAP_MS,
+  });
 }
 
 /**
- * A `Retry-After` header in milliseconds, or `null` when absent or unreadable.
- * RFC 9110 §10.2.3 allows seconds or an HTTP-date; both are honoured.
- */
-export function retryAfterMs(header: string | null, now: number): number | null {
-  if (!header) return null;
-  const value = header.trim();
-  if (/^\d+(\.\d+)?$/.test(value)) return Math.round(Number(value) * 1_000);
-  const at = Date.parse(value);
-  return Number.isNaN(at) ? null : Math.max(0, at - now);
-}
-
-/**
- * The chat endpoint under `LLM_API_BASE_URL`, or an error for the operator.
- *
- * The base comes from configuration, not from a tenant, so `lib/ssrf.ts`'s
- * private-address rule is not the check it needs: development points this at a
- * stand-in on loopback on purpose, and production is already narrower than
- * "any public host" — `llmEndpointProblem` admits the two regional OpenAI hosts
- * and nothing else. What is checked here is what would make the adapter's own
- * request wrong: a scheme fetch cannot use, a credential in the URL (it would
- * travel outside `LLM_API_KEY`'s redaction), and a query or fragment the
- * appended path would silently drop. None of the messages repeats the URL — the
- * credential case is exactly the one where it must not be printed.
+ * The chat endpoint under `LLM_API_BASE_URL`, or an error for the operator —
+ * `openAiEndpointUrl` says what is checked and why.
  */
 export function chatCompletionsUrl(baseUrl: string): string {
-  let url: URL;
-  try {
-    url = new URL(baseUrl);
-  } catch {
-    throw new Error('LLM_API_BASE_URL is not a URL.');
-  }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new Error('LLM_API_BASE_URL must be an http(s) URL.');
-  }
-  if (url.username || url.password) {
-    throw new Error(
-      'LLM_API_BASE_URL must not carry credentials; the key belongs in LLM_API_KEY, which is kept out of logs.',
-    );
-  }
-  if (url.search || url.hash) {
-    throw new Error(
-      'LLM_API_BASE_URL must not have a query string or fragment: the adapter appends /chat/completions to its path.',
-    );
-  }
-  const path = url.pathname.endsWith('/') ? url.pathname : `${url.pathname}/`;
-  return `${url.origin}${path}chat/completions`;
-}
-
-/** Which failure an HTTP answer is. `problem` is the error body's `code` and `type`. */
-export function classifyHttpFailure(
-  status: number,
-  problem: { code: string | null; type: string | null },
-): LlmFailureKind {
-  if (status === 429) {
-    const quota = [problem.code, problem.type].some(
-      (value) => value !== null && OPENAI_QUOTA_CODES.has(value),
-    );
-    return quota ? 'quota_exhausted' : 'rate_limited';
-  }
-  // 408 is the server saying it gave up waiting, which RFC 9110 lets a client repeat.
-  if (status >= 500 || status === 408) return 'unavailable';
-  if (status === 401) return 'auth';
-  if (status === 403) return 'forbidden';
-  if (status === 404) return 'not_found';
-  if (status >= 400) return 'bad_request';
-  // A 3xx — refused rather than followed — or anything else that is not a completion.
-  return 'bad_response';
+  return openAiEndpointUrl(baseUrl, {
+    key: 'LLM_API_BASE_URL',
+    apiKeyName: 'LLM_API_KEY',
+    path: 'chat/completions',
+  });
 }
 
 type AttemptResult =
   | { ok: true; completion: LlmCompletion }
   | { ok: false; error: LlmProviderError; retryAfterMs: number | null };
-
-const SAFE_CODE = /^[A-Za-z0-9_.:-]{1,64}$/;
-const SAFE_REQUEST_ID = /^[A-Za-z0-9_-]{1,128}$/;
-/** Visible ASCII: what an HTTP header value can carry without fetch refusing it. */
-const HEADER_SAFE = /^[\x21-\x7e]+$/;
 
 const defaultSleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms));
@@ -443,7 +384,7 @@ export class OpenAiLlmProvider implements LlmProvider {
 
     // Every other status is a failure; the body only refines which one. It is
     // read — capped — either way, so the connection is released.
-    const problem = await readProblem(response);
+    const problem = await readProblem(response, PROBLEM_MAX_BYTES);
     const kind = classifyHttpFailure(status, problem);
     return {
       ok: false,
@@ -542,66 +483,6 @@ function readUsage(value: unknown): LlmUsage | null {
   return isCount(input) && isCount(output) ? { inputTokens: input, outputTokens: output } : null;
 }
 
-/** `error.code` and `error.type` from an error body, when present and safe to keep. */
-async function readProblem(
-  response: Response,
-): Promise<{ code: string | null; type: string | null }> {
-  try {
-    const parsed: unknown = JSON.parse(await readCapped(response, PROBLEM_MAX_BYTES));
-    const error = isRecord(parsed) && isRecord(parsed['error']) ? parsed['error'] : null;
-    return {
-      code: safeToken(error?.['code'], SAFE_CODE),
-      type: safeToken(error?.['type'], SAFE_CODE),
-    };
-  } catch {
-    return { code: null, type: null };
-  }
-}
-
-class ResponseTooLarge extends Error {}
-
-/**
- * The body as text, refusing to hold more than `limit` bytes of it — whether
- * the server announced the size or not. Past the limit the stream is cancelled,
- * which releases the connection.
- */
-async function readCapped(response: Response, limit: number): Promise<string> {
-  if (Number(response.headers.get('content-length')) > limit) {
-    await response.body?.cancel().catch(() => undefined);
-    throw new ResponseTooLarge();
-  }
-  if (!response.body) return '';
-
-  const reader = response.body.getReader();
-  const decoder = new TextDecoder();
-  let size = 0;
-  let text = '';
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    size += value.byteLength;
-    if (size > limit) {
-      await reader.cancel().catch(() => undefined);
-      throw new ResponseTooLarge();
-    }
-    text += decoder.decode(value, { stream: true });
-  }
-  return text + decoder.decode();
-}
-
-/**
- * The socket's error code behind fetch's generic `TypeError: fetch failed`
- * (`ECONNRESET`, `ENOTFOUND`, `UND_ERR_CONNECT_TIMEOUT` …), else the error's
- * name. Never its message: a message is prose, and prose can quote anything.
- */
-function networkCode(error: unknown): string | null {
-  const cause = error instanceof Error ? error.cause : undefined;
-  const code = isRecord(cause) ? cause['code'] : isRecord(error) ? error['code'] : undefined;
-  return (
-    safeToken(code, SAFE_CODE) ?? (error instanceof Error ? safeToken(error.name, SAFE_CODE) : null)
-  );
-}
-
 function failureFields(error: LlmProviderError): Record<string, unknown> {
   return {
     kind: error.kind,
@@ -611,16 +492,4 @@ function failureFields(error: LlmProviderError): Record<string, unknown> {
     ...(error.reason ? { reason: error.reason } : {}),
     ...(error.requestId ? { requestId: error.requestId } : {}),
   };
-}
-
-function safeToken(value: unknown, pattern: RegExp): string | null {
-  return typeof value === 'string' && pattern.test(value) ? value : null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function isCount(value: unknown): value is number {
-  return typeof value === 'number' && Number.isInteger(value) && value >= 0;
 }

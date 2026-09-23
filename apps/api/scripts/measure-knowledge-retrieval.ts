@@ -51,6 +51,7 @@ import { embed, toVectorLiteral } from '@nexa/ai-mock';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { withTenant, type TenantClient, type TenantContext } from '../src/lib/tenant.js';
 import { KnowledgeService } from '../src/services/ai/knowledge-service.js';
+import { MockEmbeddingProvider } from '../src/services/ai/provider/mock-embedding-provider.js';
 import {
   adminUrl,
   assertDroppableDatabaseName,
@@ -284,11 +285,14 @@ async function main(): Promise<number> {
         `index built in ${((Date.now() - indexStarted) / 1000).toFixed(0)} s`,
     );
 
+    // The lexical stub the rows above were written with (tm 255.7: a service
+    // now names its embedding provider; a question searches its own space).
+    const embeddings = new MockEmbeddingProvider();
     const services: Record<Exclude<Strategy, 'before'>, KnowledgeService> = {
-      exact: new KnowledgeService({ exactSearchCeiling: 1_000_000 }),
-      approximate: new KnowledgeService({ exactSearchCeiling: 0 }),
-      shipped: new KnowledgeService(),
-      unanswerable: new KnowledgeService(),
+      exact: new KnowledgeService({ embeddings, exactSearchCeiling: 1_000_000 }),
+      approximate: new KnowledgeService({ embeddings, exactSearchCeiling: 0 }),
+      shipped: new KnowledgeService({ embeddings }),
+      unanswerable: new KnowledgeService({ embeddings }),
     };
     const strategies: Strategy[] = ['before', 'exact', 'approximate', 'shipped', 'unanswerable'];
     // Questions exact search finds nothing for. Above the ceiling each one pays
@@ -308,8 +312,9 @@ async function main(): Promise<number> {
         n += 1
       ) {
         const question = `qx${n} vz${n * 7} jq${n * 13}`;
+        const embedded = await services.exact.embedQuery(question);
         const { chunks } = await withTenant(probe, tenantA, (tx) =>
-          services.exact.search(tx, tenantA, question, { aiAgentId: agentId }),
+          services.exact.search(tx, tenantA, embedded, { aiAgentId: agentId }),
         );
         if (chunks.length === 0) found.push(question);
       }
@@ -336,8 +341,11 @@ async function main(): Promise<number> {
             seen.add('exact');
           } else {
             const asked = strategy === 'unanswerable' ? (noAnswer[index] ?? question) : question;
+            // Embedded inside the timed region, as `beforeTm254` embeds its own,
+            // and outside the transaction, as the product does.
+            const embedded = await services[strategy].embedQuery(asked);
             const result = await withTenant(app, tenantA, (tx) =>
-              services[strategy].search(tx, tenantA, asked, { aiAgentId: agentId }),
+              services[strategy].search(tx, tenantA, embedded, { aiAgentId: agentId }),
             );
             seen.add(result.strategy);
           }

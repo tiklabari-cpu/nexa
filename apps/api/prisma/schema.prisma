@@ -1701,14 +1701,21 @@ model KnowledgeSource {
 /// query ordered by a bare `<=>` gets the approximate index or a full scan by a
 /// hair, and on the index it can miss rows without saying so.
 model KnowledgeChunk {
-  id         String                       @id @default(uuid()) @db.Uuid
-  sourceId   String                       @map("source_id") @db.Uuid
-  licenseId  BigInt                       @map("license_id")
-  chunkText  String                       @map("chunk_text")
-  embedding  Unsupported("vector(1536)")?
-  tokenCount Int?                         @map("token_count")
-  position   Int                          @default(0)
-  createdAt  DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             String                       @id @default(uuid()) @db.Uuid
+  sourceId       String                       @map("source_id") @db.Uuid
+  licenseId      BigInt                       @map("license_id")
+  chunkText      String                       @map("chunk_text")
+  embedding      Unsupported("vector(1536)")?
+  /// The vector space `embedding` lives in, as `<provider>:<model>` -- the
+  /// `EmbeddingProvider.space` that wrote it (tm 255.7 / PLAN D182).
+  /// Retrieval compares a question only with chunks of its own space: two
+  /// spaces' vectors side by side are neighbours by accident. The default is
+  /// the lexical stub's space, which every vector written before this column
+  /// existed is in; `KnowledgeService.index` always names the space it writes.
+  embeddingSpace String                       @default("mock:lexical-v1") @map("embedding_space")
+  tokenCount     Int?                         @map("token_count")
+  position       Int                          @default(0)
+  createdAt      DateTime                     @default(now()) @map("created_at") @db.Timestamptz(6)
 
   source KnowledgeSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
 

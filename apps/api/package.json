@@ -31,6 +31,7 @@
     "siem:run": "tsx src/services/audit/siem-run.ts",
     "sla:run": "tsx src/services/sla/sla-run.ts",
     "knowledge-refresh:run": "tsx src/services/ai/knowledge-refresh-run.ts",
+    "knowledge:reembed": "tsx src/services/ai/knowledge-reembed-run.ts",
     "invoice-close:run": "tsx src/services/billing/invoice-close-run.ts"
   },
   "prisma": {

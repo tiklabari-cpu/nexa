@@ -23,12 +23,33 @@
  * not land. The next attempt is still scheduled from now, on the same
  * window, so a permanently broken URL is retried on the sweep's normal
  * cadence rather than hammered every tick.
+ *
+ * **The embedding provider is the second thing that can refuse (tm 255.7),
+ * and it is treated like the first.** The refreshed text is embedded before
+ * the write transaction opens; when the provider cannot embed it the source
+ * keeps its old text and chunks and `last_refresh_error` says so. And since no
+ * request carries this work, the residency rule is asked here: a workspace
+ * under a signed BAA whose content the embedding provider would take out of
+ * its region is not refreshed at all (NFR-C4 · `inference.ts`).
  */
 import type { PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
+import { inferenceAllowed, readInferenceResidency, type InferenceProvider } from './inference.js';
 import { computeNextRefreshAt, fetchRefreshedText } from './knowledge-refresh.js';
-import { KnowledgeService } from './knowledge-service.js';
+import type { KnowledgeService, PreparedChunks } from './knowledge-service.js';
+import { EmbeddingProviderError } from './provider/embedding-error.js';
+
+/** What `last_refresh_error` says when the residency rule refused the refresh. */
+export const REFRESH_REFUSED_RESIDENCY =
+  'Not refreshed: this workspace is covered by a signed HIPAA agreement and the embedding provider runs outside its region.';
+
+export interface KnowledgeRefreshSweeperOptions {
+  /** Indexes the refreshed text — the server's instance, or one the CLI builds from the env. */
+  knowledge: KnowledgeService;
+  /** Where that service's embedding provider runs (`resolveEmbeddingInferenceProvider`). */
+  embeddingInference: InferenceProvider;
+}
 
 export interface TenantRefreshResult {
   /** Stringified: a bigint cannot be JSON-serialised, and this report is JSON. */
@@ -61,10 +82,13 @@ interface DueSource {
 
 export class KnowledgeRefreshSweeper {
   readonly #db: PrismaClient;
-  readonly #knowledge = new KnowledgeService();
+  readonly #knowledge: KnowledgeService;
+  readonly #embeddingInference: InferenceProvider;
 
-  constructor(db: PrismaClient) {
+  constructor(db: PrismaClient, options: KnowledgeRefreshSweeperOptions) {
     this.#db = db;
+    this.#knowledge = options.knowledge;
+    this.#embeddingInference = options.embeddingInference;
   }
 
   async run(options: { now?: Date } = {}): Promise<KnowledgeRefreshReport> {
@@ -113,10 +137,29 @@ export class KnowledgeRefreshSweeper {
       }),
     );
 
+    // Only a workspace with something due is asked where it lives: most sweeps
+    // of most tenants find nothing, and should cost nothing more than that.
+    const allowed =
+      due.length > 0 &&
+      (await withTenant(this.#db, context, async (tx) => {
+        const residency = await readInferenceResidency(tx, context);
+        return (
+          residency !== null &&
+          inferenceAllowed({
+            provider: this.#embeddingInference,
+            workspaceRegion: residency.region,
+            hipaaScope: residency.hipaaScope,
+          })
+        );
+      }));
+
     let refreshed = 0;
     let failed = 0;
     for (const source of due) {
-      if (await this.#refreshOne(context, source, now)) refreshed += 1;
+      if (!allowed) {
+        await this.#recordFailure(context, source, now, REFRESH_REFUSED_RESIDENCY);
+        failed += 1;
+      } else if (await this.#refreshOne(context, source, now)) refreshed += 1;
       else failed += 1;
     }
 
@@ -139,14 +182,21 @@ export class KnowledgeRefreshSweeper {
       });
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Could not refresh this source.';
-      await withTenant(this.#db, context, (tx) =>
-        tx.knowledgeSource.updateMany({
-          where: { id: source.id },
-          data: {
-            lastRefreshError: message,
-            nextRefreshAt: computeNextRefreshAt(source.refreshAfterDays, now),
-          },
-        }),
+      await this.#recordFailure(context, source, now, message);
+      return false;
+    }
+
+    // Embedded before the write transaction, like the crawl above (tm 255.7).
+    let prepared: PreparedChunks;
+    try {
+      prepared = await this.#knowledge.prepare(text);
+    } catch (error) {
+      if (!(error instanceof EmbeddingProviderError)) throw error;
+      await this.#recordFailure(
+        context,
+        source,
+        now,
+        `Not refreshed: the embedding provider did not answer (${error.kind}). The previous text still answers.`,
       );
       return false;
     }
@@ -161,11 +211,32 @@ export class KnowledgeRefreshSweeper {
           nextRefreshAt: computeNextRefreshAt(source.refreshAfterDays, now),
         },
       });
-      // Re-chunked and re-embedded in the same transaction as the content
-      // write, exactly as the manual reindex endpoint does — a source that
-      // exists but answers from stale chunks is worse than one still stale.
-      await this.#knowledge.index(tx, context, source.id, text);
+      // Re-chunked chunks written in the same transaction as the content,
+      // exactly as the manual reindex endpoint does — a source that exists but
+      // answers from stale chunks is worse than one still stale.
+      await this.#knowledge.index(tx, context, source.id, prepared);
     });
     return true;
+  }
+
+  /**
+   * A refresh that did not land: the source's text and chunks are untouched,
+   * only the reason and the next attempt move.
+   */
+  async #recordFailure(
+    context: TenantContext,
+    source: DueSource,
+    now: Date,
+    message: string,
+  ): Promise<void> {
+    await withTenant(this.#db, context, (tx) =>
+      tx.knowledgeSource.updateMany({
+        where: { id: source.id },
+        data: {
+          lastRefreshError: message,
+          nextRefreshAt: computeNextRefreshAt(source.refreshAfterDays, now),
+        },
+      }),
+    );
   }
 }

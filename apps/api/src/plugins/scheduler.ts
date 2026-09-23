@@ -15,6 +15,7 @@
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import type { Env } from '../config/env.js';
+import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { buildSchedulerJobs } from '../services/scheduler/jobs.js';
 import { Scheduler } from '../services/scheduler/scheduler.js';
@@ -38,6 +39,8 @@ export interface SchedulerPluginOptions {
    * nobody outside the building.
    */
   automations?: WorkspaceEventDispatcher;
+  /** The server's knowledge service, so the freshness sweep embeds as requests do (tm 255.7). */
+  knowledge?: KnowledgeService;
 }
 
 async function schedulerPlugin(
@@ -58,6 +61,7 @@ async function schedulerPlugin(
     env: options.env,
     mailer: options.mailer,
     ...(options.automations ? { automations: options.automations } : {}),
+    ...(options.knowledge ? { knowledge: options.knowledge } : {}),
   })) {
     scheduler.register(job);
   }

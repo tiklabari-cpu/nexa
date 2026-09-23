@@ -37,6 +37,7 @@ import { markCampaignEngaged } from '../services/campaigns/campaign-engagement.j
 import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.js';
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
+import type { KnowledgeService } from '../services/ai/knowledge-service.js';
 import type { LlmProvider } from '../services/ai/provider/llm-provider.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
@@ -256,12 +257,19 @@ export default async function customerRoutes(
     push,
     automations,
     llm,
+    knowledge,
   }: {
     env: Env;
     mailer: Mailer;
     push: PushProvider;
     /** Writes the AI Agent's knowledge answers (tm 255.5). */
     llm: LlmProvider;
+    /**
+     * Finds the passages those answers stand on — the server's one instance,
+     * over its configured embedding provider (tm 255.7). Until then the engine
+     * here built its own over the lexical stub, whatever the deployment said.
+     */
+    knowledge: KnowledgeService;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
   },
@@ -294,6 +302,7 @@ export default async function customerRoutes(
     publisher,
     new SkillEngine({
       llm,
+      knowledge,
       maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
       timeoutMs: env.LLM_TIMEOUT_MS,
     }),

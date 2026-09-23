@@ -12,6 +12,7 @@ import {
   assertInferenceAllowed,
   inferenceAllowed,
   inferenceLeavesRegion,
+  resolveEmbeddingInferenceProvider,
   resolveInferenceProvider,
   type InferenceProvider,
 } from './inference.js';
@@ -38,6 +39,32 @@ describe('resolveInferenceProvider', () => {
         LLM_PROVIDER_REGION: 'eu',
       }),
     ).toEqual({ id: 'mock', region: 'eu' });
+  });
+});
+
+describe('resolveEmbeddingInferenceProvider (tm 255.7)', () => {
+  it('holds the embedding provider to the same default, under its own key', () => {
+    expect(
+      resolveEmbeddingInferenceProvider({ EMBEDDING_PROVIDER: 'mock', NEXA_REGION: 'us' }),
+    ).toEqual({ id: 'mock', region: 'us' });
+    expect(
+      resolveEmbeddingInferenceProvider({
+        EMBEDDING_PROVIDER: 'openai',
+        NEXA_REGION: 'us',
+        EMBEDDING_PROVIDER_REGION: 'eu',
+      }),
+    ).toEqual({ id: 'openai', region: 'eu' });
+  });
+
+  it('is independent of the chat provider’s region', () => {
+    const env = {
+      NEXA_REGION: 'us',
+      LLM_PROVIDER: 'mock',
+      LLM_PROVIDER_REGION: 'eu',
+      EMBEDDING_PROVIDER: 'mock',
+    } as const;
+    expect(resolveInferenceProvider(env).region).toBe('eu');
+    expect(resolveEmbeddingInferenceProvider(env).region).toBe('us');
   });
 });
 

@@ -25,14 +25,24 @@
  * part of the requirement: a workspace without a BAA is not silently subjected
  * to a rule it never agreed to. Scope is what turns the same configuration into
  * a refusal.
+ *
+ * **Two providers, one rule (tm 255.7).** Embedding a customer's question sends
+ * it to the embedding provider before any model sees it, so that provider is
+ * held to the same boundary under its own key (`EMBEDDING_PROVIDER_REGION`,
+ * ADR §7). The request gate (`plugins/ai-residency.ts`) refuses a covered
+ * workspace when *either* provider would take its content out of region; work
+ * that no request carries — the freshness sweep, `knowledge:reembed` — asks
+ * {@link readInferenceResidency} for the same two facts a request carries.
  */
-import { servesRegion, type Region } from '@nexa/types';
+import { REGIONS, servesRegion, type Region } from '@nexa/types';
 import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
+import { readHipaaScope } from '../../lib/hipaa.js';
+import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 export interface InferenceProvider {
-  /** Which implementation answers — the value `LLM_PROVIDER` names. */
-  id: Env['LLM_PROVIDER'];
+  /** Which implementation answers — the value `LLM_PROVIDER` or `EMBEDDING_PROVIDER` names. */
+  id: Env['LLM_PROVIDER'] | Env['EMBEDDING_PROVIDER'];
   /** Where that implementation physically runs the inference. */
   region: Region;
 }
@@ -49,6 +59,41 @@ export function resolveInferenceProvider(
   env: Pick<Env, 'LLM_PROVIDER' | 'LLM_PROVIDER_REGION' | 'NEXA_REGION'>,
 ): InferenceProvider {
   return { id: env.LLM_PROVIDER, region: env.LLM_PROVIDER_REGION ?? env.NEXA_REGION };
+}
+
+/**
+ * The embedding provider, resolved on {@link resolveInferenceProvider}'s terms
+ * (tm 255.7): the process's own region unless `EMBEDDING_PROVIDER_REGION` says
+ * otherwise, which production requires it to for anything but the stub.
+ */
+export function resolveEmbeddingInferenceProvider(
+  env: Pick<Env, 'EMBEDDING_PROVIDER' | 'EMBEDDING_PROVIDER_REGION' | 'NEXA_REGION'>,
+): InferenceProvider {
+  return {
+    id: env.EMBEDDING_PROVIDER,
+    region: env.EMBEDDING_PROVIDER_REGION ?? env.NEXA_REGION,
+  };
+}
+
+/**
+ * A workspace's residency facts, read inside its own tenant context — for work
+ * that no request carries and so no credential has already resolved (tm 255.7).
+ *
+ * `null` when the region cannot be read or is not one this build knows. The
+ * callers treat that as a refusal: a gate that cannot establish where a
+ * workspace lives has no business sending its content anywhere.
+ */
+export async function readInferenceResidency(
+  tx: TenantClient,
+  tenant: TenantContext,
+): Promise<{ region: Region; hipaaScope: boolean } | null> {
+  const organization = await tx.organization.findUnique({
+    where: { id: tenant.organizationId },
+    select: { region: true },
+  });
+  const region = REGIONS.find((candidate) => candidate === organization?.region);
+  if (!region) return null;
+  return { region, hipaaScope: await readHipaaScope(tx, tenant.licenseId) };
 }
 
 /**

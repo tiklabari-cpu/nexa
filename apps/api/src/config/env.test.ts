@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ZodTypeAny } from 'zod';
 import { REGIONS } from '@nexa/types';
+import { EMBEDDING_PROVIDERS } from '../services/ai/provider/embedding-provider.js';
 import { LLM_PROVIDERS } from '../services/ai/provider/llm-provider.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
 import { PAYMENT_PROVIDERS } from '../services/billing/payment-provider.js';
@@ -75,6 +76,7 @@ describe('provider selection', () => {
     { key: 'SIEM_PROVIDER', vocabulary: SIEM_PROVIDERS, fallback: 'file' },
     { key: 'OTEL_EXPORTER', vocabulary: OTEL_EXPORTERS, fallback: 'console' },
     { key: 'LLM_PROVIDER', vocabulary: LLM_PROVIDERS, fallback: 'mock' },
+    { key: 'EMBEDDING_PROVIDER', vocabulary: EMBEDDING_PROVIDERS, fallback: 'mock' },
   ] as const;
 
   /**
@@ -620,6 +622,122 @@ describe('production configuration', () => {
       expect(() => parseEnv({ ...BASE, LLM_TIMEOUT_MS: '0' })).toThrow(/LLM_TIMEOUT_MS/);
       expect(() => parseEnv({ ...BASE, LLM_MAX_OUTPUT_TOKENS: '-1' })).toThrow(
         /LLM_MAX_OUTPUT_TOKENS/,
+      );
+    });
+  });
+
+  /**
+   * `EMBEDDING_PROVIDER=openai` in production (tm 255.7 · NFR-C4 · ADR §7, §9.2).
+   *
+   * The same three demands as the chat model, under the embedding provider's
+   * own keys: the query path embeds the customer's message, so a remote
+   * embedder is a third party the conversation reaches before any model does.
+   */
+  describe('EMBEDDING_PROVIDER=openai', () => {
+    const EMBEDDER: NodeJS.ProcessEnv = {
+      EMBEDDING_PROVIDER: 'openai',
+      EMBEDDING_PROVIDER_REGION: 'eu',
+      EMBEDDING_API_BASE_URL: 'https://eu.api.openai.com/v1',
+      EMBEDDING_MODEL: 'text-embedding-3-small',
+      EMBEDDING_API_KEY: realSecret('embedding'),
+    };
+
+    const problemsOf = (source: NodeJS.ProcessEnv): string => {
+      try {
+        parseEnv(source);
+        return '';
+      } catch (error) {
+        return (error as Error).message;
+      }
+    };
+
+    it('boots on a regional host that matches the declared region, apart from the chat model', () => {
+      const env = parseEnv({ ...PROD_BASE, ...EMBEDDER });
+      expect(env.EMBEDDING_PROVIDER).toBe('openai');
+      // Configured apart (ADR §4.2): the chat model can stay the stub.
+      expect(env.LLM_PROVIDER).toBe('mock');
+      expect(env.embedding.openai).toEqual({
+        baseUrl: 'https://eu.api.openai.com/v1',
+        model: 'text-embedding-3-small',
+        apiKey: EMBEDDER.EMBEDDING_API_KEY,
+        timeoutMs: 10_000,
+      });
+    });
+
+    it.each([
+      'EMBEDDING_API_BASE_URL',
+      'EMBEDDING_MODEL',
+      'EMBEDDING_API_KEY',
+      'EMBEDDING_PROVIDER_REGION',
+    ])('refuses to boot without %s, naming the key', (missing) => {
+      const { [missing]: _omitted, ...incomplete } = EMBEDDER;
+      expect(problemsOf({ ...PROD_BASE, ...incomplete })).toContain(
+        `${missing} is required in production when EMBEDDING_PROVIDER=openai.`,
+      );
+    });
+
+    it('refuses the global host and a region the host does not answer in', () => {
+      expect(
+        problemsOf({
+          ...PROD_BASE,
+          ...EMBEDDER,
+          EMBEDDING_API_BASE_URL: 'https://api.openai.com/v1',
+        }),
+      ).toMatch(/EMBEDDING_API_BASE_URL points at api\.openai\.com, which does not say where/);
+      expect(
+        problemsOf({
+          ...PROD_BASE,
+          ...EMBEDDER,
+          EMBEDDING_API_BASE_URL: 'https://us.api.openai.com/v1',
+        }),
+      ).toMatch(/EMBEDDING_PROVIDER_REGION=eu but EMBEDDING_API_BASE_URL is the us host/);
+    });
+
+    it('refuses the development placeholder key, and never prints a key it was given', () => {
+      const placeholder = 'dev-only-embedding-0123456789abcdef';
+      const message = problemsOf({
+        ...PROD_BASE,
+        ...EMBEDDER,
+        EMBEDDING_API_KEY: placeholder,
+        EMBEDDING_API_BASE_URL: 'https://api.openai.com/v1',
+      });
+      expect(message).toMatch(/EMBEDDING_API_KEY still holds its development placeholder value/);
+      expect(message).not.toContain(placeholder);
+    });
+
+    it('asks nothing of the mock, and leaves a half configuration to the factory', () => {
+      expect(parseEnv({ ...PROD_BASE, EMBEDDING_PROVIDER: 'mock' }).embedding.openai).toBeNull();
+      expect(
+        parseEnv({
+          ...BASE,
+          NODE_ENV: 'development',
+          EMBEDDING_PROVIDER: 'openai',
+          EMBEDDING_API_BASE_URL: 'http://127.0.0.1:9999/v1',
+        }).embedding.openai,
+      ).toBeNull();
+    });
+
+    it('holds EMBEDDING_DIMENSIONS to the column, in every environment (FR-MOD-06.3.2)', () => {
+      expect(parseEnv(BASE).EMBEDDING_DIMENSIONS).toBe(1536);
+      expect(parseEnv({ ...BASE, EMBEDDING_DIMENSIONS: '1536' }).EMBEDDING_DIMENSIONS).toBe(1536);
+      for (const width of ['3072', '1024', '1535']) {
+        expect(() => parseEnv({ ...BASE, EMBEDDING_DIMENSIONS: width })).toThrow(
+          /EMBEDDING_DIMENSIONS: must be 1536: knowledge_chunks\.embedding is vector\(1536\)/,
+        );
+      }
+      expect(() => parseEnv({ ...BASE, EMBEDDING_DIMENSIONS: 'wide' })).toThrow(
+        /EMBEDDING_DIMENSIONS/,
+      );
+    });
+
+    it('defaults the request timeout, apart from the chat timeout', () => {
+      expect(parseEnv(BASE).EMBEDDING_TIMEOUT_MS).toBe(10_000);
+      expect(
+        parseEnv({ ...BASE, ...EMBEDDER, EMBEDDING_TIMEOUT_MS: '2500' }).embedding.openai
+          ?.timeoutMs,
+      ).toBe(2_500);
+      expect(() => parseEnv({ ...BASE, EMBEDDING_TIMEOUT_MS: '0' })).toThrow(
+        /EMBEDDING_TIMEOUT_MS/,
       );
     });
   });

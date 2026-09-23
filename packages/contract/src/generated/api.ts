@@ -2625,7 +2625,10 @@ export interface paths {
     /**
      * Add a source and index it
      * @description Chunked and embedded on save, so it is answerable immediately rather than
-     *     after a background job an admin cannot see.
+     *     after a background job an admin cannot see. The text is embedded before
+     *     the transaction opens and the source is written together with its chunks,
+     *     so a source that exists is a source that can answer; when the embedding
+     *     provider cannot index it the answer is a 503 and nothing is created.
      *
      *     A `website` source is crawled from `source_url` (the fetch is guarded
      *     against private/internal targets — SSRF, NFR-S7); an `article` or a `faq`
@@ -2666,7 +2669,9 @@ export interface paths {
      *     **Partial success is the normal outcome, and it is a 200.** A spreadsheet
      *     with 200 correct rows and one typo must not lose all 200, so each row gets
      *     its own verdict in `results` and its own short transaction; a row that
-     *     fails validation or fails to write is reported and the import continues.
+     *     fails validation, fails to write, or whose text the embedding provider
+     *     could not index (nothing is written for that row) is reported and the
+     *     import continues.
      *     The ADR-06 error envelope is reserved for a request refused *as a whole*
      *     — malformed CSV, a header missing a required column, or a budget overrun
      *     (row/cell/byte limits, refused rather than silently truncated).
@@ -2746,9 +2751,10 @@ export interface paths {
      *     prefix of it, because a knowledge base holding half a policy answers
      *     confidently from the half it kept.
      *
-     *     On success the file is chunked, embedded and indexed inside the same
-     *     transaction as the insert, so a source that exists is a source that can
-     *     answer.
+     *     On success the file is chunked and embedded, then written together with
+     *     its chunks in one transaction, so a source that exists is a source that
+     *     can answer. When the embedding provider cannot index the text the answer
+     *     is a 503 and nothing is created.
      */
     post: operations['uploadKnowledgeSourceFile'];
     delete?: never;
@@ -2792,7 +2798,9 @@ export interface paths {
      *     Leaving the old chunks would make the edit cosmetic: the source would read
      *     as changed in the table and keep answering customers from the text the
      *     admin believes they replaced. This is the same reasoning that makes a
-     *     delete cascade to its chunks.
+     *     delete cascade to its chunks. The new text is embedded before that
+     *     transaction opens; when the embedding provider cannot index it the edit
+     *     is refused whole with a 503 and the source keeps its old text and chunks.
      *
      *     A new `source_url` is crawled through the same SSRF guard `POST
      *     /knowledge-sources` uses (NFR-S7), before the transaction opens — a
@@ -2853,7 +2861,9 @@ export interface paths {
      *     A successful reindex also restarts `next_refresh_at`'s countdown from
      *     now, using whatever `refresh_after_days` the source already has (FR-MOD-06.3.3,
      *     tm 198.4) — the freshness sweep and this endpoint are the same refresh,
-     *     whichever triggered it.
+     *     whichever triggered it. A refresh the embedding provider cannot index is
+     *     a 503 that likewise leaves the source, its text and its chunks as they
+     *     were.
      */
     post: operations['reindexKnowledgeSource'];
     delete?: never;
@@ -2882,7 +2892,9 @@ export interface paths {
      * Add a source to the copilot knowledge base and index it
      * @description Chunked and embedded on save, answerable immediately. A `website` source is
      *     crawled from `source_url` (guarded against private/internal targets, SSRF —
-     *     NFR-S7); every other type indexes `content`. Exactly one is required.
+     *     NFR-S7); every other type indexes `content`. Exactly one is required. When
+     *     the embedding provider cannot index the text the answer is a 503 and
+     *     nothing is created.
      */
     post: operations['createCopilotKnowledge'];
     delete?: never;
@@ -2955,7 +2967,9 @@ export interface paths {
      * @description Retrieves from the copilot knowledge base using the customer's latest
      *     message and returns a suggested reply for the agent to edit and send
      *     (FR-MOD-12.3). Returns an empty draft when nothing relevant is found rather
-     *     than inventing an answer.
+     *     than inventing an answer — and equally when the search could not run
+     *     because the embedding provider did not answer: the agent writes the reply
+     *     themselves, and no draft is better than one from a search that failed.
      */
     post: operations['copilotReply'];
     delete?: never;
@@ -12225,6 +12239,22 @@ export interface components {
         'application/json': components['schemas']['Error'];
       };
     };
+    /**
+     * @description The embedding provider could not index the text (`service_unavailable`,
+     *     tm 255.7): it timed out, refused the request, or its circuit breaker is
+     *     open after repeated failures. The text is embedded before anything is
+     *     written, so nothing was — a new source was not created, and an existing
+     *     one keeps its previous text and chunks. `error.details.kind` names the
+     *     failure class; the request can simply be repeated.
+     */
+    EmbeddingUnavailable: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
     /** @description Rate limit exceeded */
     TooManyRequests: {
       headers: {
@@ -16410,6 +16440,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['EmbeddingUnavailable'];
     };
   };
   bulkImportKnowledgeSources: {
@@ -16516,6 +16547,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['EmbeddingUnavailable'];
     };
   };
   deleteKnowledgeSource: {
@@ -16582,6 +16614,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['EmbeddingUnavailable'];
     };
   };
   reindexKnowledgeSource: {
@@ -16609,6 +16642,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['EmbeddingUnavailable'];
     };
   };
   listCopilotKnowledge: {
@@ -16672,6 +16706,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['EmbeddingUnavailable'];
     };
   };
   deleteCopilotKnowledge: {

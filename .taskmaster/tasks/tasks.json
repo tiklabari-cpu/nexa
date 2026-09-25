@@ -10291,7 +10291,7 @@
             "description": "Epic'in kapanis kapisi. Onceki 15 alt gorevin tek tek yesil olmasi yeterli degil: bu gorev hepsini BIRLIKTE, onbellek atlanarak ve gercek bir production yigininda dogrular; PLAN damgalarinin dogrulugunu denetler ve pilot icin sahibin girmesi gereken anahtarlarin (ADLARIYLA) listesini birakir.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1 (S1.3: --force ve parcali kosu); git S2; handoff S3. Pilot kapsami ve sir siniri: ust gorev tm 255 details.\n\nNEDEN AYRI BIR GOREV: onbellek yesil bir kapiyi TEKRAR OYNATABILIR (turbo FULL TURBO replay, olculdu). Ayrica her alt gorev kendi diliminde yesildi; pilotun sorusu 'hepsi ayni anda ve gercek yapilandirmada calisiyor mu'.\n\nKAPSAM:\n1) KAPILAR: pnpm -w typecheck / lint / format:check / test / test:integration / build / test:e2e -- turbo onbellegi ATLANARAK (--force) ve ciktida '0 cached' goruldugu YAZILARAK. DIKKAT: uc kapi tek bir Bash zaman asimini asabilir; parcali kos (CONVENTIONS S1.3). test:integration icin turbo run test:integration --concurrency=1 (paralel turboda bir push testi zaman asimina dusuyor). test:e2e 137 kanit PNG'sini yeniden yazar -- kendi turunun disindakiler geri alinir, calisma agaci temiz birakilir.\n2) PRODUCTION YIGINI: 255.15'in pilot compose'u yerelde ayaga kaldirilir (127.0.0.1, disa acilim YOK); dort servis healthy; smoke gecer.\n3) UCTAN UCA PILOT AKISI, sahte saglayicilarla: (a) davet e-postasi sahte SMTP kutusuna duser ve baglantiyla yeni uye katilir; (b) sifre sifirlama ayni sekilde; (c) musteri widget'tan yazar, AI yanit yolu sahte LLM/embedding ile calisir ve hata durumunda insana devreder; (d) Settings gruplu navigasyon + arama ile bir bolume deep-link ile gidilir.\n4) PLAN/DAMGA DENETIMI: dokunulan her PRD satirinin damgasi GERCEKTEN teslim edileni yansitiyor mu (CONVENTIONS S1.2); FR-MOD-08.1 satiri S3.7'ye EKLENMIS mi; her alt gorevin kaniti '## K. Kanit Gecmisi' altinda ilgili '#### K<kod>' blogunda mi. Kismi teslim '◐' ile yazilir; '✅' UYDURULMAZ.\n5) pnpm audit:req-coverage exit 0 ve yedi denetim betigi exit 0 (audit:sweep OPEN 0 / PARTIAL 0 dahil); task-master validate-dependencies gecerli.\n6) SAHIP ICIN ANAHTAR LISTESI: pilotun calismasi icin .env'ye girilmesi gereken anahtarlarin ADLARI ve nereden alinacagi (SMTP: PrivateEmail hesabi; LLM/embedding: 255.1'de secilen saglayici). DEGER YOK. Bu liste HANDOFF.md'ye ve docs/production-checklist.md'ye yazilir.\n7) KALAN RISKLER acikca listelenir -- en az sunlar: e2e suitinin sira bagimliligi (bagimsiz denetim G9-GATE-a; iki tam kosuda iki FARKLI test dustu, ikisi de tek basina yesil), pilot disi birakilan maddeler (odeme, kanallar, push, S3/ClamAV/SIEM, MCP, sosyal giris, K8s).\n\nKAPSAM DISI: gercek saglayiciya istek; gercek secret girisi; VPS/DNS/TLS; dagitim; yeni ozellik.\n\nPRD: bu gorev yeni bir PRD satiri kapatmaz; onceki 15 gorevin satirlarini DENETLER.\n\nTM 255.4'TEN DEVREDILEN (2026-09-23, PLAN §D179): (1) Tam e2e suiti 255.4'te KOSULMADI -- sabit portlarda pencereden once acilmis bir dev yigini vardi (anon 30/dk, zamanlayici acik, MAIL_PROVIDER=file) ve oldurulmedi; ilgili 6 spec (25 test) ozel bir SMTP yiginda yesil. 255.16 tam suiti TEMIZ bir yiginda kosmali: benimsenen (reuseExistingServer) bir make-dev API'si file postasiyla auth-mail.spec + tickets posta testini kirmizi yapar. (2) ACIK RISK, pilot oncesi karar: istek yolunda hala SMTP turunu BEKLEYEN uc nezaket postasi var -- ziyaretci mesaji -> atanana bildirim (customer.ts notifyAssignee, 716/758), sohbet kapanisi -> transcript (chat-service #emailTranscript), ticket gecisi -> musteri bildirimi (tickets.ts). Hata cagirana yansimiyor ama gecikme yansiyor: saglikli sunucuda bir SMTP turu, asili sunucuda ~33 s (3 x 10 s zaman asimi + 1 + 2 s bekleme). Oneri: app.backgroundMail'e alinmalari (ayri gorev).\n\nNOT (tm 255.8, 2026-09-23): RETRIEVAL_THRESHOLD gercek embedding uzayinda OLCULMEDI (anahtar yoktu). Anahtar varsa bir kez: EMBEDDING_PROVIDER=openai (+ EMBEDDING_API_BASE_URL, EMBEDDING_MODEL, EMBEDDING_API_KEY) pnpm --filter @nexa/api measure:knowledge-recall -- exit 0 PASS, 1 FAIL, 2 SKIPPED (olculmedi, gecis DEGIL). FAIL ya da taramanin en iyi noktasi 0.25 degilse esik uzaya baglanir; bkz. PLAN D183 (5).",
             "testStrategy": "Kapi = olculmus cikti. (1) Yedi kapi komutunun HEPSI exit 0 ve her biri icin '0 cached' kaniti kapanista yazili. (2) test:e2e iki kez arka arkaya kosulur ve ayni sonucu verir; farkli bir test dustuyse bu RAPOR EDILIR (sira bagimliligi kaniti) ve pilotu engelleyip engellemedigi degerlendirilir. (3) Pilot compose yerelde healthy; smoke gecer. (4) Dort uctan uca akis (davet, sifre sifirlama, AI yanit + insana devir, Settings deep-link) sahte saglayicilarla gecer. (5) PLAN damga denetimi: dokunulan her PRD satirinda damga + K blogu var; '✅' uydurulmamis. (6) pnpm audit:req-coverage exit 0; yedi denetim betigi exit 0; task-master validate-dependencies gecerli. (7) Anahtar ADLARI listesi HANDOFF.md ve docs/production-checklist.md'de; hicbir DEGER yok (grep ile kanit). (8) Kalan riskler listesi yazili. (9) git status temiz (e2e PNG churn'u geri alinmis).",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "255.4",
               "255.8",
@@ -10305,7 +10305,7 @@
             ],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-25T16:42:22.451Z"
           },
           {
             "id": 17,
@@ -10322,12 +10322,12 @@
             "priority": "high"
           }
         ],
-        "updatedAt": "2026-09-25T16:40:44.559Z"
+        "updatedAt": "2026-09-25T16:42:22.451Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-25T16:40:44.560Z",
+      "lastModified": "2026-09-25T16:42:22.451Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

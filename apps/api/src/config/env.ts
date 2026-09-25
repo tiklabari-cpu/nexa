@@ -6,6 +6,7 @@
 import { z } from 'zod';
 import { DEFAULT_REGION, REGIONS } from '@nexa/types';
 import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
+import { consoleRedirectUri, DEV_CONSOLE_REDIRECT } from '../lib/console-redirect.js';
 // The provider vocabularies live with their factories, not here: a value this
 // schema accepts and no factory implements is exactly the drift M-PROV-a exists
 // to close, and one list read from both ends cannot drift. None of these
@@ -228,7 +229,9 @@ export const envSchema = z.object({
    */
   SHUTDOWN_DRAIN_MS: z.coerce.number().int().min(0).max(120_000).optional(),
   API_BASE_URL: z.string().url().default('http://localhost:4000'),
-  /// Where invitation links point. The agent app, not the API.
+  /// Where invitation links point. The agent app, not the API. Its origin is
+  /// also the console callback every first-party OAuth client registers
+  /// (`consoleRedirectUri` below · tm 255.17).
   WEB_APP_URL: z.string().url().default('http://localhost:5173'),
   /// Outgoing mail is written here rather than sent (PLAN A4).
   MAIL_DIR: z.string().default('.data/mail'),
@@ -794,6 +797,18 @@ export type Env = z.infer<typeof envSchema> & {
   /** `WEB_ORIGIN` parsed and normalised — the CORS allowlist production uses. */
   webOrigins: string[];
   /**
+   * The agent console's OAuth callback — `WEB_APP_URL`'s origin +
+   * `/auth/callback` (tm 255.17). What a new workspace's first-party client
+   * registers at signup, and what boot adds to every existing one.
+   *
+   * Outside production a `WEB_APP_URL` that cannot be a redirect (plain `http`
+   * on a LAN address, say — set for the links in mail) falls back to the
+   * development callback rather than refusing to boot: the panel on
+   * `localhost:5173` keeps working as it did. Production refuses such a value
+   * in `productionProblems`, so this fallback never reaches a real deployment.
+   */
+  consoleRedirectUri: string;
+  /**
    * Everything `createObjectStore` needs, gathered in one place (M-STORE-a).
    *
    * The three routes that build a store used to write `{ localDir:
@@ -975,6 +990,16 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
   // and a workspace hands that address to the customers it asks to forward mail
   // to. Fine in development, where the alternative is a key nobody has; in
   // production it is an open door into any workspace whose address is known.
+  // Every workspace's first-party OAuth client registers this deployment's own
+  // panel address (tm 255.17). One the redirect check can never accept — plain
+  // `http` off loopback — would boot fine and then refuse every sign-in with
+  // "redirect_uri is not registered", which is the failure this names instead.
+  if (consoleRedirectUri(env.WEB_APP_URL) === null) {
+    problems.push(
+      `WEB_APP_URL must be an https address (or http on localhost / 127.0.0.1) the panel is served from: its origin + /auth/callback is the OAuth redirect every workspace registers, and ${env.WEB_APP_URL} cannot be one.`,
+    );
+  }
+
   if (!env.INBOUND_EMAIL_SECRET) {
     problems.push(
       'INBOUND_EMAIL_SECRET is required in production: unset, the inbound mail webhook accepts anyone who knows a workspace address.',
@@ -1230,6 +1255,7 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
     // Non-null by construction: the schema's `refine` above already refused
     // every value this returns `null` for, so the boot is over before here.
     webOrigins: parseOriginList(env.WEB_ORIGIN) ?? [],
+    consoleRedirectUri: consoleRedirectUri(env.WEB_APP_URL) ?? DEV_CONSOLE_REDIRECT,
     storage: storageOptions(env),
     mail: mailOptions(env),
     llm: llmOptions(env),

@@ -10313,21 +10313,21 @@
             "description": "tm 255.15 provasinin buldugu pilot engeli: auth_signup redirect URI olarak sabit http://localhost:5173/auth/callback yaziyor, panel kendi origin'ini gonderiyor.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami: ust gorev tm 255 details.\n\nKANIT (tm 255.15 pilot provasi, 2026-09-25 olculdu):\n* POST /auth/signup ile acilan yeni calisma alaninin OAuth istemcisi yalniz http://localhost:5173/auth/callback (+ nexa://auth/callback) redirect URI ile kaydediliyor: auth_signup SQL fonksiyonu bu degeri sabit yaziyor (apps/api/prisma/migrations/20260724101000_signup_creates_oauth_client, 20260802120000_brand_context, 20260815090000_region_us, 20260815200000_sandbox_license, 20260816120000_mobile_native_redirect).\n* Panel ise redirect_uri olarak ${window.location.origin}/auth/callback gonderiyor (apps/web/src/lib/auth-store.ts:121).\n* Sonuc (olculdu): pilot yigininda web http://localhost:15173 iken /auth/authorize 400 \"redirect_uri is not registered for this client.\" Yani pilotun gercek alan adinda (https://panel.<alan>) kaydolan HICBIR sahip panele giris yapamaz. Prova, kayitli http://localhost:5173/auth/callback ile token alarak ilerledi.\n\nKAPSAM: yeni calisma alaninin istemcisi dagitimin kendi panel adresini (WEB_APP_URL) kaydetmeli; mevcut calisma alanlari icin genislet-yalniz (CONVENTIONS S6.3) bir yol. Guvenlik: redirect URI kaydi istemci girdisinden ALINMAZ, yalniz sunucu yapilandirmasindan. Eski localhost girdisinin korunup korunmayacagi karar olarak yazilir.\n\nKAPSAM DISI: SSO/sosyal giris, mobil redirect (degismez).",
             "testStrategy": "(1) Kirmizi-once: WEB_APP_URL=https://panel.example ile kaydolan hesabin /auth/authorize cagrisi redirect_uri=https://panel.example/auth/callback ile bugun 400, sonra 200. (2) Baska bir origin (istemci girdisi) hala reddedilir. (3) Mevcut calisma alanlari: migration sonrasi davranis testli. (4) Pilot yigininda (docker-compose.pilot.yml, 127.0.0.1) panelden kayit + giris uctan uca. (5) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "pending",
+            "status": "in-progress",
             "dependencies": [
               "255.15"
             ],
             "parentId": "255",
-            "updatedAt": "2026-09-25T15:16:21.839Z",
+            "updatedAt": "2026-09-25T15:36:03.823Z",
             "priority": "high"
           }
         ],
-        "updatedAt": "2026-09-25T15:34:46.589Z"
+        "updatedAt": "2026-09-25T15:36:03.823Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-25T15:34:46.590Z",
+      "lastModified": "2026-09-25T15:36:03.824Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

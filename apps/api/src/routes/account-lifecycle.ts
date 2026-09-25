@@ -72,7 +72,7 @@ export default async function accountLifecycleRoutes(
   options: { env: Env; mailer: Mailer },
 ): Promise<void> {
   const { env, mailer } = options;
-  const lifecycle = new LifecycleService(app.db, env.WEB_APP_URL);
+  const lifecycle = new LifecycleService(app.db, env.WEB_APP_URL, env.consoleRedirectUri);
 
   app.post('/auth/signup', { config: { public: true } }, async (request, reply) => {
     const body = parse(signupBody, request.body);

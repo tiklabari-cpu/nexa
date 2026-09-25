@@ -65,7 +65,7 @@ Bu, "önce yaz, sonra ayrı bir kontrol turunda bak" şeklinde iki ayrı faz **D
 kapanışa (§3) ulaşmadan pencereyi bitirme.
 
 - **Build.** Task'ı MASTER-PROMPT'taki contract-first akışıyla uygula: sözleşme (OpenAPI +
-  @nexa/types) → migration → backend + unit test → frontend + typed client → E2E. Task neyi
+  @siyahtus/types) → migration → backend + unit test → frontend + typed client → E2E. Task neyi
   kapsıyorsa onu; kapsam dışına ÇIKMA (başka task'ın işini yapma).
 - **Doğrulama (OBJEKTİF kapı).** CONVENTIONS.md'deki DoD kapısını çalıştır ve **exit code'lara
   bak** (kendi kanaatine değil): typecheck, lint, unit, integration, build, ilgili smoke/E2E, ve
@@ -80,20 +80,20 @@ koşu da onunla birlikte ölür — sonuç bildirimi ASLA gelmez. "Bildirim bekl
 bitirmek = pencerenin sonu: kapanış (§3) hiç çalışmaz, JSON sonuç dönmez, döngü bunu `blocked`
 sayar ve DURUR. (Görülen vaka: tm 93.3 — kod bitmişti, iki pencere de tam bu şekilde öldü.)
 
-**DB testleri artık izole koşar (tm 105).** `@nexa/api` ve `@nexa/rtm`'in `test` /
+**DB testleri artık izole koşar (tm 105).** `@siyahtus/api` ve `@siyahtus/rtm`'in `test` /
 `test:unit` / `test:integration` script'leri her koşuya KENDİ Postgres veritabanını
-(`nexa_test_<id>`) ve KENDİ Redis mantıksal veritabanını (1-15) verir; koşu bitince ikisi de
+(`siyahtus_test_<id>`) ve KENDİ Redis mantıksal veritabanını (1-15) verir; koşu bitince ikisi de
 silinir (`apps/api/scripts/with-test-datastores.ts`). Bu yüzden ne turbo'nun paralelliği ne
 de aynı anda açık BAŞKA BİR PENCERE artık senin sonucunu kirletebilir — eskiden ikisi de
-aynı `nexa` veritabanını TRUNCATE ettiği için kendi kodunla ilgisi olmayan yüzlerce kırmızı
+aynı `siyahtus` veritabanını TRUNCATE ettiği için kendi kodunla ilgisi olmayan yüzlerce kırmızı
 üretiyordu. `--concurrency=1` gerekmez; `pnpm -w test` doğrudan çalışır.
 
 Bunun pratik sonucu: **kırmızı gördüğünde artık "başka pencere yazıyordur" diye elle kök-neden
 analizi yapma.** İzolasyon açıkken bir kırmızı ya senin değişikliğinden ya da HANDOFF/Task
-Master'da zaten kayıtlı bilinen bir kusurdan gelir. Paylaşılan `nexa` veritabanına karşı
-koşmak istersen (bir testin bıraktığı veriyi elle incelemek için) `NEXA_TEST_ISOLATION=off`.
+Master'da zaten kayıtlı bilinen bir kusurdan gelir. Paylaşılan `siyahtus` veritabanına karşı
+koşmak istersen (bir testin bıraktığı veriyi elle incelemek için) `SIYAHTUS_TEST_ISOLATION=off`.
 
-İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `nexa` veritabanını
+İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `siyahtus` veritabanını
 kullanır — iki pencere aynı anda e2e koşamaz (port çakışması olarak gürültülü biçimde düşer).
 
 **Tur/bütçe disiplini:** build kısmında iterasyona kilitlenip kalma. Kapanış (§3) — done da

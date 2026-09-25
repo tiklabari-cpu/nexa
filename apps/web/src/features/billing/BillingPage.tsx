@@ -314,7 +314,7 @@ export function BillingPage(): ReactElement {
         {/* Proactive warning from 80% (PRD §8.3 flow 5, KR2.3): the quota is
             surfaced before it is exceeded. A limit that only announces itself at
             100% arrives as a support ticket — the "surprise overage" complaint
-            Nexa's transparent pricing is meant to eliminate. */}
+            SiyahTuş's transparent pricing is meant to eliminate. */}
         {use.quota_warning && (
           <div
             role="alert"
@@ -1639,7 +1639,7 @@ function InvoicesSection(): ReactElement {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `nexa-invoice-${invoice.period}.csv`;
+      link.download = `siyahtus-invoice-${invoice.period}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();

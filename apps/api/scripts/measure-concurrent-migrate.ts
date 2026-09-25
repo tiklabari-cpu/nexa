@@ -2,7 +2,7 @@
  * Measures what actually happens when several `prisma migrate deploy` processes
  * start against one database at the same instant.
  *
- *     pnpm --filter @nexa/api measure:concurrent-migrate [processes]
+ *     pnpm --filter @siyahtus/api measure:concurrent-migrate [processes]
  *
  * This exists because tm 164.3 had to choose where migrations run in a
  * multi-replica deployment (a Helm hook Job vs. a per-pod init-container vs. the
@@ -176,7 +176,7 @@ async function main(): Promise<number> {
   const ownerUrl = process.env['DATABASE_URL'];
   if (!ownerUrl) throw new Error('DATABASE_URL must be set (see .env / .env.example)');
 
-  // Minted with the same `nexa_test_` prefix the test harness uses, so a window
+  // Minted with the same `siyahtus_test_` prefix the test harness uses, so a window
   // that dies mid-measurement leaves behind a database the next test run sweeps
   // rather than an orphan nobody owns.
   const databaseName = isolatedDatabaseName();

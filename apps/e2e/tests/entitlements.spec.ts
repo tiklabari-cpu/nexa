@@ -110,7 +110,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
       await signIn(admin);
       await admin.goto('/app/settings/widget');
       const appearance = admin.getByRole('region', { name: /Widget appearance/ });
-      const branding = appearance.getByLabel(/Powered by Nexa/);
+      const branding = appearance.getByLabel(/Powered by SiyahTuş/);
       const save = appearance.getByRole('button', { name: 'Save appearance' });
 
       // --- Enterprise: an admin turns it off, from the screen ---------------
@@ -137,7 +137,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
       // mean, and the visitor's widget is where that has to show.
       await openWidget(page, organizationId);
       await expect(widgetCredit(page)).toBeVisible();
-      await expect(widgetCredit(page)).toContainText('Powered by Nexa');
+      await expect(widgetCredit(page)).toContainText('Powered by SiyahTuş');
       await page.screenshot({ path: 'kanit/11.5-white-label.png', fullPage: true });
 
       // --- And the screen agrees, then refuses to change it -----------------
@@ -162,7 +162,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
       // I18N-j and I18N-l it said "That is not allowed here." instead — the
       // upsell lost, and only this test could see it.
       await expect(appearance.getByRole('alert')).toContainText(
-        /Removing the Nexa badge is an Enterprise feature/i,
+        /Removing the SiyahTuş badge is an Enterprise feature/i,
       );
 
       // Nothing was half-applied: the visitor's widget is still branded.
@@ -198,7 +198,7 @@ test.describe('white-label widget (11.5-b · 11.5-c)', () => {
     // appearance below is the server's answer, not the mount-time default.
     await expect(page.getByRole('textbox', { name: 'Message' })).toBeVisible();
     await expect(page.locator('.nx-powered')).toBeVisible();
-    await expect(page.locator('.nx-powered')).toContainText('Powered by Nexa');
+    await expect(page.locator('.nx-powered')).toContainText('Powered by SiyahTuş');
   });
 });
 

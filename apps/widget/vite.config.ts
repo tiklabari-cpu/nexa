@@ -29,7 +29,7 @@ export default defineConfig(({ mode }) => {
           sourcemap: true,
           lib: {
             entry: resolve(import.meta.dirname, 'src/loader.ts'),
-            name: '__nexaLoader',
+            name: '__siyahtusLoader',
             formats: ['iife'],
             fileName: () => 'loader.js',
           },

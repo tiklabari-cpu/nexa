@@ -9,7 +9,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadRightPanel, saveRightPanel, useRightPanel } from './rightPanel.js';
 
-const KEY = 'nexa.inbox.right-panel';
+const KEY = 'siyahtus.inbox.right-panel';
 
 beforeEach(() => localStorage.clear());
 afterEach(() => localStorage.clear());

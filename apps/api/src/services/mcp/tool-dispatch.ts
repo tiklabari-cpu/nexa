@@ -17,7 +17,7 @@
  * the database's (RLS) to enforce, in one place, rather than something each new
  * tool could get subtly wrong.
  */
-import { effectiveScopes } from '@nexa/types';
+import { effectiveScopes } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { toolByName, type McpToolDescriptor, type McpToolName } from './tool-catalog.js';

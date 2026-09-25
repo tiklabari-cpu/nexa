@@ -19,7 +19,7 @@
  * What is left here is pure and testable: which columns can be sorted at all,
  * what a header click means, and the URL round-trip.
  */
-import { TICKET_SORT_KEYS, type SortOrder, type TicketSortKey } from '@nexa/types';
+import { TICKET_SORT_KEYS, type SortOrder, type TicketSortKey } from '@siyahtus/types';
 import type { TicketView } from './types.js';
 
 export type { SortOrder, TicketSortKey };
@@ -38,7 +38,7 @@ export interface TicketColumn {
   align?: 'left' | 'right';
   /**
    * The order a fresh click on this column starts from, or `null` when the
-   * column cannot be sorted at all — see `TICKET_SORT_KEYS` (`@nexa/types`) for
+   * column cannot be sorted at all — see `TICKET_SORT_KEYS` (`@siyahtus/types`) for
    * why `status` and `assignee` are the two: the database cannot order the
    * collection by either, and the ticket *views* already slice by both.
    */

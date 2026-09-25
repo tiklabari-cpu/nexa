@@ -1,6 +1,6 @@
 # Outbound webhooks — FR-MOD-08.8.4 (v1, Must).
 #
-# A workspace registers a URL to be POSTed when something happens in Nexa
+# A workspace registers a URL to be POSTed when something happens in SiyahTuş
 # (a chat starts, a thread closes, …). This is the platform's highest-risk
 # egress surface (NFR-S7, risk R1/R2): the *server* makes a request to a
 # customer-supplied URL, so registration and delivery are both guarded against

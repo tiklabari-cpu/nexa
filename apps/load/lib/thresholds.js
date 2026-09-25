@@ -38,7 +38,7 @@ export const NFR_BUDGETS = Object.freeze({
    *
    * Not a threshold and not something a run either meets or crosses: it is the
    * figure `scenarios/rtm.js` climbs towards, and what a rung actually held is
-   * `nexa_rtm_connections_observed`. Kept here because `budgets.test.ts` pins it
+   * `siyahtus_rtm_connections_observed`. Kept here because `budgets.test.ts` pins it
    * against the PRD row, so a revised target cannot silently stop being the one
    * the ladder is measured against.
    */
@@ -59,25 +59,25 @@ export const NFR_BUDGETS = Object.freeze({
  */
 export const METRIC_NAMES = Object.freeze({
   /** Counter — responses that came back 429. Must stay at zero (see README). */
-  rateLimited: 'nexa_rate_limited',
+  rateLimited: 'siyahtus_rate_limited',
   /**
    * Counter, tagged by `op` — one per operation actually performed.
    *
    * This is the anti-vacuum metric. See {@link exercised}.
    */
-  measured: 'nexa_measured',
+  measured: 'siyahtus_measured',
   /** Trend, ms — event publish → subscriber receipt. NFR-P1. */
-  fanoutLatency: 'nexa_rtm_fanout_ms',
+  fanoutLatency: 'siyahtus_rtm_fanout_ms',
   /** Rate — RTM `login` attempts that succeeded. NFR-U1. */
-  rtmLoginSuccess: 'nexa_rtm_login_success',
+  rtmLoginSuccess: 'siyahtus_rtm_login_success',
   /** Trend, ms — socket handshake → successful `login`. Degradation signal. */
-  rtmConnectLatency: 'nexa_rtm_connect_ms',
+  rtmConnectLatency: 'siyahtus_rtm_connect_ms',
   /** Counter — sockets that never reached a logged-in state. */
-  rtmConnectFailed: 'nexa_rtm_connect_failed',
+  rtmConnectFailed: 'siyahtus_rtm_connect_failed',
   /** Counter — live sockets the gateway or the network took away. */
-  rtmSocketDropped: 'nexa_rtm_socket_dropped',
+  rtmSocketDropped: 'siyahtus_rtm_socket_dropped',
   /** Rate — reconnects whose `sync` replayed what the gap missed. NFR-R2. */
-  rtmSyncRecovered: 'nexa_rtm_sync_recovered',
+  rtmSyncRecovered: 'siyahtus_rtm_sync_recovered',
   /**
    * Trend — sockets the gateway itself reports holding, sampled from its own
    * `/health` while the plateau is up. NFR-P8's number, read from the pod
@@ -86,7 +86,7 @@ export const METRIC_NAMES = Object.freeze({
    * requirement. `max` is the one that matters, which is why it is in
    * {@link SUMMARY_TREND_STATS}.
    */
-  rtmConnectionsObserved: 'nexa_rtm_connections_observed',
+  rtmConnectionsObserved: 'siyahtus_rtm_connections_observed',
   /**
    * Trend, ms — the publishing `POST /chats/:id/events` itself.
    *
@@ -97,7 +97,7 @@ export const METRIC_NAMES = Object.freeze({
    * because k6 only materialises a tagged sub-metric when a threshold names it,
    * and this scenario has no business claiming NFR-P2's write budget.
    */
-  rtmPublishLatency: 'nexa_rtm_publish_ms',
+  rtmPublishLatency: 'siyahtus_rtm_publish_ms',
 });
 
 /**
@@ -213,11 +213,11 @@ export function restThresholds({ read = true, write = true } = {}) {
  * the first rung whose run exits non-zero is the degradation point, and the
  * threshold that failed says which of the three kinds of degradation it was.
  *
- *   1. **Too slow** — `nexa_rtm_fanout_ms p(99) ≥ 500 ms`: the sockets are all
+ *   1. **Too slow** — `siyahtus_rtm_fanout_ms p(99) ≥ 500 ms`: the sockets are all
  *      still there and delivery has fallen outside NFR-P1's budget.
- *   2. **Refusing connections** — `nexa_rtm_connect_failed > 0`: a socket could
+ *   2. **Refusing connections** — `siyahtus_rtm_connect_failed > 0`: a socket could
  *      not be opened, or opened and could not log in.
- *   3. **Dropping connections** — `nexa_rtm_socket_dropped > 0`: a socket that
+ *   3. **Dropping connections** — `siyahtus_rtm_socket_dropped > 0`: a socket that
  *      was live went away without the scenario asking it to.
  *
  * A fourth kind — sockets that stay open and stop *receiving* — is not a

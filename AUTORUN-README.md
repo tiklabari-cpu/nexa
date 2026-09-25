@@ -1,4 +1,4 @@
-# AUTORUN — Nexa Otonom Döngü Kurulumu ve Çalıştırma
+# AUTORUN — SiyahTuş Otonom Döngü Kurulumu ve Çalıştırma
 
 Bu sistem, planını (PRD → Task Master görev ağacı) otomatik takip eder ve her task'ı **temiz
 bir Claude Code penceresinde** yaptırır. Bağlam Claude'nin kafasında değil, Task Master + git +
@@ -51,9 +51,9 @@ sınırını gösterir; aradaki akış o task'ın gerçek çalışmasıdır.
 # 1) Claude Code + Task Master kurulu olsun; Claude Code'a giriş yapılmış olsun (Max aboneliği)
 claude mcp add taskmaster-ai -- npx -y task-master-ai   # Task Master MCP'yi projeye ekle
 
-# 2) Proje kökünde (nexa reposu) git hazır olsun
+# 2) Proje kökünde (siyahtus reposu) git hazır olsun
 git init && git branch -M main
-git remote add origin git@github.com:tiklabari-cpu/nexa.git
+git remote add origin git@github.com:tiklabari-cpu/siyahtus.git
 
 # 3) PRD'yi görev ağacına çevir (planı Task Master'a yükle)
 npx task-master-ai parse-prd urun-gereksinim-dokumani-PRD.md
@@ -82,7 +82,7 @@ Unattended bırakmadan önce **ilk 1-2 task'ı izleyerek** çalıştır:
   farklıysa `run-loop.sh` başındaki değişkenleri düzelt. (`--effort max` bazı opus sürümlerinde
   yok — o zaman `EFFORT_MAX="high"` yap.)
 - İlk pencerenin gerçekten commit + push yaptığını ve Task Master'da done işaretlediğini gör.
-- `git remote`'un **nexa** olduğunu doğrula (yanlış repoya push riskini böyle keser).
+- `git remote`'un **siyahtus** olduğunu doğrula (yanlış repoya push riskini böyle keser).
 
 ## Güvenlik (tam otonom — bypassPermissions)
 
@@ -92,9 +92,9 @@ otonomi, "duruyor" sorunu tümden biter). Bu güvenli, çünkü güvenlik izin-p
 
 1. **Claude Code araç-allowlist'in** — sen zaten yalnız ihtiyaç duyulan araçları açtın; pencere
    başka bir şey çağıramaz.
-2. **Repo-scope'lu fine-grained PAT** — yalnız `nexa` reposuna yazma yetkisi. Diğer projelerine
+2. **Repo-scope'lu fine-grained PAT** — yalnız `siyahtus` reposuna yazma yetkisi. Diğer projelerine
    teknik olarak dokunamaz (en sağlam garanti — bunu mutlaka kullan).
-3. **Proje dizininde çalışma** — runner'ı `nexa` kökünde başlat; dosya işlemleri burada.
+3. **Proje dizininde çalışma** — runner'ı `siyahtus` kökünde başlat; dosya işlemleri burada.
 4. **CONVENTIONS kuralları** — force-push yok, DB drop yok, başka repoya dokunma yok, secret
    commit yok.
 

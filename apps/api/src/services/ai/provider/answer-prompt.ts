@@ -26,7 +26,7 @@ import {
   type Persona,
   type PersonaLanguage,
   type PersonaTone,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { LlmCompletionRequest } from './llm-provider.js';
 
 export const GROUNDING_MARKER = '--- grounding (JSON, last line) ---';

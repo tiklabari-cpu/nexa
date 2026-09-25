@@ -12,7 +12,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { CUSTOMER_SORT_KEYS, DEFAULT_CUSTOMER_SORT_KEY, SORT_ORDERS } from '@nexa/types';
+import { CUSTOMER_SORT_KEYS, DEFAULT_CUSTOMER_SORT_KEY, SORT_ORDERS } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { CustomerService } from '../services/customers/customer-service.js';
@@ -46,7 +46,7 @@ const listQuery = z.object({
   last_activity_to: z.string().regex(DATE_ONLY, 'must be YYYY-MM-DD').optional(),
   has_tickets: booleanQuery.optional(),
   // The database can order the whole collection by this set only — see
-  // `CUSTOMER_SORT_KEYS` (`@nexa/types`) for why chats/tickets are absent.
+  // `CUSTOMER_SORT_KEYS` (`@siyahtus/types`) for why chats/tickets are absent.
   sort: z.enum(CUSTOMER_SORT_KEYS).default(DEFAULT_CUSTOMER_SORT_KEY),
   order: z.enum(SORT_ORDERS).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(25),

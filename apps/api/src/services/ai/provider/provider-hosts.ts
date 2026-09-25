@@ -18,7 +18,7 @@
  * path embeds the customer's own message, so it is as much a transfer of
  * content as a completion is (ADR §7).
  */
-import type { Region } from '@nexa/types';
+import type { Region } from '@siyahtus/types';
 import { unhandledEmbeddingProvider, type EmbeddingProviderId } from './embedding-provider.js';
 import { unhandledLlmProvider, type LlmProviderId } from './llm-provider.js';
 

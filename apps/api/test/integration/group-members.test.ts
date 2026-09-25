@@ -10,7 +10,7 @@
  *     somewhere a conversation can go. Every write here is followed by an actual
  *     `RoutingService.route()` call — a 200 that left the routing decision
  *     unchanged would be the failure worth catching, and only routing can say.
- *   - **Priority tiers.** `GROUP_PRIORITIES` (`@nexa/types`) and the column's
+ *   - **Priority tiers.** `GROUP_PRIORITIES` (`@siyahtus/types`) and the column's
  *     `group_agents_priority_check` are two spellings of one rule, and the
  *     endpoint sits between them. Tested in both directions: every tier the
  *     type names is accepted, and anything else is a 400 rather than a 23514
@@ -27,7 +27,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { GROUP_PRIORITIES } from '@nexa/types';
+import { GROUP_PRIORITIES } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { RoutingService } from '../../src/services/routing/routing-service.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';

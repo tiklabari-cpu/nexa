@@ -6,7 +6,7 @@
  * retry policy and typed routes it will never use.
  */
 
-import type { WidgetFormField, WidgetAppearance } from '@nexa/types';
+import type { WidgetFormField, WidgetAppearance } from '@siyahtus/types';
 
 export interface WidgetEvent {
   id: string;
@@ -158,7 +158,7 @@ export class WidgetApi {
     private readonly organizationId: string,
     /**
      * Origin of the page the widget is embedded in. Sent because this request
-     * comes from inside the iframe, whose own origin is Nexa's and therefore
+     * comes from inside the iframe, whose own origin is SiyahTuş's and therefore
      * identical for every customer — it cannot say which site opened the chat.
      */
     private readonly hostOrigin: string | null = null,
@@ -176,7 +176,7 @@ export class WidgetApi {
    * authorize; the token does that, and is re-minted on every load.
    */
   async connect(): Promise<WidgetState> {
-    const stored = safeGetItem('nexa.customer_id');
+    const stored = safeGetItem('siyahtus.customer_id');
 
     const response = await fetch(`${this.baseUrl}/customer/token`, {
       method: 'POST',
@@ -218,7 +218,7 @@ export class WidgetApi {
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
     this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];
     this.#prospectForm = Array.isArray(prospect_form) ? prospect_form : [];
-    safeSetItem('nexa.customer_id', customer_id);
+    safeSetItem('siyahtus.customer_id', customer_id);
 
     return this.state();
   }
@@ -328,7 +328,7 @@ export class WidgetApi {
   /**
    * Report a completed order (FR-MOD-13.5), attributed server-side to the
    * visitor's most recent chat within the workspace's configured window.
-   * Fired from the host page's `nexa('trackSale', …)` tracking call, relayed
+   * Fired from the host page's `siyahtus('trackSale', …)` tracking call, relayed
    * into the widget document — same fire-and-forget shape as `typing`/`rate`,
    * the response body is nothing the widget needs to act on.
    */

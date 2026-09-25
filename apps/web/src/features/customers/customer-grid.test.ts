@@ -24,7 +24,7 @@ describe('the sortable columns', () => {
     // Email/phone/chats/tickets are rendered but not sortable: chats/tickets
     // are license-scoped counts the database cannot order the whole collection
     // by without disagreeing with the number in the cell (`CUSTOMER_SORT_KEYS`,
-    // `@nexa/types`), and email/phone were left unsorted for this round.
+    // `@siyahtus/types`), and email/phone were left unsorted for this round.
     expect(
       CUSTOMER_COLUMNS.filter((column) => !isSortableColumn(column.key)).map((c) => c.key),
     ).toEqual(['email', 'phone', 'chats', 'tickets']);

@@ -10,7 +10,7 @@
  * matters is that Submit stays disabled — and a field-under error shows —
  * while the subject or body names a variable the product cannot fill or
  * carries a broken placeholder, judged live against the shared catalogue
- * (`@nexa/types`). That validator message is left in English on purpose: it
+ * (`@siyahtus/types`). That validator message is left in English on purpose: it
  * comes straight from `findTemplateProblems`, a shared, non-UI catalogue this
  * screen does not own, and `SettingsForms.test.tsx` already pins its English
  * wording (`/Unknown variable/`).
@@ -24,7 +24,7 @@ import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { compose, FieldError, required, useForm, type Validator } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
-import { TEMPLATE_VARIABLES, findTemplateProblems, type TemplateField } from '@nexa/types';
+import { TEMPLATE_VARIABLES, findTemplateProblems, type TemplateField } from '@siyahtus/types';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 
 interface TicketEmailTemplate {

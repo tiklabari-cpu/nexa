@@ -108,8 +108,8 @@ jest.mock('expo-constants', () => ({
     get expoConfig() {
       return {
         extra: {
-          apiBaseUrl: 'https://api.nexa.test/api/v1',
-          rtmBaseUrl: 'wss://rtm.nexa.test',
+          apiBaseUrl: 'https://api.siyahtus.test/api/v1',
+          rtmBaseUrl: 'wss://rtm.siyahtus.test',
         },
       };
     },
@@ -117,7 +117,7 @@ jest.mock('expo-constants', () => ({
 }));
 
 const EMAIL = 'owner@acme.localhost';
-const PASSWORD = 'nexa-demo-password';
+const PASSWORD = 'siyahtus-demo-password';
 
 /** Two workspaces, so the walk goes through the step a single membership skips. */
 const MEMBERSHIPS = [

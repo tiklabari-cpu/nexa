@@ -13,7 +13,7 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement, ReactNode } from 'react';
 import { NavLink } from 'react-router-dom';
-import type { HomeDashboard } from '@nexa/types';
+import type { HomeDashboard } from '@siyahtus/types';
 import {
   Card,
   CardSkeleton,
@@ -208,7 +208,7 @@ function ActivationChecklist({
  * Response time and Efficiency — every figure read off the same
  * `GET /reports/overview` computation the Reports tab uses (`home-service.ts`),
  * never a client-side second source. Efficiency shows no week-over-week delta;
- * see the field's own doc comment in `@nexa/types` for why.
+ * see the field's own doc comment in `@siyahtus/types` for why.
  */
 function PerformanceOverview({
   performance,

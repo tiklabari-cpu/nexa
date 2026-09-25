@@ -12,7 +12,7 @@
  * connection the fixtures use. That is the point of the exercise: the table has
  * row level security with no permissive policy, so a query that is not going
  * through a SECURITY DEFINER function silently sees nothing, and only running
- * as `nexa_app` would ever notice.
+ * as `siyahtus_app` would ever notice.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -223,7 +223,7 @@ describe('two-factor recovery codes (S11-2FA-c)', () => {
       await service.issueRecoveryCodes(fx.a.ownerAccountId);
 
       // Same access pattern as `password_reset_tokens`: row level security is
-      // on and no policy permits anything, so `nexa_app` reads an empty table
+      // on and no policy permits anything, so `siyahtus_app` reads an empty table
       // however it asks. Only the SECURITY DEFINER functions see the rows —
       // which is exactly why the service above works while this does not.
       const direct = await app.$queryRaw<CodeRow[]>`

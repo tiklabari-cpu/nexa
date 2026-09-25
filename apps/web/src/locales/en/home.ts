@@ -6,7 +6,7 @@ import type { Messages } from '../merge.js';
  * `home.activation.<ActivationStepKey>.*` keys are named after the server's own
  * step keys (`install_widget`, `invite_teammate`, …) rather than a screen-local
  * shorthand, so `HomePage.tsx` can build the key straight from `step.key` with
- * no lookup table of its own to keep in sync with `@nexa/types`.
+ * no lookup table of its own to keep in sync with `@siyahtus/types`.
  */
 export const home: Messages = {
   'home.page.title': 'Home',

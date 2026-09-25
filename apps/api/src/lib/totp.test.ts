@@ -374,14 +374,22 @@ describe('buildOtpauthUri', () => {
   const SECRET = 'MZXW6YTBOIMZXW6YTBOIMZXW6YTBOIMZ';
 
   it('carries the issuer in both the label and the query, as apps expect', () => {
-    const uri = buildOtpauthUri({ issuer: 'Nexa', accountName: 'ada@acme.test', secret: SECRET });
-    expect(uri.startsWith('otpauth://totp/Nexa:')).toBe(true);
-    expect(uri).toContain('issuer=Nexa');
+    const uri = buildOtpauthUri({
+      issuer: 'SiyahTuş',
+      accountName: 'ada@acme.test',
+      secret: SECRET,
+    });
+    expect(uri.startsWith('otpauth://totp/SiyahTuş:')).toBe(true);
+    expect(uri).toContain('issuer=SiyahTuş');
     expect(uri).toContain(`secret=${SECRET}`);
   });
 
   it('pins the parameters verifyTotp actually computes with', () => {
-    const uri = buildOtpauthUri({ issuer: 'Nexa', accountName: 'ada@acme.test', secret: SECRET });
+    const uri = buildOtpauthUri({
+      issuer: 'SiyahTuş',
+      accountName: 'ada@acme.test',
+      secret: SECRET,
+    });
     expect(uri).toContain('algorithm=SHA1');
     expect(uri).toContain(`digits=${TOTP_DIGITS}`);
     expect(uri).toContain(`period=${TOTP_PERIOD_SECONDS}`);
@@ -389,29 +397,29 @@ describe('buildOtpauthUri', () => {
 
   it('encodes a colon inside a component so the label keeps one separator', () => {
     const uri = buildOtpauthUri({
-      issuer: 'Nexa: Support',
+      issuer: 'SiyahTuş: Support',
       accountName: 'ada:admin@acme.test',
       secret: SECRET,
     });
     const label = uri.slice('otpauth://totp/'.length, uri.indexOf('?'));
     expect(label.split(':')).toHaveLength(2);
-    expect(decodeURIComponent(label.split(':')[0] ?? '')).toBe('Nexa: Support');
+    expect(decodeURIComponent(label.split(':')[0] ?? '')).toBe('SiyahTuş: Support');
     expect(decodeURIComponent(label.split(':')[1] ?? '')).toBe('ada:admin@acme.test');
   });
 
   it('encodes a space as %20, not as the + a query builder would emit', () => {
     const uri = buildOtpauthUri({
-      issuer: 'Nexa Support',
+      issuer: 'SiyahTuş Support',
       accountName: 'ada@acme.test',
       secret: SECRET,
     });
-    expect(uri).toContain('issuer=Nexa%20Support');
+    expect(uri).toContain('issuer=SiyahTuş%20Support');
     expect(uri).not.toContain('+');
   });
 
   it('normalizes a secret that was handed over spaced or lower case', () => {
     const uri = buildOtpauthUri({
-      issuer: 'Nexa',
+      issuer: 'SiyahTuş',
       accountName: 'ada@acme.test',
       secret: 'mzxw6ytb oimzxw6ytboimzxw6ytboimz',
     });
@@ -422,17 +430,17 @@ describe('buildOtpauthUri', () => {
     expect(() => buildOtpauthUri({ issuer: '  ', accountName: 'ada', secret: SECRET })).toThrow(
       TypeError,
     );
-    expect(() => buildOtpauthUri({ issuer: 'Nexa', accountName: ' ', secret: SECRET })).toThrow(
+    expect(() => buildOtpauthUri({ issuer: 'SiyahTuş', accountName: ' ', secret: SECRET })).toThrow(
       TypeError,
     );
     expect(() =>
-      buildOtpauthUri({ issuer: 'Nexa', accountName: 'ada', secret: 'too-short' }),
+      buildOtpauthUri({ issuer: 'SiyahTuş', accountName: 'ada', secret: 'too-short' }),
     ).toThrow(TotpSecretError);
   });
 
   it('produces a URI an authenticator would parse into the same code we verify', () => {
     const secret = generateTotpSecret();
-    const uri = buildOtpauthUri({ issuer: 'Nexa', accountName: 'ada@acme.test', secret });
+    const uri = buildOtpauthUri({ issuer: 'SiyahTuş', accountName: 'ada@acme.test', secret });
     const parsed = new URL(uri);
     const enrolled = parsed.searchParams.get('secret') ?? '';
     const now = 1_700_000_000_000;

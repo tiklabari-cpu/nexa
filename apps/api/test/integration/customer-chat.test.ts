@@ -7,7 +7,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { licenseChannel, typingStateKey } from '@nexa/types';
+import { licenseChannel, typingStateKey } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,

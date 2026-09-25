@@ -1,7 +1,7 @@
 /**
  * Ticket priority as a small, named scale (FR-MOD-13.6, HelpDesk layer).
  *
- * The column is a signed integer bounded to ±100 (PRD/@nexa/types), which a raw
+ * The column is a signed integer bounded to ±100 (PRD/@siyahtus/types), which a raw
  * number field would expose as an open-ended box nobody can reason about. The UI
  * instead offers four labelled levels and snaps whatever value the API returns
  * to the nearest one — so a priority set through the API to some in-between value
@@ -12,7 +12,7 @@ import {
   TICKET_PRIORITY_DEFAULT,
   nearestTicketPriorityBand,
   type TicketPriorityBand,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 export type PriorityTone = 'danger' | 'warning' | 'neutral';
 
@@ -24,7 +24,7 @@ export interface PriorityLevel {
 
 /**
  * How urgent a level *looks*. Which levels exist and what each is called is
- * `@nexa/types`' (`TICKET_PRIORITY_BANDS`), shared with the ticket e-mail
+ * `@siyahtus/types`' (`TICKET_PRIORITY_BANDS`), shared with the ticket e-mail
  * templates that may print `{{ticket.priority}}` to a customer. Only the colour
  * is the console's own business, so only the colour lives here.
  */

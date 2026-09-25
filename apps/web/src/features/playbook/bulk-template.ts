@@ -14,7 +14,7 @@
  * `apps/web` is deliberately decoupled from `apps/api` (the same reasoning as
  * `templates.ts`), so this is a mirror, not an import — `bulk-template.test.ts`
  * pins the header to the column set the server actually expects, the way
- * `templates.test.ts` pins template steps to `@nexa/ai-mock`'s validator.
+ * `templates.test.ts` pins template steps to `@siyahtus/ai-mock`'s validator.
  *
  * Deliberately NOT here: parsing a CSV back — `bulk-file.ts` only reads a
  * selected file to text, and a chosen file's rows are previewed by the

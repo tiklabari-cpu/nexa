@@ -1,7 +1,7 @@
 /**
  * Measures what one page of a transcript actually costs, as the thread grows.
  *
- *     pnpm --filter @nexa/api measure:transcript-page [events]
+ *     pnpm --filter @siyahtus/api measure:transcript-page [events]
  *
  * PRD NFR-P6 asks for "sabit-zaman" — a page of a big list must cost the same
  * as a page of a small one — and names three parts: monthly RANGE partitions on
@@ -21,7 +21,7 @@
  *
  *  1. **expression, no index** — what shipped before. The audit's finding.
  *  2. **expression + an index on the expression** — the obvious fix. Perfect as
- *     the owner; under `nexa_app` the cursor bound drops out of the index
+ *     the owner; under `siyahtus_app` the cursor bound drops out of the index
  *     condition into a row filter, because `events` carries row level security
  *     and `split_part` is not leakproof. The first page is fine and every page
  *     after it re-reads the thread from event one.
@@ -32,11 +32,11 @@
  * (cursor 0, which every row satisfies) and a page from the middle of the
  * thread (the cursor doing real work).
  *
- * Everything runs as `nexa_app` inside a tenant transaction — the role and the
+ * Everything runs as `siyahtus_app` inside a tenant transaction — the role and the
  * row level security the product actually has. Measuring as the owner is what
  * would have made option 2 look like it worked.
  *
- * Nothing here touches the development database: a scratch `nexa_test_` one is
+ * Nothing here touches the development database: a scratch `siyahtus_test_` one is
  * created, migrated, measured and dropped — the same prefix the test harness
  * sweeps, so a window that dies mid-measurement leaves no orphan.
  */
@@ -337,11 +337,11 @@ async function main(): Promise<number> {
 
     await growTo(owner, 0, events);
     const small = await measureVariants(owner, app, events);
-    report(`${events} events · ${fewMonths} partitions · role nexa_app`, small);
+    report(`${events} events · ${fewMonths} partitions · role siyahtus_app`, small);
 
     await growTo(owner, events, events * 10);
     const large = await measureVariants(owner, app, events * 10);
-    report(`${events * 10} events · ${fewMonths} partitions · role nexa_app`, large);
+    report(`${events * 10} events · ${fewMonths} partitions · role siyahtus_app`, large);
 
     // The one axis the shipped fix does not remove: the page fans out over
     // every partition, because the cursor is a sequence and the partition key

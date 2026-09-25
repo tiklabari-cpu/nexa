@@ -35,7 +35,7 @@ describe('createSiemTarget', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'nexa-siem-factory-'));
+    dir = await mkdtemp(join(tmpdir(), 'siyahtus-siem-factory-'));
   });
 
   afterEach(async () => {

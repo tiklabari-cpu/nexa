@@ -34,7 +34,7 @@ const localOnly = (dir: string): ObjectStoreOptions => ({ localDir: dir, s3: nul
 /** Never connected to in this file — constructing a store sends nothing. */
 const S3 = {
   endpoint: 'http://127.0.0.1:1',
-  bucket: 'nexa-uploads',
+  bucket: 'siyahtus-uploads',
   region: 'us-east-1',
   accessKeyId: 'test-key-id',
   secretAccessKey: 'test-secret',
@@ -46,7 +46,7 @@ describe('createObjectStore', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'nexa-store-factory-'));
+    dir = await mkdtemp(join(tmpdir(), 'siyahtus-store-factory-'));
   });
 
   afterEach(async () => {
@@ -69,7 +69,7 @@ describe('createObjectStore', () => {
   it('roots two stores independently, so the directory is the store', async () => {
     // The property the setting exists for: pointing `STORAGE_LOCAL_DIR`
     // somewhere else has to move the bytes, not just the label.
-    const other = await mkdtemp(join(tmpdir(), 'nexa-store-factory-'));
+    const other = await mkdtemp(join(tmpdir(), 'siyahtus-store-factory-'));
     try {
       await createObjectStore('local', localOnly(dir)).put(KEY, Buffer.from('a'), 'text/plain');
       expect(await createObjectStore('local', localOnly(other)).exists(KEY)).toBe(false);

@@ -10,7 +10,7 @@
  * place a message becomes more than a single text node is `appendRichText`
  * (`rich-text.ts`), which still builds elements rather than parsing markup.
  */
-import { readEditedAt, type WidgetFormField, type WidgetAppearance } from '@nexa/types';
+import { readEditedAt, type WidgetFormField, type WidgetAppearance } from '@siyahtus/types';
 import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import { appendRichText } from './rich-text.js';
@@ -58,7 +58,7 @@ const CLOSED_POLL_INTERVAL_MS = 30_000;
  */
 const SOCKET_POLL_INTERVAL_MS = 30_000;
 /** Per-session, so a dismissed greeting stays dismissed until the tab closes. */
-const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
+const GREETING_DISMISSED_KEY = 'siyahtus.greeting_dismissed';
 /**
  * Watermark for the unread badge (FR-MOD-11.1): the `created_at` of the newest
  * message *from the team* the visitor has actually had on screen. Anything
@@ -73,14 +73,14 @@ const GREETING_DISMISSED_KEY = 'nexa.greeting_dismissed';
  * is re-derived from the server's own transcript on every poll, so it survives
  * reloads, cannot drift, and self-corrects.
  */
-const LAST_READ_KEY = 'nexa.last_read_at';
+const LAST_READ_KEY = 'siyahtus.last_read_at';
 /**
  * Same pattern, one key per campaign (FR-MOD-03.3.2): the campaign's `id` is
  * stable per visitor, so dismissing *this* campaign must not swallow a
  * different one delivered later in the session — unlike the greeting, which
  * has only one message to ever dismiss.
  */
-const CAMPAIGN_DISMISSED_KEY_PREFIX = 'nexa.campaign_dismissed.';
+const CAMPAIGN_DISMISSED_KEY_PREFIX = 'siyahtus.campaign_dismissed.';
 
 /**
  * The widget's appearance (FR-MOD-11.7), in the widget's own camelCase. The
@@ -215,7 +215,7 @@ interface State {
 }
 
 export function mount(doc: Document = document, win: Window = window): void {
-  const root = doc.getElementById('nexa-widget-root');
+  const root = doc.getElementById('siyahtus-widget-root');
   if (!root) return;
 
   const config = readConfig(win);
@@ -478,7 +478,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // Fire-and-forget from the visitor's perspective, like `typing`/`trackSale`
       // above — a dropped vote is not worth surfacing as a chat-blocking error,
       // and the buttons staying live below means they can just try again.
-      console.warn('nexa widget: rate failed', error);
+      console.warn('siyahtus widget: rate failed', error);
     } finally {
       state.ratingSubmitting = false;
       renderRating();
@@ -537,7 +537,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // visitor typed answers, and silently dropping them would leave them
       // believing the workspace has details it never received.
       state.postChatError = true;
-      console.warn('nexa widget: post-chat form failed', error);
+      console.warn('siyahtus widget: post-chat form failed', error);
     } finally {
       state.postChatSubmitting = false;
       renderPostChat();
@@ -614,7 +614,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // asked for something to happen and nothing did.
       state.error = t('error.close');
       renderStatus();
-      console.warn('nexa widget: close failed', error);
+      console.warn('siyahtus widget: close failed', error);
     }
   }
 
@@ -673,7 +673,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       : state.greetingOpen
         ? GREETING
         : { width: LAUNCHER_SIZE, height: LAUNCHER_SIZE };
-    postToHost(win, { type: 'nexa:resize', width: size.width, height: size.height });
+    postToHost(win, { type: 'siyahtus:resize', width: size.width, height: size.height });
   }
 
   /**
@@ -757,7 +757,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // counting again from the message that was last on screen.
     syncUnread();
     resize();
-    postToHost(win, { type: open ? 'nexa:open' : 'nexa:close' });
+    postToHost(win, { type: open ? 'siyahtus:open' : 'siyahtus:close' });
 
     if (open) {
       renderPanelBody();
@@ -954,7 +954,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // received when it was not is the one outcome this screen must not
       // produce.
       state.offlineError = true;
-      console.warn('nexa widget: leaving a message failed', error);
+      console.warn('siyahtus widget: leaving a message failed', error);
     } finally {
       state.offlineSubmitting = false;
       renderPanelBody();
@@ -1078,12 +1078,12 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.error = t('error.connect');
       renderStatus();
       // The real reason goes nowhere near the visitor.
-      console.warn('nexa widget: connect failed', error);
+      console.warn('siyahtus widget: connect failed', error);
     }
   }
 
   /**
-   * `nexa('trackSale', …)` (FR-MOD-13.5), relayed here from the loader. The
+   * `siyahtus('trackSale', …)` (FR-MOD-13.5), relayed here from the loader. The
    * host page is untrusted, so the payload is reshaped rather than trusted —
    * an unrecognised shape is dropped rather than sent on. The visitor may
    * never have opened the panel (a checkout confirmation page fires this on
@@ -1099,7 +1099,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     try {
       await api.trackSale(sale);
     } catch (error) {
-      console.warn('nexa widget: trackSale failed', error);
+      console.warn('siyahtus widget: trackSale failed', error);
     }
   }
 
@@ -1124,7 +1124,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // type, too large) surfaces here rather than being guessed at.
       state.error = t('error.upload');
       renderStatus();
-      console.warn('nexa widget: upload failed', error);
+      console.warn('siyahtus widget: upload failed', error);
     } finally {
       state.uploading = false;
       ui.attach.disabled = false;
@@ -1233,7 +1233,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       pendingBubbleIds = pendingBubbleIds.filter((id) => id !== optimistic.id);
       rerenderTranscript();
       renderStatus();
-      console.warn('nexa widget: send failed', error);
+      console.warn('siyahtus widget: send failed', error);
     } finally {
       state.sending = false;
       ui.send.disabled = false;
@@ -1303,7 +1303,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       // Last, so it counts against the transcript this poll just installed.
       syncUnread();
     } catch (error) {
-      console.warn('nexa widget: refresh failed', error);
+      console.warn('siyahtus widget: refresh failed', error);
     }
   }
 
@@ -1679,9 +1679,10 @@ export function mount(doc: Document = document, win: Window = window): void {
     // The host page is cross-origin and untrusted: accept only the known
     // commands it may issue, and ignore anything else without replying.
     const data = event.data as { type?: unknown; command?: unknown; payload?: unknown };
-    if (data?.type === 'nexa:host-open') setOpen(true);
-    if (data?.type === 'nexa:host-close') setOpen(false);
-    if (data?.type === 'nexa:command' && data.command === 'trackSale') void trackSale(data.payload);
+    if (data?.type === 'siyahtus:host-open') setOpen(true);
+    if (data?.type === 'siyahtus:host-close') setOpen(false);
+    if (data?.type === 'siyahtus:command' && data.command === 'trackSale')
+      void trackSale(data.payload);
   });
 
   if (config.chatPage) {
@@ -1696,7 +1697,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.input.focus();
     void connect();
   } else {
-    postToHost(win, { type: 'nexa:ready' });
+    postToHost(win, { type: 'siyahtus:ready' });
     // The proactive nudge, once the host has wired up its message channel. No
     // campaign can be owed yet — that needs a poll, and nothing has connected
     // — so this always resolves to the greeting or nothing.
@@ -2243,14 +2244,14 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   prechatSubmit.textContent = t('prechat.submit');
   prechat.append(prechatIntro, prechatName, prechatEmail, prechatFields, prechatSubmit);
 
-  // "Powered by Nexa" (FR-MOD-11.5): shown by default, hidden when a workspace
+  // "Powered by SiyahTuş" (FR-MOD-11.5): shown by default, hidden when a workspace
   // removes it. A link, opened in a new tab so it never navigates the panel away
   // from a live conversation.
   const poweredBy = doc.createElement('p');
   poweredBy.className = 'nx-powered';
   const poweredLink = doc.createElement('a');
   poweredLink.className = 'nx-powered-link';
-  poweredLink.href = 'https://nexa.example';
+  poweredLink.href = 'https://siyahtus.example';
   poweredLink.target = '_blank';
   poweredLink.rel = 'noopener noreferrer';
   poweredLink.textContent = t('poweredBy');
@@ -2499,7 +2500,7 @@ function formatTime(iso: string): string {
 }
 
 /**
- * Narrow an untrusted `nexa('trackSale', …)` payload to the shape the API
+ * Narrow an untrusted `siyahtus('trackSale', …)` payload to the shape the API
  * accepts. The server is the final authority (13.5-c) — this only stops an
  * obviously wrong call (missing field, wrong type) from going out at all.
  */
@@ -2601,7 +2602,7 @@ function newestTeamMessageAt(events: WidgetEvent[]): string | null {
  */
 function returningVisitor(win: Window): boolean {
   try {
-    return win.localStorage.getItem('nexa.customer_id') !== null;
+    return win.localStorage.getItem('siyahtus.customer_id') !== null;
   } catch {
     return false;
   }
@@ -3061,6 +3062,6 @@ body {
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 `;
 
-if (typeof document !== 'undefined' && document.getElementById('nexa-widget-root')) {
+if (typeof document !== 'undefined' && document.getElementById('siyahtus-widget-root')) {
   mount();
 }

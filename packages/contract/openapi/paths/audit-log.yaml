@@ -173,10 +173,10 @@ auditLogExport:
       refused with `not_allowed`, naming the entitlement and the plan in
       `details`.
 
-      **Resuming.** Every response carries `x-nexa-export-cursor`: the position
+      **Resuming.** Every response carries `x-siyahtus-export-cursor`: the position
       after the last record it contained, or the position you passed in when the
       page was empty. Store it and pass it back as `page_id` to continue.
-      `x-nexa-export-has-more` says whether more entries are already waiting, so
+      `x-siyahtus-export-has-more` says whether more entries are already waiting, so
       a consumer knows whether to poll again immediately or wait for its next
       tick.
 
@@ -204,7 +204,7 @@ auditLogExport:
       the rule that *every line is a record* survives: you can still split on
       `\n`, parse each half independently, and concatenate two pages into one
       file. The signature over the page is therefore detached, in
-      `x-nexa-export-signature`, because it is a statement about the whole
+      `x-siyahtus-export-signature`, because it is a statement about the whole
       delivery rather than any one line.
 
       A missing `chain_seq` between two records means an entry was deleted —
@@ -220,7 +220,7 @@ auditLogExport:
       from it. Ask the deployment operator to verify a file, or to hand you the
       workspace's derived key if you are the one who should be checking.
 
-      **A damaged page is delivered, not withheld.** `x-nexa-export-chain-ok` is
+      **A damaged page is delivered, not withheld.** `x-siyahtus-export-chain-ok` is
       `false` when the records in this response do not verify. Refusing to
       export a damaged trail would turn detected tampering into a silent stop of
       the feed, which is what the tampering was for.
@@ -228,7 +228,7 @@ auditLogExport:
       - name: page_id
         in: query
         description: >-
-          Resume after this position — the `x-nexa-export-cursor` value from a
+          Resume after this position — the `x-siyahtus-export-cursor` value from a
           previous export. Omit to start from the beginning of the retained
           trail. A cursor this endpoint cannot read is a 400, not a silent
           restart: both silent answers (re-sending everything, skipping
@@ -247,20 +247,20 @@ auditLogExport:
           A page of entries as NDJSON, oldest first. Empty body when the feed
           has caught up — the cursor header is still present and still valid.
         headers:
-          x-nexa-export-cursor:
+          x-siyahtus-export-cursor:
             description: >-
               Opaque position to resume from. Empty only when the workspace's
               trail is empty and no cursor was supplied.
             schema: { type: string }
-          x-nexa-export-count:
+          x-siyahtus-export-count:
             description: Records in this response.
             schema: { type: integer }
-          x-nexa-export-has-more:
+          x-siyahtus-export-has-more:
             description: >-
               `true` when more entries are already exportable — poll again
               rather than waiting.
             schema: { type: string, enum: ["true", "false"] }
-          x-nexa-export-signature:
+          x-siyahtus-export-signature:
             description: >-
               Detached HMAC over the exact body bytes, the record count and the
               range of chain positions they cover. Store it beside the file; it
@@ -268,7 +268,7 @@ auditLogExport:
               only with the workspace's derived key, which this response
               deliberately does not carry.
             schema: { type: string }
-          x-nexa-export-chain-ok:
+          x-siyahtus-export-chain-ok:
             description: >-
               `false` when the records in this response do not form an intact
               chain. The page is still delivered — see the description above.

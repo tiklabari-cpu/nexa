@@ -1,9 +1,9 @@
 # syntax=docker/dockerfile:1
-# Nexa API — multi-stage build (tm 140.1, M-CONTAINER-a). Local/dev images only:
+# SiyahTuş API — multi-stage build (tm 140.1, M-CONTAINER-a). Local/dev images only:
 # no production deploy, no real secrets baked in (CLAUDE.md / MASTER-PROMPT limits).
 #
-# @nexa/api imports two workspace packages at runtime, @nexa/types and
-# @nexa/ai-mock (@nexa/contract is test-only — grep confirms no apps/api/src
+# @siyahtus/api imports two workspace packages at runtime, @siyahtus/types and
+# @siyahtus/ai-mock (@siyahtus/contract is test-only — grep confirms no apps/api/src
 # file outside test/ touches it). Their package.json "main" points at
 # src/index.ts for local dev, where `tsx`/vitest rewrite `./foo.js` internal
 # specifiers to the sibling `.ts` file; plain Node does not do that rewrite —
@@ -39,26 +39,26 @@ RUN pnpm config set store-dir /pnpm-store \
     && pnpm config set fetch-timeout 300000 \
     && pnpm config set fetch-retries 5
 
-# ---- build: filtered workspace install (@nexa/api + the workspace packages it
+# ---- build: filtered workspace install (@siyahtus/api + the workspace packages it
 # depends on — not the whole monorepo, so this skips apps/web's, apps/mobile's
 # and apps/e2e's much larger dependency trees entirely) + compile. `--filter
-# @nexa/api...` resolves/downloads only what those projects declare, unlike
+# @siyahtus/api...` resolves/downloads only what those projects declare, unlike
 # `pnpm fetch` (whole-lockfile, no `--filter` support) which pulled in every
 # workspace member — including apps/mobile's Expo/React Native tree — and, over
 # this environment's proxied registry connection, timed out before finishing. ---
 FROM base AS build
 COPY . .
-RUN --mount=type=cache,id=nexa-pnpm-store,target=/pnpm-store \
-    pnpm install --frozen-lockfile --filter @nexa/api...
+RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
+    pnpm install --frozen-lockfile --filter @siyahtus/api...
 # Must run BEFORE `tsc` — `@prisma/client` ships an unusable stub module until
 # `generate` overwrites it (measured: skipping this first makes `tsc` fail
 # across every file that touches `Prisma.InputJsonValue`/`InputJsonObject`, not
 # just database code). `prisma generate` only needs DATABASE_URL to be a
 # well-formed URL, not a reachable one.
-RUN --mount=type=cache,id=nexa-pnpm-store,target=/pnpm-store \
+RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
     DATABASE_URL="postgresql://build:build@localhost:5432/build" \
-    pnpm --filter @nexa/api exec prisma generate
-RUN pnpm --filter @nexa/api... run build
+    pnpm --filter @siyahtus/api exec prisma generate
+RUN pnpm --filter @siyahtus/api... run build
 # Point the two runtime-consumed workspace packages at their compiled output.
 # Only this build stage's checked-out copy is touched — the real repo files
 # (which tsx/vitest need pointed at src) are untouched.
@@ -77,15 +77,15 @@ RUN node -e " \
 # ---- prod-deps: a second, production-only install, kept in its own stage
 # (rather than pruning `build`'s node_modules) so devDependencies such as
 # typescript/eslint/vitest never reach the runtime image. `prisma` (the CLI) is
-# a `dependency` of @nexa/api on purpose — the entrypoint below runs
+# a `dependency` of @siyahtus/api on purpose — the entrypoint below runs
 # `prisma migrate deploy` inside the running container, so it must be here. ---
 FROM base AS prod-deps
 COPY . .
-RUN --mount=type=cache,id=nexa-pnpm-store,target=/pnpm-store \
-    pnpm install --frozen-lockfile --prod --filter @nexa/api...
-RUN --mount=type=cache,id=nexa-pnpm-store,target=/pnpm-store \
+RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
+    pnpm install --frozen-lockfile --prod --filter @siyahtus/api...
+RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
     DATABASE_URL="postgresql://build:build@localhost:5432/build" \
-    pnpm --filter @nexa/api exec prisma generate
+    pnpm --filter @siyahtus/api exec prisma generate
 
 # ---------------------------------------------------------------------------
 FROM ${NODE_IMAGE} AS runtime
@@ -93,32 +93,32 @@ ENV NODE_ENV=production
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && groupadd --system nexa \
-    && useradd --system --gid nexa --home-dir /repo --shell /usr/sbin/nologin nexa
+    && groupadd --system siyahtus \
+    && useradd --system --gid siyahtus --home-dir /repo --shell /usr/sbin/nologin siyahtus
 
 WORKDIR /repo
 # Third-party deps: root store + apps/api's symlinks into it.
-COPY --from=prod-deps --chown=nexa:nexa /repo/node_modules ./node_modules
-COPY --from=prod-deps --chown=nexa:nexa /repo/apps/api/node_modules ./apps/api/node_modules
+COPY --from=prod-deps --chown=siyahtus:siyahtus /repo/node_modules ./node_modules
+COPY --from=prod-deps --chown=siyahtus:siyahtus /repo/apps/api/node_modules ./apps/api/node_modules
 # Workspace deps (workspace:* protocol — always symlinked to real source, never
-# through the store): @nexa/types + @nexa/ai-mock, compiled (see the patch step
-# in `build` above), not raw source — @nexa/contract is intentionally absent,
-# it is test-only for @nexa/api. `apps/api/node_modules/@nexa/contract` above
+# through the store): @siyahtus/types + @siyahtus/ai-mock, compiled (see the patch step
+# in `build` above), not raw source — @siyahtus/contract is intentionally absent,
+# it is test-only for @siyahtus/api. `apps/api/node_modules/@siyahtus/contract` above
 # is left as a dangling symlink; harmless, since it's never imported.
-COPY --from=build --chown=nexa:nexa /repo/packages/types/dist ./packages/types/dist
-COPY --from=build --chown=nexa:nexa /repo/packages/types/package.json ./packages/types/package.json
-COPY --from=build --chown=nexa:nexa /repo/packages/ai-mock/dist ./packages/ai-mock/dist
-COPY --from=build --chown=nexa:nexa /repo/packages/ai-mock/package.json ./packages/ai-mock/package.json
+COPY --from=build --chown=siyahtus:siyahtus /repo/packages/types/dist ./packages/types/dist
+COPY --from=build --chown=siyahtus:siyahtus /repo/packages/types/package.json ./packages/types/package.json
+COPY --from=build --chown=siyahtus:siyahtus /repo/packages/ai-mock/dist ./packages/ai-mock/dist
+COPY --from=build --chown=siyahtus:siyahtus /repo/packages/ai-mock/package.json ./packages/ai-mock/package.json
 # Compiled output + migrations (source of the query engine's schema) + manifest
 # (Node needs a nearest package.json with "type": "module" to load dist/**/*.js as ESM).
-COPY --from=build --chown=nexa:nexa /repo/apps/api/dist ./apps/api/dist
-COPY --from=build --chown=nexa:nexa /repo/apps/api/prisma ./apps/api/prisma
-COPY --from=build --chown=nexa:nexa /repo/apps/api/package.json ./apps/api/package.json
-COPY --chown=nexa:nexa apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
+COPY --from=build --chown=siyahtus:siyahtus /repo/apps/api/dist ./apps/api/dist
+COPY --from=build --chown=siyahtus:siyahtus /repo/apps/api/prisma ./apps/api/prisma
+COPY --from=build --chown=siyahtus:siyahtus /repo/apps/api/package.json ./apps/api/package.json
+COPY --chown=siyahtus:siyahtus apps/api/docker-entrypoint.sh ./apps/api/docker-entrypoint.sh
 RUN chmod +x ./apps/api/docker-entrypoint.sh
 
 WORKDIR /repo/apps/api
-USER nexa
+USER siyahtus
 EXPOSE 4000
 # /health/ready (not /health/live, M-OPS-a): a process with no dependency
 # reachable is not ready to receive traffic, and the orchestrator should not

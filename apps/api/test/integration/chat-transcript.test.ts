@@ -18,7 +18,7 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
 import { PermanentMailError } from '../../src/services/mail/mail-error.js';
@@ -174,7 +174,7 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     if (!APP_URL) throw new Error('DATABASE_APP_URL must be set');
     owner = ownerClient();
     appRole = new PrismaClient({ datasourceUrl: APP_URL });
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-transcript-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-transcript-'));
     mailer = new FileMailer(mailDir);
   });
 

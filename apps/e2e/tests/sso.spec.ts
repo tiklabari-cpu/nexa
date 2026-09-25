@@ -131,8 +131,8 @@ test.describe('single sign-on', () => {
       // A session good for more than the screen it landed on: the access token
       // it minted answers `/auth/me`, and answers with the right person.
       const me = await page.evaluate(async () => {
-        const stored = localStorage.getItem('nexa.refresh_token');
-        const clientId = localStorage.getItem('nexa.client_id');
+        const stored = localStorage.getItem('siyahtus.refresh_token');
+        const clientId = localStorage.getItem('siyahtus.client_id');
         const granted = await fetch('/api/v1/auth/token', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },

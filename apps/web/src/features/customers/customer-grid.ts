@@ -9,7 +9,7 @@
  * claims to (the D3 pattern the audit named), and the row that belongs at the
  * top of a newly sorted list is usually one that was never fetched.
  */
-import { CUSTOMER_SORT_KEYS, type CustomerSortKey, type SortOrder } from '@nexa/types';
+import { CUSTOMER_SORT_KEYS, type CustomerSortKey, type SortOrder } from '@siyahtus/types';
 
 export type { SortOrder, CustomerSortKey };
 
@@ -38,7 +38,7 @@ export interface CustomerColumn {
  * recently first.
  *
  * Email, Phone, Chats and Tickets carry no sort control. `chats`/`tickets` are
- * absent from `CUSTOMER_SORT_KEYS` (`@nexa/types`) because the database cannot
+ * absent from `CUSTOMER_SORT_KEYS` (`@siyahtus/types`) because the database cannot
  * order the whole collection by a license-scoped count without disagreeing
  * with the number printed in the cell — the same reason the Tickets grid
  * leaves out `status`/`assignee`. Email/Phone are personal-data columns this

@@ -14,7 +14,7 @@
  * advance — belongs to the job that does both, not to a helper any caller could
  * reach for in the wrong order.
  */
-import type { SiemExportTarget } from '@nexa/types';
+import type { SiemExportTarget } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { countPendingExport, type ExportCursor } from './audit-export.js';
 

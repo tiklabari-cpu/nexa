@@ -595,7 +595,7 @@ describe('two-factor enforcement (S11-2FA-e)', () => {
       });
 
       // A federated sign-in has already been vouched for, and MFA is what the
-      // workspace bought the provider for. A second Nexa factor on top would be
+      // workspace bought the provider for. A second SiyahTuş factor on top would be
       // a weaker copy of a control the IdP owns — and would make an
       // SSO-enforced workspace unenterable for anyone whose authenticator broke.
       expect(acs.statusCode).toBe(302);

@@ -17,7 +17,7 @@
  * token, and left the person reading a 401 with no way forward — the whole of
  * §D111's finding, in one missing branch.
  *
- * The container is also where `nexa://` URLs enter (13.7-q). Which map it is
+ * The container is also where `siyahtus://` URLs enter (13.7-q). Which map it is
  * given depends on the same three states, because a path only means something
  * against the tree that is mounted — see `app/linking.ts`.
  *

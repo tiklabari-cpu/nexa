@@ -56,8 +56,8 @@ CREATE UNIQUE INDEX uq_one_pending_invitation
 
 ALTER TABLE invitations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY invitations_tenant ON invitations
-  USING (license_id = nexa_current_license())
-  WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license())
+  WITH CHECK (license_id = siyahtus_current_license());
 
 -- `password_reset_tokens` gets RLS with no permissive policy at all: every row
 -- is invisible to the application role. Nothing in a tenant-scoped request has
@@ -65,8 +65,8 @@ CREATE POLICY invitations_tenant ON invitations
 -- SECURITY DEFINER pair below, which never returns the token itself.
 ALTER TABLE password_reset_tokens ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON password_reset_tokens TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON invitations TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON password_reset_tokens TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON invitations TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Pre-auth entry points.
@@ -256,8 +256,8 @@ REVOKE EXECUTE ON FUNCTION auth_consume_password_reset(TEXT, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_preview_invitation(TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_accept_invitation(TEXT, TEXT, TEXT) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_request_password_reset(CITEXT, TEXT, TIMESTAMPTZ) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_consume_password_reset(TEXT, TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_preview_invitation(TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_accept_invitation(TEXT, TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_request_password_reset(CITEXT, TEXT, TIMESTAMPTZ) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_consume_password_reset(TEXT, TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_preview_invitation(TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_accept_invitation(TEXT, TEXT, TEXT) TO siyahtus_app;

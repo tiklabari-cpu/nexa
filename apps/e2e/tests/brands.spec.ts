@@ -12,7 +12,7 @@
  * demo (Acme) the rest of the suite drives is left exactly as it was — a switcher
  * that never appears on one brand is itself part of the contract.
  *
- * Written to fail without the implementation: drop the `X-Nexa-Brand` header the
+ * Written to fail without the implementation: drop the `X-SiyahTus-Brand` header the
  * switcher sets and both brands read the same rows, so the "not visible"
  * assertions see the other brand's site.
  */
@@ -24,7 +24,7 @@ import type { Page } from '@playwright/test';
 // are exercised only here.
 const NORTHWIND = {
   email: 'owner@northwind.localhost',
-  password: 'nexa-demo-password',
+  password: 'siyahtus-demo-password',
   defaultBrand: 'Default',
   secondBrand: 'Northwind Europe',
   defaultColor: '#2d67fa',

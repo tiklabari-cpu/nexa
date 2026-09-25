@@ -58,7 +58,7 @@
 - If the gateway is already at `RTM_MAX_CONNECTIONS` (step 2), it is doing
   the right thing on its own — no action needed to protect existing
   connections. The response is capacity, not code:
-  - Scale out manually. The chart's HPA (`infra/helm/nexa/values.yaml`,
+  - Scale out manually. The chart's HPA (`infra/helm/siyahtus/values.yaml`,
     `apps.rtm.hpa`: `minReplicas: 1`, `maxReplicas: 4`,
     `targetCPUUtilizationPercentage: 70`) tracks CPU, which tm 161.4 measured
     as the _wrong_ signal for this app — the machine was ~96% idle at the
@@ -71,7 +71,7 @@
     (`apps/api/test/integration/two-pod.test.ts`) is what proves that, and
     `docs/production-checklist.md` §4 says explicitly not to spend an
     infrastructure decision on it — it doesn't address a connection storm.
-  - Respect `pdb.maxUnavailable: 1` (`infra/helm/nexa/values.yaml`) if a
+  - Respect `pdb.maxUnavailable: 1` (`infra/helm/siyahtus/values.yaml`) if a
     rolling restart is part of the response — it still bounds how many pods
     can be down at once during voluntary disruption.
 - If it's a reconnect loop (`identity_timeout`/`idle_timeout` dominant), the

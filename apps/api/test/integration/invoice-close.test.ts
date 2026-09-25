@@ -25,7 +25,7 @@
  *   3. **The `ApiPackagePurchase` line item (tm 71.5 · 09.3-e) survives the move
  *      to the table.** It was the one line the derived path had that nothing
  *      else in the schema records, so it is the one most easily lost.
- *   4. **RLS, not a WHERE clause.** The sweep runs as `nexa_app`
+ *   4. **RLS, not a WHERE clause.** The sweep runs as `siyahtus_app`
  *      (`DATABASE_APP_URL`), the role a request runs as, so a query that forgot
  *      to scope by tenant is caught by the database refusing the row. The
  *      negative half is asserted against the raw role too: a workspace must not
@@ -274,7 +274,7 @@ describe('persistent invoice history (FR-MOD-10.3)', () => {
         await tx.invoice.create({
           data: {
             licenseId: fx.a.licenseId,
-            number: `NEXA-${justClosed}`,
+            number: `SIYAHTUS-${justClosed}`,
             period: justClosed,
             periodStart: new Date('2020-01-01T00:00:00Z'),
             periodEnd: new Date('2020-02-01T00:00:00Z'),
@@ -639,7 +639,7 @@ describe('persistent invoice history (FR-MOD-10.3)', () => {
           await tx.$executeRaw`SELECT set_config('app.current_organization', ${fx.b.organizationId}, true)`;
           await tx.$executeRawUnsafe(
             `INSERT INTO invoices (id, license_id, number, period, period_start, period_end, issued_at, origin, status, currency, subtotal_cents, total_cents)
-             VALUES (gen_random_uuid(), ${fx.a.licenseId.toString()}, 'NEXA-209901', '209901',
+             VALUES (gen_random_uuid(), ${fx.a.licenseId.toString()}, 'SIYAHTUS-209901', '209901',
                      '2099-01-01T00:00:00Z', '2099-02-01T00:00:00Z', '2099-01-31T00:00:00Z',
                      'issued', 'paid', 'usd', 0, 0)`,
           );
@@ -654,7 +654,7 @@ describe('persistent invoice history (FR-MOD-10.3)', () => {
     async function insertInvoice(overrides: Record<string, string>): Promise<void> {
       const columns: Record<string, string> = {
         license_id: fx.a.licenseId.toString(),
-        number: `'NEXA-209901'`,
+        number: `'SIYAHTUS-209901'`,
         period: `'209901'`,
         period_start: `'2099-01-01T00:00:00Z'`,
         period_end: `'2099-02-01T00:00:00Z'`,

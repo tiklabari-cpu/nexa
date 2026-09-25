@@ -99,7 +99,7 @@ export const apps: Messages = {
   'apps.developers.partnerApps.loadError': 'Ortak uygulamalarınız yüklenemedi.',
   'apps.developers.partnerApps.emptyTitle': 'Henüz ortak uygulama yok',
   'apps.developers.partnerApps.emptyDescription':
-    'Bir betiğin, bir Zap’ın veya kendi geliştireceğiniz bir servisin bu çalışma alanı adına Nexa API’sini çağırabilmesi için bir OAuth istemcisi kaydedin.',
+    'Bir betiğin, bir Zap’ın veya kendi geliştireceğiniz bir servisin bu çalışma alanı adına SiyahTuş API’sini çağırabilmesi için bir OAuth istemcisi kaydedin.',
 
   'apps.developers.clientType.confidential': 'Gizli',
   'apps.developers.clientType.public': 'Genel',

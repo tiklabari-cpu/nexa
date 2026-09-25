@@ -30,7 +30,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { type Permission } from '../notifications/notifications.js';
-import { readNotificationPreferences, type NotificationPreferences } from '@nexa/types';
+import { readNotificationPreferences, type NotificationPreferences } from '@siyahtus/types';
 import {
   currentPermission,
   requestNotificationPermission,

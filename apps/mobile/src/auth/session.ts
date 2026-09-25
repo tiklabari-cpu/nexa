@@ -22,7 +22,7 @@
  * see into, carrying the cookies the identity provider already trusts, which is
  * also what makes a second sign-in silent.
  */
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 
 import { ApiClient, ApiClientError } from '../lib/api-client';
 import { createPkcePair, createState, type PkcePair } from './pkce';

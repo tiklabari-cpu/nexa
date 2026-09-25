@@ -1,7 +1,7 @@
 # Authentication surface — OAuth 2.1 + PKCE, personal access tokens, customer tokens.
 #
 # The authorization step is a JSON POST rather than the classic browser redirect
-# because Nexa's agent app is a first-party client: there is no third party to
+# because SiyahTuş's agent app is a first-party client: there is no third party to
 # show a consent screen to, and a redirect round-trip would add a full page load
 # to every sign-in. The security-relevant parts of the flow are unchanged —
 # single-use codes, mandatory S256 PKCE, exact redirect matching, rotation.
@@ -743,7 +743,7 @@ customerToken:
 
       The embedding page's origin must be a trusted domain for the organization
       (NFR-S6). It arrives as `host_origin`, because the request is made from
-      inside the widget iframe and that frame's own `Origin` is Nexa's — the
+      inside the widget iframe and that frame's own `Origin` is SiyahTuş's — the
       same value for every customer, and so unable to say which site opened the
       chat. Only code running on the host page knows that, which is why the
       loader passes it through.

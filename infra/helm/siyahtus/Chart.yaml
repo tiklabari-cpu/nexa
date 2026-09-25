@@ -1,7 +1,7 @@
 apiVersion: v2
-name: nexa
+name: siyahtus
 description: >-
-  Nexa — canlı destek + AI müşteri hizmetleri platformu. Dört uygulama
+  SiyahTuş — canlı destek + AI müşteri hizmetleri platformu. Dört uygulama
   (api · rtm · web · widget), M-CONTAINER (tm 140) imajlarını dağıtır.
   Postgres/Redis bu chart'a DAHİL DEĞİL (values.yaml'daki not — yönetilen
   servis varsayımı, tm 164.1).

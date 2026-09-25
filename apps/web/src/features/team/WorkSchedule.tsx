@@ -9,7 +9,7 @@
  * anyone on the roster (`agents--all:*`) — mirrored here so an unusable picker
  * entry never appears, rather than existing and then 403ing.
  *
- * The one validation gate is `@nexa/types` `normalizeWorkSchedule` — the same
+ * The one validation gate is `@siyahtus/types` `normalizeWorkSchedule` — the same
  * function the route runs on the way in, so the editor and the server can never
  * drift into disagreeing about what a valid week is (start strictly before end,
  * a known weekday, 24h `HH:MM`). Saving always sends the normalised shape.
@@ -41,7 +41,7 @@ import {
   type WorkSchedule as WorkScheduleValue,
   type WorkScheduleDay,
   type WorkScheduleSlot,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { Card, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';

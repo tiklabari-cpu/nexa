@@ -19,7 +19,7 @@
  * `benchmarkCsvRows` only when the caller asks with `?baseline=`. This module
  * stays the catalogue and the serialisers.
  */
-import { hasAnyScope, type Scope } from '@nexa/types';
+import { hasAnyScope, type Scope } from '@siyahtus/types';
 
 /** A report group: a named, scope-gated slice of the reports surface. */
 export interface ReportGroup {
@@ -120,7 +120,7 @@ export function toCsv(headers: readonly string[], rows: readonly CsvCell[][]): s
 export type ExportFormat = 'csv' | 'pdf';
 
 /**
- * A stable, filesystem-safe download name — `nexa-<group>-<from>-<to>.<ext>`,
+ * A stable, filesystem-safe download name — `siyahtus-<group>-<from>-<to>.<ext>`,
  * dates as UTC `YYYY-MM-DD`. Encodes the window so two exports of the same group
  * over different ranges do not overwrite each other in a downloads folder, and
  * the extension so the CSV and the PDF of one window are distinct files too.
@@ -134,7 +134,7 @@ export function exportFilename(
   format: ExportFormat = 'csv',
 ): string {
   const day = (date: Date): string => date.toISOString().slice(0, 10);
-  return `nexa-${groupId}-${day(from)}-${day(to)}.${format}`;
+  return `siyahtus-${groupId}-${day(from)}-${day(to)}.${format}`;
 }
 
 /* -------------------------------------------------------------------------- *
@@ -604,7 +604,7 @@ export function toPdf(
     [
       '<< /Title ',
       pdfLiteral(toWinAnsi(title)),
-      ' /Producer (Nexa)',
+      ' /Producer (SiyahTus)',
       meta.author === undefined ? '' : ` /Author ${pdfLiteral(toWinAnsi(meta.author))}`,
       meta.createdAt === undefined
         ? ''

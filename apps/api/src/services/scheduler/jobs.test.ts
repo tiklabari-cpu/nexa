@@ -139,7 +139,7 @@ describe('buildSchedulerJobs', () => {
       // A fresh temp dir, not the shared default `MAIL_DIR`: `#pruneMail` sweeps
       // it whole-directory rather than tenant-scoped, so the default would
       // count whatever a developer's own `pnpm dev` happened to leave behind.
-      const mailDir = await mkdtemp(join(tmpdir(), 'nexa-scheduler-jobs-mail-'));
+      const mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-scheduler-jobs-mail-'));
       const env = testEnv({ RETENTION_ENABLED: 'true', MAIL_DIR: mailDir });
       const job = buildSchedulerJobs({ db, env, mailer: new NullMailer() }).find(
         (j) => j.name === 'retention',

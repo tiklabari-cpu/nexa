@@ -411,7 +411,7 @@ export const settings: Messages = {
   // MCP sunucusu — McpConnection.tsx
   'settings.mcpConnection.title': 'MCP sunucusu',
   'settings.mcpConnection.description':
-    'Nexa verileriniz hakkında yapay zekâ asistanlarına sorun. Claude, ChatGPT ve herhangi bir MCP uyumlu araçla çalışır.',
+    'SiyahTuş verileriniz hakkında yapay zekâ asistanlarına sorun. Claude, ChatGPT ve herhangi bir MCP uyumlu araçla çalışır.',
   'settings.mcpConnection.loadError': 'MCP sunucu bilgileri yüklenemedi.',
   'settings.mcpConnection.serverUrlLabel': 'MCP sunucu adresi',
   'settings.mcpConnection.claudeSetup': 'Claude kurulumu',
@@ -419,7 +419,7 @@ export const settings: Messages = {
   'settings.mcpConnection.step2': '“Özel bağlayıcı ekle” seçeneğini seçin.',
   'settings.mcpConnection.step3': 'Yukarıdaki MCP sunucu adresini yapıştırın.',
   'settings.mcpConnection.step4':
-    'İstendiğinde Nexa hesabınızla oturum açın ve istenen kapsamları onaylayın.',
+    'İstendiğinde SiyahTuş hesabınızla oturum açın ve istenen kapsamları onaylayın.',
   'settings.mcpConnection.step5':
     'Çalışma alanınız hakkında bir soru sorun — aşağıdaki örneğe bakın.',
   'settings.mcpConnection.examplePromptLabel': 'Örnek istem',
@@ -467,18 +467,18 @@ export const settings: Messages = {
   'settings.widgetCustomization.mobileFullscreenLabel': 'Mobilde tam ekran',
   'settings.widgetCustomization.mobileFullscreenHint':
     'Telefonlarda kayan bir kart yerine kenardan kenara açılır.',
-  'settings.widgetCustomization.poweredByLabel': '“Powered by Nexa” yazısını göster',
+  'settings.widgetCustomization.poweredByLabel': '“Powered by SiyahTuş” yazısını göster',
   'settings.widgetCustomization.poweredByHint':
     'Widget altbilgisinde küçük bir ibare. Kaldırmak için kapatın.',
   'settings.widgetCustomization.entitlementError':
-    'Nexa rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
+    'SiyahTuş rozetini kaldırmak bir Enterprise özelliğidir. Gizlemek için planı yükseltin.',
   'settings.widgetCustomization.saveButton': 'Görünümü kaydet',
   'settings.widgetCustomization.resetButton': 'Sıfırla',
   'settings.widgetCustomization.previewLabel': 'Önizleme',
   'settings.widgetCustomization.previewChatWithUs': 'Bizimle sohbet edin',
   'settings.widgetCustomization.previewGreeting': 'Merhaba! Nasıl yardımcı olabiliriz?',
   'settings.widgetCustomization.previewCustomerMessage': 'Bir sorum var',
-  'settings.widgetCustomization.previewPoweredBy': 'Powered by Nexa',
+  'settings.widgetCustomization.previewPoweredBy': 'Powered by SiyahTuş',
   'settings.widgetCustomization.previewAutoNote':
     'Otomatik, her ziyaretçinin cihazına uyacak şekilde açık veya koyu gösterir — burada açık gösteriliyor.',
   'settings.widgetCustomization.previewFullscreenNote': 'Telefonlarda panel tam ekran açılır.',

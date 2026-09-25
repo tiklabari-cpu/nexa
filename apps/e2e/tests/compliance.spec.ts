@@ -3,7 +3,7 @@
  *
  * Everything below C4-g proved residency against a server it started itself:
  * `apps/api/test/integration/region.test.ts` boots a second in-process Fastify
- * with `NEXA_REGION=us`, and `apps/rtm/test/integration/region.test.ts` does the
+ * with `SIYAHTUS_REGION=us`, and `apps/rtm/test/integration/region.test.ts` does the
  * same with a second gateway. Those suites are the detailed ones and stay the
  * detailed ones — every branch of the rule is theirs.
  *
@@ -396,7 +396,7 @@ test.describe('a workspace with no signed BAA carries none of HIPAA’s constrai
     // token is a workspace Northwind cannot see, and the answer is 404 rather
     // than a reading of Acme's.
     const across = await request.get(`${API_BASE}/settings/compliance`, {
-      headers: { authorization: `Bearer ${northwind}`, 'x-nexa-brand': acmeOrg },
+      headers: { authorization: `Bearer ${northwind}`, 'x-siyahtus-brand': acmeOrg },
     });
     expect(across.status()).toBe(404);
   });

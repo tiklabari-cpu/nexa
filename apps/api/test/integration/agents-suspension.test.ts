@@ -285,7 +285,7 @@ describe('agent suspension (FR-MOD-04.6)', () => {
       const before = await seatFloor();
 
       await owner.aiAgent.create({
-        data: { licenseId: fx.a.licenseId, name: 'Nexa Bot', kind: 'ai_agent', active: true },
+        data: { licenseId: fx.a.licenseId, name: 'SiyahTuş Bot', kind: 'ai_agent', active: true },
       });
 
       expect(await seatFloor()).toBe(before);

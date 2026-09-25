@@ -5,7 +5,7 @@
  * It renders one control per defined field, typed to the definition — a
  * checkbox-like true/false for a boolean, a date picker for a date, a number
  * input for a number — and validates each value against its definition with the
- * same rule the server enforces (`customFieldError` from `@nexa/types`), so a
+ * same rule the server enforces (`customFieldError` from `@siyahtus/types`), so a
  * bad value shows a field-under error and keeps Save disabled rather than
  * round-tripping to a 400. Save sends only what changed; a cleared field is an
  * explicit null. When nothing is defined for the entity it renders nothing.
@@ -15,7 +15,7 @@
  * different queries.
  */
 import { useEffect, useMemo, useState, type FormEvent, type ReactElement } from 'react';
-import { customFieldError, type CustomFieldValue } from '@nexa/types';
+import { customFieldError, type CustomFieldValue } from '@siyahtus/types';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useTranslate } from '../../lib/i18n.js';
 

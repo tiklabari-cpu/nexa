@@ -53,7 +53,7 @@ function fillIn(value: string): string {
     placeholder.includes('openssl rand -hex 32')
       ? 'ab'.repeat(32)
       : placeholder.includes('address')
-        ? 'pilot@nexa.test'
+        ? 'pilot@siyahtus.test'
         : placeholder
             .slice(1, -1)
             .toLowerCase()
@@ -117,7 +117,7 @@ const PILOT_ENV = pilotEnvFrom(dotenv);
  */
 const COMPOSE_ONLY: Record<string, string> = {
   POSTGRES_PASSWORD: 'DATABASE_URL',
-  NEXA_APP_DB_PASSWORD: 'DATABASE_APP_URL',
+  SIYAHTUS_APP_DB_PASSWORD: 'DATABASE_APP_URL',
 };
 /** Template lines the compose file overrides — not what the pilot's api reads. */
 const OVERRIDDEN = ['DATABASE_URL', 'DATABASE_APP_URL', 'REDIS_URL'];
@@ -127,7 +127,7 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     expect(Object.keys(dotenv).length).toBeGreaterThan(30);
     expect(PILOT_ENV['NODE_ENV']).toBe('production');
     expect(PILOT_ENV['DATABASE_APP_URL']).toMatch(
-      /^postgresql:\/\/nexa_app:[0-9a-f]{64}@db:5432\/nexa$/,
+      /^postgresql:\/\/siyahtus_app:[0-9a-f]{64}@db:5432\/siyahtus$/,
     );
     // The compose values win over the template's own database lines.
     expect(PILOT_ENV['DATABASE_URL']).not.toContain('db-host');
@@ -137,7 +137,7 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     const env = parseEnv(PILOT_ENV);
 
     expect(env.isProduction).toBe(true);
-    expect(new URL(env.runtimeDatabaseUrl).username).toBe('nexa_app');
+    expect(new URL(env.runtimeDatabaseUrl).username).toBe('siyahtus_app');
     expect(env.mail.smtp).not.toBeNull();
     expect(env.llm.openai).not.toBeNull();
     expect(env.embedding.openai).not.toBeNull();
@@ -240,7 +240,7 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     expect(() =>
       createMailer(env.MAIL_PROVIDER, {
         ...env.mail,
-        smtp: { ...env.mail.smtp!, from: 'Nexa <pilot@nexa.test>' },
+        smtp: { ...env.mail.smtp!, from: 'SiyahTuş <pilot@siyahtus.test>' },
       }),
     ).toThrow('SMTP_FROM must be a bare email address');
   });
@@ -259,7 +259,7 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
   });
 
   it('loads the real .env, never .env.example', () => {
-    expect(block(/^x-app-env-file:/)).toMatch(/path: \$\{NEXA_ENV_FILE:-\.env\}/);
+    expect(block(/^x-app-env-file:/)).toMatch(/path: \$\{SIYAHTUS_ENV_FILE:-\.env\}/);
     expect(block(/^ {2}api:$/)).toContain('env_file: *app-env-file');
     expect(block(/^ {2}rtm:$/)).toContain('env_file: *app-env-file');
     expect(uncommented).not.toContain('.env.example');
@@ -276,13 +276,13 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
     expect(uncommented).not.toMatch(/^ {2}init:$/m);
   });
 
-  it('keeps the database on a named volume, and replaces the published nexa_app password', () => {
+  it('keeps the database on a named volume, and replaces the published siyahtus_app password', () => {
     const db = block(/^ {2}db:$/);
-    expect(db).toContain('- nexa_pilot_pgdata:/var/lib/postgresql/data');
-    expect(block(/^volumes:/)).toMatch(/^\s+nexa_pilot_pgdata:$/m);
+    expect(db).toContain('- siyahtus_pilot_pgdata:/var/lib/postgresql/data');
+    expect(block(/^volumes:/)).toMatch(/^\s+siyahtus_pilot_pgdata:$/m);
     expect(db).toContain('infra/db/pilot/10-app-role-password.sh');
     expect(read('infra/db/pilot/10-app-role-password.sh')).toContain(
-      "ALTER ROLE nexa_app PASSWORD :'app_password'",
+      "ALTER ROLE siyahtus_app PASSWORD :'app_password'",
     );
   });
 

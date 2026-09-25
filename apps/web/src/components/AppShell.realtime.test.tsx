@@ -19,7 +19,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { defaultScopesForRole } from '@nexa/types';
+import { defaultScopesForRole } from '@siyahtus/types';
 import { AppShell } from './AppShell.js';
 import { useAuth } from '../lib/auth-store.js';
 import { useRealtimeStatus } from '../lib/realtime-status.js';
@@ -177,7 +177,7 @@ describe('notifications off the inbox', () => {
 
     renderShell('/app/reports');
     await connected();
-    expect(document.title).toBe('Nexa');
+    expect(document.title).toBe('SiyahTuş');
 
     act(() =>
       FakeWebSocket.last.push('incoming_event', customerMessage('c-1', 'Is anyone there?')),
@@ -185,7 +185,7 @@ describe('notifications off the inbox', () => {
 
     // The tab title is the one notification channel jsdom can observe: no audio
     // device for the chime, no `Notification` for the desktop alert.
-    await waitFor(() => expect(document.title).toBe('(1) Nexa'));
+    await waitFor(() => expect(document.title).toBe('(1) SiyahTuş'));
   });
 
   it('stays quiet while the agent is looking at the tab', async () => {
@@ -201,6 +201,6 @@ describe('notifications off the inbox', () => {
     act(() => FakeWebSocket.last.push('incoming_event', customerMessage('c-2', 'Still there?')));
 
     await waitFor(() => expect(FakeWebSocket.last.sent).not.toHaveLength(0));
-    expect(document.title).toBe('Nexa');
+    expect(document.title).toBe('SiyahTuş');
   });
 });

@@ -90,8 +90,8 @@ ALTER TABLE "sso_connections" ADD CONSTRAINT "sso_connections_attribute_mapping_
 -- ends in a session, which is why WITH CHECK matters as much as USING here.
 ALTER TABLE sso_connections ENABLE ROW LEVEL SECURITY;
 CREATE POLICY sso_connections_tenant ON sso_connections
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- No GRANT statement: the ALTER DEFAULT PRIVILEGES in 20260722090000 already
--- hands nexa_app SELECT, INSERT, UPDATE, DELETE on every table created after
+-- hands siyahtus_app SELECT, INSERT, UPDATE, DELETE on every table created after
 -- it, and the write surface this table gets in S11-a2 needs all four.

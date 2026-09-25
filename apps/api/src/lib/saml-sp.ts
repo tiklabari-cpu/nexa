@@ -15,7 +15,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { deflateRawSync } from 'node:zlib';
-import type { SsoAttributeMapping } from '@nexa/types';
+import type { SsoAttributeMapping } from '@siyahtus/types';
 import type { VerifiedAssertion } from './saml.js';
 
 const SAML_ASSERTION_NS = 'urn:oasis:names:tc:SAML:2.0:assertion';

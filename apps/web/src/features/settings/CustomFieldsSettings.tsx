@@ -31,7 +31,7 @@ import {
   type CustomFieldDefinition,
   type CustomFieldEntity,
   type CustomFieldType,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 export function CustomFieldsSettings({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();

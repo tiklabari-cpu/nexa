@@ -7,7 +7,7 @@
  * environment, which made them a property of the **deployment**: every
  * workspace on one installation shared one number, and nobody could pick.
  * This file is the vocabulary the choice is spelled in, and it lives in
- * `@nexa/types` because three parties have to agree on it — the API that
+ * `@siyahtus/types` because three parties have to agree on it — the API that
  * stores it, the sweep that applies it, and the console that offers it.
  *
  * ## Why the tiers are a closed list and not a number of days

@@ -2,7 +2,7 @@
  * The rule bot's read side (FR-MOD-06.6): which bot answers this message, and
  * with what.
  *
- * Nothing here reaches `@nexa/ai-mock`, an embedding, the knowledge base or the
+ * Nothing here reaches `@siyahtus/ai-mock`, an embedding, the knowledge base or the
  * skill engine — that is the requirement, not a preference, and
  * `rule-bot-isolation.test.ts` asserts it against this module's import graph.
  *
@@ -31,7 +31,7 @@ import {
   type GroupPriority,
   type RuleBotActions,
   type RuleBotConditions,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { elapsedMinutes, type BusinessWeek } from '../sla/business-hours.js';
 import { readBusinessWeek } from '../sla/sla-service.js';

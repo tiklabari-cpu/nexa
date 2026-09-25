@@ -108,19 +108,19 @@ Embedding sağlayıcısı sohbetten **ayrı** bir karar ve ayrı bir yapılandı
 
 ## 6. Tool/function calling (soru 6) — HAYIR, kapsam dışı
 
-Skill adımları admin tarafından yazılır ve `@nexa/ai-mock` `validateSteps` kapısından geçer; model araç çağırmıyor, çağırması da istenmiyor. Pilotta modelin tek işi, geri getirilmiş pasajlardan ve persona kurallarından **müşteriye gidecek yanıt metnini yazmak**. Transfer / etiket / bilgi isteme kararları bugünkü deterministik adımlarda kalır. `tools`, `tool_choice`, `response_format` gönderilmez.
+Skill adımları admin tarafından yazılır ve `@siyahtus/ai-mock` `validateSteps` kapısından geçer; model araç çağırmıyor, çağırması da istenmiyor. Pilotta modelin tek işi, geri getirilmiş pasajlardan ve persona kurallarından **müşteriye gidecek yanıt metnini yazmak**. Transfer / etiket / bilgi isteme kararları bugünkü deterministik adımlarda kalır. `tools`, `tool_choice`, `response_format` gönderilmez.
 
 ## 7. Bölge ve veri yerleşimi (soru 7) — NFR-C4 kapısı korunur
 
 - `assertInferenceAllowed` değişmez; gerçek sağlayıcıda da çağrıdan **önce** koşar.
-- OpenAI'da bölgesel işleme yalnız **ABD ve Avrupa**'da var, ikisi de `/v1/chat/completions` ve `/v1/embeddings`'i kapsıyor. Diğer bölgesel host'lar yalnız depolama sağlıyor. Nexa'nın `REGIONS = ['eu','us']` kümesiyle birebir örtüşüyor.
+- OpenAI'da bölgesel işleme yalnız **ABD ve Avrupa**'da var, ikisi de `/v1/chat/completions` ve `/v1/embeddings`'i kapsıyor. Diğer bölgesel host'lar yalnız depolama sağlıyor. SiyahTuş'un `REGIONS = ['eu','us']` kümesiyle birebir örtüşüyor.
 - **Eşleme kuralı** (255.5/255.15'in uygulayacağı): `LLM_PROVIDER=openai` iken
   - `LLM_API_BASE_URL` host'u `us.api.openai.com` ise `LLM_PROVIDER_REGION` **`us`**, `eu.api.openai.com` ise **`eu`** olmak zorunda; uyuşmazlık production'da boot'u reddeder.
   - Global `api.openai.com` production'da reddedilir: nerede işlendiği kanıtlanamayan bir uç için bölge beyan edilemez.
   - Production'da `LLM_PROVIDER ≠ mock` iken `LLM_PROVIDER_REGION` **zorunlu**. Bugünkü varsayılan ("süreçle aynı bölge") yalnız süreç içi sahte için doğrudur; uzak bir uç için yanlış bir iddia olur.
 - **Embedding de müşteri içeriğini dışarı gönderir** (sorgu yolu müşterinin mesajını gömüyor). Bu yüzden aynı kapıdan geçer: `EMBEDDING_PROVIDER_REGION` + aynı eşleme kuralı; HIPAA kapsamlı bir çalışma alanının sorgusu bölge dışına gömülemez.
 - OpenAI'ın AB veri yerleşimi başvuru ister: _"you must be approved for abuse monitoring controls, and execute a Modified Retention amendment"_ (ABD için onay gerekmiyor). Kötüye kullanım izleme kayıtları _"retained for up to 30 days"_. → §11.
-- Varsayım: Nexa'nın HIPAA taahhüdü alt işlemciyle ayrı bir BAA ister; bu bir sözleşme işidir, kod işi değil. Pilotta HIPAA kapsamlı çalışma alanı açılmadığı varsayılır; kapı yine de koşar.
+- Varsayım: SiyahTuş'un HIPAA taahhüdü alt işlemciyle ayrı bir BAA ister; bu bir sözleşme işidir, kod işi değil. Pilotta HIPAA kapsamlı çalışma alanı açılmadığı varsayılır; kapı yine de koşar.
 
 ## 8. Ücretlendirme ve sağlayıcı limitleri (soru 8) — 255.9'un girdisi
 
@@ -186,7 +186,7 @@ PrivateEmail resmi ayarları: sunucu `mail.privateemail.com`; **465 = SSL/TLS** 
 Aşağıdakiler pencerenin veremeyeceği kararlardır (hesap, sözleşme, veri işleme). **Kod ve testler (255.5–255.9) bunları beklemez** — hepsi ağsız, sahte sağlayıcı ya da enjekte edilen `fetch` ile koşar. Bekleyen şey **pilotun gerçek sağlayıcıyla açılması** (255.16'nın gerçek-sağlayıcı adımı ve canlıya çıkış):
 
 1. **Sahip kararı bekleniyor: satıcı onayı.** OpenAI hesabı + faturalama kabul mü? Hayır ise bu ADR yeniden açılır ve §3'ün sıradaki adayı için ayrı bir adaptör görevi açılır (Anthropic → native `/v1/messages`; Mistral → kendi alan adları; Gemini → bölge gerekiyorsa Vertex AI). Embedding kararı (§4.2) sohbet kararından bağımsız kalabilir.
-2. **Sahip kararı bekleniyor: pilotun bölgesi.** Pilot çalışma alanları `eu` mu `us` mu (`NEXA_REGION`)? `eu` ise OpenAI'ın AB veri yerleşimi için _abuse monitoring controls_ onayı + _Modified Retention amendment_ gerekir — bu bir başvurudur, kod işi değil. `us` için onay gerekmez.
+2. **Sahip kararı bekleniyor: pilotun bölgesi.** Pilot çalışma alanları `eu` mu `us` mu (`SIYAHTUS_REGION`)? `eu` ise OpenAI'ın AB veri yerleşimi için _abuse monitoring controls_ onayı + _Modified Retention amendment_ gerekir — bu bir başvurudur, kod işi değil. `us` için onay gerekmez.
 
 ## 12. Kaynaklar (erişim 2026-09-22, yalnız resmi dokümantasyon)
 

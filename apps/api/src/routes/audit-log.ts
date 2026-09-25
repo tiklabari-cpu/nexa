@@ -10,7 +10,7 @@
  *
  * The two are gated on *different* scopes. `/audit-log` is a screen paging
  * through the trail and holds `audit_log--all:ro`; `/audit-log/export` streams
- * the whole of it into a system Nexa does not control and holds
+ * the whole of it into a system SiyahTuş does not control and holds
  * `audit_log--export:ro`. Neither implies the other, which is what stops a
  * dashboard integration acquiring the firehose by being handed the reading
  * scope (PLAN §6.1.4).
@@ -139,10 +139,10 @@ export default async function auditLogRoutes(
    *
    * **The seal is detached** (NFR-C6 · C6-c). Each record carries its own chain
    * position and hash inline, so a line copied out of the file keeps its
-   * evidence; the signature over the page travels in `x-nexa-export-signature`,
+   * evidence; the signature over the page travels in `x-siyahtus-export-signature`,
    * because a signature is about the whole delivery and a body line that was
    * not a record would break every consumer that splits on `\n`.
-   * `x-nexa-export-chain-ok` reports whether the page verified — false is a
+   * `x-siyahtus-export-chain-ok` reports whether the page verified — false is a
    * warning, not a refusal, since withholding a damaged trail is what an
    * attacker would want.
    *
@@ -167,7 +167,7 @@ export default async function auditLogRoutes(
       const after = query.page_id ? decodeExportCursor(query.page_id) : null;
       if (query.page_id && !after) {
         throw ApiError.validation(
-          '`page_id` is not an export cursor. Resume from the `x-nexa-export-cursor` header of a previous export, or omit it to start from the beginning of the trail.',
+          '`page_id` is not an export cursor. Resume from the `x-siyahtus-export-cursor` header of a previous export, or omit it to start from the beginning of the trail.',
         );
       }
 
@@ -196,11 +196,11 @@ export default async function auditLogRoutes(
           // shared cache or sniffed into something active by a browser.
           .header('x-content-type-options', 'nosniff')
           .header('cache-control', 'no-store')
-          .header('x-nexa-export-count', String(page.records.length))
-          .header('x-nexa-export-has-more', page.hasMore ? 'true' : 'false')
-          .header('x-nexa-export-cursor', page.cursor ? encodeExportCursor(page.cursor) : '')
-          .header('x-nexa-export-signature', sealed.signature)
-          .header('x-nexa-export-chain-ok', page.chain.ok ? 'true' : 'false')
+          .header('x-siyahtus-export-count', String(page.records.length))
+          .header('x-siyahtus-export-has-more', page.hasMore ? 'true' : 'false')
+          .header('x-siyahtus-export-cursor', page.cursor ? encodeExportCursor(page.cursor) : '')
+          .header('x-siyahtus-export-signature', sealed.signature)
+          .header('x-siyahtus-export-chain-ok', page.chain.ok ? 'true' : 'false')
           .send(sealed.body)
       );
     },

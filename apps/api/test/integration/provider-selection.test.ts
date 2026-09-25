@@ -65,7 +65,7 @@ describe('provider selection (M-PROV-a)', () => {
     // Enterprise, because the sink refuses a plan without `siem_export`
     // (FR-MOD-11.5) — that refusal is `entitlements.test.ts`'s to prove.
     fx = await seedFixtures(owner, { plan: 'enterprise' });
-    dir = await mkdtemp(join(tmpdir(), 'nexa-provider-'));
+    dir = await mkdtemp(join(tmpdir(), 'siyahtus-provider-'));
   });
 
   afterEach(async () => {

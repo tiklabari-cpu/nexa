@@ -36,4 +36,4 @@ ALTER TABLE "campaign_sends" ADD CONSTRAINT "campaign_sends_customer_id_fkey" FO
 -- license, exactly like campaigns and every other tenant-scoped table.
 ALTER TABLE campaign_sends ENABLE ROW LEVEL SECURITY;
 CREATE POLICY campaign_sends_tenant ON campaign_sends
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());

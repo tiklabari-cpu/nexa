@@ -7,7 +7,7 @@
  * private-use URI scheme the operating system routes back to the app, and that
  * is what this is.
  *
- * It lives in `@nexa/types` rather than in `apps/mobile` because two sides have
+ * It lives in `@siyahtus/types` rather than in `apps/mobile` because two sides have
  * to agree on the exact string: the app sends it on `/auth/authorize` and
  * `/auth/token`, and the server matches it against the client's registered set
  * *byte for byte* (`OauthService.isRegisteredRedirect`). A copy on each side is
@@ -15,7 +15,7 @@
  * works everywhere else".
  *
  * The scheme is not a secret and not a defence. Another app on the same phone
- * can claim `nexa://` and win the race for the callback — the collision RFC 8252
+ * can claim `siyahtus://` and win the race for the callback — the collision RFC 8252
  * warns about, and the reason PKCE is mandatory here rather than optional: an
  * intercepted code is useless without the verifier, which never leaves the app
  * that started the login. The residual risk is a sign-in that does not complete,
@@ -23,7 +23,7 @@
  */
 
 /** The app's private-use URI scheme, mirroring `expo.scheme` in `app.json`. */
-export const MOBILE_APP_SCHEME = 'nexa';
+export const MOBILE_APP_SCHEME = 'siyahtus';
 
 /** The redirect URI the mobile client registers and sends. Exact-matched. */
 export const MOBILE_REDIRECT_URI = `${MOBILE_APP_SCHEME}://auth/callback`;

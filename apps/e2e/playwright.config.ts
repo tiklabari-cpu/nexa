@@ -78,14 +78,14 @@ export default defineConfig({
     {
       // Before the API, so the first mail it sends has somewhere to go. See
       // `apps/api/scripts/mock-smtp-server.ts`.
-      command: 'pnpm --filter @nexa/api mock-smtp',
+      command: 'pnpm --filter @siyahtus/api mock-smtp',
       url: `${MOCK_SMTP_MAILBOX}/health`,
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
       cwd: '../..',
     },
     {
-      command: 'pnpm --filter @nexa/api dev',
+      command: 'pnpm --filter @siyahtus/api dev',
       url: `${API}/api/v1/health`,
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
@@ -140,21 +140,21 @@ export default defineConfig({
       },
     },
     {
-      command: 'pnpm --filter @nexa/rtm dev',
+      command: 'pnpm --filter @siyahtus/rtm dev',
       url: 'http://localhost:4001/health',
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
       cwd: '../..',
     },
     {
-      command: 'pnpm --filter @nexa/web dev',
+      command: 'pnpm --filter @siyahtus/web dev',
       url: WEB,
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
       cwd: '../..',
     },
     {
-      command: 'pnpm --filter @nexa/widget dev',
+      command: 'pnpm --filter @siyahtus/widget dev',
       url: `${WIDGET}/demo.html`,
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
@@ -165,7 +165,7 @@ export default defineConfig({
       // (NFR-S11 · S11-i). Loopback only, and the one address the SSO URL
       // validation lets a connection use without TLS — see
       // `apps/api/scripts/mock-idp-server.ts`.
-      command: 'pnpm --filter @nexa/api mock-idp',
+      command: 'pnpm --filter @siyahtus/api mock-idp',
       url: `${MOCK_IDP}/health`,
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,

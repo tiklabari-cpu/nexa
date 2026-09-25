@@ -32,7 +32,7 @@ const PAN_SPACED = '4111 1111 1111 1111';
 const MASKED = '**** **** **** 1111';
 /** 16 digits, but not a card — must survive untouched (the false-positive line). */
 const ORDER_NO = '1234567890123456';
-const DOMAIN = 'inbound.nexa.localhost';
+const DOMAIN = 'inbound.siyahtus.localhost';
 
 describe('card masking at write time (FR-MOD-08.9.5)', () => {
   let owner: PrismaClient;
@@ -78,7 +78,7 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
 
   beforeAll(async () => {
     owner = ownerClient();
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-ccmask-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-ccmask-'));
     // A real FileMailer so the transcript side-channel can be read back from the
     // spool; the default test mailer is a NullMailer that keeps nothing.
     server = await startTestServer({}, { mailer: new FileMailer(mailDir) });

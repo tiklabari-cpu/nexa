@@ -111,13 +111,13 @@ ALTER TABLE "sales_tracker_settings" ADD CONSTRAINT "sales_tracker_settings_attr
 -- earned.
 ALTER TABLE sales_tracker_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY sales_tracker_settings_tenant ON sales_tracker_settings
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE tracked_sales ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tracked_sales_tenant ON tracked_sales
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- No GRANT statement: the ALTER DEFAULT PRIVILEGES in 20260722090000 already
--- hands nexa_app SELECT, INSERT, UPDATE, DELETE on every table created after
+-- hands siyahtus_app SELECT, INSERT, UPDATE, DELETE on every table created after
 -- it, and both write paths this table serves (the settings upsert, and the
 -- ingest endpoint's later attribution update) need all four.

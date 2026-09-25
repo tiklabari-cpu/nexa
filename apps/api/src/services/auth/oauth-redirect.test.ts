@@ -11,7 +11,7 @@
  * is refused before the registered set is even consulted.
  */
 import { describe, expect, it } from 'vitest';
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 import { OauthService } from './oauth-service.js';
 
 const HTTPS = 'https://console.example.test/auth/callback';
@@ -22,7 +22,7 @@ const matches = (candidate: string, registered: readonly string[] = REGISTERED) 
   OauthService.isRegisteredRedirect(candidate, registered);
 
 describe('isRegisteredRedirect', () => {
-  describe('accepts the three places a Nexa client actually runs', () => {
+  describe('accepts the three places a SiyahTuş client actually runs', () => {
     it.each([HTTPS, LOOPBACK, MOBILE_REDIRECT_URI])('%s', (uri) => {
       expect(matches(uri)).toBe(true);
     });
@@ -47,11 +47,11 @@ describe('isRegisteredRedirect', () => {
     });
 
     it('refuses a native scheme that merely resembles the registered one', () => {
-      expect(matches('nexa://auth/callback2')).toBe(false);
-      expect(matches('nexa-evil://auth/callback')).toBe(false);
-      // The host segment is part of the string, so another app's `nexa://`
+      expect(matches('siyahtus://auth/callback2')).toBe(false);
+      expect(matches('siyahtus-evil://auth/callback')).toBe(false);
+      // The host segment is part of the string, so another app's `siyahtus://`
       // target is a different URI and not a match.
-      expect(matches('nexa://attacker/callback')).toBe(false);
+      expect(matches('siyahtus://attacker/callback')).toBe(false);
     });
 
     it('refuses credentials smuggled into an otherwise registered URI', () => {

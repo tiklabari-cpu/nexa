@@ -291,10 +291,10 @@ export const team: Messages = {
   'team.notifications.desktop.enableButton': 'Enable desktop notifications',
   'team.notifications.push.label': 'Mobile push notifications',
   'team.notifications.push.hint':
-    'Sent to the Nexa app on any phone you have signed in on. Which handsets those are is managed from the app itself.',
+    'Sent to the SiyahTuş app on any phone you have signed in on. Which handsets those are is managed from the app itself.',
   'team.notifications.email.label': 'Email notifications',
   'team.notifications.email.hint':
-    'Emailed when a visitor writes in a chat assigned to you, even when Nexa is closed. Not affected by the switch above — email is the fallback for when you are away.',
+    'Emailed when a visitor writes in a chat assigned to you, even when SiyahTuş is closed. Not affected by the switch above — email is the fallback for when you are away.',
   // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
   'team.ai.title': 'AI agent performance',
   'team.ai.description':

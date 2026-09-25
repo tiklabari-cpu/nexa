@@ -24,7 +24,7 @@ failing.
       `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`.
       Generate each independently — `openssl rand -hex 32`. See README
       ["Required — boot refuses without these"](../README.md#required--boot-refuses-without-these).
-- [ ] `DATABASE_APP_URL` is set to the non-owner `nexa_app` role and is **different** from
+- [ ] `DATABASE_APP_URL` is set to the non-owner `siyahtus_app` role and is **different** from
       `DATABASE_URL` — pointing both at the owner role silently disables row-level security
       (tenant isolation) without failing any request. See README
       ["`DATABASE_URL` vs `DATABASE_APP_URL`"](../README.md#database_url-vs-database_app_url).
@@ -32,10 +32,10 @@ failing.
       process, using the table in README
       ["Choosing `TRUST_PROXY_HOPS`"](../README.md#choosing-trust_proxy_hops) — and a
       NetworkPolicy (or equivalent) guarantees that count, per
-      [`infra/helm/nexa/templates/networkpolicy.yaml`](../infra/helm/nexa/templates/networkpolicy.yaml).
+      [`infra/helm/siyahtus/templates/networkpolicy.yaml`](../infra/helm/siyahtus/templates/networkpolicy.yaml).
       Measured consequence of skipping the policy half:
       `apps/api/test/integration/trust-proxy.test.ts`.
-- [ ] `WEB_ORIGIN` lists **every** origin a browser loads a Nexa page from, comma-separated:
+- [ ] `WEB_ORIGIN` lists **every** origin a browser loads a SiyahTuş page from, comma-separated:
       the agent panel, any standalone chat page, **and `WIDGET_BASE_URL`'s origin**. The widget
       has no same-origin backend — its browser code calls the API cross-origin — so a list
       naming only the panel serves agents and refuses every customer conversation, silently.
@@ -50,7 +50,7 @@ failing.
 
 - [ ] The orchestrator's liveness probe targets `/health/live` (no dependency checks) and its
       readiness probe targets `/health/ready` (checks Postgres/Redis) — never the same path for
-      both. Evidence: `infra/helm/nexa/templates/deployment.yaml` (`livenessProbe`/
+      both. Evidence: `infra/helm/siyahtus/templates/deployment.yaml` (`livenessProbe`/
       `readinessProbe`), `apps/api/test/integration/health.test.ts`,
       `apps/rtm/test/integration/health.test.ts`.
 - [ ] `SHUTDOWN_DRAIN_MS` is set at or above your readiness probe period (Kubernetes default
@@ -68,7 +68,7 @@ failing.
       `apps/rtm/test/integration/log-profile.test.ts`.
 - [ ] After `EMBEDDING_PROVIDER` or `EMBEDDING_MODEL` changes — the stub to a model, or one
       model to another — re-embed the stored knowledge base:
-      `pnpm --filter @nexa/api knowledge:reembed`, then `… knowledge:reembed --status` must
+      `pnpm --filter @siyahtus/api knowledge:reembed`, then `… knowledge:reembed --status` must
       report `pendingChunks: 0`. Until a source is re-embedded, questions asked in the new space
       cannot find it and go to a human (never to a passage from the other space). The run is
       per source and atomic, resumable (`--limit N`, or just run it again) and reversible (run
@@ -101,7 +101,7 @@ failing.
       means unlimited — the pre-tm161 behaviour, not a safe production default). See README
       ["`RTM_MAX_CONNECTIONS` — the gateway's connection ceiling"](../README.md#rtm_max_connections--the-gateways-connection-ceiling).
 - [ ] Resource `requests`/`limits` in
-      [`infra/helm/nexa/values.yaml`](../infra/helm/nexa/values.yaml) reflect a measurement, not
+      [`infra/helm/siyahtus/values.yaml`](../infra/helm/siyahtus/values.yaml) reflect a measurement, not
       a guess, for the traffic you expect — the shipped defaults (api: 250m/256Mi requests,
       1/512Mi limits; rtm: 250m/128Mi requests, 1/512Mi limits; both HPA 1–4 replicas @ 70% CPU)
       are sized for this repo's own load-test hardware, not yours.
@@ -121,7 +121,7 @@ failing.
       That is not a prediction — it is the `local` control group in
       `apps/api/test/integration/two-pod.test.ts`, four real processes, alongside the `s3`
       pair that passes the same three steps. The chart ships `STORAGE_PROVIDER: s3` with
-      `CHANGE_ME` placeholders ([`values.yaml`](../infra/helm/nexa/values.yaml)); left
+      `CHANGE_ME` placeholders ([`values.yaml`](../infra/helm/siyahtus/values.yaml)); left
       untouched every attachment answers 503 rather than silently falling back to local disk.
       `apps/api/src/config/chart-storage.test.ts` fails the build if the chart ever pairs
       pod-local uploads with an api replica ceiling above 1. Security parity between the two
@@ -142,8 +142,8 @@ failing.
 ## 5. Deployment
 
 - [ ] The chart renders and validates offline (no cluster available or required — CLAUDE.md):
-      `helm template nexa infra/helm/nexa -f infra/helm/nexa/values.yaml -f infra/helm/nexa/values.production.example.yaml`
-      then `helm lint infra/helm/nexa`. Recorded result in this repo: `helm lint` exit 0; every
+      `helm template siyahtus infra/helm/siyahtus -f infra/helm/siyahtus/values.yaml -f infra/helm/siyahtus/values.production.example.yaml`
+      then `helm lint infra/helm/siyahtus`. Recorded result in this repo: `helm lint` exit 0; every
       rendered resource valid against real Kubernetes OpenAPI schemas via `kubeconform -strict`
       — 21/21 (default values), 20/20
       (production overlay). `kubectl apply --dry-run=client` does **not** work offline (it needs
@@ -152,14 +152,14 @@ failing.
       reasoning.
 - [ ] Migration strategy is applied as decided, not left at a per-pod default:
       `prisma migrate deploy` runs once per release from the pre-install/pre-upgrade Helm hook
-      Job ([`templates/migrate-job.yaml`](../infra/helm/nexa/templates/migrate-job.yaml)), never
+      Job ([`templates/migrate-job.yaml`](../infra/helm/siyahtus/templates/migrate-job.yaml)), never
       from each pod's own entrypoint once replicas > 1 (that races `pg_advisory_lock` and a
       10s timeout turns into a crash-looping rollout). Full reasoning and the measured race
       behaviour: [CONVENTIONS.md §6](../CONVENTIONS.md#6-şema-göçü-migration-politikası--çok-replikalı-dağıtımda-güvenli-değişiklik-tm-1643).
 - [ ] Every migration since adopting this decision follows expand → migrate → contract
       (CONVENTIONS.md §6.3) — no single release drops/renames a column, narrows a type, or adds
       `NOT NULL` without a `DEFAULT` while an old pod might still be running.
-- [ ] [`values.production.example.yaml`](../infra/helm/nexa/values.production.example.yaml) is
+- [ ] [`values.production.example.yaml`](../infra/helm/siyahtus/values.production.example.yaml) is
       copied (not committed) and every placeholder is filled: image registry/tags, real
       hostnames, `TRUST_PROXY_HOPS`, `backup.storageClassName`, and the secret provisioning
       path (the file's own comments name three options and recommend one).
@@ -167,7 +167,7 @@ failing.
 ## 6. Backup
 
 - [ ] A backup is scheduled:
-      [`templates/backup-cronjob.yaml`](../infra/helm/nexa/templates/backup-cronjob.yaml)
+      [`templates/backup-cronjob.yaml`](../infra/helm/siyahtus/templates/backup-cronjob.yaml)
       (nightly `pg_dump` into a PersistentVolumeClaim) for a real deployment, or `make backup`
       for the local/dev stack. Retention: `BACKUP_RETENTION_DAYS` (default 30).
 - [ ] A restore drill has actually been run against a real backup — a backup **existing** is
@@ -178,19 +178,19 @@ failing.
       — the P3009 state); row counts for `organizations`/`accounts`/`chats`/`events` match; the
       row-level-security surface (every table, policy name, `USING`/`WITH CHECK` body) is
       identical; extensions and `SECURITY DEFINER` functions match; every `events` partition
-      has RLS on with exactly one policy; connecting as the non-owner `nexa_app` role returns
+      has RLS on with exactly one policy; connecting as the non-owner `siyahtus_app` role returns
       no rows without a tenant context and the right rows with one. See README
       ["Restore drill"](../README.md#restore-drill).
 - [ ] Uploads are covered by the **bucket's** own durability settings, not by this CronJob:
       the scheduled backup is `pg_dump` only, deliberately
-      ([`values.yaml`](../infra/helm/nexa/values.yaml) `backup:` block explains why). With
+      ([`values.yaml`](../infra/helm/siyahtus/values.yaml) `backup:` block explains why). With
       `STORAGE_PROVIDER=s3` the objects live outside the cluster, so versioning, lifecycle
       rules and any cross-region replication are settings on the bucket — check they exist
       there, because nothing in this chart checks them for you.
 - [ ] `backup.storageClassName` in `values.production.example.yaml` names an at-rest-encrypted
       StorageClass — the PVC holds every tenant's personal data unencrypted at the application
       layer, so this is the single richest target the chart creates.
-- [ ] The `nexa_app` role exists in the target cluster **before** restoring into a fresh one —
+- [ ] The `siyahtus_app` role exists in the target cluster **before** restoring into a fresh one —
       a per-database `pg_dump` carries no `CREATE ROLE`. Run
       [`infra/db/init/00-extensions.sql`](../infra/db/init/00-extensions.sql) first, or capture
       globals separately with `pg_dumpall --globals-only`.
@@ -236,7 +236,7 @@ one is the order of operations for that stack.
 `.gitignore` covers `.env`), then replace every `<…>`. Boot refuses a copy with one left in
 and names the key. By name, what the pilot needs:
 
-- Compose itself: `POSTGRES_PASSWORD`, `NEXA_APP_DB_PASSWORD` (hex, `openssl rand -hex 32`;
+- Compose itself: `POSTGRES_PASSWORD`, `SIYAHTUS_APP_DB_PASSWORD` (hex, `openssl rand -hex 32`;
   the compose file builds `DATABASE_URL`, `DATABASE_APP_URL` and `REDIS_URL` from them and
   overrides those three lines of `.env`).
 - Addresses: `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`
@@ -257,22 +257,22 @@ this document.
 
 **Where each value comes from (tm 255.16).** Only names here, never values:
 
-| Key(s)                                                                                                                                                                           | Where the owner gets it                                                                                                                                |
-| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `SMTP_USERNAME`, `SMTP_PASSWORD`                                                                                                                                                 | The PrivateEmail (Namecheap) mailbox that sends the pilot's mail. The username is the mailbox's full address. The password is that mailbox's password. |
-| `SMTP_FROM`                                                                                                                                                                      | That same mailbox's address, bare (`name@domain`) — not a secret.                                                                                      |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`                                                                                                                                          | PrivateEmail's published settings, already in the template (587 + STARTTLS, or 465 with `SMTP_SECURE=true`).                                           |
-| `LLM_API_KEY`, `EMBEDDING_API_KEY`                                                                                                                                               | An API key from the OpenAI platform account (ADR `docs/adr/pilot-llm-embedding-provider.md` §9). The two may hold the same key.                        |
-| `LLM_MODEL`                                                                                                                                                                      | The chat model id chosen in that account. `EMBEDDING_MODEL` stays `text-embedding-3-small` (the column is `vector(1536)`).                             |
-| `LLM_PROVIDER_REGION`, `EMBEDDING_PROVIDER_REGION`, `*_API_BASE_URL`                                                                                                             | The owner's region decision (ADR §11.2). `eu` needs OpenAI's EU data-residency approval first. The base URL must be that region's host.                |
-| `POSTGRES_PASSWORD`, `NEXA_APP_DB_PASSWORD`, `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET` | Generated on the host: `openssl rand -hex 32`, one per key.                                                                                            |
-| `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`, `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`                                                       | The owner's domain and the reverse proxy in front of the host.                                                                                         |
+| Key(s)                                                                                                                                                                               | Where the owner gets it                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SMTP_USERNAME`, `SMTP_PASSWORD`                                                                                                                                                     | The PrivateEmail (Namecheap) mailbox that sends the pilot's mail. The username is the mailbox's full address. The password is that mailbox's password. |
+| `SMTP_FROM`                                                                                                                                                                          | That same mailbox's address, bare (`name@domain`) — not a secret.                                                                                      |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`                                                                                                                                              | PrivateEmail's published settings, already in the template (587 + STARTTLS, or 465 with `SMTP_SECURE=true`).                                           |
+| `LLM_API_KEY`, `EMBEDDING_API_KEY`                                                                                                                                                   | An API key from the OpenAI platform account (ADR `docs/adr/pilot-llm-embedding-provider.md` §9). The two may hold the same key.                        |
+| `LLM_MODEL`                                                                                                                                                                          | The chat model id chosen in that account. `EMBEDDING_MODEL` stays `text-embedding-3-small` (the column is `vector(1536)`).                             |
+| `LLM_PROVIDER_REGION`, `EMBEDDING_PROVIDER_REGION`, `*_API_BASE_URL`                                                                                                                 | The owner's region decision (ADR §11.2). `eu` needs OpenAI's EU data-residency approval first. The base URL must be that region's host.                |
+| `POSTGRES_PASSWORD`, `SIYAHTUS_APP_DB_PASSWORD`, `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET` | Generated on the host: `openssl rand -hex 32`, one per key.                                                                                            |
+| `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`, `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`                                                           | The owner's domain and the reverse proxy in front of the host.                                                                                         |
 
 Two owner decisions come before the first real call (ADR §11): whether the OpenAI account and
 its billing are accepted, and whether the pilot's region is `eu` or `us`. Once a key exists,
 `RETRIEVAL_THRESHOLD` has to be measured once in the real embedding space. It was only
 measured in the stub's space (tm 255.8, PLAN §D183 (5)): with the four `EMBEDDING_*` keys set,
-run `pnpm --filter @nexa/api measure:knowledge-recall`. Exit 0 means PASS, 1 FAIL, 2 means it
+run `pnpm --filter @siyahtus/api measure:knowledge-recall`. Exit 0 means PASS, 1 FAIL, 2 means it
 was not measured, which is not a pass.
 
 **Run.**
@@ -294,13 +294,13 @@ was not measured, which is not a pass.
 - [ ] `WEB_APP_URL` is the address the panel is actually served from — its origin +
       `/auth/callback` is the OAuth redirect every workspace registers (tm 255.17 · PLAN
       §D189). A workspace signed up here gets exactly that one plus the mobile
-      `nexa://auth/callback`; one that existed before gains it at the api's next start
+      `siyahtus://auth/callback`; one that existed before gains it at the api's next start
       (one `registered this deployment’s console callback` info line; a failure is one
       `error` line and does not stop the boot). Production refuses a `WEB_APP_URL` that no
       sign-in could use (plain `http` off `localhost`). Changing the address later adds the
       new callback and keeps the old one — removing it is a manual step, not something a
       restart does: as the owner role, `array_remove` the old callback from
-      `oauth_clients.redirect_uris` on the clients whose id matches `nexa-%-app-%`.
+      `oauth_clients.redirect_uris` on the clients whose id matches `siyahtus-%-app-%`.
 - [ ] Create the first workspace by signing up in the panel (there is no seed). Then run the
       smoke test once more with `SMOKE_ORGANIZATION_ID=<its id>` and
       `SMOKE_ADMIN_TOKEN=<the owner's access token>`: it mints a visitor token from the widget
@@ -309,13 +309,13 @@ was not measured, which is not a pass.
 
 **Data.**
 
-- [ ] The database lives on the named volume `nexa-pilot_nexa_pilot_pgdata`: it survives
+- [ ] The database lives on the named volume `siyahtus-pilot_siyahtus_pilot_pgdata`: it survives
       `down`, `up --build` and a reboot. `down -v` deletes it — never run it on this project
       (there is deliberately no `make` target for it).
-- [ ] `NEXA_APP_DB_PASSWORD` is applied to `nexa_app` on the first start of an empty volume
+- [ ] `SIYAHTUS_APP_DB_PASSWORD` is applied to `siyahtus_app` on the first start of an empty volume
       only ([`infra/db/pilot/10-app-role-password.sh`](../infra/db/pilot/10-app-role-password.sh)).
-      To rotate it later, run `ALTER ROLE nexa_app PASSWORD '<new>'` through
-      `docker compose -f docker-compose.pilot.yml exec db psql -U nexa -d nexa`, change
+      To rotate it later, run `ALTER ROLE siyahtus_app PASSWORD '<new>'` through
+      `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus`, change
       `.env`, then `up -d`.
 - [ ] Backups use the same scripts as §6, pointed at this file: `make pilot-backup`
       (`COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh`) writes

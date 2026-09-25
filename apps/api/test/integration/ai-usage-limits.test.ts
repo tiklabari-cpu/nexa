@@ -19,7 +19,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { embed } from '@nexa/ai-mock';
+import { embed } from '@siyahtus/ai-mock';
 import { embeddingSpace } from '../../src/services/ai/provider/embedding-provider.js';
 import {
   AI_PASSAGE,

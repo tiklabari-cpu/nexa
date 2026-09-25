@@ -3,7 +3,7 @@
 `events` (every chat message, system message and form a customer ever sent) is
 partitioned by month. Each API process opens the months from one before the
 current month to three after it — at boot and every six hours — through the
-runtime role `nexa_app` (`apps/api/src/services/chat/event-partitions.ts`). An
+runtime role `siyahtus_app` (`apps/api/src/services/chat/event-partitions.ts`). An
 event whose month has no partition is not lost: it lands in the catch-all
 `events_default`. But that table is read whole by every range query that cannot
 rule it out, it grows without bound, and once it holds rows for a month
@@ -28,9 +28,9 @@ this runbook is for that quarter.
 ## Diagnosis
 
 All queries via `make psql` (dev stack) or the demo stack's `db` container
-(`docker compose exec db psql -U nexa nexa`) — as the **owner**. The runtime role
+(`docker compose exec db psql -U siyahtus siyahtus`) — as the **owner**. The runtime role
 sees no row of `events_default` without a tenant context (row level security), so
-counting there as `nexa_app` always says 0.
+counting there as `siyahtus_app` always says 0.
 
 1. Read the block, with an admin bearer token:
 
@@ -43,13 +43,13 @@ counting there as `nexa_app` always says 0.
    - **`42501`** — the runtime role is running the functions without the owner's
      rights. Either migration `20260925100000_events_partition_definer` is not
      applied, or a later migration re-created a function without
-     `SECURITY DEFINER`, or `nexa_app` lost `EXECUTE` on `events_ensure_partition`.
+     `SECURITY DEFINER`, or `siyahtus_app` lost `EXECUTE` on `events_ensure_partition`.
      Every month of the window fails at once — that is by design: the check runs
      on every pass, not only when a month is missing. Confirm:
 
      ```sql
      SELECT p.proname, p.prosecdef, pg_get_userbyid(p.proowner) AS owner,
-            has_function_privilege('nexa_app', p.oid, 'EXECUTE') AS runtime_can_execute
+            has_function_privilege('siyahtus_app', p.oid, 'EXECUTE') AS runtime_can_execute
      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
      WHERE n.nspname = 'public' AND p.proname LIKE 'events\_%'
      ORDER BY p.proname;
@@ -112,7 +112,7 @@ counting there as `nexa_app` always says 0.
   ```
 
   Do **not** reach for a narrower grant instead.
-  `GRANT CREATE ON SCHEMA public TO nexa_app` does not work — measured, the next
+  `GRANT CREATE ON SCHEMA public TO siyahtus_app` does not work — measured, the next
   error is `must be owner of table events` — and pointing the API at the owner
   role switches off row level security for every tenant.
 
@@ -133,7 +133,7 @@ counting there as `nexa_app` always says 0.
   in 1.6 s (about 60 000 rows a second). If the lock is not free within five
   seconds it fails without changing anything; run it again.
 
-  `nexa_app` cannot run it (no grant), and the function refuses NULL and
+  `siyahtus_app` cannot run it (no grant), and the function refuses NULL and
   infinite instants. A month more than 60 months from now cannot be released
   this way — its partition would be refused anyway; leave those rows where they
   are.

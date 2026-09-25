@@ -12,7 +12,7 @@
  *     `sso-login.test.ts` proved a suspended membership cannot sign in. Nobody
  *     had yet run one into the other, which is the only form in which the
  *     feature is ever bought: "when a leaver is removed from Okta, do they lose
- *     Nexa?"
+ *     SiyahTuş?"
  *   - **The rejection matrix survives the wiring.** `saml.test.ts` exhausts the
  *     verifier in isolation against a frozen clock and an injected replay guard.
  *     Here the same five families are refused through the real endpoint, real

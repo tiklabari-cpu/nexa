@@ -1,6 +1,6 @@
 /**
  * Sales tracker configuration — the shape the API, the settings screen and the
- * widget's `nexa('trackSale', …)` snippet all have to agree on (FR-MOD-13.5).
+ * widget's `siyahtus('trackSale', …)` snippet all have to agree on (FR-MOD-13.5).
  *
  * The defaults below mirror the column defaults in `schema.prisma`
  * (`model SalesTrackerSettings`) value-for-value. Signup writes no row, so a

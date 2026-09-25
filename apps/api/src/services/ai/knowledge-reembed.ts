@@ -38,7 +38,7 @@
  * provider would take out of its region is left untouched and reported.
  */
 import type { PrismaClient } from '@prisma/client';
-import { toVectorLiteral } from '@nexa/ai-mock';
+import { toVectorLiteral } from '@siyahtus/ai-mock';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { inferenceAllowed, readInferenceResidency, type InferenceProvider } from './inference.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';

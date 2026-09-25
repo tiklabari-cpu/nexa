@@ -60,7 +60,7 @@ describe('handset lifecycle end to end', () => {
 
   beforeAll(async () => {
     owner = ownerClient();
-    pushDir = await mkdtemp(join(tmpdir(), 'nexa-push-life-'));
+    pushDir = await mkdtemp(join(tmpdir(), 'siyahtus-push-life-'));
     push = new FilePushProvider(pushDir);
     server = await startTestServer({}, { push });
   });

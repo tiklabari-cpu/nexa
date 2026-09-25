@@ -41,7 +41,7 @@ describe('HIPAA BAA (C4-d)', () => {
   beforeAll(async () => {
     owner = ownerClient();
     server = await startTestServer();
-    usServer = await startTestServer({ NEXA_REGION: 'us' });
+    usServer = await startTestServer({ SIYAHTUS_REGION: 'us' });
   });
 
   afterAll(async () => {
@@ -328,7 +328,7 @@ describe('HIPAA BAA (C4-d)', () => {
           where: { id: fx.a.licenseId },
           data: { hipaaBaaSignedAt: new Date() },
         }),
-      ).rejects.toThrow(/nexa_baa_requires_us_region/);
+      ).rejects.toThrow(/siyahtus_baa_requires_us_region/);
     });
 
     it('refuses a licence created with the value already set', async () => {
@@ -348,7 +348,7 @@ describe('HIPAA BAA (C4-d)', () => {
             hipaaBaaSignedAt: new Date(),
           },
         }),
-      ).rejects.toThrow(/nexa_baa_requires_us_region/);
+      ).rejects.toThrow(/siyahtus_baa_requires_us_region/);
     });
 
     it('refuses moving a signed licence under a European organization', async () => {
@@ -367,7 +367,7 @@ describe('HIPAA BAA (C4-d)', () => {
           where: { id: us.licenseId },
           data: { organizationId: euOrganization.id },
         }),
-      ).rejects.toThrow(/nexa_baa_requires_us_region/);
+      ).rejects.toThrow(/siyahtus_baa_requires_us_region/);
     });
 
     it('lets a US licence clear the value', async () => {

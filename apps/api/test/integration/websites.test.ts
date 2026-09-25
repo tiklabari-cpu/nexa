@@ -46,7 +46,7 @@ describe('websites', () => {
 
   const auth = (token: string, brand?: string) => ({
     authorization: `Bearer ${token}`,
-    ...(brand ? { 'x-nexa-brand': brand } : {}),
+    ...(brand ? { 'x-siyahtus-brand': brand } : {}),
   });
 
   beforeAll(async () => {
@@ -165,7 +165,7 @@ describe('websites', () => {
       await server.post('/websites', { domain: 'shop.example' }, auth(adminToken))
     ).json() as Website;
     expect(created.snippet).toContain(fx.a.organizationId);
-    expect(created.snippet).toContain('window.__nexa');
+    expect(created.snippet).toContain('window.__siyahtus');
     expect(created.snippet).toContain('/loader.js');
   });
 
@@ -268,7 +268,7 @@ describe('websites', () => {
     const token = await server.post(
       '/customer/token',
       { organization_id: fx.a.organizationId, host_origin: `https://${fx.a.trustedDomain}` },
-      { origin: 'https://widget.nexa.example' },
+      { origin: 'https://widget.siyahtus.example' },
     );
     expect(token.statusCode).toBe(200);
 
@@ -287,7 +287,7 @@ describe('websites', () => {
     await server.post(
       '/customer/token',
       { organization_id: fx.b.organizationId, host_origin: `https://${fx.b.trustedDomain}` },
-      { origin: 'https://widget.nexa.example' },
+      { origin: 'https://widget.siyahtus.example' },
     );
 
     const after = await server.get(`/websites/${created.id}`, auth(readToken));

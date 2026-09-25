@@ -14,7 +14,7 @@
  * second hand-picked constant that could drift out of sync with it.
  */
 import { create } from 'zustand';
-import { AGENT_COMPOSING_TTL_SECONDS } from '@nexa/types';
+import { AGENT_COMPOSING_TTL_SECONDS } from '@siyahtus/types';
 
 export interface ConflictAgent {
   agentId: string;

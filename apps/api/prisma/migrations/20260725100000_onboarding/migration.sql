@@ -108,4 +108,4 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION onboarding_seed_demo(BIGINT, UUID, UUID, TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION onboarding_seed_demo(BIGINT, UUID, UUID, TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION onboarding_seed_demo(BIGINT, UUID, UUID, TEXT, TEXT) TO siyahtus_app;

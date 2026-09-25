@@ -756,7 +756,7 @@ function DeleteSkillModal({
 /**
  * The parameter form for one open step (FR-MOD-06.2.4).
  *
- * One switch, six shapes, matching `@nexa/ai-mock`'s `SkillStep` union field
+ * One switch, six shapes, matching `@siyahtus/ai-mock`'s `SkillStep` union field
  * for field — the fields shown are exactly the ones `validateStep` reads for
  * that type. Anything more would be a control that edits something the engine
  * ignores; anything less would be a required parameter with no way to fill it,

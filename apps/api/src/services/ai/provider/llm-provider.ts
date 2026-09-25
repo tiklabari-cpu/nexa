@@ -3,7 +3,7 @@
  *
  * Before this, nothing wrote: the skill engine stitched retrieved passages into
  * an answer itself (`shapeAnswer`), and every AI surface imported its
- * deterministic stand-in straight from `@nexa/ai-mock`. A real model has to
+ * deterministic stand-in straight from `@siyahtus/ai-mock`. A real model has to
  * arrive through one door that can be configured, injected and counted — this
  * file is that door, on the terms `createMailer` and `createObjectStore` set:
  * a closed provider enum, a factory that reads the environment once at boot,

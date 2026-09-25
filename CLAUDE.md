@@ -1,6 +1,6 @@
-# CLAUDE.md — Nexa (her Claude Code penceresi bunu otomatik okur)
+# CLAUDE.md — SiyahTuş (her Claude Code penceresi bunu otomatik okur)
 
-Bu depo, **Nexa** canlı-destek + AI müşteri hizmetleri platformunun otonom yapımıdır.
+Bu depo, **SiyahTuş** canlı-destek + AI müşteri hizmetleri platformunun otonom yapımıdır.
 Her pencere (interaktif veya `run-loop.sh` ile açılan) aşağıdaki kurallara uyar.
 
 ## Her zaman geçerli

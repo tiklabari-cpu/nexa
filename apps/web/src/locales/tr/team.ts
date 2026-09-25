@@ -284,10 +284,10 @@ export const team: Messages = {
   'team.notifications.desktop.enableButton': 'Masaüstü bildirimlerini etkinleştir',
   'team.notifications.push.label': 'Mobil push bildirimleri',
   'team.notifications.push.hint':
-    'Oturum açtığınız herhangi bir telefondaki Nexa uygulamasına gönderilir. Hangi cihazlar olduğu uygulamanın kendisinden yönetilir.',
+    'Oturum açtığınız herhangi bir telefondaki SiyahTuş uygulamasına gönderilir. Hangi cihazlar olduğu uygulamanın kendisinden yönetilir.',
   'team.notifications.email.label': 'E-posta bildirimleri',
   'team.notifications.email.hint':
-    'Size atanmış bir sohbete bir ziyaretçi yazdığında, Nexa kapalı olsa bile e-posta gönderilir. Yukarıdaki anahtardan etkilenmez — e-posta uzakta olduğunuzda yedek kanaldır.',
+    'Size atanmış bir sohbete bir ziyaretçi yazdığında, SiyahTuş kapalı olsa bile e-posta gönderilir. Yukarıdaki anahtardan etkilenmez — e-posta uzakta olduğunuzda yedek kanaldır.',
   // AI agent performance on the Team screen — TeamAiPerformance.tsx (FR-MOD-04.2)
   'team.ai.title': 'AI temsilci performansı',
   'team.ai.description':

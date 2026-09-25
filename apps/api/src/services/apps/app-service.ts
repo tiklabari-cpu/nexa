@@ -1,7 +1,7 @@
 /**
  * Apps marketplace (FR-MOD-09.1 / 09.2).
  *
- * The catalogue of available integrations is static — it lives in @nexa/types
+ * The catalogue of available integrations is static — it lives in @siyahtus/types
  * (`APP_CATALOG`) so the grid, this service and the tests agree on which apps
  * exist. This service owns only the *connections*: listing the catalogue joined
  * with what a workspace has connected, the (mock) OAuth handshake that connects
@@ -65,7 +65,7 @@ import {
   type AppPlacement,
   type AppPricing,
   type AppProvider,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
@@ -305,7 +305,7 @@ export class AppService {
       e: Date.now() + STATE_TTL_MS,
     };
     const state = this.#sign(payload);
-    const authorizeUrl = `https://apps.nexa.local/oauth/${entry.id}/authorize?state=${encodeURIComponent(state)}`;
+    const authorizeUrl = `https://apps.siyahtus.local/oauth/${entry.id}/authorize?state=${encodeURIComponent(state)}`;
     return { authorize_url: authorizeUrl, state };
   }
 
@@ -338,7 +338,7 @@ export class AppService {
     }
 
     // The account label a real grant would return, stood in for deterministically.
-    const externalAccount = `nexa+${tenant.licenseId}@${entry.id}.example`;
+    const externalAccount = `siyahtus+${tenant.licenseId}@${entry.id}.example`;
     const row = await tx.appInstallation.upsert({
       where: { licenseId_appId: { licenseId: tenant.licenseId, appId: entry.id } },
       update: { status: 'connected', externalAccount },

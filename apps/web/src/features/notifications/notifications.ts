@@ -12,7 +12,7 @@
  * (13.7-c). They moved because push does: the server picks which handset a
  * notification is delivered to, so a preference kept only in `localStorage` would
  * not apply to the one channel that reaches somebody who has closed their laptop.
- * `@nexa/types` holds the shape, the API holds the value.
+ * `@siyahtus/types` holds the shape, the API holds the value.
  *
  * What is left here is a *cache* of that value, in the key the browser
  * preference used to occupy. It exists for one reason: `decideNotification` runs
@@ -25,7 +25,7 @@ import {
   DEFAULT_NOTIFICATION_PREFERENCES,
   readNotificationPreferences,
   type NotificationPreferences,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 /**
  * The contract's preference object, under the name this module has always used.
@@ -46,7 +46,7 @@ export type ConsoleNotificationPrefs = Pick<
   'enabled' | 'sound' | 'desktop'
 >;
 
-const STORAGE_KEY = 'nexa.notifications';
+const STORAGE_KEY = 'siyahtus.notifications';
 
 /** Browser permission, plus the case where the API does not exist at all. */
 export type Permission = NotificationPermission | 'unsupported';

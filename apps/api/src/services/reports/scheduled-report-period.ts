@@ -30,7 +30,7 @@
  * an exclusive end would put the boundary row in two consecutive periods and
  * count it twice.
  */
-import type { ScheduledExportFrequency } from '@nexa/types';
+import type { ScheduledExportFrequency } from '@siyahtus/types';
 
 const DAY_MS = 86_400_000;
 

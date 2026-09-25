@@ -65,7 +65,7 @@ test.describe('rule bot (FR-MOD-06.6)', () => {
     const botName = `E2E hours bot ${stamp}`;
     // A token no other spec types, so the rule is inert for everyone else even
     // in the seconds it exists.
-    const trigger = `nexahours${stamp}`;
+    const trigger = `siyahtushours${stamp}`;
     const answer = `We are open 09:00-18:00 CET (${stamp}).`;
     const site = tenantSubdomain(`rulebot-${stamp}`);
     let botId: string | null = null;

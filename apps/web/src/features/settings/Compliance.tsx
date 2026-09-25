@@ -24,7 +24,7 @@ import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
-import type { Region } from '@nexa/types';
+import type { Region } from '@siyahtus/types';
 
 interface ComplianceSettings {
   region: Region;

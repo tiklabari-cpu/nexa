@@ -15,7 +15,7 @@ import { PermanentMailError, TransientMailError } from './mail-error.js';
 
 const MESSAGE: Message = {
   to: 'someone@example.test',
-  subject: 'Reset your Nexa password',
+  subject: 'Reset your SiyahTuş password',
   body: 'https://app.example.test/reset-password?token=x',
   kind: 'password_reset',
 };

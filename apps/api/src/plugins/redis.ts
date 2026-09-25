@@ -19,7 +19,7 @@ declare module 'fastify' {
 
 export function createRedisClient(env: Env, role = 'client'): Redis {
   const client = new Redis(env.REDIS_URL, {
-    connectionName: `nexa-api-${role}`,
+    connectionName: `siyahtus-api-${role}`,
     maxRetriesPerRequest: 3,
     enableReadyCheck: true,
     retryStrategy: (attempt) => Math.min(attempt * 200, 3_000),

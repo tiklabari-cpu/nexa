@@ -21,7 +21,7 @@
 -- new composite primary key) are what `prisma migrate diff` emits for the schema
 -- change; the three-step add→backfill→NOT NULL and the policy rewrites are
 -- invisible to Prisma and written here by hand, the same way every tenant table
--- does. `nexa_current_brand()` already exists (78.2).
+-- does. `siyahtus_current_brand()` already exists (78.2).
 
 -- ---------------------------------------------------------------------------
 -- websites.brand_id — add nullable, backfill to the license default, enforce
@@ -118,43 +118,43 @@ ALTER TABLE "widget_settings" ADD CONSTRAINT "widget_settings_pkey" PRIMARY KEY 
 DROP POLICY websites_tenant ON websites;
 CREATE POLICY websites_tenant ON websites
   USING (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   )
   WITH CHECK (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   );
 
 DROP POLICY security_settings_tenant ON security_settings;
 CREATE POLICY security_settings_tenant ON security_settings
   USING (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   )
   WITH CHECK (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   );
 
 DROP POLICY inbox_settings_tenant ON inbox_settings;
 CREATE POLICY inbox_settings_tenant ON inbox_settings
   USING (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   )
   WITH CHECK (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   );
 
 DROP POLICY widget_settings_tenant ON widget_settings;
 CREATE POLICY widget_settings_tenant ON widget_settings
   USING (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   )
   WITH CHECK (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   );

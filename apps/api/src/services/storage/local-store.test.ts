@@ -25,7 +25,7 @@ describe('LocalStore', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'nexa-local-store-'));
+    dir = await mkdtemp(join(tmpdir(), 'siyahtus-local-store-'));
   });
 
   afterEach(async () => {

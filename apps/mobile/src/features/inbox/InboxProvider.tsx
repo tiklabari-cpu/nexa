@@ -14,7 +14,7 @@
  * the list or the transcript.
  */
 import { useEffect, useMemo, type PropsWithChildren } from 'react';
-import type { RtmPushAction } from '@nexa/types';
+import type { RtmPushAction } from '@siyahtus/types';
 
 import { createInboxApi } from './api';
 import { InboxContext } from './context';

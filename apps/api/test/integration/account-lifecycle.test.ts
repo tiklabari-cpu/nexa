@@ -119,7 +119,7 @@ describe('account lifecycle', () => {
       // level security with no tenant context and returned nothing every time.
       // The token was written and the mail was never sent — to anybody — and
       // every assertion above still passed, because they all read the table.
-      const dir = await mkdtemp(join(tmpdir(), 'nexa-mail-'));
+      const dir = await mkdtemp(join(tmpdir(), 'siyahtus-mail-'));
       const mailer = new FileMailer(dir);
       const mailed = await startTestServer({}, { mailer });
 

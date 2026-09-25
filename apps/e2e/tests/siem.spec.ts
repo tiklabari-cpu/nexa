@@ -77,9 +77,9 @@ async function exportPage(
       .split('\n')
       .filter((line) => line.length > 0)
       .map((line) => JSON.parse(line) as ExportRecord),
-    cursor: headers['x-nexa-export-cursor'] ?? '',
-    hasMore: headers['x-nexa-export-has-more'] === 'true',
-    chainOk: headers['x-nexa-export-chain-ok'] === 'true',
+    cursor: headers['x-siyahtus-export-cursor'] ?? '',
+    hasMore: headers['x-siyahtus-export-has-more'] === 'true',
+    chainOk: headers['x-siyahtus-export-chain-ok'] === 'true',
   };
 }
 

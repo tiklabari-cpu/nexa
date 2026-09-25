@@ -7,7 +7,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readPersona, shapeAnswer } from '@nexa/types';
+import { readPersona, shapeAnswer } from '@siyahtus/types';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { AiAgent } from './types.js';

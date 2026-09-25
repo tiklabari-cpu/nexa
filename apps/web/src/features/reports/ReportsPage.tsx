@@ -1883,7 +1883,7 @@ function formatGap(gap: number): string {
 
 /**
  * Chat topics (FR-MOD-07.6): conversations in the window clustered into topics
- * by `@nexa/ai-mock`, no real LLM. Below `min_conversations` clusterable chats
+ * by `@siyahtus/ai-mock`, no real LLM. Below `min_conversations` clusterable chats
  * the report is an honest "not enough conversations yet" state — never a single
  * fabricated topic, and never an empty rectangle (EK-B.1).
  */
@@ -2537,7 +2537,7 @@ function ExportControl({
       // The server names the file after the group and window
       // (`exportFilename`, `reports-export.ts`); a caller only falls back to
       // its own name if `content-disposition` is somehow missing.
-      link.download = filename ?? `nexa-${group}.${format}`;
+      link.download = filename ?? `siyahtus-${group}.${format}`;
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -41,10 +41,10 @@ CREATE UNIQUE INDEX "brands_one_default_per_license" ON "brands"("license_id") W
 -- writable only within its own license.
 ALTER TABLE brands ENABLE ROW LEVEL SECURITY;
 CREATE POLICY brands_tenant ON brands
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The application role reaches the table only through that policy.
-GRANT SELECT, INSERT, UPDATE, DELETE ON brands TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON brands TO siyahtus_app;
 
 -- Backfill: give every existing license exactly one `Default` brand, so the
 -- single-brand behaviour is preserved byte-for-byte for all current data. The

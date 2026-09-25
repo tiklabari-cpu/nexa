@@ -3,9 +3,9 @@
  *
  * The problem this solves is *cross-process*, not cross-file. `vitest.config.ts`
  * already serialises files inside one run, and CONVENTIONS warns about turbo
- * running `@nexa/api` and `@nexa/rtm` at the same time. Neither helps when two
+ * running `@siyahtus/api` and `@siyahtus/rtm` at the same time. Neither helps when two
  * autonomous windows are open at once: both point at the same local Postgres
- * (`nexa-db:5433`) and the same Redis (`nexa-redis:6380`), and every suite
+ * (`siyahtus-db:5433`) and the same Redis (`siyahtus-redis:6380`), and every suite
  * begins with `TRUNCATE ... CASCADE`. One window wipes the other's fixtures
  * mid-flight, and the damage surfaces as unique-constraint violations and 401s
  * in code the window never touched — a red gate that says nothing about the
@@ -13,7 +13,7 @@
  *
  * The fix is to stop sharing:
  *
- * - **Postgres** — each run gets its own database (`nexa_test_<id>`), created
+ * - **Postgres** — each run gets its own database (`siyahtus_test_<id>`), created
  *   and migrated at start, dropped at the end. A fresh `migrate deploy` costs
  *   ~3 s against ~15 min of suite, so cloning a template database would be
  *   optimising the wrong number while adding a cache to invalidate.
@@ -22,7 +22,7 @@
  *   is scoped by the selected index, so leasing one is enough.
  * - **Pub/sub** — Redis channels are *not* scoped by logical database, and
  *   `licenseChannel()` is keyed by an autoincrement id, so two runs would both
- *   publish on `nexa:rtm:license:1`. The lease therefore also carries a licence
+ *   publish on `siyahtus:rtm:license:1`. The lease therefore also carries a licence
  *   id offset that `resetDatabase()` applies to `licenses_id_seq`, which makes
  *   the channel names disjoint without touching production code.
  *
@@ -32,7 +32,7 @@
  *
  * Liveness is tracked in Redis rather than by wall-clock age: a window that
  * dies (quota, crash, Ctrl-C) stops renewing its lease, and the next run sweeps
- * the database it left behind. Nothing outside the `nexa_test_` prefix is ever
+ * the database it left behind. Nothing outside the `siyahtus_test_` prefix is ever
  * dropped.
  */
 import { execFile } from 'node:child_process';
@@ -48,8 +48,8 @@ const run = promisify(execFile);
 const apiRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /** Every database this module is allowed to create — and, crucially, to drop. */
-export const TEST_DATABASE_PREFIX = 'nexa_test_';
-const TEST_DATABASE_PATTERN = /^nexa_test_[0-9a-f]{12}$/;
+export const TEST_DATABASE_PREFIX = 'siyahtus_test_';
+const TEST_DATABASE_PATTERN = /^siyahtus_test_[0-9a-f]{12}$/;
 
 /**
  * Logical Redis databases handed out to runs. Index 0 is left alone: it is what
@@ -77,15 +77,15 @@ const HEARTBEAT_MS = 60_000;
 /** Licence ids are spaced far enough apart that no run can reach the next one. */
 const LICENSE_ID_STRIDE = 1_000_000;
 
-const slotKey = (index: number): string => `nexa:test:redis-slot:${index}`;
-const databaseKey = (name: string): string => `nexa:test:database:${name}`;
+const slotKey = (index: number): string => `siyahtus:test:redis-slot:${index}`;
+const databaseKey = (name: string): string => `siyahtus:test:database:${name}`;
 
 /** Overrides to hand the test command — nothing else needs to change. */
 export interface IsolatedDatastoreEnv {
   DATABASE_URL: string;
   DATABASE_APP_URL: string;
   REDIS_URL: string;
-  NEXA_TEST_LICENSE_ID_OFFSET: string;
+  SIYAHTUS_TEST_LICENSE_ID_OFFSET: string;
 }
 
 export interface IsolatedDatastores {
@@ -368,7 +368,7 @@ export async function provisionIsolatedDatastores(
       DATABASE_URL: withTestConnectionBudget(withDatabaseName(ownerUrl, databaseName)),
       DATABASE_APP_URL: withTestConnectionBudget(withDatabaseName(appUrl, databaseName)),
       REDIS_URL: withRedisIndex(redisUrl, redisIndex),
-      NEXA_TEST_LICENSE_ID_OFFSET: String(licenseIdOffset),
+      SIYAHTUS_TEST_LICENSE_ID_OFFSET: String(licenseIdOffset),
     },
     release: async () => {
       if (released) return;

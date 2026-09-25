@@ -21,7 +21,7 @@ export const REFERRING_SITE = 'http://searchy.localhost:5174';
 
 export const DEMO = {
   email: 'owner@acme.localhost',
-  password: 'nexa-demo-password',
+  password: 'siyahtus-demo-password',
   agentName: 'Dana Okonkwo',
 } as const;
 
@@ -65,7 +65,7 @@ export const test = base.extend<Fixtures, WorkerFixtures>({
     async ({}, use, workerInfo) => {
       const context = await request.newContext({
         baseURL: API_BASE,
-        extraHTTPHeaders: { 'user-agent': `nexa-e2e-worker-${workerInfo.workerIndex}` },
+        extraHTTPHeaders: { 'user-agent': `siyahtus-e2e-worker-${workerInfo.workerIndex}` },
       });
       try {
         await use(await resolveOrganizationId(context));
@@ -373,7 +373,7 @@ export async function signUpFreshOwner(page: Page): Promise<void> {
 
 /** The widget lives in a cross-origin iframe; everything inside is addressed through it. */
 export function widgetFrame(page: Page) {
-  return page.frameLocator('#nexa-widget-frame');
+  return page.frameLocator('#siyahtus-widget-frame');
 }
 
 /**

@@ -38,7 +38,7 @@ export const LOCALE_NAMES: Record<Locale, string> = {
   tr: 'Türkçe',
 };
 
-const STORAGE_KEY = 'nexa.locale';
+const STORAGE_KEY = 'siyahtus.locale';
 
 /**
  * The catalogue, flattened from the namespace files.

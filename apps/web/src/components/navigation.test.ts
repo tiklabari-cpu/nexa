@@ -8,7 +8,7 @@
  * a principal holding a scope sees the door, one that does not holds does not.
  */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_AGENT_SCOPES, defaultScopesForRole } from '@nexa/types';
+import { DEFAULT_AGENT_SCOPES, defaultScopesForRole } from '@siyahtus/types';
 import { NAV_DESTINATIONS, isNavVisible } from './navigation.js';
 
 describe('isNavVisible (FR-MOD-01.2)', () => {

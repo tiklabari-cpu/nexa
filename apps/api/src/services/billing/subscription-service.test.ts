@@ -6,7 +6,7 @@
  * the catalogue itself — the part every gate will read.
  */
 import { describe, expect, it } from 'vitest';
-import { ENTITLEMENTS } from '@nexa/types';
+import { ENTITLEMENTS } from '@siyahtus/types';
 import {
   PLANS,
   PLAN_IDS,

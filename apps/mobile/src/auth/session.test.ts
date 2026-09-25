@@ -7,7 +7,7 @@
  * method was called. Everything a device would provide (secure store, browser,
  * push token) is injected, so no native module is loaded here.
  */
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 
 import { DeviceTokenLifecycle } from './device-token';
 import { MobileSession, SsoRequiredError, type AuthBrowser } from './session';
@@ -127,10 +127,10 @@ const SIGN_IN_ROUTES = {
 };
 
 const CREDENTIALS = {
-  email: 'agent@nexa.test',
+  email: 'agent@siyahtus.test',
   password: 'hunter2',
   licenseId: '42',
-  clientId: 'nexa-agent-app-1',
+  clientId: 'siyahtus-agent-app-1',
 };
 
 describe('signIn', () => {
@@ -217,7 +217,7 @@ describe('signInWithSso', () => {
     const browser = browserFor(`${MOBILE_REDIRECT_URI}?code=code-1&state=state-1`);
     const { session, calls } = build(SIGN_IN_ROUTES, { browser });
 
-    await session.signInWithSso({ connectionId: 'conn-9', clientId: 'nexa-agent-app-1' });
+    await session.signInWithSso({ connectionId: 'conn-9', clientId: 'siyahtus-agent-app-1' });
 
     const [url, redirect] = (browser.open as jest.Mock).mock.calls[0]!;
     expect(url).toContain(`${API}/auth/saml/conn-9/login?`);
@@ -236,7 +236,7 @@ describe('signInWithSso', () => {
     const { session, calls } = build(SIGN_IN_ROUTES, { browser });
 
     await expect(
-      session.signInWithSso({ connectionId: 'conn-9', clientId: 'nexa-agent-app-1' }),
+      session.signInWithSso({ connectionId: 'conn-9', clientId: 'siyahtus-agent-app-1' }),
     ).rejects.toThrow(/did not start in this app/);
     // Refused before the code is spent, so a forged callback costs no round trip.
     expect(calls.filter((c) => c.url.endsWith('/auth/token'))).toHaveLength(0);
@@ -247,7 +247,7 @@ describe('signInWithSso', () => {
     const { session } = build(SIGN_IN_ROUTES, { browser: browserFor(null) });
 
     await expect(
-      session.signInWithSso({ connectionId: 'conn-9', clientId: 'nexa-agent-app-1' }),
+      session.signInWithSso({ connectionId: 'conn-9', clientId: 'siyahtus-agent-app-1' }),
     ).rejects.toThrow(/cancelled/);
   });
 });
@@ -261,7 +261,7 @@ describe('restore', () => {
     });
     await sessionStore.write({
       refreshToken: 'refresh-1',
-      clientId: 'nexa-agent-app-1',
+      clientId: 'siyahtus-agent-app-1',
       licenseId: '42',
       accountId: 'acct-1',
     });
@@ -291,7 +291,7 @@ describe('restore', () => {
     });
     await sessionStore.write({
       refreshToken: 'revoked',
-      clientId: 'nexa-agent-app-1',
+      clientId: 'siyahtus-agent-app-1',
       licenseId: '42',
       accountId: 'acct-1',
     });
@@ -315,7 +315,7 @@ describe('restore', () => {
     });
     await sessionStore.write({
       refreshToken: 'refresh-1',
-      clientId: 'nexa-agent-app-1',
+      clientId: 'siyahtus-agent-app-1',
       licenseId: '42',
       accountId: 'acct-1',
     });
@@ -342,7 +342,7 @@ describe('restore', () => {
     );
     await sessionStore.write({
       refreshToken: 'refresh-1',
-      clientId: 'nexa-agent-app-1',
+      clientId: 'siyahtus-agent-app-1',
       licenseId: '42',
       accountId: 'acct-1',
     });
@@ -388,7 +388,7 @@ describe('restore', () => {
     });
     await sessionStore.write({
       refreshToken: 'refresh-0',
-      clientId: 'nexa-agent-app-1',
+      clientId: 'siyahtus-agent-app-1',
       licenseId: '42',
       accountId: 'acct-1',
     });
@@ -427,7 +427,7 @@ describe('refresh', () => {
     });
     await sessionStore.write({
       refreshToken: 'refresh-0',
-      clientId: 'nexa-agent-app-1',
+      clientId: 'siyahtus-agent-app-1',
       licenseId: '42',
       accountId: 'acct-1',
     });
@@ -455,7 +455,7 @@ describe('refresh', () => {
     });
     await sessionStore.write({
       refreshToken: 'refresh-0',
-      clientId: 'nexa-agent-app-1',
+      clientId: 'siyahtus-agent-app-1',
       licenseId: '42',
       accountId: 'acct-1',
     });
@@ -572,7 +572,7 @@ describe('switchAccount', () => {
 
     await session.signIn(CREDENTIALS);
     order.length = 0;
-    await session.switchAccount({ ...CREDENTIALS, email: 'other@nexa.test', licenseId: '43' });
+    await session.switchAccount({ ...CREDENTIALS, email: 'other@siyahtus.test', licenseId: '43' });
 
     expect(order).toEqual(['revoke', 'register']);
     expect(session.getState().status).toBe('signed-in');

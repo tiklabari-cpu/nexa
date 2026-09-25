@@ -39,7 +39,7 @@ import {
   type CompanySize,
   type OnboardingSeedResult,
   type OnboardingState,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { emailList, FieldError, required, splitList, useForm } from '../../lib/form.js';

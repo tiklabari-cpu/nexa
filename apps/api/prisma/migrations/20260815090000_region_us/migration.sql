@@ -38,7 +38,7 @@ COMMENT ON COLUMN organizations.region IS
 --     column would simply not know about it. C4-b and C4-e build their region
 --     decisions on top of this value; a guard that a new call site can miss is
 --     not a foundation for them.
---   * `REVOKE UPDATE (region) ON organizations FROM nexa_app`. Rejected: it
+--   * `REVOKE UPDATE (region) ON organizations FROM siyahtus_app`. Rejected: it
 --     binds one role. A migration, the seed, a psql session as the table owner
 --     and any role added later all still move the column, and the failure it
 --     does produce reads as `permission denied for table organizations` on
@@ -60,7 +60,7 @@ BEGIN
   -- ORMs send full rows, and a rename would otherwise be refused for touching
   -- a column it did not change.
   IF NEW.region IS DISTINCT FROM OLD.region THEN
-    RAISE EXCEPTION 'nexa_region_immutable'
+    RAISE EXCEPTION 'siyahtus_region_immutable'
       USING ERRCODE = 'check_violation',
             DETAIL = format('region is %L and cannot be changed to %L', OLD.region, NEW.region),
             HINT = 'A workspace chooses its region when it is created. Moving one means moving its data across the border the choice exists to draw.';
@@ -111,7 +111,7 @@ DECLARE
   v_account UUID := gen_random_uuid();
 BEGIN
   IF EXISTS (SELECT 1 FROM accounts a WHERE a.email = p_email) THEN
-    RAISE EXCEPTION 'nexa_account_exists';
+    RAISE EXCEPTION 'siyahtus_account_exists';
   END IF;
 
   -- No validation of p_region here: `organizations_region_check` is the one
@@ -138,7 +138,7 @@ BEGIN
   -- Public client: OAuth 2.1 uses PKCE rather than a secret for anything
   -- running in a browser, where no secret stays secret.
   INSERT INTO oauth_clients (id, organization_id, display_name, client_type, redirect_uris, scopes)
-  VALUES ('nexa-agent-app-' || v_org::TEXT, v_org, 'Nexa Agent App', 'public',
+  VALUES ('siyahtus-agent-app-' || v_org::TEXT, v_org, 'SiyahTuş Agent App', 'public',
           ARRAY['http://localhost:5173/auth/callback'], ARRAY[]::TEXT[]);
 
   RETURN QUERY SELECT v_account, v_license, v_org;
@@ -146,4 +146,4 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT, TEXT) TO siyahtus_app;

@@ -18,4 +18,4 @@ AS $$
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_resolve_organization_license(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_resolve_organization_license(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_resolve_organization_license(UUID) TO siyahtus_app;

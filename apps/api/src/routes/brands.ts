@@ -3,9 +3,9 @@
  *
  * One license may run several brands under a single subscription. The resources
  * a brand *contains* (channels, websites, widget/security/inbox settings) are
- * brand-scoped through `X-Nexa-Brand`; the brand catalogue itself is not — it is
+ * brand-scoped through `X-SiyahTus-Brand`; the brand catalogue itself is not — it is
  * the list you choose a brand *from*. So every handler here runs license-wide,
- * dropping any `X-Nexa-Brand` the caller sent, and reads/writes only the `brands`
+ * dropping any `X-SiyahTus-Brand` the caller sent, and reads/writes only the `brands`
  * table (license-scoped RLS, added in 78.1). That also makes the dependency check
  * on delete see the *whole* license rather than one brand's slice.
  *
@@ -109,7 +109,7 @@ const brandExists = (value: string) =>
 
 export default async function brandRoutes(app: FastifyInstance): Promise<void> {
   // The brand catalogue is license-level, so every query runs in the license-wide
-  // context — the caller's `X-Nexa-Brand` (if any) is deliberately dropped.
+  // context — the caller's `X-SiyahTus-Brand` (if any) is deliberately dropped.
   const licenseWide = (request: { tenant: () => TenantContext }): TenantContext => {
     const { licenseId, organizationId } = request.tenant();
     return { licenseId, organizationId };

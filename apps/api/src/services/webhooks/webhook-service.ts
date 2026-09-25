@@ -16,7 +16,7 @@
  * webhook belongs to exactly one license and another tenant's rows are invisible
  * to list, get and delete alike (NFR-S5).
  */
-import type { AppAutomationStats } from '@nexa/types';
+import type { AppAutomationStats } from '@siyahtus/types';
 import { generateToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 

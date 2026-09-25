@@ -17,7 +17,7 @@
  * `tsc` run for a phone. `./types` is the generated contract and nothing else,
  * and being type-only it erases at build time.
  */
-import type { paths } from '@nexa/contract/types';
+import type { paths } from '@siyahtus/contract/types';
 
 /** Every path the contract declares. */
 export type ContractPath = keyof paths & string;

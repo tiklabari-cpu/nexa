@@ -1,4 +1,4 @@
-import type { CustomFieldValue } from '@nexa/types';
+import type { CustomFieldValue } from '@siyahtus/types';
 
 export type Segment = 'all' | 'leads' | 'recent' | 'banned';
 

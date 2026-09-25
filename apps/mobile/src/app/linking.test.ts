@@ -4,10 +4,10 @@
  * `getStateFromPath` is the library's own parser rather than a re-implementation
  * of it, so what is asserted here is what the container will actually do with a
  * URL — a config that merely *looks* right is the failure this file exists to
- * catch. The prefix half (stripping `nexa://` off a real launch URL) is proved
+ * catch. The prefix half (stripping `siyahtus://` off a real launch URL) is proved
  * where it happens, against the real `App`, in `App.test.tsx`.
  */
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 import { getStateFromPath } from '@react-navigation/native';
 
 import { appLinking, authLinking, CALLBACK_PATH, linkingFor, URL_PREFIXES } from './linking';
@@ -23,7 +23,7 @@ describe('the scheme', () => {
     // server exact-matches `MOBILE_REDIRECT_URI`, and the OS routes by whatever
     // `prefixes` says. Both come from `MOBILE_APP_SCHEME`, and this is the
     // assertion that keeps it that way.
-    expect(URL_PREFIXES).toEqual(['nexa://']);
+    expect(URL_PREFIXES).toEqual(['siyahtus://']);
     expect(MOBILE_REDIRECT_URI).toBe(`${URL_PREFIXES[0]}${CALLBACK_PATH}`);
   });
 });

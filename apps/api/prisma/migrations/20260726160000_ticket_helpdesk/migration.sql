@@ -62,10 +62,10 @@ ALTER TABLE "tickets"
 ALTER TABLE ticket_followers ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ticket_followers_tenant ON ticket_followers
   USING (EXISTS (SELECT 1 FROM tickets t
-                 WHERE t.id = ticket_followers.ticket_id AND t.license_id = nexa_current_license()))
+                 WHERE t.id = ticket_followers.ticket_id AND t.license_id = siyahtus_current_license()))
   WITH CHECK (EXISTS (SELECT 1 FROM tickets t
-                      WHERE t.id = ticket_followers.ticket_id AND t.license_id = nexa_current_license()));
+                      WHERE t.id = ticket_followers.ticket_id AND t.license_id = siyahtus_current_license()));
 
 -- The application role reaches the table only through that policy. No UPDATE:
 -- a follow is added or removed, never edited.
-GRANT SELECT, INSERT, DELETE ON ticket_followers TO nexa_app;
+GRANT SELECT, INSERT, DELETE ON ticket_followers TO siyahtus_app;

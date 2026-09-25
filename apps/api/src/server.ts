@@ -149,7 +149,7 @@ export async function buildServer({
       ? telemetry
       : env.otelEnabled
         ? createTelemetry({
-            serviceName: 'nexa-api',
+            serviceName: 'siyahtus-api',
             serviceVersion: VERSION,
             spanExporter: env.OTEL_EXPORTER,
             metricExporter: env.OTEL_EXPORTER,

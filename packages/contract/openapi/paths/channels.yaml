@@ -203,7 +203,7 @@ channelMessages:
       Gated on `channels--all:ro` because, unlike the channel list, these rows
       carry the customer's own words. Scoped to the caller's workspace by RLS:
       another workspace's messages are never returned, and an `external_id` or
-      `chat_id` from one is simply an empty page (NFR-S5). `X-Nexa-Brand` does
+      `chat_id` from one is simply an empty page (NFR-S5). `X-SiyahTus-Brand` does
       not narrow it — the log is keyed by licence and channel, not by brand.
     parameters:
       - name: direction

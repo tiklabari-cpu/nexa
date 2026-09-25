@@ -6,7 +6,7 @@
  * test can pin down exactly. The service around this reads the visitors, writes
  * the sends, and hands the clock in.
  */
-import type { CampaignConditions, CampaignPerformance, CampaignStatus } from '@nexa/types';
+import type { CampaignConditions, CampaignPerformance, CampaignStatus } from '@siyahtus/types';
 
 /** A page entry inside a visit's `pages` JSON (`{ url, at }`). */
 interface VisitPage {

@@ -81,31 +81,31 @@ describe('readMobileConfig', () => {
 
   it('defaults to what expo-constants reports, which is the only path production takes', () => {
     mockExtra.value = {
-      apiBaseUrl: 'https://api.nexa.test/api/v1',
-      rtmBaseUrl: 'wss://rtm.nexa.test',
+      apiBaseUrl: 'https://api.siyahtus.test/api/v1',
+      rtmBaseUrl: 'wss://rtm.siyahtus.test',
     };
 
     expect(readMobileConfig()).toEqual({
-      apiBaseUrl: 'https://api.nexa.test/api/v1',
-      rtmBaseUrl: 'wss://rtm.nexa.test',
+      apiBaseUrl: 'https://api.siyahtus.test/api/v1',
+      rtmBaseUrl: 'wss://rtm.siyahtus.test',
     });
   });
 });
 
 describe('app.config.ts', () => {
-  const originalApi = process.env.NEXA_API_BASE_URL;
-  const originalRtm = process.env.NEXA_RTM_BASE_URL;
+  const originalApi = process.env.SIYAHTUS_API_BASE_URL;
+  const originalRtm = process.env.SIYAHTUS_RTM_BASE_URL;
 
   afterEach(() => {
-    if (originalApi === undefined) delete process.env.NEXA_API_BASE_URL;
-    else process.env.NEXA_API_BASE_URL = originalApi;
-    if (originalRtm === undefined) delete process.env.NEXA_RTM_BASE_URL;
-    else process.env.NEXA_RTM_BASE_URL = originalRtm;
+    if (originalApi === undefined) delete process.env.SIYAHTUS_API_BASE_URL;
+    else process.env.SIYAHTUS_API_BASE_URL = originalApi;
+    if (originalRtm === undefined) delete process.env.SIYAHTUS_RTM_BASE_URL;
+    else process.env.SIYAHTUS_RTM_BASE_URL = originalRtm;
   });
 
   it('defaults the API base to port 4000, matching the root README port table', () => {
-    delete process.env.NEXA_API_BASE_URL;
-    delete process.env.NEXA_RTM_BASE_URL;
+    delete process.env.SIYAHTUS_API_BASE_URL;
+    delete process.env.SIYAHTUS_RTM_BASE_URL;
 
     expect(appConfig(emptyContext).extra).toEqual({
       apiBaseUrl: 'http://localhost:4000/api/v1',
@@ -113,9 +113,9 @@ describe('app.config.ts', () => {
     });
   });
 
-  it('lets NEXA_API_BASE_URL / NEXA_RTM_BASE_URL override the default, for a physical device', () => {
-    process.env.NEXA_API_BASE_URL = 'http://192.168.1.20:4000/api/v1';
-    process.env.NEXA_RTM_BASE_URL = 'ws://192.168.1.20:4001';
+  it('lets SIYAHTUS_API_BASE_URL / SIYAHTUS_RTM_BASE_URL override the default, for a physical device', () => {
+    process.env.SIYAHTUS_API_BASE_URL = 'http://192.168.1.20:4000/api/v1';
+    process.env.SIYAHTUS_RTM_BASE_URL = 'ws://192.168.1.20:4001';
 
     expect(appConfig(emptyContext).extra).toEqual({
       apiBaseUrl: 'http://192.168.1.20:4000/api/v1',

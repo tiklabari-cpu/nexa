@@ -23,7 +23,7 @@ import {
   COMPANY_SECTORS,
   COMPANY_SIZES,
   type CompanyDetails as CompanyDetailsValue,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { CompanyDetails } from './CompanyDetails.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';

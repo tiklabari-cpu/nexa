@@ -27,12 +27,12 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import type { DevicePlatform, PushEventKind } from '@nexa/types';
+import type { DevicePlatform, PushEventKind } from '@siyahtus/types';
 
 /**
  * What happened, in the vocabulary the phone shows.
  *
- * Declared in `@nexa/types` since `13.7-s`, and re-exported here so the fifteen
+ * Declared in `@siyahtus/types` since `13.7-s`, and re-exported here so the fifteen
  * call sites that already import it from this module keep working. It moved for
  * the reason `DevicePlatform` lives there: the phone reads the `kind` it writes
  * (`notifications/handler.ts`), and two hand-kept copies of a three-value union

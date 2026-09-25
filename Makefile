@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .DEFAULT_GOAL := help
 
 COMPOSE := docker compose
-PSQL := $(COMPOSE) exec -T db psql -U nexa -d nexa
+PSQL := $(COMPOSE) exec -T db psql -U siyahtus -d siyahtus
 
 # The full containerised stack (`make demo`) — a separate compose file AND a
 # separate compose project, so it can be up at the same time as the dev
@@ -51,7 +51,7 @@ clean: ## Stop containers AND drop data volumes
 
 .PHONY: psql
 psql: ## Open a psql shell inside the db container
-	$(COMPOSE) exec db psql -U nexa -d nexa
+	$(COMPOSE) exec db psql -U siyahtus -d siyahtus
 
 .PHONY: db-extensions
 db-extensions: ## (Re)apply extensions + app role
@@ -166,4 +166,4 @@ pilot-backup: ## pg_dump the pilot database into ./backups (scripts/backup.sh)
 
 .PHONY: pilot-restore-drill
 pilot-restore-drill: ## Prove a pilot backup restores (scratch DB, verified, dropped)
-	COMPOSE_FILE=docker-compose.pilot.yml APP_DB_PASSWORD="$(NEXA_APP_DB_PASSWORD)" ./scripts/restore-drill.sh
+	COMPOSE_FILE=docker-compose.pilot.yml APP_DB_PASSWORD="$(SIYAHTUS_APP_DB_PASSWORD)" ./scripts/restore-drill.sh

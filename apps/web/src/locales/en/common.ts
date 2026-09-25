@@ -3,7 +3,7 @@ import type { Messages } from '../merge.js';
 /**
  * Shared text — chiefly the ADR-06 error taxonomy rendered for a human.
  *
- * `common.errors.<type>` covers every member of `ERROR_TYPES` (@nexa/types),
+ * `common.errors.<type>` covers every member of `ERROR_TYPES` (@siyahtus/types),
  * plus the client-only `network` and a final `unknown` for a thrown value that
  * is not an `ApiClientError` at all. `api-client.ts`'s `errorMessageKey()` is
  * the only thing that builds these keys, and `i18n-coverage.test.ts` fails if

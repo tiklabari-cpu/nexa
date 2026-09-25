@@ -15,7 +15,7 @@ import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { pino, type Logger } from 'pino';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@nexa/types';
+import { RTM_LIMITS, RTM_PATHS, roleAtLeast } from '@siyahtus/types';
 import { SocketAuthenticator, type SocketPrincipal } from './auth.js';
 import type { RtmEnv } from './config/env.js';
 import { ConflictDetectionService } from './conflict.js';
@@ -76,7 +76,7 @@ const SOCKET_CLOSE_TIMEOUT_MS = 5_000;
  */
 export const RTM_LISTEN_BACKLOG = 1024;
 
-// Defined in `@nexa/types` so the gateway and its clients cannot disagree about
+// Defined in `@siyahtus/types` so the gateway and its clients cannot disagree about
 // it; re-exported here because this is where callers have always imported it.
 export { RTM_PATHS };
 
@@ -110,7 +110,7 @@ export function buildRtmServer(
   // Level follows `LOG_LEVEL` in every environment, same as the API
   // (`apps/api/src/server.ts`) — there is no dev/production branch to get out
   // of sync (M-OPS-c).
-  const log: Logger = pino({ level: env.LOG_LEVEL, name: 'nexa-rtm' }, logStream);
+  const log: Logger = pino({ level: env.LOG_LEVEL, name: 'siyahtus-rtm' }, logStream);
   const startedAt = Date.now();
 
   // Same `telemetry !== undefined ? telemetry : env.otelEnabled ? … : null`
@@ -122,7 +122,7 @@ export function buildRtmServer(
       ? telemetry
       : env.otelEnabled
         ? createTelemetry({
-            serviceName: 'nexa-rtm',
+            serviceName: 'siyahtus-rtm',
             serviceVersion: version,
             metricExporter: env.OTEL_EXPORTER,
             otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
@@ -149,12 +149,12 @@ export function buildRtmServer(
 
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   const commands = new Redis(env.REDIS_URL, {
-    connectionName: 'nexa-rtm',
+    connectionName: 'siyahtus-rtm',
     maxRetriesPerRequest: 3,
     retryStrategy: (attempt) => Math.min(attempt * 200, 3_000),
   });
   const subscriber = new Redis(env.REDIS_URL, {
-    connectionName: 'nexa-rtm-sub',
+    connectionName: 'siyahtus-rtm-sub',
     // A subscriber that gives up leaves clients silently stale, which is worse
     // than a noisy reconnect loop.
     maxRetriesPerRequest: null,
@@ -164,7 +164,7 @@ export function buildRtmServer(
   // warnings — so a burst of them cannot queue behind the RLS and Lua commands
   // typing and conflict detection run on `commands`.
   const publisher = new Redis(env.REDIS_URL, {
-    connectionName: 'nexa-rtm-pub',
+    connectionName: 'siyahtus-rtm-pub',
     maxRetriesPerRequest: 3,
     retryStrategy: (attempt) => Math.min(attempt * 200, 3_000),
   });
@@ -178,7 +178,11 @@ export function buildRtmServer(
   telemetryInstance?.instruments.activeConnections.addCallback((result) => {
     result.observe(registry.size);
   });
-  const authenticator = new SocketAuthenticator(db, env.JWT_SIGNING_KEY_CUSTOMER, env.NEXA_REGION);
+  const authenticator = new SocketAuthenticator(
+    db,
+    env.JWT_SIGNING_KEY_CUSTOMER,
+    env.SIYAHTUS_REGION,
+  );
   const sync = new SyncService(db);
   // Typing flags are written on the command connection: a subscriber-mode client
   // may issue no other commands, so it cannot be reused for a `SET`.
@@ -615,7 +619,7 @@ async function health(
       status,
       service: 'rtm',
       version,
-      region: env.NEXA_REGION,
+      region: env.SIYAHTUS_REGION,
       connections: registry.size,
       // The ceiling next to the count it bounds (M-LOAD-CAP): a number of open
       // sockets means nothing without the number this process will stop at, and

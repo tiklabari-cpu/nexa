@@ -12,7 +12,7 @@
  * connected agent reconnecting in lockstep, which is how a brief outage becomes
  * a long one.
  */
-import type { RtmPushAction } from '@nexa/types';
+import type { RtmPushAction } from '@siyahtus/types';
 
 const PING_INTERVAL_MS = 15_000;
 const BASE_BACKOFF_MS = 500;

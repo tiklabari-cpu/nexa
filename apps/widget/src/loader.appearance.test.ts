@@ -5,18 +5,18 @@
  * full-screen on a phone rather than as a card that overhangs the edge.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { boot, type NexaWidgetConfig } from './loader.js';
+import { boot, type SiyahTusWidgetConfig } from './loader.js';
 
-type TestWindow = Window & { __nexa?: NexaWidgetConfig & { destroy?: () => void } };
+type TestWindow = Window & { __siyahtus?: SiyahTusWidgetConfig & { destroy?: () => void } };
 
-function setup(config: Partial<NexaWidgetConfig>): TestWindow {
+function setup(config: Partial<SiyahTusWidgetConfig>): TestWindow {
   document.body.replaceChildren();
   const win = window as TestWindow;
-  win.__nexa = { organizationId: 'org-1', widgetOrigin: 'https://widget.test', ...config };
+  win.__siyahtus = { organizationId: 'org-1', widgetOrigin: 'https://widget.test', ...config };
   return win;
 }
 
-const frame = () => document.getElementById('nexa-widget-frame') as HTMLIFrameElement | null;
+const frame = () => document.getElementById('siyahtus-widget-frame') as HTMLIFrameElement | null;
 
 function dispatch(type: string): void {
   const el = frame()!;
@@ -34,7 +34,7 @@ const originalWidth = window.innerWidth;
 
 afterEach(() => {
   setViewportWidth(originalWidth);
-  (window as TestWindow).__nexa?.destroy?.();
+  (window as TestWindow).__siyahtus?.destroy?.();
   document.body.replaceChildren();
 });
 
@@ -73,7 +73,7 @@ describe('loader mobile fullscreen', () => {
 
   it('fills the viewport when the panel opens on a phone', () => {
     boot(setup({ mobileFullscreen: true }));
-    dispatch('nexa:open');
+    dispatch('siyahtus:open');
 
     const el = frame()!;
     expect(el.style.width).toBe('100%');
@@ -84,8 +84,8 @@ describe('loader mobile fullscreen', () => {
 
   it('returns to the corner launcher when the panel closes', () => {
     boot(setup({ mobileFullscreen: true }));
-    dispatch('nexa:open');
-    dispatch('nexa:close');
+    dispatch('siyahtus:open');
+    dispatch('siyahtus:close');
 
     const el = frame()!;
     expect(el.style.width).toBe('84px');
@@ -99,11 +99,11 @@ describe('loader mobile fullscreen', () => {
     // Widget asks for its panel size; without fullscreen the loader honours it.
     const el = frame()!;
     const event = new MessageEvent('message', {
-      data: { type: 'nexa:resize', width: 380, height: 620 },
+      data: { type: 'siyahtus:resize', width: 380, height: 620 },
       origin: 'https://widget.test',
     });
     Object.defineProperty(event, 'source', { value: el.contentWindow });
-    dispatch('nexa:open');
+    dispatch('siyahtus:open');
     window.dispatchEvent(event);
 
     expect(el.style.width).toBe('380px');

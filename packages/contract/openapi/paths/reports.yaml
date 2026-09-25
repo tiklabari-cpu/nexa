@@ -141,7 +141,7 @@ topics:
     summary: Chat topics — conversation clusters with volume and trend
     description: |
       The Chat topics report (FR-MOD-07.6): conversations in the window grouped
-      into topics by deterministic, on-the-fly clustering (`@nexa/ai-mock`, no
+      into topics by deterministic, on-the-fly clustering (`@siyahtus/ai-mock`, no
       real LLM), each with its volume, share and vs-previous trend, for the
       Reports "Chat topics" tab. Nothing is persisted — the clustering is
       recomputed per request. Defaults to the last 30 days.
@@ -1089,7 +1089,7 @@ subscription:
     operationId: updateSubscription
     summary: Change plan, billing cycle or seats
     description: |
-      The self-serve checkout levers (FR-MOD-10.1.1–.3). Nexa keeps a single,
+      The self-serve checkout levers (FR-MOD-10.1.1–.3). SiyahTuş keeps a single,
       transparent price (ADR-13, $99/user/month), so `plan` has one option today
       (`growth`); the endpoint still validates it and is shaped for future tiers,
       including the downgrade guard that refuses a plan whose included quota is

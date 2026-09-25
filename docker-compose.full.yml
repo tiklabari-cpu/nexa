@@ -1,4 +1,4 @@
-# Nexa — the whole product in containers, on one machine (tm 140.3, M-CONTAINER-c).
+# SiyahTuş — the whole product in containers, on one machine (tm 140.3, M-CONTAINER-c).
 #
 # SCOPE: this is a LOCAL stack, not a deployment. No DNS, no TLS, no real
 # secrets, nothing published beyond 127.0.0.1 (CLAUDE.md / MASTER-PROMPT
@@ -37,25 +37,25 @@
 # of having it. Calling this stack what it is costs nothing. The production run
 # of the same containers is `docker-compose.pilot.yml` (tm 255.15), which meets
 # these gates with a real `.env` instead of stepping around them.
-name: nexa-demo
+name: siyahtus-demo
 
 services:
   # --- Datastores ---------------------------------------------------------
   # Same images and same init script as the dev compose, so the schema, the
-  # extensions and the non-owner `nexa_app` role (RLS) are identical.
+  # extensions and the non-owner `siyahtus_app` role (RLS) are identical.
   db:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: nexa
-      POSTGRES_PASSWORD: nexa_dev_password
-      POSTGRES_DB: nexa
+      POSTGRES_USER: siyahtus
+      POSTGRES_PASSWORD: siyahtus_dev_password
+      POSTGRES_DB: siyahtus
       LANG: C
     volumes:
-      - nexa_demo_pgdata:/var/lib/postgresql/data
+      - siyahtus_demo_pgdata:/var/lib/postgresql/data
       - ./infra/db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U nexa -d nexa']
+      test: ['CMD-SHELL', 'pg_isready -U siyahtus -d siyahtus']
       interval: 3s
       timeout: 3s
       retries: 20
@@ -66,7 +66,7 @@ services:
     restart: unless-stopped
     command: ['redis-server', '--appendonly', 'yes', '--save', '']
     volumes:
-      - nexa_demo_redisdata:/data
+      - siyahtus_demo_redisdata:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 3s
@@ -93,7 +93,7 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     command: server /data --console-address ":9001"
     volumes:
-      - nexa_demo_miniodata:/data
+      - siyahtus_demo_miniodata:/data
     healthcheck:
       test: ['CMD', 'mc', 'ready', 'local']
       interval: 3s
@@ -113,7 +113,7 @@ services:
       [
         '/bin/sh',
         '-c',
-        'mc alias set local http://minio:9000 minioadmin minioadmin && mc mb --ignore-existing local/nexa-uploads',
+        'mc alias set local http://minio:9000 minioadmin minioadmin && mc mb --ignore-existing local/siyahtus-uploads',
       ]
 
   # --- One-shot init: migrate, then seed ----------------------------------
@@ -123,7 +123,7 @@ services:
   # container and needs no second copy of the migrate step.
   #
   # The seed is idempotent — re-running against a seeded database is a no-op
-  # (`apps/api/prisma/seed.ts`). `NEXA_SEED_RESET` is deliberately NOT set: it
+  # (`apps/api/prisma/seed.ts`). `SIYAHTUS_SEED_RESET` is deliberately NOT set: it
   # wipes the demo data first, which would silently discard whatever the person
   # looking at this stack had just done in it.
   #
@@ -135,7 +135,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: nexa-api:local
+    image: siyahtus-api:local
     restart: 'no'
     command: ['node', 'dist/prisma/seed.js']
     env_file:
@@ -145,21 +145,21 @@ services:
       # Inside the compose network the datastores answer on their service names
       # and their real ports — `.env.example`'s localhost:5433/6380 are the
       # host-side offsets `make dev` publishes, and mean nothing in here.
-      DATABASE_URL: postgresql://nexa:nexa_dev_password@db:5432/nexa
-      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@db:5432/nexa
+      DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@db:5432/siyahtus
+      DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@db:5432/siyahtus
       REDIS_URL: redis://redis:6379
       # `.env.example` points the four file-backed mock providers at `.data/`
       # under the repo, relative to the working directory. That path is
-      # root-owned inside the image (the app runs as `nexa`), so writing there
+      # root-owned inside the image (the app runs as `siyahtus`), so writing there
       # fails; and there is no repo checkout in the container to write into
       # anyway. /tmp is writable by every user in the base image. Consequence,
       # stated rather than hidden: uploads, spooled mail/push and the SIEM
       # export live inside the container and go away with it. Acceptable for a
       # demo, not for anything else.
-      STORAGE_LOCAL_DIR: /tmp/nexa/uploads
-      MAIL_DIR: /tmp/nexa/mail
-      PUSH_DIR: /tmp/nexa/push
-      SIEM_DIR: /tmp/nexa/siem
+      STORAGE_LOCAL_DIR: /tmp/siyahtus/uploads
+      MAIL_DIR: /tmp/siyahtus/mail
+      PUSH_DIR: /tmp/siyahtus/push
+      SIEM_DIR: /tmp/siyahtus/siem
     depends_on:
       db:
         condition: service_healthy
@@ -171,7 +171,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: nexa-api:local
+    image: siyahtus-api:local
     restart: unless-stopped
     env_file:
       - .env.example
@@ -190,14 +190,14 @@ services:
     build:
       context: .
       dockerfile: apps/rtm/Dockerfile
-    image: nexa-rtm:local
+    image: siyahtus-rtm:local
     restart: unless-stopped
     env_file:
       - .env.example
     environment:
       NODE_ENV: development
-      DATABASE_URL: postgresql://nexa:nexa_dev_password@db:5432/nexa
-      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@db:5432/nexa
+      DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@db:5432/siyahtus
+      DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@db:5432/siyahtus
       REDIS_URL: redis://redis:6379
     ports:
       - '4001:4001'
@@ -219,7 +219,7 @@ services:
         # WebSocket URL cannot be relative, so the RTM base is baked in at
         # build time and has to name a host port — this one, published below.
         VITE_RTM_URL: ws://localhost:4001/v1/agent/rtm/ws
-    image: nexa-web:local
+    image: siyahtus-web:local
     restart: unless-stopped
     environment:
       # Defaults in the image already, repeated here because they are the whole
@@ -236,7 +236,7 @@ services:
     build:
       context: .
       dockerfile: apps/widget/Dockerfile
-    image: nexa-widget:local
+    image: siyahtus-widget:local
     restart: unless-stopped
     # Static files only — no upstream, so nothing to wait for. The widget talks
     # to the api from the visitor's browser at its published host port, which
@@ -245,6 +245,6 @@ services:
       - '5174:8080'
 
 volumes:
-  nexa_demo_pgdata:
-  nexa_demo_redisdata:
-  nexa_demo_miniodata:
+  siyahtus_demo_pgdata:
+  siyahtus_demo_redisdata:
+  siyahtus_demo_miniodata:

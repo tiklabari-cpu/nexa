@@ -31,7 +31,7 @@ export interface SecureKeyValueStore {
 
 export class SecureStoreUnavailableError extends Error {
   constructor() {
-    super('This device has no secure storage; Nexa will not keep a session in the clear.');
+    super('This device has no secure storage; SiyahTuş will not keep a session in the clear.');
     this.name = 'SecureStoreUnavailableError';
   }
 }
@@ -63,9 +63,9 @@ export interface PersistedSession {
   accountId: string;
 }
 
-const SESSION_KEY = 'nexa.session';
-const DEVICE_TOKEN_KEY = 'nexa.device_token';
-const DEVICE_ID_KEY = 'nexa.device_id';
+const SESSION_KEY = 'siyahtus.session';
+const DEVICE_TOKEN_KEY = 'siyahtus.device_token';
+const DEVICE_ID_KEY = 'siyahtus.device_id';
 
 /**
  * The session and the device token, read and written as whole values.

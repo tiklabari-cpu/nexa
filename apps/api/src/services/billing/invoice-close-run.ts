@@ -22,7 +22,7 @@
  * cannot be closed again (`UNIQUE (license_id, period)`), so the safe thing is
  * to run it, not to preview it.
  *
- *   pnpm --filter @nexa/api invoice-close:run
+ *   pnpm --filter @siyahtus/api invoice-close:run
  */
 import { loadEnvFile } from '../../config/load-env-file.js';
 

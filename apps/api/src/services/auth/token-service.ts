@@ -10,7 +10,7 @@
  * inside a tenant context.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { AgentRole, Region } from '@nexa/types';
+import type { AgentRole, Region } from '@siyahtus/types';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import { withTenant, type TenantClient } from '../../lib/tenant.js';
 import { ENROLLMENT_TICKET_SCOPES, scopesWithinRole, type Principal } from './principal.js';
@@ -447,7 +447,7 @@ export class TokenService {
     // automatically at commit/rollback, and each owner takes a distinct key, so
     // it neither deadlocks nor serializes unrelated mints.
     await tx.$executeRaw`
-      SELECT pg_advisory_xact_lock(hashtext('nexa.session-cap'), hashtext(${`${licenseId}:${ownerId}`}))
+      SELECT pg_advisory_xact_lock(hashtext('siyahtus.session-cap'), hashtext(${`${licenseId}:${ownerId}`}))
     `;
 
     // Read the cap inside the locked transaction so a concurrent policy change

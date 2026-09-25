@@ -22,7 +22,7 @@ import {
   type RuleBotConditions,
   type RuleBotGroupAssignment,
   type RuleBotRule,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';

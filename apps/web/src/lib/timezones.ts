@@ -10,7 +10,7 @@
  * them.
  *
  * It is also, deliberately, the client half of the server's `isIanaTimeZone`
- * (`@nexa/types/company.ts`): that validator accepts
+ * (`@siyahtus/types/company.ts`): that validator accepts
  * `Intl.supportedValuesOf('timeZone')` plus `UTC` by name, so building the
  * offer from exactly that set means a value picked here can never be refused
  * by the endpoint it is sent to. `UTC` is prepended rather than assumed because

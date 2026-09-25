@@ -12,7 +12,7 @@
  * are checked per request against live data rather than trusted from the token.
  */
 import { createHmac } from 'node:crypto';
-import { REGIONS, type Region } from '@nexa/types';
+import { REGIONS, type Region } from '@siyahtus/types';
 import { constantTimeEqual } from '../../lib/crypto.js';
 import type { CustomerPrincipal } from './principal.js';
 

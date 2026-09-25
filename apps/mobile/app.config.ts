@@ -3,7 +3,7 @@
  * reason to prefer this over JSON: `extra` needs to read an environment
  * variable. A physical phone cannot reach `localhost` — it needs the dev
  * machine's LAN IP — and a static file had no way to express "default to the
- * local API, but let `NEXA_API_BASE_URL` override it." See
+ * local API, but let `SIYAHTUS_API_BASE_URL` override it." See
  * `apps/mobile/README.md` ("Running on a device") for what each target needs.
  */
 import type { ConfigContext, ExpoConfig } from 'expo/config';
@@ -15,12 +15,12 @@ const BRAND_500 = '#2d67fa';
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
-  name: 'Nexa',
-  slug: 'nexa',
+  name: 'SiyahTuş',
+  slug: 'siyahtus',
   version: '0.1.0',
   orientation: 'portrait',
   userInterfaceStyle: 'automatic',
-  scheme: 'nexa',
+  scheme: 'siyahtus',
   platforms: ['ios', 'android'],
   // `newArchEnabled` and `android.edgeToEdgeEnabled` dropped: SDK 57's
   // `@expo/config-types` no longer has either — the New Architecture and
@@ -31,9 +31,9 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   // at the root (the native view's color before React paints anything).
   icon: './assets/icon.png',
   backgroundColor: BRAND_500,
-  ios: { bundleIdentifier: 'com.nexa.app', supportsTablet: true },
+  ios: { bundleIdentifier: 'com.siyahtus.app', supportsTablet: true },
   android: {
-    package: 'com.nexa.app',
+    package: 'com.siyahtus.app',
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
       backgroundColor: BRAND_500,
@@ -42,7 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   plugins: [['expo-notifications', { icon: './assets/notification-icon.png', color: BRAND_500 }]],
   extra: {
     // Matches the API port in the root README's "Quick start" table.
-    apiBaseUrl: process.env.NEXA_API_BASE_URL ?? 'http://localhost:4000/api/v1',
-    rtmBaseUrl: process.env.NEXA_RTM_BASE_URL ?? 'ws://localhost:4001',
+    apiBaseUrl: process.env.SIYAHTUS_API_BASE_URL ?? 'http://localhost:4000/api/v1',
+    rtmBaseUrl: process.env.SIYAHTUS_RTM_BASE_URL ?? 'ws://localhost:4001',
   },
 });

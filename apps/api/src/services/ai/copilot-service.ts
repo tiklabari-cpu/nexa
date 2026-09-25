@@ -21,7 +21,7 @@ import {
   type ConversationTurn,
   type MetricKey,
   type RelativeRange,
-} from '@nexa/ai-mock';
+} from '@siyahtus/ai-mock';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 import { buildOverviewReport, resolveRange } from '../../routes/reports.js';

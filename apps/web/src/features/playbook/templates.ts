@@ -8,7 +8,7 @@
  * skill rather than a blank page.
  *
  * The steps are authored to the same shapes the API validates on `POST /skills`
- * (`@nexa/ai-mock` `validateSteps`); `templates.test.ts` proves every one of
+ * (`@siyahtus/ai-mock` `validateSteps`); `templates.test.ts` proves every one of
  * them passes, so "Use template" / "Try this" can never mint a skill the server
  * would reject.
  */

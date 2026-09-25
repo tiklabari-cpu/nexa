@@ -28,7 +28,7 @@ const DEFAULT_LOCALE: Locale = 'en';
 export function resetLocale(): void {
   act(() => useLocaleStore.getState().setLocale(DEFAULT_LOCALE));
   try {
-    globalThis.localStorage?.removeItem('nexa.locale');
+    globalThis.localStorage?.removeItem('siyahtus.locale');
   } catch {
     // A storage-less environment has nothing to forget.
   }

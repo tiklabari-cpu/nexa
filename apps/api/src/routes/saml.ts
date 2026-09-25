@@ -35,7 +35,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { isScope } from '@nexa/types';
+import { isScope } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { activePreviousCertificate, readSsoAttributeMapping } from '../lib/sso-connection.js';

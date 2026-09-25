@@ -88,7 +88,7 @@ function stubFetch(): void {
 async function openTranscript(): Promise<HTMLElement> {
   window.history.replaceState({}, '', `/widget.html?organization_id=org-1&api=${API}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   root.querySelector<HTMLButtonElement>('.nx-launcher')!.click();

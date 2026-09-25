@@ -22,7 +22,7 @@
  * `rightPanel` are, not through the rendered sidebar.
  */
 import { useState } from 'react';
-import { ADAPTER_CHANNEL_TYPES, type AdapterChannelType } from '@nexa/types';
+import { ADAPTER_CHANNEL_TYPES, type AdapterChannelType } from '@siyahtus/types';
 import type { InboxView, TrafficTab } from './types.js';
 
 /**
@@ -31,7 +31,7 @@ import type { InboxView, TrafficTab } from './types.js';
  * the agent as "SMS". Email and the Website widget resolve tenants their own
  * way and are not adapter channels, so they are not listed here.
  *
- * The list itself is `@nexa/types`' (tm 218), not a third copy beside the API's
+ * The list itself is `@siyahtus/types`' (tm 218), not a third copy beside the API's
  * adapter registry and the `channel` filter's OpenAPI enum: these views are now
  * a real filter that sends one of these values to `GET /chats`, so a channel
  * this file recognised and the server did not would render a row that answers
@@ -118,7 +118,7 @@ export interface SavedViewInput {
   traffic: TrafficTab;
 }
 
-const STORAGE_KEY = 'nexa.inbox.saved-views';
+const STORAGE_KEY = 'siyahtus.inbox.saved-views';
 export const SAVED_VIEW_NAME_MAX = 40;
 
 const BASE_VIEWS: InboxView[] = [

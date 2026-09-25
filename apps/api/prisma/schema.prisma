@@ -1,4 +1,4 @@
-// Nexa data model.
+// SiyahTuş data model.
 //
 // Source of truth: PRD §8.4 + rapor-2 §5.3. The legacy
 // `LiveChat_ER_Diyagram.mermaid` contradicts both and is NOT used.
@@ -39,7 +39,7 @@ model Organization {
   /// merely descriptive, matching every other classification column here
   /// (`region`, `licenses.billing_cycle`, `licenses.status`): a workspace
   /// typing "Gaming" today and "gaming" tomorrow would fragment a report that
-  /// groups by this column. `COMPANY_SECTORS` (`@nexa/types`) is the value
+  /// groups by this column. `COMPANY_SECTORS` (`@siyahtus/types`) is the value
   /// list; `organizations_sector_check` is the other half Prisma cannot model.
   /// Null until a workspace fills in Settings → Company details.
   sector      String?
@@ -57,7 +57,7 @@ model Organization {
   /// "şirket büyüklüğü" step writes here, same as `sector` — one set of
   /// company facts, no second table for what the wizard collects. Closed
   /// list, not free text, for the identical reason `sector` is one:
-  /// reportable rather than merely descriptive. `COMPANY_SIZES` (`@nexa/types`)
+  /// reportable rather than merely descriptive. `COMPANY_SIZES` (`@siyahtus/types`)
   /// is the value list; `organizations_company_size_check` is the other half
   /// Prisma cannot model. Null until a workspace sets one.
   companySize String?  @map("company_size")
@@ -93,7 +93,7 @@ model License {
   hipaaBaaSignedAt      DateTime? @map("hipaa_baa_signed_at") @db.Timestamptz(6)
   /// This workspace's own retention window for closed conversations (NFR-C8),
   /// or null to inherit the deployment default (`RETENTION_THREAD_DAYS`). One of
-  /// `@nexa/types`' `RETENTION_TIERS` — `'30d' | '60d' | '365d' | 'unlimited'` —
+  /// `@siyahtus/types`' `RETENTION_TIERS` — `'30d' | '60d' | '365d' | 'unlimited'` —
   /// a checked string, the `device_tokens.platform` pattern, since Prisma has no
   /// shared enum for it; `licenses_retention_thread_window_check` is where the
   /// database says so. Stored as the tier rather than a day count so "unlimited"
@@ -108,7 +108,7 @@ model License {
   /// When the onboarding sample data was laid down, so the seed never runs twice.
   demoSeededAt          DateTime? @map("demo_seeded_at") @db.Timestamptz(6)
   /// The "What are you tracking?" survey popover's answer (FR-MOD-07.2), or
-  /// null before it is answered/skipped. One of the five values `@nexa/types`'
+  /// null before it is answered/skipped. One of the five values `@siyahtus/types`'
   /// `ONBOARDING_SURVEY_ANSWERS` names — Prisma has no shared enum for this, so
   /// it is a checked string, the `device_tokens.platform` pattern.
   surveyAnswer          String?   @map("survey_answer")
@@ -245,7 +245,7 @@ model AgentMembership {
   /// Master switch over the *interruptive* channels below — sound, desktop,
   /// push. Not over `notifyEmail`: e-mail is the fallback for somebody who is
   /// not at a screen, and "stop alerting me now" was never a request to stop
-  /// that too (`@nexa/types` · `pushAllowed`).
+  /// that too (`@siyahtus/types` · `pushAllowed`).
   notifyEnabled        Boolean   @default(true) @map("notify_enabled")
   notifySound          Boolean   @default(true) @map("notify_sound")
   notifyDesktop        Boolean   @default(true) @map("notify_desktop")
@@ -1039,7 +1039,7 @@ model CustomFieldDefinition {
 /// (FR-MOD-08.7.6). Exactly one of `ticketId` / `customerId` is set — a CHECK in
 /// the migration enforces that — and it points at the entity the definition is
 /// for. The value is kept as text in its canonical form (see checkCustomFieldValue
-/// in @nexa/types); one value per field per entity. Deleting the definition, the
+/// in @siyahtus/types); one value per field per entity. Deleting the definition, the
 /// ticket or the contact cascades the value away.
 model CustomFieldValue {
   id           String   @id @default(uuid()) @db.Uuid
@@ -1428,7 +1428,7 @@ model SalesTrackerSettings {
   @@map("sales_tracker_settings")
 }
 
-/// One order reported by the widget snippet's `nexa('trackSale', …)` call
+/// One order reported by the widget snippet's `siyahtus('trackSale', …)` call
 /// (FR-MOD-13.5) — `Rating`'s event-table shape: one row per occurrence, not
 /// a running total. `attributed`, `chatId` and `customerId` stay at their
 /// unset defaults until the ingest endpoint (13.5-c) matches the order to a
@@ -1933,7 +1933,7 @@ model Webhook {
   /// is what every row was before this column existed.
   ///
   /// Deliberately a plain text catalogue id and not a foreign key to
-  /// `app_installations`: the catalogue is static data in @nexa/types, and the
+  /// `app_installations`: the catalogue is static data in @siyahtus/types, and the
   /// installation row is what the *connection* is. Tying the two by id lets the
   /// gate live where it belongs — a subscription may only be created while the
   /// card is connected, and disconnecting removes them — without a cascade that
@@ -2012,7 +2012,7 @@ model WebhookDelivery {
 /// Per-brand security configuration (PRD §8.4 `security_settings` · §5.3).
 ///
 /// Keyed by `(license, brand)`, one row per brand (Multibrand). The settings
-/// screen resolves the row from `X-Nexa-Brand`, or the license default when no
+/// screen resolves the row from `X-SiyahTus-Brand`, or the license default when no
 /// brand is named — so a single-brand workspace keeps its single row. RLS
 /// narrows the row to the active brand on top of the license match.
 model SecuritySettings {
@@ -2075,7 +2075,7 @@ model InboxSettings {
 /// not create the row — the settings endpoint upserts it on first save under the
 /// resolved brand, and a read with no row falls back to the schema defaults — so
 /// a workspace that has never touched these renders the shipped look. The column
-/// defaults mirror `DEFAULT_WIDGET_APPEARANCE` in `@nexa/types` value-for-value.
+/// defaults mirror `DEFAULT_WIDGET_APPEARANCE` in `@siyahtus/types` value-for-value.
 model WidgetSettings {
   licenseId        BigInt   @map("license_id")
   brandId          String   @map("brand_id") @db.Uuid
@@ -2088,7 +2088,7 @@ model WidgetSettings {
   /// `auto` | `light` | `dark` — the `widget_settings_theme_check`.
   theme            String   @default("auto")
   mobileFullscreen Boolean  @default(true) @map("mobile_fullscreen")
-  /// The removable "Powered by Nexa" footer (FR-MOD-11.5).
+  /// The removable "Powered by SiyahTuş" footer (FR-MOD-11.5).
   poweredBy        Boolean  @default(true) @map("powered_by")
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -2179,7 +2179,7 @@ model UsageRecord {
 /// what, and the invoice line item (09.3-e) would have nothing to derive from.
 ///
 /// `package_id` names an `API_PACKAGE_CATALOG` entry in code rather than a row
-/// — the catalogue is static (`@nexa/types`) — so it carries no foreign key and
+/// — the catalogue is static (`@siyahtus/types`) — so it carries no foreign key and
 /// no domain CHECK, the same way `scheduled_reports.group_id` names a
 /// REPORT_GROUPS entry; the purchase route validates it instead. The quota and
 /// the price are *copied* rather than looked up, so re-pricing a package in
@@ -2240,7 +2240,7 @@ model AiPackagePurchase {
 /// every past period was priced from whatever `subscriptions` said today — so a
 /// plan change silently rewrote statements the workspace had already been shown.
 /// A row here is written once, by the period-close sweep
-/// (`invoice-close-sweep.ts`), and never updated: `nexa_app` holds SELECT and
+/// (`invoice-close-sweep.ts`), and never updated: `siyahtus_app` holds SELECT and
 /// INSERT only. That is the whole point of the table, and the reason the
 /// privilege is withheld rather than merely unused.
 ///
@@ -2259,7 +2259,7 @@ model Invoice {
   id        String @id @default(uuid()) @db.Uuid
   licenseId BigInt @map("license_id")
 
-  /// Human invoice number, `NEXA-<yyyymm>`. Frozen rather than derived: it is
+  /// Human invoice number, `SIYAHTUS-<yyyymm>`. Frozen rather than derived: it is
   /// the identity the customer quotes back, so it must not restate itself if
   /// the format ever changes. Unique per workspace, not globally — every
   /// workspace numbers its own statements, exactly as the derived path did.
@@ -2479,7 +2479,7 @@ model SiemExportCursor {
 // ===========================================================================
 
 /// A third-party integration a workspace has connected through the (mock) OAuth
-/// flow. The catalogue of *available* apps is static (@nexa/types APP_CATALOG);
+/// flow. The catalogue of *available* apps is static (@siyahtus/types APP_CATALOG);
 /// this table records only which of them a licence has connected, one row per
 /// app. `externalAccount` is the account label the mock grant returned; the
 /// granted scopes are the catalogue entry's, so they are not stored again here.
@@ -2591,7 +2591,7 @@ model KbSettings {
 /// Collapsing them would make "is Ayşe online?" and "is Ayşe rostered?" the
 /// same question, and the forecast needs both.
 ///
-/// `schedule` is the `WorkScheduleSlot[]` of `@nexa/types`, stored as JSONB
+/// `schedule` is the `WorkScheduleSlot[]` of `@siyahtus/types`, stored as JSONB
 /// because it is read and written whole — never queried slot-by-slot. The DB
 /// guarantees only that it is an array (`work_schedules_schedule_is_array_check`);
 /// the per-slot rules (known weekday, no repeats, `HH:MM`, start < end) are
@@ -2659,10 +2659,10 @@ model SlaPolicy {
 model SlaBreach {
   id                String    @id @default(uuid()) @db.Uuid
   licenseId         BigInt    @map("license_id")
-  /// `thread` or `ticket` — `SLA_SUBJECT_TYPES` in `@nexa/types`.
+  /// `thread` or `ticket` — `SLA_SUBJECT_TYPES` in `@siyahtus/types`.
   subjectType       String    @map("subject_type")
   subjectId         String    @map("subject_id")
-  /// `first_response` or `resolution` — `SLA_TARGETS` in `@nexa/types`.
+  /// `first_response` or `resolution` — `SLA_TARGETS` in `@siyahtus/types`.
   target            String
   targetMinutes     Int       @map("target_minutes")
   /// Elapsed when the miss was noticed; business minutes when the policy said so.
@@ -2695,7 +2695,7 @@ model AgentPresenceEvent {
   id        String   @id @default(uuid()) @db.Uuid
   licenseId BigInt   @map("license_id")
   agentId   String   @map("agent_id") @db.Uuid
-  /// One of `ROUTING_STATUSES` (`@nexa/types`), the same domain as
+  /// One of `ROUTING_STATUSES` (`@siyahtus/types`), the same domain as
   /// `AgentMembership.routingStatus` — enforced by
   /// `agent_presence_events_status_check`, the mirror of
   /// `agent_memberships_routing_status_check`.

@@ -36,7 +36,7 @@ interface Agent {
   concurrent_chats_limit: number;
   two_factor_enabled: boolean;
   suspended: boolean;
-  /** When this person was last active anywhere in Nexa (FR-MOD-04.3.4); null
+  /** When this person was last active anywhere in SiyahTuş (FR-MOD-04.3.4); null
    *  until they have been seen once. Shown in the profile panel, not the row —
    *  a scannable roster has no space for a seventh column. */
   last_seen_at: string | null;

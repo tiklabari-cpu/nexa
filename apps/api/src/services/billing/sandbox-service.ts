@@ -23,7 +23,7 @@
  * the very licence row the caller's transaction would be scoped to.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { SandboxSummary } from '@nexa/types';
+import type { SandboxSummary } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
@@ -120,13 +120,13 @@ export async function createSandbox(
       SELECT * FROM sandbox_create(${parentLicenseId}, ${ownerAccountId}::uuid)`;
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    if (/nexa_sandbox_exists/.test(message)) {
+    if (/siyahtus_sandbox_exists/.test(message)) {
       throw new ApiError(
         'sandbox_exists',
         'This workspace already has a sandbox. Reset it from inside instead of creating a second one.',
       );
     }
-    if (/nexa_sandbox_nested/.test(message)) {
+    if (/siyahtus_sandbox_nested/.test(message)) {
       throw new ApiError(
         'not_allowed',
         'A sandbox cannot have a sandbox of its own. Create it from the production workspace.',
@@ -154,7 +154,7 @@ export async function resetSandbox(db: PrismaClient, licenseId: bigint): Promise
     rows = await db.$queryRaw`SELECT sandbox_reset(${licenseId}) AS reset_at`;
   } catch (error) {
     const message = error instanceof Error ? error.message : '';
-    if (/nexa_not_a_sandbox/.test(message)) throw sandboxResetRefused();
+    if (/siyahtus_not_a_sandbox/.test(message)) throw sandboxResetRefused();
     throw error;
   }
 

@@ -40,10 +40,10 @@ import type { AddressInfo } from 'node:net';
 import { authorizationHeader } from '../../src/services/storage/s3-store.js';
 
 /** Credentials the bucket issues. Placeholders, in MinIO's own default shape. */
-const ACCESS_KEY_ID = 'nexatestaccesskey';
-const SECRET_ACCESS_KEY = 'nexa-test-secret-key';
+const ACCESS_KEY_ID = 'siyahtustestaccesskey';
+const SECRET_ACCESS_KEY = 'siyahtus-test-secret-key';
 const REGION = 'us-east-1';
-const BUCKET = 'nexa-uploads-test';
+const BUCKET = 'siyahtus-uploads-test';
 
 const AUTHORIZATION =
   /^AWS4-HMAC-SHA256 Credential=([^/]+)\/(\d{8})\/([^/]+)\/([^/]+)\/aws4_request, SignedHeaders=([a-z0-9;-]+), Signature=([0-9a-f]{64})$/;

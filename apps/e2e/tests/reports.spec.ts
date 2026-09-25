@@ -342,7 +342,7 @@ test.describe('reports overview', () => {
     // window as two UTC dates — proof the browser kept the name the
     // `content-disposition` header sent, not one it invented locally.
     expect(download.suggestedFilename()).toMatch(
-      /^nexa-overview-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/,
+      /^siyahtus-overview-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv$/,
     );
 
     await agentPage.getByRole('button', { name: 'Saved views' }).click();
@@ -411,7 +411,7 @@ test.describe('reports overview', () => {
       await agentPage.getByRole('button', { name: 'Export' }).click();
       const download = await downloadPromise;
       expect(download.suggestedFilename()).toMatch(
-        new RegExp(`^nexa-overview-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.${format}$`),
+        new RegExp(`^siyahtus-overview-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.${format}$`),
       );
     }
 
@@ -563,7 +563,7 @@ test.describe('reports — chat topics (FR-MOD-07.6)', () => {
  * never reaches the API, an order recorded but never aggregated, a report the
  * screen does not bind. This drives the whole chain in a browser: a visitor on a
  * real shop page chats, their checkout reports an order through
- * `nexa('trackSale', …)`, and the number that comes back is read off the agent's
+ * `siyahtus('trackSale', …)`, and the number that comes back is read off the agent's
  * Reports screen.
  *
  * Isolation is by host, for the same reason `goals.spec.ts` needs it: the goal
@@ -622,7 +622,7 @@ test.describe('reports — tracked sales (FR-MOD-13.5)', () => {
       // widget's iframe, and no return value to wait on.
       await visitor.evaluate(
         ({ orderId, amountCents }) => {
-          (window as unknown as { nexa: (command: string, payload: unknown) => void }).nexa(
+          (window as unknown as { siyahtus: (command: string, payload: unknown) => void }).siyahtus(
             'trackSale',
             { external_order_id: orderId, amount_cents: amountCents, currency: 'USD' },
           );
@@ -630,7 +630,7 @@ test.describe('reports — tracked sales (FR-MOD-13.5)', () => {
         { orderId: `E2E-${stamp}`, amountCents: AMOUNT_CENTS },
       );
 
-      // Wait on the server, not on the page: `nexa(…)` is fire-and-forget by
+      // Wait on the server, not on the page: `siyahtus(…)` is fire-and-forget by
       // contract (a checkout must not block on it), so nothing in the browser
       // signals that the order landed.
       await expect
@@ -660,7 +660,7 @@ test.describe('reports — tracked sales (FR-MOD-13.5)', () => {
       // second report is a replay, so the revenue figure must not move.
       await visitor.evaluate(
         ({ orderId, amountCents }) => {
-          (window as unknown as { nexa: (command: string, payload: unknown) => void }).nexa(
+          (window as unknown as { siyahtus: (command: string, payload: unknown) => void }).siyahtus(
             'trackSale',
             { external_order_id: orderId, amount_cents: amountCents, currency: 'USD' },
           );

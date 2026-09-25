@@ -59,7 +59,7 @@ describe('consoleRedirectUri', () => {
   it.each([
     ['plain http on a public host', 'http://panel.example.com'],
     ['plain http on a LAN address', 'http://192.168.1.20:5173'],
-    ['a non-web scheme', 'nexa://auth'],
+    ['a non-web scheme', 'siyahtus://auth'],
     ['an IPv6 literal', 'https://[::1]:5173'],
     ['not a URL at all', 'panel.example.com'],
   ])('refuses %s', (_label, webAppUrl) => {
@@ -99,7 +99,7 @@ describe('the rule is written once in TypeScript and once in SQL — and they ag
 describe('env.consoleRedirectUri', () => {
   const BASE: NodeJS.ProcessEnv = {
     NODE_ENV: 'test',
-    DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa',
+    DATABASE_URL: 'postgresql://siyahtus:siyahtus@127.0.0.1:5432/siyahtus',
     REDIS_URL: 'redis://127.0.0.1:6379',
     JWT_SIGNING_KEY: 'dev-only-jwt-signing-key-at-least-32-chars',
     WEBHOOK_HMAC_SEED: 'dev-only-webhook-hmac-seed-at-least-32-chars',

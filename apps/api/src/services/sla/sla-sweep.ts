@@ -36,7 +36,7 @@
  * SQL the workspace's rota, would put the calendar in two places.
  */
 import { type PrismaClient } from '@prisma/client';
-import type { SlaSubjectType, SlaTarget } from '@nexa/types';
+import type { SlaSubjectType, SlaTarget } from '@siyahtus/types';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
 import { deliver } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
@@ -278,7 +278,7 @@ export class SlaSweeper {
     if (recipient) {
       const outcome = await deliver(this.#mailer, {
         to: recipient,
-        subject: `Nexa: ${pending.length} SLA target${pending.length === 1 ? '' : 's'} missed`,
+        subject: `SiyahTuş: ${pending.length} SLA target${pending.length === 1 ? '' : 's'} missed`,
         body: renderBreachDigest(pending),
         kind: 'notification',
       });
@@ -340,7 +340,7 @@ export function renderBreachDigest(breaches: readonly PendingBreach[]): string {
     '',
     ...lines,
     '',
-    'Nexa measures and marks SLA targets; it does not re-route or re-prioritise',
+    'SiyahTuş measures and marks SLA targets; it does not re-route or re-prioritise',
     'the conversations behind them.',
   ].join('\n');
 }

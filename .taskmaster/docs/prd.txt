@@ -7,10 +7,10 @@
 
 ## Bağlam
 
-Nexa, TypeScript monorepo (pnpm + Turborepo) üzerinde bir canlı destek platformu.
+SiyahTuş, TypeScript monorepo (pnpm + Turborepo) üzerinde bir canlı destek platformu.
 Backend: Node 24 + Fastify + Prisma + PostgreSQL 17 (pgvector) + Redis 7.
 Frontend: `apps/web` (agent paneli) ve `apps/widget` (müşteri widget'ı).
-Kontrat önce: `packages/contract/openapi.yaml` → `@nexa/types` generate edilir.
+Kontrat önce: `packages/contract/openapi.yaml` → `@siyahtus/types` generate edilir.
 Kilitli kararlar `PLAN.md §0`'daki ADR-01…ADR-15'tir; yeniden tartışılmaz.
 
 Faz 0'ın kapanmasına iki dilim kaldı. Bu brief, ikisinden ilkidir.

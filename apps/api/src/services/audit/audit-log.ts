@@ -11,7 +11,7 @@
  *     erase the record of what they did cannot. This module never issues an
  *     UPDATE or DELETE against the table; the database enforces the rest.
  *   - **Tenant-scoped.** The row carries `license_id` and the INSERT policy is
- *     `WITH CHECK (license_id = nexa_current_license())`. `writeAuditEntry` must
+ *     `WITH CHECK (license_id = siyahtus_current_license())`. `writeAuditEntry` must
  *     therefore run inside a `withTenant` transaction, and it writes the row for
  *     that tenant — an entry can never be planted in another workspace's log.
  *   - **PII-minimal.** Passwords, tokens and secrets never belong in an audit
@@ -33,7 +33,7 @@ import type { TenantClient } from '../../lib/tenant.js';
 import { chainRowHash, deriveChainKey } from './audit-chain.js';
 
 /**
- * The security-relevant actions Nexa records. Kept as a closed vocabulary so a
+ * The security-relevant actions SiyahTuş records. Kept as a closed vocabulary so a
  * typo becomes a compile error rather than an un-queryable action string, and
  * so the set of things we audit is reviewable in one place.
  */
@@ -365,7 +365,7 @@ export const AUDIT_ACTIONS = [
   // A marketplace integration was connected (FR-MOD-09.1) — the OAuth grant
   // that hands the app a credential to read this workspace's data. Its own
   // action rather than folding into `partner_app.*`: those record a third
-  // party being handed a credential to call *Nexa*, this records Nexa being
+  // party being handed a credential to call *SiyahTuş*, this records SiyahTuş being
   // handed one to call somewhere else. Disconnecting one already writes
   // `data.deleted` (`apps.ts`).
   'app.connected',
@@ -642,7 +642,7 @@ export function sanitizeAuditMetadata(
  *
  * `tx` must come from `withTenant` (or the request's `withTenant`): the row is
  * inserted for `ctx.licenseId`, and the RLS `WITH CHECK` refuses it unless the
- * transaction's `nexa_current_license()` matches — so a mismatched context
+ * transaction's `siyahtus_current_license()` matches — so a mismatched context
  * fails loudly rather than writing to the wrong log.
  */
 export async function writeAuditEntry(

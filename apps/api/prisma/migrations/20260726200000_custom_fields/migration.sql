@@ -96,12 +96,12 @@ ALTER TABLE "custom_field_values"
 -- a value are visible and writable only within their own license.
 ALTER TABLE custom_field_definitions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY custom_field_definitions_tenant ON custom_field_definitions
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE custom_field_values ENABLE ROW LEVEL SECURITY;
 CREATE POLICY custom_field_values_tenant ON custom_field_values
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The application role reaches the tables only through those policies.
-GRANT SELECT, INSERT, UPDATE, DELETE ON custom_field_definitions TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON custom_field_values TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON custom_field_definitions TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON custom_field_values TO siyahtus_app;

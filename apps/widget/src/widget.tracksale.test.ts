@@ -1,10 +1,10 @@
 /**
- * `nexa('trackSale', …)` inside the widget document (FR-MOD-13.5, 13.5-g).
+ * `siyahtus('trackSale', …)` inside the widget document (FR-MOD-13.5, 13.5-g).
  *
  * The loader half — queueing a call made before the widget is ready and
- * relaying it across the message boundary once it signals `nexa:ready` — is
+ * relaying it across the message boundary once it signals `siyahtus:ready` — is
  * pinned in `loader.test.ts`. This is the other half of the same wire: that a
- * relayed `nexa:command` reaches `POST /customer/chat/sale` with the expected
+ * relayed `siyahtus:command` reaches `POST /customer/chat/sale` with the expected
  * body, that an invalid payload never goes out at all, and that a server or
  * network failure is swallowed rather than thrown — the checkout page this is
  * called from must never see this feature break it.
@@ -67,7 +67,7 @@ function stubFetch(): void {
 function mountWidget(search: string): void {
   window.history.replaceState({}, '', `/widget.html${search}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
 }
@@ -75,7 +75,7 @@ function mountWidget(search: string): void {
 /** Simulates the loader relaying a command across the message boundary. */
 function sendCommand(command: string, payload: unknown): void {
   window.dispatchEvent(
-    new MessageEvent('message', { data: { type: 'nexa:command', command, payload } }),
+    new MessageEvent('message', { data: { type: 'siyahtus:command', command, payload } }),
   );
 }
 

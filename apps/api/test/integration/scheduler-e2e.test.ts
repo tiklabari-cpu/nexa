@@ -4,7 +4,7 @@
  * Every one of the five sweeps was already tested — `chat-timeout.test.ts`,
  * `sla.test.ts`, `siem-sink.test.ts`, `scheduled-reports-sweep.test.ts` and
  * `retention.test.ts` each construct their sweeper and call `run()`. All five
- * were green, and all five were also completely inert in a Nexa brought up with
+ * were green, and all five were also completely inert in a SiyahTuş brought up with
  * `make dev`: nothing started them. That is the exact shape of §D113/K1 — the
  * parts were proved, the seam between them was not — and no suite could catch
  * it, because every suite was on the far side of the seam.
@@ -50,7 +50,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { FileMailer } from '../../src/services/mail/mailer.js';
 import { startOfUtcDay } from '../../src/services/reports/scheduled-report-period.js';
 import type { SchedulerSnapshot } from '../../src/services/scheduler/types.js';
@@ -255,8 +255,8 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     (await mailer.outbox()).filter((message) => message.kind === 'scheduled_report');
 
   beforeAll(async () => {
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-mail-'));
-    siemDir = await mkdtemp(join(tmpdir(), 'nexa-sched-siem-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sched-mail-'));
+    siemDir = await mkdtemp(join(tmpdir(), 'siyahtus-sched-siem-'));
     mailer = new FileMailer(mailDir);
 
     // Enterprise on both: the SIEM sink refuses to deliver for a plan without
@@ -606,7 +606,7 @@ describe('retention deletes only once a deployment has said so', () => {
   let adminAuth: { authorization: string };
 
   beforeAll(async () => {
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-retention-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sched-retention-'));
     fx = await seedFixtures(owner);
     adminAuth = {
       authorization: `Bearer ${await grantToken(owner, {

@@ -26,7 +26,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
-import type { SandboxView } from '@nexa/types';
+import type { SandboxView } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { Modal } from '../../components/ui/index.js';

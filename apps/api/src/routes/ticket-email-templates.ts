@@ -9,7 +9,7 @@
  *
  * The route only shapes and forwards the request; the placeholder-validity
  * judgement (KK "Geçersiz değişken/format engeli") lives in the service, over
- * the shared `@nexa/types` catalogue, so the check cannot drift from the one the
+ * the shared `@siyahtus/types` catalogue, so the check cannot drift from the one the
  * authoring form runs.
  */
 import type { FastifyInstance } from 'fastify';

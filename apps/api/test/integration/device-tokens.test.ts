@@ -344,7 +344,7 @@ describe('device tokens', () => {
   it('is invisible to another tenant even through the application role', async () => {
     await register(agentToken, { token: 'apns-rls', platform: 'ios' });
 
-    // Not the route — the database. `nexa_app` is the role the API connects as,
+    // Not the route — the database. `siyahtus_app` is the role the API connects as,
     // so this is the last line if a handler ever forgot its filter.
     const app = new PrismaClient({ datasourceUrl: APP_URL });
     try {

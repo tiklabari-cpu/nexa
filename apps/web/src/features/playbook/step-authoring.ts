@@ -16,7 +16,7 @@
  *
  * 1. **Retyping drops what the old type owned.** A `send_message` that becomes
  *    a `tag` must not keep `source`/`text` — the server's `validateStep`
- *    (`@nexa/ai-mock`) reads the discriminant and would either reject the step
+ *    (`@siyahtus/ai-mock`) reads the discriminant and would either reject the step
  *    or store fields the engine never looks at. Dropping them here is what
  *    keeps the client's idea of a valid step inside the server's.
  * 2. **Ids are never reused.** `id` is the React key of a reorderable row, so a
@@ -31,7 +31,7 @@ export type StepType = SkillStep['type'];
  * The six the PRD names, in the order the "add a step" control offers them —
  * roughly the order a skill reads: decide, gather, label, summarise, answer,
  * hand over. A seventh type is out of scope by definition: the vocabulary is
- * the contract `@nexa/ai-mock`'s `SKILL_STEP_TYPES` enforces server-side.
+ * the contract `@siyahtus/ai-mock`'s `SKILL_STEP_TYPES` enforces server-side.
  */
 export const STEP_TYPES = [
   'detect_intent',

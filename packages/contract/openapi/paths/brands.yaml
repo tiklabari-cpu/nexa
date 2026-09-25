@@ -2,9 +2,9 @@
 #
 # One license may run several brands (a distinct name, slug and logo) under a
 # single subscription. Unlike the resources a brand *contains* (channels,
-# websites, widget/security/inbox settings — all brand-scoped via `X-Nexa-Brand`),
+# websites, widget/security/inbox settings — all brand-scoped via `X-SiyahTus-Brand`),
 # the brand catalogue itself is license-level: it is the list you choose a brand
-# *from*, so these operations are not brand-scoped and take no `X-Nexa-Brand`
+# *from*, so these operations are not brand-scoped and take no `X-SiyahTus-Brand`
 # header. A brand id that is not one of the caller's own is answered 404, never
 # 403, so brand ids stay un-enumerable across licenses (NFR-S5).
 

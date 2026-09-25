@@ -64,7 +64,7 @@ describe('telemetry (NFR-M5)', () => {
     spanExporter = new InMemorySpanExporter();
     metricExporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE);
     telemetry = createTelemetry({
-      serviceName: 'nexa-api-test',
+      serviceName: 'siyahtus-api-test',
       serviceVersion: '0.0.0-test',
       spanExporter,
       metricExporter,

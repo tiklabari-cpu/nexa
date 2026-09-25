@@ -4,10 +4,10 @@
 -- governs access that goes *through* the parent: a query naming a partition
 -- directly is checked against that partition's own policies. The domain model
 -- migration enabled RLS on `events` but never on its partitions, and it hands
--- every new partition `GRANT SELECT, INSERT, UPDATE, DELETE ... TO nexa_app` --
+-- every new partition `GRANT SELECT, INSERT, UPDATE, DELETE ... TO siyahtus_app` --
 -- so the runtime role could read every tenant's rows with
 -- `SELECT * FROM events_2026_08`. Measured on the development database
--- (2026-08-26, role nexa_app, no tenant context set):
+-- (2026-08-26, role siyahtus_app, no tenant context set):
 --
 --   SELECT count(*) FROM events;          -> 0     (parent policy holds)
 --   SELECT count(*) FROM events_2026_08;  -> 113   (partition wide open)
@@ -53,15 +53,15 @@ BEGIN
   ) THEN
     EXECUTE format(
       'CREATE POLICY %I ON public.%I'
-      ' USING (license_id = nexa_current_license())'
-      ' WITH CHECK (license_id = nexa_current_license())',
+      ' USING (license_id = siyahtus_current_license())'
+      ' WITH CHECK (license_id = siyahtus_current_license())',
       v_policy, p_name
     );
   END IF;
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION events_secure_partition(TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION events_secure_partition(TEXT) TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Every partition created from now on is born protected.
@@ -87,7 +87,7 @@ BEGIN
       'CREATE TABLE IF NOT EXISTS public.%I PARTITION OF public.events FOR VALUES FROM (%L) TO (%L)',
       v_name, v_start, v_end
     );
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO nexa_app', v_name);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO siyahtus_app', v_name);
   END IF;
 
   PERFORM events_secure_partition(v_name);

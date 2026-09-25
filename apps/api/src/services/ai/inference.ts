@@ -34,7 +34,7 @@
  * that no request carries — the freshness sweep, `knowledge:reembed` — asks
  * {@link readInferenceResidency} for the same two facts a request carries.
  */
-import { REGIONS, servesRegion, type Region } from '@nexa/types';
+import { REGIONS, servesRegion, type Region } from '@siyahtus/types';
 import type { Env } from '../../config/env.js';
 import { ApiError } from '../../lib/api-error.js';
 import { readHipaaScope } from '../../lib/hipaa.js';
@@ -56,9 +56,9 @@ export interface InferenceProvider {
  * than the default quietly asserting something false about a remote endpoint.
  */
 export function resolveInferenceProvider(
-  env: Pick<Env, 'LLM_PROVIDER' | 'LLM_PROVIDER_REGION' | 'NEXA_REGION'>,
+  env: Pick<Env, 'LLM_PROVIDER' | 'LLM_PROVIDER_REGION' | 'SIYAHTUS_REGION'>,
 ): InferenceProvider {
-  return { id: env.LLM_PROVIDER, region: env.LLM_PROVIDER_REGION ?? env.NEXA_REGION };
+  return { id: env.LLM_PROVIDER, region: env.LLM_PROVIDER_REGION ?? env.SIYAHTUS_REGION };
 }
 
 /**
@@ -67,11 +67,11 @@ export function resolveInferenceProvider(
  * otherwise, which production requires it to for anything but the stub.
  */
 export function resolveEmbeddingInferenceProvider(
-  env: Pick<Env, 'EMBEDDING_PROVIDER' | 'EMBEDDING_PROVIDER_REGION' | 'NEXA_REGION'>,
+  env: Pick<Env, 'EMBEDDING_PROVIDER' | 'EMBEDDING_PROVIDER_REGION' | 'SIYAHTUS_REGION'>,
 ): InferenceProvider {
   return {
     id: env.EMBEDDING_PROVIDER,
-    region: env.EMBEDDING_PROVIDER_REGION ?? env.NEXA_REGION,
+    region: env.EMBEDDING_PROVIDER_REGION ?? env.SIYAHTUS_REGION,
   };
 }
 

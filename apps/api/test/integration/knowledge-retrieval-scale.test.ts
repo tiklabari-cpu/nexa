@@ -32,7 +32,7 @@
  * test (the real one is 20,000) so 2,000 chunks sit above it.
  */
 import { Prisma, PrismaClient } from '@prisma/client';
-import { chunk, embed, toVectorLiteral } from '@nexa/ai-mock';
+import { chunk, embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withTenant, type TenantClient, type TenantContext } from '../../src/lib/tenant.js';
 import {

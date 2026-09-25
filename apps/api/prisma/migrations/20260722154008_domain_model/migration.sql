@@ -669,7 +669,7 @@ BEGIN
     'CREATE TABLE IF NOT EXISTS public.%I PARTITION OF public.events FOR VALUES FROM (%L) TO (%L)',
     v_name, v_start, v_end
   );
-  EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO nexa_app', v_name);
+  EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO siyahtus_app', v_name);
   RETURN v_name;
 END;
 $$;
@@ -697,8 +697,8 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION events_ensure_partition(TIMESTAMPTZ) TO nexa_app;
-GRANT EXECUTE ON FUNCTION events_maintain_partitions(INT, INT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION events_ensure_partition(TIMESTAMPTZ) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION events_maintain_partitions(INT, INT) TO siyahtus_app;
 
 SELECT events_maintain_partitions(6, 2);
 
@@ -707,7 +707,7 @@ SELECT events_maintain_partitions(6, 2);
 -- clock skew, a bad backfill — rather than losing a customer's message, and
 -- makes the anomaly findable.
 CREATE TABLE IF NOT EXISTS events_default PARTITION OF events DEFAULT;
-GRANT SELECT, INSERT, UPDATE, DELETE ON events_default TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON events_default TO siyahtus_app;
 
 -- ===========================================================================
 -- Invariants
@@ -871,139 +871,139 @@ ALTER TABLE visits
 
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 CREATE POLICY groups_tenant ON groups
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE group_agents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY group_agents_tenant ON group_agents
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE chats ENABLE ROW LEVEL SECURITY;
 CREATE POLICY chats_tenant ON chats
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE threads ENABLE ROW LEVEL SECURITY;
 CREATE POLICY threads_tenant ON threads
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY events_tenant ON events
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- chat_users and chat_access have no license column of their own (PRD §8.4),
 -- so they inherit visibility from the chat they belong to.
 ALTER TABLE chat_users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY chat_users_tenant ON chat_users
   USING (EXISTS (SELECT 1 FROM chats c
-                 WHERE c.id = chat_users.chat_id AND c.license_id = nexa_current_license()))
+                 WHERE c.id = chat_users.chat_id AND c.license_id = siyahtus_current_license()))
   WITH CHECK (EXISTS (SELECT 1 FROM chats c
-                      WHERE c.id = chat_users.chat_id AND c.license_id = nexa_current_license()));
+                      WHERE c.id = chat_users.chat_id AND c.license_id = siyahtus_current_license()));
 
 ALTER TABLE chat_access ENABLE ROW LEVEL SECURITY;
 CREATE POLICY chat_access_tenant ON chat_access
   USING (EXISTS (SELECT 1 FROM chats c
-                 WHERE c.id = chat_access.chat_id AND c.license_id = nexa_current_license()))
+                 WHERE c.id = chat_access.chat_id AND c.license_id = siyahtus_current_license()))
   WITH CHECK (EXISTS (SELECT 1 FROM chats c
-                      WHERE c.id = chat_access.chat_id AND c.license_id = nexa_current_license()));
+                      WHERE c.id = chat_access.chat_id AND c.license_id = siyahtus_current_license()));
 
 ALTER TABLE tags ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tags_tenant ON tags
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE thread_tags ENABLE ROW LEVEL SECURITY;
 CREATE POLICY thread_tags_tenant ON thread_tags
   USING (EXISTS (SELECT 1 FROM threads t
-                 WHERE t.id = thread_tags.thread_id AND t.license_id = nexa_current_license()))
+                 WHERE t.id = thread_tags.thread_id AND t.license_id = siyahtus_current_license()))
   WITH CHECK (EXISTS (SELECT 1 FROM threads t
-                      WHERE t.id = thread_tags.thread_id AND t.license_id = nexa_current_license()));
+                      WHERE t.id = thread_tags.thread_id AND t.license_id = siyahtus_current_license()));
 
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 CREATE POLICY tickets_tenant ON tickets
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ratings_tenant ON ratings
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE canned_responses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY canned_responses_tenant ON canned_responses
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE campaigns ENABLE ROW LEVEL SECURITY;
 CREATE POLICY campaigns_tenant ON campaigns
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE goals ENABLE ROW LEVEL SECURITY;
 CREATE POLICY goals_tenant ON goals
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE visits ENABLE ROW LEVEL SECURITY;
 CREATE POLICY visits_tenant ON visits
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE ai_agents ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ai_agents_tenant ON ai_agents
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE skills ENABLE ROW LEVEL SECURITY;
 CREATE POLICY skills_tenant ON skills
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE skill_runs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY skill_runs_tenant ON skill_runs
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE workflows ENABLE ROW LEVEL SECURITY;
 CREATE POLICY workflows_tenant ON workflows
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE knowledge_sources ENABLE ROW LEVEL SECURITY;
 CREATE POLICY knowledge_sources_tenant ON knowledge_sources
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE knowledge_chunks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY knowledge_chunks_tenant ON knowledge_chunks
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE routing_rules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY routing_rules_tenant ON routing_rules
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE channels ENABLE ROW LEVEL SECURITY;
 CREATE POLICY channels_tenant ON channels
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE websites ENABLE ROW LEVEL SECURITY;
 CREATE POLICY websites_tenant ON websites
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE webhooks ENABLE ROW LEVEL SECURITY;
 CREATE POLICY webhooks_tenant ON webhooks
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE security_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY security_settings_tenant ON security_settings
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE subscriptions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY subscriptions_tenant ON subscriptions
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE usage_records ENABLE ROW LEVEL SECURITY;
 CREATE POLICY usage_records_tenant ON usage_records
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The audit log is append-only from the application's point of view: an actor
 -- who could edit it could erase the evidence of what they did.
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 CREATE POLICY audit_log_read ON audit_log FOR SELECT
-  USING (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license());
 CREATE POLICY audit_log_append ON audit_log FOR INSERT
-  WITH CHECK (license_id = nexa_current_license());
+  WITH CHECK (license_id = siyahtus_current_license());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexa_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO siyahtus_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO siyahtus_app;
 -- audit_log deliberately excluded from UPDATE/DELETE by the policies above.
-REVOKE UPDATE, DELETE ON audit_log FROM nexa_app;
+REVOKE UPDATE, DELETE ON audit_log FROM siyahtus_app;
 
 -- Events belong to their thread, and must not outlive it.
 --

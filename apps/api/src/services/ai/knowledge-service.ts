@@ -29,7 +29,7 @@
  * space.
  */
 import { Prisma } from '@prisma/client';
-import { chunk, toVectorLiteral } from '@nexa/ai-mock';
+import { chunk, toVectorLiteral } from '@siyahtus/ai-mock';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { EmbeddingProviderError } from './provider/embedding-error.js';

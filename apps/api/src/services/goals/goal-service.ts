@@ -18,7 +18,7 @@
  * quietly shrink last month's numbers.
  */
 import type { Prisma } from '@prisma/client';
-import type { Goal, GoalDefinition, GoalFilter } from '@nexa/types';
+import type { Goal, GoalDefinition, GoalFilter } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { goalRequires, hasGoalTrigger, matchesGoal, type GoalFacts } from './goal-matching.js';

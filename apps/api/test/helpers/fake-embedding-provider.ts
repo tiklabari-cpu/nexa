@@ -14,7 +14,7 @@
  * this fake a stand-in for "a real provider" that the existing fixtures,
  * written against the stub, can still be reasoned about with.
  */
-import { embed } from '@nexa/ai-mock';
+import { embed } from '@siyahtus/ai-mock';
 import type {
   EmbeddingProvider,
   EmbeddingProviderId,

@@ -64,16 +64,16 @@ ALTER TABLE "ticket_rules" ADD CONSTRAINT "ticket_rules_license_id_fkey" FOREIGN
 ALTER TABLE ticket_tags ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ticket_tags_tenant ON ticket_tags
   USING (EXISTS (SELECT 1 FROM tickets t
-                 WHERE t.id = ticket_tags.ticket_id AND t.license_id = nexa_current_license()))
+                 WHERE t.id = ticket_tags.ticket_id AND t.license_id = siyahtus_current_license()))
   WITH CHECK (EXISTS (SELECT 1 FROM tickets t
-                      WHERE t.id = ticket_tags.ticket_id AND t.license_id = nexa_current_license()));
+                      WHERE t.id = ticket_tags.ticket_id AND t.license_id = siyahtus_current_license()));
 
 -- The application role reaches the table only through that policy. No UPDATE: a
 -- tag is added or removed, never edited.
-GRANT SELECT, INSERT, DELETE ON ticket_tags TO nexa_app;
+GRANT SELECT, INSERT, DELETE ON ticket_tags TO siyahtus_app;
 
 -- ticket_rules is license-scoped like campaigns and routing_rules: a rule is
 -- visible and writable only within its own license.
 ALTER TABLE ticket_rules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ticket_rules_tenant ON ticket_rules
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());

@@ -7,7 +7,7 @@
  * but "the person who turned push off got nothing" is only convincing if it can
  * be asserted without the send path being involved at all.
  */
-import { DEFAULT_NOTIFICATION_PREFERENCES } from '@nexa/types';
+import { DEFAULT_NOTIFICATION_PREFERENCES } from '@siyahtus/types';
 import { describe, expect, it } from 'vitest';
 import { deliverablePushTargets, renderPush, type PushDevice } from './push.js';
 

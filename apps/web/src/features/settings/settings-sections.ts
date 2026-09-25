@@ -1,4 +1,4 @@
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope } from '@siyahtus/types';
 import { FOOTER } from '../../components/navigation.js';
 
 /**

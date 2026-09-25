@@ -78,11 +78,11 @@ ALTER TABLE channel_messages
 -- invisible to another (NFR-S5).
 ALTER TABLE channel_identities ENABLE ROW LEVEL SECURITY;
 CREATE POLICY channel_identities_tenant ON channel_identities
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE channel_messages ENABLE ROW LEVEL SECURITY;
 CREATE POLICY channel_messages_tenant ON channel_messages
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- A provider webhook names the workspace's channel address (a page id, a phone
 -- number) as the recipient, but no session exists yet — so the address must
@@ -105,9 +105,9 @@ $$;
 -- SECURITY DEFINER runs as the function owner, so EXECUTE is granted narrowly and
 -- never to PUBLIC.
 REVOKE EXECUTE ON FUNCTION channel_resolve_license(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION channel_resolve_license(TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION channel_resolve_license(TEXT, TEXT) TO siyahtus_app;
 
--- The API connects as nexa_app. Default privileges already cover new tables, but
+-- The API connects as siyahtus_app. Default privileges already cover new tables, but
 -- grant explicitly so this migration is correct regardless of who owns it.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.channel_identities TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.channel_messages TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.channel_identities TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.channel_messages TO siyahtus_app;

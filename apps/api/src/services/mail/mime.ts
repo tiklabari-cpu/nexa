@@ -2,7 +2,7 @@
  * The bytes of one outgoing message — RFC 5322 headers, one `text/plain` part
  * (tm 255.3).
  *
- * Every message Nexa sends is a plain-text body with a subject (`Message` in
+ * Every message SiyahTuş sends is a plain-text body with a subject (`Message` in
  * `mailer.ts`; turning the templates into HTML is out of scope), so the MIME
  * this needs is one part and seven headers. What has to be right is the
  * encoding, because both halves routinely carry Turkish and every other

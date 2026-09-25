@@ -23,7 +23,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { DEVICE_PLATFORMS, DEVICE_TOKEN_MAX_LENGTH } from '@nexa/types';
+import { DEVICE_PLATFORMS, DEVICE_TOKEN_MAX_LENGTH } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 

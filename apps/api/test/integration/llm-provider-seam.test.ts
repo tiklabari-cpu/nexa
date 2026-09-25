@@ -15,7 +15,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { embed, toVectorLiteral } from '@nexa/ai-mock';
+import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { FAKE_LLM_REPLY, FakeLlmProvider } from '../helpers/fake-llm-provider.js';
 import { grantToken, ownerClient, seedFixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -24,7 +24,7 @@ const PASSAGE = 'Standard delivery takes 3 to 5 working days across the EU.';
 
 /** A real provider, configured for Europe, on a US deployment — the refusing shape. */
 const OUT_OF_REGION_OPENAI = {
-  NEXA_REGION: 'us',
+  SIYAHTUS_REGION: 'us',
   LLM_PROVIDER: 'openai',
   LLM_PROVIDER_REGION: 'eu',
   LLM_API_BASE_URL: 'https://eu.api.openai.com/v1',

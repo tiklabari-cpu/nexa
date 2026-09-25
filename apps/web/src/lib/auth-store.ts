@@ -8,7 +8,7 @@
  * stolen one is detectable and revokes its whole family server-side.
  */
 import { create } from 'zustand';
-import { readNotificationPreferences, type NotificationPreferences } from '@nexa/types';
+import { readNotificationPreferences, type NotificationPreferences } from '@siyahtus/types';
 import { ApiClient } from './api-client.js';
 import { savePrefs } from '../features/notifications/notifications.js';
 
@@ -115,9 +115,9 @@ interface AuthState {
   markOnboarded: () => void;
 }
 
-const REFRESH_KEY = 'nexa.refresh_token';
-const CLIENT_ID_KEY = 'nexa.client_id';
-const BRAND_KEY = 'nexa.brand_id';
+const REFRESH_KEY = 'siyahtus.refresh_token';
+const CLIENT_ID_KEY = 'siyahtus.client_id';
+const BRAND_KEY = 'siyahtus.brand_id';
 const REDIRECT_URI = `${window.location.origin}/auth/callback`;
 
 /**
@@ -132,7 +132,7 @@ const REDIRECT_URI = `${window.location.origin}/auth/callback`;
  * Storing it at all is unavoidable: the browser leaves for the identity
  * provider and comes back to a fresh page with no memory.
  */
-const SSO_PENDING_KEY = 'nexa.sso_login';
+const SSO_PENDING_KEY = 'siyahtus.sso_login';
 
 interface PendingSsoLogin {
   verifier: string;
@@ -350,7 +350,7 @@ export const useAuth = create<AuthState>((set, get) => {
         // match: a workspace created through signup had no such client, and two
         // organisations sharing a first word would have collided.
         const clientId =
-          membership.client_id ?? `nexa-agent-app-${slugOf(membership.organization_name)}`;
+          membership.client_id ?? `siyahtus-agent-app-${slugOf(membership.organization_name)}`;
         const verifier = createVerifier();
         const challenge = await deriveChallenge(verifier);
 

@@ -18,7 +18,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { ownerClient, seedDefaultBrand, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
-const DOMAIN = 'inbound.nexa.localhost';
+const DOMAIN = 'inbound.siyahtus.localhost';
 
 interface InboundResult {
   status: 'created' | 'ignored';

@@ -78,12 +78,12 @@ ALTER TABLE report_share_links
 -- withdrawn.
 ALTER TABLE report_share_links ENABLE ROW LEVEL SECURITY;
 CREATE POLICY report_share_links_tenant ON report_share_links
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches the table only through that policy.
+-- The API connects as siyahtus_app and reaches the table only through that policy.
 -- Granted explicitly: the schema-wide GRANT in 20260722154008 covered only the
 -- tables that existed then.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.report_share_links TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.report_share_links TO siyahtus_app;
 
 -- Resolve a share token before any tenant context exists.
 --
@@ -128,4 +128,4 @@ $$;
 -- SECURITY DEFINER runs as the function owner, so EXECUTE is granted narrowly
 -- and never to PUBLIC.
 REVOKE EXECUTE ON FUNCTION reports_resolve_share_link(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION reports_resolve_share_link(TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION reports_resolve_share_link(TEXT) TO siyahtus_app;

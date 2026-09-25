@@ -25,7 +25,7 @@
 import { useLayoutEffect } from 'react';
 import { create } from 'zustand';
 
-const STORAGE_PREFIX = 'nexa.traffic.supervising:';
+const STORAGE_PREFIX = 'siyahtus.traffic.supervising:';
 
 function storageKey(accountId: string): string {
   return `${STORAGE_PREFIX}${accountId}`;

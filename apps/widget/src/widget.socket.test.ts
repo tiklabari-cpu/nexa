@@ -173,7 +173,7 @@ function stubFetch(): void {
 function mountWidget(): HTMLElement {
   window.history.replaceState({}, '', `/widget.html?organization_id=org-1&api=${API}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   return root;
@@ -334,7 +334,7 @@ describe('widget RTM connection (FR-MOD-11.6)', () => {
     eventsAt = () => [VISITOR_ASK];
     // A returning visitor with the panel shut: the poll is the only thing
     // carrying the proactive card and the unread badge, and it runs at 30 s.
-    window.localStorage.setItem('nexa.customer_id', 'cust-1');
+    window.localStorage.setItem('siyahtus.customer_id', 'cust-1');
     mountWidget();
     await settle();
     await handshake(FakeSocket.instances[0]!);
@@ -459,7 +459,7 @@ describe('widget RTM connection (FR-MOD-11.6)', () => {
     eventsAt = () => [VISITOR_ASK];
     // A returning visitor connects on mount without ever opening the panel
     // (FR-MOD-11.1) — which is exactly the state a push has to reach.
-    window.localStorage.setItem('nexa.customer_id', 'cust-1');
+    window.localStorage.setItem('siyahtus.customer_id', 'cust-1');
     const root = mountWidget();
     await settle();
     const socket = FakeSocket.instances[0]!;

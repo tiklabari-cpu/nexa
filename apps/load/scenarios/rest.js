@@ -21,7 +21,7 @@
  * Run the stack under test with `RATE_LIMIT_AGENT_PER_MIN` raised past
  * `LOAD_VUS ÷ LOAD_PACING_SECONDS × 60 × 3` — `apps/e2e` already does the
  * equivalent for `RATE_LIMIT_ANON_PER_MIN` (`playwright.config.ts`). The
- * shared `nexa_rate_limited count==0` threshold is what catches an operator
+ * shared `siyahtus_rate_limited count==0` threshold is what catches an operator
  * who forgets: an unraised limit turns this run red, not quietly optimistic.
  */
 import { check, fail, sleep } from 'k6';

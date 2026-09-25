@@ -74,7 +74,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
  * carries the component stack: without it "something threw" names no file.
  */
 function defaultReport(error: Error, info: ErrorInfo): void {
-  console.error('[nexa] a screen failed to render', error, info.componentStack);
+  console.error('[siyahtus] a screen failed to render', error, info.componentStack);
 }
 
 /**

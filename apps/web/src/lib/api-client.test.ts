@@ -30,18 +30,18 @@ describe('ApiClient', () => {
     expect(new Headers(init!.headers).has('Authorization')).toBe(false);
   });
 
-  it('sends the selected brand as X-Nexa-Brand (PRD §5.3-Marka)', async () => {
+  it('sends the selected brand as X-SiyahTus-Brand (PRD §5.3-Marka)', async () => {
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ ok: true }));
     const client = new ApiClient({ fetchImpl, getBrandId: () => 'brand-b' });
 
     await client.get('/websites');
 
     const [, init] = fetchImpl.mock.calls[0]!;
-    expect(new Headers(init!.headers).get('X-Nexa-Brand')).toBe('brand-b');
+    expect(new Headers(init!.headers).get('X-SiyahTus-Brand')).toBe('brand-b');
   });
 
-  it('omits X-Nexa-Brand entirely when no brand is selected', async () => {
-    // License-wide NULL semantics (RLS `nexa_current_brand() IS NULL`) must
+  it('omits X-SiyahTus-Brand entirely when no brand is selected', async () => {
+    // License-wide NULL semantics (RLS `siyahtus_current_brand() IS NULL`) must
     // stay distinguishable from "the caller sent a brand" — an empty header
     // is not the same as no header.
     const fetchImpl = vi.fn<typeof fetch>(async () => jsonResponse({ ok: true }));
@@ -50,7 +50,7 @@ describe('ApiClient', () => {
     await client.get('/websites');
 
     const [, init] = fetchImpl.mock.calls[0]!;
-    expect(new Headers(init!.headers).has('X-Nexa-Brand')).toBe(false);
+    expect(new Headers(init!.headers).has('X-SiyahTus-Brand')).toBe(false);
   });
 
   it('carries the brand header on blob fetches too', async () => {
@@ -62,7 +62,7 @@ describe('ApiClient', () => {
     await client.getBlob('/uploads/key-1');
 
     const [, init] = fetchImpl.mock.calls[0]!;
-    expect(new Headers(init!.headers).get('X-Nexa-Brand')).toBe('brand-b');
+    expect(new Headers(init!.headers).get('X-SiyahTus-Brand')).toBe('brand-b');
   });
 
   it('returns the blob plus the filename the server assigned via content-disposition', async () => {
@@ -71,7 +71,8 @@ describe('ApiClient', () => {
         new Response(new Blob(['date,chats\r\n'], { type: 'text/csv' }), {
           status: 200,
           headers: {
-            'content-disposition': 'attachment; filename="nexa-overview-2026-01-01-2026-01-31.csv"',
+            'content-disposition':
+              'attachment; filename="siyahtus-overview-2026-01-01-2026-01-31.csv"',
           },
         }),
     );
@@ -79,7 +80,7 @@ describe('ApiClient', () => {
 
     const { blob, filename } = await client.getFile('/reports/export?group=overview&format=csv');
 
-    expect(filename).toBe('nexa-overview-2026-01-01-2026-01-31.csv');
+    expect(filename).toBe('siyahtus-overview-2026-01-01-2026-01-31.csv');
     expect(blob).toBeInstanceOf(Blob);
     expect(blob.size).toBeGreaterThan(0);
   });

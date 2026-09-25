@@ -42,4 +42,4 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_request_password_reset(CITEXT, TEXT, TIMESTAMPTZ) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_request_password_reset(CITEXT, TEXT, TIMESTAMPTZ) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_request_password_reset(CITEXT, TEXT, TIMESTAMPTZ) TO siyahtus_app;

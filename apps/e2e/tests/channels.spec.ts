@@ -171,7 +171,7 @@ let apiCtx: APIRequestContext;
 
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
-    extraHTTPHeaders: { 'user-agent': 'nexa-e2e-channels' },
+    extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-channels' },
   });
 });
 

@@ -62,13 +62,13 @@ olarak okur. Ona dokunma.
 
 ### 1.1 Kapının objektifliği: test veri depoları koşu başına izole (tm 105)
 
-`@nexa/api` ve `@nexa/rtm` gerçek Postgres + Redis'e karşı koşar ve her süit TRUNCATE ile
-başlar. Eskiden aynı anda açık iki pencere aynı `nexa` veritabanını paylaştığı için birbirinin
+`@siyahtus/api` ve `@siyahtus/rtm` gerçek Postgres + Redis'e karşı koşar ve her süit TRUNCATE ile
+başlar. Eskiden aynı anda açık iki pencere aynı `siyahtus` veritabanını paylaştığı için birbirinin
 fixture'ını siliyordu; sonuç, o pencerenin HİÇ DOKUNMADIĞI dosyalarda yüzlerce kırmızıydı
 (ölçüldü: art arda iki koşuda 889 → 982). Kapı bu durumda objektif değildi.
 
 Artık bu iki paketin `test` / `test:unit` / `test:integration` script'leri
-`apps/api/scripts/with-test-datastores.ts` üzerinden geçer: her koşu kendi `nexa_test_<id>`
+`apps/api/scripts/with-test-datastores.ts` üzerinden geçer: her koşu kendi `siyahtus_test_<id>`
 veritabanını (oluştur → `migrate deploy` → koşu sonunda düşür) ve kendi Redis mantıksal
 veritabanını (1-15) alır. Koşu başına ~3 sn. Test/fixture tarafında değişiklik gerekmez —
 harness yalnız `DATABASE_URL` / `DATABASE_APP_URL` / `REDIS_URL`'i yeniden yönlendirir.
@@ -80,9 +80,9 @@ Pencere için iki sonuç:
   senin değişikliğindendir ya da HANDOFF/Task Master'da kayıtlı bilinen bir kusurdur; ikisi de
   değilse gerçek bir regresyondur.
 
-İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `nexa` veritabanını sürer;
+İstisna: `apps/e2e` sabit portlarda gerçek sunucuları ve seed'lenmiş `siyahtus` veritabanını sürer;
 iki pencere aynı anda e2e koşamaz. Paylaşılan veritabanına karşı koşmak (bir testin bıraktığı
-veriyi elle incelemek) için: `NEXA_TEST_ISOLATION=off`.
+veriyi elle incelemek) için: `SIYAHTUS_TEST_ISOLATION=off`.
 
 ### 1.3 Kapıyı KOŞMAK da objektif olmalı: `--force` ve parçalama (tm 129)
 
@@ -95,16 +95,16 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   `FULL TURBO` deyip son sonucu döndürür (ölçüldü: 49 ms). Bu normal ve istenen — ama "kapıyı üç kez
   koşturdum, üçü de yeşil" demenin hiçbir anlamı yok demektir. Bir kırmızıyı kovalarken ya da bir
   flake düzeltmesini kanıtlarken **`--force` şart**:
-  `npx turbo run test --force --filter=!@nexa/e2e`. Normal DoD kapısında `--force` gerekmez.
-- **Tek komut olarak kapı, bir pencerenin komut tavanını aşar.** `@nexa/api`'nin `test` script'i unit
+  `npx turbo run test --force --filter=!@siyahtus/e2e`. Normal DoD kapısında `--force` gerekmez.
+- **Tek komut olarak kapı, bir pencerenin komut tavanını aşar.** `@siyahtus/api`'nin `test` script'i unit
   **ve** integration'ı birlikte koşar, `fileParallelism: false` ile sırayla: tek başına ~858 s, yani
   `pnpm -w test` ~15 dk. Pencerenin komut tavanı 10 dk. `pnpm -w test:integration` için zaten
   kullanılan çözüm burada da geçerli — **parçala ve her parçanın exit code'unu yaz**; içerik aynı
   kaldığı sürece kapı geçilmiş sayılır:
 
   ```
-  npx turbo run test --force --filter=!@nexa/e2e --filter=!@nexa/api   # ~1 dk
-  npx turbo run test:unit --force --filter=@nexa/api                   # ~1 dk (91 dosya)
+  npx turbo run test --force --filter=!@siyahtus/e2e --filter=!@siyahtus/api   # ~1 dk
+  npx turbo run test:unit --force --filter=@siyahtus/api                   # ~1 dk (91 dosya)
   # ×3 (shard 1/3, 2/3, 3/3) — ~5 / 4 / 2,5 dk
   cd apps/api
   npx tsx scripts/with-test-datastores.ts vitest run --dir test/integration --shard=1/3
@@ -138,10 +138,10 @@ sanılır. Ölçüldü, kaybedilen tur sayısıyla birlikte.
 - **Docker kapalıyken entegrasyon testleri ASILIR.** `with-test-datastores.ts` hızlı düşmez:
   10+ dakika boyunca **0 bayt çıktı** verir. Kapıyı koşmadan önce `docker info` ile bak. Kapalıysa
   exe **`%LOCALAPPDATA%\Programs\DockerDesktop\Docker Desktop.exe`** — `C:\Program Files\...`
-  altında DEĞİL, kullanıcı kurulumu. Sonra `docker compose up -d`; `nexa-db` host portu **5433**,
-  `nexa-redis` **6380**. psql kullanıcısı **`nexa`** (`-U postgres` → "role does not exist"),
+  altında DEĞİL, kullanıcı kurulumu. Sonra `docker compose up -d`; `siyahtus-db` host portu **5433**,
+  `siyahtus-redis` **6380**. psql kullanıcısı **`siyahtus`** (`-U postgres` → "role does not exist"),
   container'a komut geçerken `MSYS_NO_PATHCONV=1` gerekir. Volume'lar restart'ta korunur, yani
-  e2e'nin beklediği tohumlu `nexa` veritabanı yerinde kalır.
+  e2e'nin beklediği tohumlu `siyahtus` veritabanı yerinde kalır.
 
 - **`pnpm -w test:e2e` kök `.env`'i kendiliğinden ALMAZ.** Playwright'ın kaldırdığı RTM sunucusu
   60 saniyede `DATABASE_URL: Required` ile düşer ve bütün süit "webServer timeout" verir. Doğrusu:
@@ -177,7 +177,7 @@ sessizce atlıyor") bu turda **zaten kapalı bulundu** — `git log -- .github/w
 `6404a2e` (tm 156.1, M-GUARD-a) "Build runs before Unit tests, widget bundle guard stops skipping
 silently" diyor ve `ci.yml`'de "Build" adımı fiilen "Unit tests"ten önce duruyor;
 `apps/widget/test/bundle-size.test.ts` artık `describe.skipIf` değil, `existsSync` üzerinden
-**assert** ediyor (dist yoksa "run \`pnpm --filter @nexa/widget build\` first" mesajıyla kırmızı
+**assert** ediyor (dist yoksa "run \`pnpm --filter @siyahtus/widget build\` first" mesajıyla kırmızı
 verir, sessizce atlamaz). Ayrı bir düzeltme commit'i bu yüzden gerekmedi.
 
 ## 2) Git kuralları
@@ -230,14 +230,14 @@ dağıtılırsa gerçek düzeltmelerin önünü keser ve öncelik sırası anlam
 ## 6) Şema göçü (migration) politikası — çok replikalı dağıtımda güvenli değişiklik (tm 164.3)
 
 Bu bölüm bir **karar** ve onun gerekçesidir. Üç sorunun cevabı; hepsi ölçüldü, varsayılmadı
-(yeniden koşulabilir: `pnpm --filter @nexa/api measure:concurrent-migrate 3`).
+(yeniden koşulabilir: `pnpm --filter @siyahtus/api measure:concurrent-migrate 3`).
 
 ### 6.1 Migration NEREDE koşar
 
-| Ortam                                                        | Migration'ı kim koşar           | Nasıl                                                                                                                                  |
-| ------------------------------------------------------------ | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| Yerel (`make dev`, tek konteyner, `docker-compose.full.yml`) | api imajının kendi entrypoint'i | `apps/api/docker-entrypoint.sh` → `prisma migrate deploy` (varsayılan **değişmedi**)                                                   |
-| Dağıtım (Helm, replika > 1)                                  | **tek atımlık hook Job**        | `infra/helm/nexa/templates/migrate-job.yaml` (`helm.sh/hook: pre-install,pre-upgrade`) + ConfigMap'te `NEXA_MIGRATE_ON_START: "false"` |
+| Ortam                                                        | Migration'ı kim koşar           | Nasıl                                                                                                                                          |
+| ------------------------------------------------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Yerel (`make dev`, tek konteyner, `docker-compose.full.yml`) | api imajının kendi entrypoint'i | `apps/api/docker-entrypoint.sh` → `prisma migrate deploy` (varsayılan **değişmedi**)                                                           |
+| Dağıtım (Helm, replika > 1)                                  | **tek atımlık hook Job**        | `infra/helm/siyahtus/templates/migrate-job.yaml` (`helm.sh/hook: pre-install,pre-upgrade`) + ConfigMap'te `SIYAHTUS_MIGRATE_ON_START: "false"` |
 
 **Neden entrypoint DEĞİL (replika > 1 iken).** `prisma migrate deploy` gerçekten sıraya
 giriyor — üç süreç aynı anda boş bir veritabanına saldırdığında biri 72 migration'ı uyguladı,
@@ -434,20 +434,20 @@ Aşağıdaki iki komut depo kökünden koşar (Git Bash). tm 184.2 bunları scri
 buradaki amaç biçimin **bugün** çıkarılabilir olduğunu göstermek.
 
 ```bash
-# Dış parantezler ŞART: alternasyon gruplanmazsa `\($NEXA_REQ_ID` yalnız ilk
+# Dış parantezler ŞART: alternasyon gruplanmazsa `\($SIYAHTUS_REQ_ID` yalnız ilk
 # seçeneğe bağlanır, kalan üçü `describe(` çıpasından da parantez şartından da
 # bağımsız eşleşir ve yorum satırları sonuca sızar (bu turda ölçüldü: 73 yerine
 # 149 ID, aralarında hiç etiketlenmemiş dosyaların yorumları).
-NEXA_REQ_ID='(FR-MOD-[0-9][0-9.]*|FR-[0-9A-Z][0-9A-Z-]*\.[0-9A-Za-z]+|NFR-[A-Z0-9]+|SEMA-MIMARI\.[0-9A-Za-z][0-9A-Za-z.-]*)'
+SIYAHTUS_REQ_ID='(FR-MOD-[0-9][0-9.]*|FR-[0-9A-Z][0-9A-Z-]*\.[0-9A-Za-z]+|NFR-[A-Z0-9]+|SEMA-MIMARI\.[0-9A-Za-z][0-9A-Za-z.-]*)'
 
 # 1) Her kapsama iddiası, yeriyle birlikte (dosya:satır)
 git ls-files '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' \
-  | xargs grep -nE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($NEXA_REQ_ID"
+  | xargs grep -nE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($SIYAHTUS_REQ_ID"
 
 # 2) İddia edilen maddelerin kümesi (247'nin içinden bugün 74)
 git ls-files '*.test.ts' '*.test.tsx' '*.spec.ts' '*.spec.tsx' \
-  | xargs grep -hE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($NEXA_REQ_ID" \
-  | grep -oE "\($NEXA_REQ_ID[^)]*\)" | grep -oE "$NEXA_REQ_ID" | sort -u
+  | xargs grep -hE "^[[:space:]]*(describe|it|test)(\.[a-z]+)?\(.*\($SIYAHTUS_REQ_ID" \
+  | grep -oE "\($SIYAHTUS_REQ_ID[^)]*\)" | grep -oE "$SIYAHTUS_REQ_ID" | sort -u
 ```
 
 Regex katalogun 247 ID'sinin 246'sını eşliyor; eşleşmeyen tek satır `FR-MOD-02.4.1–.6`, bir

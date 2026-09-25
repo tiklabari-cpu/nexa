@@ -50,7 +50,7 @@ describe('brands', () => {
 
   const auth = (token: string, brand?: string) => ({
     authorization: `Bearer ${token}`,
-    ...(brand ? { 'x-nexa-brand': brand } : {}),
+    ...(brand ? { 'x-siyahtus-brand': brand } : {}),
   });
 
   beforeAll(async () => {

@@ -10,7 +10,7 @@
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { licenseChannel, type BusEnvelope } from '@nexa/types';
+import { licenseChannel, type BusEnvelope } from '@siyahtus/types';
 import type { Logger } from 'pino';
 import {
   createConversation,
@@ -65,7 +65,7 @@ describe('ConflictPublisher', () => {
         /* ignore non-JSON — nothing this suite publishes is malformed */
       }
     });
-    await sub.psubscribe('nexa:rtm:license:*');
+    await sub.psubscribe('siyahtus:rtm:license:*');
   });
 
   afterAll(async () => {

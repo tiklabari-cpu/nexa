@@ -37,9 +37,9 @@ export const auth: Messages = {
   'auth.signin.forgotPassword': 'Forgot your password?',
   'auth.signin.newHere': 'New here?',
   'auth.signin.createWorkspace': 'Create a workspace',
-  'auth.signin.demoCredentials': 'Demo: owner@acme.localhost / nexa-demo-password',
+  'auth.signin.demoCredentials': 'Demo: owner@acme.localhost / siyahtus-demo-password',
   'auth.signin.ssoRequired':
-    'This workspace requires single sign-on. Continue from your identity provider’s Nexa tile.',
+    'This workspace requires single sign-on. Continue from your identity provider’s SiyahTuş tile.',
   'auth.signin.ssoLinkFailed': 'Could not start single sign-on for that link.',
   'auth.signin.ssoStartFailed': 'Could not start single sign-on.',
   'auth.signin.ssoRedirecting': 'Taking you to your identity provider…',
@@ -134,7 +134,7 @@ export const auth: Messages = {
   'auth.join.title': 'Join {organization}',
   'auth.join.subtitle': 'Invited as {role} · {email}',
   'auth.join.existingAccountNotice':
-    'You already have a Nexa account for this address. Accepting adds this workspace to it.',
+    'You already have a SiyahTuş account for this address. Accepting adds this workspace to it.',
   'auth.join.passwordHint': 'At least {count} characters.',
   'auth.join.submit': 'Join workspace',
   'auth.join.submitting': 'Joining…',

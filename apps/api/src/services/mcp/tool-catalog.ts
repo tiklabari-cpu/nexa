@@ -27,7 +27,7 @@
  * `apps/api/src/services/audit/audit-log.ts` (`AUDIT_ACTIONS`).
  */
 import { z } from 'zod';
-import { isScope, type Scope } from '@nexa/types';
+import { isScope, type Scope } from '@siyahtus/types';
 
 /** One MCP tool's static description, discoverable and callable by a client. */
 export interface McpToolDescriptor<TSchema extends z.ZodTypeAny = z.ZodTypeAny> {

@@ -5,7 +5,7 @@
   "globalEnv": [
     "NODE_ENV",
     "LOG_LEVEL",
-    "NEXA_REGION",
+    "SIYAHTUS_REGION",
 
     "DATABASE_URL",
     "DATABASE_APP_URL",
@@ -13,8 +13,8 @@
     "DATABASE_REPLICA_URL",
     "REDIS_URL",
 
-    "NEXA_TEST_ISOLATION",
-    "NEXA_TEST_LICENSE_ID_OFFSET",
+    "SIYAHTUS_TEST_ISOLATION",
+    "SIYAHTUS_TEST_LICENSE_ID_OFFSET",
 
     "API_PORT",
     "API_HOST",
@@ -148,11 +148,11 @@
       "dependsOn": ["^build"],
       "outputs": ["coverage/**"]
     },
-    "@nexa/widget#test": {
+    "@siyahtus/widget#test": {
       "dependsOn": ["^build", "build"],
       "outputs": ["coverage/**"]
     },
-    "@nexa/widget#test:unit": {
+    "@siyahtus/widget#test:unit": {
       "dependsOn": ["^build", "build"],
       "outputs": ["coverage/**"]
     },

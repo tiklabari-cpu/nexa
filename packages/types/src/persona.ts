@@ -24,7 +24,7 @@
  *      empty persona returns the first passage unchanged — the exact string the
  *      engine sent before any of this existed.
  *
- * It lives in `@nexa/types` rather than beside the engine because two surfaces
+ * It lives in `@siyahtus/types` rather than beside the engine because two surfaces
  * have to agree on it: the engine that produces the customer's reply, and the
  * admin-facing preview that promises what that reply will look like. A preview
  * running its own approximation of these rules is worse than no preview.

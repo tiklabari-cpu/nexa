@@ -21,6 +21,6 @@ ALTER TABLE "inbox_settings" ADD CONSTRAINT "inbox_settings_license_id_fkey"
 
 ALTER TABLE inbox_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY inbox_settings_tenant ON inbox_settings
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON inbox_settings TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON inbox_settings TO siyahtus_app;

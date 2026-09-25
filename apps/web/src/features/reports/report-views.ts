@@ -63,7 +63,7 @@ export interface SavedReportViewInput {
   baseline: ReportBaseline | null;
 }
 
-const STORAGE_KEY = 'nexa.reports.saved-views';
+const STORAGE_KEY = 'siyahtus.reports.saved-views';
 export const SAVED_REPORT_VIEW_NAME_MAX = 40;
 
 const REPORT_TABS: ReportTabId[] = [

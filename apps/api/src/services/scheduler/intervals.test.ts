@@ -15,7 +15,7 @@ import { SCHEDULER_JOB_NAMES, intervalEnvKey, jobIntervalMs, jobIntervals } from
 /** The minimum a boot needs, so a failure below is about the scheduler alone. */
 const BASE: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
-  DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa',
+  DATABASE_URL: 'postgresql://siyahtus:siyahtus@127.0.0.1:5432/siyahtus',
   REDIS_URL: 'redis://127.0.0.1:6379',
   JWT_SIGNING_KEY: 'dev-only-jwt-signing-key-at-least-32-chars',
   WEBHOOK_HMAC_SEED: 'dev-only-webhook-hmac-seed-at-least-32-chars',

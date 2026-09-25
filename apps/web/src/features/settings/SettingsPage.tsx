@@ -19,7 +19,7 @@
  */
 import type { ReactElement, ReactNode } from 'react';
 import { Navigate, useLocation, useParams } from 'react-router-dom';
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope } from '@siyahtus/types';
 import { Page } from '../../components/Page.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';

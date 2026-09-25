@@ -16,7 +16,7 @@ import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const AGENT = {
   account_id: 'acc_1',
-  email: 'demo@nexa.test',
+  email: 'demo@siyahtus.test',
   name: 'Demo Agent',
   role: 'owner',
   organization_id: 'org_1',
@@ -117,9 +117,10 @@ function stubFetch(initial: TwoFactorStatus): void {
         if (nextEnrollError) return errorJson(nextEnrollError);
         return okJson({
           secret: 'JBSWY3DPEHPK3PXP',
-          otpauth_uri: 'otpauth://totp/Nexa:demo%40nexa.test?secret=JBSWY3DPEHPK3PXP&issuer=Nexa',
-          issuer: 'Nexa',
-          account_name: 'demo@nexa.test',
+          otpauth_uri:
+            'otpauth://totp/SiyahTuş:demo%40siyahtus.test?secret=JBSWY3DPEHPK3PXP&issuer=SiyahTuş',
+          issuer: 'SiyahTuş',
+          account_name: 'demo@siyahtus.test',
         });
       }
       if (path.endsWith('/auth/2fa/activate') && method === 'POST') {

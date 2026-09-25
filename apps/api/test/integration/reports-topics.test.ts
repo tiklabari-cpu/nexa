@@ -19,8 +19,8 @@ import { execFile } from 'node:child_process';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
-import { TOPIC_MIN_CLUSTER_SIZE } from '@nexa/ai-mock';
+import { generateShortId } from '@siyahtus/types';
+import { TOPIC_MIN_CLUSTER_SIZE } from '@siyahtus/ai-mock';
 import {
   grantToken,
   ownerClient,
@@ -482,7 +482,7 @@ describe('chat topics report (07.6)', () => {
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-type']).toContain('text/csv');
       expect(response.headers['content-disposition']).toMatch(
-        /^attachment; filename="nexa-topics-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+        /^attachment; filename="siyahtus-topics-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
       );
       expect(response.headers['cache-control']).toBe('no-store');
 
@@ -594,7 +594,7 @@ describe('chat topics — demo seed diversity (07.6-d)', () => {
 
   it('clusters the seeded demo tenant into several topics, each over the cluster floor, with a live trend', async () => {
     const response = await server.get('/reports/topics', {
-      authorization: 'Bearer nexa_pat_demo_acme',
+      authorization: 'Bearer siyahtus_pat_demo_acme',
     });
     expect(response.statusCode).toBe(200);
     const body = response.json();
@@ -619,7 +619,7 @@ describe('chat topics — demo seed diversity (07.6-d)', () => {
 
   it('does not leak the seeded topics into a demo tenant with no rich conversations', async () => {
     const response = await server.get('/reports/topics', {
-      authorization: 'Bearer nexa_pat_demo_northwind',
+      authorization: 'Bearer siyahtus_pat_demo_northwind',
     });
     expect(response.statusCode).toBe(200);
     const body = response.json();
@@ -636,7 +636,7 @@ describe('chat topics — demo seed diversity (07.6-d)', () => {
     const to = new Date();
     const from = new Date(to.getTime() - 30 * 86_400_000);
     const url = `/reports/topics?from=${from.toISOString()}&to=${to.toISOString()}`;
-    const auth = { authorization: 'Bearer nexa_pat_demo_acme' };
+    const auth = { authorization: 'Bearer siyahtus_pat_demo_acme' };
 
     const before = (await server.get(url, auth)).json();
     await runDemoSeed();

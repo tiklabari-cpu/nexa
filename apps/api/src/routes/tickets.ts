@@ -17,7 +17,7 @@ import {
   TICKET_PRIORITY_MAX,
   TICKET_PRIORITY_MIN,
   TICKET_SORT_KEYS,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
@@ -36,7 +36,7 @@ const listQuery = z.object({
   query: z.string().trim().max(320).optional(),
   // The enum is the contract's, shared rather than restated: the grid, this
   // route and the keyset predicate all have to agree on which columns the
-  // database can order the whole collection by (`@nexa/types`).
+  // database can order the whole collection by (`@siyahtus/types`).
   sort: z.enum(TICKET_SORT_KEYS).default(DEFAULT_TICKET_SORT_KEY),
   order: z.enum(SORT_ORDERS).default('desc'),
   limit: z.coerce.number().int().min(1).max(100).default(25),
@@ -94,7 +94,7 @@ const updateBody = z
  * minus `email_template_id` (mailing every customer in a selection is a
  * different product decision, and this endpoint does not make it quietly).
  *
- * The ceiling is `@nexa/types`' rather than a literal: the console sizes its
+ * The ceiling is `@siyahtus/types`' rather than a literal: the console sizes its
  * "select the whole page" gesture from the same constant, and a client offering
  * one more row than the server accepts would 400 on the flagship action.
  */

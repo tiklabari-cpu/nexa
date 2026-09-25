@@ -28,15 +28,15 @@ if (!Element.prototype.scrollIntoView) {
 setFormatLocale('en-US');
 
 /**
- * `NEXA_TEST_RUNTIME_LOCALE=<bcp47>` rewrites the runtime's *default* locale for
+ * `SIYAHTUS_TEST_RUNTIME_LOCALE=<bcp47>` rewrites the runtime's *default* locale for
  * the whole run — the one thing a test machine cannot otherwise vary.
  *
  * Without it the pin above can only be proven on the machine that exposed the
  * bug: on an en-US laptop an unpinned suite passes for the wrong reason. With
- * it, `NEXA_TEST_RUNTIME_LOCALE=en-US` and `=tr-TR` are both runnable anywhere,
+ * it, `SIYAHTUS_TEST_RUNTIME_LOCALE=en-US` and `=tr-TR` are both runnable anywhere,
  * and both must stay green.
  */
-const forcedRuntimeLocale = process.env['NEXA_TEST_RUNTIME_LOCALE'];
+const forcedRuntimeLocale = process.env['SIYAHTUS_TEST_RUNTIME_LOCALE'];
 if (forcedRuntimeLocale) {
   forceRuntimeDefaultLocale(forcedRuntimeLocale);
 }

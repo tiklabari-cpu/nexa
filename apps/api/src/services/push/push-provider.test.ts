@@ -39,7 +39,7 @@ describe('FilePushProvider', () => {
   let provider: FilePushProvider;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'nexa-push-'));
+    dir = await mkdtemp(join(tmpdir(), 'siyahtus-push-'));
     provider = new FilePushProvider(dir);
   });
 
@@ -113,7 +113,7 @@ describe('createPushProvider', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'nexa-push-factory-'));
+    dir = await mkdtemp(join(tmpdir(), 'siyahtus-push-factory-'));
   });
 
   afterEach(async () => {

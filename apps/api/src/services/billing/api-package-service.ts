@@ -19,7 +19,7 @@
  * quota over would need a column that does not exist yet, and inventing one
  * quietly here would make every past period's invoice depend on it.
  */
-import { findApiPackage, type ApiPackage } from '@nexa/types';
+import { findApiPackage, type ApiPackage } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { API_CALL_OVERAGE_UNIT, currentPeriod } from './metering.js';

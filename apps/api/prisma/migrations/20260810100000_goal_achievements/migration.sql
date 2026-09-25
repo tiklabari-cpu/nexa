@@ -84,10 +84,10 @@ ALTER TABLE "goal_achievements" ADD CONSTRAINT "goal_achievements_chat_id_fkey" 
 -- license match, so nothing here is bespoke.
 ALTER TABLE goal_achievements ENABLE ROW LEVEL SECURITY;
 CREATE POLICY goal_achievements_tenant ON goal_achievements
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- No GRANT statement: the ALTER DEFAULT PRIVILEGES in 20260722090000 already
--- hands nexa_app SELECT, INSERT, UPDATE, DELETE on every table created after
+-- hands siyahtus_app SELECT, INSERT, UPDATE, DELETE on every table created after
 -- it. UPDATE and DELETE are wider than 13.3-d needs (it only inserts), but this
 -- table is not an audit trail — a mis-attributed conversion should be
 -- correctable, and a visitor exercising erasure takes their achievements with

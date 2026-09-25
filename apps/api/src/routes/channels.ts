@@ -73,7 +73,7 @@ function channelTypeParam(value: string): ChannelType {
 }
 
 /** Who a test message comes from when the caller has no account behind it. */
-const TEST_SENDER = 'test@nexa.example';
+const TEST_SENDER = 'test@siyahtus.example';
 
 /** The one field defining an address takes; the service owns the vocabulary. */
 const addressBody = z.object({ label: z.string().trim().min(1).max(32) });
@@ -432,7 +432,7 @@ export default async function channelRoutes(
         const ingested = await ingestInboundEmail(tx, tenant, tickets, {
           senderEmail: sender.email,
           senderName: sender.name,
-          subject: 'Nexa test message',
+          subject: 'SiyahTuş test message',
           spam: false,
           addressId: address.id,
         });

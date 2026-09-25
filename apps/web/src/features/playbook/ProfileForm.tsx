@@ -16,7 +16,7 @@ import {
   readPersona,
   shapeAnswer,
   type AnswerLength,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { Card } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { errorMessageKey } from '../../lib/api-client.js';

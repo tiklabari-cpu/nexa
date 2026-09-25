@@ -176,7 +176,7 @@ bi:
       `POST /palette/ai-query`). The two surfaces are deliberately separate:
       one endpoint never has to serve two different authorization contexts.
 
-      Deterministic (`@nexa/ai-mock`, no real LLM): the question is matched
+      Deterministic (`@siyahtus/ai-mock`, no real LLM): the question is matched
       against a small set of known report metrics and, on a match, reads the
       figure straight out of the same builder `GET /reports/overview` uses
       (ADR-09) — Copilot never computes its own number, so it can never

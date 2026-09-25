@@ -21,7 +21,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { SCOPES } from '@nexa/types';
+import { SCOPES } from '@siyahtus/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';

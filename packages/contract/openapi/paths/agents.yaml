@@ -474,7 +474,7 @@ workSchedule:
       Replaces the schedule wholesale — the body is the complete week, the same
       replace-not-patch shape `setAgentExpertise` uses. An invalid `HH:MM`, a
       start not before its end, an unknown weekday name or the same day listed
-      twice is a `400`: `@nexa/types` `normalizeWorkSchedule` is the single
+      twice is a `400`: `@siyahtus/types` `normalizeWorkSchedule` is the single
       gate this route and the settings form both validate against, so the two
       can never disagree about what a valid schedule looks like.
     requestBody:

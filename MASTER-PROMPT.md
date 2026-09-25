@@ -1,4 +1,4 @@
-# Nexa — Otonom Geliştirme Görevi (Master Prompt)
+# SiyahTuş — Otonom Geliştirme Görevi (Master Prompt)
 
 > Referans dokümanlar ZATEN proje kökünde (`livechat` klasörü) ve mevcut alt klasörlerde
 > (`v2-derin-analiz/`, `gorseller/`, `images/`). Onlar için YENİ klasör AÇMA; oldukları
@@ -6,7 +6,7 @@
 
 ## Rol ve Hedef
 Bu projenin tek sorumlu senior full-stack mühendisisin. Hedef: kökteki PRD ve raporlara
-dayanarak canlı-destek + AI müşteri hizmetleri platformu "Nexa"nın ÇALIŞAN bir sürümünü
+dayanarak canlı-destek + AI müşteri hizmetleri platformu "SiyahTuş"nın ÇALIŞAN bir sürümünü
 sıfırdan, contract-first ve dikey dilimler halinde inşa etmek. MVP kritik yolunu uçtan uca
 çalışır ve test edilmiş halde teslim et.
 
@@ -25,7 +25,7 @@ sıfırdan, contract-first ve dikey dilimler halinde inşa etmek. MVP kritik yol
 
 ## Kilitli Teknik Kararlar (sorma, uygula)
 - Dil: TypeScript her yerde (paylaşılan tipler için).
-- Monorepo (proje kökünde): pnpm + Turborepo. packages/types (@nexa/types),
+- Monorepo (proje kökünde): pnpm + Turborepo. packages/types (@siyahtus/types),
   packages/contract (OpenAPI), apps/api (Fastify), apps/rtm (WebSocket), apps/web (agent SPA),
   apps/widget (customer widget). Referans .md'ler kökte kalır, taşınmaz.
 - Backend: Node + Fastify, Prisma + PostgreSQL (RLS ile multi-tenant), Redis (presence/
@@ -34,12 +34,12 @@ sıfırdan, contract-first ve dikey dilimler halinde inşa etmek. MVP kritik yol
 - Auth: OAuth 2.1 + PKCE, PAT (hash'li), customer token, scope enforcement (route+API).
 - Frontend: React + Vite + Tailwind + shadcn/ui (Radix), TanStack Query, Zustand, typed API
   client OpenAPI'den generate.
-- Contract-first: her özellik önce OpenAPI + @nexa/types → sonra backend → sonra frontend.
+- Contract-first: her özellik önce OpenAPI + @siyahtus/types → sonra backend → sonra frontend.
 
 ## Git / Repo
-- Remote: git@github.com:tiklabari-cpu/nexa.git (PRIVATE). İlk kurulum proje kökünde:
+- Remote: git@github.com:tiklabari-cpu/siyahtus.git (PRIVATE). İlk kurulum proje kökünde:
   `git init` → `git branch -M main` → `git remote add origin <url>` → .gitignore + ilk commit → push.
-- İzolasyon: yalnız `nexa` reposuna scope'lu FINE-GRAINED PAT kullan; diğer projelerine
+- İzolasyon: yalnız `siyahtus` reposuna scope'lu FINE-GRAINED PAT kullan; diğer projelerine
   teknik olarak dokunamaz. .env / secret / anahtar ASLA commit'lenmez (.gitignore ilk commit'te).
 - Branch: `main` korunur; her dilim `feat/<slice>` dalında geliştirilir, bitince main'e merge.
 - force-push YOK, history rewrite YOK, başka repoya dokunma YOK.

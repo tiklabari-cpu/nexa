@@ -1,4 +1,4 @@
-# @nexa/load — the load leg (k6)
+# @siyahtus/load — the load leg (k6)
 
 NFR-M4 asks for five layers of testing: unit · integration · contract · E2E · **load**.
 The first four have lived in this repo for a long time. This package is the fifth, and
@@ -73,14 +73,14 @@ make demo     # the containerised stack (docker-compose.full.yml) + smoke test
 Then, from this directory:
 
 ```sh
-pnpm --filter @nexa/load load       # == k6 run scenarios/smoke.js
+pnpm --filter @siyahtus/load load       # == k6 run scenarios/smoke.js
 make load                           # the same thing, from the repo root
 k6 run scenarios/smoke.js           # directly, when passing env knobs
 
-pnpm --filter @nexa/load load:rest  # == k6 run scenarios/rest.js — NFR-P2
+pnpm --filter @siyahtus/load load:rest  # == k6 run scenarios/rest.js — NFR-P2
 make load-rest                      # the same thing, from the repo root
 
-pnpm --filter @nexa/load load:rtm   # == k6 run scenarios/rtm.js — NFR-P1 / NFR-P8
+pnpm --filter @siyahtus/load load:rtm   # == k6 run scenarios/rtm.js — NFR-P1 / NFR-P8
 make load-rtm                       # the same thing, from the repo root
 ```
 
@@ -92,7 +92,7 @@ k6 exits non-zero if any threshold is crossed. That exit code is the result — 
 summary with a non-zero exit is not a pass.
 
 > **Do not run this while `pnpm -w test:e2e` is running.** Both want ports 4000/4001/5173/5174
-> and both write to the seeded `nexa` database. Two writers against one seed produce
+> and both write to the seeded `siyahtus` database. Two writers against one seed produce
 > failures on both sides that look like product defects and are not (the same collision
 > `apps/e2e` documents for two simultaneous windows).
 
@@ -105,7 +105,7 @@ All optional; the defaults target a local `make dev` stack.
 | `LOAD_API_ORIGIN`     | `http://localhost:4000`               | API origin; `/api/v1` is appended      |
 | `LOAD_RTM_ORIGIN`     | `ws://localhost:4001`                 | RTM origin, socket and `/health` alike |
 | `LOAD_EMAIL`          | `owner@acme.localhost`                | Seeded owner to sign in as             |
-| `LOAD_PASSWORD`       | `nexa-demo-password`                  | Its demo password                      |
+| `LOAD_PASSWORD`       | `siyahtus-demo-password`              | Its demo password                      |
 | `LOAD_ORG_PREFIX`     | `Acme`                                | Which membership to use                |
 | `LOAD_REDIRECT_URI`   | `http://localhost:5173/auth/callback` | Registered panel redirect              |
 | `LOAD_VUS`            | `2`                                   | Virtual users at the plateau           |
@@ -144,14 +144,14 @@ judge, and the run fails on warm-up rather than on the product.
 | ----------------------------- | ------------- | ------------------------ |
 | `http_req_duration{op:read}`  | p99 < 150 ms  | NFR-P2 (read)            |
 | `http_req_duration{op:write}` | p99 < 300 ms  | NFR-P2 (write)           |
-| `nexa_rtm_fanout_ms`          | p99 < 500 ms  | NFR-P1 = NFR-U3          |
-| `nexa_rtm_login_success`      | rate ≥ 0.999  | NFR-U1 (floor)           |
-| `nexa_rtm_connect_failed`     | count == 0    | NFR-P8 degradation (2)   |
-| `nexa_rtm_socket_dropped`     | count == 0    | NFR-P8 degradation (3)   |
-| `nexa_rtm_sync_recovered`     | rate == 1.00  | NFR-R2 (opt-in)          |
+| `siyahtus_rtm_fanout_ms`      | p99 < 500 ms  | NFR-P1 = NFR-U3          |
+| `siyahtus_rtm_login_success`  | rate ≥ 0.999  | NFR-U1 (floor)           |
+| `siyahtus_rtm_connect_failed` | count == 0    | NFR-P8 degradation (2)   |
+| `siyahtus_rtm_socket_dropped` | count == 0    | NFR-P8 degradation (3)   |
+| `siyahtus_rtm_sync_recovered` | rate == 1.00  | NFR-R2 (opt-in)          |
 | `http_req_failed`             | rate < 0.0005 | NFR-U2 (floor)           |
-| `nexa_rate_limited`           | count == 0    | ADR-07 (see below)       |
-| `nexa_measured{op:…}`         | count > 0     | see "empty is not green" |
+| `siyahtus_rate_limited`       | count == 0    | ADR-07 (see below)       |
+| `siyahtus_measured{op:…}`     | count > 0     | see "empty is not green" |
 | `checks`                      | rate == 1.00  | —                        |
 
 None of those numbers is written by hand in a scenario. They live in `lib/thresholds.js`,
@@ -171,7 +171,7 @@ Two things close that, and a new scenario inherits both:
 
 1. A scenario **declares** which budgets it drives — `restThresholds({ write: false })` for
    a read-only one — so it never claims a budget it cannot exercise.
-2. Every latency budget is paired with `nexa_measured{op:…} count>0`, incremented by
+2. Every latency budget is paired with `siyahtus_measured{op:…} count>0`, incremented by
    `lib/http.js` from the same call that applies the `op` tag. (`count` is not a legal
    aggregation on a k6 trend, so the proof has to be a counter beside it.) `budgets.test.ts`
    walks every p99 threshold and fails if it has no such proof.
@@ -197,17 +197,17 @@ comparing rungs is the whole exercise.
 Four kinds, three of them thresholds (`lib/thresholds.js#rtmThresholds`) and the fourth a
 per-socket check, so none of them is an after-the-fact judgement call:
 
-1. **Too slow** — `nexa_rtm_fanout_ms p(99) ≥ 500 ms`. Every socket is still there; delivery
+1. **Too slow** — `siyahtus_rtm_fanout_ms p(99) ≥ 500 ms`. Every socket is still there; delivery
    has left NFR-P1's budget.
-2. **Refusing connections** — `nexa_rtm_connect_failed > 0`. A socket could not be opened, or
+2. **Refusing connections** — `siyahtus_rtm_connect_failed > 0`. A socket could not be opened, or
    opened and could not log in.
-3. **Dropping connections** — `nexa_rtm_socket_dropped > 0`. A socket that was live went away
+3. **Dropping connections** — `siyahtus_rtm_socket_dropped > 0`. A socket that was live went away
    without the scenario asking it to.
 4. **Deaf sockets** — a socket that stayed open and stopped receiving. No aggregate threshold
    can see this (the run's total delivery count stays high while one socket goes quiet), so
    every socket checks its own count at close and `checks rate==1.00` fails the run.
 
-A fifth reading is recorded but not thresholded: `nexa_rtm_connections_observed`, sampled
+A fifth reading is recorded but not thresholded: `siyahtus_rtm_connections_observed`, sampled
 from the gateway's own `/health` while the plateau is up. "We opened 8000 sockets" and "the
 pod is holding 8000 sockets" are different claims and only the second one is NFR-P8; the
 `max` of that trend is the number to quote.
@@ -223,7 +223,7 @@ a report that does not separate them feeds the next decision the wrong number:
   `{"error":{"details":{"reason":"connection_limit_reached"}}}`, so a rung that goes red at
   exactly the configured number is measuring the ceiling, not the machine. `/health` reports
   `max_connections` alongside `connections` for an admin caller, which is the credential
-  `rtm.js` already uses for `nexa_rtm_connections_observed` — read it before a ladder and you
+  `rtm.js` already uses for `siyahtus_rtm_connections_observed` — read it before a ladder and you
   know which rung is expected to fail. A ladder meant to find the pod's real limit should
   leave the key **unset** (its default), or the ladder measures the configuration.
 - **The load generator ran out of local resources.** Not a product finding at all. On Windows
@@ -262,7 +262,7 @@ per VU, opened at 200/s, 20 messages published 2 s apart, 1 socket in 25 doing a
 
 So the pod degrades **between 6 000 and 8 000 connections on this hardware**, in two ways at
 once and in neither of the other two: it never dropped a live socket, and every socket that
-connected received every message (`nexa_rtm_socket_dropped 0`, delivery check 7 940 / 7 940).
+connected received every message (`siyahtus_rtm_socket_dropped 0`, delivery check 7 940 / 7 940).
 
 The 60 refusals at 8 000 have a named cause, printed by the scenario itself:
 `connectex: No connection could be made because the target machine actively refused it` — the
@@ -274,7 +274,7 @@ variable; 8 000 held sockets on this hardware is. Fan-out came down only slightl
 (p99 550 ms) and was still outside the budget.
 
 The reconnect leg (NFR-R2) held at every rung, including the red one:
-`nexa_rtm_sync_recovered rate 1.00` — every reconnecting socket came back and recovered the
+`siyahtus_rtm_sync_recovered rate 1.00` — every reconnecting socket came back and recovered the
 messages it had missed, at 8 000 sockets as readily as at 5.
 
 ### Two harness defects this ladder had to fix first
@@ -316,7 +316,7 @@ microseconds without touching Postgres, so tripping the limiter _improves_ the p
 while the rejected requests never reach the code under test. Read the latency line alone and
 that run looks like a pass at 33× the traffic.
 
-`nexa_rate_limited count==0` is what stops it: the run exited 99 with three thresholds
+`siyahtus_rate_limited count==0` is what stops it: the run exited 99 with three thresholds
 crossed. The latency number is only evidence when the 429 counter is zero.
 
 Two honest ways to buy headroom, for 161.2 and 161.3 to choose between and **write down**:
@@ -351,7 +351,7 @@ make dev                               # (or restart an already-running `pnpm de
 A shell-exported value wins over `.env` (`apps/api/src/config/load-env-file.ts` skips a key
 that is already set), and `RATE_LIMIT_AGENT_PER_MIN` is already in `turbo.json`'s passthrough
 env list, so this reaches every app `turbo run dev` starts without editing `.env` by hand.
-Forgetting this step is not silently wrong: the shared `nexa_rate_limited count==0`
+Forgetting this step is not silently wrong: the shared `siyahtus_rate_limited count==0`
 threshold still trips and the run exits non-zero, the same way it did in the deliberate
 over-quota run 161.1 recorded in `HANDOFF.md`.
 
@@ -377,7 +377,7 @@ line: **nothing gets stamped that was not measured.**
 ## Cleaning up after a write scenario
 
 `rest.js` (161.2) sends real messages and grows the seeded database. Reset it with the seed,
-never with a drop — `pnpm db:reset` re-runs migrations and reseeds; dropping the `nexa`
+never with a drop — `pnpm db:reset` re-runs migrations and reseeds; dropping the `siyahtus`
 development database is out of bounds (CLAUDE.md).
 
 For a Claude Code window specifically: `prisma migrate reset` now refuses to run for an AI
@@ -388,7 +388,7 @@ running `rest.js` once: it replies with the same message text every iteration
 fix is a targeted delete rather than a full reset:
 
 ```sh
-docker exec -i nexa-db psql -U nexa -d nexa \
+docker exec -i siyahtus-db psql -U siyahtus -d siyahtus \
   -c "DELETE FROM events WHERE text LIKE 'load rest.js — VU%';"
 ```
 
@@ -400,7 +400,7 @@ messages).
 `rtm.js` writes into the same conversation and marks its rows the same way:
 
 ```sh
-docker exec -i nexa-db psql -U nexa -d nexa \
+docker exec -i siyahtus-db psql -U siyahtus -d siyahtus \
   -c "DELETE FROM events WHERE text LIKE 'load rtm.js — %';"
 ```
 

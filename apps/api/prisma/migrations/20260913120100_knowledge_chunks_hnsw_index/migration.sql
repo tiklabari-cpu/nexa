@@ -16,7 +16,7 @@
 -- m AND ef_construction ARE PGVECTOR'S DEFAULTS, CHOSEN BY MEASUREMENT. One
 -- index serves every tenant, so every chunk any tenant writes pays for the
 -- graph. Indexing one 100,000-character source (502 chunks) into a 70,000-chunk
--- table, through `KnowledgeService.index` as nexa_app, cost:
+-- table, through `KnowledgeService.index` as siyahtus_app, cost:
 --
 --   no vector index          0.63-0.68 s
 --   ivfflat (lists = 100)    0.57-0.74 s

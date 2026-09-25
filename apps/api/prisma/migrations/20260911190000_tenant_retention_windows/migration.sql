@@ -29,7 +29,7 @@
 -- because a zero window puts the cutoff at "now" and therefore matches every
 -- row. Encoding "never delete anything" as the one number that means "delete
 -- everything" is a defect waiting for a careless read. The column stores the
--- tier as itself (`@nexa/types#RETENTION_TIERS`), so the off state is not a
+-- tier as itself (`@siyahtus/types#RETENTION_TIERS`), so the off state is not a
 -- number at all and no arithmetic can reach it.
 --
 -- NULL means "no choice made — inherit the deployment default", which is a

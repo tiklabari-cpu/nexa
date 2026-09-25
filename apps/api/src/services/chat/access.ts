@@ -14,7 +14,7 @@
  * (NFR-S5) — a 403 confirms the id is real and turns short ids into an
  * enumeration oracle.
  */
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';

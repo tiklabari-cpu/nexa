@@ -792,7 +792,7 @@ export interface paths {
      *
      *     The embedding page's origin must be a trusted domain for the organization
      *     (NFR-S6). It arrives as `host_origin`, because the request is made from
-     *     inside the widget iframe and that frame's own `Origin` is Nexa's — the
+     *     inside the widget iframe and that frame's own `Origin` is SiyahTuş's — the
      *     same value for every customer, and so unable to say which site opened the
      *     chat. Only code running on the host page knows that, which is why the
      *     loader passes it through.
@@ -2197,7 +2197,7 @@ export interface paths {
      * @description Replaces the schedule wholesale — the body is the complete week, the same
      *     replace-not-patch shape `setAgentExpertise` uses. An invalid `HH:MM`, a
      *     start not before its end, an unknown weekday name or the same day listed
-     *     twice is a `400`: `@nexa/types` `normalizeWorkSchedule` is the single
+     *     twice is a `400`: `@siyahtus/types` `normalizeWorkSchedule` is the single
      *     gate this route and the settings form both validate against, so the two
      *     can never disagree about what a valid schedule looks like.
      */
@@ -3051,7 +3051,7 @@ export interface paths {
      *     `POST /palette/ai-query`). The two surfaces are deliberately separate:
      *     one endpoint never has to serve two different authorization contexts.
      *
-     *     Deterministic (`@nexa/ai-mock`, no real LLM): the question is matched
+     *     Deterministic (`@siyahtus/ai-mock`, no real LLM): the question is matched
      *     against a small set of known report metrics and, on a match, reads the
      *     figure straight out of the same builder `GET /reports/overview` uses
      *     (ADR-09) — Copilot never computes its own number, so it can never
@@ -3084,7 +3084,7 @@ export interface paths {
      *     unlike `/copilot/chats/{chatId}/*`, it takes no `chatId`, because it is
      *     asked from the palette, not from inside a conversation.
      *
-     *     The answer is deterministic (`@nexa/ai-mock`, no real LLM): the query is
+     *     The answer is deterministic (`@siyahtus/ai-mock`, no real LLM): the query is
      *     matched against a small set of known topics and, on a match, reads the
      *     corresponding figure straight out of the Overview report for the caller's
      *     own license. An unrecognised question is not an error — `kind:
@@ -3519,7 +3519,7 @@ export interface paths {
     /**
      * Provision a member (SCIM)
      * @description Creates the membership, and the account behind it if this person has no
-     *     Nexa account anywhere yet.
+     *     SiyahTuş account anywhere yet.
      *
      *     **An account that already exists is adopted, never modified.** A person may
      *     work for more than one workspace (PRD §8.4), so one workspace's directory
@@ -5133,7 +5133,7 @@ export interface paths {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         websiteId: string;
@@ -5457,7 +5457,7 @@ export interface paths {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         /** @description The adapter channel. */
@@ -5503,7 +5503,7 @@ export interface paths {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         /** @description The adapter channel. */
@@ -5537,7 +5537,7 @@ export interface paths {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         /** @description The adapter channel. */
@@ -5562,7 +5562,7 @@ export interface paths {
      *     Gated on `channels--all:ro` because, unlike the channel list, these rows
      *     carry the customer's own words. Scoped to the caller's workspace by RLS:
      *     another workspace's messages are never returned, and an `external_id` or
-     *     `chat_id` from one is simply an empty page (NFR-S5). `X-Nexa-Brand` does
+     *     `chat_id` from one is simply an empty page (NFR-S5). `X-SiyahTus-Brand` does
      *     not narrow it — the log is keyed by licence and channel, not by brand.
      */
     get: operations['listChannelMessages'];
@@ -6034,7 +6034,7 @@ export interface paths {
     /**
      * Chat topics — conversation clusters with volume and trend
      * @description The Chat topics report (FR-MOD-07.6): conversations in the window grouped
-     *     into topics by deterministic, on-the-fly clustering (`@nexa/ai-mock`, no
+     *     into topics by deterministic, on-the-fly clustering (`@siyahtus/ai-mock`, no
      *     real LLM), each with its volume, share and vs-previous trend, for the
      *     Reports "Chat topics" tab. Nothing is persisted — the clustering is
      *     recomputed per request. Defaults to the last 30 days.
@@ -6750,7 +6750,7 @@ export interface paths {
     head?: never;
     /**
      * Change plan, billing cycle or seats
-     * @description The self-serve checkout levers (FR-MOD-10.1.1–.3). Nexa keeps a single,
+     * @description The self-serve checkout levers (FR-MOD-10.1.1–.3). SiyahTuş keeps a single,
      *     transparent price (ADR-13, $99/user/month), so `plan` has one option today
      *     (`growth`); the endpoint still validates it and is shaped for future tiers,
      *     including the downgrade guard that refuses a plan whose included quota is
@@ -7105,10 +7105,10 @@ export interface paths {
      *     refused with `not_allowed`, naming the entitlement and the plan in
      *     `details`.
      *
-     *     **Resuming.** Every response carries `x-nexa-export-cursor`: the position
+     *     **Resuming.** Every response carries `x-siyahtus-export-cursor`: the position
      *     after the last record it contained, or the position you passed in when the
      *     page was empty. Store it and pass it back as `page_id` to continue.
-     *     `x-nexa-export-has-more` says whether more entries are already waiting, so
+     *     `x-siyahtus-export-has-more` says whether more entries are already waiting, so
      *     a consumer knows whether to poll again immediately or wait for its next
      *     tick.
      *
@@ -7136,7 +7136,7 @@ export interface paths {
      *     the rule that *every line is a record* survives: you can still split on
      *     `\n`, parse each half independently, and concatenate two pages into one
      *     file. The signature over the page is therefore detached, in
-     *     `x-nexa-export-signature`, because it is a statement about the whole
+     *     `x-siyahtus-export-signature`, because it is a statement about the whole
      *     delivery rather than any one line.
      *
      *     A missing `chain_seq` between two records means an entry was deleted —
@@ -7152,7 +7152,7 @@ export interface paths {
      *     from it. Ask the deployment operator to verify a file, or to hand you the
      *     workspace's derived key if you are the one who should be checking.
      *
-     *     **A damaged page is delivered, not withheld.** `x-nexa-export-chain-ok` is
+     *     **A damaged page is delivered, not withheld.** `x-siyahtus-export-chain-ok` is
      *     `false` when the records in this response do not verify. Refusing to
      *     export a damaged trail would turn detected tampering into a silent stop of
      *     the feed, which is what the tampering was for.
@@ -7618,7 +7618,7 @@ export interface components {
      *     retention. `enabled` false means this process runs none of them (every
      *     job below is still listed, each `disabled`); a deployment that would
      *     rather drive the sweeps from a host cron leaves it off and uses each
-     *     job's own `pnpm --filter @nexa/api <job>:run` script instead.
+     *     job's own `pnpm --filter @siyahtus/api <job>:run` script instead.
      */
     SchedulerHealth: {
       enabled: boolean;
@@ -8479,7 +8479,7 @@ export interface components {
     /**
      * @description One brand of a license (Multibrand, PRD §5.3). A license may run several
      *     brands under a single subscription; each has its own channels, websites
-     *     and widget/security/inbox settings, selected via the `X-Nexa-Brand`
+     *     and widget/security/inbox settings, selected via the `X-SiyahTus-Brand`
      *     header on those resources. Every license has exactly one default brand —
      *     the `Default` it is created with — which cannot be deleted.
      */
@@ -8494,7 +8494,7 @@ export interface components {
       logo_url: string | null;
       /**
        * @description The license's default brand — the one a request with no
-       *     `X-Nexa-Brand` header resolves to. Exactly one per license; it
+       *     `X-SiyahTus-Brand` header resolves to. Exactly one per license; it
        *     cannot be deleted.
        */
       is_default: boolean;
@@ -8541,7 +8541,7 @@ export interface components {
       /** Format: date-time */
       created_at: string;
       /**
-       * @description The code to paste before `</body>`. Sets `window.__nexa` and loads
+       * @description The code to paste before `</body>`. Sets `window.__siyahtus` and loads
        *     the async widget loader. Identical across a workspace's sites — the
        *     embedding origin is resolved at runtime — so "get code" per row shows
        *     this same value.
@@ -9156,7 +9156,7 @@ export interface components {
       theme: 'auto' | 'light' | 'dark';
       /** @description Open the panel edge-to-edge on phones rather than as a card. */
       mobile_fullscreen: boolean;
-      /** @description The removable "Powered by Nexa" footer (FR-MOD-11.5). */
+      /** @description The removable "Powered by SiyahTuş" footer (FR-MOD-11.5). */
       powered_by: boolean;
       /** Format: date-time */
       updated_at: string | null;
@@ -10483,7 +10483,7 @@ export interface components {
       two_factor_enabled?: boolean;
       /**
        * Format: date-time
-       * @description When this person was last active anywhere in Nexa, coarsened to the
+       * @description When this person was last active anywhere in SiyahTuş, coarsened to the
        *     minute (FR-MOD-04.3.4). Account-wide by design — `accounts` is a
        *     person, not a membership, so someone who works two workspaces
        *     carries one timestamp across both. `null` means never seen since the
@@ -10550,9 +10550,9 @@ export interface components {
     };
     /**
      * @description An agent's declared weekly availability (PRD §5.3-Vardiya). One slot per
-     *     weekday it lists, in `@nexa/types` `WORK_SCHEDULE_DAYS` order; a day with
+     *     weekday it lists, in `@siyahtus/types` `WORK_SCHEDULE_DAYS` order; a day with
      *     no slot is unscheduled. `enabled` distinguishes a day that is off from a
-     *     day whose hours have simply not been set. `@nexa/types`
+     *     day whose hours have simply not been set. `@siyahtus/types`
      *     `normalizeWorkSchedule` is the single validation gate both
      *     `GET`/`PUT /agents/{agentId}/work-schedule` and the settings form defer
      *     to, so the endpoint and the form can never disagree about what a valid
@@ -10681,7 +10681,7 @@ export interface components {
        *     is never absent, so "missing" can never be read as an implicit yes.
        */
       entitlements: {
-        /** @description Widget served without Nexa branding. */
+        /** @description Widget served without SiyahTuş branding. */
         white_label: boolean;
         /** @description A second */
         sandbox: boolean;
@@ -10717,7 +10717,7 @@ export interface components {
      *     current period is computed live, and it says so.
      */
     Invoice: {
-      /** @description Invoice number, `NEXA-<yyyymm>`. */
+      /** @description Invoice number, `SIYAHTUS-<yyyymm>`. */
       number: string;
       /** @description Billing period as `yyyymm`. */
       period: string;
@@ -11361,7 +11361,7 @@ export interface components {
     };
     /**
      * @description The Chat topics report (FR-MOD-07.6): conversations in the window grouped
-     *     into topics by deterministic, on-the-fly clustering (`@nexa/ai-mock`, no
+     *     into topics by deterministic, on-the-fly clustering (`@siyahtus/ai-mock`, no
      *     real LLM), each with volume, share and a vs-previous trend. Nothing is
      *     persisted — the clustering is recomputed per request.
      *
@@ -11774,7 +11774,7 @@ export interface components {
       }[];
     };
     /**
-     * @description A time-limited, scope-limited link that lets someone without a Nexa
+     * @description A time-limited, scope-limited link that lets someone without a SiyahTuş
      *     account read **one** report group over **one** fixed window
      *     (FR-MOD-07.3.1 "Share export/link").
      *
@@ -11935,7 +11935,7 @@ export interface components {
         /**
          * @description How that sign-in was made. Separated because after an incident
          *     the two imply different containment: `password` means a secret
-         *     Nexa holds was known, `sso` means an external system vouched.
+         *     SiyahTuş holds was known, `sso` means an external system vouched.
          * @enum {string|null}
          */
         last_login_method: 'password' | 'sso' | null;
@@ -14740,7 +14740,7 @@ export interface operations {
          *     are deliberately absent: what the table shows is a count scoped to
          *     the caller's license, and the database cannot order the whole
          *     collection by that scoped number without disagreeing with the
-         *     cell it prints — see `CUSTOMER_SORT_KEYS` (`@nexa/types`). A
+         *     cell it prints — see `CUSTOMER_SORT_KEYS` (`@siyahtus/types`). A
          *     customer with no value in the sorted column (no name, no country)
          *     sorts last in *both* directions, so an empty cell never outranks a
          *     real one just because the order flipped.
@@ -19181,7 +19181,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -19213,7 +19213,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -19670,7 +19670,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -19702,7 +19702,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -19745,7 +19745,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -19777,7 +19777,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -20013,7 +20013,7 @@ export interface operations {
           /**
            * @description The key issued by the provider. Bounds match
            *     `APP_API_KEY_MIN_LENGTH`/`APP_API_KEY_MAX_LENGTH` in
-           *     @nexa/types, which the console's form validates against, so
+           *     @siyahtus/types, which the console's form validates against, so
            *     the client never refuses a key the server would accept.
            */
           api_key: string;
@@ -20370,7 +20370,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -20404,7 +20404,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -20457,7 +20457,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         websiteId: string;
@@ -20492,7 +20492,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         websiteId: string;
@@ -20873,7 +20873,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path?: never;
       cookie?: never;
@@ -20907,7 +20907,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         /** @description The adapter channel. */
@@ -20950,7 +20950,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         /** @description The adapter channel. */
@@ -20999,7 +20999,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         /** @description The adapter channel. */
@@ -21040,7 +21040,7 @@ export interface operations {
          *     unaffected. A brand id that is not one of the caller's own is answered
          *     404, never 403, so brand ids stay un-enumerable across licenses (NFR-S5).
          */
-        'X-Nexa-Brand'?: components['parameters']['BrandHeader'];
+        'X-SiyahTus-Brand'?: components['parameters']['BrandHeader'];
       };
       path: {
         /** @description The adapter channel. */
@@ -23147,7 +23147,7 @@ export interface operations {
   exportAuditLog: {
     parameters: {
       query?: {
-        /** @description Resume after this position — the `x-nexa-export-cursor` value from a previous export. Omit to start from the beginning of the retained trail. A cursor this endpoint cannot read is a 400, not a silent restart: both silent answers (re-sending everything, skipping everything) are wrong and invisible to the consumer. Cursors from the list endpoint are rejected here — they run the other way. */
+        /** @description Resume after this position — the `x-siyahtus-export-cursor` value from a previous export. Omit to start from the beginning of the retained trail. A cursor this endpoint cannot read is a 400, not a silent restart: both silent answers (re-sending everything, skipping everything) are wrong and invisible to the consumer. Cursors from the list endpoint are rejected here — they run the other way. */
         page_id?: string;
         /** @description Records per response. Defaults to 1000, maximum 5000; above the maximum is clamped, not rejected. */
         limit?: number;
@@ -23165,15 +23165,15 @@ export interface operations {
       200: {
         headers: {
           /** @description Opaque position to resume from. Empty only when the workspace's trail is empty and no cursor was supplied. */
-          'x-nexa-export-cursor'?: string;
+          'x-siyahtus-export-cursor'?: string;
           /** @description Records in this response. */
-          'x-nexa-export-count'?: number;
+          'x-siyahtus-export-count'?: number;
           /** @description `true` when more entries are already exportable — poll again rather than waiting. */
-          'x-nexa-export-has-more'?: 'true' | 'false';
+          'x-siyahtus-export-has-more'?: 'true' | 'false';
           /** @description Detached HMAC over the exact body bytes, the record count and the range of chain positions they cover. Store it beside the file; it is what makes the copy evidence rather than a claim. Verifiable only with the workspace's derived key, which this response deliberately does not carry. */
-          'x-nexa-export-signature'?: string;
+          'x-siyahtus-export-signature'?: string;
           /** @description `false` when the records in this response do not form an intact chain. The page is still delivered — see the description above. Note that this checks the links *within* the page; the join to the previous page is the consumer's to make, by comparing the first record's `prev_hash` with the last `hash` it already holds. */
-          'x-nexa-export-chain-ok'?: 'true' | 'false';
+          'x-siyahtus-export-chain-ok'?: 'true' | 'false';
           [name: string]: unknown;
         };
         content: {

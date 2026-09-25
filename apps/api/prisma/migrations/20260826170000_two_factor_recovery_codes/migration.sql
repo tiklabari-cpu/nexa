@@ -3,7 +3,7 @@
 --
 -- 20260826150000_two_factor_auth created `two_factor_recovery_codes` with row
 -- level security enabled and *no permissive policy*, exactly the shape
--- `password_reset_tokens` has: an ordinary query by `nexa_app` returns nothing
+-- `password_reset_tokens` has: an ordinary query by `siyahtus_app` returns nothing
 -- and writes nothing, whatever the application layer believes it is doing. The
 -- three functions below are therefore the entire access path, and each one is
 -- narrow enough to be read as a rule rather than a query.
@@ -149,6 +149,6 @@ $$;
 REVOKE EXECUTE ON FUNCTION auth_two_factor_replace_recovery_codes(UUID, TEXT[]) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_two_factor_consume_recovery_code(UUID, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_two_factor_count_recovery_codes(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_two_factor_replace_recovery_codes(UUID, TEXT[]) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_two_factor_consume_recovery_code(UUID, TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_two_factor_count_recovery_codes(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_replace_recovery_codes(UUID, TEXT[]) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_consume_recovery_code(UUID, TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_count_recovery_codes(UUID) TO siyahtus_app;

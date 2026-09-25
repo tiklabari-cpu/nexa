@@ -46,7 +46,7 @@ test.describe('knowledge — bulk CSV import (FR-MOD-06.3.2)', () => {
     const run = Date.now().toString().slice(-6);
 
     // The marker is a nonsense token on purpose. Retrieval here is lexical
-    // (`@nexa/ai-mock`'s hashed bag of words), so a word that exists in no
+    // (`@siyahtus/ai-mock`'s hashed bag of words), so a word that exists in no
     // seeded source and in no other row of this file makes the retrieval
     // unambiguous: if the answer comes back, it came back from this CSV.
     const marker = `flugelbrace${run}`;
@@ -74,7 +74,7 @@ test.describe('knowledge — bulk CSV import (FR-MOD-06.3.2)', () => {
         `${metadataProbeName},website,,http://169.254.169.254/latest/meta-data/`,
       ].join('\r\n') + '\r\n';
 
-    const fileName = `nexa-bulk-${run}.csv`;
+    const fileName = `siyahtus-bulk-${run}.csv`;
 
     await agentPage.goto('/app/playbook');
     await agentPage

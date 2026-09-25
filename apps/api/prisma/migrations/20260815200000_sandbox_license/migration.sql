@@ -10,7 +10,7 @@
 -- A sandbox could have been a second `licenses` row inside the *same*
 -- organization — one column, no new organization, and the person's existing
 -- OAuth client would have kept working untouched. It is refused because of what
--- `nexa_current_organization()` already guards: `customers` carries no
+-- `siyahtus_current_organization()` already guards: `customers` carries no
 -- `license_id` at all and is scoped to the organization by design ("one person
 -- may be known across the licenses of one organization"). A sandbox sharing the
 -- organization would therefore have read the production **customer directory**
@@ -99,7 +99,7 @@ BEGIN
      AND EXISTS (SELECT 1 FROM licenses l
                   WHERE l.id = NEW.sandbox_of_license_id
                     AND l.sandbox_of_license_id IS NOT NULL) THEN
-    RAISE EXCEPTION 'nexa_sandbox_nested'
+    RAISE EXCEPTION 'siyahtus_sandbox_nested'
       USING ERRCODE = 'check_violation',
             DETAIL = format('licence %s is itself a sandbox', NEW.sandbox_of_license_id),
             HINT = 'A sandbox belongs to a production workspace. Chaining them leaves nobody paying for the last one.';
@@ -126,7 +126,7 @@ CREATE TRIGGER licenses_sandbox_not_nested
 -- the licence whose `sandbox_of_license_id` is the caller's own licence.
 --
 -- The asymmetry is the point, and it is structural rather than remembered. From
--- the sandbox's context `nexa_current_license()` is the sandbox's own id, and
+-- the sandbox's context `siyahtus_current_license()` is the sandbox's own id, and
 -- nothing points at it (nesting is refused above), so the added clause matches
 -- nothing at all: **a sandbox credential cannot see the production licence
 -- row.** The widening is one-directional by construction.
@@ -137,9 +137,9 @@ CREATE TRIGGER licenses_sandbox_not_nested
 -- `sandbox_reset` runs SECURITY DEFINER precisely so it does not need one.
 DROP POLICY IF EXISTS licenses_tenant ON licenses;
 CREATE POLICY licenses_tenant ON licenses
-  USING (organization_id = nexa_current_organization()
-         OR sandbox_of_license_id = nexa_current_license())
-  WITH CHECK (organization_id = nexa_current_organization());
+  USING (organization_id = siyahtus_current_organization()
+         OR sandbox_of_license_id = siyahtus_current_license())
+  WITH CHECK (organization_id = siyahtus_current_organization());
 
 -- ---------------------------------------------------------------------------
 -- Creating one
@@ -172,13 +172,13 @@ BEGIN
   -- the unique index and producing one success and one unexplained 500.
   SELECT l.* INTO v_parent FROM licenses l WHERE l.id = p_parent_license FOR UPDATE;
   IF NOT FOUND THEN
-    RAISE EXCEPTION 'nexa_sandbox_parent_missing' USING ERRCODE = 'no_data_found';
+    RAISE EXCEPTION 'siyahtus_sandbox_parent_missing' USING ERRCODE = 'no_data_found';
   END IF;
   IF v_parent.sandbox_of_license_id IS NOT NULL THEN
-    RAISE EXCEPTION 'nexa_sandbox_nested' USING ERRCODE = 'check_violation';
+    RAISE EXCEPTION 'siyahtus_sandbox_nested' USING ERRCODE = 'check_violation';
   END IF;
   IF EXISTS (SELECT 1 FROM licenses l WHERE l.sandbox_of_license_id = p_parent_license) THEN
-    RAISE EXCEPTION 'nexa_sandbox_exists' USING ERRCODE = 'unique_violation';
+    RAISE EXCEPTION 'siyahtus_sandbox_exists' USING ERRCODE = 'unique_violation';
   END IF;
 
   -- The new workspace's owner has to be someone who already works for the old
@@ -189,7 +189,7 @@ BEGIN
                   WHERE m.license_id = p_parent_license
                     AND m.agent_id = p_owner_account
                     AND NOT m.suspended) THEN
-    RAISE EXCEPTION 'nexa_sandbox_owner_not_member' USING ERRCODE = 'foreign_key_violation';
+    RAISE EXCEPTION 'siyahtus_sandbox_owner_not_member' USING ERRCODE = 'foreign_key_violation';
   END IF;
 
   SELECT o.name, o.region INTO v_org_name, v_region
@@ -229,7 +229,7 @@ BEGIN
    LIMIT 1;
 
   INSERT INTO oauth_clients (id, organization_id, display_name, client_type, redirect_uris, scopes)
-  VALUES ('nexa-sandbox-app-' || v_org::TEXT, v_org, 'Nexa Agent App (Sandbox)', 'public',
+  VALUES ('siyahtus-sandbox-app-' || v_org::TEXT, v_org, 'SiyahTuş Agent App (Sandbox)', 'public',
           COALESCE(v_redirects, ARRAY['http://localhost:5173/auth/callback']),
           COALESCE(v_scopes, ARRAY[]::TEXT[]));
 
@@ -238,7 +238,7 @@ END;
 $fn$;
 
 REVOKE EXECUTE ON FUNCTION sandbox_create(BIGINT, UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION sandbox_create(BIGINT, UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION sandbox_create(BIGINT, UUID) TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Emptying one
@@ -285,7 +285,7 @@ BEGIN
     -- One answer for "no such licence" and "that is a production workspace".
     -- The route turns it into a refusal; the caller is standing in the licence
     -- either way, so nothing is concealed from them they could not already read.
-    RAISE EXCEPTION 'nexa_not_a_sandbox' USING ERRCODE = 'check_violation';
+    RAISE EXCEPTION 'siyahtus_not_a_sandbox' USING ERRCODE = 'check_violation';
   END IF;
 
   -- Snapshotted as whole rows rather than named columns, so a column added to
@@ -317,4 +317,4 @@ END;
 $fn$;
 
 REVOKE EXECUTE ON FUNCTION sandbox_reset(BIGINT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION sandbox_reset(BIGINT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION sandbox_reset(BIGINT) TO siyahtus_app;

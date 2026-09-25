@@ -3,7 +3,7 @@
  * dropped for four seconds must not cost the agent a customer's message. Every
  * other assertion here is scaffolding around that one.
  */
-import { RTM_LIMITS, RTM_PATHS, RTM_VERSION } from '@nexa/types';
+import { RTM_LIMITS, RTM_PATHS, RTM_VERSION } from '@siyahtus/types';
 
 import { MobileRtmClient, type AppStateLike, type RtmSocket } from './client';
 
@@ -85,7 +85,7 @@ function harness(overrides: { token?: string | null; isSignedOut?: () => boolean
   };
 
   const client = new MobileRtmClient({
-    baseUrl: 'wss://rtm.nexa.test',
+    baseUrl: 'wss://rtm.siyahtus.test',
     organizationId: 'org-1',
     getToken: () => token,
     ...(overrides.isSignedOut ? { isSignedOut: overrides.isSignedOut } : {}),
@@ -139,7 +139,7 @@ describe('connecting', () => {
     const h = harness();
     await signIn(h);
 
-    expect(h.latest().url).toBe(`wss://rtm.nexa.test${RTM_PATHS.agent}?organization_id=org-1`);
+    expect(h.latest().url).toBe(`wss://rtm.siyahtus.test${RTM_PATHS.agent}?organization_id=org-1`);
   });
 
   it('logs in with the version-keyed push subscription ADR-15 specifies', async () => {

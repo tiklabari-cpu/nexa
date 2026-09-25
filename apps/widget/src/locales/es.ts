@@ -63,5 +63,5 @@ export const es: Record<string, string> = {
   'chat.end.closedMessage': 'Chat finalizado.',
   'chat.end.startNew': 'Iniciar un nuevo chat',
   'error.close': 'No se pudo finalizar el chat. Inténtalo de nuevo.',
-  poweredBy: 'Desarrollado por Nexa',
+  poweredBy: 'Desarrollado por SiyahTuş',
 };

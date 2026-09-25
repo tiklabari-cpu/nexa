@@ -3,7 +3,7 @@
  *
  * The authoring half of this requirement has existed since tm 50: a workspace
  * writes a branded template, and `{{ group.field }}` placeholders are validated
- * against the `@nexa/types` catalogue before the row is stored. What was missing
+ * against the `@siyahtus/types` catalogue before the row is stored. What was missing
  * was the other half — nothing ever *rendered* one, so an admin could write a
  * template and no mail would ever carry it.
  *
@@ -30,7 +30,7 @@ import {
   type TemplateProblem,
   type TemplateVariable,
   type TicketStatus,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 /** The stored template, reduced to what rendering needs. */
 export interface StoredTemplate {
@@ -96,7 +96,7 @@ export type TicketEmailOutcome =
  * `ticket.priority` is the *band* — `Urgent`, `Normal` — and not the stored
  * integer. The column is a signed ±100 scale that exists so a queue can be
  * ordered; a customer reading "Priority: -50" learns nothing. The band table is
- * `@nexa/types`', the same one the inbox renders, so the mail and the screen
+ * `@siyahtus/types`', the same one the inbox renders, so the mail and the screen
  * cannot disagree.
  */
 export function ticketTemplateContext(facts: TicketEmailFacts): TemplateContext {

@@ -51,7 +51,7 @@ export function AuthStack({ mode = 'sign-in' }: AuthStackProps = {}) {
         {({ navigation, route }) => (
           <SignInScreen
             session={session}
-            // Set by `app/linking.ts` when a `nexa://auth/callback` landed here
+            // Set by `app/linking.ts` when a `siyahtus://auth/callback` landed here
             // with no sign-in left to finish. A boolean is the whole param —
             // the code that came with the URL is dropped, not stored.
             returned={route.params?.returned === true}

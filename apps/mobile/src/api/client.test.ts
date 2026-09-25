@@ -67,7 +67,7 @@ async function signedIn(handlers: { agents: () => Response; token?: () => Respon
   const store = new SessionStore(memoryStore());
   await store.write({
     refreshToken: 'refresh-0',
-    clientId: 'nexa-agent-app-1',
+    clientId: 'siyahtus-agent-app-1',
     licenseId: '42',
     accountId: 'acct-1',
   });

@@ -6,7 +6,7 @@
  * can pin down exactly. The service around this reads the rules, loads the
  * ticket, and writes the assignment / priority / tag.
  */
-import type { TicketRuleActions, TicketRuleConditions, TicketRuleSource } from '@nexa/types';
+import type { TicketRuleActions, TicketRuleConditions, TicketRuleSource } from '@siyahtus/types';
 
 /**
  * What a ticket looks like to a rule at the moment it is opened. `source` widens

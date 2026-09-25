@@ -45,9 +45,9 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
  */
 export const AUDIT_CHAIN_VERSION = 1;
 
-const KEY_LABEL = `nexa.audit.chain.v${AUDIT_CHAIN_VERSION}.key`;
-const ROW_LABEL = `nexa.audit.chain.v${AUDIT_CHAIN_VERSION}.row`;
-const EXPORT_LABEL = `nexa.audit.export.v${AUDIT_CHAIN_VERSION}.sig`;
+const KEY_LABEL = `siyahtus.audit.chain.v${AUDIT_CHAIN_VERSION}.key`;
+const ROW_LABEL = `siyahtus.audit.chain.v${AUDIT_CHAIN_VERSION}.row`;
+const EXPORT_LABEL = `siyahtus.audit.export.v${AUDIT_CHAIN_VERSION}.sig`;
 
 /**
  * The per-workspace key.

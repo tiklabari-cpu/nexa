@@ -15,7 +15,7 @@ import {
   isWorkScheduleProblem,
   normalizeWorkSchedule,
   type GoalFunnel,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import {
@@ -891,7 +891,7 @@ interface EcommerceBlock {
  *   workspace defined. It needs no money to change hands. It is deduplicated per
  *   (goal, customer), so a visitor who buys twice converts once.
  * - `tracked_sales` is written by the *merchant's own page*, once per order it
- *   reports through `nexa('trackSale', …)`, deduplicated per external order id.
+ *   reports through `siyahtus('trackSale', …)`, deduplicated per external order id.
  *   A second order from the same visitor is a second sale.
  *
  * Neither is derived from the other and neither should be: a sale writes no
@@ -1613,7 +1613,7 @@ export default async function reportRoutes(
   });
 
   // Chat topics (FR-MOD-07.6): conversations clustered into topics with volume
-  // and trend. Clustering is deterministic and on-the-fly (@nexa/ai-mock, no real
+  // and trend. Clustering is deterministic and on-the-fly (@siyahtus/ai-mock, no real
   // LLM); below the floor the report is an honest "not enough conversations yet"
   // — a 200 state, not an error, so no new ApiError type. Same reports_read +
   // withTenantRead surface as the other tabs.

@@ -29,7 +29,7 @@
  */
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
-import { isDevicePlatform, type DevicePlatform } from '@nexa/types';
+import { isDevicePlatform, type DevicePlatform } from '@siyahtus/types';
 
 import type { DeviceTokenProvider } from './device-token';
 

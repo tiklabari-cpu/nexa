@@ -1,8 +1,8 @@
 /**
- * What a `nexa://` URL means — and why that depends on whether anybody is
+ * What a `siyahtus://` URL means — and why that depends on whether anybody is
  * signed in.
  *
- * `app.config.ts` has registered `scheme: nexa` since `13.7-a` and `@nexa/types`
+ * `app.config.ts` has registered `scheme: siyahtus` since `13.7-a` and `@siyahtus/types`
  * has built `MOBILE_REDIRECT_URI` out of it since `13.7-b`, but nothing ever
  * told React Navigation about either: `NavigationContainer` was mounted without
  * `linking`, so every URL the operating system handed this app was dropped on
@@ -21,7 +21,7 @@
  * exact-matches is built from the same value, and a second copy here is a pair
  * that can drift.
  */
-import { MOBILE_APP_SCHEME } from '@nexa/types';
+import { MOBILE_APP_SCHEME } from '@siyahtus/types';
 import type { LinkingOptions } from '@react-navigation/native';
 
 import type { AuthStackParamList, RootTabParamList } from './navigation';
@@ -31,7 +31,7 @@ import type { SessionStatus } from '../auth/session';
 export type LinkableParamList = AuthStackParamList & RootTabParamList;
 
 /**
- * `nexa://` — the app's private-use scheme (RFC 8252 §7.1), the one `app.config.ts`
+ * `siyahtus://` — the app's private-use scheme (RFC 8252 §7.1), the one `app.config.ts`
  * registers. Universal (`https`) links are deliberately not here: they need a
  * verified domain and a hosted association file, which is the deployment this
  * repository does not do (§C-A29 · CLAUDE.md).

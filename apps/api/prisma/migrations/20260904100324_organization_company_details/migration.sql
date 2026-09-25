@@ -14,7 +14,7 @@ ADD COLUMN     "timezone" TEXT NOT NULL DEFAULT 'UTC';
 -- `sector` is a closed list, not free text — reportable rather than merely
 -- descriptive, the same reasoning `organizations_region_check` and
 -- `licenses_billing_cycle_check` already apply to their own columns. The
--- value set is `COMPANY_SECTORS` (`@nexa/types`); this CHECK is Prisma's
+-- value set is `COMPANY_SECTORS` (`@siyahtus/types`); this CHECK is Prisma's
 -- schema comment made enforceable, not a second copy of the list to keep in
 -- sync by hand — a value the API's zod schema would refuse can never reach
 -- this table by any other writer either.

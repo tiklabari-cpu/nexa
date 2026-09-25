@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId, licenseChannel } from '@nexa/types';
+import { generateShortId, licenseChannel } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,
@@ -1782,7 +1782,7 @@ describe('agent chat api', () => {
         await seedChats(6);
 
         // The query `listChatsInTenant` issues, reduced to the part under test:
-        // the tenant predicate (what RLS's `license_id = nexa_current_license()`
+        // the tenant predicate (what RLS's `license_id = siyahtus_current_license()`
         // evaluates to), the default view's `active`, the new ordering, and the
         // page's LIMIT.
         const sql = `SELECT id FROM chats WHERE license_id = $1 AND active

@@ -269,7 +269,7 @@ describe('SignInScreen', () => {
     await render(tree);
     await act(async () => {});
 
-    // `app/linking.ts` routes `nexa://auth/callback` here when nothing is
+    // `app/linking.ts` routes `siyahtus://auth/callback` here when nothing is
     // waiting for it. The form is usable — starting over is the only way
     // forward — but it does not pretend nothing happened.
     expect(screen.getByTestId('sign-in-error')).toHaveTextContent(RETURNED_FROM_BROWSER);

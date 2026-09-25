@@ -43,7 +43,7 @@ export default async function mcpRoutes(
   // every caller — so there is nothing per-request to compute.
   const manifest = {
     protocol_version: MCP_PROTOCOL_VERSION,
-    server: { name: 'nexa', url: opts.serverUrl, version: opts.version },
+    server: { name: 'siyahtus', url: opts.serverUrl, version: opts.version },
     tools: MCP_TOOL_CATALOG.map((tool) => ({
       name: tool.name,
       title: tool.title,

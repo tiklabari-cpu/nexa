@@ -3,7 +3,7 @@
  *
  * The decision (CONVENTIONS §6) is split across two files that no compiler,
  * type or import connects: `apps/api/docker-entrypoint.sh` skips its inline
- * `prisma migrate deploy` when `NEXA_MIGRATE_ON_START` is `false`, and the Helm
+ * `prisma migrate deploy` when `SIYAHTUS_MIGRATE_ON_START` is `false`, and the Helm
  * chart's ConfigMap is what sets it — while a hook Job migrates instead. Delete
  * either half and nothing fails to build, nothing fails to render, and the
  * deployment quietly goes back to every replica racing to migrate on start.
@@ -25,9 +25,9 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..'
 const read = (path: string): string => readFileSync(resolve(REPO_ROOT, path), 'utf8');
 
 const ENTRYPOINT = 'apps/api/docker-entrypoint.sh';
-const CHART_VALUES = 'infra/helm/nexa/values.yaml';
-const MIGRATE_JOB = 'infra/helm/nexa/templates/migrate-job.yaml';
-const FLAG = 'NEXA_MIGRATE_ON_START';
+const CHART_VALUES = 'infra/helm/siyahtus/values.yaml';
+const MIGRATE_JOB = 'infra/helm/siyahtus/templates/migrate-job.yaml';
+const FLAG = 'SIYAHTUS_MIGRATE_ON_START';
 
 describe(`migration strategy: ${ENTRYPOINT} ↔ Helm chart (tm 164.3, CONVENTIONS §6)`, () => {
   it('the entrypoint gates its migrate step on the flag, defaulting to migrating', () => {

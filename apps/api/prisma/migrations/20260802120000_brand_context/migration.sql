@@ -14,17 +14,17 @@
 -- written here by hand, the same way every other tenant table does.
 
 -- ---------------------------------------------------------------------------
--- Tenant context helper — the brand twin of nexa_current_license()
+-- Tenant context helper — the brand twin of siyahtus_current_license()
 -- ---------------------------------------------------------------------------
 -- Empty string ('') means "no brand selected" → the license-wide view. A
 -- malformed value raises on the ::UUID cast rather than silently matching
 -- nothing, exactly like the license/organization helpers.
-CREATE OR REPLACE FUNCTION nexa_current_brand() RETURNS UUID
+CREATE OR REPLACE FUNCTION siyahtus_current_brand() RETURNS UUID
 LANGUAGE sql STABLE AS $$
   SELECT NULLIF(current_setting('app.current_brand', true), '')::UUID;
 $$;
 
-GRANT EXECUTE ON FUNCTION nexa_current_brand() TO nexa_app;
+GRANT EXECUTE ON FUNCTION siyahtus_current_brand() TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- channels.brand_id — add nullable, backfill to the license default, enforce
@@ -61,12 +61,12 @@ CREATE UNIQUE INDEX "channels_license_id_brand_id_type_key"
 DROP POLICY channels_tenant ON channels;
 CREATE POLICY channels_tenant ON channels
   USING (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   )
   WITH CHECK (
-    license_id = nexa_current_license()
-    AND (nexa_current_brand() IS NULL OR brand_id = nexa_current_brand())
+    license_id = siyahtus_current_license()
+    AND (siyahtus_current_brand() IS NULL OR brand_id = siyahtus_current_brand())
   );
 
 -- ---------------------------------------------------------------------------
@@ -95,7 +95,7 @@ DECLARE
   v_account UUID := gen_random_uuid();
 BEGIN
   IF EXISTS (SELECT 1 FROM accounts a WHERE a.email = p_email) THEN
-    RAISE EXCEPTION 'nexa_account_exists';
+    RAISE EXCEPTION 'siyahtus_account_exists';
   END IF;
 
   INSERT INTO organizations (id, name, region) VALUES (v_org, p_organization_name, 'eu');
@@ -118,7 +118,7 @@ BEGIN
   -- Public client: OAuth 2.1 uses PKCE rather than a secret for anything
   -- running in a browser, where no secret stays secret.
   INSERT INTO oauth_clients (id, organization_id, display_name, client_type, redirect_uris, scopes)
-  VALUES ('nexa-agent-app-' || v_org::TEXT, v_org, 'Nexa Agent App', 'public',
+  VALUES ('siyahtus-agent-app-' || v_org::TEXT, v_org, 'SiyahTuş Agent App', 'public',
           ARRAY['http://localhost:5173/auth/callback'], ARRAY[]::TEXT[]);
 
   RETURN QUERY SELECT v_account, v_license, v_org;

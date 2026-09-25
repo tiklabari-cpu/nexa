@@ -39,7 +39,7 @@ BEGIN
 
   IF v_account IS NULL THEN
     IF p_password_hash IS NULL THEN
-      RAISE EXCEPTION 'nexa_password_required';
+      RAISE EXCEPTION 'siyahtus_password_required';
     END IF;
     v_account := gen_random_uuid();
     v_email   := v_invite.email::TEXT;
@@ -57,4 +57,4 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_accept_invitation(TEXT, TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_accept_invitation(TEXT, TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_accept_invitation(TEXT, TEXT, TEXT) TO siyahtus_app;

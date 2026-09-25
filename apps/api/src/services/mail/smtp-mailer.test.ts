@@ -203,7 +203,7 @@ describe('(2) envelope and encoding', () => {
   it('uses SMTP_FROM and the recipient for the envelope and carries a non-ASCII subject and body intact', async () => {
     const server = await startServer({ mode: 'starttls' });
     const { mailer } = carrier(server);
-    const subject = 'Şifre sıfırlama — Nexa çalışma alanınız "Ağaç İşleri"';
+    const subject = 'Şifre sıfırlama — SiyahTuş çalışma alanınız "Ağaç İşleri"';
     const body =
       'Merhaba Çağla,\n.bu satır noktayla başlıyor\n\nBağlantı: https://app.example.test/r?t=a=b';
 

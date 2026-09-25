@@ -51,7 +51,7 @@ module.exports = {
   preset: 'jest-expo',
   transformIgnorePatterns: [`node_modules[/\\\\]\\.pnpm[/\\\\](?!(?:${TRANSFORMED}))`],
   moduleNameMapper: {
-    // `@nexa/types` is TypeScript source whose internal imports carry the ESM
+    // `@siyahtus/types` is TypeScript source whose internal imports carry the ESM
     // `.js` extension (`export * from './domain.js'`) — the form tsc, vite and
     // tsx all expect, and the one Jest's CommonJS resolver cannot follow to a
     // `.ts` file. Metro needs the same shim; see `metro.config.js`.

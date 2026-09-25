@@ -40,7 +40,7 @@ describe('createMailer', () => {
   let dir: string;
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'nexa-mailer-factory-'));
+    dir = await mkdtemp(join(tmpdir(), 'siyahtus-mailer-factory-'));
   });
 
   afterEach(async () => {
@@ -88,7 +88,7 @@ describe('createMailer', () => {
     expect(() =>
       createMailer('smtp', {
         dir,
-        smtp: { ...SMTP, from: 'Nexa <info@nolnk.test>' },
+        smtp: { ...SMTP, from: 'SiyahTuş <info@nolnk.test>' },
         logger: SILENT,
       }),
     ).toThrow(/SMTP_FROM/);

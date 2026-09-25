@@ -1,7 +1,7 @@
 /**
  * Sales tracker settings (FR-MOD-13.5) — enabled / currency / attribution
  * window. What is configured here decides two other surfaces: the widget's
- * `nexa('trackSale', …)` snippet (13.5-g) refuses to record anything while
+ * `siyahtus('trackSale', …)` snippet (13.5-g) refuses to record anything while
  * `enabled` is false (13.5-c), and the Reports → Reviews Ecommerce block
  * (13.5-d) sums tracked sales under this `currency`. A save here is the
  * on-ramp for both, so a saved change points at where its effect shows up.
@@ -15,7 +15,7 @@ import {
   SALES_TRACKER_CURRENCIES,
   type SalesTrackerConfig,
   type SalesTrackerCurrency,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';

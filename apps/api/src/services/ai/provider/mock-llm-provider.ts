@@ -20,7 +20,7 @@
  * a total that is part invoice and part invention, and one on the stub would
  * report spend it never had. The stub consumed nothing, so it says so.
  */
-import { shapeAnswer } from '@nexa/types';
+import { shapeAnswer } from '@siyahtus/types';
 import { readAnswerGrounding } from './answer-prompt.js';
 import type { LlmCompletion, LlmCompletionRequest, LlmProvider } from './llm-provider.js';
 

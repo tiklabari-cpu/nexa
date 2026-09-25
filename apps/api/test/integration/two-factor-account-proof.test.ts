@@ -409,7 +409,7 @@ describe('two-factor enrollment proves the account (M-SEC-d2)', () => {
 
   describe('activation', () => {
     it('tells the account holder, at the address the factor now guards', async () => {
-      const dir = await mkdtemp(join(tmpdir(), 'nexa-mail-'));
+      const dir = await mkdtemp(join(tmpdir(), 'siyahtus-mail-'));
       const mailer = new FileMailer(dir);
       const mailed = await startTestServer({}, { mailer });
       try {

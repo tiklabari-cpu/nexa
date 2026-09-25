@@ -5,7 +5,7 @@
  * `scripts/measure-knowledge-recall.ts` (a real provider, by hand).
  *
  * The questions are asked the way the skill engine asks them: embedded first,
- * outside any transaction, then `KnowledgeService.search` as `nexa_app` with
+ * outside any transaction, then `KnowledgeService.search` as `siyahtus_app` with
  * RLS on, scoped to one agent, with the limit the product passes. Nothing here
  * ranks chunks itself — a gate that re-implemented the search could agree with
  * a broken one. The one exception is {@link calibrate}, which reads a ranking

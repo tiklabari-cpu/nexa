@@ -67,7 +67,7 @@ customers:
           are deliberately absent: what the table shows is a count scoped to
           the caller's license, and the database cannot order the whole
           collection by that scoped number without disagreeing with the
-          cell it prints — see `CUSTOMER_SORT_KEYS` (`@nexa/types`). A
+          cell it prints — see `CUSTOMER_SORT_KEYS` (`@siyahtus/types`). A
           customer with no value in the sorted column (no name, no country)
           sorts last in *both* directions, so an empty cell never outranks a
           real one just because the order flipped.

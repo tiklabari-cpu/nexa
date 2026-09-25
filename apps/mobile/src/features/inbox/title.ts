@@ -2,7 +2,7 @@
  * What one conversation is called, in the one place both screens read it from.
  *
  * The list has always computed this for the row it draws and for the header it
- * pushes with. `13.7-q` gave the conversation a second way in — `nexa://chats/
+ * pushes with. `13.7-q` gave the conversation a second way in — `siyahtus://chats/
  * <id>`, and after it a tapped notification (13.7-s) — and a URL carries no
  * name, so the detail screen has to be able to work it out for itself. One
  * function rather than the same line in two files: a header that said "Visitor"

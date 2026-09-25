@@ -1,5 +1,5 @@
 {
-  "name": "@nexa/rtm",
+  "name": "@siyahtus/rtm",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -15,7 +15,7 @@
     "test:integration": "tsx ../api/scripts/with-test-datastores.ts vitest run --passWithNoTests --dir test/integration"
   },
   "dependencies": {
-    "@nexa/types": "workspace:*",
+    "@siyahtus/types": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/core": "^2.10.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.221.0",

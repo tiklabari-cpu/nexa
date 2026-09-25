@@ -9,7 +9,7 @@
  * it again.
  */
 import type { PrismaClient } from '@prisma/client';
-import { LEXICAL_EMBEDDING_SPACE, embed, toVectorLiteral } from '@nexa/ai-mock';
+import { LEXICAL_EMBEDDING_SPACE, embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { expect } from 'vitest';
 import { grantToken } from './fixtures.js';
 import type { TestServer } from './server.js';

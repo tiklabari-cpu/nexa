@@ -25,7 +25,7 @@ import {
 } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
-const DOMAIN = 'inbound.nexa.localhost';
+const DOMAIN = 'inbound.siyahtus.localhost';
 
 interface AddressRow {
   id: string;
@@ -209,7 +209,7 @@ describe('e-mail forwarding addresses (FR-MOD-08.5.3)', () => {
     });
     expect(ticket.licenseId).toBe(fx.a.licenseId);
     expect(ticket.inboundAddressId).toBe(addressId);
-    expect(ticket.subject).toBe('Nexa test message');
+    expect(ticket.subject).toBe('SiyahTuş test message');
 
     // And the evidence is durable: the list reports it afterwards.
     const row = (await list()).items.find((item) => item.id === addressId);

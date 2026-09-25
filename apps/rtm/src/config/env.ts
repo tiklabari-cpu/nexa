@@ -11,7 +11,7 @@
  * and verifies the same tokens — came up on the values the API rejected.
  */
 import { z } from 'zod';
-import { DEFAULT_REGION, REGIONS } from '@nexa/types';
+import { DEFAULT_REGION, REGIONS } from '@siyahtus/types';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 
 /**
@@ -32,11 +32,11 @@ const envSchema = z.object({
    * are separate processes reading the same variable, and a gateway that
    * refuses a value the API accepts is a US deployment with no realtime.
    */
-  NEXA_REGION: z.enum(REGIONS).default(DEFAULT_REGION),
+  SIYAHTUS_REGION: z.enum(REGIONS).default(DEFAULT_REGION),
 
   DATABASE_URL: z.string().url(),
   /**
-   * Runtime connection, non-owner `nexa_app` role. The gateway reads through
+   * Runtime connection, non-owner `siyahtus_app` role. The gateway reads through
    * `set_config('app.current_license', …)` exactly as the REST API does
    * (`auth.ts#scoped`), so connecting as the table owner would exempt it from
    * every row level security policy and the tenant scoping above it would be

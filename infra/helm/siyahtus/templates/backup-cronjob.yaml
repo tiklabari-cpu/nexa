@@ -31,7 +31,7 @@ metadata:
   labels:
     app.kubernetes.io/name: backup
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/part-of: siyahtus
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 spec:
   schedule: {{ .Values.backup.schedule | quote }}

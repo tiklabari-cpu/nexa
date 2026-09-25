@@ -26,7 +26,7 @@ test.describe('playbook — knowledge source actions', () => {
 
   test.beforeAll(async () => {
     apiCtx = await newApiContext.newContext({
-      extraHTTPHeaders: { 'user-agent': 'nexa-e2e-knowledge-actions' },
+      extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-knowledge-actions' },
     });
   });
 

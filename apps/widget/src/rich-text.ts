@@ -11,11 +11,11 @@
  *   - **No `innerHTML`.** The subset is built out of `createElement` and text
  *     nodes, so nothing here can parse markup out of a message however it is
  *     shaped (NFR-S6, and the eslint config bans the property outright).
- *   - **The subset is parsed in one place.** `@nexa/types#parseRichText` is
+ *   - **The subset is parsed in one place.** `@siyahtus/types#parseRichText` is
  *     shared with the console; two copies would drift and the visitor would
  *     then be shown something other than what the agent was shown.
  */
-import { parseRichText } from '@nexa/types';
+import { parseRichText } from '@siyahtus/types';
 
 /**
  * Appends `text` to `target` as the subset's nodes.

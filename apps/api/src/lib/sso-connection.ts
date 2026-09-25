@@ -19,7 +19,7 @@
  * must be able to allow: the mock IdP harness (S11-c) runs on 127.0.0.1.
  */
 import { X509Certificate } from 'node:crypto';
-import { SSO_ATTRIBUTE_MAPPING_KEYS, type SsoAttributeMapping } from '@nexa/types';
+import { SSO_ATTRIBUTE_MAPPING_KEYS, type SsoAttributeMapping } from '@siyahtus/types';
 
 /**
  * Below this an RSA modulus is within reach of a well-resourced attacker, and a

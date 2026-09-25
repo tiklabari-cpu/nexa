@@ -11,7 +11,7 @@
  * wearing the same fix.
  */
 import { describe, expect, it } from 'vitest';
-import { findApiPackage } from '@nexa/types';
+import { findApiPackage } from '@siyahtus/types';
 import {
   composeInvoice,
   invoiceCsvRows,
@@ -69,8 +69,8 @@ describe('the period calendar (FR-MOD-10.3)', () => {
   });
 
   it('numbers a statement per workspace, from its period alone', () => {
-    expect(invoiceNumber('202607')).toBe('NEXA-202607');
-    expect(invoiceFilename('202607')).toBe('nexa-invoice-202607.csv');
+    expect(invoiceNumber('202607')).toBe('SIYAHTUS-202607');
+    expect(invoiceFilename('202607')).toBe('siyahtus-invoice-202607.csv');
   });
 });
 
@@ -211,7 +211,7 @@ describe('toInvoice — what a period claims about itself (FR-MOD-10.3)', () => 
   it('calls the open period an estimate, never a statement', () => {
     const invoice = toInvoice('202607', composeInvoice(base()), 'estimate');
     expect(invoice).toMatchObject({
-      number: 'NEXA-202607',
+      number: 'SIYAHTUS-202607',
       period: '202607',
       period_label: 'July 2026',
       period_start: '2026-07-01T00:00:00.000Z',

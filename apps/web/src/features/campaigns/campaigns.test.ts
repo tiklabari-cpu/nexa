@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Campaign, CampaignStatus } from '@nexa/types';
+import type { Campaign, CampaignStatus } from '@siyahtus/types';
 import {
   CAMPAIGN_TABS,
   campaignCounts,

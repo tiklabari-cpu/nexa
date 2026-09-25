@@ -43,8 +43,8 @@ describe('agent push notifications', () => {
 
   beforeAll(async () => {
     owner = ownerClient();
-    pushDir = await mkdtemp(join(tmpdir(), 'nexa-push-int-'));
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-push-mail-'));
+    pushDir = await mkdtemp(join(tmpdir(), 'siyahtus-push-int-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-push-mail-'));
     push = new FilePushProvider(pushDir);
     mailer = new FileMailer(mailDir);
     server = await startTestServer({}, { push, mailer });

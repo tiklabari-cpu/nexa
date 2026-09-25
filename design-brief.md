@@ -1,4 +1,4 @@
-# Nexa — Design Brief
+# SiyahTuş — Design Brief
 
 > Referans ekranlar (`gorseller/`, `images/`) **ilham** kaynağıdır, kopyalanmaz.
 > İki ürün (text.com + livechat.com) PRD §8.1'deki tek IA altında birleştirilir.

@@ -40,7 +40,7 @@ const OFF = 'off';
  *
  * Deliberately says nothing about *who* holds the address. That the address is
  * taken is unavoidable — it is the rejection — but naming the workspace behind
- * it would turn a public page id into a lookup for "which company uses Nexa"
+ * it would turn a public page id into a lookup for "which company uses SiyahTuş"
  * (NFR-S5). `validation` (400) rather than a new conflict type: the contract
  * already documents 400 here, so the client story is unchanged.
  */
@@ -149,7 +149,7 @@ export class ChannelService {
     // it (`config->>'address'`) without a tenant context.
     const stored = { ...config, address } as Prisma.InputJsonValue;
     // A channel belongs to exactly one brand (brand_id is NOT NULL). Connect
-    // under the request's brand when `X-Nexa-Brand` named one, otherwise the
+    // under the request's brand when `X-SiyahTus-Brand` named one, otherwise the
     // license default — which is the sole brand for a single-brand workspace.
     const brandId = tenant.brandId ?? (await this.defaultBrandId(tx));
 

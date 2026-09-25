@@ -39,7 +39,7 @@
  * `sync` — far inside the 10 messages/second/connection cap. The publisher's
  * REST traffic is one write per `LOAD_RTM_PUBLISH_INTERVAL`, i.e. 30/min at the
  * default, inside the 180/min agent cap without raising anything. Push the
- * publish rate up and the shared `nexa_rate_limited count==0` threshold turns
+ * publish rate up and the shared `siyahtus_rate_limited count==0` threshold turns
  * the run red rather than quietly measuring the rate limiter.
  *
  * Run it: `make load-rtm`, or `k6 run scenarios/rtm.js` with `LOAD_RTM_*` set.
@@ -209,7 +209,7 @@ async function runSocket(data, { index, closeAt, reconnectAt, publishStartAt }) 
  * A handshake that never completed is deliberately *not* counted as a failed
  * login: NFR-U1 is about logins that were attempted, and folding "the pod
  * refused the connection" into it would make one number mean two things.
- * `nexa_rtm_connect_failed` is the one that covers both.
+ * `siyahtus_rtm_connect_failed` is the one that covers both.
  */
 async function connect(data, state) {
   const url = `${CONFIG.rtmUrl}?organization_id=${encodeURIComponent(data.session.organizationId)}`;

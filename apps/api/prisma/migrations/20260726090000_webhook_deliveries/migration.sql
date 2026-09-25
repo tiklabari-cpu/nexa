@@ -48,8 +48,8 @@ ALTER TABLE webhook_deliveries
 -- visible inside that tenant's transaction (mirrors webhooks_tenant).
 ALTER TABLE webhook_deliveries ENABLE ROW LEVEL SECURITY;
 CREATE POLICY webhook_deliveries_tenant ON webhook_deliveries
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app. Default privileges already cover new tables,
+-- The API connects as siyahtus_app. Default privileges already cover new tables,
 -- but grant explicitly so this migration is correct regardless of who owns it.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.webhook_deliveries TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.webhook_deliveries TO siyahtus_app;

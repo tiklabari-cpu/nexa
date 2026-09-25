@@ -16,7 +16,7 @@
  * The six keys are the capabilities the PRD names as Enterprise, not a guess at
  * what might sell:
  *
- *   - `white_label` — the widget served without Nexa branding (FR-MOD-11.5).
+ *   - `white_label` — the widget served without SiyahTuş branding (FR-MOD-11.5).
  *   - `sandbox`     — a second, non-billable workspace to test against (§5.4).
  *   - `sla`         — first-response/resolution targets with breach marking
  *                     (§5.4 "Kurumsal"). *Not* the uptime commitment of NFR-U5:

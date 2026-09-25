@@ -54,7 +54,7 @@ export const SCOPES = [
   'chats--all:rw',
   'chats--access:rw',
   // Ticket. Not in the source platform's list (v2-03 §8.5) because there
-  // ticketing is a separate product with its own API. Nexa merges the two
+  // ticketing is a separate product with its own API. SiyahTuş merges the two
   // surfaces into one inbox, so tickets need scopes of their own — reusing
   // `chats--*` would mean a token scoped to conversations silently also reads
   // the follow-up work, and ADR-04 keeps resources distinct. See PLAN §D.
@@ -62,14 +62,14 @@ export const SCOPES = [
   'tickets--access:ro',
   'tickets--all:rw',
   'tickets--access:rw',
-  // Channel. Also a Nexa addition: the source platform manages connected
+  // Channel. Also a SiyahTuş addition: the source platform manages connected
   // channels through account settings, not a scoped resource. The v1
   // omnichannel adapters (Messenger/SMS/WhatsApp, FR-MOD-08.5.4-.6) make
   // channels a first-class resource an integration connects and sends through,
   // so they get their own scopes rather than borrowing an unrelated one.
   'channels--all:ro',
   'channels--all:rw',
-  // Brand — Multibrand (PRD §5.3). A Nexa addition: the source platform is
+  // Brand — Multibrand (PRD §5.3). A SiyahTuş addition: the source platform is
   // single-tenant-per-license and has no brand resource. Tenant-wide only
   // (`--all`): a brand is a workspace-configuration object an owner/admin manages,
   // so there is no `--my`/`--groups` variant. Owners and admins write it; ordinary
@@ -78,7 +78,7 @@ export const SCOPES = [
   'brands--all:rw',
   // Customer
   'customers.ban:rw',
-  // Erasing a person on request (GDPR Art. 17 · NFR-C8). A Nexa addition, and
+  // Erasing a person on request (GDPR Art. 17 · NFR-C8). A SiyahTuş addition, and
   // its own scope for the reason `customers.ban:rw` is: NFR-C8's own words are
   // that the "erişim ≠ silme" tension has to be resolved, and a resource where
   // the widest read/write scope also carries an irreversible delete has not
@@ -111,8 +111,8 @@ export const SCOPES = [
   'webhooks.state:ro',
   'webhooks.state:rw',
   'webhooks.configuration:rw',
-  // Audit log. A Nexa addition: the source platform (v2-03 §8.5) has no audit
-  // resource, but Nexa keeps a security trail (NFR-S12) and needs a scope to
+  // Audit log. A SiyahTuş addition: the source platform (v2-03 §8.5) has no audit
+  // resource, but SiyahTuş keeps a security trail (NFR-S12) and needs a scope to
   // gate reading it. `--all:ro` — tenant-wide, read-only: an audit log is
   // append-only, so there is no `:rw`, and it is never scoped narrower than the
   // whole workspace. Paired with `minimumRole: admin` at the route (PLAN §D).
@@ -121,14 +121,14 @@ export const SCOPES = [
   // authority, not a convenience on top of the first. `--all:ro` is what a
   // screen holds to page through the log a hundred entries at a time; this is
   // what a machine holds to pull every entry the workspace has, continuously,
-  // into a system Nexa does not control. A dashboard integration granted the
+  // into a system SiyahTuş does not control. A dashboard integration granted the
   // reading scope should not thereby acquire the firehose — and because
   // `expandScope` only widens along the `all → access/groups/my` axis, it
   // cannot: `audit_log--all:ro` does not imply this one (PLAN §6.1.4).
   'audit_log--export:ro',
   // Reports / Billing — do not follow the `--` pattern
   'reports_read',
-  // Scheduled report exports (PRD §5.3-Reports). A Nexa addition: the source
+  // Scheduled report exports (PRD §5.3-Reports). A SiyahTuş addition: the source
   // platform's reports surface is read-only, so `reports_read` was the whole of
   // it. Defining a schedule is a *mutation* — it decides which report leaves the
   // workspace, how often and to whose mailbox — and a read scope must not carry

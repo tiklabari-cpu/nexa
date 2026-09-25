@@ -14,7 +14,7 @@
  * irreversible blast radius to preview. The machine-readable report goes to
  * stdout; a one-line human summary goes to stderr.
  *
- *   pnpm --filter @nexa/api chat-timeout:run
+ *   pnpm --filter @siyahtus/api chat-timeout:run
  */
 import { loadEnvFile } from '../../config/load-env-file.js';
 

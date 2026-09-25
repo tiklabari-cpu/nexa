@@ -1,4 +1,4 @@
-# Nexa — the controlled production pilot on one Docker host (tm 255.15).
+# SiyahTuş — the controlled production pilot on one Docker host (tm 255.15).
 #
 # SCOPE: the same four containers as `docker-compose.full.yml`, run the way the
 # pilot runs them — NODE_ENV=production, real configuration from a `.env` that
@@ -31,7 +31,7 @@
 # Variables in `${…}` below are read by Compose from the same `.env` (Compose's
 # own interpolation file). `:?` makes Compose itself refuse to start when one is
 # missing, before any container exists.
-name: nexa-pilot
+name: siyahtus-pilot
 
 # What api and rtm share. The database URLs are assembled here rather than taken
 # from `.env` because the database is this file's own container: its address is
@@ -40,15 +40,15 @@ name: nexa-pilot
 # `environment:` over `env_file:`.
 x-app-environment: &app-environment
   NODE_ENV: production
-  DATABASE_URL: postgresql://nexa:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (hex, e.g. openssl rand -hex 32)}@db:5432/nexa
-  DATABASE_APP_URL: postgresql://nexa_app:${NEXA_APP_DB_PASSWORD:?set NEXA_APP_DB_PASSWORD in .env (hex, e.g. openssl rand -hex 32)}@db:5432/nexa
+  DATABASE_URL: postgresql://siyahtus:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (hex, e.g. openssl rand -hex 32)}@db:5432/siyahtus
+  DATABASE_APP_URL: postgresql://siyahtus_app:${SIYAHTUS_APP_DB_PASSWORD:?set SIYAHTUS_APP_DB_PASSWORD in .env (hex, e.g. openssl rand -hex 32)}@db:5432/siyahtus
   REDIS_URL: redis://redis:6379
 
-# `NEXA_ENV_FILE` exists for one reason: a rehearsal on a developer machine,
+# `SIYAHTUS_ENV_FILE` exists for one reason: a rehearsal on a developer machine,
 # whose own `.env` belongs to `make dev`. On the pilot host it is unset and the
 # file is `.env`, next to this one.
 x-app-env-file: &app-env-file
-  - path: ${NEXA_ENV_FILE:-.env}
+  - path: ${SIYAHTUS_ENV_FILE:-.env}
     required: true
 
 services:
@@ -60,23 +60,23 @@ services:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
     environment:
-      POSTGRES_USER: nexa
+      POSTGRES_USER: siyahtus
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
-      POSTGRES_DB: nexa
+      POSTGRES_DB: siyahtus
       # Read once, by infra/db/pilot/10-app-role-password.sh, on the first start
       # of an empty data directory.
-      NEXA_APP_DB_PASSWORD: ${NEXA_APP_DB_PASSWORD:?set NEXA_APP_DB_PASSWORD in .env}
+      SIYAHTUS_APP_DB_PASSWORD: ${SIYAHTUS_APP_DB_PASSWORD:?set SIYAHTUS_APP_DB_PASSWORD in .env}
       LANG: C
     volumes:
       # The pilot's data. A named volume survives `down`, `up --build` and a
       # host reboot; only `down -v` removes it — never run that here.
-      - nexa_pilot_pgdata:/var/lib/postgresql/data
-      # The same extensions + `nexa_app` role as every other stack, then the
+      - siyahtus_pilot_pgdata:/var/lib/postgresql/data
+      # The same extensions + `siyahtus_app` role as every other stack, then the
       # pilot's own step that replaces the role's published dev password.
       - ./infra/db/init/00-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
       - ./infra/db/pilot/10-app-role-password.sh:/docker-entrypoint-initdb.d/10-app-role-password.sh:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U nexa -d nexa']
+      test: ['CMD-SHELL', 'pg_isready -U siyahtus -d siyahtus']
       interval: 3s
       timeout: 3s
       retries: 20
@@ -89,7 +89,7 @@ services:
     # restart without a second persistence mechanism to reason about.
     command: ['redis-server', '--appendonly', 'yes', '--save', '']
     volumes:
-      - nexa_pilot_redisdata:/data
+      - siyahtus_pilot_redisdata:/data
     healthcheck:
       test: ['CMD', 'redis-cli', 'ping']
       interval: 3s
@@ -107,24 +107,24 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: nexa-api:pilot
+    image: siyahtus-api:pilot
     restart: unless-stopped
     env_file: *app-env-file
     environment:
       <<: *app-environment
       # `.env.production.example` leaves these relative to the working
       # directory, which is root-owned inside the image (the app runs as
-      # `nexa`). /tmp is writable. What lives there does not survive a
+      # `siyahtus`). /tmp is writable. What lives there does not survive a
       # container re-create: with MAIL_PROVIDER=smtp nothing is spooled to
       # MAIL_DIR, push and the SIEM export are outside the pilot, and file
       # sharing stays off (tm 255.13) — a workspace that turns it on keeps
       # its uploads only until the next `up --build`.
-      STORAGE_LOCAL_DIR: /tmp/nexa/uploads
-      MAIL_DIR: /tmp/nexa/mail
-      PUSH_DIR: /tmp/nexa/push
-      SIEM_DIR: /tmp/nexa/siem
+      STORAGE_LOCAL_DIR: /tmp/siyahtus/uploads
+      MAIL_DIR: /tmp/siyahtus/mail
+      PUSH_DIR: /tmp/siyahtus/push
+      SIEM_DIR: /tmp/siyahtus/siem
     ports:
-      - '127.0.0.1:${NEXA_API_HOST_PORT:-4000}:4000'
+      - '127.0.0.1:${SIYAHTUS_API_HOST_PORT:-4000}:4000'
     depends_on:
       db:
         condition: service_healthy
@@ -135,12 +135,12 @@ services:
     build:
       context: .
       dockerfile: apps/rtm/Dockerfile
-    image: nexa-rtm:pilot
+    image: siyahtus-rtm:pilot
     restart: unless-stopped
     env_file: *app-env-file
     environment: *app-environment
     ports:
-      - '127.0.0.1:${NEXA_RTM_HOST_PORT:-4001}:4001'
+      - '127.0.0.1:${SIYAHTUS_RTM_HOST_PORT:-4001}:4001'
     depends_on:
       redis:
         condition: service_healthy
@@ -156,7 +156,7 @@ services:
         # Baked into the bundle: a WebSocket URL cannot be relative. The same
         # public RTM address the api hands the widget (RTM_BASE_URL).
         VITE_RTM_URL: ${RTM_BASE_URL:?set RTM_BASE_URL in .env}/v1/agent/rtm/ws
-    image: nexa-web:pilot
+    image: siyahtus-web:pilot
     restart: unless-stopped
     environment:
       API_UPSTREAM: http://api:4000
@@ -164,7 +164,7 @@ services:
       # The panel's CSP has to allow the RTM origin the bundle dials.
       CSP_CONNECT_EXTRA: ${RTM_BASE_URL}
     ports:
-      - '127.0.0.1:${NEXA_WEB_HOST_PORT:-5173}:8080'
+      - '127.0.0.1:${SIYAHTUS_WEB_HOST_PORT:-5173}:8080'
     depends_on:
       api:
         condition: service_healthy
@@ -178,15 +178,15 @@ services:
         # cross-origin at this address (and CORS lets it, because WEB_ORIGIN
         # has to name WIDGET_BASE_URL's origin — productionProblems).
         VITE_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL in .env}/api/v1
-    image: nexa-widget:pilot
+    image: siyahtus-widget:pilot
     restart: unless-stopped
     environment:
       # The widget's CSP has to allow both addresses it connects to: the api
       # above, and the RTM URL the api returns with every customer token.
       CSP_CONNECT_EXTRA: ${API_BASE_URL} ${RTM_BASE_URL}
     ports:
-      - '127.0.0.1:${NEXA_WIDGET_HOST_PORT:-5174}:8080'
+      - '127.0.0.1:${SIYAHTUS_WIDGET_HOST_PORT:-5174}:8080'
 
 volumes:
-  nexa_pilot_pgdata:
-  nexa_pilot_redisdata:
+  siyahtus_pilot_pgdata:
+  siyahtus_pilot_redisdata:

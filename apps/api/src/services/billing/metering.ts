@@ -8,7 +8,7 @@
  * invoice is the wrong one to discover was drifting.
  */
 import { Prisma } from '@prisma/client';
-import { AI_RESOLUTION_PACK_SIZE } from '@nexa/types';
+import { AI_RESOLUTION_PACK_SIZE } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 
 export type LicenseAccess = 'active' | 'trialing' | 'read_only';
@@ -45,7 +45,7 @@ const isBillableLicense = (licenseId: bigint): Prisma.Sql => Prisma.sql`EXISTS (
  * use. Named here so the value the meter shows and the value a usage record is
  * stamped with can never disagree.
  *
- * Re-exported from `@nexa/types` rather than declared, since 10.1.4 made the
+ * Re-exported from `@siyahtus/types` rather than declared, since 10.1.4 made the
  * pack *purchasable* (`ai-package-service.ts`): the sale and the meter have to
  * agree on how big a pack is, and a second literal `50` here is exactly how
  * they would stop agreeing. The name stays because every usage record and every

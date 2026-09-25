@@ -1,4 +1,4 @@
-# Nexa
+# SiyahTuş
 
 Live support + AI customer service platform. A working implementation built from the
 requirement package in this repository root (`urun-gereksinim-dokumani-PRD.md`,
@@ -20,16 +20,16 @@ make dev
 That single command installs dependencies, starts Postgres and Redis, waits for them to
 become healthy, applies migrations, seeds demo data, and starts every app.
 
-| Surface         | URL                                       |
-| --------------- | ----------------------------------------- |
-| Agent app       | http://localhost:5173                     |
-| REST API        | http://localhost:4000/api/v1              |
-| RTM (WebSocket) | ws://localhost:4001/v1/agent/rtm/ws       |
-| Widget          | http://localhost:5174                     |
-| Postgres        | `localhost:5433` (user `nexa`, db `nexa`) |
-| Redis           | `localhost:6380`                          |
+| Surface         | URL                                               |
+| --------------- | ------------------------------------------------- |
+| Agent app       | http://localhost:5173                             |
+| REST API        | http://localhost:4000/api/v1                      |
+| RTM (WebSocket) | ws://localhost:4001/v1/agent/rtm/ws               |
+| Widget          | http://localhost:5174                             |
+| Postgres        | `localhost:5433` (user `siyahtus`, db `siyahtus`) |
+| Redis           | `localhost:6380`                                  |
 
-Ports are offset from the defaults so Nexa never collides with a Postgres or Redis you
+Ports are offset from the defaults so SiyahTuş never collides with a Postgres or Redis you
 already run locally.
 
 Check everything is alive:
@@ -83,7 +83,7 @@ seeded demo account — and exits non-zero if any of them is wrong.
 | Hosted Chat page (visitor) | http://localhost:5174/chat.html?organization_id=`<id>` |
 
 Sign in with the seeded owner of the demo workspace: `owner@acme.localhost` /
-`nexa-demo-password`. Ports match `make dev`, so run one or the other, not both.
+`siyahtus-demo-password`. Ports match `make dev`, so run one or the other, not both.
 
 | Target            | Does                                             |
 | ----------------- | ------------------------------------------------ |
@@ -133,17 +133,17 @@ all, so the two never collide.
 
 ### Workspace layout
 
-| Package             | Role                                                                                 |
-| ------------------- | ------------------------------------------------------------------------------------ |
-| `packages/contract` | OpenAPI 3.1 document — the contract every other package derives from                 |
-| `packages/types`    | `@nexa/types`: domain vocabulary, error taxonomy, scopes, ID strategy, RTM protocol  |
-| `apps/api`          | REST API (Fastify + Prisma), migrations, seed                                        |
-| `apps/rtm`          | WebSocket gateway: presence, push fan-out, missed-event sync                         |
-| `apps/web`          | Agent SPA (React + Vite + Tailwind)                                                  |
-| `apps/widget`       | Customer chat widget — loader + sandboxed iframe app                                 |
-| `apps/mobile`       | Agent phone app (Expo / React Native) — Inbox, AI, CRM, Reports + push               |
-| `apps/e2e`          | Playwright suite: drives the real servers on fixed ports against the seeded database |
-| `packages/ai-mock`  | Deterministic LLM stand-in — no external model is ever called                        |
+| Package             | Role                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------- |
+| `packages/contract` | OpenAPI 3.1 document — the contract every other package derives from                    |
+| `packages/types`    | `@siyahtus/types`: domain vocabulary, error taxonomy, scopes, ID strategy, RTM protocol |
+| `apps/api`          | REST API (Fastify + Prisma), migrations, seed                                           |
+| `apps/rtm`          | WebSocket gateway: presence, push fan-out, missed-event sync                            |
+| `apps/web`          | Agent SPA (React + Vite + Tailwind)                                                     |
+| `apps/widget`       | Customer chat widget — loader + sandboxed iframe app                                    |
+| `apps/mobile`       | Agent phone app (Expo / React Native) — Inbox, AI, CRM, Reports + push                  |
+| `apps/e2e`          | Playwright suite: drives the real servers on fixed ports against the seeded database    |
+| `packages/ai-mock`  | Deterministic LLM stand-in — no external model is ever called                           |
 
 ### Contract-first
 
@@ -169,7 +169,7 @@ algorithm, the definition of an "AI resolution", trial behaviour — are recorde
 **The API never connects to Postgres as the table owner.** PostgreSQL exempts owners and
 superusers from row level security, so running the request path as the migration role
 would silently disable every tenant isolation policy while all tests still passed.
-Migrations use `DATABASE_URL`; the runtime uses `DATABASE_APP_URL` (`nexa_app`).
+Migrations use `DATABASE_URL`; the runtime uses `DATABASE_APP_URL` (`siyahtus_app`).
 
 **Errors carry a machine-readable type, and the HTTP status is derived from it.** A route
 cannot return `not_found` with a 403. Anything the caller may not see — including
@@ -188,7 +188,7 @@ fully compromised widget document cannot reach the host page's storage or cookie
 
 `apps/mobile` is the agent phone app (Expo / React Native) — Inbox, Customers,
 Reports, AI/Copilot and Settings, plus push. It talks to the same API and RTM
-`make dev` already started; run it with `pnpm --filter @nexa/mobile start` in a
+`make dev` already started; run it with `pnpm --filter @siyahtus/mobile start` in a
 separate terminal. See [apps/mobile/README.md](apps/mobile/README.md) for
 prerequisites, emulator/device networking (`localhost` doesn't mean the same
 thing on an Android emulator or a physical phone), and demo login credentials.
@@ -200,7 +200,7 @@ thing on an Android emulator or a physical phone), and demo login credentials.
 ```bash
 pnpm typecheck      # tsc across the workspace
 pnpm lint           # eslint
-pnpm test:unit      # vitest; @nexa/api and @nexa/rtm need a live Postgres + Redis
+pnpm test:unit      # vitest; @siyahtus/api and @siyahtus/rtm need a live Postgres + Redis
                     # (each run gets its own isolated database — see below)
 pnpm test:integration
 pnpm test:e2e       # playwright (chromium) — see "End-to-end tests" below
@@ -212,19 +212,19 @@ mocked behind interfaces. The LLM mock is deterministic so tests never flake.
 
 ### Test datastores are private to each run
 
-`@nexa/api` and `@nexa/rtm` talk to a real Postgres and a real Redis, and every suite
+`@siyahtus/api` and `@siyahtus/rtm` talk to a real Postgres and a real Redis, and every suite
 starts by truncating. Two test runs against one database therefore destroy each other's
 fixtures — and the damage lands as unique-constraint violations and 401s in whatever
 happened to be running, not as anything to do with the change under test.
 
 So each run gets its own. `pnpm test`, `test:unit` and `test:integration` in those two
 packages go through `apps/api/scripts/with-test-datastores.ts`, which creates a
-`nexa_test_<id>` database, migrates it, leases one of Redis' logical databases (1-15),
+`siyahtus_test_<id>` database, migrates it, leases one of Redis' logical databases (1-15),
 runs the command against them and drops both afterwards. A run that dies without
 cleaning up leaves a lease that expires; the next run sweeps what it left behind.
 
 Nothing in a test needs to know: the harness only rewrites `DATABASE_URL`,
-`DATABASE_APP_URL` and `REDIS_URL`. Adds ~3 s per run. `NEXA_TEST_ISOLATION=off` runs
+`DATABASE_APP_URL` and `REDIS_URL`. Adds ~3 s per run. `SIYAHTUS_TEST_ISOLATION=off` runs
 against the shared development database instead, for picking through the wreckage of a
 failing test by hand.
 
@@ -234,12 +234,12 @@ seeded development database, so two of those still cannot run at once.
 ### End-to-end tests
 
 ```bash
-pnpm --filter @nexa/e2e exec playwright install chromium   # one-time browser download
+pnpm --filter @siyahtus/e2e exec playwright install chromium   # one-time browser download
 pnpm test:e2e
 ```
 
 Playwright starts six real servers for you (mock-smtp, api, rtm, web, widget, mock-idp) on
-their usual ports, then a global setup step reseeds the demo tenant with `NEXA_SEED_RESET=1`.
+their usual ports, then a global setup step reseeds the demo tenant with `SIYAHTUS_SEED_RESET=1`.
 The api it starts sends mail for real (`MAIL_PROVIDER=smtp`, TLS verified) to the mock-smtp
 stand-in on 127.0.0.1:4625, and the tests read what arrived from its mailbox at
 `http://127.0.0.1:4626/messages`. An api server that is already running is reused as it is
@@ -280,13 +280,13 @@ opt-in [MinIO](https://min.io/) service behind the `storage` profile — not sta
 plain `docker compose up` / `make dev`:
 
 ```bash
-docker compose --profile storage up -d   # starts nexa-minio, then nexa-minio-init
-                                          # creates the `nexa-uploads` bucket and exits 0
+docker compose --profile storage up -d   # starts siyahtus-minio, then siyahtus-minio-init
+                                          # creates the `siyahtus-uploads` bucket and exits 0
 ```
 
 Then uncomment the `STORAGE_S3_*` block in `.env` (copied from `.env.example` — the
 values already match this MinIO container: endpoint `http://localhost:9000`, bucket
-`nexa-uploads`, credentials `minioadmin`/`minioadmin`) and set `STORAGE_PROVIDER=s3`.
+`siyahtus-uploads`, credentials `minioadmin`/`minioadmin`) and set `STORAGE_PROVIDER=s3`.
 Console at http://localhost:9001 (same credentials) to browse what got uploaded.
 
 `docker-compose.full.yml` has the same `minio`/`minio-init` pair under the same profile,
@@ -322,7 +322,7 @@ Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one dep
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
 `.env.example` for every key. To turn a background sweep off entirely and drive it from
 outside the app instead (a host cron, a managed job runner), set `SCHEDULER_ENABLED=false`;
-every job but one keeps its own `pnpm --filter @nexa/api <job>:run` CLI script, which is
+every job but one keeps its own `pnpm --filter @siyahtus/api <job>:run` CLI script, which is
 what that outside trigger calls. Webhook redelivery has no CLI equivalent — it is not a pass
 an operator would ever want to force, and a hand-run one would race the scheduled one for the
 same rows.
@@ -342,7 +342,7 @@ invoices; this job composes each closed period once and stores it, after which n
 it — the database withholds UPDATE and DELETE on `invoices` from the runtime role. Only closed
 periods are written: the current month is served as an `estimate` whose figures are still
 accruing. **After deploying the persistent-invoice migration, run
-`pnpm --filter @nexa/api invoice-close:run` once** — periods that closed before the table
+`pnpm --filter @siyahtus/api invoice-close:run` once** — periods that closed before the table
 existed are written by the first pass, marked `reconstructed` because only their seat line has
 to be priced from the subscription as it stands rather than as it stood.
 
@@ -365,7 +365,7 @@ overlapping tick delivers the same event twice.
 **`events` partition maintenance is not one of the eight** and `SCHEDULER_ENABLED` does not
 touch it. `events` is partitioned by month, and every API process opens the months from one
 before the current month to three after it, at boot and every six hours — no lock and no
-leader, because opening a month twice is a no-op. It runs as the runtime role `nexa_app`
+leader, because opening a month twice is a no-op. It runs as the runtime role `siyahtus_app`
 through `SECURITY DEFINER` functions that can open and secure an `events` partition and
 nothing else (migration `20260925100000_events_partition_definer`). A failed pass never stops
 the process — an event whose month has no partition lands in `events_default` instead — but
@@ -415,7 +415,7 @@ openssl rand -hex 32
 
 Two connection strings to the same database, and the distinction is a tenant-isolation
 control, not a style choice. Migrations run as the table owner (`DATABASE_URL`); the
-request path runs as `nexa_app` (`DATABASE_APP_URL`), a role with no owner/superuser
+request path runs as `siyahtus_app` (`DATABASE_APP_URL`), a role with no owner/superuser
 privilege. PostgreSQL exempts owners and superusers from row level security — so a
 deployment that (accidentally or "temporarily") points the runtime at the owner connection
 does not error, does not fail a test, and does not look different in any way except that
@@ -473,7 +473,7 @@ transaction-mode pooling does not provide, which is also why this repo already k
 separate from the pooled `DATABASE_APP_URL` runtime connection (see above). This
 repository has no PgBouncer instance to point at (CLAUDE.md's deploy boundary); a
 deployment that adds one sets
-`DATABASE_APP_URL=postgresql://…@pgbouncer-host:6432/nexa?pgbouncer=true` and leaves
+`DATABASE_APP_URL=postgresql://…@pgbouncer-host:6432/siyahtus?pgbouncer=true` and leaves
 `DATABASE_URL` aimed at Postgres' own port.
 
 ### Read replica
@@ -559,7 +559,7 @@ it. Raising the count does not help — the direct caller just prepends one more
 
 So `TRUST_PROXY_HOPS` is worth exactly what the network guarantees about which paths
 reach the process, and the two have to be set together. In the Helm chart that guarantee
-is [`templates/networkpolicy.yaml`](infra/helm/nexa/templates/networkpolicy.yaml) (on by
+is [`templates/networkpolicy.yaml`](infra/helm/siyahtus/templates/networkpolicy.yaml) (on by
 default), which is why that file and the `TRUST_PROXY_HOPS` value in `values.yaml` each
 tell you to re-read the other. It is also what makes a _second_ public path to the API a
 decision rather than a convenience: two paths with different hop counts cannot share one
@@ -576,7 +576,7 @@ Comma-separated list of origins the API answers cross-origin (only production en
 it). Left at the `.env.example` localhost default, every real browser request is refused by
 CORS.
 
-List **every** origin a browser loads a Nexa page from, not only the panel's:
+List **every** origin a browser loads a SiyahTuş page from, not only the panel's:
 
 - the agent panel;
 - a standalone chat page, if one is hosted separately (FR-MOD-08.5.9);
@@ -602,7 +602,7 @@ jobs does):
 - `SCHEDULER_ENABLED` — unset already means **on** under `NODE_ENV=production` (it only
   defaults off under test, so suites don't race a sweep against their own fixtures). Set it
   to `false` explicitly if this deployment drives the jobs from a host cron instead; each
-  job keeps its own `pnpm --filter @nexa/api <job>:run` script for that.
+  job keeps its own `pnpm --filter @siyahtus/api <job>:run` script for that.
 - `RETENTION_ENABLED` — defaults to **off** in every environment, scheduler on or not. It
   is the one sweep that hard-deletes data, and unlike the CLI's `--apply` flag — an operator
   confirming one specific run — a scheduled pass has no operator to ask. Review
@@ -667,7 +667,7 @@ mechanism whose retries add load would not be one.
 
 ## Deployment
 
-`infra/helm/nexa/` is a Helm chart for the four M-CONTAINER images (api, rtm, web,
+`infra/helm/siyahtus/` is a Helm chart for the four M-CONTAINER images (api, rtm, web,
 widget) — Deployment + Service per app, a ConfigMap/Secret pair, PodDisruptionBudgets,
 HorizontalPodAutoscalers, a pre-install/pre-upgrade migration Job, a nightly backup
 CronJob with its PersistentVolumeClaim, and a NetworkPolicy. It is a different
@@ -681,12 +681,12 @@ review this repo cannot give it.
 Render the chart (needs Helm; not required for anything else in this repo):
 
 ```bash
-helm template nexa infra/helm/nexa \
-  -f infra/helm/nexa/values.yaml \
-  -f infra/helm/nexa/values.production.example.yaml
+helm template siyahtus infra/helm/siyahtus \
+  -f infra/helm/siyahtus/values.yaml \
+  -f infra/helm/siyahtus/values.production.example.yaml
 ```
 
-[`values.production.example.yaml`](infra/helm/nexa/values.production.example.yaml) is the
+[`values.production.example.yaml`](infra/helm/siyahtus/values.production.example.yaml) is the
 production overlay — every value a real deployment has to fill in (image registry/tags,
 public URLs, `TRUST_PROXY_HOPS`, secret material), one line of reasoning each, no real
 secrets, exactly the discipline [`.env.production.example`](.env.production.example)
@@ -701,7 +701,7 @@ rule for writing a migration that survives a rolling upgrade — is a deliberate
 not a default; it is documented once, in [CONVENTIONS.md](CONVENTIONS.md) §6, and this
 section does not repeat it.
 
-[`templates/networkpolicy.yaml`](infra/helm/nexa/templates/networkpolicy.yaml)
+[`templates/networkpolicy.yaml`](infra/helm/siyahtus/templates/networkpolicy.yaml)
 (`networkPolicy.enabled`, **on by default**) restricts ingress to the api pods to this
 release's web pods. It is not a generic hardening extra: it is the half of
 `TRUST_PROXY_HOPS` that the application cannot enforce for itself, and "Choosing
@@ -729,7 +729,7 @@ combination is the defect.
 
 **What is verified, and how:**
 
-- `helm lint infra/helm/nexa` — passes (one non-blocking suggestion: add a chart icon).
+- `helm lint infra/helm/siyahtus` — passes (one non-blocking suggestion: add a chart icon).
 - `helm template` — renders successfully: 4 Deployments, 4 Services, 4 PodDisruptionBudgets,
   3 HorizontalPodAutoscalers (api/rtm/web — widget opts out, see `values.yaml`), 1
   ConfigMap, 1 Job, 1 CronJob, 1 PersistentVolumeClaim, 1 NetworkPolicy, and 1 Secret
@@ -775,7 +775,7 @@ are UTC timestamps) and delete those files by hand — there is no partial-file
 redaction, deleting the archive is the procedure.
 
 The Helm chart's analogue is
-[`infra/helm/nexa/templates/backup-cronjob.yaml`](infra/helm/nexa/templates/backup-cronjob.yaml)
+[`infra/helm/siyahtus/templates/backup-cronjob.yaml`](infra/helm/siyahtus/templates/backup-cronjob.yaml)
 (schedule/image/retention in `values.yaml`'s `backup:` block) — a daily `pg_dump`
 into a PersistentVolumeClaim (`templates/backup-pvc.yaml`), pruned by the same
 whole-file retention window. **Database only**, and since tm 242 that is a scope
@@ -808,13 +808,13 @@ make restore-drill                                  # back up, then drill that b
 ```
 
 It takes a fresh backup, creates a **scratch** database, restores into it, verifies,
-and drops it again — including when a check fails or the run is interrupted. `nexa` is
+and drops it again — including when a check fails or the run is interrupted. `siyahtus` is
 only ever read from: the sole DDL is `CREATE`/`DROP DATABASE` against a name that has
-to match `nexa_restore_drill_<digits>`, enforced in the script (`DRILL_DB=nexa` is
+to match `siyahtus_restore_drill_<digits>`, enforced in the script (`DRILL_DB=siyahtus` is
 refused), so CLAUDE.md's "no DB drop" boundary holds by construction rather than by
 care. Same discipline as
 [`apps/api/scripts/test-datastores.ts`](apps/api/scripts/test-datastores.ts), which
-provisions and drops the per-run `nexa_test_<id>` databases.
+provisions and drops the per-run `siyahtus_test_<id>` databases.
 
 Verified on every run, with exit codes: the applied-migration set matches (and none is
 half-applied — the P3009 state, `CONVENTIONS.md` §6.2) · row counts for
@@ -823,7 +823,7 @@ half-applied — the P3009 state, `CONVENTIONS.md` §6.2) · row counts for
 extensions and the `SECURITY DEFINER` functions including their `SET search_path` ·
 every `events` partition came back with RLS on and exactly one policy (the hole tm 150
 found lives per-partition, not on the parent) · and, connecting as the non-owner
-`nexa_app` role, the restore hands out **no** rows without a tenant context and the
+`siyahtus_app` role, the restore hands out **no** rows without a tenant context and the
 right rows once `app.current_license` is set.
 
 That last check needs both halves. Measured while building it: an archive restored with
@@ -835,9 +835,9 @@ application, not an open one, so "sees nothing" is not evidence of a good restor
 
 **One thing the archive does not carry, stated because it is a restore step:** roles are
 cluster-wide, and a per-database `pg_dump` has no `CREATE ROLE` in it. This archive
-references `nexa_app` 146 times (grants, policy roles) and creates it zero times.
+references `siyahtus_app` 146 times (grants, policy roles) and creates it zero times.
 Restoring into a _fresh_ cluster therefore aborts on the first
-`GRANT USAGE ON SCHEMA public TO nexa_app` with `role "nexa_app" does not exist`
+`GRANT USAGE ON SCHEMA public TO siyahtus_app` with `role "siyahtus_app" does not exist`
 (measured, and green once the role exists). Create it first with
 [`infra/db/init/00-extensions.sql`](infra/db/init/00-extensions.sql) — which the
 compose stack runs automatically — or capture globals separately with

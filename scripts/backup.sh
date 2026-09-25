@@ -36,14 +36,14 @@ set -euo pipefail
 BACKUP_DIR="${BACKUP_DIR:-backups}"
 BACKUP_RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-30}"
 DB_SERVICE="${DB_SERVICE:-db}"
-DB_USER="${DB_USER:-nexa}"
-DB_NAME="${DB_NAME:-nexa}"
+DB_USER="${DB_USER:-siyahtus}"
+DB_NAME="${DB_NAME:-siyahtus}"
 UPLOADS_DIR="${UPLOADS_DIR:-.data/uploads}"
 
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$BACKUP_DIR"
 
-printf 'Nexa backup — %s\n' "$timestamp"
+printf 'SiyahTuş backup — %s\n' "$timestamp"
 
 # --- Database: custom-format dump (pg_restore can filter/parallelize it,
 # unlike a plain SQL dump) ---

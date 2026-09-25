@@ -64,10 +64,10 @@ ALTER TABLE "chat_supervisions" ADD CONSTRAINT "chat_supervisions_license_id_fke
 -- license match, so nothing here is bespoke.
 ALTER TABLE chat_supervisions ENABLE ROW LEVEL SECURITY;
 CREATE POLICY chat_supervisions_tenant ON chat_supervisions
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- No GRANT statement: the ALTER DEFAULT PRIVILEGES in 20260722090000 already
--- hands nexa_app SELECT, INSERT, UPDATE, DELETE on every table created after
+-- hands siyahtus_app SELECT, INSERT, UPDATE, DELETE on every table created after
 -- it, and a supervision needs all four (register, heartbeat, release, read).
 -- Unlike audit_log or api_package_purchases there is nothing to withhold — this
 -- table is live state, not a record of something that happened, so rewriting a

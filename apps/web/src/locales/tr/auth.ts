@@ -32,9 +32,9 @@ export const auth: Messages = {
   'auth.signin.forgotPassword': 'Parolanızı mı unuttunuz?',
   'auth.signin.newHere': 'İlk kez mi buradasınız?',
   'auth.signin.createWorkspace': 'Çalışma alanı oluştur',
-  'auth.signin.demoCredentials': 'Demo: owner@acme.localhost / nexa-demo-password',
+  'auth.signin.demoCredentials': 'Demo: owner@acme.localhost / siyahtus-demo-password',
   'auth.signin.ssoRequired':
-    'Bu çalışma alanı tek oturum açmayı (SSO) zorunlu kılıyor. Kimlik sağlayıcınızdaki Nexa kutucuğundan devam edin.',
+    'Bu çalışma alanı tek oturum açmayı (SSO) zorunlu kılıyor. Kimlik sağlayıcınızdaki SiyahTuş kutucuğundan devam edin.',
   'auth.signin.ssoLinkFailed': 'Bu bağlantı için tek oturum açma başlatılamadı.',
   'auth.signin.ssoStartFailed': 'Tek oturum açma başlatılamadı.',
   'auth.signin.ssoRedirecting': 'Kimlik sağlayıcınıza yönlendiriliyorsunuz…',
@@ -131,7 +131,7 @@ export const auth: Messages = {
   'auth.join.title': "{organization}'a katıl",
   'auth.join.subtitle': '{role} olarak davet edildiniz · {email}',
   'auth.join.existingAccountNotice':
-    'Bu adres için zaten bir Nexa hesabınız var. Kabul etmek bu çalışma alanını hesabınıza ekler.',
+    'Bu adres için zaten bir SiyahTuş hesabınız var. Kabul etmek bu çalışma alanını hesabınıza ekler.',
   'auth.join.passwordHint': 'En az {count} karakter.',
   'auth.join.submit': 'Çalışma alanına katıl',
   'auth.join.submitting': 'Katılınıyor…',

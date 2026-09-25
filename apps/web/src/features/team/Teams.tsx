@@ -16,7 +16,7 @@
  */
 import { useMemo, useState, type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { GROUP_PRIORITIES, type GroupPriority } from '@nexa/types';
+import { GROUP_PRIORITIES, type GroupPriority } from '@siyahtus/types';
 import { Card, CardSkeleton, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { useApiClient } from '../../lib/auth-store.js';

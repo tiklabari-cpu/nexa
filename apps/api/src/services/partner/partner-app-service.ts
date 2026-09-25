@@ -2,7 +2,7 @@
  * Partner app registration — FR-MOD-09.4 (v2, Could).
  *
  * The write half of `oauth_clients`. Until now the table was only ever *read*:
- * signup inserted one row per organization (the Nexa Agent App) and
+ * signup inserted one row per organization (the SiyahTuş Agent App) and
  * `POST /auth/authorize` looked clients up through `auth_find_client`. This
  * service lets a workspace admin register their own client — the "build your
  * own app" surface — without touching a single line of the OAuth flow.
@@ -31,7 +31,7 @@
  * another organization's client is invisible to read, update and delete alike
  * (NFR-S4). The route turns "invisible" into 404, never 403 (NFR-S5).
  */
-import { effectiveScopes, isScope } from '@nexa/types';
+import { effectiveScopes, isScope } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { generateClientId, generateToken, hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
@@ -208,7 +208,7 @@ export function narrowScopes(requested: string[], held: readonly string[]): stri
 
 /**
  * A fresh client secret: 256 bits of entropy behind a recognisable prefix, so a
- * value that ends up in a log line or a paste is identifiable as a Nexa client
+ * value that ends up in a log line or a paste is identifiable as a SiyahTuş client
  * secret rather than an opaque blob nobody thinks to revoke. One function
  * because registration and rotation must mint the *same* shape — a rotation
  * that produced a differently-formed secret would still authenticate, and the

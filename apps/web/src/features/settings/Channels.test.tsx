@@ -434,7 +434,7 @@ describe('Telegram card — not connected', () => {
     await userEvent.type(within(dialog).getByLabelText('Bot token'), 'bot-token-1');
     expect(submit).toBeDisabled();
 
-    await userEvent.type(within(dialog).getByLabelText('Bot username'), 'nexa_support_bot');
+    await userEvent.type(within(dialog).getByLabelText('Bot username'), 'siyahtus_support_bot');
     expect(submit).toBeEnabled();
   });
 
@@ -460,7 +460,7 @@ describe('Telegram card — connected', () => {
           {
             type: 'telegram',
             status: 'connected',
-            address: 'nexa_support_bot',
+            address: 'siyahtus_support_bot',
             connected: true,
             created_at: '2026-01-01T00:00:00.000Z',
           },
@@ -476,7 +476,7 @@ describe('Telegram card — connected', () => {
     // The card renders Not-connected/Connect first, synchronously — the
     // switch to Connected only happens once /channels resolves.
     expect(await within(card).findByRole('button', { name: 'Disconnect' })).toBeInTheDocument();
-    expect(within(card).getByText('nexa_support_bot')).toBeInTheDocument();
+    expect(within(card).getByText('siyahtus_support_bot')).toBeInTheDocument();
   });
 
   it('does not disconnect without confirmation', async () => {
@@ -503,12 +503,12 @@ describe('Telegram card — connected', () => {
 
 describe('Email forwarding addresses (FR-MOD-08.5.3)', () => {
   const ADDRESSES = {
-    domain: 'inbound.nexa.localhost',
+    domain: 'inbound.siyahtus.localhost',
     items: [
       {
         id: 'addr-default',
         label: null,
-        address: 'org-1@inbound.nexa.localhost',
+        address: 'org-1@inbound.siyahtus.localhost',
         is_default: true,
         ticket_count: 4,
         last_received_at: '2026-09-05T10:00:00.000Z',
@@ -516,7 +516,7 @@ describe('Email forwarding addresses (FR-MOD-08.5.3)', () => {
       {
         id: 'addr-support',
         label: 'support',
-        address: 'org-1+support@inbound.nexa.localhost',
+        address: 'org-1+support@inbound.siyahtus.localhost',
         is_default: false,
         ticket_count: 0,
         last_received_at: null,
@@ -555,8 +555,10 @@ describe('Email forwarding addresses (FR-MOD-08.5.3)', () => {
     stubAddresses();
 
     const dialog = await openDialog();
-    expect(await within(dialog).findByText('org-1@inbound.nexa.localhost')).toBeInTheDocument();
-    expect(within(dialog).getByText('org-1+support@inbound.nexa.localhost')).toBeInTheDocument();
+    expect(await within(dialog).findByText('org-1@inbound.siyahtus.localhost')).toBeInTheDocument();
+    expect(
+      within(dialog).getByText('org-1+support@inbound.siyahtus.localhost'),
+    ).toBeInTheDocument();
   });
 
   it("shows each address's own activity — the proof that forwarding to it works", async () => {
@@ -600,7 +602,7 @@ describe('Email forwarding addresses (FR-MOD-08.5.3)', () => {
 
   it('sends a test message to the address the button belongs to and reports the result', async () => {
     const fetchSpy = stubAddresses({
-      post: { ticket_id: 'TCK-1', address: 'org-1+support@inbound.nexa.localhost' },
+      post: { ticket_id: 'TCK-1', address: 'org-1+support@inbound.siyahtus.localhost' },
     });
 
     const dialog = await openDialog();

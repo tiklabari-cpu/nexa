@@ -137,7 +137,7 @@ test.describe('playbook — step authoring', () => {
 
   test.beforeAll(async () => {
     apiCtx = await newApiContext.newContext({
-      extraHTTPHeaders: { 'user-agent': 'nexa-e2e-playbook-steps' },
+      extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-playbook-steps' },
     });
   });
 
@@ -244,7 +244,7 @@ test.describe('playbook — public KB categories', () => {
 
   test.beforeAll(async () => {
     apiCtx = await newApiContext.newContext({
-      extraHTTPHeaders: { 'user-agent': 'nexa-e2e-kb-categories' },
+      extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-kb-categories' },
     });
     token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
   });

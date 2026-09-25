@@ -12,7 +12,7 @@ import {
   type ErrorType,
   type RtmAction,
   type RtmPushAction,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 export interface DecodedRequest {
   version: string;

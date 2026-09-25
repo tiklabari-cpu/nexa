@@ -160,7 +160,7 @@ describe('NotificationsScreen', () => {
 
     expect(
       await screen.findByText(
-        'On for this workspace, but this phone is not allowing Nexa to notify you — turn notifications on in your device settings.',
+        'On for this workspace, but this phone is not allowing SiyahTuş to notify you — turn notifications on in your device settings.',
       ),
     ).toBeOnTheScreen();
   });
@@ -170,7 +170,7 @@ describe('NotificationsScreen', () => {
 
     expect(
       await screen.findByText(
-        'On for this workspace, but this phone is not allowing Nexa to notify you — turn notifications on in your device settings.',
+        'On for this workspace, but this phone is not allowing SiyahTuş to notify you — turn notifications on in your device settings.',
       ),
     ).toBeOnTheScreen();
   });

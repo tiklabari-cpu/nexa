@@ -33,7 +33,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import type { RoutingStatus } from '@nexa/types';
+import type { RoutingStatus } from '@siyahtus/types';
 import { useApiClient, useAuth } from '../lib/auth-store.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
 

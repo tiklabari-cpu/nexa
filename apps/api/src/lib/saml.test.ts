@@ -97,8 +97,8 @@ Cv8v5ICPmDAR2FRuYtAeZEuKQ0nVVjyGELxpAgal3fl91B3wH1PrTLZLbwIV
 `;
 
 const IDP_ENTITY_ID = 'https://idp-signing.example.test/metadata';
-const SP_ENTITY_ID = 'https://app.nexa.test/saml/metadata';
-const ACS_URL = 'https://app.nexa.test/auth/saml/conn-1/acs';
+const SP_ENTITY_ID = 'https://app.siyahtus.test/saml/metadata';
+const ACS_URL = 'https://app.siyahtus.test/auth/saml/conn-1/acs';
 const REQUEST_ID = '_req-00000000000000000001';
 
 /** Inside every fixture's window: assertions run 10:00 → 10:05. */
@@ -458,7 +458,7 @@ describe('verifySamlResponse — signature wrapping (XSW)', () => {
     const xml = sign(
       buildResponse({
         assertions: [buildAssertion({ id: '_forged', nameId: VICTIM })],
-        extensions: '<decoy xmlns="urn:nexa:test" ID="_decoy">nothing to see</decoy>',
+        extensions: '<decoy xmlns="urn:siyahtus:test" ID="_decoy">nothing to see</decoy>',
       }),
       { target: { localName: 'Extensions' } },
     );
@@ -688,7 +688,9 @@ describe('verifySamlResponse — conditions and binding', () => {
   });
 
   it('refuses a response addressed to a different endpoint', async () => {
-    const xml = sign(buildResponse({ destination: 'https://app.nexa.test/auth/saml/conn-2/acs' }));
+    const xml = sign(
+      buildResponse({ destination: 'https://app.siyahtus.test/auth/saml/conn-2/acs' }),
+    );
     expect(await verdict(xml)).toBe('destination_mismatch');
   });
 

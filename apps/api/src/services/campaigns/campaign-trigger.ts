@@ -63,7 +63,7 @@
  * about how many *fresh* sends this evaluation produced.
  */
 import type { Prisma } from '@prisma/client';
-import type { CampaignConditions } from '@nexa/types';
+import type { CampaignConditions } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { matchesConditions, resolveCampaignStatus } from './campaign-matching.js';
 

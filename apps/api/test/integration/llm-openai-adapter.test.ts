@@ -22,7 +22,7 @@ import { InMemoryMetricExporter, AggregationTemporality } from '@opentelemetry/s
 import { InMemorySpanExporter } from '@opentelemetry/sdk-trace-base';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { embed, toVectorLiteral } from '@nexa/ai-mock';
+import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { createTelemetry } from '../../src/telemetry/telemetry.js';
 import { LLM_CIRCUIT_FAILURE_THRESHOLD } from '../../src/services/ai/provider/openai-llm-provider.js';
 import {
@@ -52,7 +52,7 @@ const OPENAI_ENV = {
 };
 
 /** A real provider configured for Europe on a US deployment — the refusing shape (NFR-C4). */
-const OUT_OF_REGION_ENV = { ...OPENAI_ENV, NEXA_REGION: 'us', LLM_PROVIDER_REGION: 'eu' };
+const OUT_OF_REGION_ENV = { ...OPENAI_ENV, SIYAHTUS_REGION: 'us', LLM_PROVIDER_REGION: 'eu' };
 
 /** Every line the server wrote, so a test can say what never appeared. */
 class LineSink {
@@ -324,7 +324,7 @@ describe('OpenAI chat adapter through the real server (tm 255.6)', () => {
       );
       const spans = new InMemorySpanExporter();
       const telemetry = createTelemetry({
-        serviceName: 'nexa-api-test',
+        serviceName: 'siyahtus-api-test',
         serviceVersion: '0.0.0-test',
         spanExporter: spans,
         metricExporter: new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE),

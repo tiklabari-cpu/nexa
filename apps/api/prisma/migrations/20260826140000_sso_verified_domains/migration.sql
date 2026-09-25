@@ -150,7 +150,7 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION sso_email_domain_verified(CITEXT, TEXT[]) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION sso_email_domain_verified(CITEXT, TEXT[]) TO nexa_app;
+GRANT EXECUTE ON FUNCTION sso_email_domain_verified(CITEXT, TEXT[]) TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- 4. SAML just-in-time provisioning, bound to its own connection
@@ -245,7 +245,7 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_provision_sso_account(UUID, CITEXT, TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_provision_sso_account(UUID, CITEXT, TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_provision_sso_account(UUID, CITEXT, TEXT, TEXT) TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- 5. SCIM provisioning, bound to the workspace's verified domains
@@ -329,4 +329,4 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION scim_provision_member(BIGINT, CITEXT, TEXT, TEXT, TEXT, BOOLEAN) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION scim_provision_member(BIGINT, CITEXT, TEXT, TEXT, TEXT, BOOLEAN) TO nexa_app;
+GRANT EXECUTE ON FUNCTION scim_provision_member(BIGINT, CITEXT, TEXT, TEXT, TEXT, BOOLEAN) TO siyahtus_app;

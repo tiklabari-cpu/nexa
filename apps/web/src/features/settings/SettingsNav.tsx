@@ -26,7 +26,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { DEFAULT_UI_PREFERENCES, hasAnyScope, type UiPreferences } from '@nexa/types';
+import { DEFAULT_UI_PREFERENCES, hasAnyScope, type UiPreferences } from '@siyahtus/types';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { searchSections, sectionHref, visibleGroups } from './settings-sections.js';

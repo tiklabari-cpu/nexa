@@ -5,8 +5,8 @@
  * preferences (`services/notifications/preferences.ts`), for the same reason:
  * a preference is per user **and** per license.
  */
-import type { UiPreferences } from '@nexa/types';
-import { DEFAULT_UI_PREFERENCES } from '@nexa/types';
+import type { UiPreferences } from '@siyahtus/types';
+import { DEFAULT_UI_PREFERENCES } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 const UI_PREFERENCE_SELECT = { settingsNavPinned: true } as const;

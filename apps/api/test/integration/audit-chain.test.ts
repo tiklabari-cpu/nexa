@@ -518,14 +518,14 @@ describe('audit chain (NFR-C6 · C6-c)', () => {
       expect(records[0]?.prev_hash).toBeNull();
       expect(records[1]?.prev_hash).toBe(records[0]?.hash);
       expect(records[2]?.prev_hash).toBe(records[1]?.hash);
-      expect(res.headers['x-nexa-export-chain-ok']).toBe('true');
+      expect(res.headers['x-siyahtus-export-chain-ok']).toBe('true');
     });
 
     it('signs the exact bytes it delivered', async () => {
       for (const n of [1, 2]) await append(fx.a, `entry-${n}`);
 
       const res = await server.get('/audit-log/export', auth(exportToken));
-      const signature = res.headers['x-nexa-export-signature'] as string;
+      const signature = res.headers['x-siyahtus-export-signature'] as string;
       const records = recordsOf(res.body);
       const subject = {
         licenseId: fx.a.licenseId,
@@ -565,7 +565,7 @@ describe('audit chain (NFR-C6 · C6-c)', () => {
             lastSeq: 1n,
             body: res.body,
           },
-          res.headers['x-nexa-export-signature'] as string,
+          res.headers['x-siyahtus-export-signature'] as string,
         ),
       ).toBe(false);
     });
@@ -585,7 +585,7 @@ describe('audit chain (NFR-C6 · C6-c)', () => {
       const res = await server.get('/audit-log/export', auth(exportToken));
       expect(res.statusCode).toBe(200);
       expect(recordsOf(res.body)).toHaveLength(3);
-      expect(res.headers['x-nexa-export-chain-ok']).toBe('false');
+      expect(res.headers['x-siyahtus-export-chain-ok']).toBe('false');
     });
 
     it('signs an empty page too', async () => {
@@ -597,7 +597,7 @@ describe('audit chain (NFR-C6 · C6-c)', () => {
         verifyExportSignature(
           keyFor(fx.a),
           { licenseId: fx.a.licenseId, count: 0, firstSeq: null, lastSeq: null, body: '' },
-          res.headers['x-nexa-export-signature'] as string,
+          res.headers['x-siyahtus-export-signature'] as string,
         ),
       ).toBe(true);
     });

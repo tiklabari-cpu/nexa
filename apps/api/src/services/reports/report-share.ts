@@ -37,7 +37,7 @@
  * nothing downstream is *able* to tell them apart (NFR-S5).
  */
 import type { PrismaClient } from '@prisma/client';
-import type { ReportShareLink, ReportShareLinkCreated } from '@nexa/types';
+import type { ReportShareLink, ReportShareLinkCreated } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { generateToken, hashToken } from '../../lib/crypto.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';

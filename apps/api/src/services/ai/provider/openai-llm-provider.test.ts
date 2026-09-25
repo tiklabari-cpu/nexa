@@ -11,7 +11,7 @@ import type { AddressInfo } from 'node:net';
 import { Writable } from 'node:stream';
 import pino from 'pino';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Persona } from '@nexa/types';
+import type { Persona } from '@siyahtus/types';
 import {
   fakeOpenAiFetch as fakeFetch,
   hangingRequest as hang,

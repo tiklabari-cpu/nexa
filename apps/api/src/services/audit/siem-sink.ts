@@ -199,7 +199,7 @@ export class SiemSink {
     // per-licence value, so this sink's lock and any other feature's advisory
     // lock cannot collide, and one licence's delivery never blocks another's.
     await tx.$executeRaw`
-      SELECT pg_advisory_xact_lock(hashtext('nexa.siem-sink'), hashtext(${licenseId.toString()}))`;
+      SELECT pg_advisory_xact_lock(hashtext('siyahtus.siem-sink'), hashtext(${licenseId.toString()}))`;
 
     const row = await readSiemExportRow(tx);
     if (!row || !row.enabled) {

@@ -16,7 +16,7 @@ import {
 } from './notifications.js';
 
 /** The clean title the badge is layered on top of. */
-const BASE_TITLE = 'Nexa';
+const BASE_TITLE = 'SiyahTuş';
 
 export interface Notifier {
   /** Feed every realtime push through this; it decides and acts. */

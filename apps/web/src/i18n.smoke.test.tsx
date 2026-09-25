@@ -16,7 +16,7 @@ import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { ReactElement } from 'react';
-import { defaultScopesForRole } from '@nexa/types';
+import { defaultScopesForRole } from '@siyahtus/types';
 import { AppShell } from './components/AppShell.js';
 import { useAuth } from './lib/auth-store.js';
 import type { Locale } from './lib/i18n.js';

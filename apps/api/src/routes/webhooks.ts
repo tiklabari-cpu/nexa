@@ -21,7 +21,12 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { INTEGRATION_ACTIONS, INTEGRATION_TRIGGERS, findApp, isAutomationApp } from '@nexa/types';
+import {
+  INTEGRATION_ACTIONS,
+  INTEGRATION_TRIGGERS,
+  findApp,
+  isAutomationApp,
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import type { TenantClient } from '../lib/tenant.js';

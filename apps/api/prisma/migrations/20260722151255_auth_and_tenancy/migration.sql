@@ -268,7 +268,7 @@ ALTER TABLE "api_tokens" ADD CONSTRAINT "api_tokens_license_id_fkey" FOREIGN KEY
 -- dangerous failure mode is a query that silently sees everything.
 --
 -- RLS is ENABLEd but not FORCEd. Postgres exempts the table owner, which is what
--- lets migrations and the seed script work; the API connects as `nexa_app`,
+-- lets migrations and the seed script work; the API connects as `siyahtus_app`,
 -- which is neither owner nor superuser and is therefore fully subject to the
 -- policies. `apps/api/test/integration/tenant-isolation.test.ts` asserts this
 -- rather than trusting it.
@@ -287,7 +287,7 @@ ALTER TABLE "api_tokens" ADD CONSTRAINT "api_tokens_license_id_fkey" FOREIGN KEY
 -- value, but TRUNCATE ... RESTART IDENTITY resets to START WITH — so without
 -- the former, the first truncate silently drops licence ids back to 1.
 ALTER SEQUENCE licenses_id_seq START WITH 1000001 RESTART WITH 1000001;
-GRANT USAGE, SELECT ON SEQUENCE licenses_id_seq TO nexa_app;
+GRANT USAGE, SELECT ON SEQUENCE licenses_id_seq TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Domain constraints (PRD §8.4 "CHECK kısıtları")
@@ -331,36 +331,36 @@ CREATE UNIQUE INDEX uq_license_single_owner
 -- ---------------------------------------------------------------------------
 -- Tenant context helpers
 -- ---------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION nexa_current_license() RETURNS BIGINT
+CREATE OR REPLACE FUNCTION siyahtus_current_license() RETURNS BIGINT
 LANGUAGE sql STABLE AS $$
   SELECT NULLIF(current_setting('app.current_license', true), '')::BIGINT;
 $$;
 
-CREATE OR REPLACE FUNCTION nexa_current_organization() RETURNS UUID
+CREATE OR REPLACE FUNCTION siyahtus_current_organization() RETURNS UUID
 LANGUAGE sql STABLE AS $$
   SELECT NULLIF(current_setting('app.current_organization', true), '')::UUID;
 $$;
 
-GRANT EXECUTE ON FUNCTION nexa_current_license() TO nexa_app;
-GRANT EXECUTE ON FUNCTION nexa_current_organization() TO nexa_app;
+GRANT EXECUTE ON FUNCTION siyahtus_current_license() TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION siyahtus_current_organization() TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Policies
 -- ---------------------------------------------------------------------------
 ALTER TABLE organizations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY organizations_tenant ON organizations
-  USING (id = nexa_current_organization())
-  WITH CHECK (id = nexa_current_organization());
+  USING (id = siyahtus_current_organization())
+  WITH CHECK (id = siyahtus_current_organization());
 
 ALTER TABLE licenses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY licenses_tenant ON licenses
-  USING (organization_id = nexa_current_organization())
-  WITH CHECK (organization_id = nexa_current_organization());
+  USING (organization_id = siyahtus_current_organization())
+  WITH CHECK (organization_id = siyahtus_current_organization());
 
 ALTER TABLE agent_memberships ENABLE ROW LEVEL SECURITY;
 CREATE POLICY agent_memberships_tenant ON agent_memberships
-  USING (license_id = nexa_current_license())
-  WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license())
+  WITH CHECK (license_id = siyahtus_current_license());
 
 -- `accounts` is global by design: one person may work for several licenses
 -- (PRD §8.4). Visibility is therefore derived from shared membership rather
@@ -371,43 +371,43 @@ CREATE POLICY accounts_tenant ON accounts
     EXISTS (
       SELECT 1 FROM agent_memberships m
       WHERE m.agent_id = accounts.id
-        AND m.license_id = nexa_current_license()
+        AND m.license_id = siyahtus_current_license()
     )
   );
 
 -- Inserting a brand new person (an invite) happens before the membership row
 -- exists, so INSERT is separated from the visibility rule above.
 CREATE POLICY accounts_insert ON accounts FOR INSERT
-  WITH CHECK (nexa_current_license() IS NOT NULL);
+  WITH CHECK (siyahtus_current_license() IS NOT NULL);
 
 CREATE POLICY accounts_update ON accounts FOR UPDATE
   USING (
     EXISTS (
       SELECT 1 FROM agent_memberships m
       WHERE m.agent_id = accounts.id
-        AND m.license_id = nexa_current_license()
+        AND m.license_id = siyahtus_current_license()
     )
   );
 
 ALTER TABLE oauth_clients ENABLE ROW LEVEL SECURITY;
 CREATE POLICY oauth_clients_tenant ON oauth_clients
-  USING (organization_id = nexa_current_organization())
-  WITH CHECK (organization_id = nexa_current_organization());
+  USING (organization_id = siyahtus_current_organization())
+  WITH CHECK (organization_id = siyahtus_current_organization());
 
 ALTER TABLE oauth_authorization_codes ENABLE ROW LEVEL SECURITY;
 CREATE POLICY oauth_codes_tenant ON oauth_authorization_codes
-  USING (organization_id = nexa_current_organization())
-  WITH CHECK (organization_id = nexa_current_organization());
+  USING (organization_id = siyahtus_current_organization())
+  WITH CHECK (organization_id = siyahtus_current_organization());
 
 ALTER TABLE oauth_refresh_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY oauth_refresh_tokens_tenant ON oauth_refresh_tokens
-  USING (organization_id = nexa_current_organization())
-  WITH CHECK (organization_id = nexa_current_organization());
+  USING (organization_id = siyahtus_current_organization())
+  WITH CHECK (organization_id = siyahtus_current_organization());
 
 ALTER TABLE api_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY api_tokens_tenant ON api_tokens
-  USING (license_id = nexa_current_license())
-  WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license())
+  WITH CHECK (license_id = siyahtus_current_license());
 
 -- ---------------------------------------------------------------------------
 -- Authentication bootstrap
@@ -609,19 +609,19 @@ REVOKE EXECUTE ON FUNCTION auth_resolve_refresh_token(TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_revoke_refresh_family(UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_touch_token(UUID) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION auth_resolve_token(TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_find_account_for_login(CITEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_find_client(TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_consume_authorization_code(TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_resolve_refresh_token(TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_revoke_refresh_family(UUID) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_touch_token(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_resolve_token(TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_find_account_for_login(CITEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_find_client(TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_consume_authorization_code(TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_resolve_refresh_token(TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_revoke_refresh_family(UUID) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_touch_token(UUID) TO siyahtus_app;
 
 -- Tables created by the migration above were made by the owner, so the standing
 -- grant in the baseline migration does not cover them retroactively.
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexa_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO siyahtus_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO siyahtus_app;
 
 -- Tenant isolation for the two tables above.
 --
@@ -630,13 +630,13 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nexa_app;
 
 ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 CREATE POLICY customers_tenant ON customers
-  USING (organization_id = nexa_current_organization())
-  WITH CHECK (organization_id = nexa_current_organization());
+  USING (organization_id = siyahtus_current_organization())
+  WITH CHECK (organization_id = siyahtus_current_organization());
 
 ALTER TABLE trusted_domains ENABLE ROW LEVEL SECURITY;
 CREATE POLICY trusted_domains_tenant ON trusted_domains
-  USING (license_id = nexa_current_license())
-  WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license())
+  WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE customers
   ADD CONSTRAINT customers_country_code_check
@@ -683,8 +683,8 @@ $$;
 
 REVOKE EXECUTE ON FUNCTION auth_resolve_widget_origin(UUID, TEXT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_find_customer(UUID, UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_resolve_widget_origin(UUID, TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_find_customer(UUID, UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_resolve_widget_origin(UUID, TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_find_customer(UUID, UUID) TO siyahtus_app;
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO nexa_app;
-GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO siyahtus_app;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO siyahtus_app;

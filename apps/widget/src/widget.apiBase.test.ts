@@ -16,7 +16,7 @@ let calls: string[] = [];
 function mountWidget(query: string): HTMLElement {
   window.history.replaceState({}, '', `/widget.html?organization_id=org-1${query}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   return root;

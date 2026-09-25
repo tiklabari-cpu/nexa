@@ -130,7 +130,7 @@ describe('webhook redelivery (M-SCHED-e)', () => {
   }
 
   /**
-   * Built on the `nexa_app` connection, exactly as the scheduler builds it
+   * Built on the `siyahtus_app` connection, exactly as the scheduler builds it
    * (`app.db` is the app role) — the owner connection bypasses RLS, so a sweep
    * driven through it would prove nothing about isolation.
    */

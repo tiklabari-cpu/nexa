@@ -37,7 +37,7 @@ import {
   type NotificationChannel,
   type UiPreferenceKey,
   type WorkSchedule,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
 import { publishTrafficChange } from '../services/traffic/traffic-events.js';

@@ -293,7 +293,7 @@ describe('sandbox workspace (11.5-f)', () => {
       // the rule has to bind a migration, the seed and a psql session too.
       await expect(
         owner.$executeRaw`SELECT * FROM sandbox_create(${sandbox.licenseId}, ${fx.a.ownerAccountId}::uuid)`,
-      ).rejects.toThrow(/nexa_sandbox_nested/);
+      ).rejects.toThrow(/siyahtus_sandbox_nested/);
     });
   });
 
@@ -325,7 +325,7 @@ describe('sandbox workspace (11.5-f)', () => {
         sandbox: null,
       });
 
-      // And underneath it, against the `nexa_app` role the API connects as:
+      // And underneath it, against the `siyahtus_app` role the API connects as:
       // the widened `licenses_tenant` policy is one-directional by
       // construction, so the sandbox's context matches exactly one row — its
       // own — however the query is written.
@@ -481,7 +481,7 @@ describe('sandbox workspace (11.5-f)', () => {
 
     it('is refused in the database too, so the route is not the only guard', async () => {
       await expect(owner.$executeRaw`SELECT sandbox_reset(${fx.a.licenseId})`).rejects.toThrow(
-        /nexa_not_a_sandbox/,
+        /siyahtus_not_a_sandbox/,
       );
       expect(await owner.license.count({ where: { id: fx.a.licenseId } })).toBe(1);
     });

@@ -41,7 +41,7 @@ export type AccessReviewProvisioning = (typeof ACCESS_REVIEW_PROVISIONING)[numbe
  * `password` covers a verified password bound to this workspace (`auth.login`,
  * break-glass included); `sso` covers an assertion an identity provider
  * vouched for (`auth.sso_login`). Kept apart because after an incident the two
- * imply different containment: one means a secret Nexa holds was known, the
+ * imply different containment: one means a secret SiyahTuş holds was known, the
  * other means an external system said yes.
  */
 export const ACCESS_REVIEW_LOGIN_METHODS = ['password', 'sso'] as const;

@@ -21,7 +21,7 @@ DECLARE
   v_account UUID := gen_random_uuid();
 BEGIN
   IF EXISTS (SELECT 1 FROM accounts a WHERE a.email = p_email) THEN
-    RAISE EXCEPTION 'nexa_account_exists';
+    RAISE EXCEPTION 'siyahtus_account_exists';
   END IF;
 
   INSERT INTO organizations (id, name, region) VALUES (v_org, p_organization_name, 'eu');

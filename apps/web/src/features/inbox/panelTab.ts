@@ -11,7 +11,7 @@ import { useState } from 'react';
 
 export type PanelTab = 'details' | 'copilot';
 
-const STORAGE_KEY = 'nexa.inbox.right-panel-tab';
+const STORAGE_KEY = 'siyahtus.inbox.right-panel-tab';
 const DEFAULT_TAB: PanelTab = 'details';
 
 /** `localStorage` can throw on access (private mode, sandboxed frames). */

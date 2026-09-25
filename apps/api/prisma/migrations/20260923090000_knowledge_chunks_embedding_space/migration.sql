@@ -1,7 +1,7 @@
 -- Which vector space each chunk's embedding lives in (tm 255.7 · PLAN §D182).
 --
 -- Vectors are only comparable inside the space that produced them. Until now
--- one space existed — the lexical hash `@nexa/ai-mock` computes in process —
+-- one space existed — the lexical hash `@siyahtus/ai-mock` computes in process —
 -- so the column had nothing to say. A real embedding provider is a second
 -- space, and a knowledge base moves from one to the other source by source
 -- (`knowledge:reembed`): between the first source and the last, the table

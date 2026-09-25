@@ -65,4 +65,4 @@ $$;
 -- SECURITY DEFINER runs as the function owner, so EXECUTE is granted narrowly
 -- and never to PUBLIC.
 REVOKE EXECUTE ON FUNCTION channel_address_owner(TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION channel_address_owner(TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION channel_address_owner(TEXT, TEXT) TO siyahtus_app;

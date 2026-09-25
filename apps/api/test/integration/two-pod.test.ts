@@ -52,7 +52,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,
@@ -628,7 +628,7 @@ describe('two API processes sharing one Redis leader lock', () => {
  *
  * `LocalStore` writes under `STORAGE_LOCAL_DIR`, a directory inside one
  * container. The chart scales the API to four replicas
- * (`infra/helm/nexa/values.yaml`, `api.hpa.maxReplicas: 4`) and mounts no shared
+ * (`infra/helm/siyahtus/values.yaml`, `api.hpa.maxReplicas: 4`) and mounts no shared
  * volume, so an attachment that landed on pod A is, to pod B, a file nobody
  * uploaded — a broken image on a good day, and on a bad one a *refused message*,
  * because `attachment.ts` reads `store.exists` before it will let an
@@ -774,7 +774,7 @@ describe('an attachment uploaded through one API pod and read from another', () 
     // fall-through to local storage now fails the shared-bucket block outright.
     podDirs = await Promise.all(
       ['s3-a', 's3-b', 'local-a', 'local-b'].map((name) =>
-        mkdtemp(join(tmpdir(), `nexa-pod-${name}-`)),
+        mkdtemp(join(tmpdir(), `siyahtus-pod-${name}-`)),
       ),
     );
 

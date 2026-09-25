@@ -2,7 +2,7 @@
  * A tenant with a ten-thousand-plus-row Tickets grid, for the NFR-P4 fps
  * measurement (tm 240).
  *
- *     pnpm --filter @nexa/api seed:fps-bench
+ *     pnpm --filter @siyahtus/api seed:fps-bench
  *
  * Deliberately **not** wired into `prisma/seed.ts`'s `main()`. That seed runs
  * on every `pnpm db:seed` — including the e2e suite's `global-setup.ts`, on
@@ -15,7 +15,7 @@
  * `global-setup.ts` shells out to `db:seed` itself.
  *
  * Idempotent like every other seed function here: a database that already has
- * the tenant is left alone. `global-setup.ts`'s `NEXA_SEED_RESET=1` truncates
+ * the tenant is left alone. `global-setup.ts`'s `SIYAHTUS_SEED_RESET=1` truncates
  * every table before a full suite run, so in practice this always takes the
  * create path there; the guard exists for running the fps spec on its own
  * against a database that was not just reset.
@@ -28,7 +28,7 @@
  */
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { generateShortId, MOBILE_REDIRECT_URI } from '@nexa/types';
+import { generateShortId, MOBILE_REDIRECT_URI } from '@siyahtus/types';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword } from '../src/lib/crypto.js';
 
@@ -37,7 +37,7 @@ loadEnvFile();
 const prisma = new PrismaClient();
 
 /** Same password every seeded owner uses (`fixtures.ts`'s `DEMO_PASSWORD`). */
-const PASSWORD = 'nexa-demo-password';
+const PASSWORD = 'siyahtus-demo-password';
 
 export const FPS_BENCH = {
   organizationName: 'FPS Bench',
@@ -116,9 +116,9 @@ async function main(): Promise<void> {
   // (`seedPagingWorkspace`'s same note applies verbatim).
   await prisma.oauthClient.create({
     data: {
-      id: `nexa-agent-app-${FPS_BENCH.slug}`,
+      id: `siyahtus-agent-app-${FPS_BENCH.slug}`,
       organizationId: organization.id,
-      displayName: 'Nexa Agent App',
+      displayName: 'SiyahTuş Agent App',
       clientType: 'public',
       redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],

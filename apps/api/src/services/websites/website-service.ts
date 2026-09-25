@@ -16,7 +16,7 @@ import {
   DEFAULT_WIDGET_APPEARANCE,
   normalizeWidgetAppearance,
   type WidgetAppearance,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { resolveBrandId } from '../../lib/brand.js';
 import { poweredByFor } from '../../lib/entitlements.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
@@ -101,7 +101,7 @@ export class WebsiteService {
     input: { domain: string; setup: WebsiteSetup; createdBy: string | null },
   ): Promise<Website> {
     // A website belongs to exactly one brand (brand_id is NOT NULL): the request's
-    // brand when `X-Nexa-Brand` named one, otherwise the license default — the
+    // brand when `X-SiyahTus-Brand` named one, otherwise the license default — the
     // sole brand of a single-brand workspace.
     const brandId = await resolveBrandId(tx, tenant.brandId);
     const row = await tx.website.create({
@@ -192,9 +192,9 @@ export class WebsiteService {
       ...appearanceFields(appearance),
     ];
     return [
-      '<!-- Nexa widget -->',
+      '<!-- SiyahTuş widget -->',
       '<script>',
-      `  window.__nexa = { ${fields.join(', ')} };`,
+      `  window.__siyahtus = { ${fields.join(', ')} };`,
       '</script>',
       `<script async src="${origin}/loader.js"></script>`,
     ].join('\n');
@@ -202,7 +202,7 @@ export class WebsiteService {
 }
 
 /**
- * The `window.__nexa` fields for the appearance, in the loader's camelCase, and
+ * The `window.__siyahtus` fields for the appearance, in the loader's camelCase, and
  * only where they differ from the defaults. Booleans and enum strings, both
  * already normalised, so each renders as a safe literal.
  */

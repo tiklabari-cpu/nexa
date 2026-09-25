@@ -9,7 +9,7 @@ import {
   type GoalDefinition,
   type GoalFilter,
   type GoalFunnel,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 /** The status sub-tabs in display order. */
 export const GOAL_TABS: ReadonlyArray<{ id: GoalFilter; label: string }> = [

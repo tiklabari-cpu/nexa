@@ -60,7 +60,11 @@
  * less roster than expected, in the same conservative direction as the rules
  * above.
  */
-import { WORK_SCHEDULE_DAYS, WORK_SCHEDULE_TIME_PATTERN, type WorkScheduleSlot } from '@nexa/types';
+import {
+  WORK_SCHEDULE_DAYS,
+  WORK_SCHEDULE_TIME_PATTERN,
+  type WorkScheduleSlot,
+} from '@siyahtus/types';
 
 /** One agent's saved plan, as this module needs it. */
 export interface RosterPlan {

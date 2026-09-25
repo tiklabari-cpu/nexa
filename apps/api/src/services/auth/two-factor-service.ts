@@ -61,7 +61,7 @@ export const RECOVERY_CODE_LENGTH = 10;
  * covers every workspace they belong to, so naming one of them on the phone
  * would be wrong the moment they join a second.
  */
-export const TOTP_ISSUER = 'Nexa';
+export const TOTP_ISSUER = 'SiyahTuş';
 
 /**
  * Confusable characters are gone: no `0`/`O`, no `1`/`I`/`L`, and no `U`, which

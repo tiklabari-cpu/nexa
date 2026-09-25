@@ -9,7 +9,7 @@
  * or a stray `{{` has to be caught while the template is being written, not
  * discovered as a literal `{{ticket.titel}}` sitting in a customer's inbox.
  *
- * The catalogue and the validator live here, in @nexa/types, so the authoring
+ * The catalogue and the validator live here, in @siyahtus/types, so the authoring
  * form (web) and the endpoint that stores a template (api) both judge "valid" by
  * one definition instead of drifting apart.
  */

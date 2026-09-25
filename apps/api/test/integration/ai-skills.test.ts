@@ -11,7 +11,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { embed, toVectorLiteral } from '@nexa/ai-mock';
+import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 

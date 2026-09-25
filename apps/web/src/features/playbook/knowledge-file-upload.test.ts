@@ -8,7 +8,7 @@
  * work around, while a client that lets one through only costs a slower error.
  */
 import { describe, expect, it } from 'vitest';
-import { KNOWLEDGE_FILE_MAX_BYTES } from '@nexa/types';
+import { KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
 import {
   KNOWLEDGE_FILE_ACCEPT,
   precheckKnowledgeFile,

@@ -169,9 +169,9 @@ describe.each(IMAGES)('$name nginx security profile', ({ conf, dockerfile, heade
     // There is no TLS in this repository, and the header is meaningless over
     // plain http. nginx skips an `add_header` whose value is empty, so mapping
     // the default to "" is what keeps the local stack byte-identical.
-    expect(stripComments(conf)).toMatch(/map\s+\$http_x_forwarded_proto\s+\$nexa_hsts/);
-    expect(mapDefault(conf, 'nexa_hsts')).toBe('');
-    expect(mapDefault(conf, 'nexa_hsts')).not.toContain('max-age');
+    expect(stripComments(conf)).toMatch(/map\s+\$http_x_forwarded_proto\s+\$siyahtus_hsts/);
+    expect(mapDefault(conf, 'siyahtus_hsts')).toBe('');
+    expect(mapDefault(conf, 'siyahtus_hsts')).not.toContain('max-age');
 
     const overHttps = /https\s+"([^"]*)"/.exec(stripComments(conf))![1]!;
     expect(overHttps).toMatch(/max-age=\d+/);
@@ -210,7 +210,7 @@ describe.each(IMAGES)('$name nginx security profile', ({ conf, dockerfile, heade
   });
 
   it('writes a policy with no escape hatch in it', () => {
-    const policy = mapDefault(conf, 'nexa_csp');
+    const policy = mapDefault(conf, 'siyahtus_csp');
 
     expect(policy).not.toContain("'unsafe-eval'");
     expect(directive(policy, 'script-src')).not.toContain("'unsafe-inline'");
@@ -225,8 +225,8 @@ describe.each(IMAGES)('$name nginx security profile', ({ conf, dockerfile, heade
 });
 
 describe('the panel and the widget frame in opposite directions', () => {
-  const panel = mapDefault(WEB_CONF, 'nexa_csp');
-  const widget = mapDefault(WIDGET_CONF, 'nexa_csp');
+  const panel = mapDefault(WEB_CONF, 'siyahtus_csp');
+  const widget = mapDefault(WIDGET_CONF, 'siyahtus_csp');
 
   it('never lets the agent console be embedded', () => {
     // A console that can be framed is a console that can be clicked through by
@@ -276,7 +276,7 @@ describe("the panel's inline theme boot is pinned by hash, not waved through", (
   });
 
   it('is the hash the policy carries', () => {
-    expect(directive(mapDefault(WEB_CONF, 'nexa_csp'), 'script-src')).toContain(
+    expect(directive(mapDefault(WEB_CONF, 'siyahtus_csp'), 'script-src')).toContain(
       `'sha256-${cspDigest(inline[0]![1]!)}'`,
     );
   });
@@ -286,7 +286,7 @@ describe("the panel's inline theme boot is pinned by hash, not waved through", (
     // exact text, so editing the theme boot without updating the policy stops
     // the browser from running it — which is the failure this test exists to
     // turn into a red suite instead of a dark panel for light-theme agents.
-    expect(mapDefault(WEB_CONF, 'nexa_csp')).not.toContain(cspDigest(`${inline[0]![1]!} `));
+    expect(mapDefault(WEB_CONF, 'siyahtus_csp')).not.toContain(cspDigest(`${inline[0]![1]!} `));
   });
 
   it('is not the digest of the raw bytes, when those differ', () => {
@@ -296,6 +296,6 @@ describe("the panel's inline theme boot is pinned by hash, not waved through", (
     const raw = createHash('sha256').update(inline[0]![1]!, 'utf8').digest('base64');
     if (raw === cspDigest(inline[0]![1]!)) return;
 
-    expect(mapDefault(WEB_CONF, 'nexa_csp')).not.toContain(raw);
+    expect(mapDefault(WEB_CONF, 'siyahtus_csp')).not.toContain(raw);
   });
 });

@@ -24,7 +24,7 @@ import {
   TOPIC_MIN_CONVERSATIONS,
   TOPIC_SIMILARITY_THRESHOLD,
   type TopicDoc,
-} from '@nexa/ai-mock';
+} from '@siyahtus/ai-mock';
 import { ApiError } from '../../lib/api-error.js';
 import { TRIAL_PLAN } from '../../lib/entitlements.js';
 import type { TenantClient } from '../../lib/tenant.js';
@@ -980,7 +980,7 @@ export async function breakdownByTeam(
 /**
  * An AI→human hand-off — the `chat_transferred` system event stamped with
  * `reason: 'ai_handoff'` (`ai-responder.ts`, `chat-service.ts#transfer`). Of
- * `TRANSFER_REASONS` (`@nexa/types`: `manual` / `routing` /
+ * `TRANSFER_REASONS` (`@siyahtus/types`: `manual` / `routing` /
  * `agent_disconnected` / `ai_handoff`), only `ai_handoff` is AI-attributed —
  * the other three are agent-to-agent transfers and must not inflate the AI
  * Agent report. Two containment (`@>`) checks, not `->>` and not one merged

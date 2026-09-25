@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState, type ReactElement } from 'react';
-import { isEditableEventType, isWithinEditWindow, readEditedAt } from '@nexa/types';
+import { isEditableEventType, isWithinEditWindow, readEditedAt } from '@siyahtus/types';
 import type { ChatEvent } from './types.js';
 import type { FailedSend } from './failedSends.js';
 import { AttachmentView } from './Attachment.js';

@@ -12,7 +12,7 @@ import { render, renderHook, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
-import { defaultScopesForRole } from '@nexa/types';
+import { defaultScopesForRole } from '@siyahtus/types';
 import { CommandPalette } from './CommandPalette.js';
 import { useAuth } from '../lib/auth-store.js';
 import { useLeaveGuard } from '../lib/dirty-guard.js';

@@ -29,7 +29,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ReportShareLink, ReportShareLinkCreated } from '@nexa/types';
+import type { ReportShareLink, ReportShareLinkCreated } from '@siyahtus/types';
 import { Dropdown, Modal } from '../../components/ui/index.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { errorMessageKey } from '../../lib/api-client.js';

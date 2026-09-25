@@ -9,11 +9,11 @@
  * including when the command fails or the window is interrupted.
  *
  * Everything downstream reads those three variables from the environment, so no
- * test, helper or fixture needs to know this exists. `@nexa/rtm` invokes this
+ * test, helper or fixture needs to know this exists. `@siyahtus/rtm` invokes this
  * same script by relative path: it shares the API's schema and datastores, so a
  * second copy of the harness would be a second thing to keep in step.
  *
- * Set `NEXA_TEST_ISOLATION=off` to run against the shared development database
+ * Set `SIYAHTUS_TEST_ISOLATION=off` to run against the shared development database
  * instead — useful when inspecting the leftovers of a failing test by hand.
  */
 import { spawn } from 'node:child_process';
@@ -74,7 +74,7 @@ function runCommand(overrides: Partial<IsolatedDatastoreEnv>): Promise<number> {
 }
 
 async function main(): Promise<number> {
-  if (process.env['NEXA_TEST_ISOLATION'] === 'off') {
+  if (process.env['SIYAHTUS_TEST_ISOLATION'] === 'off') {
     console.error('[test-datastores] isolation disabled — using the shared database');
     return runCommand({});
   }

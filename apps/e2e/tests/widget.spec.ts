@@ -69,7 +69,7 @@ test.describe('widget embedding', () => {
   test('mounts a cross-origin iframe on the host page', async ({ page, organizationId }) => {
     await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
 
-    const frame = page.locator('#nexa-widget-frame');
+    const frame = page.locator('#siyahtus-widget-frame');
     await expect(frame).toBeAttached();
 
     // Different origin from the host page — that difference *is* the isolation.
@@ -92,7 +92,7 @@ test.describe('widget embedding', () => {
     // origin real; without it `self.origin` is the string "null" and the token
     // request is rejected.
     await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
-    const sandbox = await page.locator('#nexa-widget-frame').getAttribute('sandbox');
+    const sandbox = await page.locator('#siyahtus-widget-frame').getAttribute('sandbox');
     expect(sandbox).toContain('allow-same-origin');
 
     const frameOrigin = await page.frame({ url: /widget\.html/ })!.evaluate(() => self.origin);
@@ -101,7 +101,7 @@ test.describe('widget embedding', () => {
 
   test('opens, resizes the frame, and closes again', async ({ page, organizationId }) => {
     await page.goto(`${HOST_PAGE}/demo.html?organization_id=${organizationId}`);
-    const frameElement = page.locator('#nexa-widget-frame');
+    const frameElement = page.locator('#siyahtus-widget-frame');
     const frame = widgetFrame(page);
 
     await frame.getByRole('button', { name: 'Open chat' }).click();
@@ -169,11 +169,11 @@ test.describe('widget embedding', () => {
     // The global is exposed by the loader itself, independently of the widget
     // having booted — so a host page can call it as soon as the script has run.
     await page.waitForFunction(
-      () => typeof (window as unknown as { nexa?: unknown }).nexa === 'function',
+      () => typeof (window as unknown as { siyahtus?: unknown }).siyahtus === 'function',
     );
     await page.evaluate(
       ({ orderId, amountCents }) => {
-        (window as unknown as { nexa: (command: string, payload: unknown) => void }).nexa(
+        (window as unknown as { siyahtus: (command: string, payload: unknown) => void }).siyahtus(
           'trackSale',
           { external_order_id: orderId, amount_cents: amountCents, currency: 'USD' },
         );
@@ -205,7 +205,7 @@ test.describe('chat page', () => {
       await agent.getByLabel('Availability').selectOption('accepting_chats');
 
       // The widget is the whole page here, addressed directly (not through the
-      // `#nexa-widget-frame` iframe).
+      // `#siyahtus-widget-frame` iframe).
       await visitor.goto(`${WIDGET_ORIGIN}/chat.html?organization_id=${organizationId}`);
       const composer = visitor.getByRole('textbox', { name: 'Message' });
       await expect(composer).toBeVisible();

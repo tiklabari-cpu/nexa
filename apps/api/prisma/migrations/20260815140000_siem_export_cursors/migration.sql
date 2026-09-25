@@ -68,7 +68,7 @@ COMMENT ON TABLE siem_export_cursors IS
 -- ---------------------------------------------------------------------------
 -- What a target may be
 -- ---------------------------------------------------------------------------
--- Mirrors SIEM_EXPORT_TARGETS in @nexa/types. A workspace that could save an
+-- Mirrors SIEM_EXPORT_TARGETS in @siyahtus/types. A workspace that could save an
 -- arbitrary string would get a settings screen showing a configured, enabled
 -- export to a destination no delivery job knows how to reach — and the failure
 -- is silent by construction, because the evidence that it is not working is
@@ -109,15 +109,15 @@ ALTER TABLE siem_export_cursors
 -- on this table does not leak evidence, it destroys it.
 ALTER TABLE siem_export_cursors ENABLE ROW LEVEL SECURITY;
 CREATE POLICY siem_export_cursors_tenant ON siem_export_cursors
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches the table only through that policy.
+-- The API connects as siyahtus_app and reaches the table only through that policy.
 -- Granted explicitly: the schema-wide GRANT in 20260722154008 covered only the
 -- tables that existed then.
-GRANT SELECT, INSERT, UPDATE ON public.siem_export_cursors TO nexa_app;
+GRANT SELECT, INSERT, UPDATE ON public.siem_export_cursors TO siyahtus_app;
 
 -- No DELETE, and withholding it takes an explicit REVOKE: the ALTER DEFAULT
--- PRIVILEGES in 20260722090000 hands SELECT, INSERT, UPDATE, DELETE to nexa_app
+-- PRIVILEGES in 20260722090000 hands SELECT, INSERT, UPDATE, DELETE to siyahtus_app
 -- on every table created after it, so the narrower GRANT above is a no-op on its
 -- own. Mirrors `REVOKE DELETE ON scheduled_report_runs`.
 --
@@ -129,6 +129,6 @@ GRANT SELECT, INSERT, UPDATE ON public.siem_export_cursors TO nexa_app;
 -- workspace that genuinely wants to start over can be given a deliberate reset
 -- later; it should not be the accidental consequence of switching a destination
 -- off. Erasing the workspace still clears these rows — the ON DELETE CASCADE
--- above is carried out by the referencing table's owner, not by nexa_app —
+-- above is carried out by the referencing table's owner, not by siyahtus_app —
 -- which is what NFR-C8 needs.
-REVOKE DELETE ON public.siem_export_cursors FROM nexa_app;
+REVOKE DELETE ON public.siem_export_cursors FROM siyahtus_app;

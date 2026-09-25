@@ -6,7 +6,7 @@
 -- for every workspace that never opened the appearance panel. #2d67fa is
 -- 4.74:1 and is visually within a hair of it.
 --
--- `DEFAULT_WIDGET_APPEARANCE` in `@nexa/types` and the widget's own `--nx-brand`
+-- `DEFAULT_WIDGET_APPEARANCE` in `@siyahtus/types` and the widget's own `--nx-brand`
 -- move with it; this column exists to mirror them value-for-value.
 ALTER TABLE "widget_settings" ALTER COLUMN "primary_color" SET DEFAULT '#2d67fa';
 

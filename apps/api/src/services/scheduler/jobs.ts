@@ -2,7 +2,7 @@
  * The sweeps as scheduler jobs (M-SCHED-b, plus webhook redelivery M-SCHED-e ·
  * §D113/K1).
  *
- * Each of these already existed as a `pnpm --filter @nexa/api <job>:run`
+ * Each of these already existed as a `pnpm --filter @siyahtus/api <job>:run`
  * script wrapping a class with its own `run()` — the CLI entry point and the
  * pass itself were already split, so this module does not touch either. It
  * only gives {@link import('./scheduler.js').Scheduler.register} what it

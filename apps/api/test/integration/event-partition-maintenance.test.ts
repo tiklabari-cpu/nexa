@@ -3,9 +3,9 @@
  * §D131 → §D187 · SEMA-MIMARI.8.4c).
  *
  * `plugins/database.ts` opens the months ahead of "now" at boot and every six
- * hours, and it does so through `DATABASE_APP_URL` — `nexa_app`, the role that
+ * hours, and it does so through `DATABASE_APP_URL` — `siyahtus_app`, the role that
  * owns nothing. Until migration `20260925100000_events_partition_definer`,
- * `events_ensure_partition` ran with its caller's rights, and `nexa_app` can
+ * `events_ensure_partition` ran with its caller's rights, and `siyahtus_app` can
  * neither create in `public` nor own `events`. Measured 2026-08-28 (§D131) and
  * again 2026-09-25: `permission denied for schema public` — and with a
  * `CREATE` grant added by hand, `must be owner of table events`. It stayed
@@ -34,7 +34,7 @@
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildEventId, generateShortId } from '@nexa/types';
+import { buildEventId, generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import {
   grantToken,
@@ -251,7 +251,7 @@ describe('the runtime role opens months itself (SEMA-MIMARI.8.4c)', () => {
     >`
       SELECT c.relrowsecurity AS "rowSecurity",
              c.relowner = (SELECT relowner FROM pg_class WHERE oid = 'public.events'::regclass) AS "ownedLikeEvents",
-             pg_has_role('nexa_app', c.relowner, 'USAGE') AS "appOwns"
+             pg_has_role('siyahtus_app', c.relowner, 'USAGE') AS "appOwns"
       FROM pg_class c WHERE c.oid = to_regclass(${`public.${name}`})
     `;
     expect(shape).toEqual({ rowSecurity: true, ownedLikeEvents: true, appOwns: false });
@@ -265,8 +265,8 @@ describe('the runtime role opens months itself (SEMA-MIMARI.8.4c)', () => {
     expect(policies).toEqual([
       {
         policyname: `${name}_tenant`,
-        qual: expect.stringMatching(/nexa_current_license/),
-        withCheck: expect.stringMatching(/nexa_current_license/),
+        qual: expect.stringMatching(/siyahtus_current_license/),
+        withCheck: expect.stringMatching(/siyahtus_current_license/),
       },
     ]);
 
@@ -347,7 +347,7 @@ describe('the runtime role opens months itself (SEMA-MIMARI.8.4c)', () => {
       await waitUntil(async () => {
         const [row] = await owner.$queryRaw<Array<{ waiting: number }>>`
           SELECT count(*)::int AS waiting FROM pg_stat_activity
-          WHERE datname = current_database() AND usename = 'nexa_app'
+          WHERE datname = current_database() AND usename = 'siyahtus_app'
             AND wait_event_type = 'Lock' AND query LIKE '%events_ensure_partition%'
         `;
         return (row?.waiting ?? 0) > 0;
@@ -475,7 +475,7 @@ describe('the SECURITY DEFINER surface is exactly partition-shaped (NFR-S4)', ()
              p.proconfig AS config,
              p.proowner = (SELECT relowner FROM pg_class WHERE oid = 'public.events'::regclass) AS "ownedLikeEvents",
              has_function_privilege('public', p.oid, 'EXECUTE') AS "publicCan",
-             has_function_privilege('nexa_app', p.oid, 'EXECUTE') AS "appCan"
+             has_function_privilege('siyahtus_app', p.oid, 'EXECUTE') AS "appCan"
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
       WHERE n.nspname = 'public'
         AND p.proname IN ('events_ensure_partition', 'events_secure_partition',

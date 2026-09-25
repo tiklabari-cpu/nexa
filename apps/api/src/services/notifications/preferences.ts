@@ -13,8 +13,8 @@
  * per license. That is FR-MOD-08.2's rule, and it is why nothing here takes an
  * account id on its own.
  */
-import type { NotificationPreferences } from '@nexa/types';
-import { DEFAULT_NOTIFICATION_PREFERENCES } from '@nexa/types';
+import type { NotificationPreferences } from '@siyahtus/types';
+import { DEFAULT_NOTIFICATION_PREFERENCES } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 /**

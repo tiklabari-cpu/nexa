@@ -187,7 +187,7 @@ afterEach(async () => {
 function optionsFor(origin: string, overrides: Partial<S3StoreOptions> = {}): S3StoreOptions {
   return {
     endpoint: origin,
-    bucket: 'nexa-uploads',
+    bucket: 'siyahtus-uploads',
     region: 'eu-central-1',
     accessKeyId: 'test-key-id',
     secretAccessKey: 'test-secret-key',
@@ -223,7 +223,7 @@ describe('S3Store round trip', () => {
 
     // `<bucket>/<licence>/<key>` — the fan-out `LocalStore` gets from
     // directories, so a bucket policy can still be written per licence.
-    expect(bucket!.requests[0]!.url).toBe(`/nexa-uploads/7/${KEY}`);
+    expect(bucket!.requests[0]!.url).toBe(`/siyahtus-uploads/7/${KEY}`);
   });
 
   it('addresses the bucket as a subdomain when path style is off', async () => {
@@ -234,7 +234,7 @@ describe('S3Store round trip', () => {
     const host = new URL(origin).host;
     const store = new S3Store(optionsFor(origin, { forcePathStyle: false }), (input, init) =>
       // Send it to the same server, but with the URL the store built intact in
-      // the path — `nexa-uploads.127.0.0.1` has nowhere to resolve to.
+      // the path — `siyahtus-uploads.127.0.0.1` has nowhere to resolve to.
       fetch(new URL(new URL(input as string).pathname, `http://${host}`), init),
     );
 

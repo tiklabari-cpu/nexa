@@ -194,7 +194,7 @@ describe('resolveSsoIdentity', () => {
 
 // --- Starting a login --------------------------------------------------------
 
-const API_BASE = 'https://api.nexa.test/api/v1';
+const API_BASE = 'https://api.siyahtus.test/api/v1';
 const CONNECTION = '0b4dd3f0-1c2b-4f5a-9d6e-7a8b9c0d1e2f';
 
 /** The AuthnRequest as the IdP will read it: inflated back out of the redirect. */
@@ -273,7 +273,7 @@ describe('ssoEntityId / ssoAcsUrl', () => {
     // at every other workspace's ACS on both `Audience` and `Destination`, even
     // when the two federate the same identity provider.
     expect(ssoEntityId(API_BASE, CONNECTION)).toBe(
-      `https://api.nexa.test/api/v1/auth/saml/${CONNECTION}`,
+      `https://api.siyahtus.test/api/v1/auth/saml/${CONNECTION}`,
     );
     expect(ssoAcsUrl(API_BASE, CONNECTION)).toBe(`${ssoEntityId(API_BASE, CONNECTION)}/acs`);
     expect(ssoEntityId(API_BASE, 'other')).not.toBe(ssoEntityId(API_BASE, CONNECTION));

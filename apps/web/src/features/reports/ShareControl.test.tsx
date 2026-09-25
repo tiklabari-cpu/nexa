@@ -98,9 +98,9 @@ describe('report share control (FR-MOD-07.3.1)', () => {
   });
 
   it('offers the link as a fragment URL, so the token is never sent to a server', () => {
-    const url = shareUrl('https://panel.nexa.test', TOKEN);
+    const url = shareUrl('https://panel.siyahtus.test', TOKEN);
 
-    expect(url).toBe(`https://panel.nexa.test${SHARED_REPORT_PATH}#token=${TOKEN}`);
+    expect(url).toBe(`https://panel.siyahtus.test${SHARED_REPORT_PATH}#token=${TOKEN}`);
     // The distinction is the whole point: a query string reaches the web host's
     // access log and the `Referer` of anything the page loads; a fragment does
     // not leave the browser.

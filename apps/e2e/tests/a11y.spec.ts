@@ -197,7 +197,7 @@ async function ensureJoinInvitation(
 ): Promise<{ id: string; token: string }> {
   const created = await api.post(`${API_BASE}/invitations`, {
     ...auth(ownerToken),
-    data: { emails: ['a11y-join@nexa.test'], role: 'agent' },
+    data: { emails: ['a11y-join@siyahtus.test'], role: 'agent' },
   });
   expect(created.ok(), `invite failed: ${created.status()} ${await created.text()}`).toBe(true);
   const { items } = (await created.json()) as {
@@ -223,7 +223,7 @@ const owedSkillIds: string[] = [];
 
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
-    extraHTTPHeaders: { 'user-agent': 'nexa-e2e-a11y' },
+    extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-a11y' },
   });
   const token = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
   await ensurePublishedArticle(apiCtx, token);
@@ -338,7 +338,7 @@ type PanelTheme = (typeof PANEL_THEMES)[number];
  */
 async function pinTheme(page: Page, theme: PanelTheme): Promise<void> {
   await page.addInitScript((value) => {
-    window.localStorage.setItem('nexa.theme', value);
+    window.localStorage.setItem('siyahtus.theme', value);
   }, theme);
 }
 

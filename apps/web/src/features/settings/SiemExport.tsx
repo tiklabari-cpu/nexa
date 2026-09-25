@@ -30,7 +30,7 @@ import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDateTime } from '../../lib/format.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
-import { SIEM_EXPORT_TARGETS, type SiemExportTarget } from '@nexa/types';
+import { SIEM_EXPORT_TARGETS, type SiemExportTarget } from '@siyahtus/types';
 
 interface SiemExportSettings {
   enabled: boolean;

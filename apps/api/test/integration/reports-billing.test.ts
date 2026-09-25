@@ -14,7 +14,7 @@ import {
   API_PACKAGE_CATALOG,
   generateShortId,
   type TransferReason,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,
@@ -37,7 +37,7 @@ import { purchaseAiPackage } from '../../src/services/billing/ai-package-service
 
 describe('reports and billing', () => {
   let owner: PrismaClient;
-  /** The `nexa_app` role the API itself connects as — RLS applies to it. */
+  /** The `siyahtus_app` role the API itself connects as — RLS applies to it. */
   let appRole: PrismaClient;
   let server: TestServer;
   let fx: Fixtures;
@@ -209,7 +209,7 @@ describe('reports and billing', () => {
    * (like {@link runSkillOn}) so the test exercises the aggregation without
    * dragging in the whole transfer flow; the shape matches what
    * `chat-service`/`ai-responder` emit. Defaults to `ai_handoff`, the only
-   * `TransferReason` (`@nexa/types`) the AI Agent report's hand-off counters
+   * `TransferReason` (`@siyahtus/types`) the AI Agent report's hand-off counters
    * count — pass `'manual'`/`'routing'`/`'agent_disconnected'` to record an
    * agent-to-agent transfer that must NOT show up in them.
    *
@@ -3184,7 +3184,7 @@ describe('reports and billing', () => {
         expect(response.statusCode).toBe(200);
         expect(response.headers['content-type']).toContain('text/csv');
         expect(response.headers['content-disposition']).toMatch(
-          /^attachment; filename="nexa-breakdown-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+          /^attachment; filename="siyahtus-breakdown-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
         );
         expect(response.headers['cache-control']).toBe('no-store');
 
@@ -3363,7 +3363,7 @@ describe('reports and billing', () => {
         expect(response.statusCode).toBe(200);
         expect(response.headers['content-type']).toContain('text/csv');
         expect(response.headers['content-disposition']).toMatch(
-          /^attachment; filename="nexa-cases-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+          /^attachment; filename="siyahtus-cases-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
         );
 
         const rows = lines(response.body);
@@ -3398,7 +3398,7 @@ describe('reports and billing', () => {
         expect(response.statusCode).toBe(200);
         expect(response.headers['content-type']).toContain('text/csv');
         expect(response.headers['content-disposition']).toMatch(
-          /^attachment; filename="nexa-leads-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+          /^attachment; filename="siyahtus-leads-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
         );
 
         const rows = lines(response.body);
@@ -3432,7 +3432,7 @@ describe('reports and billing', () => {
         expect(response.statusCode).toBe(200);
         expect(response.headers['content-type']).toContain('text/csv');
         expect(response.headers['content-disposition']).toMatch(
-          /^attachment; filename="nexa-team-performance-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+          /^attachment; filename="siyahtus-team-performance-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
         );
 
         const rows = lines(response.body);
@@ -3495,7 +3495,7 @@ describe('reports and billing', () => {
         expect(response.statusCode).toBe(200);
         expect(response.headers['content-type']).toContain('text/csv');
         expect(response.headers['content-disposition']).toMatch(
-          /^attachment; filename="nexa-sales-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
+          /^attachment; filename="siyahtus-sales-\d{4}-\d{2}-\d{2}-\d{4}-\d{2}-\d{2}\.csv"$/,
         );
 
         const rows = lines(response.body);
@@ -3606,7 +3606,7 @@ describe('reports and billing', () => {
         expect(response.headers['content-type']).toBe('application/pdf');
         expect(response.headers['content-disposition']).toMatch(
           new RegExp(
-            `^attachment; filename="nexa-${group}-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.pdf"$`,
+            `^attachment; filename="siyahtus-${group}-\\d{4}-\\d{2}-\\d{2}-\\d{4}-\\d{2}-\\d{2}\\.pdf"$`,
           ),
         );
         // Same caching/sniffing contract as CSV — the format changes the body,
@@ -3726,7 +3726,7 @@ describe('reports and billing', () => {
 
         expect(csv.statusCode, `csv ${id}`).toBe(200);
         expect(csv.headers['content-type']).toContain('text/csv');
-        expect(csv.headers['content-disposition']).toContain(`filename="nexa-${id}-`);
+        expect(csv.headers['content-disposition']).toContain(`filename="siyahtus-${id}-`);
 
         expect(pdf.statusCode, `pdf ${id}`).toBe(200);
         expect(pdf.headers['content-type']).toBe('application/pdf');
@@ -4955,7 +4955,7 @@ describe('reports and billing', () => {
 
       const open = invoices.find((i: { period: string }) => i.period === period);
       expect(open).toBeTruthy();
-      expect(open.number).toBe(`NEXA-${period}`);
+      expect(open.number).toBe(`SIYAHTUS-${period}`);
       expect(open.status).toBe('open');
       // The standing seat charge, visible before the period closes.
       expect(open.total_cents).toBe(2 * 9900);
@@ -5029,7 +5029,7 @@ describe('reports and billing', () => {
       await owner.invoice.create({
         data: {
           licenseId: fx.a.licenseId,
-          number: 'NEXA-202601',
+          number: 'SIYAHTUS-202601',
           period: '202601',
           periodStart: new Date('2026-01-01T00:00:00Z'),
           periodEnd: new Date('2026-02-01T00:00:00Z'),
@@ -5051,7 +5051,7 @@ describe('reports and billing', () => {
       const invoices = (await server.get('/billing/invoices', auth)).json().invoices;
       const past = invoices.find((i: { period: string }) => i.period === '202601');
       expect(past).toMatchObject({
-        number: 'NEXA-202601',
+        number: 'SIYAHTUS-202601',
         period_label: 'January 2026',
         period_start: '2026-01-01T00:00:00.000Z',
         period_end: '2026-02-01T00:00:00.000Z',
@@ -5077,7 +5077,7 @@ describe('reports and billing', () => {
       expect(response.statusCode).toBe(200);
       expect(response.headers['content-type']).toContain('text/csv');
       expect(response.headers['content-disposition']).toBe(
-        `attachment; filename="nexa-invoice-${period}.csv"`,
+        `attachment; filename="siyahtus-invoice-${period}.csv"`,
       );
       expect(response.headers['cache-control']).toBe('no-store');
       expect(response.headers['x-content-type-options']).toBe('nosniff');
@@ -5116,7 +5116,7 @@ describe('reports and billing', () => {
       await owner.invoice.create({
         data: {
           licenseId: fx.a.licenseId,
-          number: 'NEXA-202601',
+          number: 'SIYAHTUS-202601',
           period: '202601',
           periodStart: new Date('2026-01-01T00:00:00Z'),
           periodEnd: new Date('2026-02-01T00:00:00Z'),
@@ -5426,7 +5426,7 @@ describe('reports and billing', () => {
       expect(theirs.map((p: { id: string }) => p.id)).not.toContain(mine.id);
     });
 
-    it('serves the catalogue verbatim — the ids, quotas and prices @nexa/types compiles', async () => {
+    it('serves the catalogue verbatim — the ids, quotas and prices @siyahtus/types compiles', async () => {
       const response = await server.get('/billing/api-packages', auth);
       expect(response.statusCode).toBe(200);
       // Not a hand-written second copy: a repriced package shows up here without

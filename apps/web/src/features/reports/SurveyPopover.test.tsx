@@ -9,7 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { OnboardingState } from '@nexa/types';
+import type { OnboardingState } from '@siyahtus/types';
 import { SurveyPopover } from './SurveyPopover.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useLocaleStore } from '../../lib/i18n.js';

@@ -57,7 +57,7 @@ BEGIN
   -- licence that may claim HIPAA cover. The foreign key makes this
   -- unreachable today, and that is the point of answering it anyway.
   IF v_region IS DISTINCT FROM 'us' THEN
-    RAISE EXCEPTION 'nexa_baa_requires_us_region'
+    RAISE EXCEPTION 'siyahtus_baa_requires_us_region'
       USING ERRCODE = 'check_violation',
             DETAIL = format('workspace region is %L, not %L', COALESCE(v_region, '<unknown>'), 'us'),
             HINT = 'HIPAA cover is conditional on US hosting (NFR-C4). A workspace hosted elsewhere has no cover to sign into.';

@@ -14,7 +14,7 @@
  *     that lets somebody tick one row more than `POST /tickets/bulk` accepts
  *     turns the flagship gesture into a 400.
  */
-import { TICKET_BULK_MAX, TICKET_PRIORITY_BANDS } from '@nexa/types';
+import { TICKET_BULK_MAX, TICKET_PRIORITY_BANDS } from '@siyahtus/types';
 import type { Agent, Ticket, TicketStatus } from './types.js';
 
 export { TICKET_BULK_MAX };

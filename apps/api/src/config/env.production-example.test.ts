@@ -64,7 +64,7 @@ describe('.env.production.example documents what parseEnv requires in production
     'SMTP_PASSWORD',
     'SMTP_FROM',
     'POSTGRES_PASSWORD',
-    'NEXA_APP_DB_PASSWORD',
+    'SIYAHTUS_APP_DB_PASSWORD',
   ])('%s is present with a <…> fill-in and no value (tm 255.15)', (key) => {
     // Key names only — a credential written here is a credential published.
     expect(uncommentedValueOf(key)).toMatch(/^<[^<>]+>$/);

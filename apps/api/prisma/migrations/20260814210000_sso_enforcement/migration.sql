@@ -88,7 +88,7 @@ AS $$
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_list_memberships(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Is there a key to the break-glass door?
@@ -146,4 +146,4 @@ AS $$
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_has_break_glass_owner(BIGINT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_has_break_glass_owner(BIGINT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_has_break_glass_owner(BIGINT) TO siyahtus_app;

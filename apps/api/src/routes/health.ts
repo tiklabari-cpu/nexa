@@ -21,12 +21,13 @@
  *   "leaving on purpose" from "a dependency is down" for whoever reads it.
  * - `/health` stays backward compatible: same dependency probe, but the body
  *   is admin-gated (M-SEC-b2 · §D116 MEDIUM (b)) — version, region,
- *   dependency latencies, scheduler status, which mock each provider runs is
- *   infrastructure fingerprinting an anonymous caller has no business
- *   reading. An admin-role caller still gets all of it; anyone else gets only
- *   `status` + `service`. This narrows the BODY only — the status code still
- *   reflects real dependency health either way, so an orchestrator watching
- *   for 200/503 (never reading the body) keeps working exactly as before.
+ *   dependency latencies, scheduler and event-partition status, which mock
+ *   each provider runs is infrastructure fingerprinting an anonymous caller
+ *   has no business reading. An admin-role caller still gets all of it;
+ *   anyone else gets only `status` + `service`. This narrows the BODY only —
+ *   the status code still reflects real dependency health either way, so an
+ *   orchestrator watching for 200/503 (never reading the body) keeps working
+ *   exactly as before.
  */
 import type { FastifyInstance } from 'fastify';
 import { roleAtLeast } from '@nexa/types';
@@ -153,6 +154,12 @@ export default async function healthRoutes(
         // deployment with none of them running looked identical to one that had
         // just found nothing to do.
         scheduler: app.scheduler.snapshot(),
+        // Whether the months ahead have their `events` partitions (tm 255.14 ·
+        // §D187). The failure this replaces was silent too (§D131): the pass
+        // could not open a single month and said so only in a log line. Body
+        // only, never the status code — the process still serves, and a
+        // restart fixes nothing.
+        event_partitions: app.eventPartitions.snapshot(),
         // Which implementation each mockable dependency currently runs (M-ENV-b ·
         // §D113/K3) — read straight off the validated env, so this can never drift
         // from what `server.ts` actually built the factories with.

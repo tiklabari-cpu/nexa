@@ -540,12 +540,21 @@ describe('data model invariants', () => {
       `;
       expect(before[0]?.exists).toBe(false);
 
-      // events_ensure_partition is SECURITY INVOKER and nexa_app has no CREATE
-      // privilege on schema public (a pre-existing, separate gap — see tm
-      // 150.1's handoff note), so an out-of-window month can only be opened by
-      // a privileged connection. That is run here as `owner`, standing in for
-      // whatever privileged path actually opens a month that far out.
-      await owner.$queryRaw`SELECT events_maintain_partitions(${monthsAhead}::int, 1::int)`;
+      const partitionNames = async (): Promise<string[]> =>
+        (
+          await owner.$queryRaw<Array<{ name: string }>>`
+            SELECT c.relname AS name FROM pg_inherits i JOIN pg_class c ON c.oid = i.inhrelid
+            WHERE i.inhparent = 'public.events'::regclass
+          `
+        ).map((row) => row.name);
+      const existing = new Set(await partitionNames());
+
+      // As the runtime role, the connection the plugin really uses. Until
+      // 20260925100000 this had to run as `owner`: events_ensure_partition was
+      // SECURITY INVOKER and nexa_app can neither create in `public` nor own
+      // `events` (§D131). Now the function carries the owner's rights itself
+      // (§D187 · event-partition-maintenance.test.ts), so the stand-in is gone.
+      await app.$queryRaw`SELECT events_maintain_partitions(${monthsAhead}::int, 1::int)`;
 
       const after = await owner.$queryRaw<Array<{ exists: boolean }>>`
         SELECT to_regclass(${`public.${name}`}) IS NOT NULL AS exists
@@ -562,7 +571,12 @@ describe('data model invariants', () => {
       `;
       expect(policies.map((p) => p.policyname)).toEqual([`${name}_tenant`]);
 
-      await owner.$executeRawUnsafe(`DROP TABLE IF EXISTS ${name}`);
+      // Every month the window opened, not only the one asserted on: the months
+      // between the migration's +6 and this +14 would otherwise stay behind as
+      // months every later suite in the shard believes nobody has opened.
+      for (const opened of (await partitionNames()).filter((n) => !existing.has(n))) {
+        await owner.$executeRawUnsafe(`DROP TABLE IF EXISTS "${opened}"`);
+      }
     });
 
     it('hides chat_users and chat_access, which have no license column', async () => {

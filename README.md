@@ -362,6 +362,18 @@ quietly stopped receiving is discoverable rather than silent. An event is queued
 place — a partial unique index, not a convention — so no restart, no second instance and no
 overlapping tick delivers the same event twice.
 
+**`events` partition maintenance is not one of the eight** and `SCHEDULER_ENABLED` does not
+touch it. `events` is partitioned by month, and every API process opens the months from one
+before the current month to three after it, at boot and every six hours — no lock and no
+leader, because opening a month twice is a no-op. It runs as the runtime role `nexa_app`
+through `SECURITY DEFINER` functions that can open and secure an `events` partition and
+nothing else (migration `20260925100000_events_partition_definer`). A failed pass never stops
+the process — an event whose month has no partition lands in `events_default` instead — but
+it is reported: the admin `GET /health` body's `event_partitions` block names each month
+that failed and its SQLSTATE, and the log carries one `event partition maintenance failed`
+line per failed pass. What each code means and what to do:
+[`docs/runbooks/event-partitions.md`](docs/runbooks/event-partitions.md).
+
 ---
 
 ## Production configuration

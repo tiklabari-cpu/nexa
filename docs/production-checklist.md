@@ -11,7 +11,8 @@ to the section that explains the _why_. This document is the _what to check, in 
 
 This is a pre-deployment checklist, not an incident guide — for that, see
 [`docs/runbooks/`](runbooks/): Postgres down, Redis down, webhook delivery backlog, RTM
-connection storm, suspected cross-tenant data exposure.
+connection storm, suspected cross-tenant data exposure, `events` partition maintenance
+failing.
 
 ## 1. Configuration
 
@@ -73,6 +74,14 @@ connection storm, suspected cross-tenant data exposure.
       per source and atomic, resumable (`--limit N`, or just run it again) and reversible (run
       it with the previous provider configured). Evidence:
       `apps/api/test/integration/knowledge-reembed.test.ts`, PLAN §D182.
+- [ ] After the first boot, the admin `GET /api/v1/health` body shows
+      `event_partitions.last_status: "ok"` and `failed_months: []` — the API opened the
+      `events` partitions from last month to three months ahead as the runtime role. Anything
+      else is on a quarter's runway, not an outage: follow
+      [`docs/runbooks/event-partitions.md`](runbooks/event-partitions.md). Something should be
+      watching that field for the life of the deployment — the status code will not change
+      when it fails. Evidence: `apps/api/test/integration/event-partition-maintenance.test.ts`,
+      PLAN §D187.
 
 ## 3. Capacity
 

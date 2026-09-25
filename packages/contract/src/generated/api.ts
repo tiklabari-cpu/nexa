@@ -19,9 +19,10 @@ export interface paths {
      *     The body has two shapes (M-SEC-b2 · §D116 MEDIUM (b)). An anonymous
      *     caller — or one whose credential does not resolve to at least the
      *     `admin` role — gets only `status` + `service`: version, region,
-     *     dependency latencies, scheduler status and which mock each provider
-     *     runs are infrastructure detail an unauthenticated caller has no
-     *     business reading. An admin-role bearer token gets every field below.
+     *     dependency latencies, scheduler and event-partition status and which
+     *     mock each provider runs are infrastructure detail an unauthenticated
+     *     caller has no business reading. An admin-role bearer token gets every
+     *     field below.
      *     Either way the status code (200/503) reflects real dependency health —
      *     narrowing applies to the body only, so an orchestrator that reads only
      *     the status code is unaffected.
@@ -7602,6 +7603,7 @@ export interface components {
         redis: components['schemas']['DependencyHealth'];
       };
       scheduler?: components['schemas']['SchedulerHealth'];
+      event_partitions?: components['schemas']['EventPartitionsHealth'];
       providers?: components['schemas']['HealthProviders'];
     };
     DependencyHealth: {
@@ -7647,6 +7649,53 @@ export interface components {
       last_status: 'ok' | 'skipped' | 'error' | 'disabled' | null;
       /** @description The error's class, never its message — driver messages can carry connection strings. */
       last_error_class?: string;
+    };
+    /**
+     * @description The `events` monthly partition maintenance (SEMA-MIMARI.8.4c · PLAN
+     *     §D187). Not a scheduler job: every API process runs it at boot and
+     *     every `interval_ms`, whatever `SCHEDULER_ENABLED` says, opening each
+     *     month from `months_behind` before the current one to `months_ahead`
+     *     after it. A month that has no partition when its first event arrives
+     *     sends every event of that month to the unindexed `events_default`
+     *     catch-all, so a failing pass is worth noticing three months early —
+     *     which is what this block is for. It never changes the status code:
+     *     the process still serves, and restarting it fixes nothing.
+     */
+    EventPartitionsHealth: {
+      interval_ms: number;
+      months_ahead: number;
+      months_behind: number;
+      /**
+       * Format: date-time
+       * @description When the last pass finished, whatever came of it. Null only before the boot pass.
+       */
+      last_run_at: string | null;
+      /**
+       * @description `error` when at least one month of the last pass failed.
+       * @enum {string|null}
+       */
+      last_status: 'ok' | 'error' | null;
+      /** @description Failed passes in a row; back to 0 on the first clean one. */
+      consecutive_errors: number;
+      /** @description The months the last pass could not open or secure. Empty when it was clean. */
+      failed_months: {
+        /** @example 2026-12 */
+        month: string;
+        /**
+         * @description The SQLSTATE the database answered with — `42501` the
+         *     runtime role lacks the owner's rights (the maintenance
+         *     functions lost SECURITY DEFINER), `23514` rows for that
+         *     month already sit in `events_default` (the owner releases
+         *     them — `docs/runbooks/event-partitions.md`), `55P03` a lock
+         *     was not free within a second (retried next pass). When the
+         *     database never answered, the error's class. Never the
+         *     message.
+         * @example 42501
+         * @example 23514
+         * @example 55P03
+         */
+        error_code: string;
+      }[];
     };
     /**
      * @description Which implementation each mockable dependency (M-ENV-b · §D113/K3)

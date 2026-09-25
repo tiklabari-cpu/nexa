@@ -10264,11 +10264,11 @@
             "description": "PLAN S D131'de 2026-08-28'de OLCULMUS, hala acik: events_ensure_partition / events_secure_partition nexa_app roluyle calismiyor; zamanlayici yeni ay partisyonunu uretemiyor. Pilot takvimi Aralik'a uzandigi icin tarihi pilot penceresinin ICINDE. Kiraci izolasyonu etkilenmiyor (RLS duruyor), ama olaylar tek varsayilan partisyona yigiliyor ve hata bugun sessizce yutuluyor.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; MIGRATION POLITIKASI S6 ve S6.3. Pilot kapsami: ust gorev tm 255 details.\n\nKANIT:\n- PLAN.md S D131 (tm 157, 2026-08-28, MEDIUM): 'events partisyon bakimi calisma-zamani roluyle HIC kosamiyor; ~2026-12'den itibaren her olay events_default'a duser -- kiraci izolasyonu ETKILENMEZ'. PLAN.md:6430 ayni borcu ismen tekrar sayiyor.\n- Kod: apps/api/prisma/migrations/20260722154008_domain_model/migration.sql:654 events_ensure_partition, :700 GRANT EXECUTE ... TO nexa_app; 20260826090000_events_partition_rls/migration.sql:34 events_secure_partition, :64 GRANT, :75 ve :93/:119 cagri zinciri. GRANT var ama fonksiyonlar SECURITY DEFINER degil: CREATE TABLE / partition attach icin gereken hak cagirana ait olmadigindan nexa_app ile permission denied uretiyor.\n- Hata bugun yutuluyor (plugins/database.ts yolu) -- yani arizanin kendisi de gorunmez.\n- Bagimsiz denetim artefakti ayni maddeyi G9-GATE-b olarak OPUS-MAX etiketiyle listeliyor.\n\nKAPSAM:\n1) KIRMIZI-ONCE: nexa_app roluyle bugunku permission denied'i URETEN bir test yazilir (once kirmizi oldugu gosterilir).\n2) Migration: iki fonksiyon SECURITY DEFINER yapilir; search_path sabitlenir (SET search_path = ...) ve EXECUTE haklari daraltilir -- SECURITY DEFINER bir yetki yukseltmesidir, bu yuzden fonksiyonun ne yaptigi ve neden guvenli oldugu migration yorumunda yazilir. Fonksiyonlar YALNIZ partisyon uretir/guvenceye alir; disaridan gelen bir isim parametresiyle keyfi DDL calistirilamaz (girdi dogrulamasi).\n3) SAGLIK SINYALI: bakim basarisizligi artik sessizce yutulmaz; saglik/log yuzeyine cikar (mevcut health.ts deseni ya da zamanlayici sonucu). Pilotta bu arizanin FARK EDILEBILIR olmasi bu gorevin asil urunu.\n4) Geriye donuk: bugune kadar events_default'a dusmus satir varsa davranisi olculur ve yazilir (tasima bu gorevin kapsaminda degilse acikca yazilir).\n\nKAPSAM DISI: partisyon saklama/retention politikasi degisikligi; events semasinin degistirilmesi; ANN/olcek isleri.\n\nDIKKAT (olculmus tuzaklar): migrate deploy P1002 genelde artakalan bir Prisma shadow-DB oturumunun pg_advisory_lock(72707369)'i tutmasidir -- o pid sonlandirilir. Migration provasi icin izole bir DB: with-test-datastores.ts <komut>. pnpm db:reset ajanlara kapalidir; gerekiyorsa NEXA_SEED_RESET=1 pnpm db:seed.\n\nPRD: SEMA-MIMARI.8.4c (events aylik RANGE partition) - NFR-P6 (buyuk liste sorgulari partisyona dayaniyor).",
             "testStrategy": "(1) KIRMIZI-ONCE: nexa_app baglantisiyla events_ensure_partition cagrisi bugun permission denied veriyor -- test once kirmizi, migration sonrasi yesil (integration, gercek Postgres). (2) Gelecek ay: nexa_app roluyle gelecek bir tarih icin partisyon uretilir ve RLS politikalari yeni partisyona uygulanmis olur (events_secure_partition'in isi) -- kiraci izolasyonu negatif testi partisyon uzerinde tekrarlanir. (3) GUVENLIK: SECURITY DEFINER fonksiyonuna beklenmedik/kotu bir isim parametresi gecildiginde keyfi DDL CALISMAZ -- negatif test. (4) search_path sabit; fonksiyon sahibi ve EXECUTE haklari testte dogrulanir. (5) Saglik sinyali: bakim basarisiz oldugunda saglik/log yuzeyinde GORUNUR -- simule edilmis hata ile test. (6) pnpm -w db:check-drift exit 0; migration CONVENTIONS S6.3'e uygun. (7) Test basliklari (SEMA-MIMARI.8.4c) etiketli; pnpm audit:req-coverage exit 0. (8) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-25T12:56:11.230Z"
+            "updatedAt": "2026-09-25T14:10:11.180Z"
           },
           {
             "id": 15,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-25T12:56:11.230Z"
+        "updatedAt": "2026-09-25T14:10:11.180Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-25T12:56:11.231Z",
+      "lastModified": "2026-09-25T14:10:11.180Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

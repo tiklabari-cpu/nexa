@@ -70,6 +70,14 @@ export const settings: Messages = {
   'settings.nav.section.siem': 'SIEM dışa aktarımı',
   'settings.nav.section.billing': 'Abonelik ve faturalar',
 
+  // Yan gezinme araması — SettingsNav.tsx (FR-MOD-08.1 · tm 255.11)
+  'settings.nav.search.label': 'Ayarlarda ara',
+  'settings.nav.search.placeholder': 'Ayarlarda ara…',
+  'settings.nav.search.resultsLabel': 'Arama sonuçları',
+  'settings.nav.search.empty': '"{query}" için bölüm bulunamadı.',
+  'settings.nav.search.resultsCount.one': '{count} bölüm bulundu.',
+  'settings.nav.search.resultsCount.other': '{count} bölüm bulundu.',
+
   // Şirket bilgileri — CompanyDetails.tsx (FR-MOD-08.3)
   'settings.company.title': 'Şirket bilgileri',
   'settings.company.description':

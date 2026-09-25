@@ -30,6 +30,11 @@ import { FOOTER } from '../../components/navigation.js';
  * a courtesy hide so a teammate is not shown a section that only answers 403.
  * The route keeps the real gate. Omitted means everyone — the section reads
  * nothing the caller does not already hold (their own profile, a static door).
+ *
+ * `searchSections` (tm 255.11) is the same catalogue read a second way: rather
+ * than a fixed group, a section matches a typed query by its label or its
+ * `keywords`, and the caller's scopes gate a search result exactly as they
+ * gate a navigation link — see `SettingsNav.tsx` for where it renders.
  */
 export type SettingsGroupKey =
   'general' | 'channels' | 'routing' | 'inbox' | 'integrations' | 'security' | 'billing';
@@ -59,6 +64,14 @@ export interface SettingsSectionEntry {
    * Billing links to `/app/billing`.
    */
   to?: string;
+  /**
+   * Extra terms `searchSections` (tm 255.11) matches besides the label — the
+   * synonym an owner types instead of a section's own name ("mfa" for
+   * Two-factor, "response time" for SLA). Not translated: like
+   * `navigation.ts`'s own `keywords`, these are matched against the query as
+   * typed, in whichever language the label happens to render.
+   */
+  keywords?: readonly string[];
 }
 
 const ACCESS_RULES = ['access_rules:ro', 'access_rules:rw'] as const;
@@ -83,6 +96,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     group: 'general',
     labelKey: 'settings.nav.section.notifications',
     file: 'NotificationSettings',
+    keywords: ['alerts', 'email digest'],
   },
   {
     slug: 'company',
@@ -90,6 +104,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.company',
     scope: ['organization--my:rw'],
     file: 'CompanyDetails',
+    keywords: ['organization', 'address', 'timezone', 'sector'],
   },
   {
     slug: 'brands',
@@ -97,6 +112,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.brands',
     scope: ['brands--all:ro', 'brands--all:rw'],
     file: 'Brands',
+    keywords: ['multi-brand', 'brand switcher'],
   },
 
   // 08.5 — Channels
@@ -106,6 +122,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.channels',
     scope: ['channels--all:ro', 'channels--all:rw'],
     file: 'Channels',
+    keywords: ['messenger', 'whatsapp', 'sms', 'telegram', 'instagram', 'email'],
   },
   {
     slug: 'website-widgets',
@@ -113,6 +130,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.websiteWidgets',
     scope: ACCESS_RULES,
     file: 'WebsiteWidgets',
+    keywords: ['install', 'snippet', 'embed code'],
   },
   {
     slug: 'widget',
@@ -120,6 +138,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.widget',
     scope: ACCESS_RULES,
     file: 'WidgetCustomization',
+    keywords: ['white label', 'branding', 'colour', 'color', 'theme', 'logo'],
   },
   {
     slug: 'sales-tracker',
@@ -127,6 +146,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.salesTracker',
     scope: ACCESS_RULES,
     file: 'SalesTracker',
+    keywords: ['ecommerce', 'orders', 'attribution', 'revenue'],
   },
 
   // 08.6 — Routing
@@ -136,6 +156,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.routingRules',
     scope: ACCESS_RULES,
     file: 'RoutingRules',
+    keywords: ['assignment', 'queue', 'distribution'],
   },
   {
     slug: 'skills',
@@ -143,6 +164,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.skills',
     scope: ACCESS_RULES,
     file: 'Skills',
+    keywords: ['expertise'],
   },
   {
     slug: 'ticket-rules',
@@ -150,6 +172,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.ticketRules',
     scope: ['tickets--all:ro', 'tickets--all:rw'],
     file: 'TicketRules',
+    keywords: ['automation', 'triggers'],
   },
   {
     slug: 'sla',
@@ -157,6 +180,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.sla',
     scope: ACCESS_RULES,
     file: 'SlaPolicy',
+    keywords: ['response time', 'first response', 'resolution target', 'service level'],
   },
 
   // 08.7 — Inbox tools
@@ -166,6 +190,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.cannedResponses',
     scope: ['canned_responses--all:ro', 'canned_responses--groups:ro'],
     file: 'CannedResponses',
+    keywords: ['templates', 'shortcuts', 'macros'],
   },
   {
     slug: 'tags',
@@ -173,6 +198,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.tags',
     scope: ['tags--all:ro', 'tags--groups:ro'],
     file: 'Tags',
+    keywords: ['labels'],
   },
   {
     slug: 'chat-timeout',
@@ -180,6 +206,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.chatTimeout',
     scope: ACCESS_RULES,
     file: 'ChatTimeout',
+    keywords: ['auto close', 'idle'],
   },
   {
     slug: 'ticket-email-templates',
@@ -187,6 +214,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.ticketEmailTemplates',
     scope: ['tickets--all:ro', 'tickets--access:ro', 'tickets--all:rw'],
     file: 'TicketEmailTemplates',
+    keywords: ['branded email'],
   },
   {
     slug: 'custom-fields',
@@ -194,6 +222,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.customFields',
     scope: ACCESS_RULES,
     file: 'CustomFieldsSettings',
+    keywords: ['metadata', 'extra fields'],
   },
   {
     slug: 'chat-forms',
@@ -201,6 +230,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.chatForms',
     scope: ACCESS_RULES,
     file: 'ChatFormsSettings',
+    keywords: ['pre-chat', 'post-chat', 'offline form'],
   },
 
   // 08.8 — Integrations
@@ -210,6 +240,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     group: 'integrations',
     labelKey: 'settings.nav.section.integrations',
     file: 'Integrations',
+    keywords: ['marketplace', 'apps', 'zapier'],
   },
   // `GET /mcp/manifest` is public — the manifest is documentation.
   {
@@ -217,6 +248,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     group: 'integrations',
     labelKey: 'settings.nav.section.mcp',
     file: 'McpConnection',
+    keywords: ['model context protocol', 'claude', 'chatgpt', 'ai assistant'],
   },
   {
     slug: 'personal-access-tokens',
@@ -224,6 +256,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.personalAccessTokens',
     scope: ['accounts--my:ro'],
     file: 'PersonalAccessTokens',
+    keywords: ['api key', 'pat', 'token'],
   },
   {
     slug: 'scheduled-exports',
@@ -231,6 +264,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.scheduledExports',
     scope: ['reports_manage'],
     file: 'ScheduledExports',
+    keywords: ['csv', 'email report', 'export'],
   },
   {
     slug: 'sandbox',
@@ -238,6 +272,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.sandbox',
     scope: ACCESS_RULES,
     file: 'Sandbox',
+    keywords: ['test workspace', 'staging'],
   },
 
   // 08.9 — Security
@@ -247,6 +282,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.trustedDomains',
     scope: ACCESS_RULES,
     file: 'TrustedDomains',
+    keywords: ['allowlist', 'cors', 'domains'],
   },
   {
     slug: 'banned-customers',
@@ -254,6 +290,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.bannedCustomers',
     scope: ACCESS_RULES,
     file: 'BannedCustomerIps',
+    keywords: ['blocklist', 'ip ban'],
   },
   {
     slug: 'file-sharing',
@@ -261,6 +298,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.fileSharing',
     scope: ACCESS_RULES,
     file: 'FileSharing',
+    keywords: ['attachments', 'uploads', 'mime types'],
   },
   {
     slug: 'ip-allowlist',
@@ -268,6 +306,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.ipAllowlist',
     scope: ACCESS_RULES,
     file: 'IpAllowlist',
+    keywords: ['session policy', 'idle timeout', 'concurrent sessions'],
   },
   {
     slug: 'sso',
@@ -275,6 +314,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.sso',
     scope: ACCESS_RULES,
     file: 'SsoConnection',
+    keywords: ['saml', 'scim', 'identity provider'],
   },
   // The caller's own second factor (`/auth/me`).
   {
@@ -282,6 +322,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     group: 'security',
     labelKey: 'settings.nav.section.twoFactor',
     file: 'TwoFactor',
+    keywords: ['2fa', 'mfa', 'authenticator'],
   },
   {
     slug: 'compliance',
@@ -289,6 +330,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.compliance',
     scope: ACCESS_RULES,
     file: 'Compliance',
+    keywords: ['hipaa', 'baa', 'gdpr'],
   },
   {
     slug: 'data-retention',
@@ -296,6 +338,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.dataRetention',
     scope: ACCESS_RULES,
     file: 'DataRetention',
+    keywords: ['gdpr', 'delete data', 'storage'],
   },
   {
     slug: 'audit-log',
@@ -303,6 +346,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.auditLog',
     scope: ['audit_log--all:ro'],
     to: '/app/settings/audit-log',
+    keywords: ['activity log', 'history'],
   },
   {
     slug: 'siem',
@@ -310,6 +354,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.siem',
     scope: ACCESS_RULES,
     file: 'SiemExport',
+    keywords: ['splunk', 'log export', 'soc 2'],
   },
 
   // 08.10 — Billing: the existing page, gated as the rail gates it.
@@ -319,6 +364,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.billing',
     scope: BILLING_DESTINATION?.scope ?? ['billing_manage'],
     to: '/app/billing',
+    keywords: ['subscription', 'invoice', 'plan', 'payment'],
   },
 ];
 
@@ -330,6 +376,33 @@ export function sectionHref(entry: SettingsSectionEntry): string {
 /** Sections the caller may see, in navigation order. */
 export function visibleSections(scopes: readonly string[]): SettingsSectionEntry[] {
   return SETTINGS_SECTIONS.filter((s) => hasAnyScope(scopes, s.scope ?? []));
+}
+
+/**
+ * Visible sections whose label or `keywords` match `query` (FR-MOD-08.1 ·
+ * tm 255.11), a case-insensitive substring on either, in navigation order.
+ *
+ * Built on `visibleSections` rather than `SETTINGS_SECTIONS` directly: a
+ * section the caller cannot open never appears in a search result either —
+ * the same courtesy hide as the navigation itself, not a second gate to keep
+ * in sync (the route is what actually refuses the request).
+ *
+ * `labelOf` resolves a section's translated label; this file has no `t()` of
+ * its own; `SettingsNav.tsx` (which does) supplies it. That keeps the match
+ * logic a plain function a test can call with a fake English labeller,
+ * without rendering anything.
+ */
+export function searchSections(
+  scopes: readonly string[],
+  query: string,
+  labelOf: (entry: SettingsSectionEntry) => string,
+): SettingsSectionEntry[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return [];
+  return visibleSections(scopes).filter((section) => {
+    if (labelOf(section).toLowerCase().includes(needle)) return true;
+    return (section.keywords ?? []).some((keyword) => keyword.toLowerCase().includes(needle));
+  });
 }
 
 /**

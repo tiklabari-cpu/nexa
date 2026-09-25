@@ -10226,13 +10226,13 @@
             "description": "PRD FR-MOD-08.1'in 'Nexa iyilestirmesi' payi: 20+ alt sayfa icinde arama. 255.10'un gruplu navigasyonu uzerine oturur; arama sonucu ilgili bolumun deep-link'ine goturur.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Pilot kapsami: ust gorev tm 255 details.\n\nKANIT: PRD:596 'Nexa iyilestirmesi: Settings ici arama (20+ alt sayfa)'; PRD:861 ayni istek S8.1 IA iyilestirmeleri arasinda. Kodda arama YOK (SettingsPage.tsx'te arama alani yok, 2026-09-22).\n\nKAPSAM:\n1) Arama alani: bolum adi ve bolumun anahtar kelimeleri uzerinde; sonuc listesi 255.10'un deep-link rotasina goturur.\n2) Izin filtresi: kullanicinin goremedigi bolum arama sonuclarinda DA cikmaz -- negatif test (bilgi sizintisi olur).\n3) Klavye: alan odaklanabilir, sonuclar ok tuslariyla gezilebilir, Enter secer, Escape kapatir. Mevcut komut paleti (apps/web/src/components/CommandPalette.tsx) bu depoda zaten bir klavye deseni tasiyor -- once o okunur, desen tekrarlanir, KOPYALANMAZ.\n4) i18n: yeni metinler cevrilir. DIKKAT (olculmus tuzak): t() cagiran yeni bir web bileseni i18n-coverage.test.ts'in TRANSLATED_FILES listesine EKLENMEZSE iki assertion kirmizi olur.\n5) Mobil: dar ekranda navigasyon ve arama kullanilabilir kalir (mevcut duzenin kirilmadigi dogrulanir).\n6) a11y: arama alaninin adi/rolu dogru; sonuc listesi ekran okuyucuya duyurulur. DIKKAT (olculmus tuzak): bir etiketin icine giren yardim metni getByLabelText'i, baska bir dugmenin aria-label'iyle ayni metin ise getByRole'u kirar.\n\nKAPSAM DISI: global komut paletinin degistirilmesi; bolum iceriklerinde metin aramasi (yalniz bolum duzeyinde arama); yeni bolum eklenmesi.\n\nPRD: FR-MOD-08.1 - SEMA-MIMARI.8.1c (kismi).",
             "testStrategy": "(1) Birim (apps/web): arama terimi ilgili bolumu bulur; es anlamli/kismi eslesme davranisi testte yazili. (2) NEGATIF: scope'u olmayan kullanici icin o bolum arama sonucunda CIKMAZ. (3) Klavye: ok tuslari + Enter + Escape ile tam akis (userEvent). DIKKAT: web vitest'te userEvent testleri CPU yuku altinda 5000 ms zaman asimina dusebilir -- kirmizi gorulurse --maxWorkers=4 ile tekrarlanir, bu bir regresyon degildir. (4) i18n: yeni bilesen TRANSLATED_FILES listesinde ve i18n-coverage.test.ts yesil. (5) a11y: apps/e2e a11y kosusu yesil; arama alani icin rol/ad assertion'i. (6) Mobil genislikte e2e goruntusu/davranisi bozulmaz. (7) Test basliklari (FR-MOD-08.1) etiketli; pnpm audit:req-coverage exit 0. (8) PLAN.md FR-MOD-08.1 satirinin damgasi bu teslimle guncellenir + K blogu. (9) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / test:e2e / build exit 0.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [
               "255.10"
             ],
             "parentId": "255",
             "priority": "medium",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-25T11:05:24.606Z"
           },
           {
             "id": 12,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-23T12:29:53.895Z"
+        "updatedAt": "2026-09-25T11:05:24.606Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-23T12:29:53.896Z",
+      "lastModified": "2026-09-25T11:05:24.607Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

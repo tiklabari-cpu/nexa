@@ -20,12 +20,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
 import { ADMIN_SCOPES, DEFAULT_AGENT_SCOPES } from '@nexa/types';
 import type * as AuthStore from '../../lib/auth-store.js';
+import { settings as EN_SETTINGS } from '../../locales/en/settings.js';
 import {
   SETTINGS_GROUPS,
   SETTINGS_SECTIONS,
   defaultSectionSlug,
+  searchSections,
   visibleGroups,
+  type SettingsSectionEntry,
 } from './settings-sections.js';
+
+/** `searchSections` takes a label resolver; the real one is `t()`, this is English. */
+const englishLabel = (section: SettingsSectionEntry): string =>
+  EN_SETTINGS[section.labelKey] ?? section.labelKey;
 
 let currentScopes: string[] = [];
 
@@ -139,6 +146,42 @@ describe('Settings navigation catalogue (FR-MOD-08.1)', () => {
   });
 });
 
+describe('searchSections (FR-MOD-08.1 · tm 255.11)', () => {
+  it('returns nothing for an empty query', () => {
+    expect(searchSections(ADMIN, '', englishLabel)).toEqual([]);
+    expect(searchSections(ADMIN, '   ', englishLabel)).toEqual([]);
+  });
+
+  it('matches a section by a case-insensitive substring of its own label', () => {
+    expect(searchSections(ADMIN, 'trusted', englishLabel).map((s) => s.slug)).toEqual([
+      'trusted-domains',
+    ]);
+    expect(searchSections(ADMIN, 'TRUSTED DOMAINS', englishLabel).map((s) => s.slug)).toEqual([
+      'trusted-domains',
+    ]);
+  });
+
+  it('matches a section by a partial synonym in its keywords, not only its label', () => {
+    // Nothing in "Two-factor authentication" or "SLA" spells these out.
+    expect(searchSections(ADMIN, 'mfa', englishLabel).map((s) => s.slug)).toContain('two-factor');
+    expect(searchSections(ADMIN, 'response time', englishLabel).map((s) => s.slug)).toContain(
+      'sla',
+    );
+  });
+
+  it('reports no matches for a query that names nothing', () => {
+    expect(searchSections(ADMIN, 'xyzzy-not-a-setting', englishLabel)).toEqual([]);
+  });
+
+  it('never returns a section the caller has no scope to see', () => {
+    // An agent cannot read Billing; the word from its own label finds nothing.
+    expect(searchSections(AGENT, 'invoice', englishLabel)).toEqual([]);
+    expect(searchSections(AGENT, 'subscription', englishLabel)).toEqual([]);
+    // The same query for an owner finds it.
+    expect(searchSections(ADMIN, 'invoice', englishLabel).map((s) => s.slug)).toContain('billing');
+  });
+});
+
 describe('Settings navigation visibility (FR-MOD-08.1)', () => {
   function renderNav(): void {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -229,6 +272,123 @@ describe('Settings navigation visibility (FR-MOD-08.1)', () => {
         .flatMap((g) => g.sections)
         .map((s) => s.slug),
     ).toEqual(['notifications', 'integrations', 'mcp', 'two-factor']);
+  });
+});
+
+describe('Settings navigation search (FR-MOD-08.1 · tm 255.11)', () => {
+  function renderSearchableNav(): void {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <SettingsNav />
+          <Where />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+  }
+
+  it('finds a section by its own label', async () => {
+    currentScopes = ADMIN;
+    renderSearchableNav();
+    const search = await screen.findByRole('combobox', { name: 'Search settings' });
+    await userEvent.type(search, 'trusted');
+    const results = screen.getByRole('listbox', { name: 'Search results' });
+    expect(within(results).getAllByRole('option')).toHaveLength(1);
+    expect(within(results).getByRole('option', { name: 'Trusted domains' })).toBeInTheDocument();
+  });
+
+  it('finds a section by a partial, case-insensitive keyword match, not just its label', async () => {
+    currentScopes = ADMIN;
+    renderSearchableNav();
+    const search = screen.getByRole('combobox', { name: 'Search settings' });
+    // "mfa" names nothing in the label "Two-factor authentication" — only the
+    // section's keywords carry the synonym, and only part of one at that.
+    await userEvent.type(search, 'MFA');
+    expect(
+      within(screen.getByRole('listbox', { name: 'Search results' })).getByRole('option', {
+        name: 'Two-factor authentication',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('reports no matches rather than an empty, unexplained list', async () => {
+    currentScopes = ADMIN;
+    renderSearchableNav();
+    const search = screen.getByRole('combobox', { name: 'Search settings' });
+    await userEvent.type(search, 'nonexistent-section-xyz');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(
+      screen.getByText('No sections found for “nonexistent-section-xyz”.'),
+    ).toBeInTheDocument();
+  });
+
+  it('never surfaces a section the caller has no scope to see, even under a matching query', async () => {
+    // An agent cannot read Billing; searching the very word on its label must
+    // not leak it into the results — the same courtesy hide as the grouped
+    // navigation, not a second gate that could fall out of sync with it.
+    currentScopes = AGENT;
+    renderSearchableNav();
+    const search = screen.getByRole('combobox', { name: 'Search settings' });
+    await userEvent.type(search, 'invoice');
+    expect(screen.getByText('No sections found for “invoice”.')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('option', { name: 'Subscription and invoices' }),
+    ).not.toBeInTheDocument();
+
+    // What the agent *can* reach stays findable.
+    await userEvent.clear(search);
+    await userEvent.type(search, 'notif');
+    expect(
+      within(screen.getByRole('listbox', { name: 'Search results' })).getByRole('option', {
+        name: 'Notifications',
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('walks results with the arrow keys, wrapping past either end', async () => {
+    currentScopes = ADMIN;
+    renderSearchableNav();
+    const search = screen.getByRole('combobox', { name: 'Search settings' });
+    // A single common letter matches enough labels to give the arrow keys
+    // somewhere to walk.
+    await userEvent.type(search, 'a');
+    const options = within(screen.getByRole('listbox', { name: 'Search results' })).getAllByRole(
+      'option',
+    );
+    expect(options.length).toBeGreaterThan(1);
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+
+    await userEvent.keyboard('{ArrowUp}');
+    expect(options[options.length - 1]).toHaveAttribute('aria-selected', 'true');
+
+    await userEvent.keyboard('{ArrowDown}');
+    expect(options[0]).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('opens the highlighted result on Enter and clears the search', async () => {
+    currentScopes = ADMIN;
+    renderSearchableNav();
+    const search = screen.getByRole('combobox', { name: 'Search settings' });
+    await userEvent.type(search, 'trusted domains');
+    await userEvent.keyboard('{Enter}');
+    expect(await screen.findByTestId('where')).toHaveTextContent('/app/settings/trusted-domains');
+    expect(search).toHaveValue('');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('closes the search on Escape without touching the navigation underneath', async () => {
+    currentScopes = ADMIN;
+    renderSearchableNav();
+    const search = screen.getByRole('combobox', { name: 'Search settings' });
+    await userEvent.type(search, 'trusted');
+    expect(screen.getByRole('listbox', { name: 'Search results' })).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+    expect(search).toHaveValue('');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    // The grouped list is back, not a blank pane.
+    expect(screen.getByRole('link', { name: 'Trusted domains' })).toBeInTheDocument();
   });
 });
 

@@ -126,3 +126,54 @@ test.describe('Settings navigation (FR-MOD-08.1)', () => {
     }
   });
 });
+
+test.describe('Settings navigation search (FR-MOD-08.1 · tm 255.11)', () => {
+  test('finds a section by keyboard alone and opens it', async ({ agentPage }) => {
+    await agentPage.goto('/app/settings/notifications');
+    const search = agentPage.getByRole('combobox', { name: 'Search settings' });
+    // A keyword, not the section's own label — proves the catalogue's
+    // `keywords` list is actually reached, not just the visible name.
+    await search.fill('mfa');
+    const results = agentPage.getByRole('listbox', { name: 'Search results' });
+    await expect(
+      results.getByRole('option', { name: 'Two-factor authentication' }),
+    ).toBeVisible();
+
+    await search.press('Enter');
+    await expect(agentPage).toHaveURL(/\/app\/settings\/two-factor$/);
+    await expect(agentPage.getByRole('region', { name: 'Two-factor authentication' })).toBeVisible();
+    // Enter both opened the result and cleared the search back to the groups.
+    await expect(search).toHaveValue('');
+    await expect(agentPage.getByRole('navigation', { name: 'Settings navigation' })).toBeVisible();
+  });
+
+  test('reports no matches, and Escape returns to the grouped list without navigating', async ({
+    agentPage,
+  }) => {
+    await agentPage.goto('/app/settings/notifications');
+    const search = agentPage.getByRole('combobox', { name: 'Search settings' });
+    await search.fill('nonexistent-section-xyz');
+    await expect(agentPage.getByText('No sections found for “nonexistent-section-xyz”.')).toBeVisible();
+
+    await search.press('Escape');
+    await expect(search).toHaveValue('');
+    await expect(agentPage.getByRole('link', { name: 'Trusted domains' })).toBeVisible();
+    // Still on the section the search was opened over — Escape did not navigate.
+    await expect(agentPage).toHaveURL(/\/app\/settings\/notifications$/);
+  });
+
+  test('stays usable at a phone width', async ({ agentPage }) => {
+    await agentPage.setViewportSize({ width: 390, height: 844 });
+    await agentPage.goto('/app/settings/notifications');
+    const search = agentPage.getByRole('combobox', { name: 'Search settings' });
+    await expect(search).toBeVisible();
+    await search.fill('trusted');
+    await agentPage
+      .getByRole('listbox', { name: 'Search results' })
+      .getByRole('option', { name: 'Trusted domains' })
+      .click();
+    await expect(agentPage).toHaveURL(/\/app\/settings\/trusted-domains$/);
+    await expect(agentPage.getByRole('region', { name: 'Trusted domains' })).toBeVisible();
+    await agentPage.screenshot({ path: 'kanit/08.1-settings-search-mobile.png', fullPage: true });
+  });
+});

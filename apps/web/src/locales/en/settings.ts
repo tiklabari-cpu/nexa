@@ -82,6 +82,14 @@ export const settings: Messages = {
   'settings.nav.section.siem': 'SIEM export',
   'settings.nav.section.billing': 'Subscription and invoices',
 
+  // Side navigation search — SettingsNav.tsx (FR-MOD-08.1 · tm 255.11)
+  'settings.nav.search.label': 'Search settings',
+  'settings.nav.search.placeholder': 'Search settings…',
+  'settings.nav.search.resultsLabel': 'Search results',
+  'settings.nav.search.empty': 'No sections found for “{query}”.',
+  'settings.nav.search.resultsCount.one': '{count} section found.',
+  'settings.nav.search.resultsCount.other': '{count} sections found.',
+
   // Company details — CompanyDetails.tsx (FR-MOD-08.3)
   'settings.company.title': 'Company details',
   'settings.company.description':

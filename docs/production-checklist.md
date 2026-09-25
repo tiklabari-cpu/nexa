@@ -255,6 +255,26 @@ and names the key. By name, what the pilot needs:
 Values go into `.env` on the host and nowhere else — not into a ticket, a log, a commit or
 this document.
 
+**Where each value comes from (tm 255.16).** Only names here, never values:
+
+| Key(s)                                                                                                                                                                           | Where the owner gets it                                                                                                                                |
+| -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `SMTP_USERNAME`, `SMTP_PASSWORD`                                                                                                                                                 | The PrivateEmail (Namecheap) mailbox that sends the pilot's mail. The username is the mailbox's full address. The password is that mailbox's password. |
+| `SMTP_FROM`                                                                                                                                                                      | That same mailbox's address, bare (`name@domain`) — not a secret.                                                                                      |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`                                                                                                                                          | PrivateEmail's published settings, already in the template (587 + STARTTLS, or 465 with `SMTP_SECURE=true`).                                           |
+| `LLM_API_KEY`, `EMBEDDING_API_KEY`                                                                                                                                               | An API key from the OpenAI platform account (ADR `docs/adr/pilot-llm-embedding-provider.md` §9). The two may hold the same key.                        |
+| `LLM_MODEL`                                                                                                                                                                      | The chat model id chosen in that account. `EMBEDDING_MODEL` stays `text-embedding-3-small` (the column is `vector(1536)`).                             |
+| `LLM_PROVIDER_REGION`, `EMBEDDING_PROVIDER_REGION`, `*_API_BASE_URL`                                                                                                             | The owner's region decision (ADR §11.2). `eu` needs OpenAI's EU data-residency approval first. The base URL must be that region's host.                |
+| `POSTGRES_PASSWORD`, `NEXA_APP_DB_PASSWORD`, `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`, `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET` | Generated on the host: `openssl rand -hex 32`, one per key.                                                                                            |
+| `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`, `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`                                                       | The owner's domain and the reverse proxy in front of the host.                                                                                         |
+
+Two owner decisions come before the first real call (ADR §11): whether the OpenAI account and
+its billing are accepted, and whether the pilot's region is `eu` or `us`. Once a key exists,
+`RETRIEVAL_THRESHOLD` has to be measured once in the real embedding space. It was only
+measured in the stub's space (tm 255.8, PLAN §D183 (5)): with the four `EMBEDDING_*` keys set,
+run `pnpm --filter @nexa/api measure:knowledge-recall`. Exit 0 means PASS, 1 FAIL, 2 means it
+was not measured, which is not a pass.
+
 **Run.**
 
 - [ ] `docker compose -f docker-compose.pilot.yml config --quiet` exits 0. A missing
@@ -311,6 +331,23 @@ this document.
       as one JSON record per line.
 - [ ] Uploads: the pilot keeps file sharing off (tm 255.13). A workspace that turns it on
       stores files under `/tmp` inside the api container; they do not survive `up --build`.
+
+**Known risks at pilot readiness (tm 255.16).** Open, not fixed by this checklist:
+
+- Three notice mails are still sent **inside the request** that causes them: the assignee's
+  new-message notice (`routes/customer.ts` `notifyAssignee`), the chat transcript on close
+  (`chat-service` `#emailTranscript`) and the customer's ticket-status notice
+  (`routes/tickets.ts`). A failure never reaches the caller, but the delay does: one SMTP round
+  on a healthy server, and about 33 s on a hung one (3 × 10 s timeout + 1 + 2 s backoff).
+  Moving them onto `app.backgroundMail` is a separate task (PLAN §D179).
+- The e2e suite is order-dependent (independent audit finding G9-GATE-a): full runs have
+  failed on different single tests that each pass alone. That is test fixture state, not
+  product code.
+- Outside the pilot by the owner's decision (2026-09-22): payments/Stripe, messaging channels,
+  mobile push, S3 + virus scanning + SIEM + load testing, the MCP protocol, social sign-in, and
+  Kubernetes (the Helm chart is kept, not used).
+- A malformed JSON request body is answered 500 instead of 400 (found in tm 255.15, no task
+  open).
 
 ## Explicitly out of scope
 

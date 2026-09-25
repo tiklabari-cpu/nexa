@@ -10240,11 +10240,11 @@
             "description": "Kullanicinin gozlemi dogrulandi: /app/tickets rotasi yok, ticket yuzeyi Inbox icinde yasiyor. Fakat PRD iki yerde birbirini tam tamamlamayan sey soyluyor. Bu yuzden dogrudan kod gorevi acilmadi: once karar, ADR'ye yazilir; ayri rota gerekiyorsa takip gorevi ACILIR (bu turda degil).",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami: ust gorev tm 255 details.\n\nKANIT (2026-09-22 olculdu) -- KARARIN DAYANAGI BU IKI SATIRIN GERILIMI:\n- PRD:861 (S8.1 IA iyilestirmeleri): 'Tickets ust-seviye gorunur kilinir (yalniz Inbox'ta gizli degil)'.\n- PRD:846 (S8.1 birincil navigasyon, sol ikon rayi): 'Home - Inbox - Customers (Real-time/Contacts/Campaigns) - Team (AI Agents/Copilot/Teammates/Teams) - Playbook - Engage (Traffic/Goals/Campaigns) - Reports - [alt] Settings - Help - Account'. Bu listede Tickets YOK.\n- KOD: apps/web/src/App.tsx:102-120 rotalari -- home, inbox, customers(+3), team(+2), reports, billing, playbook, settings(+audit-log), apps, developers. /app/tickets YOK.\n- Ticket yuzeyi Inbox icinde GERCEK ve calisiyor: apps/web/src/features/inbox/ ticket-grid.ts, ticket-selection.ts, ticket-priority.ts, TicketBulkBar.tsx, CreateTicketButton.tsx. Denetim (prd-uyum-denetimi.md:200) bunu SEMA-MIMARI.8.1c altinda 'Kucuk' siddetle 'karsiligi yok' diye isaretlemis.\n- Ayrica US-5 KK3 ('sohbetten ticket') denetimde GERCEK olarak dogrulanmis -- yani islevsellik degil, YALNIZ GORUNURLUK tartisiliyor.\n\nKAPSAM -- su uc secenekten biri gerekcesiyle secilir:\n(A) Birincil navigasyona ayri Tickets girisi + /app/tickets rotasi + deep-link + e2e kapsami.\n(B) Inbox icindeki mevcut Tickets gorunumu ust-seviye bir giristen deep-link ile acilir (rota Inbox'in alti, ama navigasyonda kendi adiyla gorunur).\n(C) Mevcut tasarim PRD ile uyumlu sayilir; gerekce ADR'ye yazilir ve SEMA-MIMARI.8.1c'nin durumu PLAN'da acikca kaydedilir.\nSecim PRD:846 ile PRD:861'in nasil uzlastirildigini TEK CUMLEYLE soylemeli. Referans urunun (LiveChat/text.com) bugunku IA'si WebSearch/WebFetch ile bakilabilir ve karara dayanak olarak yazilabilir -- ama PRD'nin kendi cumlesi ustundur.\n\nCIKTI: ADR (docs/ ya da PLAN S D) + PLAN.md'de SEMA-MIMARI.8.1c'nin durumunun acikca kaydi. (A) ya da (B) secilirse UYGULAMA ICIN YENI BIR TASK ACILIR (baslik, kapsam, e2e kapsami ve PRD kimligi bu gorevde yazilir) -- uygulama bu gorevin kapsaminda DEGIL.\n\nKAPSAM DISI: rota/navigasyon kodu yazmak; Inbox'taki ticket yuzeyini degistirmek; AI yeteneklerinin 'tek ev'e toplanmasi (SEMA-MIMARI.8.1c'nin ikinci payi, pilot disi).\n\nPRD: SEMA-MIMARI.8.1c.",
             "testStrategy": "Karar gorevi; kapisi belgedir. (1) ADR dosyada; PRD:846 ile PRD:861 gerilimi tek cumleyle uzlastirilmis. (2) Secenek A/B/C'den biri acikca secilmis ve gerekcesi yazili. (3) A ya da B ise: yeni task Task Master'da ACILMIS (baslik + kapsam + e2e kapsami + PRD kimligi dolu) ve bu gorevin kapanis notunda id'si yazili. (4) C ise: PLAN'da SEMA-MIMARI.8.1c'nin durumu ve gerekcesi kayitli; damga UYDURULMAZ. (5) Kod degismedi: git diff yalniz .md (ve secenek A/B ise .taskmaster/tasks/tasks.json). (6) DoD: pnpm -w format:check exit 0; kod degismedigi icin typecheck/lint/test/build yesil kalir.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "255",
             "priority": "medium",
-            "updatedAt": "2026-09-22T19:52:05.666Z"
+            "updatedAt": "2026-09-25T11:12:23.779Z"
           },
           {
             "id": 13,
@@ -10307,12 +10307,12 @@
             "updatedAt": "2026-09-22T19:52:05.666Z"
           }
         ],
-        "updatedAt": "2026-09-25T11:05:24.606Z"
+        "updatedAt": "2026-09-25T11:12:23.779Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-25T11:05:24.607Z",
+      "lastModified": "2026-09-25T11:12:23.780Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

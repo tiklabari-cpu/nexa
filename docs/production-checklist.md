@@ -271,11 +271,16 @@ this document.
       origin and from the panel's is answered, one from an unlisted origin is not. Point it at
       the public side with `API_BASE=… RTM_BASE=… WEB_BASE=… WIDGET_BASE=…` once the proxy is
       up.
-- [ ] **Known blocker (tm 255.17, open):** a signed-up workspace's OAuth client is registered
-      for `http://localhost:5173/auth/callback` only, and the panel sends its own origin's
-      `/auth/callback` — so on the pilot's real domain `/auth/authorize` refuses the panel
-      sign-in (`redirect_uri is not registered for this client`). Measured in this section's
-      rehearsal; the step below needs that task first.
+- [ ] `WEB_APP_URL` is the address the panel is actually served from — its origin +
+      `/auth/callback` is the OAuth redirect every workspace registers (tm 255.17 · PLAN
+      §D189). A workspace signed up here gets exactly that one plus the mobile
+      `nexa://auth/callback`; one that existed before gains it at the api's next start
+      (one `registered this deployment’s console callback` info line; a failure is one
+      `error` line and does not stop the boot). Production refuses a `WEB_APP_URL` that no
+      sign-in could use (plain `http` off `localhost`). Changing the address later adds the
+      new callback and keeps the old one — removing it is a manual step, not something a
+      restart does: as the owner role, `array_remove` the old callback from
+      `oauth_clients.redirect_uris` on the clients whose id matches `nexa-%-app-%`.
 - [ ] Create the first workspace by signing up in the panel (there is no seed). Then run the
       smoke test once more with `SMOKE_ORGANIZATION_ID=<its id>` and
       `SMOKE_ADMIN_TOKEN=<the owner's access token>`: it mints a visitor token from the widget

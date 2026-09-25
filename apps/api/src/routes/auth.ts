@@ -24,6 +24,7 @@ import {
   type AuditContext,
   type AuditEntry,
 } from '../services/audit/audit-log.js';
+import { registerConsoleRedirect } from '../services/auth/console-redirect-sync.js';
 import { OauthService, type Membership } from '../services/auth/oauth-service.js';
 import type { IssuedToken } from '../services/auth/token-service.js';
 import { badCode, TOTP_ISSUER, TwoFactorService } from '../services/auth/two-factor-service.js';
@@ -228,6 +229,15 @@ export default async function authRoutes(
     auditChainSecret: env.AUDIT_CHAIN_SECRET,
   });
   const twoFactor = new TwoFactorService(app.db);
+
+  // Before any route is served: a workspace opened before this deployment's
+  // address was known gains its console callback here, or `/auth/authorize`
+  // below refuses its owner (tm 255.17). Never throws — see the module.
+  await registerConsoleRedirect({
+    db: app.db,
+    redirect: env.consoleRedirectUri,
+    logger: app.log.child({ component: 'console-redirect' }),
+  });
 
   /**
    * Best-effort audit write. Authentication and credential management must not

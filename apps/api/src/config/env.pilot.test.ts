@@ -179,6 +179,20 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     );
   });
 
+  it("registers the pilot's own panel address as the console callback (tm 255.17)", () => {
+    const env = parseEnv(PILOT_ENV);
+    expect(env.consoleRedirectUri).toBe(`${new URL(env.WEB_APP_URL).origin}/auth/callback`);
+    expect(env.consoleRedirectUri).toMatch(/^https:\/\//);
+  });
+
+  it('refuses a WEB_APP_URL no sign-in could ever be redirected to, naming WEB_APP_URL', () => {
+    // Plain http off loopback: `isRegisteredRedirect` refuses it, so every
+    // owner would be turned away at /auth/authorize by a server that booted.
+    expect(() => parseEnv({ ...PILOT_ENV, WEB_APP_URL: 'http://panel.example.com' })).toThrow(
+      /WEB_APP_URL must be an https address/,
+    );
+  });
+
   it.each(SECRET_KEYS)('refuses %s holding the dev-only placeholder', (key) => {
     const source = { ...PILOT_ENV, [key]: `dev-only-${'x'.repeat(40)}` };
     expect(() => parseEnv(source)).toThrow(`${key} still holds its development placeholder`);

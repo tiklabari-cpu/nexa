@@ -100,10 +100,17 @@ function hashToken(token: string): string {
 export class LifecycleService {
   readonly #db: PrismaClient;
   readonly #appUrl: string;
+  readonly #consoleRedirect: string;
 
-  constructor(db: PrismaClient, appUrl: string) {
+  /**
+   * @param consoleRedirect The console callback a new workspace's OAuth client
+   *   registers — `env.consoleRedirectUri`, i.e. server configuration and never
+   *   anything a request carried (tm 255.17).
+   */
+  constructor(db: PrismaClient, appUrl: string, consoleRedirect: string) {
     this.#db = db;
     this.#appUrl = appUrl.replace(/\/+$/, '');
+    this.#consoleRedirect = consoleRedirect;
   }
 
   async signup(input: {
@@ -130,7 +137,8 @@ export class LifecycleService {
       created = await this.#db.$queryRaw`
         SELECT * FROM auth_signup(
           ${input.email}::citext, ${input.name}, ${passwordHash},
-          ${input.organizationName}, ${TRIAL_DAYS}::int, ${input.region}
+          ${input.organizationName}, ${TRIAL_DAYS}::int, ${input.region},
+          ${this.#consoleRedirect}
         )`;
     } catch (error) {
       if (isAccountExists(error)) {

@@ -10276,14 +10276,14 @@
             "description": "docker-compose.full.yml basindaki yorumun kendisi soyluyor: NODE_ENV development, cunku uc production kapisi bu yigini reddediyor (dev-only- yer tutuculari, INBOUND_EMAIL_SECRET, CORS/widget origin). Pilot gercek .env ile production'da kosacagi icin bu kapilarin ATLANMASI degil KARSILANMASI gerekir. Healthcheck ve restart policy ZATEN var -- bu gorev onlari yeniden yazmaz.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5. Pilot kapsami: ust gorev tm 255 details.\n\nKANIT (2026-09-22 olculdu):\n- docker-compose.full.yml:1-33 basligi: 'SCOPE: this is a LOCAL stack, not a deployment' ve 'NODE_ENV is development here ON PURPOSE' -- sebep olarak uc kapi sayiliyor: parseEnv dev-only- yer tutucularini reddediyor; production CORS WEB_ORIGIN'e daraliyor ve widget'in :5174'ten gelen cagrilarini kesiyor; parseEnv production'da INBOUND_EMAIL_SECRET istiyor.\n- Yigin .env.example'i env_file olarak yukluyor (api :169, rtm :189) -- yani yer tutucu degerlerle kosuyor.\n- productionProblems (apps/api/src/config/env.ts:693) bugun dort seyi zorunlu kiliyor: DATABASE_APP_URL, dev-only- kalmamis sirlar, INBOUND_EMAIL_SECRET, WEB_ORIGIN'in WIDGET_BASE_URL origin'ini ICERMESI (bu sonuncusu tm 243'te eklendi ve yukaridaki CORS gerekcesini ZATEN cozuyor -- yorum bu yonuyle eskimis olabilir, pencere bunu dogrular).\n- ZATEN VAR, YENIDEN YAZILMAYACAK: apps/api/Dockerfile:127, apps/rtm/Dockerfile:119, apps/web/Dockerfile:91, apps/widget/Dockerfile:66 HEALTHCHECK; compose'ta restart: unless-stopped ve depends_on service_healthy zinciri.\n- .env.production.example VAR ve kendi testi var (apps/api/src/config/env.production-example.test.ts): NODE_ENV=production, INBOUND_EMAIL_SECRET yer tutucusuz.\n\nKAPSAM:\n1) Pilot compose: ayri bir dosya ya da overlay (ornek docker-compose.pilot.yml ya da .prod overlay). NODE_ENV=production; env_file GERCEK .env (repoya girmez); .env.example yer tutuculari KULLANILMAZ.\n2) Bu yigin parseEnv + productionProblems'i GECMELIDIR: DATABASE_APP_URL (RLS icin non-owner rol), sirlarin yer tutucu olmamasi, INBOUND_EMAIL_SECRET, WEB_ORIGIN'in widget origin'ini icermesi. Ayrica 255.2 ile MAIL_PROVIDER=smtp ve SMTP_* zorunlulugu, 255.5 ile LLM/embedding anahtar adlari.\n3) .env.production.example GUNCELLENIR: bugun LLM_PROVIDER=mock (satir 140) ve MAIL_PROVIDER=file (satir 142) yaziyor; pilot gercegi yansitilir (DEGER YOK, yalnizca anahtar ve yorum). Mevcut production-example testi yesil kalmali.\n4) Veri kaliciligi ve yedek: pilotta DB volume'unun kalici oldugu ve mevcut yedek yordamiyla (Makefile backup / restore-drill) uyumlu oldugu dogrulanir.\n5) Calistirma yordami README'ye ya da docs/production-checklist.md'ye tek bolum olarak yazilir: hangi komut, hangi anahtarlar gerekli (ADLARIYLA), saglik nasil dogrulanir.\n\nKAPSAM DISI -- BU TURUN SINIRI: gercek VPS'e dagitim, DNS, TLS sertifikasi, reverse proxy kurulumu, gercek secret'larin girilmesi, Kubernetes/Helm (mevcut hazirlik KORUNUR, DOKUNULMAZ), yedeklerin uzak depoya gonderilmesi.\n\nSIR SINIRI: hicbir gercek deger commit'e girmez; .env repoda degildir ve .gitignore zaten kapsar.\n\nPRD: NFR-C4 baglami korunur; dogrudan kapi productionProblems'in kendisidir.",
             "testStrategy": "(1) Yapilandirma testi: pilot compose dosyasi docker compose config ile gecerli; NODE_ENV=production ve env_file .env.example DEGIL. (2) Birim: sahte bir pilot env kumesiyle parseEnv production'da SORUNSUZ gecer; her zorunlu anahtar tek tek cikarildiginda parseEnv ATAR ve eksigi ADIYLA soyler (dort mevcut kural + SMTP + LLM). (3) .env.production.example: mevcut env.production-example testi yesil; yeni anahtarlar yorumlu ve DEGERSIZ. (4) Parite: env.parity testi yesil. (5) FIILI KOSU: pilot yigini yerelde ayaga kaldirilir (gercek disa acilim YOK, 127.0.0.1); dort servisin healthcheck'i healthy; scripts/smoke.sh ya da esdegeri gecer; widget'in cross-origin cagrisi CORS'tan GECER (production CORS ile) -- bu, compose yorumundaki eski gerekcenin gecerliligini de olcer ve sonuc yazilir. (6) Yigin kapatilip acildiginda veri korunur (volume). DIKKAT (olculmus tuzak): docker compose down -v proje kapsamlidir ve baska profillerin volume'unu da dusurur -- benzersiz -p ile kosulur. (7) DoD: pnpm -w typecheck / lint / format:check / test / test:integration / build exit 0.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "255.2",
               "255.5"
             ],
             "parentId": "255",
             "priority": "high",
-            "updatedAt": "2026-09-25T14:12:48.384Z"
+            "updatedAt": "2026-09-25T15:34:46.589Z"
           },
           {
             "id": 16,
@@ -10322,12 +10322,12 @@
             "priority": "high"
           }
         ],
-        "updatedAt": "2026-09-25T14:12:48.384Z"
+        "updatedAt": "2026-09-25T15:34:46.589Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-25T14:12:48.384Z",
+      "lastModified": "2026-09-25T15:34:46.590Z",
       "taskCount": 255,
       "completedCount": 254,
       "tags": [

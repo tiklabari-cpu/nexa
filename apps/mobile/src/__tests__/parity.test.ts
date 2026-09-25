@@ -877,7 +877,12 @@ describe('module parity matrix — what is still owed', () => {
       // whether the web console's Settings side navigation is pinned. The app
       // has no Settings side navigation to pin, so it has nothing to read
       // there; a web layout preference, not a gap, and nothing here re-scopes.
-      contractEndpoints: 218,
+      // 218 -> 219 with `/uploads-policy` (FR-MOD-08.9.4, tm 255.13) — the
+      // licence's file-sharing on/off switch, read so the agent composer can
+      // hide its attach button instead of refusing a pick after the fact.
+      // The phone composer has no such affordance to gate; nothing to read
+      // there, and nothing here re-scopes.
+      contractEndpoints: 219,
       scopeBoundaries: 1,
     });
   });

@@ -1638,9 +1638,10 @@ export default async function authRoutes(
     // round-trip is least welcome.
     // All best-effort — the widget falls back to the shipped look and no extra
     // fields, so a read failure must never deny a token.
-    const [widget, forms] = await Promise.all([
+    const [widget, forms, fileSharingEnabled] = await Promise.all([
       widgetAppearance(app.db, tenant, request),
       readWidgetForms(app.db, tenant, request),
+      fileSharingEnabledFor(app.db, tenant, request),
     ]);
 
     reply.header('Cache-Control', 'no-store');
@@ -1660,6 +1661,7 @@ export default async function authRoutes(
       // gateway's own routing.
       rtm_url: `${env.RTM_BASE_URL}${RTM_PATHS.customer}`,
       widget,
+      file_sharing_enabled: fileSharingEnabled,
       pre_chat_form: forms.pre_chat,
       post_chat_form: forms.post_chat,
       ticket_form: forms.ticket,
@@ -1705,6 +1707,30 @@ async function widgetAppearance(
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read widget appearance');
     return normalizeWidgetAppearance(null);
+  }
+}
+
+/**
+ * Whether this licence allows attachments (FR-MOD-08.9.4) — the same
+ * `security_settings` row and the same unscoped `findFirst` that `POST
+ * /uploads` enforces against, so the widget never shows an affordance the
+ * upload endpoint would then refuse. Guarded like the appearance above: a
+ * read failure must not deny a token, and the safe fallback is the schema
+ * default (file sharing on).
+ */
+async function fileSharingEnabledFor(
+  db: PrismaClient,
+  tenant: TenantContext,
+  request: FastifyRequest,
+): Promise<boolean> {
+  try {
+    return await withTenant(db, tenant, async (tx) => {
+      const row = await tx.securitySettings.findFirst({ select: { fileSharingEnabled: true } });
+      return row?.fileSharingEnabled ?? true;
+    });
+  } catch (error) {
+    request.log.warn({ err: error }, 'failed to read file-sharing policy');
+    return true;
   }
 }
 

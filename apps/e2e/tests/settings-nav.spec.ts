@@ -135,13 +135,13 @@ test.describe('Settings navigation search (FR-MOD-08.1 · tm 255.11)', () => {
     // `keywords` list is actually reached, not just the visible name.
     await search.fill('mfa');
     const results = agentPage.getByRole('listbox', { name: 'Search results' });
-    await expect(
-      results.getByRole('option', { name: 'Two-factor authentication' }),
-    ).toBeVisible();
+    await expect(results.getByRole('option', { name: 'Two-factor authentication' })).toBeVisible();
 
     await search.press('Enter');
     await expect(agentPage).toHaveURL(/\/app\/settings\/two-factor$/);
-    await expect(agentPage.getByRole('region', { name: 'Two-factor authentication' })).toBeVisible();
+    await expect(
+      agentPage.getByRole('region', { name: 'Two-factor authentication' }),
+    ).toBeVisible();
     // Enter both opened the result and cleared the search back to the groups.
     await expect(search).toHaveValue('');
     await expect(agentPage.getByRole('navigation', { name: 'Settings navigation' })).toBeVisible();
@@ -153,7 +153,9 @@ test.describe('Settings navigation search (FR-MOD-08.1 · tm 255.11)', () => {
     await agentPage.goto('/app/settings/notifications');
     const search = agentPage.getByRole('combobox', { name: 'Search settings' });
     await search.fill('nonexistent-section-xyz');
-    await expect(agentPage.getByText('No sections found for “nonexistent-section-xyz”.')).toBeVisible();
+    await expect(
+      agentPage.getByText('No sections found for “nonexistent-section-xyz”.'),
+    ).toBeVisible();
 
     await search.press('Escape');
     await expect(search).toHaveValue('');

@@ -63,7 +63,10 @@ const COPILOT_SUGGESTION_TIMEOUT_MS = 3_000;
  * once there is text *or* an attachment. Client-side type/size limits would only
  * be a courtesy — the licence's real file-sharing rules are enforced by
  * `/uploads`, so a refusal surfaces from there rather than being second-guessed
- * here.
+ * here. The one thing worth pre-empting is the button itself: when the licence
+ * has attachments switched off entirely, showing it only to refuse the pick a
+ * moment later is a worse conversation than not offering it — so it is hidden
+ * rather than disabled (FR-MOD-08.9.4).
  */
 export function Composer({
   chatId,
@@ -105,6 +108,19 @@ export function Composer({
   const canned = useCannedResponses();
   const matches = useMatchingResponses(canned.data?.items, shortcut?.query ?? null);
   const pickerOpen = shortcut !== null && matches.length > 0;
+
+  // File sharing (FR-MOD-08.9.4): `GET /settings/security` carries the full
+  // rule set but is admin-only (`access_rules:ro`); this is the one bit every
+  // agent role can read, so the attach button can be hidden before a pick
+  // rather than only refused after one. Defaults to shown while loading and
+  // on a fetch error — the same fail-open default the endpoint itself falls
+  // back to — so a slow or failed read never hides a button most licences
+  // actually have on.
+  const fileSharing = useQuery({
+    queryKey: ['settings', 'file-sharing'],
+    queryFn: () => api.get<{ file_sharing_enabled: boolean }>('/uploads-policy'),
+  });
+  const fileSharingEnabled = fileSharing.data?.file_sharing_enabled ?? true;
 
   const isNote = mode === 'agents';
   const canSend =
@@ -669,13 +685,15 @@ export function Composer({
         />
       </div>
 
-      <input
-        ref={fileRef}
-        type="file"
-        className="hidden"
-        accept="image/*,application/pdf"
-        onChange={(event) => void onPickFile(event)}
-      />
+      {fileSharingEnabled && (
+        <input
+          ref={fileRef}
+          type="file"
+          className="hidden"
+          accept="image/*,application/pdf"
+          onChange={(event) => void onPickFile(event)}
+        />
+      )}
 
       <div className="mt-2 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -756,15 +774,17 @@ export function Composer({
               </div>
             )}
           </Dropdown>
-          <button
-            type="button"
-            aria-label={t('inbox.composer.attachFile')}
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
-            className="rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content disabled:opacity-50"
-          >
-            <PaperclipIcon />
-          </button>
+          {fileSharingEnabled && (
+            <button
+              type="button"
+              aria-label={t('inbox.composer.attachFile')}
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="rounded-md p-1.5 text-content-secondary transition-colors hover:bg-surface-2 hover:text-content disabled:opacity-50"
+            >
+              <PaperclipIcon />
+            </button>
+          )}
           <span className="text-2xs text-content-tertiary">
             {uploading ? t('inbox.composer.uploading') : t('inbox.composer.hint')}
           </span>

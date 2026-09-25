@@ -66,6 +66,14 @@ export class WidgetApi {
   #token: string | null = null;
   #rtmUrl: string | null = null;
   #appearance: WidgetAppearance | null = null;
+  /**
+   * Whether the licence allows attachments (FR-MOD-08.9.4). Starts `true` —
+   * the schema default, and the state the attach button is already in before
+   * the first connect — so a visitor who opens the panel and picks a file
+   * before the mint resolves meets the same server refusal as before; it
+   * only ever narrows once the real value is known.
+   */
+  #fileSharingEnabled = true;
   #preChatForm: WidgetFormField[] = [];
   #postChatForm: WidgetFormField[] = [];
   #ticketForm: WidgetFormField[] = [];
@@ -102,6 +110,11 @@ export class WidgetApi {
    */
   get appearance(): WidgetAppearance | null {
     return this.#appearance;
+  }
+
+  /** The last token mint's file-sharing switch (FR-MOD-08.9.4). */
+  get fileSharingEnabled(): boolean {
+    return this.#fileSharingEnabled;
   }
 
   /**
@@ -181,6 +194,7 @@ export class WidgetApi {
       customer_id,
       rtm_url,
       widget,
+      file_sharing_enabled,
       pre_chat_form,
       post_chat_form,
       ticket_form,
@@ -190,6 +204,7 @@ export class WidgetApi {
       customer_id: string;
       rtm_url?: string;
       widget?: WidgetAppearance;
+      file_sharing_enabled?: boolean;
       pre_chat_form?: WidgetFormField[];
       post_chat_form?: WidgetFormField[];
       ticket_form?: WidgetFormField[];
@@ -198,6 +213,7 @@ export class WidgetApi {
     this.#token = token;
     this.#rtmUrl = typeof rtm_url === 'string' && rtm_url !== '' ? rtm_url : null;
     if (widget) this.#appearance = widget;
+    if (typeof file_sharing_enabled === 'boolean') this.#fileSharingEnabled = file_sharing_enabled;
     this.#preChatForm = Array.isArray(pre_chat_form) ? pre_chat_form : [];
     this.#postChatForm = Array.isArray(post_chat_form) ? post_chat_form : [];
     this.#ticketForm = Array.isArray(ticket_form) ? ticket_form : [];

@@ -505,6 +505,8 @@ paths:
 
   /uploads:
     $ref: "./paths/uploads.yaml#/issueUpload"
+  /uploads-policy:
+    $ref: "./paths/uploads.yaml#/uploadPolicy"
   /uploads/{key}:
     $ref: "./paths/uploads.yaml#/uploadObject"
 

@@ -53,6 +53,32 @@ issueUpload:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
+uploadPolicy:
+  get:
+    tags: [Uploads]
+    operationId: getUploadPolicy
+    summary: Whether file sharing is on for this licence
+    description: |
+      Just the on/off switch from `security_settings` (FR-MOD-08.9.4) — not the
+      allowed types or size ceiling, which stay server-only (a client-side
+      pre-check of those would only duplicate what `POST /uploads` already
+      refuses). Reachable by every agent role, unlike `GET /settings/security`
+      (`access_rules:ro`, admin-only): the composer needs this to decide
+      whether to show the attachment button at all, before the agent has
+      picked a file and hit the refusal.
+    responses:
+      "200":
+        description: The licence's file-sharing switch
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_sharing_enabled]
+              properties:
+                file_sharing_enabled: { type: boolean }
+      "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
 uploadObject:
   parameters:
     - name: key

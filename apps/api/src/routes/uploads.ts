@@ -1,14 +1,22 @@
 /**
  * Attachment uploads.
  *
- * Three endpoints, and the split between them is the point:
+ * Four endpoints, and the split between them is the point:
  *
  *   POST /uploads            asks permission — this is where the file-sharing
  *                            rules are enforced, before a single byte moves
+ *   GET  /uploads-policy     just the on/off switch, for a composer deciding
+ *                            whether to offer the affordance at all
  *   PUT  /uploads/:key       receives the bytes, authorised by the signature
  *                            the POST issued rather than by a session
  *   GET  /uploads/:key       serves them back, authorised by a session whose
  *                            licence has to match the one inside the key
+ *
+ * `/uploads-policy` sits outside the `/uploads/:key` family on purpose, not
+ * nested under it: `scripts/audit/endpoint-ui.cjs`'s path matcher for a
+ * parametric route matches any single segment in that position, so a nested
+ * `/uploads/policy` would read as a call to `/uploads/:key` as well as to
+ * itself and desync that operation's own UI-coverage entry.
  *
  * The rules come from `security_settings` (FR-MOD-08.9.4), the same row the
  * Settings screen writes. An admin who narrows the list narrows what the
@@ -132,6 +140,22 @@ export default async function uploadRoutes(app: FastifyInstance, { env }: Option
         file_url: `/api/v1/uploads/${key}`,
         expires_at: new Date(expiresAt * 1000).toISOString(),
       });
+    },
+  );
+
+  app.get(
+    '/uploads-policy',
+    // Every agent role reaches this (`chats--access:rw` is in
+    // `DEFAULT_AGENT_SCOPES`), unlike `GET /settings/security`
+    // (`access_rules:ro`, admin-only) — the composer needs the on/off switch
+    // to decide whether to show the attachment button at all, not the full
+    // rule set behind it.
+    { config: { scopes: ['chats--all:rw', 'chats--access:rw'], principals: ['agent'] } },
+    async (request) => {
+      const row = await request.withTenant((tx) =>
+        tx.securitySettings.findFirst({ select: { fileSharingEnabled: true } }),
+      );
+      return { file_sharing_enabled: row?.fileSharingEnabled ?? DEFAULTS.fileSharingEnabled };
     },
   );
 

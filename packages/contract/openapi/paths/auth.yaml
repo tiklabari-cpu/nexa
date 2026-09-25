@@ -796,6 +796,14 @@ customerToken:
                 expires_in: { type: integer }
                 customer_id: { type: string, format: uuid }
                 organization_id: { type: string, format: uuid }
+                file_sharing_enabled:
+                  type: boolean
+                  description: |
+                    Whether this licence allows attachments (FR-MOD-08.9.4), so
+                    the widget can hide its attachment button rather than let a
+                    visitor pick a file only to have `POST /uploads` refuse it.
+                    Delivered here for the same reason as the appearance and the
+                    forms below: the widget makes no second fetch.
                 rtm_url:
                   type: string
                   description: |

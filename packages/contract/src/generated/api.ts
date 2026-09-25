@@ -5805,6 +5805,32 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/uploads-policy': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Whether file sharing is on for this licence
+     * @description Just the on/off switch from `security_settings` (FR-MOD-08.9.4) — not the
+     *     allowed types or size ceiling, which stay server-only (a client-side
+     *     pre-check of those would only duplicate what `POST /uploads` already
+     *     refuses). Reachable by every agent role, unlike `GET /settings/security`
+     *     (`access_rules:ro`, admin-only): the composer needs this to decide
+     *     whether to show the attachment button at all, before the agent has
+     *     picked a file and hit the refusal.
+     */
+    get: operations['getUploadPolicy'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/uploads/{key}': {
     parameters: {
       query?: never;
@@ -13639,6 +13665,14 @@ export interface operations {
             /** Format: uuid */
             organization_id: string;
             /**
+             * @description Whether this licence allows attachments (FR-MOD-08.9.4), so
+             *     the widget can hide its attachment button rather than let a
+             *     visitor pick a file only to have `POST /uploads` refuse it.
+             *     Delivered here for the same reason as the appearance and the
+             *     forms below: the widget makes no second fetch.
+             */
+            file_sharing_enabled?: boolean;
+            /**
              * @description The realtime gateway's customer endpoint (FR-MOD-11.6), e.g.
              *     `wss://rtm.example.com/v1/customer/rtm/ws`. The widget opens
              *     a socket here with `?organization_id=…` and logs in with the
@@ -21272,6 +21306,30 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  getUploadPolicy: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description The licence's file-sharing switch */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': {
+            file_sharing_enabled: boolean;
+          };
+        };
+      };
+      401: components['responses']['Unauthorized'];
       429: components['responses']['TooManyRequests'];
     };
   };

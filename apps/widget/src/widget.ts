@@ -205,6 +205,13 @@ interface State {
    * "Start a new chat" only clears this, it does not call anything itself.
    */
   closed: boolean;
+  /**
+   * The licence's file-sharing switch (FR-MOD-08.9.4), from the last token
+   * mint. Starts `true` — the attach button's own default state, so nothing
+   * changes before the first connect — and only ever narrows once the server
+   * has answered.
+   */
+  fileSharingEnabled: boolean;
 }
 
 export function mount(doc: Document = document, win: Window = window): void {
@@ -257,6 +264,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     rating: null,
     ratingSubmitting: false,
     closed: false,
+    fileSharingEnabled: true,
   };
 
   /**
@@ -559,6 +567,10 @@ export function mount(doc: Document = document, win: Window = window): void {
     ui.input.disabled = state.closed;
     ui.send.disabled = state.closed || state.sending;
     ui.attach.disabled = state.closed || state.uploading;
+    // Hidden rather than merely disabled when the licence has attachments
+    // switched off entirely (FR-MOD-08.9.4) — showing it only to refuse a
+    // pick a moment later is a worse conversation than not offering it.
+    ui.attach.hidden = !state.fileSharingEnabled;
     ui.emojiButton.disabled = state.closed;
   }
 
@@ -1031,6 +1043,7 @@ export function mount(doc: Document = document, win: Window = window): void {
       noteTranscriptCursor();
       state.agent = toAgent(snapshot.agent);
       state.agentTyping = snapshot.agent_typing ?? false;
+      state.fileSharingEnabled = api.fileSharingEnabled;
       // Never overwrite a campaign already waiting to be seen — the server
       // will not offer this one again either way (at-most-once), so there is
       // nothing to gain by replacing it and a card mid-read with a new one.

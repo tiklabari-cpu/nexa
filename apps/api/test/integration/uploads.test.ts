@@ -156,6 +156,44 @@ describe('uploads', () => {
     expect(png.statusCode).toBe(400);
   });
 
+  // --- GET /uploads-policy --------------------------------------------------
+
+  describe('GET /uploads-policy (FR-MOD-08.9.4)', () => {
+    it('reports on by default, reachable by a plain agent scope', async () => {
+      // `chats--access:rw` alone — no `access_rules:*` — the same minimum
+      // every default agent role holds, unlike `GET /settings/security`.
+      const plainAgent = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['chats--access:rw'],
+      });
+
+      const response = await server.get('/uploads-policy', auth(plainAgent));
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ file_sharing_enabled: true });
+    });
+
+    it('matches what POST /uploads is about to refuse once file sharing is off', async () => {
+      await server.patch('/settings/security', { file_sharing_enabled: false }, auth(tokenA));
+
+      const response = await server.get('/uploads-policy', auth(tokenA));
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ file_sharing_enabled: false });
+    });
+
+    it("does not see another licence's switch", async () => {
+      await server.patch('/settings/security', { file_sharing_enabled: false }, auth(tokenA));
+
+      const response = await server.get('/uploads-policy', auth(tokenB));
+
+      expect(response.statusCode).toBe(200);
+      expect(response.json()).toEqual({ file_sharing_enabled: true });
+    });
+  });
+
   // --- The signed PUT --------------------------------------------------------
 
   it('stores the bytes and reads them back', async () => {

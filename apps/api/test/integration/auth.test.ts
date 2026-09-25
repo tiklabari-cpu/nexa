@@ -14,6 +14,7 @@ import { deriveCodeChallenge, generateToken, hashToken } from '../../src/lib/cry
 import {
   grantToken,
   ownerClient,
+  seedDefaultBrand,
   seedFixtures,
   TEST_PASSWORD,
   type Fixtures,
@@ -889,6 +890,32 @@ describe('auth', () => {
       expect(me.json().kind).toBe('customer');
       expect(me.json().scopes).toEqual([]);
       expect(me.json().organization_id).toBe(fx.a.organizationId);
+    });
+
+    it("hands the widget the licence's file-sharing switch, on by default (FR-MOD-08.9.4)", async () => {
+      const response = await post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        widgetOrigin(fx.a.trustedDomain),
+      );
+      expect(response.statusCode).toBe(200);
+      // No `security_settings` row for this licence yet — the schema default.
+      expect(response.json().file_sharing_enabled).toBe(true);
+    });
+
+    it('reflects file sharing switched off, so the widget never offers what /uploads would refuse (FR-MOD-08.9.4)', async () => {
+      const brandId = await seedDefaultBrand(owner, fx.a.licenseId);
+      await owner.securitySettings.create({
+        data: { licenseId: fx.a.licenseId, brandId, fileSharingEnabled: false },
+      });
+
+      const response = await post(
+        '/customer/token',
+        { organization_id: fx.a.organizationId },
+        widgetOrigin(fx.a.trustedDomain),
+      );
+      expect(response.statusCode).toBe(200);
+      expect(response.json().file_sharing_enabled).toBe(false);
     });
   });
 

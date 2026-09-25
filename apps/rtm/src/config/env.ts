@@ -147,6 +147,16 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     }
   }
 
+  // The API's `TEMPLATE_PLACEHOLDER` rule, kept identical (tm 255.15): both
+  // processes read the pilot's one `.env`, copied from
+  // `.env.production.example`, and a `<…>` fill-in left in it is refused by
+  // name rather than booted with.
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string' && /<[^<>]+>/.test(value)) {
+      problems.push(`${key} still holds a .env.production.example placeholder (<…>).`);
+    }
+  }
+
   return problems;
 }
 

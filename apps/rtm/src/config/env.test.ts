@@ -231,6 +231,19 @@ describe('production configuration', () => {
     });
   }
 
+  it('refuses a .env.production.example fill-in left in place, naming the key (tm 255.15)', () => {
+    // The pilot's one `.env` is a filled-in copy of that template; a secret
+    // long enough to pass the schema can still be the template's own text.
+    const source = {
+      ...PROD_BASE,
+      CUSTOMER_TOKEN_SECRET: '<üret: openssl rand -hex 32> 0123456789abcdef',
+    };
+
+    expect(() => parseEnv(source)).toThrow(
+      'CUSTOMER_TOKEN_SECRET still holds a .env.production.example placeholder',
+    );
+  });
+
   it('reports every problem at once rather than one per deploy', () => {
     const message = (() => {
       try {

@@ -14,6 +14,14 @@
 #
 # Override any base URL to point at a stack published elsewhere:
 #   API_BASE=http://127.0.0.1:4000 ./scripts/smoke.sh
+#
+# SMOKE_PROFILE=pilot checks `docker-compose.pilot.yml` instead (tm 255.15).
+# That stack has no seed — no demo owner, no demo PAT — so the checks that sign
+# in as the seeded owner give way to the ones production adds: CORS answers
+# the widget's origin and nobody else's. Two optional inputs extend it to a
+# signed-in check, since only a real workspace has credentials:
+#   SMOKE_ORGANIZATION_ID  a workspace to mint a visitor token for, cross-origin
+#   SMOKE_ADMIN_TOKEN      an owner's bearer token, to read the admin /health
 set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:4000}"
@@ -28,11 +36,23 @@ READY_TIMEOUT_S="${READY_TIMEOUT_S:-300}"
 # Seeded owner of the "Acme Bikes" demo workspace (apps/api/prisma/seed.ts).
 DEMO_EMAIL="${DEMO_EMAIL:-owner@acme.localhost}"
 DEMO_PASSWORD="${DEMO_PASSWORD:-nexa-demo-password}"
+SMOKE_PROFILE="${SMOKE_PROFILE:-demo}"
+case "$SMOKE_PROFILE" in
+  demo) SMOKE_COMPOSE_FILE="${SMOKE_COMPOSE_FILE:-docker-compose.full.yml}" ;;
+  pilot) SMOKE_COMPOSE_FILE="${SMOKE_COMPOSE_FILE:-docker-compose.pilot.yml}" ;;
+  *)
+    printf 'SMOKE_PROFILE must be demo or pilot, not %s\n' "$SMOKE_PROFILE" >&2
+    exit 2
+    ;;
+esac
+SMOKE_ORGANIZATION_ID="${SMOKE_ORGANIZATION_ID:-}"
+SMOKE_ADMIN_TOKEN="${SMOKE_ADMIN_TOKEN:-}"
 
 passed=0
 failed=0
 body_file="$(mktemp)"
-trap 'rm -f "$body_file"' EXIT
+header_file="$(mktemp)"
+trap 'rm -f "$body_file" "$header_file"' EXIT
 
 pass() {
   passed=$((passed + 1))
@@ -101,6 +121,25 @@ check_excludes() {
   return 0
 }
 
+# A browser's CORS preflight from `origin`, and what the api's answer lets that
+# browser do: `allowed` means Access-Control-Allow-Origin echoes the origin,
+# `refused` means the header is absent — which is how a browser is told no.
+check_preflight() {
+  local label="$1" url="$2" origin="$3" want="$4"
+  local status acao
+  status="$(curl -sS -o /dev/null -D "$header_file" -w '%{http_code}' -X OPTIONS \
+    -H "Origin: $origin" -H 'Access-Control-Request-Method: POST' \
+    -H 'Access-Control-Request-Headers: content-type' --max-time 15 "$url" 2>/dev/null || echo 000)"
+  acao="$(tr -d '\r' <"$header_file" | grep -i '^access-control-allow-origin:' | cut -d' ' -f2-)"
+  if [ "$want" = allowed ] && [ "$acao" = "$origin" ]; then
+    pass "$label"
+  elif [ "$want" = refused ] && [ -z "$acao" ] && [ "$status" != 000 ]; then
+    pass "$label"
+  else
+    fail "$label" "preflight from $origin: HTTP $status, Access-Control-Allow-Origin '${acao}'"
+  fi
+}
+
 # Poll until a URL answers 200, or the deadline passes. Used once, on the api's
 # health endpoint: everything else in the stack depends on it, so waiting here
 # means the rest of the checks either pass or have failed for their own reason.
@@ -117,7 +156,7 @@ wait_for() {
   return 1
 }
 
-printf '\nNexa smoke test — containerised stack\n'
+printf '\nNexa smoke test — containerised stack (%s)\n' "$SMOKE_PROFILE"
 printf '  api %s · rtm %s · web %s · widget %s\n\n' \
   "$API_BASE" "$RTM_BASE" "$WEB_BASE" "$WIDGET_BASE"
 
@@ -152,21 +191,30 @@ check 'api /health is ok (Postgres + Redis reachable)' \
 # apps/api/test/integration/reports-topics.test.ts uses) still sees it.
 check_excludes 'api /health hides the scheduler block from an anonymous caller' \
   GET "$API_BASE/api/v1/health" 200 '"scheduler"'
+check 'rtm /health is ok' \
+  GET "$RTM_BASE/health" 200 '"status":"ok"'
+check_excludes 'rtm /health hides region/connections from an anonymous caller' \
+  GET "$RTM_BASE/health" 200 '"region"'
+if [ "$SMOKE_PROFILE" = demo ]; then
 auth_header='Bearer nexa_pat_demo_acme'
 # The six background sweeps (M-SCHED) tick inside the api process. A stack
 # where none of them run looks identical to one with nothing to do — which is
 # why /health reports the scheduler and why this asserts on it.
 check 'api /health reports the scheduler enabled (admin caller)' \
   GET "$API_BASE/api/v1/health" 200 '"enabled":true'
-auth_header=''
-check 'rtm /health is ok' \
-  GET "$RTM_BASE/health" 200 '"status":"ok"'
-check_excludes 'rtm /health hides region/connections from an anonymous caller' \
-  GET "$RTM_BASE/health" 200 '"region"'
-auth_header='Bearer nexa_pat_demo_acme'
 check 'rtm /health reports region for an admin caller' \
   GET "$RTM_BASE/health" 200 '"region"'
 auth_header=''
+elif [ -n "$SMOKE_ADMIN_TOKEN" ]; then
+  # The pilot has no demo PAT; an owner's own token reads the same body. The
+  # partition line is the one tm 255.14 asked the first boot to be checked for.
+  auth_header="Bearer $SMOKE_ADMIN_TOKEN"
+  check 'api /health reports the scheduler enabled (admin caller)' \
+    GET "$API_BASE/api/v1/health" 200 '"enabled":true'
+  check 'api /health reports the event partition pass ok (admin caller)' \
+    GET "$API_BASE/api/v1/health" 200 '"last_status":"ok"'
+  auth_header=''
+fi
 
 printf '\nStatic surfaces\n'
 check 'web serves the agent app' GET "$WEB_BASE/" 200 '<div id="root">'
@@ -191,6 +239,19 @@ printf '\nWiring\n'
 # fails at every request.
 check 'web proxies /api to the api service' \
   GET "$WEB_BASE/api/v1/health" 200 '"status":"ok"'
+if [ "$SMOKE_PROFILE" = pilot ]; then
+  # Production CORS (NODE_ENV=production, apps/api/src/server.ts) is an
+  # allowlist: WEB_ORIGIN. The widget's browser code is cross-origin to the
+  # api, so its origin has to be answered — and an origin nobody listed must
+  # not be, or the "production" in this stack is a label.
+  check_preflight 'CORS answers the widget origin (production allowlist)' \
+    "$API_BASE/api/v1/customer/token" "$WIDGET_BASE" allowed
+  check_preflight 'CORS answers the panel origin (production allowlist)' \
+    "$API_BASE/api/v1/customer/token" "$WEB_BASE" allowed
+  check_preflight 'CORS refuses an origin that is not on the allowlist' \
+    "$API_BASE/api/v1/customer/token" 'https://not-listed.invalid' refused
+  organization_id="$SMOKE_ORGANIZATION_ID"
+else
 # Proves the schema was migrated AND the seed ran AND password auth works —
 # one request that fails if any of the three did not happen.
 check 'seeded demo owner can sign in' \
@@ -198,6 +259,7 @@ check 'seeded demo owner can sign in' \
   "{\"email\":\"$DEMO_EMAIL\",\"password\":\"$DEMO_PASSWORD\"}"
 # Reuse that response rather than hard-coding a UUID the seed regenerates.
 organization_id="$(grep -o '"organization_id":"[^"]*"' "$body_file" | head -1 | cut -d'"' -f4)"
+fi
 
 # The other half of the product: a visitor's browser, on the widget's origin,
 # minting a customer token from the api's. Cross-origin, so it also exercises
@@ -208,7 +270,7 @@ if [ -n "$organization_id" ]; then
     POST "$API_BASE/api/v1/customer/token" 200 '"token"' \
     "{\"organization_id\":\"$organization_id\",\"host_origin\":\"$WIDGET_BASE\"}"
   origin_header=''
-else
+elif [ "$SMOKE_PROFILE" = demo ]; then
   fail 'a visitor can mint a customer token from the widget origin' \
     'sign-in did not return an organization_id to try it with'
 fi
@@ -216,12 +278,16 @@ fi
 printf '\n%s passed, %s failed\n' "$passed" "$failed"
 if [ "$failed" -gt 0 ]; then
   printf '\nStack state:\n'
-  docker compose -f docker-compose.full.yml ps 2>/dev/null || true
+  docker compose -f "$SMOKE_COMPOSE_FILE" ps 2>/dev/null || true
   printf '\nRecent logs:\n'
-  docker compose -f docker-compose.full.yml logs --tail 40 2>/dev/null || true
+  docker compose -f "$SMOKE_COMPOSE_FILE" logs --tail 40 2>/dev/null || true
   exit 1
 fi
 printf 'Stack is up and wired.\n'
+if [ "$SMOKE_PROFILE" = pilot ]; then
+  printf '  agent app   %s   (no seed: the first workspace is created by signing up)\n' "$WEB_BASE"
+  exit 0
+fi
 printf '  agent app   %s   (%s / %s)\n' "$WEB_BASE" "$DEMO_EMAIL" "$DEMO_PASSWORD"
 [ -n "$organization_id" ] &&
   printf '  visitor     %s/chat.html?organization_id=%s\n' "$WIDGET_BASE" "$organization_id"

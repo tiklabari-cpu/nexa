@@ -2624,6 +2624,11 @@ function rememberCampaignDismissed(win: Window, campaignId: string): void {
   }
 }
 
+function defaultApiBaseUrl(): string {
+  const baked = import.meta.env['VITE_API_BASE_URL'] as string | undefined;
+  return baked && baked !== '' ? baked : 'http://localhost:4000/api/v1';
+}
+
 function readConfig(win: Window): WidgetConfig {
   const params = new URLSearchParams(win.location.search);
   // The hosted page is served at `/chat.html`; the query flag is an override for
@@ -2631,8 +2636,12 @@ function readConfig(win: Window): WidgetConfig {
   const chatPage = win.location.pathname.endsWith('/chat.html') || params.get('chat_page') === '1';
   return {
     organizationId: params.get('organization_id') ?? '',
-    // Same origin as the widget document by default; overridable for local dev.
-    apiBaseUrl: params.get('api') ?? 'http://localhost:4000/api/v1',
+    // Baked in at build time (`VITE_API_BASE_URL`, apps/widget/Dockerfile): the
+    // loader forwards no address, and the api is on another origin, so a
+    // deployment has nothing else to tell the widget where it is (tm 255.15).
+    // The fallback is the demo stack's published api port; `?api=` overrides
+    // either for local dev.
+    apiBaseUrl: params.get('api') ?? defaultApiBaseUrl(),
     language: params.get('language') ?? 'en',
     // On the Chat page the widget is served from our own origin and speaks for
     // it; elsewhere the loader passes the embedding page's origin, falling back

@@ -136,3 +136,34 @@ demo-clean: ## Stop the container stack AND drop its data volumes
 .PHONY: demo-logs
 demo-logs: ## Follow the container stack's logs
 	$(COMPOSE_DEMO) logs -f
+
+# --- Pilot stack (tm 255.15): NODE_ENV=production, the real .env, no seed ---
+# Ports on 127.0.0.1 only; TLS/DNS/reverse proxy are the host's. There is
+# deliberately no `pilot-clean`: `down -v` on this project deletes the pilot's
+# database. See docs/production-checklist.md "Pilot on Docker Compose".
+COMPOSE_PILOT := docker compose -f docker-compose.pilot.yml
+
+.PHONY: pilot
+pilot: ## Build + run the pilot stack from .env, then smoke-test it
+	$(COMPOSE_PILOT) up --build -d
+	SMOKE_PROFILE=pilot ./scripts/smoke.sh
+
+.PHONY: pilot-smoke
+pilot-smoke: ## Smoke-test the running pilot stack (production CORS included)
+	SMOKE_PROFILE=pilot ./scripts/smoke.sh
+
+.PHONY: pilot-down
+pilot-down: ## Stop the pilot stack (its data volumes are kept)
+	$(COMPOSE_PILOT) down
+
+.PHONY: pilot-logs
+pilot-logs: ## Follow the pilot stack's logs
+	$(COMPOSE_PILOT) logs -f
+
+.PHONY: pilot-backup
+pilot-backup: ## pg_dump the pilot database into ./backups (scripts/backup.sh)
+	COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh
+
+.PHONY: pilot-restore-drill
+pilot-restore-drill: ## Prove a pilot backup restores (scratch DB, verified, dropped)
+	COMPOSE_FILE=docker-compose.pilot.yml APP_DB_PASSWORD="$(NEXA_APP_DB_PASSWORD)" ./scripts/restore-drill.sh

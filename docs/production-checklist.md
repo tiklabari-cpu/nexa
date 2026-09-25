@@ -224,6 +224,89 @@ failing.
       identification of the affected archive(s) — filenames are UTC timestamps — see README
       ["Backups"](../README.md#backups).
 
+## 9. Pilot on Docker Compose
+
+The controlled production pilot (owner decision 2026-09-22) runs on one Docker host from
+[`docker-compose.pilot.yml`](../docker-compose.pilot.yml), under `NODE_ENV=production`, with
+no demo seed. The file publishes every port on `127.0.0.1` only: DNS, TLS and the reverse
+proxy in front of it are the host's, not this repository's. Sections 1–8 still apply; this
+one is the order of operations for that stack.
+
+**Keys.** `cp .env.production.example .env` next to the compose file (never committed —
+`.gitignore` covers `.env`), then replace every `<…>`. Boot refuses a copy with one left in
+and names the key. By name, what the pilot needs:
+
+- Compose itself: `POSTGRES_PASSWORD`, `NEXA_APP_DB_PASSWORD` (hex, `openssl rand -hex 32`;
+  the compose file builds `DATABASE_URL`, `DATABASE_APP_URL` and `REDIS_URL` from them and
+  overrides those three lines of `.env`).
+- Addresses: `API_BASE_URL`, `RTM_BASE_URL`, `WEB_APP_URL`, `WIDGET_BASE_URL`, `WEB_ORIGIN`
+  (must contain `WIDGET_BASE_URL`'s origin), `INBOUND_EMAIL_DOMAIN`, `TRUST_PROXY_HOPS`.
+  `RTM_BASE_URL` and `API_BASE_URL` are baked into the web and widget bundles at build time,
+  so changing either means `up --build`.
+- Secrets: `JWT_SIGNING_KEY`, `WEBHOOK_HMAC_SEED`, `CUSTOMER_TOKEN_SECRET`,
+  `UPLOAD_SIGNING_KEY`, `AUDIT_CHAIN_SECRET`, `INBOUND_EMAIL_SECRET`.
+- Model: `LLM_PROVIDER=openai`, `LLM_PROVIDER_REGION`, `LLM_API_BASE_URL`, `LLM_MODEL`,
+  `LLM_API_KEY`.
+- Embeddings: `EMBEDDING_PROVIDER=openai`, `EMBEDDING_PROVIDER_REGION`,
+  `EMBEDDING_API_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`.
+- Mail: `MAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
+  `SMTP_FROM`.
+
+Values go into `.env` on the host and nowhere else — not into a ticket, a log, a commit or
+this document.
+
+**Run.**
+
+- [ ] `docker compose -f docker-compose.pilot.yml config --quiet` exits 0. A missing
+      Compose variable fails here, by name, before any container exists.
+- [ ] `docker compose -f docker-compose.pilot.yml up --build -d` (or `make pilot`, which also
+      runs the smoke test). The api migrates on its own start (one replica — CONVENTIONS §6.1);
+      rtm and web wait for a healthy api. A configuration production refuses stops the api
+      with one `Invalid environment for NODE_ENV=production` block listing every problem:
+      `docker compose -f docker-compose.pilot.yml logs api`.
+- [ ] `docker compose -f docker-compose.pilot.yml ps` shows `db`, `redis`, `api`, `rtm`,
+      `web` and `widget` all `healthy`.
+- [ ] `SMOKE_PROFILE=pilot ./scripts/smoke.sh` exits 0 (`make pilot-smoke`). Beyond health
+      and wiring it checks the part production adds: a CORS preflight from `WIDGET_BASE_URL`'s
+      origin and from the panel's is answered, one from an unlisted origin is not. Point it at
+      the public side with `API_BASE=… RTM_BASE=… WEB_BASE=… WIDGET_BASE=…` once the proxy is
+      up.
+- [ ] **Known blocker (tm 255.17, open):** a signed-up workspace's OAuth client is registered
+      for `http://localhost:5173/auth/callback` only, and the panel sends its own origin's
+      `/auth/callback` — so on the pilot's real domain `/auth/authorize` refuses the panel
+      sign-in (`redirect_uri is not registered for this client`). Measured in this section's
+      rehearsal; the step below needs that task first.
+- [ ] Create the first workspace by signing up in the panel (there is no seed). Then run the
+      smoke test once more with `SMOKE_ORGANIZATION_ID=<its id>` and
+      `SMOKE_ADMIN_TOKEN=<the owner's access token>`: it mints a visitor token from the widget
+      origin, cross-origin, and reads the admin `/health` — scheduler enabled and
+      `event_partitions.last_status: ok` (tm 255.14).
+
+**Data.**
+
+- [ ] The database lives on the named volume `nexa-pilot_nexa_pilot_pgdata`: it survives
+      `down`, `up --build` and a reboot. `down -v` deletes it — never run it on this project
+      (there is deliberately no `make` target for it).
+- [ ] `NEXA_APP_DB_PASSWORD` is applied to `nexa_app` on the first start of an empty volume
+      only ([`infra/db/pilot/10-app-role-password.sh`](../infra/db/pilot/10-app-role-password.sh)).
+      To rotate it later, run `ALTER ROLE nexa_app PASSWORD '<new>'` through
+      `docker compose -f docker-compose.pilot.yml exec db psql -U nexa -d nexa`, change
+      `.env`, then `up -d`.
+- [ ] Backups use the same scripts as §6, pointed at this file: `make pilot-backup`
+      (`COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh`) writes
+      `backups/db-<UTC>.dump`, and `make pilot-restore-drill` proves one restores (on a
+      database with no chat yet it fails "RLS enforcement not exercised" — it will not call
+      isolation verified without rows to verify it on; run it again after the first
+      conversation). Copying
+      archives off the host is not part of this repository's scope — until something does, a
+      lost disk loses the backups with the database.
+- [ ] `OTEL_EXPORTER=none` (the template sets it): there is no collector in the pilot, and
+      the `console` default prints every span into the container log — measured, only 33 of
+      566 lines in five minutes were the api's own log records. `docker compose -f docker-compose.pilot.yml logs api` should read
+      as one JSON record per line.
+- [ ] Uploads: the pilot keeps file sharing off (tm 255.13). A workspace that turns it on
+      stores files under `/tmp` inside the api container; they do not survive `up --build`.
+
 ## Explicitly out of scope
 
 This checklist stops at what a deployment built from this code needs to configure and verify
@@ -231,9 +314,10 @@ locally or offline. The following are **not "not done"** — they are outside th
 boundary (CLAUDE.md) and no amount of further work here produces them:
 
 - TLS/DNS certificates and a real Ingress hostname.
-- Any real external provider — LLM, SMTP, S3, Stripe, push, SIEM, AV, and the five messaging
-  channels are all mocked by design. Swapping a mock for a real provider is a deployment-time
-  integration decision, not a code change this repository makes for you.
+- Any real external provider beyond the pilot's three — S3, Stripe, push, SIEM, AV, and the
+  five messaging channels are mocked by design. The LLM, embedding and SMTP adapters are real
+  (tm 255.3 · 255.6 · 255.7) and §9 turns them on; their credentials and reachability are
+  still the deployment's.
 - SOC2/ISO/BAA process artifacts — organizational and legal work, not code.
 
 ## Status

@@ -12,14 +12,14 @@
 # points at wherever this container is reachable; nothing here needs to know
 # that address in advance or bake it in.
 #
-# The widget's own upstream API call defaults to `http://localhost:4000/api/v1`
-# (apps/widget/src/widget.ts readConfig) — unlike the web app's relative
-# `/api/v1`, so it isn't a same-origin path an nginx proxy could intercept.
-# That default already matches this compose's api port-publishing convention
-# (dev parity, `.env.example` API_PORT=4000), so it works unmodified for the
-# local/yerel scope this task covers; a real deployment would set `?api=` on
-# the loader's iframe URL, which is out of scope here (M-CONTAINER is local
-# only).
+# The widget's own upstream API call is the one address that DOES have to be
+# baked in: unlike the web app's relative `/api/v1` it is cross-origin, so no
+# nginx proxy here can intercept it, and the loader never forwards one to the
+# iframe. `VITE_API_BASE_URL` (the build stage below) sets it; unset, it
+# defaults to `http://localhost:4000/api/v1` (apps/widget/src/widget.ts
+# readConfig), which is the demo stack's published api port and nothing else.
+# The pilot compose passes its public API_BASE_URL (tm 255.15) — before that,
+# a widget built from this file called the visitor's own localhost.
 ARG NODE_IMAGE=node:24-alpine
 ARG PNPM_VERSION=11.15.1
 ARG NGINX_IMAGE=nginxinc/nginx-unprivileged:1.27-alpine
@@ -38,6 +38,8 @@ RUN pnpm config set store-dir /pnpm-store \
 # `vite build` (loader IIFE, then the widget/chat app — see
 # apps/widget/vite.config.ts's own comment on why it is two passes). ----
 FROM base AS build
+ARG VITE_API_BASE_URL=http://localhost:4000/api/v1
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 COPY . .
 RUN --mount=type=cache,id=nexa-pnpm-store,target=/pnpm-store \
     pnpm install --frozen-lockfile --filter @nexa/widget...

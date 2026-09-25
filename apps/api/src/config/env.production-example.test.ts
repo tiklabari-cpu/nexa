@@ -47,6 +47,29 @@ describe('.env.production.example documents what parseEnv requires in production
     expect(value?.startsWith('dev-only-')).toBe(false);
   });
 
+  it('chooses the pilot providers, uncommented (tm 255.15)', () => {
+    // The pilot runs a real model, real embeddings and real mail; a template
+    // still saying `mock`/`file` would boot happily and send nothing.
+    expect(uncommentedValueOf('LLM_PROVIDER')).toBe('openai');
+    expect(uncommentedValueOf('EMBEDDING_PROVIDER')).toBe('openai');
+    expect(uncommentedValueOf('MAIL_PROVIDER')).toBe('smtp');
+    // No collector in the pilot: the console exporter would bury the log.
+    expect(uncommentedValueOf('OTEL_EXPORTER')).toBe('none');
+  });
+
+  it.each([
+    'LLM_API_KEY',
+    'EMBEDDING_API_KEY',
+    'SMTP_USERNAME',
+    'SMTP_PASSWORD',
+    'SMTP_FROM',
+    'POSTGRES_PASSWORD',
+    'NEXA_APP_DB_PASSWORD',
+  ])('%s is present with a <…> fill-in and no value (tm 255.15)', (key) => {
+    // Key names only — a credential written here is a credential published.
+    expect(uncommentedValueOf(key)).toMatch(/^<[^<>]+>$/);
+  });
+
   it('INBOUND_EMAIL_SECRET does not carry a dev-only placeholder either', () => {
     const value = uncommentedValueOf('INBOUND_EMAIL_SECRET');
     expect(value?.startsWith('dev-only-')).toBe(false);

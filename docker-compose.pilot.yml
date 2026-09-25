@@ -1,0 +1,192 @@
+# Nexa — the controlled production pilot on one Docker host (tm 255.15).
+#
+# SCOPE: the same four containers as `docker-compose.full.yml`, run the way the
+# pilot runs them — NODE_ENV=production, real configuration from a `.env` that
+# never enters the repository, no demo seed. What this file does NOT do is the
+# part in front of it: DNS, TLS certificates and the reverse proxy that
+# terminates HTTPS are the host's, and every port below is published on
+# 127.0.0.1 only, for that proxy to reach. Nothing here listens publicly.
+#
+#   cp .env.production.example .env        # then fill in every <…> value
+#   docker compose -f docker-compose.pilot.yml up --build -d
+#   SMOKE_PROFILE=pilot ./scripts/smoke.sh # see docs/production-checklist.md
+#
+# Why a separate file rather than an overlay on `docker-compose.full.yml`: an
+# overlay can add to `env_file`, not take `.env.example` away, and every
+# placeholder in `.env.example` is something production refuses to boot with.
+# The demo stack stays exactly as it was (NODE_ENV=development, seeded); the
+# two use different project names, volumes and images, so neither can reach
+# into the other's data.
+#
+# The production gates this stack has to pass are the application's own —
+# `parseEnv`/`productionProblems` in apps/api/src/config/env.ts and
+# apps/rtm/src/config/env.ts. They refuse to boot, naming every missing key at
+# once, on: no non-owner DATABASE_APP_URL (RLS), a secret still holding a
+# `dev-only-…` or `<…>` placeholder, no INBOUND_EMAIL_SECRET, a WEB_ORIGIN
+# without the widget's origin, and — because the pilot chooses them in `.env` —
+# MAIL_PROVIDER=smtp without its SMTP_* keys and LLM_PROVIDER / EMBEDDING_PROVIDER
+# =openai without theirs. This file adds no gate of its own; it only makes sure
+# nothing in it switches one off.
+#
+# Variables in `${…}` below are read by Compose from the same `.env` (Compose's
+# own interpolation file). `:?` makes Compose itself refuse to start when one is
+# missing, before any container exists.
+name: nexa-pilot
+
+# What api and rtm share. The database URLs are assembled here rather than taken
+# from `.env` because the database is this file's own container: its address is
+# the compose service name, and its passwords are the two this file hands `db`.
+# A DATABASE_URL in `.env` is overridden by these — Compose applies
+# `environment:` over `env_file:`.
+x-app-environment: &app-environment
+  NODE_ENV: production
+  DATABASE_URL: postgresql://nexa:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env (hex, e.g. openssl rand -hex 32)}@db:5432/nexa
+  DATABASE_APP_URL: postgresql://nexa_app:${NEXA_APP_DB_PASSWORD:?set NEXA_APP_DB_PASSWORD in .env (hex, e.g. openssl rand -hex 32)}@db:5432/nexa
+  REDIS_URL: redis://redis:6379
+
+# `NEXA_ENV_FILE` exists for one reason: a rehearsal on a developer machine,
+# whose own `.env` belongs to `make dev`. On the pilot host it is unset and the
+# file is `.env`, next to this one.
+x-app-env-file: &app-env-file
+  - path: ${NEXA_ENV_FILE:-.env}
+    required: true
+
+services:
+  # --- Datastores ---------------------------------------------------------
+  # Same images as the dev and demo stacks. No host port: nothing outside the
+  # compose network needs Postgres or Redis. Backups go through
+  # `docker compose exec` (scripts/backup.sh), not through a published port.
+  db:
+    image: pgvector/pgvector:pg17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: nexa
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: nexa
+      # Read once, by infra/db/pilot/10-app-role-password.sh, on the first start
+      # of an empty data directory.
+      NEXA_APP_DB_PASSWORD: ${NEXA_APP_DB_PASSWORD:?set NEXA_APP_DB_PASSWORD in .env}
+      LANG: C
+    volumes:
+      # The pilot's data. A named volume survives `down`, `up --build` and a
+      # host reboot; only `down -v` removes it — never run that here.
+      - nexa_pilot_pgdata:/var/lib/postgresql/data
+      # The same extensions + `nexa_app` role as every other stack, then the
+      # pilot's own step that replaces the role's published dev password.
+      - ./infra/db/init/00-extensions.sql:/docker-entrypoint-initdb.d/00-extensions.sql:ro
+      - ./infra/db/pilot/10-app-role-password.sh:/docker-entrypoint-initdb.d/10-app-role-password.sh:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U nexa -d nexa']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # Append-only on, snapshots off: presence and rate-limit state survive a
+    # restart without a second persistence mechanism to reason about.
+    command: ['redis-server', '--appendonly', 'yes', '--save', '']
+    volumes:
+      - nexa_pilot_redisdata:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 3s
+      timeout: 3s
+      retries: 20
+      start_period: 2s
+
+  # --- Applications -------------------------------------------------------
+  # No `init` service and no seed: CONVENTIONS §6.1 — a deployment's database
+  # is not a demo. The api image's entrypoint applies `prisma migrate deploy` as
+  # the table owner on every start (one replica here, so the advisory-lock race
+  # CONVENTIONS §6.2 measured cannot happen), and the first workspace is created
+  # through sign-up.
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    image: nexa-api:pilot
+    restart: unless-stopped
+    env_file: *app-env-file
+    environment:
+      <<: *app-environment
+      # `.env.production.example` leaves these relative to the working
+      # directory, which is root-owned inside the image (the app runs as
+      # `nexa`). /tmp is writable. What lives there does not survive a
+      # container re-create: with MAIL_PROVIDER=smtp nothing is spooled to
+      # MAIL_DIR, push and the SIEM export are outside the pilot, and file
+      # sharing stays off (tm 255.13) — a workspace that turns it on keeps
+      # its uploads only until the next `up --build`.
+      STORAGE_LOCAL_DIR: /tmp/nexa/uploads
+      MAIL_DIR: /tmp/nexa/mail
+      PUSH_DIR: /tmp/nexa/push
+      SIEM_DIR: /tmp/nexa/siem
+    ports:
+      - '127.0.0.1:${NEXA_API_HOST_PORT:-4000}:4000'
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  rtm:
+    build:
+      context: .
+      dockerfile: apps/rtm/Dockerfile
+    image: nexa-rtm:pilot
+    restart: unless-stopped
+    env_file: *app-env-file
+    environment: *app-environment
+    ports:
+      - '127.0.0.1:${NEXA_RTM_HOST_PORT:-4001}:4001'
+    depends_on:
+      redis:
+        condition: service_healthy
+      # Healthy api = migrations applied. rtm reads the schema api migrates.
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Baked into the bundle: a WebSocket URL cannot be relative. The same
+        # public RTM address the api hands the widget (RTM_BASE_URL).
+        VITE_RTM_URL: ${RTM_BASE_URL:?set RTM_BASE_URL in .env}/v1/agent/rtm/ws
+    image: nexa-web:pilot
+    restart: unless-stopped
+    environment:
+      API_UPSTREAM: http://api:4000
+      RTM_UPSTREAM: http://rtm:4001
+      # The panel's CSP has to allow the RTM origin the bundle dials.
+      CSP_CONNECT_EXTRA: ${RTM_BASE_URL}
+    ports:
+      - '127.0.0.1:${NEXA_WEB_HOST_PORT:-5173}:8080'
+    depends_on:
+      api:
+        condition: service_healthy
+
+  widget:
+    build:
+      context: .
+      dockerfile: apps/widget/Dockerfile
+      args:
+        # The widget has no same-origin backend; its browser code calls the api
+        # cross-origin at this address (and CORS lets it, because WEB_ORIGIN
+        # has to name WIDGET_BASE_URL's origin — productionProblems).
+        VITE_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL in .env}/api/v1
+    image: nexa-widget:pilot
+    restart: unless-stopped
+    environment:
+      # The widget's CSP has to allow both addresses it connects to: the api
+      # above, and the RTM URL the api returns with every customer token.
+      CSP_CONNECT_EXTRA: ${API_BASE_URL} ${RTM_BASE_URL}
+    ports:
+      - '127.0.0.1:${NEXA_WIDGET_HOST_PORT:-5174}:8080'
+
+volumes:
+  nexa_pilot_pgdata:
+  nexa_pilot_redisdata:

@@ -22,14 +22,21 @@
 #     holding its `dev-only-…` placeholder — and the placeholders in
 #     `.env.example` are exactly what this stack loads, because inventing real
 #     secrets is out of scope.
-#   * CORS (`apps/api/src/server.ts`) narrows to `WEB_ORIGIN` alone under
-#     production, which would block the widget's cross-origin calls from
-#     :5174 — i.e. the customer half of the demo.
+#   * CORS (`apps/api/src/server.ts`) narrows to `WEB_ORIGIN` under
+#     production, and `.env.example`'s WEB_ORIGIN names the panel (:5173)
+#     alone. Since tm 243 that no longer fails quietly at the widget's first
+#     call: `productionProblems` refuses to boot a WEB_ORIGIN without the
+#     widget's origin. Production CORS itself is not the obstacle — measured
+#     in `docker-compose.pilot.yml`'s rehearsal (tm 255.15), a WEB_ORIGIN
+#     naming both answers the widget and the panel and refuses an unlisted
+#     origin (`SMOKE_PROFILE=pilot ./scripts/smoke.sh`).
 #   * `parseEnv` also requires `INBOUND_EMAIL_SECRET` under production
 #     (M-PROD-CFG-a), which this stack deliberately leaves unset — the mail
 #     provider is mocked here, so there is no signature to stand in for.
 # Renaming the placeholders to slip past the first guard would defeat the point
-# of having it. Calling this stack what it is costs nothing.
+# of having it. Calling this stack what it is costs nothing. The production run
+# of the same containers is `docker-compose.pilot.yml` (tm 255.15), which meets
+# these gates with a real `.env` instead of stepping around them.
 name: nexa-demo
 
 services:

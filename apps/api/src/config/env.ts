@@ -842,6 +842,14 @@ export const SECRET_KEYS = [
 ] as const;
 
 /**
+ * A `<…>` fill-in from `.env.production.example` (`<owner_password>`,
+ * `<üret: openssl rand -hex 32>`, `<from your provider>`). No configuration
+ * value this process reads has a legitimate use for angle brackets — even
+ * `SMTP_FROM` has to be a bare address (`smtp-mailer.ts`).
+ */
+export const TEMPLATE_PLACEHOLDER = /<[^<>]+>/;
+
+/**
  * What production refuses, and why each one is a refusal rather than a default.
  *
  * Every problem is collected before anything is thrown. Failing on the first
@@ -862,6 +870,19 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
   for (const key of SECRET_KEYS) {
     if (env[key].startsWith('dev-only-')) {
       problems.push(`${key} still holds its development placeholder value.`);
+    }
+  }
+
+  // `.env.production.example` marks everything a deployer has to supply as
+  // `<…>`, and the pilot's `.env` starts life as a copy of it (tm 255.15). Most
+  // of those keys are plain strings to the schema, so a copy with one left
+  // unfilled booted: `INBOUND_EMAIL_SECRET=<üret: …>` authenticated the inbound
+  // webhook with a key printed in this repository, and `LLM_API_KEY=<from your
+  // provider>` got as far as the provider's 401. Key name only — the rest of
+  // the value can be real.
+  for (const [key, value] of Object.entries(env)) {
+    if (typeof value === 'string' && TEMPLATE_PLACEHOLDER.test(value)) {
+      problems.push(`${key} still holds a .env.production.example placeholder (<…>).`);
     }
   }
 

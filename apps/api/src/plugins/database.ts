@@ -10,10 +10,16 @@ import { PrismaClient } from '@prisma/client';
 import type { FastifyInstance } from 'fastify';
 import fp from 'fastify-plugin';
 import type { Env } from '../config/env.js';
+import { EventPartitionMaintenance } from '../services/chat/event-partitions.js';
 
 declare module 'fastify' {
   interface FastifyInstance {
     db: PrismaClient;
+    /**
+     * `events` partition maintenance (SEMA-MIMARI.8.4c · tm 255.14). Its last
+     * pass is the `event_partitions` block of the admin `/health` body.
+     */
+    eventPartitions: EventPartitionMaintenance;
     /**
      * Where the heavy read-only reports run (M-SCALE-c · NFR-P7 · NFR-R4).
      *
@@ -50,15 +56,6 @@ export function createReplicaClient(env: Env): PrismaClient | null {
   });
 }
 
-/**
- * How far ahead event partitions are kept. An insert into a month with no
- * partition lands in `events_default` rather than failing, but that partition
- * is unindexed for range scans and grows without bound — so the window must
- * stay comfortably ahead of real time.
- */
-const PARTITION_MONTHS_AHEAD = 3;
-const PARTITION_MAINTENANCE_INTERVAL_MS = 6 * 60 * 60 * 1000;
-
 async function databasePlugin(app: FastifyInstance, options: { env: Env }): Promise<void> {
   const db = createPrismaClient(options.env);
 
@@ -71,26 +68,32 @@ async function databasePlugin(app: FastifyInstance, options: { env: Env }): Prom
   if (replica) await replica.$connect();
   app.decorate('dbRead', replica ?? db);
 
-  const maintainPartitions = async (): Promise<void> => {
-    try {
-      // Casts are explicit: Prisma sends JS numbers as bigint, which does not
-      // match the function's int signature.
-      await db.$queryRaw`SELECT events_maintain_partitions(${PARTITION_MONTHS_AHEAD}::int, 1::int)`;
-    } catch (error) {
-      // Never fatal: the default partition catches anything that slips through,
-      // so a failure here degrades performance rather than losing messages.
-      app.log.error({ err: error }, 'event partition maintenance failed');
-    }
-  };
+  // Through the runtime role, like every other query: since migration
+  // 20260925100000 the partition functions carry the owner's rights themselves
+  // (SECURITY DEFINER, §D187), so no deployment has to hand the API an owner
+  // connection for this — and before it, this role could not open a month at
+  // all (§D131).
+  const eventPartitions = new EventPartitionMaintenance({
+    ensureMonth: (monthStart) =>
+      db.$queryRaw`SELECT events_ensure_partition(${monthStart}::timestamptz)`,
+    logger: app.log.child({ component: 'event-partitions' }),
+  });
+  app.decorate('eventPartitions', eventPartitions);
 
   // At boot, and periodically, because a process that stays up for months would
-  // otherwise outlive its partition window.
-  await maintainPartitions();
-  const timer = setInterval(() => void maintainPartitions(), PARTITION_MAINTENANCE_INTERVAL_MS);
+  // otherwise outlive its partition window. Never fatal (`run()` does not
+  // reject): the default partition catches anything that slips through, so a
+  // failure here degrades performance rather than losing messages — and is on
+  // `/health` rather than only in a log line.
+  await eventPartitions.run();
+  const timer = setInterval(() => void eventPartitions.run(), eventPartitions.intervalMs);
   timer.unref();
 
   app.addHook('onClose', async () => {
     clearInterval(timer);
+    // A pass still running would otherwise meet a closed pool and record a
+    // failure nobody caused.
+    await eventPartitions.settled();
     await db.$disconnect();
     // Guarded on the client rather than on `app.dbRead !== app.db`: without a
     // replica the two are one object, and disconnecting it twice would be a

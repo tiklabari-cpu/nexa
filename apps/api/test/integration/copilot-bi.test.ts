@@ -20,7 +20,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { BI_METRICS } from '@nexa/ai-mock';
+import { BI_METRICS } from '@siyahtus/ai-mock';
 import {
   grantToken,
   ownerClient,

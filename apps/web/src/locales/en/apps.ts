@@ -121,7 +121,7 @@ export const apps: Messages = {
   'apps.developers.partnerApps.loadError': 'Could not load your partner apps.',
   'apps.developers.partnerApps.emptyTitle': 'No partner apps yet',
   'apps.developers.partnerApps.emptyDescription':
-    "Register an OAuth client to let a script, a Zap, or a service you build call the Nexa API on this workspace's behalf.",
+    "Register an OAuth client to let a script, a Zap, or a service you build call the SiyahTuş API on this workspace's behalf.",
 
   // AppRow
   'apps.developers.clientType.confidential': 'Confidential',

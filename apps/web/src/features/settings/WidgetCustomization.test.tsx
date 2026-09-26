@@ -72,7 +72,7 @@ describe('WidgetCustomization', () => {
   it('renders a live preview with the "Powered by" footer shown by default', async () => {
     renderWidget();
     const preview = await screen.findByTestId('widget-preview');
-    expect(preview).toHaveTextContent('Powered by Nexa');
+    expect(preview).toHaveTextContent('Powered by SiyahTuş');
   });
 
   it('keeps Save disabled until something is changed', async () => {
@@ -107,12 +107,12 @@ describe('WidgetCustomization', () => {
 
   it('reflects a toggled setting in the preview', async () => {
     renderWidget();
-    const toggle = await screen.findByRole('checkbox', { name: /Powered by Nexa/ });
+    const toggle = await screen.findByRole('checkbox', { name: /Powered by SiyahTuş/ });
     await userEvent.click(toggle);
 
     const preview = within(screen.getByTestId('widget-preview'));
     // Turning the footer off removes it from the miniature.
-    expect(preview.queryByText('Powered by Nexa')).toBeNull();
+    expect(preview.queryByText('Powered by SiyahTuş')).toBeNull();
   });
 
   it('titles the section plainly when no brand is selected', async () => {
@@ -138,7 +138,7 @@ describe('WidgetCustomization', () => {
               error: {
                 type: 'not_allowed',
                 message:
-                  'Removing Nexa branding from the widget is not included in the growth plan.',
+                  'Removing SiyahTuş branding from the widget is not included in the growth plan.',
                 request_id: 'req-test',
                 details: { entitlement: 'white_label', plan: 'growth' },
               },
@@ -150,11 +150,11 @@ describe('WidgetCustomization', () => {
     );
 
     renderWidget();
-    await userEvent.click(await screen.findByRole('checkbox', { name: /Powered by Nexa/ }));
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Powered by SiyahTuş/ }));
     await userEvent.click(screen.getByRole('button', { name: 'Save appearance' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(/Removing the Nexa badge is an Enterprise feature/);
+    expect(alert).toHaveTextContent(/Removing the SiyahTuş badge is an Enterprise feature/);
     expect(alert).not.toHaveTextContent('That is not allowed here.');
     // And the server's own English prose still never reaches the screen.
     expect(alert).not.toHaveTextContent(/growth plan/);
@@ -198,7 +198,7 @@ describe('WidgetCustomization brand scoping', () => {
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
         const method = init?.method ?? 'GET';
-        const brand = new Headers(init?.headers).get('X-Nexa-Brand');
+        const brand = new Headers(init?.headers).get('X-SiyahTus-Brand');
         if (String(url).endsWith('/brands')) return okJson({ items: [BRAND_A, BRAND_B] });
         if (String(url).endsWith('/settings/widget')) {
           const current = (brand && WIDGET_BY_BRAND[brand]) || DEFAULTS;

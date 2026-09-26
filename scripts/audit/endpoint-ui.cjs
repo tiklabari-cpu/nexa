@@ -110,7 +110,7 @@ const HEADLESS = [
   {
     op: 'GET /health/live',
     reason:
-      "the liveness probe. Its caller is the orchestrator (`infra/helm/nexa`'s deployments); " +
+      "the liveness probe. Its caller is the orchestrator (`infra/helm/siyahtus`'s deployments); " +
       'a browser asking whether the process is alive has already had its answer.',
   },
   { op: 'GET /health/ready', reason: 'the readiness probe — same caller as `GET /health/live`.' },

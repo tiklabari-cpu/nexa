@@ -1,7 +1,7 @@
 /**
  * The self-serve checkout levers — plan, billing cycle, seats (FR-MOD-10.1.1–.3).
  *
- * Nexa's self-serve pricing is deliberately one transparent number (ADR-13, the
+ * SiyahTuş's self-serve pricing is deliberately one transparent number (ADR-13, the
  * PRD's §5.3 differentiator): $99 per user per month, 200 AI resolutions
  * included. Enterprise (PRD §5.4 "Kurumsal") sits beside it as a *quoted* tier —
  * it carries capabilities, not a price this repo is allowed to invent.
@@ -9,7 +9,12 @@
  * Billing is mocked (ADR-13, A5): this persists the choice and does the
  * arithmetic; nothing is charged and no external provider is called.
  */
-import { ENTITLEMENTS, entitlementMap, type Entitlement, type EntitlementMap } from '@nexa/types';
+import {
+  ENTITLEMENTS,
+  entitlementMap,
+  type Entitlement,
+  type EntitlementMap,
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 

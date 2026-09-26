@@ -11,7 +11,7 @@
 import { PrismaClient } from '@prisma/client';
 import { Redis } from 'ioredis';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { composerStateKey } from '@nexa/types';
+import { composerStateKey } from '@siyahtus/types';
 import {
   createConversation,
   ownerClient,
@@ -69,7 +69,7 @@ describe('ConflictDetectionService', () => {
     fx = await seedRtmFixtures(owner);
     // Licence ids repeat across suites (RESTART IDENTITY), so drop any composer
     // keys a prior file left behind before a stale registration can bleed in.
-    const stale = await redis.keys('nexa:composer:*');
+    const stale = await redis.keys('siyahtus:composer:*');
     if (stale.length > 0) await redis.del(...stale);
   });
 

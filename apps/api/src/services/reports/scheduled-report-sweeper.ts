@@ -40,7 +40,7 @@
  * (07.9-sched-g) reads, so nothing fails quietly either way.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
-import type { ScheduledExportFrequency } from '@nexa/types';
+import type { ScheduledExportFrequency } from '@siyahtus/types';
 import { type TenantContext, withTenant, withTenantRead } from '../../lib/tenant.js';
 import { exportFilename, reportGroup, toCsv } from '../../routes/reports-export.js';
 import { deliver } from '../mail/delivery.js';

@@ -471,7 +471,7 @@ describe('access review report (C6-e)', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/csv');
     expect(res.headers['content-disposition']).toMatch(
-      /attachment; filename="nexa-access-review-members-\d{4}-\d{2}-\d{2}\.csv"/,
+      /attachment; filename="siyahtus-access-review-members-\d{4}-\d{2}-\d{2}\.csv"/,
     );
     expect(res.headers['cache-control']).toBe('no-store');
     expect(res.headers['x-content-type-options']).toBe('nosniff');
@@ -492,7 +492,7 @@ describe('access review report (C6-e)', () => {
     );
 
     expect(res.statusCode).toBe(200);
-    expect(res.headers['content-disposition']).toContain('nexa-access-review-credentials-');
+    expect(res.headers['content-disposition']).toContain('siyahtus-access-review-credentials-');
     expect(res.body.split('\r\n')[0]).toBe(
       'credential_id,kind,name,owner_id,owner_email,owner_is_member,scopes,created_at,last_used_at,expires_at',
     );

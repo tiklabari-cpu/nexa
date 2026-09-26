@@ -3,7 +3,7 @@
  *
  * Five correctness-critical sweeps — idle chat auto-close, SLA breach marking,
  * the SIEM export, scheduled reports and retention — existed only as
- * `pnpm --filter @nexa/api <job>:run` scripts. Nothing started them, so a Nexa
+ * `pnpm --filter @siyahtus/api <job>:run` scripts. Nothing started them, so a SiyahTuş
  * brought up with `make dev` never closed an idle chat, never marked a breach
  * and never wrote a SIEM file, while the plan recorded all five as done. This is
  * the thing that runs them.

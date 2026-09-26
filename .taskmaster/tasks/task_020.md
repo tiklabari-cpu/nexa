@@ -13,7 +13,7 @@
 **Details:**
 
 Tanim: Automated = kapanmis, hic agent-yazimli event yok (ADR-09, KORUNUR). Assisted = kapanmis, agent event VAR + o thread'e ait skill_execution VAR. Manual = kapanmis, agent event VAR, skill YOK. Manual+Assisted+Automated = toplam kapanmis vaka.
-1) Kontrat: packages/contract/openapi/paths/reports.yaml overview yanitina manual/assisted (+ *_rate) alanlari (automated'in yanina). openapi.yaml:201-206 mevcut /reports/* yollari. `pnpm --filter @nexa/types generate`.
+1) Kontrat: packages/contract/openapi/paths/reports.yaml overview yanitina manual/assisted (+ *_rate) alanlari (automated'in yanina). openapi.yaml:201-206 mevcut /reports/* yollari. `pnpm --filter @siyahtus/types generate`.
 2) Aggregation: reports.ts overview SQL (~124-220). Kapanmis her vakayi uc sinifa ayir (skill_executions LEFT JOIN + agent-authored event kontrolu). ADR-09 automated tanimini bozma.
 3) manual_rate/assisted_rate; automated_rate mevcut mantikla ayni (closed=0 -> null).
 4) Web: apps/web/src/features/reports/ReportsPage.tsx — 3 KPI karti (Manual/Assisted/Automated) + Total cases; mevcut automated karti korunur.
@@ -30,7 +30,7 @@ DoD kapisi (typecheck/lint/unit/integration/build/e2e exit 0). Ozel: reports int
 **Status:** pending  
 **Dependencies:** None  
 
-openapi paths/reports.yaml overview yanitina manual, assisted, manual_rate, assisted_rate ekle; @nexa/types generate.
+openapi paths/reports.yaml overview yanitina manual, assisted, manual_rate, assisted_rate ekle; @siyahtus/types generate.
 
 ### 20.2. Aggregation: reports.ts SQL uc-sinif siniflandirmasi
 

@@ -33,8 +33,8 @@
  */
 import type { FastifyBaseLogger } from 'fastify';
 import type { PrismaClient } from '@prisma/client';
-import type { DevicePlatform, NotificationPreferences } from '@nexa/types';
-import { isDevicePlatform, pushAllowed } from '@nexa/types';
+import type { DevicePlatform, NotificationPreferences } from '@siyahtus/types';
+import { isDevicePlatform, pushAllowed } from '@siyahtus/types';
 import { withTenant, type TenantClient, type TenantContext } from '../../lib/tenant.js';
 import type { PushEventKind, PushProvider } from '../push/push-provider.js';
 import { NOTIFICATION_PREFERENCE_SELECT, serialiseNotificationPreferences } from './preferences.js';

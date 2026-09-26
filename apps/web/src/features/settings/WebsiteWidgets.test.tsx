@@ -77,7 +77,7 @@ describe('WebsiteWidgets validation', () => {
 });
 
 /**
- * The `nexa('trackSale', …)` tracking call (FR-MOD-13.5, 13.5-g) is
+ * The `siyahtus('trackSale', …)` tracking call (FR-MOD-13.5, 13.5-g) is
  * documentation only here — the panel just needs to show a developer the
  * exact line to paste into their own checkout confirmation script.
  */
@@ -89,7 +89,7 @@ describe('WebsiteWidgets trackSale documentation', () => {
     status: 'connected' as const,
     connected_at: null,
     created_at: '2026-01-01T00:00:00.000Z',
-    snippet: '<script>window.__nexa = { organizationId: "org-1" };</script>',
+    snippet: '<script>window.__siyahtus = { organizationId: "org-1" };</script>',
   };
 
   beforeEach(() => {
@@ -105,7 +105,9 @@ describe('WebsiteWidgets trackSale documentation', () => {
     renderWidgets();
     await userEvent.click(await screen.findByRole('button', { name: 'Get code' }));
 
-    expect(screen.getByTestId('website-snippet-track-sale')).toHaveTextContent("nexa('trackSale',");
+    expect(screen.getByTestId('website-snippet-track-sale')).toHaveTextContent(
+      "siyahtus('trackSale',",
+    );
   });
 
   it('hides the example until the snippet panel is opened', async () => {
@@ -141,7 +143,7 @@ describe('WebsiteWidgets brand scoping', () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
-        const brand = new Headers(init?.headers).get('X-Nexa-Brand');
+        const brand = new Headers(init?.headers).get('X-SiyahTus-Brand');
         if (String(url).endsWith('/brands')) return okJson({ items: [BRAND_A, BRAND_B] });
         if (String(url).includes('/websites')) {
           return okJson({ items: (brand && SITES_BY_BRAND[brand]) || [] });

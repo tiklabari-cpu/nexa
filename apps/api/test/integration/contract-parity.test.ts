@@ -18,7 +18,7 @@
  */
 import { describe, expect, it, beforeAll, afterAll } from 'vitest';
 import type { FastifyInstance } from 'fastify';
-import { loadOpenApiDocument } from '@nexa/contract';
+import { loadOpenApiDocument } from '@siyahtus/contract';
 import { API_PREFIX, buildServer } from '../../src/server.js';
 import { testEnv } from '../helpers/fixtures.js';
 

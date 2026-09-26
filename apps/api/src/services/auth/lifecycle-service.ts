@@ -24,7 +24,7 @@ import {
 import { assertInviteSeatCeiling } from '../../lib/entitlements.js';
 import { ensureSeatsCoverHeadcount } from '../billing/subscription-service.js';
 import { hashPassword } from '../../lib/crypto.js';
-import { type AgentRole, type Region } from '@nexa/types';
+import { type AgentRole, type Region } from '@siyahtus/types';
 import { ROLE_RANK } from './principal.js';
 
 export const TRIAL_DAYS = 14;
@@ -189,9 +189,9 @@ export class LifecycleService {
    * But *inside* `withTenant`, which is the whole reason this method takes the
    * memberships. Everything else in this file reaches the database through the
    * `auth_*` SECURITY DEFINER functions precisely because signup runs before a
-   * tenant context exists, and `#db` is the non-owner `nexa_app` role — writing
+   * tenant context exists, and `#db` is the non-owner `siyahtus_app` role — writing
    * `groups` straight through it hits `groups_tenant`'s `WITH CHECK
-   * (license_id = nexa_current_license())` against an unset setting and fails.
+   * (license_id = siyahtus_current_license())` against an unset setting and fails.
    * The same trap `#membershipsOf` documents below, one step louder: a read
    * comes back empty, a write raises and takes signup down with it. The tenant
    * this opens is the one the transaction above just created, so the context is
@@ -279,7 +279,7 @@ export class LifecycleService {
    * `tx` is a tenant-scoped client, not the bare connection.
    *
    * `invitations` is a tenant table with a RLS `WITH CHECK`, so an insert made
-   * outside `withTenant` is refused — `nexa_current_license()` is null there.
+   * outside `withTenant` is refused — `siyahtus_current_license()` is null there.
    * Everything else in this service is pre-auth and cannot use a tenant context;
    * this one call is inside a workspace and must.
    */
@@ -511,7 +511,7 @@ export class LifecycleService {
 }
 
 function isAccountExists(error: unknown): boolean {
-  return error instanceof Error && /nexa_account_exists/.test(error.message);
+  return error instanceof Error && /siyahtus_account_exists/.test(error.message);
 }
 
 /** Constant-time compare, kept here so the token path never reaches for `===`. */

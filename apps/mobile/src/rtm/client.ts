@@ -29,7 +29,7 @@
  * that happened to be open when the connection dropped.
  */
 import { AppState, type AppStateStatus } from 'react-native';
-import { RTM_LIMITS, RTM_PATHS, RTM_VERSION, type RtmPushAction } from '@nexa/types';
+import { RTM_LIMITS, RTM_PATHS, RTM_VERSION, type RtmPushAction } from '@siyahtus/types';
 
 const BASE_BACKOFF_MS = 500;
 const MAX_BACKOFF_MS = 15_000;

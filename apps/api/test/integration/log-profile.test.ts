@@ -62,11 +62,11 @@ const PRODUCTION_ENV: NodeJS.ProcessEnv = {
   LOG_LEVEL: 'info',
   SCHEDULER_ENABLED: 'false',
   OTEL_ENABLED: 'false',
-  WEB_ORIGIN: 'https://panel.nexa.test',
+  WEB_ORIGIN: 'https://panel.siyahtus.test',
   // Production refuses a WEB_ORIGIN that omits the widget's origin (tm 243).
   // Nothing here is about CORS, so this fixture takes the one-host shape and
   // says so rather than carrying a second origin it never uses.
-  WIDGET_BASE_URL: 'https://panel.nexa.test',
+  WIDGET_BASE_URL: 'https://panel.siyahtus.test',
   INBOUND_EMAIL_SECRET: 'an-inbound-webhook-shared-secret',
   JWT_SIGNING_KEY: realSecret('jwt'),
   WEBHOOK_HMAC_SEED: realSecret('webhook'),

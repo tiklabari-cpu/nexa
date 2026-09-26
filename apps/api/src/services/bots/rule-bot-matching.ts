@@ -2,7 +2,7 @@
  * The rule bot's pure core (FR-MOD-06.6).
  *
  * Free of Prisma, of clocks, and — the part the requirement is actually about —
- * of `@nexa/ai-mock`, embeddings and retrieval. PRD:577 asks for a bot that is
+ * of `@siyahtus/ai-mock`, embeddings and retrieval. PRD:577 asks for a bot that is
  * deterministic *by design* rather than deterministic because the LLM behind it
  * happens to be a stub, and this module is where that claim is checkable: every
  * function here is total, side-effect free, and decided by a unit test on paper
@@ -12,7 +12,7 @@
  * The service around this reads the rows, decides which bots a chat can reach
  * and in what order, and applies the winning rule's actions.
  */
-import type { RuleBotActions, RuleBotConditions } from '@nexa/types';
+import type { RuleBotActions, RuleBotConditions } from '@siyahtus/types';
 
 /**
  * What an incoming customer message looks like to a rule.

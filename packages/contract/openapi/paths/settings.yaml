@@ -1212,7 +1212,7 @@ company:
 #
 # Where the workspace's audit trail is shipped, and how the feed is doing. Part
 # of the security family — `access_rules` plus Owner/Admin — because deciding
-# that a copy of every security event leaves for a system Nexa does not control
+# that a copy of every security event leaves for a system SiyahTuş does not control
 # is a workspace-security decision, not an inbox preference.
 #
 # The data itself is `GET /audit-log/export`; these two describe the standing

@@ -91,14 +91,14 @@ ALTER TABLE ai_package_purchases
 -- crediting the quota to whoever wrote the row.
 ALTER TABLE ai_package_purchases ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ai_package_purchases_tenant ON ai_package_purchases
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches the table only through that policy.
+-- The API connects as siyahtus_app and reaches the table only through that policy.
 -- It may record a sale and read the history, nothing more.
-GRANT SELECT, INSERT ON public.ai_package_purchases TO nexa_app;
+GRANT SELECT, INSERT ON public.ai_package_purchases TO siyahtus_app;
 
 -- Withholding UPDATE and DELETE takes an explicit REVOKE: the ALTER DEFAULT
--- PRIVILEGES in 20260722090000 hands nexa_app the full set on every table
+-- PRIVILEGES in 20260722090000 hands siyahtus_app the full set on every table
 -- created after it, so the narrower GRANT above is a no-op on its own. Mirrors
 -- api_package_purchases, and for the same reason: a purchase is the only
 -- surviving evidence of a charge, and an actor who can edit it can quietly
@@ -107,5 +107,5 @@ GRANT SELECT, INSERT ON public.ai_package_purchases TO nexa_app;
 -- idempotency key, which is what makes a retry safe.
 --
 -- Erasing the workspace still clears these rows: the ON DELETE CASCADE above is
--- carried out by the referencing table's owner, not by nexa_app (NFR-C9).
-REVOKE UPDATE, DELETE ON public.ai_package_purchases FROM nexa_app;
+-- carried out by the referencing table's owner, not by siyahtus_app (NFR-C9).
+REVOKE UPDATE, DELETE ON public.ai_package_purchases FROM siyahtus_app;

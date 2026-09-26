@@ -13,7 +13,7 @@ import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import type { HomeDashboard } from '@nexa/types';
+import type { HomeDashboard } from '@siyahtus/types';
 import { useAuth } from '../../lib/auth-store.js';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';

@@ -74,7 +74,7 @@ describe('issueAssertion', () => {
 
   it('writes the given audience and destination into the signed body', async () => {
     const audience = 'https://other-sp.example.test';
-    const destination = 'https://app.nexa.test/auth/saml/conn-42/acs';
+    const destination = 'https://app.siyahtus.test/auth/saml/conn-42/acs';
     const issued = issueAssertion({ audience, destination });
 
     expect(issued.xml).toContain(`<saml:Audience>${audience}</saml:Audience>`);

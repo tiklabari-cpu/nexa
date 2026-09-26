@@ -106,7 +106,7 @@ ALTER TABLE "bot_groups" ADD CONSTRAINT "bot_groups_license_id_group_id_fkey"
     FOREIGN KEY ("license_id", "group_id") REFERENCES "groups"("license_id", "id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- The four tiers `group_agents.priority` already uses (GROUP_PRIORITIES in
--- @nexa/types). Constrained here rather than only in the route because the
+-- @siyahtus/types). Constrained here rather than only in the route because the
 -- ordering is what the KK's second half is about: a row carrying `urgent` would
 -- sort as "unknown tier" and the bot would quietly be tried last.
 ALTER TABLE bot_groups
@@ -126,19 +126,19 @@ ALTER TABLE bot_rules
 -- possible.
 ALTER TABLE bots ENABLE ROW LEVEL SECURITY;
 CREATE POLICY bots_tenant ON bots
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE bot_rules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY bot_rules_tenant ON bot_rules
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE bot_groups ENABLE ROW LEVEL SECURITY;
 CREATE POLICY bot_groups_tenant ON bot_groups
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches these tables only through the
+-- The API connects as siyahtus_app and reaches these tables only through the
 -- policies above. Granted explicitly: the schema-wide GRANT in 20260722154008
 -- covered only the tables that existed then.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.bots TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.bot_rules TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.bot_groups TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.bots TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.bot_rules TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.bot_groups TO siyahtus_app;

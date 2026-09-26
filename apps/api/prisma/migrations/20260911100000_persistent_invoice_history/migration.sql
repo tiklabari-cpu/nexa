@@ -11,7 +11,7 @@
 -- what a period had actually cost, which means there was no version of the
 -- history that a plan change could not move.
 --
--- The fix is a row that is written once and never touched again. `nexa_app`
+-- The fix is a row that is written once and never touched again. `siyahtus_app`
 -- holds SELECT and INSERT on both tables and nothing else — the REVOKE at the
 -- bottom is not tidiness, it is the guarantee: an actor who can UPDATE a
 -- statement can lower the price on an invoice that has already been issued, and
@@ -167,20 +167,20 @@ ALTER TABLE invoice_line_items
 -- being joined correctly is isolation that a future query can forget.
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 CREATE POLICY invoices_tenant ON invoices
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE invoice_line_items ENABLE ROW LEVEL SECURITY;
 CREATE POLICY invoice_line_items_tenant ON invoice_line_items
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API and the sweep both connect as nexa_app and reach these tables only
+-- The API and the sweep both connect as siyahtus_app and reach these tables only
 -- through the policies above. They may freeze a statement and read the history,
 -- nothing more.
-GRANT SELECT, INSERT ON public.invoices TO nexa_app;
-GRANT SELECT, INSERT ON public.invoice_line_items TO nexa_app;
+GRANT SELECT, INSERT ON public.invoices TO siyahtus_app;
+GRANT SELECT, INSERT ON public.invoice_line_items TO siyahtus_app;
 
 -- Withholding UPDATE and DELETE takes an explicit REVOKE: the ALTER DEFAULT
--- PRIVILEGES in 20260722090000 hands nexa_app the full set on every table
+-- PRIVILEGES in 20260722090000 hands siyahtus_app the full set on every table
 -- created after it, so the narrower GRANTs above are a no-op on their own.
 -- This is the whole point of the table. A statement that can be edited after
 -- issue is exactly as retroactive as the derivation it replaces — worse, in
@@ -188,6 +188,6 @@ GRANT SELECT, INSERT ON public.invoice_line_items TO nexa_app;
 -- recomputed from something visible.
 --
 -- Erasing the workspace still clears these rows: the ON DELETE CASCADE above is
--- carried out by the referencing table's owner, not by nexa_app (NFR-C9).
-REVOKE UPDATE, DELETE ON public.invoices FROM nexa_app;
-REVOKE UPDATE, DELETE ON public.invoice_line_items FROM nexa_app;
+-- carried out by the referencing table's owner, not by siyahtus_app (NFR-C9).
+REVOKE UPDATE, DELETE ON public.invoices FROM siyahtus_app;
+REVOKE UPDATE, DELETE ON public.invoice_line_items FROM siyahtus_app;

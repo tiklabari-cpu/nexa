@@ -92,7 +92,7 @@ function PriorityCell({ value, t }: { value: number; t: TFunction }): ReactEleme
  *
  * Status and Assignee are the plain two, and they are not an oversight — the
  * server cannot order the whole collection by either (`TICKET_SORT_KEYS`,
- * `@nexa/types`), and a header that only re-orders the fifty rows this browser
+ * `@siyahtus/types`), and a header that only re-orders the fifty rows this browser
  * happens to hold looks exactly like one that sorts the queue. Offering the
  * gesture and answering a different question is worse than not offering it; the
  * ticket views already slice by status and by "assigned to me".

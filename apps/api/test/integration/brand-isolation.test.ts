@@ -9,7 +9,7 @@
  *      another brand's channel (the `channels_tenant` brand condition).
  *   2. The brand setting does not leak past its transaction — the pooled-
  *      connection trap v2-02:476 warns about, now for a third context value.
- *   3. A brand id in `X-Nexa-Brand` that is not one of the caller's own is a 404,
+ *   3. A brand id in `X-SiyahTus-Brand` that is not one of the caller's own is a 404,
  *      never a 403, so brand ids stay un-enumerable across licenses.
  *   4. With no brand named, the request sees every brand of the license — a
  *      single-brand workspace is unchanged.
@@ -131,7 +131,7 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
 
   const auth = (token: string, brand?: string): Record<string, string> => ({
     authorization: `Bearer ${token}`,
-    ...(brand ? { 'x-nexa-brand': brand } : {}),
+    ...(brand ? { 'x-siyahtus-brand': brand } : {}),
   });
 
   const connect = (brand: string | undefined, pageId: string) =>
@@ -233,7 +233,7 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
   });
 
   // === The resolver — a foreign or bad brand id is 404, never 403 =============
-  describe('X-Nexa-Brand resolution (un-enumerable, NFR-S5)', () => {
+  describe('X-SiyahTus-Brand resolution (un-enumerable, NFR-S5)', () => {
     it('404s a brand id that belongs to another license', async () => {
       // brandB is a real brand — just not one of A's — so RLS makes it invisible
       // to A's lookup and it comes back as not-found, not forbidden.
@@ -258,7 +258,7 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
         (tx) => tx.channel.findMany(),
       );
       const [row] = await app.$queryRaw<Array<{ brand: string | null }>>`
-        SELECT nexa_current_brand() AS brand
+        SELECT siyahtus_current_brand() AS brand
       `;
       expect(row?.brand).toBeNull();
     });
@@ -275,7 +275,7 @@ describe('brand isolation (Multibrand RLS · NFR-S4 · NFR-S5)', () => {
         ),
       ).rejects.toThrow('boom');
       const [row] = await app.$queryRaw<Array<{ brand: string | null }>>`
-        SELECT nexa_current_brand() AS brand
+        SELECT siyahtus_current_brand() AS brand
       `;
       expect(row?.brand).toBeNull();
     });

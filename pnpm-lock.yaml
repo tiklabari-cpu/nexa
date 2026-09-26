@@ -44,13 +44,13 @@ importers:
       '@fastify/sensible':
         specifier: ^6.0.2
         version: 6.0.4
-      '@nexa/ai-mock':
+      '@siyahtus/ai-mock':
         specifier: workspace:*
         version: link:../../packages/ai-mock
-      '@nexa/contract':
+      '@siyahtus/contract':
         specifier: workspace:*
         version: link:../../packages/contract
-      '@nexa/types':
+      '@siyahtus/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@opentelemetry/api':
@@ -156,7 +156,7 @@ importers:
 
   apps/mobile:
     dependencies:
-      '@nexa/types':
+      '@siyahtus/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@react-navigation/bottom-tabs':
@@ -208,7 +208,7 @@ importers:
       '@expo/metro-config':
         specifier: ~57.0.8
         version: 57.0.8(expo@57.0.13)(supports-color@10.2.2)(typescript@5.9.3)
-      '@nexa/contract':
+      '@siyahtus/contract':
         specifier: workspace:*
         version: link:../../packages/contract
       '@react-native/jest-preset':
@@ -244,7 +244,7 @@ importers:
 
   apps/rtm:
     dependencies:
-      '@nexa/types':
+      '@siyahtus/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@opentelemetry/api':
@@ -299,7 +299,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@nexa/types':
+      '@siyahtus/types':
         specifier: workspace:*
         version: link:../../packages/types
       '@tanstack/react-query':
@@ -318,7 +318,7 @@ importers:
         specifier: ^5.0.2
         version: 5.0.14(@types/react@18.3.31)(react@18.3.1)(use-sync-external-store@1.6.0(react@18.3.1))
     devDependencies:
-      '@nexa/ai-mock':
+      '@siyahtus/ai-mock':
         specifier: workspace:*
         version: link:../../packages/ai-mock
       '@testing-library/jest-dom':
@@ -363,7 +363,7 @@ importers:
 
   apps/widget:
     dependencies:
-      '@nexa/types':
+      '@siyahtus/types':
         specifier: workspace:*
         version: link:../../packages/types
     devDependencies:
@@ -394,7 +394,7 @@ importers:
 
   packages/contract:
     dependencies:
-      '@nexa/types':
+      '@siyahtus/types':
         specifier: workspace:*
         version: link:../types
     devDependencies:

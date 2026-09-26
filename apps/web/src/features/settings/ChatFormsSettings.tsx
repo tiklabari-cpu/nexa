@@ -47,7 +47,7 @@ import {
   type CustomFieldEntity,
   type CustomFieldType,
   type FormPlacement,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 export function ChatFormsSettings({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();

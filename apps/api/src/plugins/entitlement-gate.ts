@@ -28,7 +28,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import type { Entitlement } from '@nexa/types';
+import type { Entitlement } from '@siyahtus/types';
 import { requireEntitlement } from '../lib/entitlements.js';
 
 declare module 'fastify' {

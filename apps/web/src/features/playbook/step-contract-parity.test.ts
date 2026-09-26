@@ -14,7 +14,7 @@
  * refuses is one the server would refuse too (or the editor blocks a save that
  * would have worked).
  */
-import { validateSteps } from '@nexa/ai-mock';
+import { validateSteps } from '@siyahtus/ai-mock';
 import { describe, expect, it } from 'vitest';
 import { STEP_TYPES, blankStep } from './step-authoring.js';
 import { stepIssues } from './step-reorder.js';

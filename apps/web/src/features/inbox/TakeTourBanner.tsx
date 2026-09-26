@@ -18,7 +18,7 @@
  */
 import { useQuery } from '@tanstack/react-query';
 import { useState, type ReactElement } from 'react';
-import type { OnboardingState } from '@nexa/types';
+import type { OnboardingState } from '@siyahtus/types';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Banner, bannerDismissKey } from '../../components/ui/index.js';

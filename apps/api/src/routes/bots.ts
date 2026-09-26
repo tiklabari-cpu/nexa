@@ -15,7 +15,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { GROUP_PRIORITIES, RULE_BOT_MAX_GROUPS, RULE_BOT_MAX_REPLY } from '@nexa/types';
+import { GROUP_PRIORITIES, RULE_BOT_MAX_GROUPS, RULE_BOT_MAX_REPLY } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import {
   RuleBotService,

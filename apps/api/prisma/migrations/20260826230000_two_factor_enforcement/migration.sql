@@ -94,7 +94,7 @@ AS $$
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_list_memberships(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Does this account hold a live second factor?
@@ -115,7 +115,7 @@ GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO nexa_app;
 --
 -- SECURITY DEFINER for the same reason everything touching this table is:
 -- `account_two_factor` has row level security with no permissive policy, so an
--- ordinary `nexa_app` query sees nothing at all.
+-- ordinary `siyahtus_app` query sees nothing at all.
 CREATE FUNCTION auth_two_factor_is_active(p_account_id UUID)
 RETURNS BOOLEAN
 LANGUAGE sql SECURITY DEFINER STABLE
@@ -129,4 +129,4 @@ AS $$
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_two_factor_is_active(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_two_factor_is_active(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_is_active(UUID) TO siyahtus_app;

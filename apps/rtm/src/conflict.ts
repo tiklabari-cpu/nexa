@@ -26,7 +26,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
-import { AGENT_COMPOSING_TTL_SECONDS, composerStateKey } from '@nexa/types';
+import { AGENT_COMPOSING_TTL_SECONDS, composerStateKey } from '@siyahtus/types';
 import type { SocketPrincipal } from './auth.js';
 
 /** One agent currently composing a reply in a chat. */

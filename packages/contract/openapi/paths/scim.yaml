@@ -77,7 +77,7 @@ users:
     summary: Provision a member (SCIM)
     description: |
       Creates the membership, and the account behind it if this person has no
-      Nexa account anywhere yet.
+      SiyahTuş account anywhere yet.
 
       **An account that already exists is adopted, never modified.** A person may
       work for more than one workspace (PRD §8.4), so one workspace's directory

@@ -20,7 +20,7 @@
  *    ratings is arithmetic, not information, and putting it on the screen
  *    invites a decision the evidence cannot support. The threshold is the
  *    product's existing one (`apps/web/src/features/playbook/performance.ts`
- *    `LOW_BASE_THRESHOLD = 20`), so Nexa has one answer to "how few is too few".
+ *    `LOW_BASE_THRESHOLD = 20`), so SiyahTuş has one answer to "how few is too few".
  * 2. **No new measurement.** The rules read the tallies `buildReviewsReport`
  *    already has; nothing here opens a query, and the tracked-sales block is
  *    deliberately untouched — it carries no previous-window figure in this

@@ -15,7 +15,7 @@ import { useApiClient } from '../../lib/auth-store.js';
 import { formatCount, formatRate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { funnelStages } from './goals.js';
-import type { GoalFunnel } from '@nexa/types';
+import type { GoalFunnel } from '@siyahtus/types';
 
 interface GoalsReport {
   range: { from: string; to: string };

@@ -128,7 +128,7 @@ ALTER TABLE "sso_domain_verifications" ADD CONSTRAINT "sso_domain_verifications_
 -- much as USING.
 ALTER TABLE sso_domain_verifications ENABLE ROW LEVEL SECURITY;
 CREATE POLICY sso_domain_verifications_tenant ON sso_domain_verifications
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 COMMENT ON TABLE "sso_domain_verifications" IS
   'Proof of ownership for one domain claimed by one SSO connection. Only a row with verified_at takes part in just-in-time provisioning (NFR-S11, PLAN D134).';
@@ -170,7 +170,7 @@ END;
 $fn$;
 
 REVOKE EXECUTE ON FUNCTION sso_sync_domain_verifications() FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION sso_sync_domain_verifications() TO nexa_app;
+GRANT EXECUTE ON FUNCTION sso_sync_domain_verifications() TO siyahtus_app;
 
 CREATE TRIGGER sso_connections_sync_domain_verifications
 AFTER INSERT OR UPDATE OF verified_domains, license_id ON sso_connections
@@ -212,7 +212,7 @@ AS $fn$
 $fn$;
 
 REVOKE EXECUTE ON FUNCTION sso_connection_proved_domains(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION sso_connection_proved_domains(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION sso_connection_proved_domains(UUID) TO siyahtus_app;
 
 -- The SCIM half. A SCIM credential is minted per workspace and names no
 -- connection, so it reads the union across the license's connections — the same
@@ -231,7 +231,7 @@ AS $fn$
 $fn$;
 
 REVOKE EXECUTE ON FUNCTION sso_license_proved_domains(BIGINT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION sso_license_proved_domains(BIGINT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION sso_license_proved_domains(BIGINT) TO siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- 5. SAML just-in-time provisioning, gated on proof

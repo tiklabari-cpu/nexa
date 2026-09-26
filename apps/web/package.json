@@ -1,5 +1,5 @@
 {
-  "name": "@nexa/web",
+  "name": "@siyahtus/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "test:unit": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@nexa/types": "workspace:*",
+    "@siyahtus/types": "workspace:*",
     "@tanstack/react-query": "^5.62.7",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -21,7 +21,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
-    "@nexa/ai-mock": "workspace:*",
+    "@siyahtus/ai-mock": "workspace:*",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",

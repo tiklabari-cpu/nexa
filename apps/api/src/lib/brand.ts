@@ -2,7 +2,7 @@
  * Brand resolution for brand-scoped writes (Multibrand, PRD §5.3).
  *
  * A brand-scoped singleton — widget/security/inbox settings, and a website's
- * home brand — must land on exactly one brand. `X-Nexa-Brand` names it when
+ * home brand — must land on exactly one brand. `X-SiyahTus-Brand` names it when
  * present (folded into the tenant context as `brandId`); when absent, the
  * request operates license-wide, and the row it writes belongs to the license
  * *default* brand. Every license has exactly one default brand — the migration

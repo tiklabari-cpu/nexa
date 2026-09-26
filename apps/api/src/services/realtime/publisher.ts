@@ -19,7 +19,7 @@ import {
   type BusEnvelope,
   type PushAudience,
   type RtmPushAction,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { TenantContext } from '../../lib/tenant.js';
 
 export class RealtimePublisher {

@@ -90,7 +90,7 @@ BEGIN
   END IF;
 
   IF EXISTS (SELECT 1 FROM accounts a WHERE a.email = p_email) THEN
-    RAISE EXCEPTION 'nexa_account_exists';
+    RAISE EXCEPTION 'siyahtus_account_exists';
   END IF;
 
   -- No validation of p_region here: `organizations_region_check` is the one
@@ -118,8 +118,8 @@ BEGIN
   -- running in a browser or on a phone, where no secret stays secret. Two
   -- callbacks, one client: this deployment's console and the mobile app.
   INSERT INTO oauth_clients (id, organization_id, display_name, client_type, redirect_uris, scopes)
-  VALUES ('nexa-agent-app-' || v_org::TEXT, v_org, 'Nexa Agent App', 'public',
-          ARRAY[p_console_redirect, 'nexa://auth/callback'],
+  VALUES ('siyahtus-agent-app-' || v_org::TEXT, v_org, 'SiyahTuş Agent App', 'public',
+          ARRAY[p_console_redirect, 'siyahtus://auth/callback'],
           ARRAY[]::TEXT[]);
 
   RETURN QUERY SELECT v_account, v_license, v_org;
@@ -127,7 +127,7 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT, TEXT, TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT, TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT, TEXT, TEXT) TO siyahtus_app;
 
 -- --------------------------------------------------------------------------
 -- Existing workspaces
@@ -144,7 +144,7 @@ GRANT EXECUTE ON FUNCTION auth_signup(CITEXT, TEXT, TEXT, TEXT, INT, TEXT, TEXT)
 --
 -- Scoped by id prefix, the rule `20260816120000_mobile_native_redirect` set
 -- down: first-party clients (`auth_signup`, `sandbox_create`, the demo seed)
--- are `nexa-agent-app-…` / `nexa-sandbox-app-…`; a partner's is 32 hex from
+-- are `siyahtus-agent-app-…` / `siyahtus-sandbox-app-…`; a partner's is 32 hex from
 -- `generateClientId` and is never touched — its redirects belong to whoever
 -- registered the app.
 --
@@ -169,7 +169,7 @@ BEGIN
 
   UPDATE oauth_clients
      SET redirect_uris = redirect_uris || ARRAY[p_redirect]
-   WHERE (id LIKE 'nexa-agent-app-%' OR id LIKE 'nexa-sandbox-app-%')
+   WHERE (id LIKE 'siyahtus-agent-app-%' OR id LIKE 'siyahtus-sandbox-app-%')
      AND NOT (p_redirect = ANY (redirect_uris));
   GET DIAGNOSTICS v_count = ROW_COUNT;
 
@@ -178,4 +178,4 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_register_console_redirect(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_register_console_redirect(TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_register_console_redirect(TEXT) TO siyahtus_app;

@@ -29,7 +29,7 @@
  * gate exists to close. It costs one indexed lookup, inside a transaction the
  * caller already has open.
  */
-import type { Entitlement, EntitlementMap } from '@nexa/types';
+import type { Entitlement, EntitlementMap } from '@siyahtus/types';
 import { entitlementsForPlan } from '../services/billing/subscription-service.js';
 import { ApiError } from './api-error.js';
 import type { TenantClient, TenantContext } from './tenant.js';
@@ -54,7 +54,7 @@ export const TRIAL_PLAN = 'growth';
  * can never come back describing itself as `undefined`.
  */
 const ENTITLEMENT_LABELS: Record<Entitlement, string> = {
-  white_label: 'Removing Nexa branding from the widget',
+  white_label: 'Removing SiyahTuş branding from the widget',
   sandbox: 'A sandbox workspace',
   sla: 'SLA targets and breach reporting',
   sso: 'Single sign-on and directory provisioning',
@@ -127,7 +127,7 @@ export async function requireEntitlement(
 }
 
 /**
- * Whether the widget must show "Powered by Nexa" — the white-label rule, for
+ * Whether the widget must show "Powered by SiyahTuş" — the white-label rule, for
  * every path that serves the widget's appearance.
  *
  * The stored value is the workspace's *intent*; this is what it is allowed to

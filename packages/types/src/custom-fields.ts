@@ -1,14 +1,14 @@
 /**
  * Custom fields for tickets and contacts (FR-MOD-08.7.6).
  *
- * A workspace defines extra fields the product does not ship with — for Nexa,
+ * A workspace defines extra fields the product does not ship with — for SiyahTuş,
  * things like a player id, a KYC status or an account balance — and those
  * fields then show up on the ticket Details pane and in the CRM. A definition
  * carries the two properties the requirement turns on (KK "Tip/zorunluluk"): a
  * `type`, which says how a value is validated, and `required`, which says a
  * value may not be left blank.
  *
- * The catalogue of types and the value validator live here, in @nexa/types, so
+ * The catalogue of types and the value validator live here, in @siyahtus/types, so
  * the authoring/editing form (web) and the endpoint that stores a value (api)
  * judge "is this a valid value for this field" by one definition rather than
  * drifting apart — the same single-source approach the ticket e-mail templates

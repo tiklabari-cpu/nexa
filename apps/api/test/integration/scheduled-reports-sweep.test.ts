@@ -42,7 +42,7 @@ import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
 import { PermanentMailError } from '../../src/services/mail/mail-error.js';
 import { periodFor, startOfUtcDay } from '../../src/services/reports/scheduled-report-period.js';
@@ -175,7 +175,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
     if (!APP_URL) throw new Error('DATABASE_APP_URL must be set');
     owner = ownerClient();
     appRole = new PrismaClient({ datasourceUrl: APP_URL });
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sched-'));
     mailer = new FileMailer(mailDir);
   });
 
@@ -456,7 +456,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
         'pnpm',
         [
           '--filter',
-          '@nexa/api',
+          '@siyahtus/api',
           'run',
           'scheduled-reports:run',
           ...(args.length > 0 ? ['--', ...args] : []),
@@ -512,7 +512,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
     }
 
     beforeEach(async () => {
-      scriptMailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-run-'));
+      scriptMailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sched-run-'));
     });
 
     afterEach(async () => {
@@ -671,7 +671,7 @@ describe('scheduled report sweep (PRD §5.3-Reports)', () => {
     it('exits with a non-zero code and sends nothing when the database is unreachable', async () => {
       await expect(
         runScript([], {
-          DATABASE_APP_URL: 'postgresql://nexa_app:wrong@127.0.0.1:1/nexa_unreachable',
+          DATABASE_APP_URL: 'postgresql://siyahtus_app:wrong@127.0.0.1:1/siyahtus_unreachable',
         }),
       ).rejects.toMatchObject({ code: 1 });
       expect(await scriptMailbox()).toHaveLength(0);

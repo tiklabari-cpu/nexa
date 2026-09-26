@@ -165,7 +165,7 @@ test.describe('virtualized ticket grid holds 60fps at 10,000+ rows (NFR-P4)', ()
       );
     }
 
-    await run('pnpm', ['--filter', '@nexa/api', 'seed:fps-bench'], {
+    await run('pnpm', ['--filter', '@siyahtus/api', 'seed:fps-bench'], {
       cwd: repoRoot,
       // `pnpm` is a shell shim on Windows, not a `.exe` — see `global-setup.ts`.
       shell: true,

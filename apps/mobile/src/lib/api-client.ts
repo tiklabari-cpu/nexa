@@ -7,14 +7,14 @@
  * origin), it sets `credentials: 'same-origin'` (meaningless here), and it hands
  * back `Blob`s. What the two share is the part that must not diverge — the
  * ADR-06 error envelope and the contract types — and those come from
- * `@nexa/types` and `@nexa/contract`, not from copied code.
+ * `@siyahtus/types` and `@siyahtus/contract`, not from copied code.
  *
  * Two things this one adds because it runs on a radio rather than a cable:
  * every request carries a timeout (a stalled mobile connection otherwise hangs
  * a screen forever with nothing to show), and a transport failure is reported as
  * one honest category instead of being guessed at.
  */
-import type { ApiErrorBody, ErrorType } from '@nexa/types';
+import type { ApiErrorBody, ErrorType } from '@siyahtus/types';
 
 import type {
   ContractMethod,
@@ -119,7 +119,7 @@ export class ApiClient {
     const token = this.#getAccessToken();
     if (token) headers.Authorization = `Bearer ${token}`;
     const brandId = this.#getBrandId();
-    if (brandId) headers['X-Nexa-Brand'] = brandId;
+    if (brandId) headers['X-SiyahTus-Brand'] = brandId;
 
     const controller = new AbortController();
     let timedOut = false;

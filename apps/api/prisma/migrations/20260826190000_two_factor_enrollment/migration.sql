@@ -3,7 +3,7 @@
 --
 -- 20260826150000_two_factor_auth gave `account_two_factor` row level security
 -- with *no permissive policy*, the `password_reset_tokens` shape: an ordinary
--- query by `nexa_app` sees nothing and writes nothing. 20260826170000 opened the
+-- query by `siyahtus_app` sees nothing and writes nothing. 20260826170000 opened the
 -- three functions the recovery-code sheet needs. These six are the rest of the
 -- surface — enroll, read, activate, spend a step, disable, and the one question
 -- that spans licences ("does any workspace this person belongs to insist on a
@@ -281,9 +281,9 @@ REVOKE EXECUTE ON FUNCTION auth_two_factor_record_step(UUID, BIGINT) FROM PUBLIC
 REVOKE EXECUTE ON FUNCTION auth_two_factor_disable(UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_two_factor_enforcing_licenses(UUID) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION auth_two_factor_begin_enrollment(UUID, TEXT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_two_factor_state(UUID) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_two_factor_activate(UUID, BIGINT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_two_factor_record_step(UUID, BIGINT) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_two_factor_disable(UUID) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_two_factor_enforcing_licenses(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_begin_enrollment(UUID, TEXT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_state(UUID) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_activate(UUID, BIGINT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_record_step(UUID, BIGINT) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_disable(UUID) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_two_factor_enforcing_licenses(UUID) TO siyahtus_app;

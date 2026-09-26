@@ -19,7 +19,7 @@ import {
   type SavedView,
 } from './views.js';
 
-const STORAGE_KEY = 'nexa.inbox.saved-views';
+const STORAGE_KEY = 'siyahtus.inbox.saved-views';
 
 beforeEach(() => localStorage.clear());
 afterEach(() => localStorage.clear());

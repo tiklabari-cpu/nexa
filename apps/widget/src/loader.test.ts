@@ -1,22 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { boot, type NexaWidgetConfig } from './loader.js';
+import { boot, type SiyahTusWidgetConfig } from './loader.js';
 
 type TestWindow = Window & {
-  __nexa?: NexaWidgetConfig & { open?: () => void; destroy?: () => void };
+  __siyahtus?: SiyahTusWidgetConfig & { open?: () => void; destroy?: () => void };
 };
 
-function setup(config?: Partial<NexaWidgetConfig>): TestWindow {
+function setup(config?: Partial<SiyahTusWidgetConfig>): TestWindow {
   document.body.replaceChildren();
   const win = window as TestWindow;
   if (config) {
-    win.__nexa = { organizationId: 'org-1', widgetOrigin: 'https://widget.test', ...config };
+    win.__siyahtus = { organizationId: 'org-1', widgetOrigin: 'https://widget.test', ...config };
   } else {
-    delete win.__nexa;
+    delete win.__siyahtus;
   }
   return win;
 }
 
-const frame = () => document.getElementById('nexa-widget-frame') as HTMLIFrameElement | null;
+const frame = () => document.getElementById('siyahtus-widget-frame') as HTMLIFrameElement | null;
 
 /**
  * jsdom hard-codes an empty `document.referrer`; a visitor usually has one.
@@ -68,7 +68,7 @@ describe('widget loader', () => {
 
   it('passes the host page origin through to the widget', () => {
     // The token request is made from inside the frame, whose own origin is
-    // Nexa's and therefore identical for every customer. Only code running on
+    // SiyahTuş's and therefore identical for every customer. Only code running on
     // the host page knows which site this actually is.
     boot(setup({}));
     const src = new URL(frame()!.src);
@@ -169,7 +169,7 @@ describe('widget loader', () => {
     const win = setup({});
     boot(win);
     expect(boot(win)).toBeNull();
-    expect(document.querySelectorAll('#nexa-widget-frame')).toHaveLength(1);
+    expect(document.querySelectorAll('#siyahtus-widget-frame')).toHaveLength(1);
   });
 
   it('honours bottom-left placement', () => {
@@ -181,8 +181,8 @@ describe('widget loader', () => {
   it('exposes open/close/destroy on the host global', () => {
     const win = setup({});
     boot(win);
-    expect(typeof win.__nexa!.open).toBe('function');
-    expect(typeof win.__nexa!.destroy).toBe('function');
+    expect(typeof win.__siyahtus!.open).toBe('function');
+    expect(typeof win.__siyahtus!.destroy).toBe('function');
   });
 
   it('removes the frame and its listener on destroy', () => {
@@ -190,7 +190,7 @@ describe('widget loader', () => {
     const destroy = boot(win)!;
     destroy();
     expect(frame()).toBeNull();
-    expect(win.__nexa!.open).toBeUndefined();
+    expect(win.__siyahtus!.open).toBeUndefined();
   });
 });
 
@@ -208,7 +208,7 @@ describe('loader message boundary', () => {
     boot(setup({}));
     const el = frame()!;
     dispatch(
-      { type: 'nexa:resize', width: 380, height: 620 },
+      { type: 'siyahtus:resize', width: 380, height: 620 },
       'https://widget.test',
       el.contentWindow,
     );
@@ -220,7 +220,7 @@ describe('loader message boundary', () => {
     boot(setup({}));
     const el = frame()!;
     const before = el.style.height;
-    dispatch({ type: 'nexa:resize', height: 9999 }, 'https://evil.test', el.contentWindow);
+    dispatch({ type: 'siyahtus:resize', height: 9999 }, 'https://evil.test', el.contentWindow);
     expect(el.style.height).toBe(before);
   });
 
@@ -228,7 +228,7 @@ describe('loader message boundary', () => {
     boot(setup({}));
     const el = frame()!;
     const before = el.style.height;
-    dispatch({ type: 'nexa:resize', height: 500 }, 'https://widget.test', {} as Window);
+    dispatch({ type: 'siyahtus:resize', height: 500 }, 'https://widget.test', {} as Window);
     expect(el.style.height).toBe(before);
   });
 
@@ -236,7 +236,7 @@ describe('loader message boundary', () => {
     boot(setup({}));
     const el = frame()!;
     const before = el.style.height;
-    dispatch({ type: 'nexa:take-over-page' }, 'https://widget.test', el.contentWindow);
+    dispatch({ type: 'siyahtus:take-over-page' }, 'https://widget.test', el.contentWindow);
     expect(el.style.height).toBe(before);
   });
 
@@ -244,7 +244,7 @@ describe('loader message boundary', () => {
     boot(setup({}));
     const el = frame()!;
     dispatch(
-      { type: 'nexa:resize', width: 999_999, height: 999_999 },
+      { type: 'siyahtus:resize', width: 999_999, height: 999_999 },
       'https://widget.test',
       el.contentWindow,
     );
@@ -257,7 +257,7 @@ describe('loader message boundary', () => {
     const el = frame()!;
     const before = el.style.height;
     dispatch(
-      { type: 'nexa:resize', height: 'tall', width: Number.NaN },
+      { type: 'siyahtus:resize', height: 'tall', width: Number.NaN },
       'https://widget.test',
       el.contentWindow,
     );
@@ -273,7 +273,7 @@ describe('loader message boundary', () => {
 });
 
 /**
- * The `nexa('trackSale', …)` command surface (FR-MOD-13.5, 13.5-g). The
+ * The `siyahtus('trackSale', …)` command surface (FR-MOD-13.5, 13.5-g). The
  * customer token this call needs lives inside the sandboxed frame, never on
  * the host page (NFR-S6), so the loader's part is only to relay a validated
  * command across the message boundary the tests above establish — the widget
@@ -281,16 +281,17 @@ describe('loader message boundary', () => {
  * `widget.tracksale.test.ts`, since a plain jsdom iframe never executes the
  * document at `frame.src`).
  */
-describe('nexa command queue (FR-MOD-13.5)', () => {
+describe('siyahtus command queue (FR-MOD-13.5)', () => {
   beforeEach(() => setup());
 
-  function nexaGlobal(): (command: string, payload?: unknown) => void {
-    return (window as unknown as { nexa: (command: string, payload?: unknown) => void }).nexa;
+  function siyahtusGlobal(): (command: string, payload?: unknown) => void {
+    return (window as unknown as { siyahtus: (command: string, payload?: unknown) => void })
+      .siyahtus;
   }
 
   function markReady(el: HTMLIFrameElement): void {
     const event = new MessageEvent('message', {
-      data: { type: 'nexa:ready' },
+      data: { type: 'siyahtus:ready' },
       origin: 'https://widget.test',
     });
     Object.defineProperty(event, 'source', { value: el.contentWindow });
@@ -300,7 +301,7 @@ describe('nexa command queue (FR-MOD-13.5)', () => {
   const payload = { external_order_id: 'o-1', amount_cents: 500, currency: 'USD' };
 
   it('exposes a global command function', () => {
-    expect(typeof nexaGlobal()).toBe('function');
+    expect(typeof siyahtusGlobal()).toBe('function');
   });
 
   it('relays a command issued after the widget signals ready', () => {
@@ -309,10 +310,10 @@ describe('nexa command queue (FR-MOD-13.5)', () => {
     markReady(el);
     const post = vi.spyOn(el.contentWindow!, 'postMessage');
 
-    nexaGlobal()('trackSale', payload);
+    siyahtusGlobal()('trackSale', payload);
 
     expect(post).toHaveBeenCalledWith(
-      { type: 'nexa:command', command: 'trackSale', payload },
+      { type: 'siyahtus:command', command: 'trackSale', payload },
       'https://widget.test',
     );
   });
@@ -322,13 +323,13 @@ describe('nexa command queue (FR-MOD-13.5)', () => {
     const el = frame()!;
     const post = vi.spyOn(el.contentWindow!, 'postMessage');
 
-    nexaGlobal()('trackSale', payload);
+    siyahtusGlobal()('trackSale', payload);
     expect(post).not.toHaveBeenCalled();
 
     markReady(el);
     expect(post).toHaveBeenCalledTimes(1);
     expect(post).toHaveBeenCalledWith(
-      { type: 'nexa:command', command: 'trackSale', payload },
+      { type: 'siyahtus:command', command: 'trackSale', payload },
       'https://widget.test',
     );
 
@@ -339,6 +340,6 @@ describe('nexa command queue (FR-MOD-13.5)', () => {
   });
 
   it('does not throw when called before the widget has ever booted', () => {
-    expect(() => nexaGlobal()('trackSale', payload)).not.toThrow();
+    expect(() => siyahtusGlobal()('trackSale', payload)).not.toThrow();
   });
 });

@@ -141,7 +141,7 @@ describe('entry hash', () => {
   });
 
   it('carries a version tag, so a future encoding cannot be confused with this one', () => {
-    expect(chainPayload(row())).toContain('nexa.audit.chain.v1.row');
+    expect(chainPayload(row())).toContain('siyahtus.audit.chain.v1.row');
   });
 });
 

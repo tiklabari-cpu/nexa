@@ -12,7 +12,13 @@
  */
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
-import { REGIONS, scopesWithinRole, servesRegion, type AgentRole, type Region } from '@nexa/types';
+import {
+  REGIONS,
+  scopesWithinRole,
+  servesRegion,
+  type AgentRole,
+  type Region,
+} from '@siyahtus/types';
 
 export interface SocketPrincipal {
   kind: 'agent' | 'bot' | 'customer';
@@ -78,7 +84,7 @@ export class SocketAuthenticator {
     private readonly db: PrismaClient,
     private readonly customerTokenSecret: string,
     /**
-     * The region this gateway serves (`NEXA_REGION`), read from the same
+     * The region this gateway serves (`SIYAHTUS_REGION`), read from the same
      * variable and validated by the same schema as the API's (C4-a). It is the
      * left-hand side of every residency comparison below; the right-hand side
      * is always the workspace's own.
@@ -160,7 +166,7 @@ export class SocketAuthenticator {
     // the same shared function: an admin demoted to agent who is refused the
     // workspace's chats over HTTP must not keep being pushed them over the
     // socket. A personal access token keeps its list here for the same reason
-    // it does there — see `scopesWithinRole` (@nexa/types).
+    // it does there — see `scopesWithinRole` (@siyahtus/types).
     const scopes = role && row.kind === 'oauth' ? scopesWithinRole(role, row.scopes) : row.scopes;
 
     const unrestricted = scopes.some((s) => s === 'chats--all:ro' || s === 'chats--all:rw');

@@ -48,18 +48,18 @@ describe('translate', () => {
 
 describe('detectLocale', () => {
   afterEach(() => {
-    globalThis.localStorage.removeItem('nexa.locale');
+    globalThis.localStorage.removeItem('siyahtus.locale');
   });
 
   it('honours a remembered choice, coercing the region away', () => {
-    globalThis.localStorage.setItem('nexa.locale', 'tr');
+    globalThis.localStorage.setItem('siyahtus.locale', 'tr');
     expect(detectLocale()).toBe('tr');
-    globalThis.localStorage.setItem('nexa.locale', 'tr-TR');
+    globalThis.localStorage.setItem('siyahtus.locale', 'tr-TR');
     expect(detectLocale()).toBe('tr');
   });
 
   it('falls back to English for an unsupported remembered value', () => {
-    globalThis.localStorage.setItem('nexa.locale', 'de');
+    globalThis.localStorage.setItem('siyahtus.locale', 'de');
     expect(detectLocale()).toBe('en');
   });
 });
@@ -180,7 +180,7 @@ describe('the store’s side effects', () => {
     // Put back the suite-wide pin `vitest.setup.ts` installed (tm 108) — this
     // file just overwrote it by switching languages for real.
     setFormatLocale('en-US');
-    globalThis.localStorage.removeItem('nexa.locale');
+    globalThis.localStorage.removeItem('siyahtus.locale');
   });
 
   it('re-points the Intl helpers, so numbers and dates follow the chosen language', () => {
@@ -197,7 +197,7 @@ describe('the store’s side effects', () => {
 
   it('remembers the choice and tells the document what language it is in', () => {
     useLocaleStore.getState().setLocale('tr');
-    expect(globalThis.localStorage.getItem('nexa.locale')).toBe('tr');
+    expect(globalThis.localStorage.getItem('siyahtus.locale')).toBe('tr');
     expect(document.documentElement.lang).toBe('tr');
   });
 });

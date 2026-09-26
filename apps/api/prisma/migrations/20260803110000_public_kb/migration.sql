@@ -104,17 +104,17 @@ ALTER TABLE "kb_articles"
 -- function, the same pre-tenant-context pattern as channel_resolve_license.
 ALTER TABLE kb_categories ENABLE ROW LEVEL SECURITY;
 CREATE POLICY kb_categories_tenant ON kb_categories
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE kb_articles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY kb_articles_tenant ON kb_articles
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE kb_settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY kb_settings_tenant ON kb_settings
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The application role reaches the tables only through those policies.
-GRANT SELECT, INSERT, UPDATE, DELETE ON kb_categories TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON kb_articles TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON kb_settings TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kb_categories TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kb_articles TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON kb_settings TO siyahtus_app;

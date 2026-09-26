@@ -1,7 +1,7 @@
 /**
  * PrismaClient lifecycle.
  *
- * The runtime connection uses DATABASE_APP_URL (the non-owner `nexa_app` role)
+ * The runtime connection uses DATABASE_APP_URL (the non-owner `siyahtus_app` role)
  * when present. This matters: PostgreSQL exempts superusers and table owners
  * from row level security, so connecting as the migration role would quietly
  * turn off every tenant isolation policy while all the tests still pass.

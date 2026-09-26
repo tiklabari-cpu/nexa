@@ -5,10 +5,10 @@
  * two independent guards rather than trusting either alone:
  *
  *   1. **RLS is the cross-tenant guard.** Every delete runs inside `withTenant`,
- *      so `nexa_current_license()` scopes each statement to one workspace. Even
+ *      so `siyahtus_current_license()` scopes each statement to one workspace. Even
  *      a mistake in a WHERE clause cannot reach another tenant's rows — the
  *      policy filters them out first. This is why the job runs as the RLS-bound
- *      `nexa_app` role and loops per tenant, rather than as the owner behind a
+ *      `siyahtus_app` role and loops per tenant, rather than as the owner behind a
  *      single SECURITY DEFINER delete (which would trade the safety net for a
  *      hand-written WHERE). The tenant list itself comes from the one
  *      SECURITY DEFINER enumerator, `retention_list_tenants()`.
@@ -17,7 +17,7 @@
  *      without it. `cutoffFor` refuses a non-positive window, so the cutoff can
  *      never land at or after "now".
  *
- * The audit log is the one table the sweep cannot prune through `nexa_app`: it
+ * The audit log is the one table the sweep cannot prune through `siyahtus_app`: it
  * is append-only to that role (INSERT/SELECT only, UPDATE/DELETE revoked), so
  * its window is applied by a single SECURITY DEFINER function,
  * `audit_prune_expired`. That function bypasses RLS, so there the age predicate
@@ -255,7 +255,7 @@ export class RetentionRunner {
               this.#deleteVisitBatch(tx, cutoffs.visits!),
             );
 
-    // The audit log is append-only to `nexa_app` (no DELETE grant), so its
+    // The audit log is append-only to `siyahtus_app` (no DELETE grant), so its
     // window cannot be applied through `withTenant` like the tables above. A
     // real run goes through the one SECURITY DEFINER hole, `audit_prune_expired`,
     // whose in-function `license_id = …` predicate keeps the RLS-bypassing
@@ -395,7 +395,7 @@ export class RetentionRunner {
    * delete from the append-only log. It runs SECURITY DEFINER and so bypasses
    * RLS: the `licenseId` handed to it — not a tenant context — is what scopes the
    * delete, and it refuses a null or `now()`-or-later cutoff. Called on the
-   * RLS-bound `nexa_app` connection, which holds EXECUTE but no table DELETE.
+   * RLS-bound `siyahtus_app` connection, which holds EXECUTE but no table DELETE.
    */
   async #pruneAudit(licenseId: bigint, cutoff: Date): Promise<number> {
     const rows = await this.#db.$queryRaw<Array<{ n: bigint }>>`

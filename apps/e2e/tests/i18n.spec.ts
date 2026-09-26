@@ -229,7 +229,7 @@ const SURFACES = [...APP_SURFACES, ...PUBLIC_SURFACES];
 
 /** The remembered choice, read where the product writes it. */
 function storedLocale(page: Page): Promise<string | null> {
-  return page.evaluate(() => localStorage.getItem('nexa.locale'));
+  return page.evaluate(() => localStorage.getItem('siyahtus.locale'));
 }
 
 type Locale = 'en' | 'tr';

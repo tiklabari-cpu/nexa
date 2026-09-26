@@ -1,4 +1,4 @@
-import type { CustomFieldValue } from '@nexa/types';
+import type { CustomFieldValue } from '@siyahtus/types';
 
 export interface ChatEvent {
   id: string;

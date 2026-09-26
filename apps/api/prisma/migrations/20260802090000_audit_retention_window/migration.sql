@@ -3,10 +3,10 @@
 --
 -- The audit log is append-only from the application's point of view: migration
 -- 20260722154008 enables RLS with only a SELECT and an INSERT policy, then
--- `REVOKE UPDATE, DELETE ON audit_log FROM nexa_app`. That is exactly what a
+-- `REVOKE UPDATE, DELETE ON audit_log FROM siyahtus_app`. That is exactly what a
 -- tamper-proof trail needs — an actor who could edit the log could erase the
 -- evidence of what they did — but it also means the 30-day retention window
--- cannot be applied through the normal `nexa_app` + `withTenant` path the rest
+-- cannot be applied through the normal `siyahtus_app` + `withTenant` path the rest
 -- of the retention sweep uses: that role has no DELETE on this table at all.
 --
 -- So the window is opened by one narrow SECURITY DEFINER function, mirroring
@@ -18,7 +18,7 @@
 -- not-yet-past cutoff would select live rows, so the function refuses it
 -- outright rather than run: retention must never be one bad argument away from
 -- erasing a tenant's — or every tenant's — trail. The table-level DELETE revoke
--- on `nexa_app` stays exactly as it was; `nexa_app` gains only EXECUTE on this
+-- on `siyahtus_app` stays exactly as it was; `siyahtus_app` gains only EXECUTE on this
 -- function, and PUBLIC gains nothing.
 
 CREATE OR REPLACE FUNCTION audit_prune_expired(p_license_id BIGINT, p_cutoff TIMESTAMPTZ)
@@ -49,6 +49,6 @@ $$;
 
 -- EXECUTE defaults to PUBLIC for a new function; take it back and grant only the
 -- application role, so the one hole in the append-only log is reachable from
--- exactly one place. The table's UPDATE/DELETE revoke on nexa_app is untouched.
+-- exactly one place. The table's UPDATE/DELETE revoke on siyahtus_app is untouched.
 REVOKE EXECUTE ON FUNCTION audit_prune_expired(BIGINT, TIMESTAMPTZ) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION audit_prune_expired(BIGINT, TIMESTAMPTZ) TO nexa_app;
+GRANT EXECUTE ON FUNCTION audit_prune_expired(BIGINT, TIMESTAMPTZ) TO siyahtus_app;

@@ -33,7 +33,7 @@ const mockSecureStore = jest.requireMock('expo-secure-store') as {
 
 const SESSION: PersistedSession = {
   refreshToken: 'refresh-1',
-  clientId: 'nexa-agent-app-1',
+  clientId: 'siyahtus-agent-app-1',
   licenseId: '42',
   accountId: 'acct-1',
 };
@@ -56,20 +56,20 @@ function fakeStore(available = true) {
 
 describe('expoSecureStore', () => {
   it('writes through expo-secure-store, bound to this device and this unlock', async () => {
-    await expoSecureStore.setItem('nexa.session', 'value');
+    await expoSecureStore.setItem('siyahtus.session', 'value');
 
-    expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('nexa.session', 'value', {
+    expect(mockSecureStore.setItemAsync).toHaveBeenCalledWith('siyahtus.session', 'value', {
       keychainAccessible: mockSecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
     });
   });
 
   it('reads and deletes with the same accessibility, so an entry is findable again', async () => {
-    await expoSecureStore.getItem('nexa.session');
-    await expoSecureStore.removeItem('nexa.session');
+    await expoSecureStore.getItem('siyahtus.session');
+    await expoSecureStore.removeItem('siyahtus.session');
 
     const options = { keychainAccessible: mockSecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
-    expect(mockSecureStore.getItemAsync).toHaveBeenCalledWith('nexa.session', options);
-    expect(mockSecureStore.deleteItemAsync).toHaveBeenCalledWith('nexa.session', options);
+    expect(mockSecureStore.getItemAsync).toHaveBeenCalledWith('siyahtus.session', options);
+    expect(mockSecureStore.deleteItemAsync).toHaveBeenCalledWith('siyahtus.session', options);
   });
 });
 
@@ -100,16 +100,16 @@ describe('SessionStore', () => {
 
   it('treats an unreadable stored value as no session, and removes it', async () => {
     const store = fakeStore();
-    store.values.set('nexa.session', 'not json');
+    store.values.set('siyahtus.session', 'not json');
     const subject = new SessionStore(store);
 
     expect(await subject.read()).toBeNull();
-    expect(store.values.has('nexa.session')).toBe(false);
+    expect(store.values.has('siyahtus.session')).toBe(false);
   });
 
   it('treats a session missing its refresh token as no session', async () => {
     const store = fakeStore();
-    store.values.set('nexa.session', JSON.stringify({ clientId: 'c', licenseId: '1' }));
+    store.values.set('siyahtus.session', JSON.stringify({ clientId: 'c', licenseId: '1' }));
 
     expect(await new SessionStore(store).read()).toBeNull();
   });

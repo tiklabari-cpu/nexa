@@ -32,7 +32,7 @@
  * The tenant boundary itself is not this executor's to set: `ctx.tx` already
  * carries the caller's tenant context (RLS), the same as every other MCP tool.
  */
-import { summariseConversation } from '@nexa/ai-mock';
+import { summariseConversation } from '@siyahtus/ai-mock';
 import { ApiError } from '../../../lib/api-error.js';
 import { maskCardNumbers } from '../../../lib/cc-mask.js';
 import { readConversationTurns } from '../../ai/copilot-service.js';

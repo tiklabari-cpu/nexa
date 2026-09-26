@@ -7,7 +7,7 @@
  * a socket.
  */
 import type { Logger } from 'pino';
-import { RTM_LIMITS, RTM_PUSH_ACTIONS, type ErrorType, type RtmAction } from '@nexa/types';
+import { RTM_LIMITS, RTM_PUSH_ACTIONS, type ErrorType, type RtmAction } from '@siyahtus/types';
 import type { SocketAuthenticator, SocketPrincipal } from './auth.js';
 import type { ConflictDetectionService } from './conflict.js';
 import type { ConflictPublisher } from './conflict-publisher.js';

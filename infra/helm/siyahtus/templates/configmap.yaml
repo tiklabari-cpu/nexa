@@ -3,7 +3,7 @@ kind: ConfigMap
 metadata:
   name: {{ .Release.Name }}-config
   labels:
-    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/part-of: siyahtus
     app.kubernetes.io/managed-by: {{ .Release.Service }}
 data:
   {{- range $key, $value := .Values.config }}

@@ -64,7 +64,7 @@ All queries via `make psql` (dev stack) or the demo stack's `db` container.
 ## Response
 
 - **There is no CLI to force-run this sweep** — unlike the other five
-  background jobs, `webhook_redelivery` has no `pnpm --filter @nexa/api
+  background jobs, `webhook_redelivery` has no `pnpm --filter @siyahtus/api
 <job>:run` script, deliberately: a hand-run pass would race the scheduled
   one for the same rows (README "Background jobs"). Do not write one for this
   incident; let the scheduled pass carry the backlog.

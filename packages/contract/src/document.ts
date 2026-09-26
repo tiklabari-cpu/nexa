@@ -29,7 +29,7 @@ export function loadOpenApiDocument(): OpenApiDocument {
     return cached;
   } catch (cause) {
     throw new Error(
-      `OpenAPI bundle missing at ${file}. Run \`pnpm --filter @nexa/contract build\`.`,
+      `OpenAPI bundle missing at ${file}. Run \`pnpm --filter @siyahtus/contract build\`.`,
       { cause },
     );
   }

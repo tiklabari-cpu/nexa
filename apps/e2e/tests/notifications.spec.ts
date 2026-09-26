@@ -139,7 +139,7 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
 
     // The badge only rises for an account with notifications on, and the test
     // above turns them off and back on for this same account. State that here
-    // rather than inherit it: when that restore was lost, this test read "Nexa"
+    // rather than inherit it: when that restore was lost, this test read "SiyahTuş"
     // for twenty seconds with a healthy socket, and the red named the socket.
     // Before `goto`, because the page caches the preference when it loads the
     // profile — a write after that would not reach `decideNotification`.
@@ -200,13 +200,13 @@ test.describe('notifications away from the inbox (FR-MOD-13.8)', () => {
       await agentPage.evaluate(() => {
         Object.defineProperty(document, 'hasFocus', { value: () => false, configurable: true });
       });
-      expect(await agentPage.title()).toBe('Nexa');
+      expect(await agentPage.title()).toBe('SiyahTuş');
 
       await visitorSends(visitor, `Still there? ${stamp}`);
 
       // A page with no inbox on it, on a socket opened before the agent ever
       // came here, raising the unread badge.
-      await expect.poll(() => agentPage.title(), { timeout: 20_000 }).toBe('(1) Nexa');
+      await expect.poll(() => agentPage.title(), { timeout: 20_000 }).toBe('(1) SiyahTuş');
     } finally {
       await visitorContext.close();
     }

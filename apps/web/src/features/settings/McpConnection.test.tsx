@@ -15,7 +15,7 @@ import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
 const MANIFEST = {
   protocol_version: '2025-06-18',
-  server: { name: 'nexa', url: 'http://localhost:4000/api/v1/mcp', version: '1.0.0' },
+  server: { name: 'siyahtus', url: 'http://localhost:4000/api/v1/mcp', version: '1.0.0' },
   tools: [
     {
       name: 'search_tickets',

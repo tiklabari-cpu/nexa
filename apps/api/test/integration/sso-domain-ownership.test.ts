@@ -111,7 +111,7 @@ describe('sso domain ownership', () => {
     owner = ownerClient();
     // A real spool: the token exists only in the message, so a mock that keeps
     // nothing would leave this suite testing the endpoints and not the flow.
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-sso-domains-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sso-domains-'));
     mailer = new FileMailer(mailDir);
     server = await startTestServer({}, { mailer });
   });

@@ -187,7 +187,7 @@ appConnect:
                 description: |
                   The key issued by the provider. Bounds match
                   `APP_API_KEY_MIN_LENGTH`/`APP_API_KEY_MAX_LENGTH` in
-                  @nexa/types, which the console's form validates against, so
+                  @siyahtus/types, which the console's form validates against, so
                   the client never refuses a key the server would accept.
     responses:
       "200":

@@ -3,7 +3,7 @@
  *
  * The platform this clones compared a plaintext `secret_key` the receiver had to
  * store and echo back — a model where the secret travels on every request and a
- * single leaked log line forges any future call. Nexa signs instead: the secret
+ * single leaked log line forges any future call. SiyahTuş signs instead: the secret
  * never leaves the server, only a signature derived from it does.
  *
  *   signature = HMAC-SHA256(secret, "{timestamp}.{nonce}.{body}")

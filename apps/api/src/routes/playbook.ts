@@ -10,8 +10,8 @@
 import type { FastifyInstance } from 'fastify';
 import type { Prisma } from '@prisma/client';
 import { z } from 'zod';
-import { compileInstruction, validateSteps } from '@nexa/ai-mock';
-import { ANSWER_LENGTHS } from '@nexa/types';
+import { compileInstruction, validateSteps } from '@siyahtus/ai-mock';
+import { ANSWER_LENGTHS } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../lib/csv-import.js';

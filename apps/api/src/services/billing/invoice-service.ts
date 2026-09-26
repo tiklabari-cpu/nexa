@@ -1,7 +1,7 @@
 /**
  * Invoices (FR-MOD-10.3, "fatura listesi/indirme").
  *
- * Billing is mocked (ADR-13): no external provider issues invoices, so Nexa
+ * Billing is mocked (ADR-13): no external provider issues invoices, so SiyahTuş
  * issues its own. A period's statement is **composed once, when the period
  * closes, and frozen** into `invoices` + `invoice_line_items` by
  * `invoice-close-sweep.ts`; this module reads those rows back.
@@ -12,7 +12,7 @@
  * a single row `updateSubscription` rewrites in place. Changing plan, seats or
  * cycle therefore restated statements the workspace had already been shown and
  * already downloaded, silently and retroactively. A frozen row cannot do that,
- * and the database withholds UPDATE and DELETE from `nexa_app` so it cannot be
+ * and the database withholds UPDATE and DELETE from `siyahtus_app` so it cannot be
  * quietly walked back either.
  *
  * The **current** period is the one thing still computed on read, and it is not
@@ -27,7 +27,7 @@
  * it. A second copy would be how a period's invoice comes to price its overage
  * differently from the usage endpoint that produced it.
  */
-import { findApiPackage } from '@nexa/types';
+import { findApiPackage } from '@siyahtus/types';
 import type { Env } from '../../config/env.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { currentPeriod, trialState } from './metering.js';
@@ -68,7 +68,7 @@ export type InvoiceStatus = 'paid' | 'open' | 'trial';
 export type InvoiceOrigin = 'issued' | 'reconstructed' | 'estimate';
 
 export interface Invoice {
-  /** Human invoice number, `NEXA-<yyyymm>`. */
+  /** Human invoice number, `SIYAHTUS-<yyyymm>`. */
   number: string;
   /** Billing period as `yyyymm`. */
   period: string;
@@ -297,7 +297,7 @@ export function toInvoice(
 
 /** The invoice number for a period. Per workspace, as the derived path was. */
 export function invoiceNumber(period: string): string {
-  return `NEXA-${period}`;
+  return `SIYAHTUS-${period}`;
 }
 
 /**
@@ -432,7 +432,7 @@ export function invoiceCsvRows(invoice: Invoice): {
   };
 }
 
-/** Download filename for an invoice — `nexa-invoice-<yyyymm>.csv`. */
+/** Download filename for an invoice — `siyahtus-invoice-<yyyymm>.csv`. */
 export function invoiceFilename(period: string): string {
-  return `nexa-invoice-${period}.csv`;
+  return `siyahtus-invoice-${period}.csv`;
 }

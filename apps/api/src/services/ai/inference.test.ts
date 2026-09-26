@@ -23,7 +23,7 @@ const outOfRegion: InferenceProvider = { id: 'mock', region: 'eu' };
 describe('resolveInferenceProvider', () => {
   it('places the provider in this process’s region when nothing says otherwise', () => {
     // The truth for an in-process stub: it runs wherever the API runs.
-    expect(resolveInferenceProvider({ LLM_PROVIDER: 'mock', NEXA_REGION: 'us' })).toEqual({
+    expect(resolveInferenceProvider({ LLM_PROVIDER: 'mock', SIYAHTUS_REGION: 'us' })).toEqual({
       id: 'mock',
       region: 'us',
     });
@@ -35,7 +35,7 @@ describe('resolveInferenceProvider', () => {
     expect(
       resolveInferenceProvider({
         LLM_PROVIDER: 'mock',
-        NEXA_REGION: 'us',
+        SIYAHTUS_REGION: 'us',
         LLM_PROVIDER_REGION: 'eu',
       }),
     ).toEqual({ id: 'mock', region: 'eu' });
@@ -45,12 +45,12 @@ describe('resolveInferenceProvider', () => {
 describe('resolveEmbeddingInferenceProvider (tm 255.7)', () => {
   it('holds the embedding provider to the same default, under its own key', () => {
     expect(
-      resolveEmbeddingInferenceProvider({ EMBEDDING_PROVIDER: 'mock', NEXA_REGION: 'us' }),
+      resolveEmbeddingInferenceProvider({ EMBEDDING_PROVIDER: 'mock', SIYAHTUS_REGION: 'us' }),
     ).toEqual({ id: 'mock', region: 'us' });
     expect(
       resolveEmbeddingInferenceProvider({
         EMBEDDING_PROVIDER: 'openai',
-        NEXA_REGION: 'us',
+        SIYAHTUS_REGION: 'us',
         EMBEDDING_PROVIDER_REGION: 'eu',
       }),
     ).toEqual({ id: 'openai', region: 'eu' });
@@ -58,7 +58,7 @@ describe('resolveEmbeddingInferenceProvider (tm 255.7)', () => {
 
   it('is independent of the chat provider’s region', () => {
     const env = {
-      NEXA_REGION: 'us',
+      SIYAHTUS_REGION: 'us',
       LLM_PROVIDER: 'mock',
       LLM_PROVIDER_REGION: 'eu',
       EMBEDDING_PROVIDER: 'mock',

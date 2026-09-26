@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { parseRichText } from '@nexa/types';
+import { parseRichText } from '@siyahtus/types';
 
 /** A caret (`start === end`) or selection range in a `<textarea>`. */
 export interface TextRange {
@@ -70,7 +70,7 @@ export function applyBulletPrefix(value: string, range: TextRange): EditResult {
  * asterisks should read back exactly as they typed them, not be reinterpreted
  * — not a security boundary.
  *
- * The subset itself is defined once, in `@nexa/types#parseRichText`, because
+ * The subset itself is defined once, in `@siyahtus/types#parseRichText`, because
  * the customer widget has to read back exactly what this shows the agent
  * (`apps/widget/src/rich-text.ts`, tm 235). Only the parse is shared: this
  * side makes React elements, that side makes DOM nodes.

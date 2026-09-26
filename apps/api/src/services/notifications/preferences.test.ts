@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_NOTIFICATION_PREFERENCES } from '@nexa/types';
+import { DEFAULT_NOTIFICATION_PREFERENCES } from '@siyahtus/types';
 import {
   NOTIFICATION_PREFERENCE_SELECT,
   serialiseNotificationPreferences,

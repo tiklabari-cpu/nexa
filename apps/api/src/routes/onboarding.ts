@@ -16,7 +16,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { ONBOARDING_SURVEY_ANSWERS, type AgentRole } from '@nexa/types';
+import { ONBOARDING_SURVEY_ANSWERS, type AgentRole } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { type AgentPrincipal, roleAtLeast } from '../services/auth/principal.js';
 import { OnboardingService } from '../services/onboarding/onboarding-service.js';

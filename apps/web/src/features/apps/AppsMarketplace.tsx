@@ -60,7 +60,7 @@ import {
   type AppOAuthStart,
   type AppPlacement,
   type AppPricing,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { Card, CardSkeleton, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';

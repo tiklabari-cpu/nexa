@@ -199,7 +199,7 @@ describe('trusted proxy hops (TRUST_PROXY_HOPS)', () => {
 
   it('believes whatever the caller wrote when the request never crossed a proxy', async () => {
     // The count is not too high here. `1` is exactly what the deployment that
-    // ships this process declares (infra/helm/nexa/values.yaml's
+    // ships this process declares (infra/helm/siyahtus/values.yaml's
     // TRUST_PROXY_HOPS) and exactly how many hops the path through that
     // deployment's web nginx really has. What is wrong is the *path*: this
     // request reached the process without crossing that nginx at all, so the
@@ -213,7 +213,7 @@ describe('trusted proxy hops (TRUST_PROXY_HOPS)', () => {
     // both arrive with one XFF entry over a trusted socket peer — so no header
     // discipline can close it and no other value of TRUST_PROXY_HOPS is safer
     // (see the pair below). The fix is a NetworkPolicy that stops the second
-    // path from existing: infra/helm/nexa/templates/networkpolicy.yaml.
+    // path from existing: infra/helm/siyahtus/templates/networkpolicy.yaml.
     await enforce(fx.a, ['203.0.113.0/24']);
 
     const res = await at('1').get('/auth/me', { ...auth(), 'x-forwarded-for': ALLOWED });

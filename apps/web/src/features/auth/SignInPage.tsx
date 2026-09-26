@@ -32,7 +32,7 @@ import { downloadRecoveryCodes } from '../../lib/recovery-codes.js';
  * assertion back here rather than completing it, because no browser proved it
  * asked for that login; arriving with that parameter, this page immediately
  * starts an ordinary SP-initiated one of its own. It redirects without asking
- * because the person already clicked something — their identity provider's Nexa
+ * because the person already clicked something — their identity provider's SiyahTuş
  * tile — and their session there makes the second leg silent. Nothing in the
  * URL decides where they go: the destination comes from the connection row.
  *
@@ -354,7 +354,7 @@ export function SignInPage(): ReactElement {
             N
           </span>
           <div>
-            <h1 className="text-lg font-semibold">Nexa</h1>
+            <h1 className="text-lg font-semibold">SiyahTuş</h1>
             <p className="text-xs text-content-secondary">{t('auth.signin.subtitle')}</p>
           </div>
         </header>

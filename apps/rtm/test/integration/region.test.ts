@@ -9,7 +9,7 @@
  * real gateway, and separately from the API's suite rather than by assuming the
  * two share code.
  *
- * The lever is `NEXA_REGION`: the harness starts a second gateway configured
+ * The lever is `SIYAHTUS_REGION`: the harness starts a second gateway configured
  * for `us` against the same fixtures, which is exactly what a US deployment is.
  * The tokens are unchanged — the same credential is accepted at one door and
  * refused at the other, which is the property.
@@ -29,7 +29,7 @@ import { startRtm, TestSocket } from '../helpers/rtm-harness.js';
 
 describe('region enforcement (C4-b)', () => {
   let db: PrismaClient;
-  /** The gateway every other suite runs: `NEXA_REGION` defaults to `eu`. */
+  /** The gateway every other suite runs: `SIYAHTUS_REGION` defaults to `eu`. */
   let eu: Awaited<ReturnType<typeof startRtm>>;
   /** The same build, configured as a US deployment. */
   let us: Awaited<ReturnType<typeof startRtm>>;
@@ -40,8 +40,8 @@ describe('region enforcement (C4-b)', () => {
 
   beforeAll(async () => {
     db = ownerClient();
-    eu = await startRtm({ NEXA_REGION: 'eu' });
-    us = await startRtm({ NEXA_REGION: 'us' });
+    eu = await startRtm({ SIYAHTUS_REGION: 'eu' });
+    us = await startRtm({ SIYAHTUS_REGION: 'us' });
   });
 
   afterAll(async () => {

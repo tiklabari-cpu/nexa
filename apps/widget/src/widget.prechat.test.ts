@@ -10,7 +10,7 @@
  * builder configured still gets exactly that, unchanged.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WidgetFormField } from '@nexa/types';
+import type { WidgetFormField } from '@siyahtus/types';
 import { mount } from './widget.js';
 
 interface FetchCall {
@@ -62,7 +62,7 @@ function stubFetch(): void {
 function mountWidget(search: string): HTMLElement {
   window.history.replaceState({}, '', `/widget.html${search}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   return root;

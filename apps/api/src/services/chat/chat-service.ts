@@ -32,7 +32,7 @@ import {
   type EventRecipients,
   type EventType,
   type TransferReason,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { visitedPagesOf } from '../campaigns/campaign-matching.js';
 import {

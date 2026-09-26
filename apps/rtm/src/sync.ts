@@ -22,7 +22,7 @@
  * new conversation must be told about it.
  */
 import type { PrismaClient } from '@prisma/client';
-import { EDITED_AT_PROPERTY, MESSAGE_EDIT_WINDOW_SECONDS } from '@nexa/types';
+import { EDITED_AT_PROPERTY, MESSAGE_EDIT_WINDOW_SECONDS } from '@siyahtus/types';
 import type { SocketPrincipal } from './auth.js';
 
 /**

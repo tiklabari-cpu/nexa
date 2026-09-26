@@ -15,7 +15,7 @@ import { ApiClientError, errorMessageKey, type ApiClient } from '../../lib/api-c
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { useTranslate } from '../../lib/i18n.js';
-import type { Campaign, CampaignWriteResult } from '@nexa/types';
+import type { Campaign, CampaignWriteResult } from '@siyahtus/types';
 
 /** An ISO instant as the `YYYY-MM-DDTHH:mm` a `datetime-local` input wants. */
 function toDateTimeLocal(iso: string | null): string {

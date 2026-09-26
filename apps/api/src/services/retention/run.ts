@@ -16,8 +16,8 @@
  * unless invoked with `--apply`. The machine-readable report goes to stdout; a
  * one-line human summary goes to stderr.
  *
- *   pnpm --filter @nexa/api retention:run            # dry-run: count only
- *   pnpm --filter @nexa/api retention:run --apply    # actually delete
+ *   pnpm --filter @siyahtus/api retention:run            # dry-run: count only
+ *   pnpm --filter @siyahtus/api retention:run --apply    # actually delete
  */
 import { loadEnvFile } from '../../config/load-env-file.js';
 

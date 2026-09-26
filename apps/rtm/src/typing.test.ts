@@ -143,11 +143,11 @@ describe('TypingService · agent-typing flag', () => {
 
   it('sets a short-lived, licence-scoped key when typing starts', async () => {
     await service.setAgentTyping('7', 'CHAT1', true);
-    expect(redis.set).toHaveBeenCalledWith('nexa:typing:7:CHAT1', '1', 'EX', 8);
+    expect(redis.set).toHaveBeenCalledWith('siyahtus:typing:7:CHAT1', '1', 'EX', 8);
   });
 
   it('clears the key when typing stops', async () => {
     await service.setAgentTyping('7', 'CHAT1', false);
-    expect(redis.del).toHaveBeenCalledWith('nexa:typing:7:CHAT1');
+    expect(redis.del).toHaveBeenCalledWith('siyahtus:typing:7:CHAT1');
   });
 });

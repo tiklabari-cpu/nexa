@@ -9,13 +9,13 @@
  */
 
 export const ERROR_TYPES = [
-  // Nexa addition. Signup is not in the source catalogue at all — that API
+  // SiyahTuş addition. Signup is not in the source catalogue at all — that API
   // assumes a workspace already exists — and "this email is taken" is a
   // conflict, not a malformed request.
   'account_exists',
   'authentication',
   'authorization',
-  // Nexa additions — Multibrand (PRD §5.3 · NFR-S4/S5). The source catalogue
+  // SiyahTuş additions — Multibrand (PRD §5.3 · NFR-S4/S5). The source catalogue
   // (v2-03 §1.8) has no brand concept. `brand_not_found` gives the brands surface
   // its own 404 (a foreign or unknown brand id is un-enumerable, like every other
   // resource); `brand_exists` is the 409 a duplicate slug within a license raises,
@@ -25,7 +25,7 @@ export const ERROR_TYPES = [
   'chat_anonymized',
   'chat_inactive',
   'customer_banned',
-  // Nexa addition — routing rules (FR-MOD-08.6.1). A licence holds at most one
+  // SiyahTuş addition — routing rules (FR-MOD-08.6.1). A licence holds at most one
   // fallback rule per kind, and asking for a second is a conflict rather than a
   // malformed request: the body was fine, the workspace's state is what refused
   // it. It also needs its own answer on the screen — "you already have one, edit
@@ -34,7 +34,7 @@ export const ERROR_TYPES = [
   // written.
   'fallback_rule_exists',
   'greeting_not_found',
-  // Nexa addition. A team still carries work: a routing rule targets it, or a
+  // SiyahTuş addition. A team still carries work: a routing rule targets it, or a
   // live conversation is reachable only through it (FR-MOD-04.5). Neither
   // reference is a foreign key, so this refusal is the only thing standing
   // between a delete and silently unroutable chats. 409, like the other
@@ -47,7 +47,7 @@ export const ERROR_TYPES = [
   'internal',
   'license_expired',
   'limit_reached',
-  // Nexa addition. A write refused for content reasons at the visitor edge —
+  // SiyahTuş addition. A write refused for content reasons at the visitor edge —
   // the spam filter (FR-MOD-08.9.3). Deliberately generic: it does not name the
   // rule that fired, so an enveloped refusal cannot be used to probe the filter.
   // Kept narrow like `customer_banned`, not folded into `not_allowed` (which is
@@ -58,7 +58,7 @@ export const ERROR_TYPES = [
   'not_found',
   'pending_requests_limit_reached',
   'request_timeout',
-  // Nexa addition — the sandbox workspace (FR-MOD-11.5 · 11.5-f). A licence may
+  // SiyahTuş addition — the sandbox workspace (FR-MOD-11.5 · 11.5-f). A licence may
   // hold at most one sandbox, and asking for a second is a conflict rather than
   // a malformed request: the caller's body was fine, the workspace's state is
   // what refused them. Kept narrow like `website_exists`/`ticket_exists` rather
@@ -66,19 +66,19 @@ export const ERROR_TYPES = [
   // written.
   'sandbox_exists',
   'service_unavailable',
-  // Nexa addition — supervisor takeover (FR-MOD-08.6.3). Two supervisors racing
+  // SiyahTuş addition — supervisor takeover (FR-MOD-08.6.3). Two supervisors racing
   // to seize the same chat: the conditional re-assign lets exactly one win, and
   // the loser gets this 409. Not `not_allowed` (that is an authorization verdict
   // — the loser *was* allowed, they simply lost the race) and not `chat_inactive`
   // (the chat is open); kept narrow like `ticket_exists`, not a generic conflict.
   'takeover_conflict',
-  // Nexa addition. The source catalogue (v2-03 §1.8) is chat-only — ticketing
+  // SiyahTuş addition. The source catalogue (v2-03 §1.8) is chat-only — ticketing
   // lives in a separate product there — so it has no "this already exists"
   // conflict. Kept narrow rather than adding a generic `conflict`, which is how
   // the rest of this list is written (`group_offline`, not `unavailable`).
   'ticket_exists',
   'too_many_requests',
-  // Nexa addition — two-factor authentication (NFR-S11 · FR-MOD-00.1). Asking
+  // SiyahTuş addition — two-factor authentication (NFR-S11 · FR-MOD-00.1). Asking
   // to set up a second factor on an account that already has a live one
   // (S11-2FA-d). A conflict rather than a malformed request: the body was fine,
   // the account's state is what refused it — and the client needs to tell this
@@ -87,7 +87,7 @@ export const ERROR_TYPES = [
   // folded into a generic conflict, which is how the rest of this list is
   // written.
   'two_factor_already_enabled',
-  // Nexa addition — two-factor authentication (NFR-S11 · FR-MOD-00.1). The
+  // SiyahTuş addition — two-factor authentication (NFR-S11 · FR-MOD-00.1). The
   // second login step (S11-2FA-e) answers with this rather than
   // `authentication`: the password was correct, a second factor is simply
   // still owed, and a client needs to tell the two apart to know whether to
@@ -96,7 +96,7 @@ export const ERROR_TYPES = [
   'unsupported_version',
   'users_limit_reached',
   'validation',
-  // Nexa addition. Websites (FR-MOD-08.5.2) are not in the source catalogue
+  // SiyahTuş addition. Websites (FR-MOD-08.5.2) are not in the source catalogue
   // (v2-03 §1.8, chat-only); a duplicate install domain is a conflict, kept
   // narrow like `ticket_exists`/`account_exists` rather than a generic one.
   'website_exists',

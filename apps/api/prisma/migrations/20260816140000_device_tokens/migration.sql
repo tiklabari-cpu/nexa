@@ -75,7 +75,7 @@ COMMENT ON COLUMN device_tokens.token IS
 -- ---------------------------------------------------------------------------
 -- What a device may be
 -- ---------------------------------------------------------------------------
--- Mirrors DEVICE_PLATFORMS in @nexa/types. A row naming a platform no sender
+-- Mirrors DEVICE_PLATFORMS in @siyahtus/types. A row naming a platform no sender
 -- knows how to reach is a delivery that silently never happens, and the person
 -- it was meant for cannot tell that from "nothing was sent" — the same
 -- reasoning as sla_breaches_target_check.
@@ -84,7 +84,7 @@ ALTER TABLE device_tokens
 
 -- An empty token is not a device. It would pass every type check, occupy the
 -- unique slot for the workspace's "" token, and address nothing.
--- The ceiling matches DEVICE_TOKEN_MAX_LENGTH in @nexa/types: a generous bound
+-- The ceiling matches DEVICE_TOKEN_MAX_LENGTH in @siyahtus/types: a generous bound
 -- whose job is refusing a payload posted into a credential field, not policing
 -- a vendor's current token length.
 ALTER TABLE device_tokens
@@ -112,9 +112,9 @@ ALTER TABLE device_tokens
 -- what makes the second impossible rather than merely unlikely.
 ALTER TABLE device_tokens ENABLE ROW LEVEL SECURITY;
 CREATE POLICY device_tokens_tenant ON device_tokens
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches the table only through that policy.
+-- The API connects as siyahtus_app and reaches the table only through that policy.
 -- Granted explicitly: the schema-wide GRANT in 20260722154008 covered only the
 -- tables that existed then.
 --
@@ -123,4 +123,4 @@ CREATE POLICY device_tokens_tenant ON device_tokens
 -- ability to remove one outright (rather than only mark it revoked) is what
 -- makes NFR-C8's erasure of a departed colleague's data complete. Revocation
 -- itself is still an UPDATE, so the ordinary path keeps the row.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.device_tokens TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.device_tokens TO siyahtus_app;

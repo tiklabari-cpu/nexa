@@ -34,7 +34,7 @@ import type {
   CampaignStatus,
   CampaignStatusFilter,
   CampaignWriteResult,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 const STATUS_TONE: Record<CampaignStatus, StatusTone> = {
   ongoing: 'success',

@@ -17,7 +17,7 @@ import {
   type SavedReportView,
 } from './report-views.js';
 
-const STORAGE_KEY = 'nexa.reports.saved-views';
+const STORAGE_KEY = 'siyahtus.reports.saved-views';
 
 beforeEach(() => localStorage.clear());
 afterEach(() => localStorage.clear());
@@ -99,7 +99,7 @@ describe('saved report views store', () => {
         baseline: null,
       },
     ]);
-    expect(localStorage.getItem('nexa.inbox.saved-views')).toBeNull();
+    expect(localStorage.getItem('siyahtus.inbox.saved-views')).toBeNull();
   });
 });
 

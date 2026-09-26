@@ -28,7 +28,7 @@
  * inside this one plugin. Recorded as a deliberate exception in PLAN §D.
  */
 import { ApiError } from './api-error.js';
-import type { ErrorType } from '@nexa/types';
+import type { ErrorType } from '@siyahtus/types';
 
 export const SCIM_USER_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:User';
 export const SCIM_GROUP_SCHEMA = 'urn:ietf:params:scim:schemas:core:2.0:Group';

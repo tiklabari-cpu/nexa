@@ -9,7 +9,7 @@ import {
   type WidgetFormField,
   type Region,
   type WidgetAppearance,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { verifyPassword } from '../lib/crypto.js';
@@ -186,7 +186,7 @@ const customerTokenBody = z.object({
    * Origin of the page the widget is embedded in.
    *
    * The request itself comes from inside the widget iframe, so its `Origin`
-   * header is Nexa's own widget origin — identical for every customer and
+   * header is SiyahTuş's own widget origin — identical for every customer and
    * therefore useless for deciding which *website* opened the chat. The loader
    * runs on the customer's page, knows that origin, and passes it through.
    *
@@ -321,7 +321,7 @@ export default async function authRoutes(
    * Deliberately *not* applied to the SAML assertion path (`routes/saml.ts`).
    * A federated sign-in is one the identity provider has already vouched for,
    * and MFA, conditional access and device posture are precisely what the
-   * workspace bought that provider for; demanding a second Nexa factor on top
+   * workspace bought that provider for; demanding a second SiyahTuş factor on top
    * would be a second, weaker copy of a control the IdP already owns, and would
    * make an enforced-SSO workspace unenterable for anyone whose authenticator
    * broke. A *password* sign-in is not vouched for by anybody, so it is gated —
@@ -1197,10 +1197,10 @@ export default async function authRoutes(
       await mailer.send({
         to: email,
         kind: 'notification',
-        subject: 'Two-factor authentication is now on for your Nexa account',
+        subject: 'Two-factor authentication is now on for your SiyahTuş account',
         body:
           `Two-factor authentication was just turned on for ${email}, from the ` +
-          `workspace "${organization?.name ?? 'Nexa'}". It applies to every ` +
+          `workspace "${organization?.name ?? 'SiyahTuş'}". It applies to every ` +
           `workspace this account can sign in to.\n\n` +
           `If this was you, keep your recovery codes somewhere safe — they are ` +
           `the way back in if you lose your authenticator app.\n\n` +
@@ -1230,7 +1230,7 @@ export default async function authRoutes(
       const accountId = requireSelfAccount(principal);
       const body = parse(enrollTwoFactorBody, request.body ?? {});
 
-      // The label the authenticator app shows under "Nexa". The address rather
+      // The label the authenticator app shows under "SiyahTuş". The address rather
       // than the display name: it is what distinguishes two entries for somebody
       // who holds a personal and a work account. Read with the password hash the
       // proof below needs, because both are one row.
@@ -1569,7 +1569,7 @@ export default async function authRoutes(
     // The region is then signed into the token (`rgn`), so the two doors it can
     // later reach — the REST edge and the RTM `login` — refuse it in the wrong
     // place without a lookup of their own.
-    if (!region || !servesRegion(env.NEXA_REGION, region)) {
+    if (!region || !servesRegion(env.SIYAHTUS_REGION, region)) {
       request.log.warn(
         { organization_id: match.organization_id, region: region ?? null },
         'widget token requested from the wrong region',

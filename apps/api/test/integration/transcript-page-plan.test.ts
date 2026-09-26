@@ -7,7 +7,7 @@
  * `(split_part(id, '_', 2))::bigint` — the per-thread sequence that lives
  * inside the event id — and nothing indexed that expression, so every page
  * sorted the whole thread and threw all but fifty rows away. Measured before
- * the fix (`pnpm --filter @nexa/api measure:transcript-page 2000`): ten times
+ * the fix (`pnpm --filter @siyahtus/api measure:transcript-page 2000`): ten times
  * the events, 10.03 times the shared buffers, on every page.
  *
  * The fix is a stored generated column, `events.event_sequence`, and the reason
@@ -36,7 +36,7 @@
  */
 import { Prisma, PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildEventId, generateShortId } from '@nexa/types';
+import { buildEventId, generateShortId } from '@siyahtus/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import type { TenantClient } from '../../src/lib/tenant.js';
 import type { AgentPrincipal, CustomerPrincipal } from '../../src/services/auth/principal.js';

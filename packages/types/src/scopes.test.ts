@@ -3,24 +3,24 @@ import { SCOPES, expandScope, hasAnyScope, isScope } from './scopes.js';
 import { ERROR_STATUS, ERROR_TYPES } from './errors.js';
 
 /**
- * Scopes Nexa adds to the transcribed catalogue.
+ * Scopes SiyahTuş adds to the transcribed catalogue.
  *
  * Listed explicitly rather than folded into the count so the guard keeps
  * working: an addition nobody decided on still fails the test below.
  */
-const NEXA_ADDED_SCOPES = [
+const SIYAHTUS_ADDED_SCOPES = [
   // Ticketing is a separate product in the source platform, with its own API
-  // and no scopes in v2-03 §8.5. Nexa merges it into one inbox (PLAN §D).
+  // and no scopes in v2-03 §8.5. SiyahTuş merges it into one inbox (PLAN §D).
   'tickets--all:ro',
   'tickets--access:ro',
   'tickets--all:rw',
   'tickets--access:rw',
   // Connected channels are managed through account settings in the source
   // platform, not a scoped resource. The v1 omnichannel adapters make them a
-  // first-class resource (FR-MOD-08.5.4-.6), so Nexa adds channel scopes.
+  // first-class resource (FR-MOD-08.5.4-.6), so SiyahTuş adds channel scopes.
   'channels--all:ro',
   'channels--all:rw',
-  // The source platform has no audit resource; Nexa keeps a security trail
+  // The source platform has no audit resource; SiyahTuş keeps a security trail
   // (NFR-S12) and gates reading it with a scope of its own (PLAN §D).
   'audit_log--all:ro',
   // Bulk egress of that trail to a SIEM (NFR-C6 · C6-b) is a separate
@@ -45,10 +45,10 @@ const SOURCE_SCOPE_COUNT = 58;
 describe('scope catalogue', () => {
   // v2-03 §8.5 is headed "~63 scopes" but its table enumerates 58. The table is
   // the authority — the heading is an approximation. Transcribed verbatim.
-  it('carries every scope enumerated in v2-03 §8.5, plus Nexa additions', () => {
-    expect(SCOPES).toHaveLength(SOURCE_SCOPE_COUNT + NEXA_ADDED_SCOPES.length);
+  it('carries every scope enumerated in v2-03 §8.5, plus SiyahTuş additions', () => {
+    expect(SCOPES).toHaveLength(SOURCE_SCOPE_COUNT + SIYAHTUS_ADDED_SCOPES.length);
     expect(new Set(SCOPES).size).toBe(SCOPES.length);
-    for (const scope of NEXA_ADDED_SCOPES) expect(SCOPES).toContain(scope);
+    for (const scope of SIYAHTUS_ADDED_SCOPES) expect(SCOPES).toContain(scope);
   });
 
   it('recognises real scopes and rejects invented ones', () => {
@@ -89,7 +89,7 @@ describe('expandScope', () => {
     // (all → access/groups/my); `--export` is a different authority on the same
     // resource, so no amount of read scope reaches it. If this ever inverts, a
     // dashboard integration holding `audit_log--all:ro` silently gains the
-    // right to stream the entire trail into a system Nexa does not control.
+    // right to stream the entire trail into a system SiyahTuş does not control.
     expect(expandScope('audit_log--all:ro')).not.toContain('audit_log--export:ro');
     expect(hasAnyScope(['audit_log--all:ro'], ['audit_log--export:ro'])).toBe(false);
     // Nor the other way round: a SIEM connector is not a log browser.
@@ -119,7 +119,7 @@ describe('hasAnyScope', () => {
 describe('error taxonomy', () => {
   // Same rule as the scopes above: the source's 24, plus additions that are
   // named here so an unplanned one still fails.
-  const NEXA_ADDED_TYPES = [
+  const SIYAHTUS_ADDED_TYPES = [
     'ticket_exists',
     'account_exists',
     'website_exists',
@@ -150,10 +150,10 @@ describe('error taxonomy', () => {
     'fallback_rule_exists',
   ];
 
-  it('carries the 24 documented types, plus Nexa additions', () => {
-    expect(ERROR_TYPES).toHaveLength(24 + NEXA_ADDED_TYPES.length);
+  it('carries the 24 documented types, plus SiyahTuş additions', () => {
+    expect(ERROR_TYPES).toHaveLength(24 + SIYAHTUS_ADDED_TYPES.length);
     expect(new Set(ERROR_TYPES).size).toBe(ERROR_TYPES.length);
-    for (const type of NEXA_ADDED_TYPES) expect(ERROR_TYPES).toContain(type);
+    for (const type of SIYAHTUS_ADDED_TYPES) expect(ERROR_TYPES).toContain(type);
   });
 
   it('maps every type to an HTTP status', () => {

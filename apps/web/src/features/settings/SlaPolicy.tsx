@@ -18,7 +18,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
 import { Link } from 'react-router-dom';
-import { SLA_MAX_TARGET_MINUTES } from '@nexa/types';
+import { SLA_MAX_TARGET_MINUTES } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';

@@ -3,7 +3,7 @@
 -- them come later (route in WORKSCHED-c, presence writer in WORKSCHED-d).
 --
 --   * work_schedules        — an agent's standing weekly plan: a timezone plus
---                             the `WorkScheduleSlot[]` of `@nexa/types` as
+--                             the `WorkScheduleSlot[]` of `@siyahtus/types` as
 --                             JSONB. Keyed `(license_id, agent_id)` like
 --                             agent_memberships, so one agent working in two
 --                             workspaces keeps two independent plans. The
@@ -96,14 +96,14 @@ ALTER TABLE agent_presence_events
 -- another's workspace.
 ALTER TABLE work_schedules ENABLE ROW LEVEL SECURITY;
 CREATE POLICY work_schedules_tenant ON work_schedules
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE agent_presence_events ENABLE ROW LEVEL SECURITY;
 CREATE POLICY agent_presence_events_tenant ON agent_presence_events
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches both tables only through those
+-- The API connects as siyahtus_app and reaches both tables only through those
 -- policies. Granted explicitly: the schema-wide GRANT in 20260722154008 covered
 -- only the tables that existed then.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.work_schedules TO nexa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.agent_presence_events TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.work_schedules TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.agent_presence_events TO siyahtus_app;

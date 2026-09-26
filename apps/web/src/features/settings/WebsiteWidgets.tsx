@@ -266,13 +266,13 @@ export function WebsiteWidgets({ canEdit }: { canEdit: boolean }): ReactElement 
 /**
  * Documentation only (FR-MOD-13.5, 13.5-g) — shown alongside the install
  * snippet so a developer wiring up the checkout confirmation page sees the
- * call right next to where the widget itself is pasted in. `nexa` is the
+ * call right next to where the widget itself is pasted in. `siyahtus` is the
  * general command surface the loader exposes once pasted above; calling it
  * before the widget has finished loading queues the call rather than losing
  * it.
  */
 const TRACK_SALE_EXAMPLE =
-  "nexa('trackSale', { external_order_id: 'order-123', amount_cents: 4999, currency: 'USD' });";
+  "siyahtus('trackSale', { external_order_id: 'order-123', amount_cents: 4999, currency: 'USD' });";
 
 /**
  * The code to paste, plus the two ways to hand it off: copy it, or mail it to a

@@ -11,9 +11,9 @@
 #
 # It restores into a scratch database it creates itself, verifies, and drops it
 # again (including when a check fails, or when the window is interrupted). It
-# never writes to `nexa`: every statement against the source database is a
+# never writes to `siyahtus`: every statement against the source database is a
 # SELECT, and the only DDL is CREATE/DROP DATABASE against a name that has to
-# match `nexa_restore_drill_<digits>` — enforced in `assert_droppable_database`,
+# match `siyahtus_restore_drill_<digits>` — enforced in `assert_droppable_database`,
 # not by review. CLAUDE.md's "no DB drop" boundary holds by construction.
 #
 # psql/pg_dump/pg_restore are not assumed to be on the host: everything runs
@@ -36,22 +36,22 @@ cd "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 BACKUP_DIR="${BACKUP_DIR:-backups}"
 DB_SERVICE="${DB_SERVICE:-db}"
-DB_USER="${DB_USER:-nexa}"
-DB_NAME="${DB_NAME:-nexa}"
+DB_USER="${DB_USER:-siyahtus}"
+DB_NAME="${DB_NAME:-siyahtus}"
 UPLOADS_DIR="${UPLOADS_DIR:-.data/uploads}"
 # The non-owner runtime role. Postgres exempts owners and superusers from row
 # level security, so the behavioural RLS check below is only worth anything from
 # this role — the same one the API connects as (DATABASE_APP_URL). Defaults are
 # the dev-only values from .env.example; a drill runs against dev datastores.
-APP_DB_USER="${APP_DB_USER:-nexa_app}"
-APP_DB_PASSWORD="${APP_DB_PASSWORD:-nexa_app_dev_password}"
+APP_DB_USER="${APP_DB_USER:-siyahtus_app}"
+APP_DB_PASSWORD="${APP_DB_PASSWORD:-siyahtus_app_dev_password}"
 
 # Tables whose row counts have to survive the round trip. Not "every table":
 # these are the spine of the domain model (PRD §8.4), and the ones a silently
 # empty restore would show up in first.
 COUNT_TABLES=(organizations accounts chats events)
 
-DRILL_DB_PREFIX='nexa_restore_drill_'
+DRILL_DB_PREFIX='siyahtus_restore_drill_'
 DRILL_DB="${DRILL_DB:-${DRILL_DB_PREFIX}$(date -u +%Y%m%d%H%M%S)_$$}"
 
 passed=0
@@ -88,7 +88,7 @@ fatal() {
 # impossible by construction. Same reasoning, and same wording, as
 # apps/api/scripts/test-datastores.ts:assertDroppableDatabaseName.
 assert_droppable_database() {
-  if [[ ! "$1" =~ ^nexa_restore_drill_[0-9]+(_[0-9]+)?$ ]]; then
+  if [[ ! "$1" =~ ^siyahtus_restore_drill_[0-9]+(_[0-9]+)?$ ]]; then
     fatal "refusing to create or drop \"$1\": not a ${DRILL_DB_PREFIX}<id> database"
   fi
 }
@@ -238,7 +238,7 @@ assert_droppable_database "$DRILL_DB"
 psql_q postgres 'SELECT 1' >/dev/null 2>&1 ||
   fatal "the \"$DB_SERVICE\" compose service is not reachable — start the datastores first (make up)"
 
-printf 'Nexa restore drill — scratch database %s\n' "$DRILL_DB"
+printf 'SiyahTuş restore drill — scratch database %s\n' "$DRILL_DB"
 
 if [ "$fresh_backup" -eq 1 ]; then
   printf '\nTaking a fresh backup first (scripts/backup.sh)\n'
@@ -442,8 +442,8 @@ fi
 # ---------------------------------------------------------------------------
 #
 # Measured, not assumed (tm 165.2): restoring this archive into a *fresh* cluster
-# aborts on the first `GRANT USAGE ON SCHEMA public TO nexa_app` with
-# `role "nexa_app" does not exist`. Roles are cluster-wide objects and a
+# aborts on the first `GRANT USAGE ON SCHEMA public TO siyahtus_app` with
+# `role "siyahtus_app" does not exist`. Roles are cluster-wide objects and a
 # per-database dump has no CREATE ROLE in it — pg_dumpall --globals-only is the
 # tool that carries them. Restoring into *this* cluster works only because
 # infra/db/init/00-extensions.sql already created the role here.

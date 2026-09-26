@@ -24,7 +24,7 @@ import {
   APP_COLLECTIONS,
   APP_PLACEMENTS,
   APP_PRICING_VALUES,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -53,7 +53,7 @@ const callbackBody = z.object({
 });
 
 /**
- * The API-key connect body (09.2). The bounds come from @nexa/types rather than
+ * The API-key connect body (09.2). The bounds come from @siyahtus/types rather than
  * being written out here, because the console's form validates against the same
  * two constants — a client that refuses a key this endpoint would take is the
  * failure mode this shares them to avoid.

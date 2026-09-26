@@ -9,7 +9,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AppListItem, AppListResponse } from '@nexa/types';
+import type { AppListItem, AppListResponse } from '@siyahtus/types';
 import type { ReactElement } from 'react';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
@@ -52,7 +52,7 @@ const connected = {
   installation: {
     app_id: 'hubspot',
     status: 'connected',
-    external_account: 'nexa+1@hubspot.example',
+    external_account: 'siyahtus+1@hubspot.example',
     scopes: ['contacts.read', 'deals.read'],
     connected_at: '2026-07-27T00:00:00.000Z',
     api_key_last_four: null,
@@ -77,7 +77,7 @@ const automationCard = {
   installation: {
     app_id: 'zapier',
     status: 'connected',
-    external_account: 'nexa+1@zapier.example',
+    external_account: 'siyahtus+1@zapier.example',
     scopes: ['zaps.trigger'],
     connected_at: '2026-09-06T00:00:00.000Z',
     api_key_last_four: null,

@@ -11,7 +11,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactElement } from 'react';
-import { KNOWLEDGE_FILE_MAX_BYTES } from '@nexa/types';
+import { KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
 import { Card, ErrorNotice, Page, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { VirtualList } from '../../components/VirtualList.js';

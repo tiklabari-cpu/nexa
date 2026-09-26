@@ -26,4 +26,4 @@ AS $$
 $$;
 
 REVOKE EXECUTE ON FUNCTION kb_resolve_public_slug(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION kb_resolve_public_slug(TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION kb_resolve_public_slug(TEXT) TO siyahtus_app;

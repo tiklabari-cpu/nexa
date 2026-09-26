@@ -1,7 +1,7 @@
 /**
  * Website crawl + parse for the knowledge base (FR-MOD-06.3.2).
  *
- * External network access is mocked across Nexa (a real crawler needs egress
+ * External network access is mocked across SiyahTuş (a real crawler needs egress
  * this build does not have), so the fetcher is a deterministic in-process stub:
  * the same URL always yields the same page, which is what lets an integration
  * test assert "crawl produced chunks" without a flaky network. The parse step is

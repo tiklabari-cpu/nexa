@@ -20,11 +20,11 @@ export function LoadingScreen() {
     <View
       testID="session-loading"
       accessibilityRole="progressbar"
-      accessibilityLabel="Opening Nexa"
+      accessibilityLabel="Opening SiyahTuş"
       style={[styles.screen, { backgroundColor: colors.bgCanvas }]}
     >
       <ActivityIndicator color={colors.brand500} />
-      <Text style={[styles.label, { color: colors.textSecondary }]}>Opening Nexa…</Text>
+      <Text style={[styles.label, { color: colors.textSecondary }]}>Opening SiyahTuş…</Text>
     </View>
   );
 }

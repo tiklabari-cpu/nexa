@@ -19,7 +19,7 @@
  */
 import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GROUP_PRIORITIES, type GroupPriority } from '@nexa/types';
+import { GROUP_PRIORITIES, type GroupPriority } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { ListSkeleton } from '../../components/Skeleton.js';

@@ -140,7 +140,7 @@ async function main(): Promise<void> {
   if (unexplained.length > 0) {
     console.error('Database has drifted from prisma/schema.prisma:\n');
     for (const statement of unexplained) console.error(`  ${statement}`);
-    console.error('\nRun `pnpm --filter @nexa/api db:migrate` or add a migration.');
+    console.error('\nRun `pnpm --filter @siyahtus/api db:migrate` or add a migration.');
     process.exitCode = 1;
     return;
   }

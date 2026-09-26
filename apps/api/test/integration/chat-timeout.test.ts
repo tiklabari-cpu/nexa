@@ -21,7 +21,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import {
   ChatTimeoutSweeper,

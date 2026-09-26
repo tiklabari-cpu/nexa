@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Nexa web (agent app) — multi-stage build (tm 140.2, M-CONTAINER-b). Local/dev
+# SiyahTuş web (agent app) — multi-stage build (tm 140.2, M-CONTAINER-b). Local/dev
 # images only: no production deploy, no real secrets baked in (CLAUDE.md /
 # MASTER-PROMPT limits).
 #
@@ -45,26 +45,26 @@ RUN pnpm config set store-dir /pnpm-store \
     && pnpm config set fetch-timeout 300000 \
     && pnpm config set fetch-retries 5
 
-# ---- build: filtered workspace install (`@nexa/web` + the workspace packages
-# it depends on — just `@nexa/types`, so this skips apps/api's, apps/rtm's and
-# apps/mobile's much larger dependency trees) + `vite build`. `@nexa/types`'s
+# ---- build: filtered workspace install (`@siyahtus/web` + the workspace packages
+# it depends on — just `@siyahtus/types`, so this skips apps/api's, apps/rtm's and
+# apps/mobile's much larger dependency trees) + `vite build`. `@siyahtus/types`'s
 # package.json points "main"/"exports" at raw `src/index.ts` (unlike the
 # compiled-dist patch apps/api/Dockerfile needs for plain `node`) — Vite's
 # esbuild transform handles `.ts` files it resolves through node_modules the
 # same way it handles project source, so no patch step is needed here. ----
 FROM base AS build
 COPY . .
-RUN --mount=type=cache,id=nexa-pnpm-store,target=/pnpm-store \
-    pnpm install --frozen-lockfile --filter @nexa/web...
+RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
+    pnpm install --frozen-lockfile --filter @siyahtus/web...
 ARG VITE_RTM_URL=ws://localhost:4001/v1/agent/rtm/ws
 ENV VITE_RTM_URL=${VITE_RTM_URL}
-RUN pnpm --filter @nexa/web... run build
+RUN pnpm --filter @siyahtus/web... run build
 
 # ---------------------------------------------------------------------------
 FROM ${NGINX_IMAGE} AS runtime
 # `nginx-unprivileged` runs the master process as the image's own non-root
 # user on an unprivileged port (8080) out of the box — the same "no root in
-# the running container" goal as apps/api|rtm's `nexa` user, without needing
+# the running container" goal as apps/api|rtm's `siyahtus` user, without needing
 # to reimplement nginx's own privilege-drop plumbing.
 COPY --from=build --chown=nginx:nginx /repo/apps/web/dist /usr/share/nginx/html
 # The stock image's own entrypoint (`/docker-entrypoint.d/20-envsubst-on-templates.sh`)

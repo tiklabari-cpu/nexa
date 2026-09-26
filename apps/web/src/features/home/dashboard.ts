@@ -11,7 +11,7 @@
  * so the label/description strings live in `locales/{en,tr}/home.ts`, keyed by
  * the same `ActivationStepKey`/live-counter key this file already carries.
  */
-import type { ActivationStepKey, HomeDashboard } from '@nexa/types';
+import type { ActivationStepKey, HomeDashboard } from '@siyahtus/types';
 
 /** Where each activation step's "do it" link points. */
 export const ACTIVATION_STEP_ROUTE: Record<ActivationStepKey, string> = {

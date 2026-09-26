@@ -18,7 +18,7 @@ import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
-import { EXPERTISE_NAME_MAX_LENGTH } from '@nexa/types';
+import { EXPERTISE_NAME_MAX_LENGTH } from '@siyahtus/types';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 
 /**

@@ -10,7 +10,7 @@ aiQuery:
       unlike `/copilot/chats/{chatId}/*`, it takes no `chatId`, because it is
       asked from the palette, not from inside a conversation.
 
-      The answer is deterministic (`@nexa/ai-mock`, no real LLM): the query is
+      The answer is deterministic (`@siyahtus/ai-mock`, no real LLM): the query is
       matched against a small set of known topics and, on a match, reads the
       corresponding figure straight out of the Overview report for the caller's
       own license. An unrecognised question is not an error — `kind:

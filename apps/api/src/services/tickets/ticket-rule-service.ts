@@ -14,7 +14,7 @@
  * cannot be saved pointing at nothing.
  */
 import type { Prisma } from '@prisma/client';
-import type { TicketRule, TicketRuleActions, TicketRuleConditions } from '@nexa/types';
+import type { TicketRule, TicketRuleActions, TicketRuleConditions } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';

@@ -25,7 +25,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ERROR_TYPES } from '@nexa/types';
+import { ERROR_TYPES } from '@siyahtus/types';
 import { NAMESPACES, NAMESPACE_PREFIXES, NAMESPACED_CATALOGUES } from '../locales/index.js';
 
 /**

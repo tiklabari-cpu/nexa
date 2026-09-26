@@ -10,7 +10,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { loadPanelTab, savePanelTab, usePanelTab } from './panelTab.js';
 
-const KEY = 'nexa.inbox.right-panel-tab';
+const KEY = 'siyahtus.inbox.right-panel-tab';
 
 beforeEach(() => localStorage.clear());
 afterEach(() => localStorage.clear());

@@ -106,7 +106,7 @@ describe('ApiClient', () => {
     expect(fetchImpl.mock.calls[0][1].headers).toMatchObject({
       Accept: 'application/json',
       Authorization: 'Bearer tok-1',
-      'X-Nexa-Brand': 'brand-9',
+      'X-SiyahTus-Brand': 'brand-9',
     });
   });
 

@@ -6,13 +6,13 @@
  * değişken/format engeli": a template's subject and body may only contain
  * `{{ group.field }}` placeholders naming variables the product can fill, and
  * only through well-formed braces. That judgement is not made here — it lives in
- * `@nexa/types` so the authoring form and this endpoint agree on it — but it is
+ * `@siyahtus/types` so the authoring form and this endpoint agree on it — but it is
  * *enforced* here, on every create and on every edit that touches the text, so a
  * template that would render broken mail can never reach the table.
  */
 import type { Prisma } from '@prisma/client';
-import type { TicketEmailTemplate, TicketStatus } from '@nexa/types';
-import { findTemplateProblemsIn } from '@nexa/types';
+import type { TicketEmailTemplate, TicketStatus } from '@siyahtus/types';
+import { findTemplateProblemsIn } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';
@@ -223,7 +223,7 @@ export class TicketEmailTemplateService {
 /**
  * Reject a subject/body pair that names a variable the product cannot fill, or
  * that carries a malformed placeholder — the KK, enforced. The judgement is the
- * shared one from `@nexa/types`; here it is turned into the first offending
+ * shared one from `@siyahtus/types`; here it is turned into the first offending
  * problem's message so the author sees what to fix.
  */
 function assertPlaceholdersValid(subject: string, body: string): void {

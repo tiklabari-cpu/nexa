@@ -33,7 +33,7 @@
  * caller here is placed next to an existing post-commit publish rather than
  * inside the `withTenant` block it belongs to.
  */
-import type { PushAudience, TrafficVisitorUpdatedPush } from '@nexa/types';
+import type { PushAudience, TrafficVisitorUpdatedPush } from '@siyahtus/types';
 import type { TenantContext } from '../../lib/tenant.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 

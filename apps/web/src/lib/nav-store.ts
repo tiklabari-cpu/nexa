@@ -17,7 +17,7 @@
 import { useLayoutEffect } from 'react';
 import { create } from 'zustand';
 
-const STORAGE_PREFIX = 'nexa.nav.pinned:';
+const STORAGE_PREFIX = 'siyahtus.nav.pinned:';
 
 /** What every account starts as, and what an unreadable value falls back to. */
 export const DEFAULT_NAV_PINNED = false;

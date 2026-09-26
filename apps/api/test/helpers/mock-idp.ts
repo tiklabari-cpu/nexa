@@ -79,8 +79,8 @@ F9K3pw3ol8gtt9OZcl2BezqA/f4VjZTITfBmFg+ep71Xmnt6NU/hnGg3b0cp
 /** `Issuer` on every assertion this harness signs. */
 export const MOCK_IDP_ENTITY_ID = 'https://idp-signing.example.test/metadata';
 
-/** Default `audience` — matches `saml.test.ts`'s stand-in for Nexa's own entity id. */
-export const MOCK_SP_ENTITY_ID = 'https://app.nexa.test/saml/metadata';
+/** Default `audience` — matches `saml.test.ts`'s stand-in for SiyahTuş's own entity id. */
+export const MOCK_SP_ENTITY_ID = 'https://app.siyahtus.test/saml/metadata';
 
 /**
  * Default `destination`. A real caller wiring up an `sso_connections` row has
@@ -88,7 +88,7 @@ export const MOCK_SP_ENTITY_ID = 'https://app.nexa.test/saml/metadata';
  * pass it as `destination` instead — this default only serves calls that just
  * want *a* valid assertion, such as this file's own unit test.
  */
-export const MOCK_ACS_URL = 'https://app.nexa.test/auth/saml/mock-connection/acs';
+export const MOCK_ACS_URL = 'https://app.siyahtus.test/auth/saml/mock-connection/acs';
 
 const EXC_C14N = 'http://www.w3.org/2001/10/xml-exc-c14n#';
 const ENVELOPED_SIGNATURE = 'http://www.w3.org/2000/09/xmldsig#enveloped-signature';
@@ -124,7 +124,7 @@ export interface IssuedAssertion {
 
 /**
  * Sign and base64-encode one happy-path SAMLResponse, as `MOCK_IDP_ENTITY_ID`
- * would send it to a Nexa ACS endpoint.
+ * would send it to a SiyahTuş ACS endpoint.
  *
  * Signs the `Assertion` only, not the enclosing `Response` — the shape most
  * real IdPs emit, and the one `saml.test.ts` calls `validResponse()`.

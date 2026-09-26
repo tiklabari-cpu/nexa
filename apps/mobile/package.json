@@ -1,5 +1,5 @@
 {
-  "name": "@nexa/mobile",
+  "name": "@siyahtus/mobile",
   "version": "0.1.0",
   "private": true,
   "main": "index.ts",
@@ -14,7 +14,7 @@
     "test:unit": "jest --ci"
   },
   "dependencies": {
-    "@nexa/types": "workspace:*",
+    "@siyahtus/types": "workspace:*",
     "@react-navigation/bottom-tabs": "^7.18.16",
     "@react-navigation/native": "^7.3.16",
     "@react-navigation/native-stack": "^7.18.8",
@@ -33,7 +33,7 @@
   "devDependencies": {
     "@babel/core": "^7.26.0",
     "@expo/metro-config": "~57.0.8",
-    "@nexa/contract": "workspace:*",
+    "@siyahtus/contract": "workspace:*",
     "@react-native/jest-preset": "^0.86.2",
     "@testing-library/react-native": "^14.0.1",
     "@types/jest": "^29.5.14",

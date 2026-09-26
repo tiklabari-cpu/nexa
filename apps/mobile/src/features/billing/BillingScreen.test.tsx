@@ -53,7 +53,7 @@ function usage(overrides: Partial<Usage> = {}): Usage {
 
 function invoice(overrides: Partial<Invoice> & { period: string }): Invoice {
   return {
-    number: `NEXA-${overrides.period}`,
+    number: `SIYAHTUS-${overrides.period}`,
     period_label: 'August 2026',
     period_start: '2026-08-01T00:00:00.000Z',
     period_end: '2026-09-01T00:00:00.000Z',

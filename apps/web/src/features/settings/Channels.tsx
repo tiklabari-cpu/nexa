@@ -47,7 +47,8 @@ const WIDGET_URL =
  * API's `INBOUND_EMAIL_DOMAIN`, which reads the local part back to route mail.
  */
 const INBOUND_EMAIL_DOMAIN =
-  (import.meta.env['VITE_INBOUND_EMAIL_DOMAIN'] as string | undefined) ?? 'inbound.nexa.localhost';
+  (import.meta.env['VITE_INBOUND_EMAIL_DOMAIN'] as string | undefined) ??
+  'inbound.siyahtus.localhost';
 
 interface WebsiteStatusRow {
   status: string;

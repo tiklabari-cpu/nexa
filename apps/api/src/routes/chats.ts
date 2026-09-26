@@ -6,7 +6,7 @@ import {
   EVENT_TYPES,
   TRANSFER_REASONS,
   isShortId,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';

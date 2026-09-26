@@ -18,7 +18,7 @@
  *
  * **The children share this run's datastores, which is the opposite of what the
  * harness normally does.** CONVENTIONS §1.1 gives every run its own
- * `nexa_test_<id>` database and its own Redis index precisely so two runs cannot
+ * `siyahtus_test_<id>` database and its own Redis index precisely so two runs cannot
  * see each other; here two *processes* have to see each other or there is
  * nothing to measure. Both are true at once because the isolation happens one
  * level up: `with-test-datastores.ts` repoints `DATABASE_URL`,

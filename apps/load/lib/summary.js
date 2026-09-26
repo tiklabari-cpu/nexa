@@ -53,7 +53,7 @@ function formatCount(value) {
  * Trends that are not durations, named rather than guessed at.
  *
  * Every trend k6 makes for itself is a time, and so is every one this suite
- * adds — except this: `nexa_rtm_connections_observed` counts sockets. Printing
+ * adds — except this: `siyahtus_rtm_connections_observed` counts sockets. Printing
  * "5000.0 ms" beside the one number NFR-P8 is about would be a lie told by the
  * formatter, and the reader has no way to catch it.
  */
@@ -93,7 +93,7 @@ function renderText(report) {
 
   const lines = [
     '',
-    `  nexa load — ${report.scenario}`,
+    `  siyahtus load — ${report.scenario}`,
     `  target ${report.target.api}`,
     // The generic profile describes the ramping REST scenarios; a capacity rung
     // has its own shape and prints it instead, because "2 VU · plateau 30s" is
@@ -117,7 +117,7 @@ function renderText(report) {
   // lost one, or neither — and how many sockets the pod said it was holding
   // while the numbers above were being taken.
   for (const [name, values] of Object.entries(report.metrics)) {
-    if (!name.startsWith('nexa_') || values.type === 'trend') continue;
+    if (!name.startsWith('siyahtus_') || values.type === 'trend') continue;
     const value = values.count ?? values.rate;
     if (value === undefined) continue;
     lines.push(`  ${name.padEnd(44)} ${values.type === 'rate' ? 'rate' : 'count'} ${value}`);

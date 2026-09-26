@@ -22,14 +22,14 @@ import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { defaultScopesForRole } from '@nexa/types';
+import { defaultScopesForRole } from '@siyahtus/types';
 import { AppShell } from './AppShell.js';
 import { readBrandId, useAuth, useBrandStore } from '../lib/auth-store.js';
 import { useLeaveGuard } from '../lib/dirty-guard.js';
 import { useNavStore } from '../lib/nav-store.js';
 import { installFakeWebSocket } from '../test/fake-socket.js';
 
-const BRAND_KEY = 'nexa.brand_id';
+const BRAND_KEY = 'siyahtus.brand_id';
 
 function renderShell(
   initialPath = '/app/inbox',
@@ -796,8 +796,8 @@ describe('brand switcher', () => {
 });
 
 describe('nav pin (FR-MOD-01.1.1 · 01.5)', () => {
-  const PIN_KEY_A1 = 'nexa.nav.pinned:a-1';
-  const PIN_KEY_A2 = 'nexa.nav.pinned:a-2';
+  const PIN_KEY_A1 = 'siyahtus.nav.pinned:a-1';
+  const PIN_KEY_A2 = 'siyahtus.nav.pinned:a-2';
 
   beforeEach(() => {
     localStorage.removeItem(PIN_KEY_A1);

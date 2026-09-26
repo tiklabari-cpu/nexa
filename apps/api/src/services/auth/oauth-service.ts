@@ -13,7 +13,7 @@
  *     source platform uses.
  */
 import type { PrismaClient } from '@prisma/client';
-import type { AgentRole } from '@nexa/types';
+import type { AgentRole } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import {
   constantTimeEqual,
@@ -100,7 +100,7 @@ export interface TokenGrant {
 /**
  * OAuth error codes are a fixed vocabulary (RFC 6749 §5.2) and clients switch
  * on them, so they travel as `details.oauth_error` rather than being folded
- * into Nexa's own `type` taxonomy.
+ * into SiyahTuş's own `type` taxonomy.
  */
 function oauthError(code: string, message: string): ApiError {
   return new ApiError('authentication', message, { details: { oauth_error: code } });
@@ -211,10 +211,10 @@ export class OauthService {
    * "close enough" URIs get accepted, and a redirect URI is a security
    * boundary, not a convenience.
    *
-   * Three families are admissible, and only because each is a place a Nexa
+   * Three families are admissible, and only because each is a place a SiyahTuş
    * client genuinely runs: `https` (the hosted console), loopback `http` (a
    * developer's Vite server), and a private-use scheme (the phone — RFC 8252
-   * §7.1, `@nexa/types` · `MOBILE_REDIRECT_URI`). Everything else is refused
+   * §7.1, `@siyahtus/types` · `MOBILE_REDIRECT_URI`). Everything else is refused
    * *before* the registered set is consulted, so a scheme that could execute
    * (`javascript:`), read a file (`file:`) or hand the code to another app on
    * the device (`intent:`) stays unusable even if one somehow reached the

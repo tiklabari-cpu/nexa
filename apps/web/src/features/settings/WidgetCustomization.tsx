@@ -21,7 +21,7 @@ import {
   type WidgetAppearance,
   type WidgetPosition,
   type WidgetTheme,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useBrand } from '../../lib/auth-store.js';

@@ -24,15 +24,15 @@
  * still open — writing nothing and sending nothing. `--apply` is the only path
  * that claims and delivers.
  *
- *   pnpm --filter @nexa/api scheduled-reports:run            # dry-run: list only
- *   pnpm --filter @nexa/api scheduled-reports:run --apply    # actually deliver
+ *   pnpm --filter @siyahtus/api scheduled-reports:run            # dry-run: list only
+ *   pnpm --filter @siyahtus/api scheduled-reports:run --apply    # actually deliver
  */
 import { loadEnvFile } from '../../config/load-env-file.js';
 
 loadEnvFile();
 
 import { PrismaClient } from '@prisma/client';
-import type { ScheduledExportFrequency } from '@nexa/types';
+import type { ScheduledExportFrequency } from '@siyahtus/types';
 import { parseEnv } from '../../config/env.js';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
 import { createMailer } from '../mail/mailer.js';

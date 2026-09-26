@@ -48,14 +48,14 @@ async function freshLoader(): Promise<(fromDir?: string) => void> {
 
 /** A `<root>/w/x/y/z` directory to call the loader from — it resolves four levels up. */
 function envFileFixture(contents?: string): { root: string; fromDir: string } {
-  const root = mkdtempSync(join(tmpdir(), 'nexa-load-env-'));
+  const root = mkdtempSync(join(tmpdir(), 'siyahtus-load-env-'));
   const fromDir = join(root, 'w', 'x', 'y', 'z');
   mkdirSync(fromDir, { recursive: true });
   if (contents !== undefined) writeFileSync(join(root, '.env'), contents, 'utf8');
   return { root, fromDir };
 }
 
-const TEST_KEYS = ['NEXA_LOAD_ENV_ALREADY_SET', 'NEXA_LOAD_ENV_FROM_FILE'] as const;
+const TEST_KEYS = ['SIYAHTUS_LOAD_ENV_ALREADY_SET', 'SIYAHTUS_LOAD_ENV_FROM_FILE'] as const;
 const created: string[] = [];
 
 afterEach(() => {
@@ -83,20 +83,20 @@ describe('loadEnvFile', () => {
       [
         '# a comment, and a blank line below',
         '',
-        'NEXA_LOAD_ENV_ALREADY_SET=from-file',
-        'NEXA_LOAD_ENV_FROM_FILE="from-file"',
+        'SIYAHTUS_LOAD_ENV_ALREADY_SET=from-file',
+        'SIYAHTUS_LOAD_ENV_FROM_FILE="from-file"',
       ].join('\n'),
     );
     created.push(root);
-    process.env['NEXA_LOAD_ENV_ALREADY_SET'] = 'from-the-shell';
+    process.env['SIYAHTUS_LOAD_ENV_ALREADY_SET'] = 'from-the-shell';
 
     const loadEnvFile = await freshLoader();
     loadEnvFile(fromDir);
 
     // The precedence that makes the file safe to keep: CI, `docker compose` and
     // a developer's own shell all override it rather than fight it.
-    expect(process.env['NEXA_LOAD_ENV_ALREADY_SET']).toBe('from-the-shell');
-    expect(process.env['NEXA_LOAD_ENV_FROM_FILE']).toBe('from-file');
+    expect(process.env['SIYAHTUS_LOAD_ENV_ALREADY_SET']).toBe('from-the-shell');
+    expect(process.env['SIYAHTUS_LOAD_ENV_FROM_FILE']).toBe('from-file');
   });
 });
 

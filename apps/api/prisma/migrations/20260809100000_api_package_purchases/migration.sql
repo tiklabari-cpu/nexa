@@ -16,7 +16,7 @@
 -- `package_id` names an API_PACKAGE_CATALOG entry in code rather than a row, so
 -- it carries no foreign key and no domain CHECK — the same call scheduled_reports
 -- makes for `group_id`, and for the same reason: the catalogue lives in
--- @nexa/types and every tier added to it would otherwise cost a migration. The
+-- @siyahtus/types and every tier added to it would otherwise cost a migration. The
 -- purchase route validates the id instead. `api_calls` and `price_cents` are
 -- copied from the catalogue at sale time rather than looked up on read, so
 -- re-pricing a package in code can never rewrite what a workspace already paid.
@@ -55,7 +55,7 @@ ALTER TABLE api_package_purchases
   ADD CONSTRAINT api_package_purchases_period_check CHECK (period ~ '^\d{6}$');
 
 -- A package that adds no calls is a charge for nothing. Every catalogue entry
--- carries a positive quota (@nexa/types asserts it), so a zero or negative row
+-- carries a positive quota (@siyahtus/types asserts it), so a zero or negative row
 -- can only arrive through a bug in the purchase path.
 ALTER TABLE api_package_purchases
   ADD CONSTRAINT api_package_purchases_api_calls_check CHECK (api_calls > 0);
@@ -75,14 +75,14 @@ ALTER TABLE api_package_purchases
 -- quota to whoever wrote the row.
 ALTER TABLE api_package_purchases ENABLE ROW LEVEL SECURITY;
 CREATE POLICY api_package_purchases_tenant ON api_package_purchases
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches the table only through that policy.
+-- The API connects as siyahtus_app and reaches the table only through that policy.
 -- It may record a sale and read the history, nothing more.
-GRANT SELECT, INSERT ON public.api_package_purchases TO nexa_app;
+GRANT SELECT, INSERT ON public.api_package_purchases TO siyahtus_app;
 
 -- Withholding UPDATE and DELETE takes an explicit REVOKE: the ALTER DEFAULT
--- PRIVILEGES in 20260722090000 hands nexa_app SELECT, INSERT, UPDATE, DELETE on
+-- PRIVILEGES in 20260722090000 hands siyahtus_app SELECT, INSERT, UPDATE, DELETE on
 -- every table created after it, so the narrower GRANT above is a no-op on its
 -- own. Mirrors `REVOKE UPDATE, DELETE ON audit_log`, and for the same reason: a
 -- purchase is the only surviving evidence of a charge, so an actor who can edit
@@ -92,6 +92,6 @@ GRANT SELECT, INSERT ON public.api_package_purchases TO nexa_app;
 -- that is a slice of its own.
 --
 -- Erasing the workspace still clears these rows: the ON DELETE CASCADE above is
--- carried out by the referencing table's owner, not by nexa_app, which is what
+-- carried out by the referencing table's owner, not by siyahtus_app, which is what
 -- NFR-C9 needs.
-REVOKE UPDATE, DELETE ON public.api_package_purchases FROM nexa_app;
+REVOKE UPDATE, DELETE ON public.api_package_purchases FROM siyahtus_app;

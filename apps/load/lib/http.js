@@ -1,7 +1,7 @@
 /**
  * Every HTTP call this suite makes goes through here.
  *
- * One reason: the `op` tag and the `nexa_measured{op:…}` counter have to agree,
+ * One reason: the `op` tag and the `siyahtus_measured{op:…}` counter have to agree,
  * always. The tag decides which latency budget the request lands in; the
  * counter is the proof that the budget was driven at all (`thresholds.js` →
  * `exercised`). Set by two separate call sites they would eventually disagree,

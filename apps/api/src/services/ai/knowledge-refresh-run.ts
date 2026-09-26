@@ -13,7 +13,7 @@
  * the sweep's own safety property (`knowledge-refresh-sweep.ts`), not
  * something a preview would add.
  *
- *   pnpm --filter @nexa/api knowledge-refresh:run
+ *   pnpm --filter @siyahtus/api knowledge-refresh:run
  */
 import { loadEnvFile } from '../../config/load-env-file.js';
 

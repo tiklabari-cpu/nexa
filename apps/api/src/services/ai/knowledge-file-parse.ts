@@ -31,7 +31,7 @@
  *    before chunking, because an upload is user-chosen size and everything
  *    downstream of it (decode, parse, chunk, embed, one row per chunk) is
  *    proportional to that size. `knowledge-bulk-row.ts` bounds a CSV import for
- *    the same reason; the ceilings live in `@nexa/types` so the form and the
+ *    the same reason; the ceilings live in `@siyahtus/types` so the form and the
  *    route cannot drift apart on what they are.
  *
  * 4. **Nothing is truncated to fit.** Over a limit is a typed error naming the
@@ -51,7 +51,7 @@ import {
   KNOWLEDGE_FILE_MIME_TYPES,
   normalizeKnowledgeFileMime,
   type KnowledgeFileMimeType,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { isCsvParseError, parseCsv, type CsvLimits } from '../../lib/csv-import.js';
 
 export type KnowledgeFileParseErrorCode =

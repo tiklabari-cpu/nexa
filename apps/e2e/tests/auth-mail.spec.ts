@@ -57,7 +57,11 @@ test.describe('invitation e-mail over SMTP — the link in the mail makes a team
     await expect(dialog.getByText(/Invitations sent/)).toBeVisible();
     await dialog.getByRole('button', { name: 'Done' }).click();
 
-    const mail = await waitForMail(request, invitee, 'You have been invited to a Nexa workspace');
+    const mail = await waitForMail(
+      request,
+      invitee,
+      'You have been invited to a SiyahTuş workspace',
+    );
     const link = linkIn(mail, '/join');
 
     // The invitee is somebody else, in a browser with no session of the owner's.
@@ -122,7 +126,7 @@ test.describe('password reset e-mail over SMTP — the link in the mail sets a n
       await forgot.getByRole('button', { name: 'Send link' }).click();
       await expect(forgot.getByRole('status')).toHaveText(neutral ?? '');
 
-      const mail = await waitForMail(request, owner, 'Reset your Nexa password');
+      const mail = await waitForMail(request, owner, 'Reset your SiyahTuş password');
       expect(mail.body).toContain('expires in one hour and works once');
       await forgot.goto(linkIn(mail, '/reset-password'));
       await forgot.getByLabel('New password').fill(newPassword);

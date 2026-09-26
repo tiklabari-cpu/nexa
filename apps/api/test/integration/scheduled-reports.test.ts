@@ -32,7 +32,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
 import { ScheduledReportSweeper } from '../../src/services/reports/scheduled-report-sweeper.js';
 import {
@@ -785,7 +785,7 @@ describe('scheduled report exports', () => {
       const appUrl = process.env['DATABASE_APP_URL'];
       if (!appUrl) throw new Error('DATABASE_APP_URL must be set');
       appRole = new PrismaClient({ datasourceUrl: appUrl });
-      mailDir = await mkdtemp(join(tmpdir(), 'nexa-sched-history-'));
+      mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sched-history-'));
       mailer = new FileMailer(mailDir);
     });
 

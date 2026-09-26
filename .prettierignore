@@ -59,4 +59,4 @@ apps/load/results/
 # `{{ $key }}: {{ $value | quote }}` line) and would fail `format:check` on
 # files that were never valid YAML on their own, only after Helm renders them.
 # `Chart.yaml`/`values.yaml` (plain YAML, no template syntax) are NOT ignored.
-infra/helm/nexa/templates/
+infra/helm/siyahtus/templates/

@@ -10,7 +10,7 @@
  * message can actually be typed and sent again, not just that a prop flipped.
  *
  * The conversation is created and archived by the test itself rather than
- * relying on a seeded archived chat — the shared `nexa` database has several,
+ * relying on a seeded archived chat — the shared `siyahtus` database has several,
  * and picking the "right" one by inspection is more fragile than making one.
  */
 import { expect, openWidget, test, visitorSends } from './fixtures.js';

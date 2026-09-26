@@ -1,10 +1,10 @@
 openapi: 3.1.0
 
 info:
-  title: Nexa Platform API
+  title: SiyahTuş Platform API
   version: 1.0.0
   description: |
-    Nexa live support + AI customer service platform.
+    SiyahTuş live support + AI customer service platform.
 
     **Resource-based REST** (ADR-04). Actions that are not plain CRUD live as a
     POST sub-path under the resource they act on — `POST /chats/{chatId}/transfer`,
@@ -57,7 +57,7 @@ info:
 servers:
   - url: http://localhost:4000/api/v1
     description: Local development
-  - url: https://api.nexa.example/api/v1
+  - url: https://api.siyahtus.example/api/v1
     description: Production (eu region; the us deployment serves us workspaces)
 
 tags:
@@ -721,7 +721,7 @@ components:
         retention. `enabled` false means this process runs none of them (every
         job below is still listed, each `disabled`); a deployment that would
         rather drive the sweeps from a host cron leaves it off and uses each
-        job's own `pnpm --filter @nexa/api <job>:run` script instead.
+        job's own `pnpm --filter @siyahtus/api <job>:run` script instead.
       required: [enabled, jobs]
       properties:
         enabled:
@@ -1798,7 +1798,7 @@ components:
       description: |
         One brand of a license (Multibrand, PRD §5.3). A license may run several
         brands under a single subscription; each has its own channels, websites
-        and widget/security/inbox settings, selected via the `X-Nexa-Brand`
+        and widget/security/inbox settings, selected via the `X-SiyahTus-Brand`
         header on those resources. Every license has exactly one default brand —
         the `Default` it is created with — which cannot be deleted.
       required: [id, name, slug, logo_url, is_default, created_at]
@@ -1818,7 +1818,7 @@ components:
           type: boolean
           description: |
             The license's default brand — the one a request with no
-            `X-Nexa-Brand` header resolves to. Exactly one per license; it
+            `X-SiyahTus-Brand` header resolves to. Exactly one per license; it
             cannot be deleted.
         created_at: { type: string, format: date-time }
 
@@ -1864,7 +1864,7 @@ components:
         snippet:
           type: string
           description: |
-            The code to paste before `</body>`. Sets `window.__nexa` and loads
+            The code to paste before `</body>`. Sets `window.__siyahtus` and loads
             the async widget loader. Identical across a workspace's sites — the
             embedding origin is resolved at runtime — so "get code" per row shows
             this same value.
@@ -2696,7 +2696,7 @@ components:
           description: Open the panel edge-to-edge on phones rather than as a card.
         powered_by:
           type: boolean
-          description: The removable "Powered by Nexa" footer (FR-MOD-11.5).
+          description: The removable "Powered by SiyahTuş" footer (FR-MOD-11.5).
         updated_at: { type: string, format: date-time, nullable: true }
 
     SalesTrackerSettings:
@@ -4397,7 +4397,7 @@ components:
           format: date-time
           nullable: true
           description: |
-            When this person was last active anywhere in Nexa, coarsened to the
+            When this person was last active anywhere in SiyahTuş, coarsened to the
             minute (FR-MOD-04.3.4). Account-wide by design — `accounts` is a
             person, not a membership, so someone who works two workspaces
             carries one timestamp across both. `null` means never seen since the
@@ -4479,9 +4479,9 @@ components:
       type: object
       description: |
         An agent's declared weekly availability (PRD §5.3-Vardiya). One slot per
-        weekday it lists, in `@nexa/types` `WORK_SCHEDULE_DAYS` order; a day with
+        weekday it lists, in `@siyahtus/types` `WORK_SCHEDULE_DAYS` order; a day with
         no slot is unscheduled. `enabled` distinguishes a day that is off from a
-        day whose hours have simply not been set. `@nexa/types`
+        day whose hours have simply not been set. `@siyahtus/types`
         `normalizeWorkSchedule` is the single validation gate both
         `GET`/`PUT /agents/{agentId}/work-schedule` and the settings form defer
         to, so the endpoint and the form can never disagree about what a valid
@@ -4651,7 +4651,7 @@ components:
           required: [white_label, sandbox, sla, sso, hipaa, siem_export]
           additionalProperties: false
           properties:
-            white_label: { type: boolean, description: Widget served without Nexa branding. }
+            white_label: { type: boolean, description: Widget served without SiyahTuş branding. }
             sandbox:
               { type: boolean, description: A second, non-billable workspace to test against. }
             sla:
@@ -4708,7 +4708,7 @@ components:
           total_cents,
         ]
       properties:
-        number: { type: string, description: "Invoice number, `NEXA-<yyyymm>`." }
+        number: { type: string, description: "Invoice number, `SIYAHTUS-<yyyymm>`." }
         period: { type: string, description: "Billing period as `yyyymm`." }
         period_label: { type: string, description: "Friendly period label, e.g. `July 2026`." }
         period_start:
@@ -5508,7 +5508,7 @@ components:
       type: object
       description: |
         The Chat topics report (FR-MOD-07.6): conversations in the window grouped
-        into topics by deterministic, on-the-fly clustering (`@nexa/ai-mock`, no
+        into topics by deterministic, on-the-fly clustering (`@siyahtus/ai-mock`, no
         real LLM), each with volume, share and a vs-previous trend. Nothing is
         persisted — the clustering is recomputed per request.
 
@@ -6035,7 +6035,7 @@ components:
     ReportShareLink:
       type: object
       description: |
-        A time-limited, scope-limited link that lets someone without a Nexa
+        A time-limited, scope-limited link that lets someone without a SiyahTuş
         account read **one** report group over **one** fixed window
         (FR-MOD-07.3.1 "Share export/link").
 
@@ -6225,7 +6225,7 @@ components:
                 description: |
                   How that sign-in was made. Separated because after an incident
                   the two imply different containment: `password` means a secret
-                  Nexa holds was known, `sso` means an external system vouched.
+                  SiyahTuş holds was known, `sso` means an external system vouched.
         credentials:
           type: array
           description: |
@@ -6728,7 +6728,7 @@ components:
       description: The agent account's uuid.
       schema: { type: string, format: uuid }
     BrandHeader:
-      name: X-Nexa-Brand
+      name: X-SiyahTus-Brand
       in: header
       required: false
       description: |

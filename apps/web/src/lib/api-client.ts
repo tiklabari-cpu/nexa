@@ -5,7 +5,7 @@
  * `type` and `request_id`, so UI code branches on a stable machine-readable
  * value and support can correlate a user report with a server log line.
  */
-import { isErrorType, type ApiErrorBody, type ErrorType } from '@nexa/types';
+import { isErrorType, type ApiErrorBody, type ErrorType } from '@siyahtus/types';
 
 export class ApiClientError extends Error {
   readonly type: ErrorType | 'network';
@@ -124,7 +124,7 @@ export class ApiClient {
     const token = this.#getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const brandId = this.#getBrandId();
-    if (brandId) headers.set('X-Nexa-Brand', brandId);
+    if (brandId) headers.set('X-SiyahTus-Brand', brandId);
 
     const response = await this.#fetch(`${this.#baseUrl}${path}`, {
       ...init,
@@ -161,7 +161,7 @@ export class ApiClient {
     const token = this.#getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const brandId = this.#getBrandId();
-    if (brandId) headers.set('X-Nexa-Brand', brandId);
+    if (brandId) headers.set('X-SiyahTus-Brand', brandId);
 
     const response = await this.#fetch(`${this.#baseUrl}${path}`, {
       ...init,
@@ -198,7 +198,7 @@ export class ApiClient {
     const token = this.#getAccessToken();
     if (token) headers.set('Authorization', `Bearer ${token}`);
     const brandId = this.#getBrandId();
-    if (brandId) headers.set('X-Nexa-Brand', brandId);
+    if (brandId) headers.set('X-SiyahTus-Brand', brandId);
 
     let response: Response;
     try {

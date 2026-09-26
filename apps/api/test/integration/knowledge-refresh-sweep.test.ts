@@ -15,7 +15,7 @@
  *      survive exactly as `POST …/reindex` leaves them on the same refusal —
  *      only `last_refresh_error` moves, and the next attempt is still
  *      scheduled rather than abandoned.
- *   3. **RLS, not just a WHERE clause.** The sweep runs as `nexa_app`
+ *   3. **RLS, not just a WHERE clause.** The sweep runs as `siyahtus_app`
  *      (`DATABASE_APP_URL`), the same role a request runs as, so a query that
  *      forgot to scope by tenant would be caught by the database refusing the
  *      row, not by a lucky test fixture.

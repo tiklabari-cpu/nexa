@@ -24,7 +24,11 @@ import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
-import type { ScheduledExport, ScheduledExportFrequency, ScheduledExportRun } from '@nexa/types';
+import type {
+  ScheduledExport,
+  ScheduledExportFrequency,
+  ScheduledExportRun,
+} from '@siyahtus/types';
 
 interface ReportGroupOption {
   id: string;

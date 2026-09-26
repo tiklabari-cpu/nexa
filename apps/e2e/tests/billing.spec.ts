@@ -209,7 +209,7 @@ test.describe('billing checkout', () => {
     await agentPage.goto('/app/billing');
     await expect(agentPage.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
 
-    // The Essential package, as the catalogue sells it (@nexa/types).
+    // The Essential package, as the catalogue sells it (@siyahtus/types).
     const ESSENTIAL_CALLS = 100_000;
     const ESSENTIAL_PRICE_CENTS = 2999;
 

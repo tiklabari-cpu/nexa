@@ -14,9 +14,9 @@ safe to run immediately.
 ## Diagnosis
 
 All queries run via `make psql` (dev stack) or the demo stack's `db`
-container — connect as the **owner** role (`nexa`) only to read catalogs; the
+container — connect as the **owner** role (`siyahtus`) only to read catalogs; the
 behavioral checks below deliberately connect as the **runtime** role
-(`nexa_app`) instead, because RLS does not apply to table owners or
+(`siyahtus_app`) instead, because RLS does not apply to table owners or
 superusers and a check run as the owner would tell you nothing
 (`README.md` "`DATABASE_URL` vs `DATABASE_APP_URL`").
 
@@ -26,7 +26,7 @@ superusers and a check run as the owner would tell you nothing
    visible difference except that every tenant's rows are now readable
    (README, same section). Check the deployed config directly: confirm
    `DATABASE_APP_URL` is set and is **not** equal to `DATABASE_URL`, and that
-   its user is `nexa_app`.
+   its user is `siyahtus_app`.
 
 2. **RLS surface — every table, every policy, verbatim.** (Same query
    `scripts/restore-drill.sh`'s `rls_surface()` uses to compare a restore
@@ -44,7 +44,7 @@ superusers and a check run as the owner would tell you nothing
    ```
 
    Every tenant-scoped table should show `relrowsecurity = t` with a policy
-   whose `qual`/`with_check` references `nexa_current_license` (or the
+   whose `qual`/`with_check` references `siyahtus_current_license` (or the
    region/organization equivalent). A table with rows but no matching line
    here is the gap.
 
@@ -74,8 +74,8 @@ superusers and a check run as the owner would tell you nothing
    `psql_app()`:
 
    ```bash
-   docker compose exec -T -e PGPASSWORD=nexa_app_dev_password db \
-     psql -U nexa_app -h 127.0.0.1 -d nexa -v ON_ERROR_STOP=1 -qtAX \
+   docker compose exec -T -e PGPASSWORD=siyahtus_app_dev_password db \
+     psql -U siyahtus_app -h 127.0.0.1 -d siyahtus -v ON_ERROR_STOP=1 -qtAX \
      -c "SELECT count(*) FROM chats UNION ALL SELECT count(*) FROM events UNION ALL SELECT count(*) FROM audit_log"
    ```
 
@@ -97,7 +97,7 @@ superusers and a check run as the owner would tell you nothing
    ```bash
    curl -sD - -H "Authorization: Bearer $ADMIN_TOKEN" \
      "http://127.0.0.1:4000/api/v1/audit-log/export" -o export.ndjson \
-     | grep -i x-nexa-export-chain-ok
+     | grep -i x-siyahtus-export-chain-ok
    ```
 
 ## Response
@@ -118,7 +118,7 @@ superusers and a check run as the owner would tell you nothing
 - If the gap is a missing policy on a table, the fix pattern is the same one
   tm 150 used for `events` partitions: a migration that adds the same
   `USING`/`WITH CHECK` policy the sibling tables carry (`qual` referencing
-  `nexa_current_license`), not a `REVOKE` — `ALTER DEFAULT PRIVILEGES` in
+  `siyahtus_current_license`), not a `REVOKE` — `ALTER DEFAULT PRIVILEGES` in
   `20260722090000_init_extensions` regrants DML to every new table, so a
   revoke only closes the gap until the next table/partition is created; a
   policy closes it permanently. See `PLAN.md` `#### KS4-PART` and the
@@ -134,7 +134,7 @@ superusers and a check run as the owner would tell you nothing
   covers every tenant table including partitions:
 
   ```bash
-  pnpm --filter @nexa/api exec tsx scripts/with-test-datastores.ts \
+  pnpm --filter @siyahtus/api exec tsx scripts/with-test-datastores.ts \
     vitest run --dir test/integration data-model.test.ts
   ```
 

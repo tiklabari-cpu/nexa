@@ -17,7 +17,7 @@
  * against an all-or-nothing implementation and against a silent one alike.
  */
 import type { PrismaClient } from '@prisma/client';
-import { generateShortId, TICKET_BULK_MAX } from '@nexa/types';
+import { generateShortId, TICKET_BULK_MAX } from '@siyahtus/types';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTenant, type TenantClient } from '../../src/lib/tenant.js';
 import { TicketService } from '../../src/services/tickets/ticket-service.js';

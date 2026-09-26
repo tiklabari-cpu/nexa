@@ -6,7 +6,7 @@
 -- it means — "not attached to a marketplace card". Old code that never selects
 -- the column is unaffected, so this is safe with both versions running.
 --
--- The value is a catalogue id from @nexa/types (`zapier`, `make`), not a
+-- The value is a catalogue id from @siyahtus/types (`zapier`, `make`), not a
 -- foreign key: the catalogue is static data in the type package, and it is the
 -- *connection* (`app_installations`) that is a row. Holding the link by id
 -- keeps the gate in the service — a subscription may only be created while the

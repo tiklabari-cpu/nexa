@@ -25,7 +25,7 @@
  * of a local test database.
  *
  * THE AUTHENTICATOR IS WRITTEN OUT HERE rather than imported from
- * `apps/api/src/lib/totp.ts`. `@nexa/e2e` has no workspace dependencies (see
+ * `apps/api/src/lib/totp.ts`. `@siyahtus/e2e` has no workspace dependencies (see
  * its `package.json`), so importing would mean exporting the API's internals to
  * a test package — but the stronger reason is that a shared implementation
  * cannot catch its own bug: a base32 decoder that dropped a bit would produce

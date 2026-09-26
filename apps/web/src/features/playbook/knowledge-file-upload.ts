@@ -21,7 +21,7 @@ import {
   KNOWLEDGE_FILE_MIME_TYPES,
   knowledgeFileMimeFor,
   type KnowledgeFileMimeType,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 export type KnowledgeFileRejectionReason =
   'invalid_type' | 'empty_file' | 'too_large' | 'unreadable';

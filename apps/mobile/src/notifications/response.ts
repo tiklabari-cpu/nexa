@@ -13,7 +13,7 @@
  * both of them run on the launch path.
  */
 import * as Notifications from 'expo-notifications';
-import { readPushPayload } from '@nexa/types';
+import { readPushPayload } from '@siyahtus/types';
 
 /**
  * One notification a person acted on: which conversation, and which delivery it

@@ -4,7 +4,7 @@
  *
  * The defect this exists for was never a bug in a function. tm 177 shipped an
  * S3-compatible `ObjectStore`, proved it across two real pods, and closed;
- * `infra/helm/nexa/values.yaml` went on selecting `STORAGE_PROVIDER: local`
+ * `infra/helm/siyahtus/values.yaml` went on selecting `STORAGE_PROVIDER: local`
  * while giving api an HPA ceiling of four pods, and went on carrying a comment
  * that said "STORAGE_PROVIDERS only has 'local' today" for a week after `s3`
  * shipped. Nothing failed to compile, render or test — a manifest and the code
@@ -35,8 +35,8 @@ import { parseEnv } from './env.js';
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
 const read = (path: string): string => readFileSync(resolve(REPO_ROOT, path), 'utf8');
 
-const CHART_VALUES = 'infra/helm/nexa/values.yaml';
-const CHART_SECRET = 'infra/helm/nexa/templates/secret.yaml';
+const CHART_VALUES = 'infra/helm/siyahtus/values.yaml';
+const CHART_SECRET = 'infra/helm/siyahtus/templates/secret.yaml';
 
 /** The one provider whose bytes never leave the pod that received them. */
 const POD_LOCAL_PROVIDERS = new Set(['local']);

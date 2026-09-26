@@ -7,7 +7,7 @@
  *
  *   - **RLS is the tenant boundary.** These queries carry no `license_id`
  *     filter. They run inside `withTenant`, and the `audit_log_read` policy
- *     (`USING (license_id = nexa_current_license())`) means a query can only
+ *     (`USING (license_id = siyahtus_current_license())`) means a query can only
  *     ever see the caller's own rows. Adding a redundant `WHERE license_id = …`
  *     would suggest the filter is what protects the tenant — it is not, and a
  *     copy of it drifting out of step with the policy would be the more

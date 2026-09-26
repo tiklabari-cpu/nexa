@@ -56,7 +56,7 @@ export function AccessReviewExport(): ReactElement | null {
       // The server stamps the file with the section and the day it was
       // generated (`accessReviewFilename`), and that date is part of the
       // evidence — a caller-invented name would drop it.
-      link.download = filename ?? `nexa-access-review-${section}.csv`;
+      link.download = filename ?? `siyahtus-access-review-${section}.csv`;
       document.body.appendChild(link);
       link.click();
       link.remove();

@@ -416,7 +416,7 @@ export const settings: Messages = {
   // MCP server — McpConnection.tsx
   'settings.mcpConnection.title': 'MCP server',
   'settings.mcpConnection.description':
-    'Ask AI assistants about your Nexa data. Works with Claude, ChatGPT, and any MCP-compatible tool.',
+    'Ask AI assistants about your SiyahTuş data. Works with Claude, ChatGPT, and any MCP-compatible tool.',
   'settings.mcpConnection.loadError': 'Could not load the MCP server details.',
   'settings.mcpConnection.serverUrlLabel': 'MCP server URL',
   'settings.mcpConnection.claudeSetup': 'Claude setup',
@@ -424,7 +424,7 @@ export const settings: Messages = {
   'settings.mcpConnection.step2': 'Choose “Add custom connector”.',
   'settings.mcpConnection.step3': 'Paste the MCP server URL above.',
   'settings.mcpConnection.step4':
-    'Sign in with your Nexa account when prompted, and approve the scopes it requests.',
+    'Sign in with your SiyahTuş account when prompted, and approve the scopes it requests.',
   'settings.mcpConnection.step5': 'Ask a question about your workspace — see the example below.',
   'settings.mcpConnection.examplePromptLabel': 'Example prompt',
   'settings.mcpConnection.examplePrompt': 'Find all tickets where customers ask about bulk orders',
@@ -471,18 +471,18 @@ export const settings: Messages = {
   'settings.widgetCustomization.mobileFullscreenLabel': 'Full screen on mobile',
   'settings.widgetCustomization.mobileFullscreenHint':
     'Open edge-to-edge on phones rather than as a floating card.',
-  'settings.widgetCustomization.poweredByLabel': 'Show “Powered by Nexa”',
+  'settings.widgetCustomization.poweredByLabel': 'Show “Powered by SiyahTuş”',
   'settings.widgetCustomization.poweredByHint':
     'A small credit in the widget footer. Turn it off to remove it.',
   'settings.widgetCustomization.entitlementError':
-    'Removing the Nexa badge is an Enterprise feature. Upgrade the plan to hide it.',
+    'Removing the SiyahTuş badge is an Enterprise feature. Upgrade the plan to hide it.',
   'settings.widgetCustomization.saveButton': 'Save appearance',
   'settings.widgetCustomization.resetButton': 'Reset',
   'settings.widgetCustomization.previewLabel': 'Preview',
   'settings.widgetCustomization.previewChatWithUs': 'Chat with us',
   'settings.widgetCustomization.previewGreeting': 'Hi! How can we help?',
   'settings.widgetCustomization.previewCustomerMessage': 'I have a question',
-  'settings.widgetCustomization.previewPoweredBy': 'Powered by Nexa',
+  'settings.widgetCustomization.previewPoweredBy': 'Powered by SiyahTuş',
   'settings.widgetCustomization.previewAutoNote':
     "Auto shows light or dark to match each visitor's device — light shown here.",
   'settings.widgetCustomization.previewFullscreenNote': 'On phones the panel opens full screen.',

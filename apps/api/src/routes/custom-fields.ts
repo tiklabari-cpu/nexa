@@ -9,7 +9,7 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CUSTOM_FIELD_ENTITIES, CUSTOM_FIELD_TYPES, FORM_PLACEMENTS } from '@nexa/types';
+import { CUSTOM_FIELD_ENTITIES, CUSTOM_FIELD_TYPES, FORM_PLACEMENTS } from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 

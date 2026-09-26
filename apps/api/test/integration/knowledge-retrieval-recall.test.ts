@@ -59,7 +59,7 @@
  * the table is shared the way production's is.
  */
 import { PrismaClient } from '@prisma/client';
-import { chunk, embed, similarity, toVectorLiteral } from '@nexa/ai-mock';
+import { chunk, embed, similarity, toVectorLiteral } from '@siyahtus/ai-mock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { withTenant, type TenantClient, type TenantContext } from '../../src/lib/tenant.js';
 import {
@@ -306,7 +306,7 @@ describe('knowledge retrieval — a ready source is found on any plan (FR-MOD-06
 
   /**
    * The pair's question through `retrieve()`, as the request path runs it: the
-   * `nexa_app` role, RLS on, scoped to the agent the skill belongs to.
+   * `siyahtus_app` role, RLS on, scoped to the agent the skill belongs to.
    */
   async function retrieve(question: string, pin: boolean): Promise<RetrievedChunk[]> {
     // Embedded first and outside the transaction, as the engine does it.

@@ -27,6 +27,6 @@ ALTER TABLE "payment_methods" ADD CONSTRAINT "payment_methods_license_id_fkey"
 
 ALTER TABLE payment_methods ENABLE ROW LEVEL SECURITY;
 CREATE POLICY payment_methods_tenant ON payment_methods
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON payment_methods TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_methods TO siyahtus_app;

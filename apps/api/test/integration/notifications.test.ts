@@ -25,7 +25,7 @@ describe('agent e-mail notifications', () => {
 
   beforeAll(async () => {
     owner = ownerClient();
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-notify-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-notify-'));
     mailer = new FileMailer(mailDir);
     server = await startTestServer({}, { mailer });
   });

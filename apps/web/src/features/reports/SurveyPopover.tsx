@@ -24,7 +24,7 @@
  * immediately rather than racing `staleTime` for a refetch.
  *
  * The five options mirror `ONBOARDING_SURVEY_ANSWERS`' PRD order exactly
- * (`@nexa/types`); the personalization payoff — which one of them (if any)
+ * (`@siyahtus/types`); the personalization payoff — which one of them (if any)
  * moves to the front of the Home checklist — lives server-side in
  * `orderActivationSteps` (`packages/types/src/home.ts`), read by
  * `HomeService#activation`.
@@ -35,7 +35,7 @@ import {
   ONBOARDING_SURVEY_ANSWERS,
   type OnboardingState,
   type OnboardingSurveyAnswer,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { useApiClient } from '../../lib/auth-store.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useTranslate } from '../../lib/i18n.js';

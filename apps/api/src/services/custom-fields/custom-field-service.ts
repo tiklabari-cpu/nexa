@@ -8,7 +8,7 @@
  * (set or not), and writing values that are validated against their definition
  * before they are stored.
  *
- * The value validation is not made here — it lives in `@nexa/types`
+ * The value validation is not made here — it lives in `@siyahtus/types`
  * (`checkCustomFieldValue`) so the authoring form and this endpoint agree on
  * what a valid value is — but it is *enforced* here, so a value of the wrong
  * type, or a blank on a required field, is refused rather than stored.
@@ -25,7 +25,7 @@ import {
   type CustomFieldValue,
   type FormPlacement,
   type WidgetFormField,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { type AuditContext, writeAuditEntry } from '../audit/audit-log.js';

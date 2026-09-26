@@ -8,13 +8,13 @@
  * than as nothing at all.
  *
  * Idempotent: re-running against a seeded database is a no-op. Set
- * `NEXA_SEED_RESET=1` to wipe first and lay the fixture down from scratch —
+ * `SIYAHTUS_SEED_RESET=1` to wipe first and lay the fixture down from scratch —
  * see `resetDemoData` for who needs that and why it is opt-in.
  */
 import { randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { embed, LEXICAL_EMBEDDING_SPACE, toVectorLiteral } from '@nexa/ai-mock';
-import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@nexa/types';
+import { embed, LEXICAL_EMBEDDING_SPACE, toVectorLiteral } from '@siyahtus/ai-mock';
+import { buildEventId, generateShortId, MOBILE_REDIRECT_URI } from '@siyahtus/types';
 import { parseEnv } from '../src/config/env.js';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { hashPassword, hashToken } from '../src/lib/crypto.js';
@@ -34,7 +34,7 @@ loadEnvFile();
 
 const prisma = new PrismaClient();
 
-const DEMO_PASSWORD = 'nexa-demo-password';
+const DEMO_PASSWORD = 'siyahtus-demo-password';
 
 interface AgentSpec {
   name: string;
@@ -867,7 +867,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
     walkInCustomerId: customers.at(-1)!.id,
   });
 
-  const demoToken = `nexa_pat_demo_${spec.slug}`;
+  const demoToken = `siyahtus_pat_demo_${spec.slug}`;
   await prisma.apiToken.create({
     data: {
       licenseId,
@@ -886,15 +886,15 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
 
   await prisma.oauthClient.create({
     data: {
-      id: `nexa-agent-app-${spec.slug}`,
+      id: `siyahtus-agent-app-${spec.slug}`,
       organizationId: organization.id,
-      displayName: 'Nexa Agent App',
+      displayName: 'SiyahTuş Agent App',
       // Public client: OAuth 2.1 relies on PKCE rather than a secret for
       // anything running in a browser, where no secret stays secret.
       clientType: 'public',
       // Both callbacks the first-party clients carry: the console's and the
       // phone's (`auth_signup` registers the same pair). Sourced from
-      // `@nexa/types` so the seed and the mobile app cannot drift apart.
+      // `@siyahtus/types` so the seed and the mobile app cannot drift apart.
       redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],
     },
@@ -903,7 +903,7 @@ async function seedTenant(spec: TenantSpec, passwordHash: string): Promise<void>
   console.log(`  ${spec.organizationName}`);
   console.log(`    license      ${licenseId}`);
   console.log(`    owner        ${owner.email} / ${DEMO_PASSWORD}`);
-  console.log(`    client_id    nexa-agent-app-${spec.slug}`);
+  console.log(`    client_id    siyahtus-agent-app-${spec.slug}`);
   console.log(`    widget host  ${spec.widgetDomain}`);
   console.log(`    demo token   ${demoToken}`);
 }
@@ -1447,15 +1447,15 @@ async function createConversation(input: {
  *
  * An unrecognised value throws rather than reading as "no". Silently doing
  * nothing is precisely the failure mode this whole flag exists to remove, and a
- * caller who typed `NEXA_SEED_RESET=yes` would get the accumulating database
+ * caller who typed `SIYAHTUS_SEED_RESET=yes` would get the accumulating database
  * back with no hint of why.
  */
 function resetRequested(): boolean {
-  const raw = process.env['NEXA_SEED_RESET'];
+  const raw = process.env['SIYAHTUS_SEED_RESET'];
   if (raw === undefined || raw === '') return false;
   if (raw === '1' || raw === 'true') return true;
   if (raw === '0' || raw === 'false') return false;
-  throw new Error(`NEXA_SEED_RESET must be one of 1/0/true/false, got "${raw}"`);
+  throw new Error(`SIYAHTUS_SEED_RESET must be one of 1/0/true/false, got "${raw}"`);
 }
 
 /**
@@ -1578,13 +1578,13 @@ async function seedMisplacedUsWorkspace(passwordHash: string): Promise<void> {
   // compliance suite obtain a genuine token and get it refused at each door.
   await prisma.oauthClient.create({
     data: {
-      id: `nexa-agent-app-${MISPLACED_US.slug}`,
+      id: `siyahtus-agent-app-${MISPLACED_US.slug}`,
       organizationId: organization.id,
-      displayName: 'Nexa Agent App',
+      displayName: 'SiyahTuş Agent App',
       clientType: 'public',
       // Both callbacks the first-party clients carry: the console's and the
       // phone's (`auth_signup` registers the same pair). Sourced from
-      // `@nexa/types` so the seed and the mobile app cannot drift apart.
+      // `@siyahtus/types` so the seed and the mobile app cannot drift apart.
       redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],
     },
@@ -1687,9 +1687,9 @@ async function seedPagingWorkspace(passwordHash: string): Promise<void> {
   // the owner authenticates and then cannot be granted a token.
   await prisma.oauthClient.create({
     data: {
-      id: `nexa-agent-app-${PAGING.slug}`,
+      id: `siyahtus-agent-app-${PAGING.slug}`,
       organizationId: organization.id,
-      displayName: 'Nexa Agent App',
+      displayName: 'SiyahTuş Agent App',
       clientType: 'public',
       redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],
@@ -1947,9 +1947,9 @@ async function seedOverdueTrialWorkspace(passwordHash: string): Promise<void> {
 
   await prisma.oauthClient.create({
     data: {
-      id: `nexa-agent-app-${OVERDUE.slug}`,
+      id: `siyahtus-agent-app-${OVERDUE.slug}`,
       organizationId: organization.id,
-      displayName: 'Nexa Agent App',
+      displayName: 'SiyahTuş Agent App',
       clientType: 'public',
       redirectUris: ['http://localhost:5173/auth/callback', MOBILE_REDIRECT_URI],
       scopes: [],
@@ -1996,7 +1996,7 @@ async function main(): Promise<void> {
   const passwordHash = await hashPassword(DEMO_PASSWORD);
 
   if (reset) {
-    console.log('resetting demo data (NEXA_SEED_RESET)');
+    console.log('resetting demo data (SIYAHTUS_SEED_RESET)');
     await resetDemoData();
   }
 

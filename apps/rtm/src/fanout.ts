@@ -12,7 +12,7 @@
  */
 import type { Redis } from 'ioredis';
 import type { Logger } from 'pino';
-import { isBusEnvelope, licenseChannel, type BusEnvelope } from '@nexa/types';
+import { isBusEnvelope, licenseChannel, type BusEnvelope } from '@siyahtus/types';
 import type { Connection, ConnectionRegistry } from './connection.js';
 import { encodePush } from './protocol.js';
 import type { Telemetry } from './telemetry/telemetry.js';

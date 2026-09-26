@@ -31,7 +31,7 @@ import type {
   AppListResponse,
   IntegrationAction,
   IntegrationTrigger,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -94,7 +94,7 @@ function useConnectedAutomationApps() {
   return useQuery({
     queryKey: AUTOMATION_APPS_KEY,
     // paging-exempt: the bound is over `APP_CATALOG`, a compile-time constant in
-    // `@nexa/types`, not over tenant data — the failure NFR-P5 exists to prevent
+    // `@siyahtus/types`, not over tenant data — the failure NFR-P5 exists to prevent
     // (a workspace whose rows outgrow one page) cannot happen to a list that a
     // deployment cannot lengthen. `productivity` holds 13 cards today, and the
     // one way the cap could be exceeded — someone adding the 101st — is pinned

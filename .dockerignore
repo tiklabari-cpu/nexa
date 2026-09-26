@@ -1,4 +1,4 @@
-# Nexa — Docker build context excludes (tm 140.1).
+# SiyahTuş — Docker build context excludes (tm 140.1).
 #
 # Multi-stage builds (apps/api, apps/rtm, …) need the *whole* pnpm workspace
 # in the build context — `pnpm install --frozen-lockfile` validates every

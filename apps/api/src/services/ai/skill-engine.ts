@@ -56,7 +56,12 @@
  * in the same transaction that counts the run, so the AI Agent report reads
  * runs and their cost from one place and the two cannot drift.
  */
-import { matchIntent, validateSteps, type SendMessageStep, type SkillStep } from '@nexa/ai-mock';
+import {
+  matchIntent,
+  validateSteps,
+  type SendMessageStep,
+  type SkillStep,
+} from '@siyahtus/ai-mock';
 import {
   ANSWER_BUDGETS,
   DEFAULT_ANSWER_PASSAGES,
@@ -64,7 +69,7 @@ import {
   readPersona,
   type Persona,
   type PersonaLanguage,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import {
   ANSWER_RETRIEVAL_LIMIT,

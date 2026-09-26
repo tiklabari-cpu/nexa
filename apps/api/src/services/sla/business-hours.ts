@@ -60,7 +60,11 @@
  * modelled, because the plan itself carries no per-date detail that would
  * justify the machinery.
  */
-import { WORK_SCHEDULE_DAYS, WORK_SCHEDULE_TIME_PATTERN, type WorkScheduleSlot } from '@nexa/types';
+import {
+  WORK_SCHEDULE_DAYS,
+  WORK_SCHEDULE_TIME_PATTERN,
+  type WorkScheduleSlot,
+} from '@siyahtus/types';
 
 /** One agent's saved plan, as this module needs it. */
 export interface BusinessHoursPlan {

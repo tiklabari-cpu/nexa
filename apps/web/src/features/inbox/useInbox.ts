@@ -15,7 +15,7 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { ROUTING_STATUSES, type AdapterChannelType } from '@nexa/types';
+import { ROUTING_STATUSES, type AdapterChannelType } from '@siyahtus/types';
 import { RtmClient, type PushHandler } from '../../lib/realtime.js';
 import { noteTrafficVisitorUpdated } from '../../lib/traffic-live.js';
 import { setRealtimeStatus } from '../../lib/realtime-status.js';

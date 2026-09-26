@@ -18,7 +18,7 @@
  * whole point of `siem-sink.ts`'s order invariant), which a SIEM consumer is
  * expected to de-duplicate on id — noise, not loss.
  *
- *   pnpm --filter @nexa/api siem:run
+ *   pnpm --filter @siyahtus/api siem:run
  */
 import { loadEnvFile } from '../../config/load-env-file.js';
 

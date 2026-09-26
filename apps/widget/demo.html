@@ -47,12 +47,12 @@
     <main>
       <h1>Acme Bikes</h1>
       <p>
-        Demo host page for the Nexa widget. The chat launcher in the corner is a cross-origin
+        Demo host page for the SiyahTuş widget. The chat launcher in the corner is a cross-origin
         iframe created by <code>loader.js</code> — this page cannot read the conversation inside
         it, and it cannot read this page.
       </p>
       <p>
-        Configure with <code>window.__nexa</code> before the loader runs. Query parameters
+        Configure with <code>window.__siyahtus</code> before the loader runs. Query parameters
         override the defaults so tests can point at a different organization.
       </p>
     </main>
@@ -62,7 +62,7 @@
       // nothing so a misconfigured page fails visibly rather than silently
       // talking to whichever tenant happens to be first.
       const params = new URLSearchParams(location.search);
-      window.__nexa = {
+      window.__siyahtus = {
         organizationId: params.get('organization_id') ?? '',
         // Must differ from this page's origin — the loader refuses a
         // same-origin widget, because that is exactly the configuration in

@@ -286,7 +286,7 @@ describe('channelsFor — telegram', () => {
   const row = (overrides: Partial<ConnectedChannel> = {}): ConnectedChannel => ({
     type: 'telegram',
     status: 'connected',
-    address: 'nexa_support_bot',
+    address: 'siyahtus_support_bot',
     connected: true,
     created_at: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -306,10 +306,10 @@ describe('channelsFor — telegram', () => {
   });
 
   it('is Connected when the /channels row is connected, offering Disconnect and showing the address', () => {
-    const card = telegram([row({ address: 'nexa_support_bot' })]);
+    const card = telegram([row({ address: 'siyahtus_support_bot' })]);
     expect(card.status).toBe('connected');
     expect(card.cta).toBe('Disconnect');
-    expect(card.address).toBe('nexa_support_bot');
+    expect(card.address).toBe('siyahtus_support_bot');
   });
 
   it('does not confuse another connected channel type for telegram', () => {

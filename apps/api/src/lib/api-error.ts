@@ -5,7 +5,7 @@
  * passed in, so a route cannot accidentally return `not_found` with a 403 (or
  * any other combination that would leak whether a resource exists).
  */
-import { ERROR_STATUS, type ApiErrorBody, type ErrorType } from '@nexa/types';
+import { ERROR_STATUS, type ApiErrorBody, type ErrorType } from '@siyahtus/types';
 
 export class ApiError extends Error {
   readonly type: ErrorType;

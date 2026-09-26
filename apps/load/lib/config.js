@@ -79,7 +79,7 @@ export const CONFIG = Object.freeze({
    * password; `apps/e2e/tests/fixtures.ts` uses exactly these credentials.
    */
   email: env('LOAD_EMAIL', 'owner@acme.localhost'),
-  password: env('LOAD_PASSWORD', 'nexa-demo-password'),
+  password: env('LOAD_PASSWORD', 'siyahtus-demo-password'),
   /** Memberships are matched on this prefix — an owner may hold several. */
   orgPrefix: env('LOAD_ORG_PREFIX', 'Acme'),
   /** The panel's registered redirect URI; `/auth/authorize` checks it. */

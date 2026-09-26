@@ -24,7 +24,7 @@ function setUrl(search: string): void {
 function mountWith(search: string): HTMLElement {
   setUrl(search);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   return root;
@@ -96,7 +96,7 @@ beforeEach(() => {
   document.body.replaceChildren();
   document.documentElement.removeAttribute('data-nx-theme');
   document.documentElement.style.removeProperty('--nx-brand');
-  // A mint stores `nexa.customer_id`, and since tm 195.1 that id makes the
+  // A mint stores `siyahtus.customer_id`, and since tm 195.1 that id makes the
   // next mount connect on its own (FR-MOD-11.1) — so one test's identity
   // would decide whether the next one's widget is connected before it opens.
   window.localStorage.clear();
@@ -122,7 +122,7 @@ describe('widget appearance', () => {
     const powered = root.querySelector('.nx-powered') as HTMLElement;
     expect(powered).not.toBeNull();
     expect(powered.hidden).toBe(false);
-    expect(powered.textContent).toContain('Powered by Nexa');
+    expect(powered.textContent).toContain('Powered by SiyahTuş');
   });
 
   it('applies a brand colour from the loader query params', () => {

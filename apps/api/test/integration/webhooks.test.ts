@@ -18,7 +18,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { isScope, type IntegrationAction, type IntegrationTrigger } from '@nexa/types';
+import { isScope, type IntegrationAction, type IntegrationTrigger } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import {
   WebhookDispatcher,

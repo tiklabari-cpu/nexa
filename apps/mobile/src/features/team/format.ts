@@ -3,7 +3,7 @@
  * `apps/web/src/features/team` uses, not its code: a web module cannot be
  * imported across the workspace boundary into a Metro bundle.
  */
-import type { WorkScheduleDay } from '@nexa/types';
+import type { WorkScheduleDay } from '@siyahtus/types';
 
 import type { Agent } from './types';
 

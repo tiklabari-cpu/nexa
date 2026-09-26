@@ -627,7 +627,7 @@ interface BrandSummary {
  * behaviour changed, only what's now above it in the tree. The selection is
  * persisted the same way as the language preference (`lib/i18n.ts`), and
  * every request after a change picks it up through `api-client.ts`'s
- * `X-Nexa-Brand` header.
+ * `X-SiyahTus-Brand` header.
  *
  * The reconciliation effect below is what makes "invalid/deleted brand id"
  * safe: a remembered selection that the license no longer has (or a license

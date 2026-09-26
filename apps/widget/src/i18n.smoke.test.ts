@@ -16,7 +16,7 @@ import { mount } from './widget.js';
 function setupRoot(search: string): void {
   window.history.replaceState({}, '', `/widget.html${search}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.replaceChildren(root);
 }
 

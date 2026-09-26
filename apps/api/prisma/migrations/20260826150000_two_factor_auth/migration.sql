@@ -7,7 +7,7 @@
 -- subtasks somewhere to write.
 --
 -- Both tables are per-ACCOUNT, not per-license: `accounts` sits above the
--- tenant boundary (PRD §8.4) and cannot be filtered by `nexa_current_license()`.
+-- tenant boundary (PRD §8.4) and cannot be filtered by `siyahtus_current_license()`.
 -- `agent_memberships.two_factor_enabled` (added in 20260722151255) is the
 -- per-MEMBERSHIP flag PRD §8.4 actually specifies; it is a DERIVED copy of
 -- `account_two_factor.activated_at`, kept in sync by the enrollment/removal
@@ -69,13 +69,13 @@ COMMENT ON COLUMN account_two_factor.last_used_step IS
   'RFC 6238 §5.2 replay guard: the TOTP step counter of the last code accepted. A verification must reject any step at or before this one.';
 
 -- ACCESS PATTERN — copied from `password_reset_tokens` (20260724090000_account_lifecycle):
--- no permissive RLS policy at all. Every row is invisible to `nexa_app`
+-- no permissive RLS policy at all. Every row is invisible to `siyahtus_app`
 -- through an ordinary query; only a SECURITY DEFINER function — added
 -- alongside the enrollment/verification logic that needs one (S11-2FA-b/c/d/e)
 -- — can read or write one, the same way `auth_request_password_reset` /
 -- `auth_consume_password_reset` are the only path to a reset token.
 ALTER TABLE account_two_factor ENABLE ROW LEVEL SECURITY;
-GRANT SELECT, INSERT, UPDATE, DELETE ON account_two_factor TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON account_two_factor TO siyahtus_app;
 
 -- Recovery codes, unlike the secret above, are presented once and never read
 -- back — so they follow `password_reset_tokens`'s example instead: stored only
@@ -86,4 +86,4 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON account_two_factor TO nexa_app;
 -- inserts a batch of codes (S11-2FA-c) must supply `gen_random_uuid()` for
 -- `id` itself.
 ALTER TABLE two_factor_recovery_codes ENABLE ROW LEVEL SECURITY;
-GRANT SELECT, INSERT, UPDATE, DELETE ON two_factor_recovery_codes TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON two_factor_recovery_codes TO siyahtus_app;

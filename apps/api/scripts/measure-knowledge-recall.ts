@@ -2,8 +2,8 @@
  * The retrieval recall gate against a REAL embedding provider, by hand
  * (tm 255.8 · PLAN §D183).
  *
- *     pnpm --filter @nexa/api measure:knowledge-recall          # the configured model
- *     pnpm --filter @nexa/api measure:knowledge-recall --stub   # the lexical stub, for comparison
+ *     pnpm --filter @siyahtus/api measure:knowledge-recall          # the configured model
+ *     pnpm --filter @siyahtus/api measure:knowledge-recall --stub   # the lexical stub, for comparison
  *
  * CI runs the same golden set on the fake provider
  * (`test/integration/knowledge-recall-gate.test.ts`); nothing on the CI path
@@ -17,7 +17,7 @@
  * texts in 15 + 41 requests — synthetic help-centre text, no customer's data.
  * The key is read from the configuration and never printed.
  *
- * What it does: a scratch `nexa_test_` database (created, migrated, dropped —
+ * What it does: a scratch `siyahtus_test_` database (created, migrated, dropped —
  * the prefix the test harness sweeps), the golden knowledge base written by
  * `KnowledgeService` with the configured provider, every question asked the
  * way the skill engine asks it, and the gate's verdict (`RECALL_GATE`). Then

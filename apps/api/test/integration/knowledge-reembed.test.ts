@@ -17,7 +17,7 @@
  *       the other space is the nearest vector there is.
  */
 import { PrismaClient } from '@prisma/client';
-import { LEXICAL_EMBEDDING_SPACE, embed, toVectorLiteral } from '@nexa/ai-mock';
+import { LEXICAL_EMBEDDING_SPACE, embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { withTenant, type TenantClient, type TenantContext } from '../../src/lib/tenant.js';
 import type { InferenceProvider } from '../../src/services/ai/inference.js';

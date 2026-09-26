@@ -64,5 +64,5 @@ export const ar: Record<string, string> = {
   'chat.end.closedMessage': 'انتهت المحادثة.',
   'chat.end.startNew': 'بدء محادثة جديدة',
   'error.close': 'تعذّر إنهاء المحادثة. يرجى المحاولة مرة أخرى.',
-  poweredBy: 'مقدَّم من Nexa',
+  poweredBy: 'مقدَّم من SiyahTuş',
 };

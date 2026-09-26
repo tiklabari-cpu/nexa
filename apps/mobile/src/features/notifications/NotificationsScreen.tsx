@@ -1,7 +1,7 @@
 /**
  * Notification preferences (FR-MOD-08.2 · FR-MOD-13.8) — the phone's window
  * onto the same account-level preference the web console's
- * `NotificationSettings` reads and writes. One dictionary, `@nexa/types`'s
+ * `NotificationSettings` reads and writes. One dictionary, `@siyahtus/types`'s
  * `NotificationPreferences` — no parallel model, per FR-MOD-13.8's "kanallar
  * arası tutarlı" acceptance criterion, so every channel the console shows is
  * shown here too.
@@ -13,20 +13,20 @@
  * a settings-screen one (13.7-j KAPSAM).
  *
  * "İzin durumu" is two questions, not one, and `13.7-l` is where the second
- * one arrived. `pushAllowed(prefs)` (`@nexa/types`) is what the *account*
+ * one arrived. `pushAllowed(prefs)` (`@siyahtus/types`) is what the *account*
  * asked for — the single place the master switch's effect on push is decided,
  * named for this screen in that function's own doc comment: "the sender
  * (13.7-d), the mobile settings screen (13.7-j) and the web console cannot
  * disagree about what 'notifications off' means for a phone." What it cannot
  * see is whether this *handset* will show anything, which is the operating
  * system's answer and overrules the account's. A screen that reported only the
- * first would show "on" to somebody who has denied Nexa notifications in iOS
+ * first would show "on" to somebody who has denied SiyahTuş notifications in iOS
  * Settings and will never be interrupted — the one failure a settings screen
  * must not have, because the person has no way to discover it.
  */
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import { pushAllowed } from '@nexa/types';
+import { pushAllowed } from '@siyahtus/types';
 
 import { useDevicePushPermission, useNotificationsApi } from './context';
 import type { NotificationPreferences, NotificationPreferencesPatch } from './types';
@@ -187,7 +187,7 @@ export function NotificationsScreen() {
         />
         <Row
           label="Email notifications"
-          hint="Emailed when a chat assigned to you has new activity, even when Nexa is closed."
+          hint="Emailed when a chat assigned to you has new activity, even when SiyahTuş is closed."
           value={prefs.email}
           onValueChange={(value) => void update({ email: value })}
           testID="notification-toggle-email"
@@ -230,7 +230,7 @@ function pushStatusHint(prefs: NotificationPreferences, device: PushPermission |
   if (deviceBlocksPush(device)) {
     // The state 13.7-j could not report: on for the account, silent on the
     // handset. Says where the switch is, because it is not on this screen.
-    return 'On for this workspace, but this phone is not allowing Nexa to notify you — turn notifications on in your device settings.';
+    return 'On for this workspace, but this phone is not allowing SiyahTuş to notify you — turn notifications on in your device settings.';
   }
   return 'Delivered to this phone and any other device signed in on this workspace.';
 }

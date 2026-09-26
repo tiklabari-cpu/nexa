@@ -8,7 +8,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MOBILE_REDIRECT_URI, RTM_PATHS } from '@nexa/types';
+import { MOBILE_REDIRECT_URI, RTM_PATHS } from '@siyahtus/types';
 import { parseEnv } from '../../src/config/env.js';
 import { deriveCodeChallenge, generateToken, hashToken } from '../../src/lib/crypto.js';
 import {
@@ -1128,7 +1128,7 @@ describe('auth', () => {
       const response = await post('/auth/authorize', {
         client_id: fx.a.clientId,
         // Another app on the same handset, claiming a scheme of its own.
-        redirect_uri: 'nexa-evil://auth/callback',
+        redirect_uri: 'siyahtus-evil://auth/callback',
         code_challenge: challenge,
         email: fx.a.ownerEmail,
         password: TEST_PASSWORD,

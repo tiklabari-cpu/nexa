@@ -14,13 +14,13 @@
  *      attacked on purpose below, through the same client the application uses
  *      — the one that is actually subject to RLS.
  *
- * The negatives run against `DATABASE_APP_URL` (the `nexa_app` role). Fixtures
+ * The negatives run against `DATABASE_APP_URL` (the `siyahtus_app` role). Fixtures
  * are laid down over `DATABASE_URL` (the owner), which is exempt from RLS — so
  * tenant B's rows genuinely exist while tenant A is failing to reach them.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
@@ -91,8 +91,8 @@ describe('goal achievements (FR-MOD-13.3) — the conversion record', () => {
       `;
       expect(policies).toHaveLength(1);
       expect(policies[0]?.policyname).toBe('goal_achievements_tenant');
-      expect(policies[0]?.qual).toMatch(/nexa_current_license/);
-      expect(policies[0]?.withCheck).toMatch(/nexa_current_license/);
+      expect(policies[0]?.qual).toMatch(/siyahtus_current_license/);
+      expect(policies[0]?.withCheck).toMatch(/siyahtus_current_license/);
     });
 
     it('constrains one conversion per (goal, visitor) and indexes the window read', async () => {

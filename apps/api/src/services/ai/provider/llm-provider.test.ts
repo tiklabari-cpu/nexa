@@ -3,7 +3,7 @@
  * guarantee, and the prompt the stub and a real model both read.
  */
 import { describe, expect, expectTypeOf, it } from 'vitest';
-import { chunk } from '@nexa/ai-mock';
+import { chunk } from '@siyahtus/ai-mock';
 import {
   ANSWER_BUDGETS,
   shapeAnswer,
@@ -11,7 +11,7 @@ import {
   type Persona,
   type PersonaLanguage,
   type PersonaTone,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import {
   GROUNDING_MARKER,
   buildAnswerPrompt,

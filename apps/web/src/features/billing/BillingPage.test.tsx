@@ -130,7 +130,7 @@ const DEFAULT_PLANS = [
   },
 ];
 
-/** The real catalogue's values (`@nexa/types` `API_PACKAGE_CATALOG`), so the
+/** The real catalogue's values (`@siyahtus/types` `API_PACKAGE_CATALOG`), so the
  *  default in tests matches what production actually serves. */
 const DEFAULT_API_PACKAGES: ApiPackageOpt[] = [
   { id: 'essential', name: 'Essential', api_calls: 100_000, price_cents: 2999 },
@@ -152,7 +152,7 @@ const DEFAULT_AI_PACK_TERMS: AiPackageTermsOpt = {
 };
 
 const DEFAULT_INVOICE: InvoiceOpt = {
-  number: 'NEXA-202607',
+  number: 'SIYAHTUS-202607',
   period: '202607',
   period_label: 'July 2026',
   period_start: '2026-07-01T00:00:00.000Z',
@@ -845,7 +845,7 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
       invoices: [
         DEFAULT_INVOICE,
         {
-          number: 'NEXA-202606',
+          number: 'SIYAHTUS-202606',
           period: '202606',
           period_label: 'June 2026',
           period_start: '2026-06-01T00:00:00.000Z',
@@ -865,10 +865,10 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
     const rows = await screen.findAllByTestId('invoice-row');
     expect(rows).toHaveLength(2);
     // Newest first, with its number, amount and open status.
-    expect(rows[0]).toHaveTextContent('NEXA-202607');
+    expect(rows[0]).toHaveTextContent('SIYAHTUS-202607');
     expect(rows[0]).toHaveTextContent('$297.00');
     expect(rows[0]).toHaveTextContent('Open');
-    expect(rows[1]).toHaveTextContent('NEXA-202606');
+    expect(rows[1]).toHaveTextContent('SIYAHTUS-202606');
     expect(rows[1]).toHaveTextContent('Paid');
   });
 
@@ -886,14 +886,14 @@ describe('BillingPage — invoices (FR-MOD-10.3)', () => {
         DEFAULT_INVOICE,
         {
           ...DEFAULT_INVOICE,
-          number: 'NEXA-202606',
+          number: 'SIYAHTUS-202606',
           period: '202606',
           origin: 'issued',
           status: 'paid',
         },
         {
           ...DEFAULT_INVOICE,
-          number: 'NEXA-202605',
+          number: 'SIYAHTUS-202605',
           period: '202605',
           origin: 'reconstructed',
           status: 'paid',

@@ -16,7 +16,7 @@
  * of a notification somebody tapped once. It dies with the process, which is
  * the correct lifetime.
  *
- * **Why the navigation ref rather than `nexa://chats/<id>`.** `13.7-q` gave the
+ * **Why the navigation ref rather than `siyahtus://chats/<id>`.** `13.7-q` gave the
  * conversation a URL, and reusing it here is tempting — one route, spelled
  * once. But a URL would have to go back out through `Linking` and in again, and
  * the signed-out linking map does not contain `chats/:chatId` at all (the two

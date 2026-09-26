@@ -1,7 +1,7 @@
 /**
  * The visitor's socket (FR-MOD-11.6).
  *
- * This is the first persistent, authenticated connection Nexa opens on the
+ * This is the first persistent, authenticated connection SiyahTuş opens on the
  * *customer* side, and that is what makes it worth its own file. An agent
  * socket is opened by somebody who works here, against a credential minted
  * through a sign-in. A widget socket is opened by a stranger's browser on a
@@ -33,7 +33,7 @@ import {
   RTM_PATHS,
   type BusEnvelope,
   type PushAudience,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import {
   createConversation,
   createCustomer,

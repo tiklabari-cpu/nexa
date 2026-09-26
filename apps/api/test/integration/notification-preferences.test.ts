@@ -22,7 +22,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_NOTIFICATION_PREFERENCES, pushAllowed } from '@nexa/types';
+import { DEFAULT_NOTIFICATION_PREFERENCES, pushAllowed } from '@siyahtus/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 

@@ -70,7 +70,7 @@ export function addressFor(organizationId: string, label: string | null, domain:
  * Says only that the address is taken, never by whom — the same shape and the
  * same reasoning as `channel-service.ts`'s `addressTaken()`. That an address is
  * unavailable is unavoidable (it is the rejection), but naming the workspace
- * behind it would turn a guessable label into a lookup for who uses Nexa.
+ * behind it would turn a guessable label into a lookup for who uses SiyahTuş.
  * `validation` (400) rather than a new error type, because the contract already
  * documents 400 here and the client story is unchanged.
  */

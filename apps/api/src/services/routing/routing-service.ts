@@ -20,7 +20,7 @@
  * cannot go stale between the decision and the write.
  */
 import { Prisma } from '@prisma/client';
-import { GROUP_PRIORITY_ORDER, type GroupPriority } from '@nexa/types';
+import { GROUP_PRIORITY_ORDER, type GroupPriority } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 
 export interface RoutingContext {

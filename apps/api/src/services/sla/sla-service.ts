@@ -39,7 +39,7 @@ import {
   type SlaPolicy,
   type SlaSubjectType,
   type SlaTarget,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import { hasEntitlement } from '../../lib/entitlements.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';

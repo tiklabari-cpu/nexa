@@ -37,7 +37,7 @@ export type AuthStackParamList = {
 
 /**
  * `Inbox` names its nested stack rather than `undefined`, which is what makes
- * the conversation inside it addressable — both by `nexa://chats/<id>`
+ * the conversation inside it addressable — both by `siyahtus://chats/<id>`
  * (13.7-q) and by a `navigate('Inbox', { screen: 'ChatDetail', … })` from
  * outside the tab. The other three tabs have nothing to reach into yet.
  */

@@ -13,7 +13,7 @@
  */
 import { useEffect, useState, type ReactElement, type ReactNode } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { DEFAULT_REGION, REGIONS, type Region } from '@nexa/types';
+import { DEFAULT_REGION, REGIONS, type Region } from '@siyahtus/types';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';

@@ -10,7 +10,7 @@ import {
   EMBEDDING_DIMENSIONS as LEXICAL_DIMENSIONS,
   LEXICAL_EMBEDDING_SPACE,
   embed,
-} from '@nexa/ai-mock';
+} from '@siyahtus/ai-mock';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { createEmbeddingProvider } from './create-embedding-provider.js';
 import {

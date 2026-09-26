@@ -48,7 +48,7 @@
  * blockers. Oldest first because the alternative — newest first — lets a busy
  * workspace's fresh campaigns starve the ones already owed.
  */
-import type { CampaignContent } from '@nexa/types';
+import type { CampaignContent } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { trialState } from '../billing/metering.js';
 import { resolveCampaignStatus } from './campaign-matching.js';

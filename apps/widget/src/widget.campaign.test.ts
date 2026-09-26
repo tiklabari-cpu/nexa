@@ -80,7 +80,7 @@ function stubFetch(): void {
 function mountWidget(): HTMLElement {
   window.history.replaceState({}, '', `/widget.html?organization_id=org-1&api=${API}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   return root;
@@ -88,7 +88,7 @@ function mountWidget(): HTMLElement {
 
 /**
  * Connects the widget the way a checkout confirmation page would — via a
- * relayed `nexa('trackSale', …)` — without ever opening the panel. This is
+ * relayed `siyahtus('trackSale', …)` — without ever opening the panel. This is
  * the cleanest way to prove the card can appear from a poll the visitor never
  * triggered by clicking anything, which is the whole point of it being
  * "proactive": FR-MOD-03.3.2 reuses the greeting's poll for exactly this.
@@ -97,7 +97,7 @@ function connectWithoutOpening(): void {
   window.dispatchEvent(
     new MessageEvent('message', {
       data: {
-        type: 'nexa:command',
+        type: 'siyahtus:command',
         command: 'trackSale',
         payload: { external_order_id: 'o-1', amount_cents: 100, currency: 'USD' },
       },

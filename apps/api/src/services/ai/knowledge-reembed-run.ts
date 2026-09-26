@@ -7,9 +7,9 @@
  * time, atomically, and a question meanwhile searches whatever has already
  * moved (`knowledge-reembed.ts` has the four promises this rests on).
  *
- *   pnpm --filter @nexa/api knowledge:reembed             # every pending source
- *   pnpm --filter @nexa/api knowledge:reembed --limit 50  # a slice; run again to go on
- *   pnpm --filter @nexa/api knowledge:reembed --status    # measure only, change nothing
+ *   pnpm --filter @siyahtus/api knowledge:reembed             # every pending source
+ *   pnpm --filter @siyahtus/api knowledge:reembed --limit 50  # a slice; run again to go on
+ *   pnpm --filter @siyahtus/api knowledge:reembed --status    # measure only, change nothing
  *
  * It connects as the runtime (RLS-bound) role, workspace by workspace, like
  * the sweeps. The report goes to stdout as JSON, a one-line summary to

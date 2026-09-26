@@ -1,7 +1,7 @@
 /**
  * The embedding seam has one door (tm 255.7).
  *
- * `embed()` from `@nexa/ai-mock` is the lexical stub's algorithm. Before the
+ * `embed()` from `@siyahtus/ai-mock` is the lexical stub's algorithm. Before the
  * seam it was also how the knowledge service embedded; now a vector that is
  * written to the index or compared with one has to come through the configured
  * `EmbeddingProvider`, which knows the space it writes. A second direct caller
@@ -42,11 +42,11 @@ function productionSources(dir: string): string[] {
   });
 }
 
-/** The names a file imports from `@nexa/ai-mock`, as written before any `as`. */
+/** The names a file imports from `@siyahtus/ai-mock`, as written before any `as`. */
 function aiMockImports(source: string): { named: string[]; namespace: boolean } {
   const named: string[] = [];
   for (const match of source.matchAll(
-    /import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'@nexa\/ai-mock'/g,
+    /import\s+(?:type\s+)?\{([^}]*)\}\s*from\s*'@siyahtus\/ai-mock'/g,
   )) {
     for (const specifier of match[1]!.split(',')) {
       const name = specifier
@@ -57,7 +57,7 @@ function aiMockImports(source: string): { named: string[]; namespace: boolean } 
       if (name) named.push(name);
     }
   }
-  const namespace = /import\s+\*\s+as\s+\w+\s+from\s*'@nexa\/ai-mock'/.test(source);
+  const namespace = /import\s+\*\s+as\s+\w+\s+from\s*'@siyahtus\/ai-mock'/.test(source);
   return { named, namespace };
 }
 

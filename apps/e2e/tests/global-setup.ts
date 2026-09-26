@@ -43,7 +43,7 @@ export default async function globalSetup(): Promise<void> {
     // Passed as an environment variable rather than an argument: this goes
     // through two layers of `pnpm run`, and a bare `--reset` is ambiguous with
     // pnpm's own flags at the outer one.
-    env: { ...process.env, NEXA_SEED_RESET: '1' },
+    env: { ...process.env, SIYAHTUS_SEED_RESET: '1' },
     // The seed prints credentials; keep the buffer generous so a failure shows
     // the real output rather than a truncation error.
     maxBuffer: 4 * 1024 * 1024,

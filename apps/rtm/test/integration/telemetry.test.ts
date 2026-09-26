@@ -19,7 +19,7 @@ import {
   type ResourceMetrics,
 } from '@opentelemetry/sdk-metrics';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { licenseChannel, type BusEnvelope, type PushAudience } from '@nexa/types';
+import { licenseChannel, type BusEnvelope, type PushAudience } from '@siyahtus/types';
 import { grantToken, ownerClient, seedRtmFixtures, type RtmFixtures } from '../helpers/fixtures.js';
 import { settle, startRtm, TestSocket } from '../helpers/rtm-harness.js';
 import { createTelemetry, type Telemetry } from '../../src/telemetry/telemetry.js';
@@ -103,7 +103,7 @@ describe('rtm telemetry (NFR-M5 · M-OTEL-b)', () => {
   }> {
     const exporter = new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE);
     const telemetry = createTelemetry({
-      serviceName: 'nexa-rtm-test',
+      serviceName: 'siyahtus-rtm-test',
       serviceVersion: '0.0.0-test',
       metricExporter: exporter,
     });

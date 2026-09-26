@@ -20,7 +20,7 @@ import {
   type SortOrder,
   type TicketBulkSkipReason,
   type TicketSortKey,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';

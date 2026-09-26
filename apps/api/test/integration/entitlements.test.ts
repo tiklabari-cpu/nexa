@@ -38,7 +38,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { ENTITLEMENTS, type Entitlement } from '@nexa/types';
+import { ENTITLEMENTS, type Entitlement } from '@siyahtus/types';
 import { SiemSink } from '../../src/services/audit/siem-sink.js';
 import { VALID_CERTIFICATE_PEM } from '../helpers/certificates.js';
 import {
@@ -80,7 +80,7 @@ describe('plan entitlements (FR-MOD-10.1.1 · 11.5-b)', () => {
   beforeAll(async () => {
     owner = ownerClient();
     server = await startTestServer({ AUDIT_CHAIN_SECRET });
-    usServer = await startTestServer({ NEXA_REGION: 'us', AUDIT_CHAIN_SECRET });
+    usServer = await startTestServer({ SIYAHTUS_REGION: 'us', AUDIT_CHAIN_SECRET });
   });
 
   afterAll(async () => {
@@ -95,7 +95,7 @@ describe('plan entitlements (FR-MOD-10.1.1 · 11.5-b)', () => {
     fx = await seedFixtures(owner);
     brandA = await seedDefaultBrand(owner, fx.a.licenseId);
     await Promise.all([clearRateLimits(server.app), clearRateLimits(usServer.app)]);
-    siemDir = await mkdtemp(join(tmpdir(), 'nexa-entitlements-'));
+    siemDir = await mkdtemp(join(tmpdir(), 'siyahtus-entitlements-'));
   });
 
   afterEach(async () => {
@@ -264,7 +264,7 @@ describe('plan entitlements (FR-MOD-10.1.1 · 11.5-b)', () => {
       const minted = await server.post(
         '/customer/token',
         { organization_id: fx.a.organizationId, host_origin: `https://${fx.a.trustedDomain}` },
-        { origin: 'https://widget.nexa.example' },
+        { origin: 'https://widget.siyahtus.example' },
       );
       expect(minted.statusCode).toBe(200);
       expect((minted.json() as { widget: WidgetView }).widget.powered_by).toBe(true);

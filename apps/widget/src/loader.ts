@@ -1,8 +1,8 @@
 /**
- * Nexa widget loader — the only script that runs on the customer's own page.
+ * SiyahTuş widget loader — the only script that runs on the customer's own page.
  *
  * Responsibilities, and nothing else:
- *   1. read config from `window.__nexa`
+ *   1. read config from `window.__siyahtus`
  *   2. create a sandboxed cross-origin iframe
  *   3. relay a narrow, validated message protocol between page and iframe
  *
@@ -14,12 +14,12 @@
  * adds the chat surface behind it.
  */
 
-import { sanitizeReferrer } from '@nexa/types';
+import { sanitizeReferrer } from '@siyahtus/types';
 
-export interface NexaWidgetConfig {
+export interface SiyahTusWidgetConfig {
   /** Tenant this widget talks to. */
   organizationId: string;
-  /** Origin serving the widget iframe, e.g. `https://widget.nexa.example`. */
+  /** Origin serving the widget iframe, e.g. `https://widget.siyahtus.example`. */
   widgetOrigin?: string;
   /** Corner placement. */
   position?: 'bottom-right' | 'bottom-left';
@@ -34,41 +34,46 @@ export interface NexaWidgetConfig {
   theme?: 'auto' | 'light' | 'dark';
   /** Open the panel edge-to-edge on phones rather than as a floating card. */
   mobileFullscreen?: boolean;
-  /** The removable "Powered by Nexa" footer (FR-MOD-11.5). */
+  /** The removable "Powered by SiyahTuş" footer (FR-MOD-11.5). */
   poweredBy?: boolean;
 }
 
 /** Below this host-viewport width the widget is treated as being on a phone. */
 const MOBILE_MAX_WIDTH = 480;
 
-interface NexaGlobal extends NexaWidgetConfig {
+interface SiyahTusGlobal extends SiyahTusWidgetConfig {
   open?: () => void;
   close?: () => void;
   destroy?: () => void;
 }
 
 /** Messages the iframe is allowed to send outward. Anything else is dropped. */
-const ALLOWED_INBOUND = new Set(['nexa:ready', 'nexa:resize', 'nexa:open', 'nexa:close']);
+const ALLOWED_INBOUND = new Set([
+  'siyahtus:ready',
+  'siyahtus:resize',
+  'siyahtus:open',
+  'siyahtus:close',
+]);
 
-const IFRAME_ID = 'nexa-widget-frame';
+const IFRAME_ID = 'siyahtus-widget-frame';
 
 /** Opaque here — the widget document (not this script) validates the shape. */
-type NexaCommandPayload = Record<string, unknown> | undefined;
+type SiyahTusCommandPayload = Record<string, unknown> | undefined;
 
 /** Commands called before the widget can receive them, flushed once it is ready. */
-let pendingCommands: Array<{ command: string; payload: NexaCommandPayload }> = [];
-/** Set once the current widget instance confirms (`nexa:ready`) it can receive commands. */
-let relayCommand: ((command: string, payload: NexaCommandPayload) => void) | null = null;
+let pendingCommands: Array<{ command: string; payload: SiyahTusCommandPayload }> = [];
+/** Set once the current widget instance confirms (`siyahtus:ready`) it can receive commands. */
+let relayCommand: ((command: string, payload: SiyahTusCommandPayload) => void) | null = null;
 
 /**
- * `nexa('trackSale', …)` (FR-MOD-13.5) — the general command surface a host
+ * `siyahtus('trackSale', …)` (FR-MOD-13.5) — the general command surface a host
  * page's own scripts call. Exposed as soon as this script runs, since a page's
  * own script may call it before the widget has finished booting; queued
  * rather than dropped, and flushed once the frame confirms it is ready
  * (classic command-queue snippet pattern). Never throws — a checkout page
  * must not break because a call arrived early or was misused.
  */
-function nexa(command: string, payload?: NexaCommandPayload): void {
+function siyahtus(command: string, payload?: SiyahTusCommandPayload): void {
   try {
     if (relayCommand) relayCommand(command, payload);
     else pendingCommands.push({ command, payload });
@@ -78,8 +83,10 @@ function nexa(command: string, payload?: NexaCommandPayload): void {
   }
 }
 
-export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (() => void) | null {
-  const config = win.__nexa;
+export function boot(
+  win: Window & { __siyahtus?: SiyahTusGlobal } = window as never,
+): (() => void) | null {
+  const config = win.__siyahtus;
   if (!config?.organizationId) {
     // Silent: a missing config is a host page integration mistake, and throwing
     // inside someone else's page is hostile.
@@ -132,7 +139,7 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
 
   win.document.body.appendChild(frame);
 
-  // The frame's own idea of how big it wants to be, updated by `nexa:resize`.
+  // The frame's own idea of how big it wants to be, updated by `siyahtus:resize`.
   // Geometry is recomputed from these plus whether the panel is open, so that
   // opening on a phone can fill the viewport (FR-MOD-11.7, "mobil tam ekran")
   // rather than leave a 380 px card overhanging a 360 px screen.
@@ -172,19 +179,22 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
     const data = event.data as { type?: unknown; height?: unknown; width?: unknown };
     if (typeof data?.type !== 'string' || !ALLOWED_INBOUND.has(data.type)) return;
 
-    if (data.type === 'nexa:open') open = true;
-    if (data.type === 'nexa:close') open = false;
+    if (data.type === 'siyahtus:open') open = true;
+    if (data.type === 'siyahtus:close') open = false;
 
-    if (data.type === 'nexa:ready') {
+    if (data.type === 'siyahtus:ready') {
       relayCommand = (command, payload): void => {
-        frame.contentWindow?.postMessage({ type: 'nexa:command', command, payload }, widgetOrigin);
+        frame.contentWindow?.postMessage(
+          { type: 'siyahtus:command', command, payload },
+          widgetOrigin,
+        );
       };
       const queued = pendingCommands;
       pendingCommands = [];
       for (const item of queued) relayCommand(item.command, item.payload);
     }
 
-    if (data.type === 'nexa:resize') {
+    if (data.type === 'siyahtus:resize') {
       const height = clampDimension(data.height, 84, 720);
       const width = clampDimension(data.width, 84, 420);
       if (height) wantHeight = height;
@@ -199,8 +209,8 @@ export function boot(win: Window & { __nexa?: NexaGlobal } = window as never): (
   const post = (type: string): void => {
     frame.contentWindow?.postMessage({ type }, widgetOrigin);
   };
-  config.open = () => post('nexa:host-open');
-  config.close = () => post('nexa:host-close');
+  config.open = () => post('siyahtus:host-open');
+  config.close = () => post('siyahtus:host-close');
 
   const destroy = (): void => {
     win.removeEventListener('message', onMessage);
@@ -231,7 +241,7 @@ function normaliseOrigin(value: string): string | null {
 
 function buildFrameUrl(
   origin: string,
-  config: NexaWidgetConfig,
+  config: SiyahTusWidgetConfig,
   host: { origin: string; url: string; referrer: string | null },
 ): string {
   const url = new URL('/widget.html', origin);
@@ -288,9 +298,9 @@ function clampDimension(value: unknown, min: number, max: number): number | null
 }
 
 // Exposed unconditionally, independent of boot() succeeding — a misconfigured
-// `window.__nexa` should not also take down the tracking call surface.
+// `window.__siyahtus` should not also take down the tracking call surface.
 if (typeof window !== 'undefined') {
-  (window as Window & { nexa?: typeof nexa }).nexa = nexa;
+  (window as Window & { siyahtus?: typeof siyahtus }).siyahtus = siyahtus;
 }
 
 // Auto-boot when loaded as a plain script tag, but stay inert under test/import.

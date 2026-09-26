@@ -7,7 +7,7 @@
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { WORK_SCHEDULE_DAYS, generateShortId } from '@nexa/types';
+import { WORK_SCHEDULE_DAYS, generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { RoutingService } from '../../src/services/routing/routing-service.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';

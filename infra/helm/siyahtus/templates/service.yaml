@@ -9,7 +9,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ $name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
-    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/part-of: siyahtus
     app.kubernetes.io/managed-by: {{ $.Release.Service }}
 spec:
   # None — deliberately (tm 162.1, M-SCALE-a, §D136): a pod-affinity sticky

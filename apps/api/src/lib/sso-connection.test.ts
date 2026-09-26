@@ -191,8 +191,8 @@ describe('checkFederationUrl', () => {
     // Host case and an implicit path are the same endpoint; storing the parsed
     // form means what is stored is what the redirect is built from.
     expect(urlVerdict('https://IdP.Example.Test')).toBe('https://idp.example.test/');
-    expect(urlVerdict('https://idp.example.test/sso?tenant=nexa')).toBe(
-      'https://idp.example.test/sso?tenant=nexa',
+    expect(urlVerdict('https://idp.example.test/sso?tenant=siyahtus')).toBe(
+      'https://idp.example.test/sso?tenant=siyahtus',
     );
   });
 

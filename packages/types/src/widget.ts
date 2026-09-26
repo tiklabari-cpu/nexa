@@ -25,7 +25,7 @@ export const WIDGET_THEMES: readonly WidgetTheme[] = ['auto', 'light', 'dark'];
 
 /**
  * The whole customisable surface of the widget. `snake_case` because it travels
- * over the API and rides in the install snippet's `window.__nexa`.
+ * over the API and rides in the install snippet's `window.__siyahtus`.
  */
 export interface WidgetAppearance {
   /** Brand colour of the launcher, header and send button — a `#rrggbb` hex. */
@@ -34,7 +34,7 @@ export interface WidgetAppearance {
   theme: WidgetTheme;
   /** On phones, open the panel edge-to-edge rather than as a floating card. */
   mobile_fullscreen: boolean;
-  /** The "Powered by Nexa" footer (FR-MOD-11.5) — removable, shown by default. */
+  /** The "Powered by SiyahTuş" footer (FR-MOD-11.5) — removable, shown by default. */
   powered_by: boolean;
 }
 

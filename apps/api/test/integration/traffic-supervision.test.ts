@@ -44,7 +44,7 @@ describe('chat supervision', () => {
   let server: TestServer;
   let owner: PrismaClient;
   /**
-   * The runtime role, `nexa_app`. Isolation has to be attacked from the layer
+   * The runtime role, `siyahtus_app`. Isolation has to be attacked from the layer
    * the API actually uses: `owner` owns these tables and Postgres exempts owners
    * from RLS, so a cross-tenant read through it proves nothing.
    */

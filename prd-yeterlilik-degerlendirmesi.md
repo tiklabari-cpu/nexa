@@ -1,4 +1,4 @@
-# PRD Yeterlilik Değerlendirmesi — Nexa (LiveChat / Text klonu)
+# PRD Yeterlilik Değerlendirmesi — SiyahTuş (LiveChat / Text klonu)
 
 **Değerlendiren:** Claude · **Tarih:** 2026-07-21 · **Girdi:** `urun-gereksinim-dokumani-PRD.md` (1420 satır) + destekleyici paket (rapor-1, rapor-2, v2-01…05, ER diyagramı, `_evidence/`)
 
@@ -74,7 +74,7 @@ Bunlar "eksik bilgi" değil, **karar**dır; kodlama planına girmeden netleşmel
 
 1. **Backend dili / RTM çekirdeği:** Node.js mi, Go mu, hibrit mi (Q3). MVP kritik yolu buna bağlı.
 2. **Tek şema doğruluk kaynağı:** PRD §8.4 + rapor-2 §5.3 sabitlenmeli; eski ER mermaid arşive alınmalı (G8).
-3. **API kontrat dondurma:** Action-tabanlı (orijinale sadık) mı, kaynak-tabanlı REST (`/api/v1/...`) mi, yoksa v2-03 §11'deki hibrit mi. `@nexa/types` tek kaynak (Q10).
+3. **API kontrat dondurma:** Action-tabanlı (orijinale sadık) mı, kaynak-tabanlı REST (`/api/v1/...`) mi, yoksa v2-03 §11'deki hibrit mi. `@siyahtus/types` tek kaynak (Q10).
 4. **"AI resolution" kesin tanımı** — billing sayacı ile Reports "Automated" hizası (Q2). Gelir modeli buna bağlı.
 5. **Rate-limit sayısal değerleri + `Retry-After`** politikası (Q11, G2).
 6. **Routing atama algoritması** — priority + concurrent limit üstüne seçim kuralı (G3).

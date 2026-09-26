@@ -2026,7 +2026,7 @@ describe('ReportsPage — Export control (07.7-k)', () => {
 
   it("requests the active tab's group as CSV by default, and as PDF once that format is selected (export)", async () => {
     mockGroupsExport();
-    api.getFile.mockResolvedValue({ blob: new Blob(['x']), filename: 'nexa-overview-x.csv' });
+    api.getFile.mockResolvedValue({ blob: new Blob(['x']), filename: 'siyahtus-overview-x.csv' });
     const { createObjectURL, click } = stubDownload();
     const user = userEvent.setup();
 
@@ -2210,7 +2210,7 @@ describe('ReportsPage — Save view (KK-derived from 07.7-h)', () => {
     // side already threads it through correctly (KAPSAM item 3), ahead of
     // that control landing.
     localStorage.setItem(
-      'nexa.reports.saved-views',
+      'siyahtus.reports.saved-views',
       JSON.stringify([
         {
           id: 'v1',

@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Nexa widget (customer-facing loader + iframe) — multi-stage build (tm 140.2,
+# SiyahTuş widget (customer-facing loader + iframe) — multi-stage build (tm 140.2,
 # M-CONTAINER-b). Local/dev images only: no production deploy, no real
 # secrets baked in (CLAUDE.md / MASTER-PROMPT limits).
 #
@@ -8,7 +8,7 @@
 # the built `loader.js`/`widget.html`/`chat.html` reference is root-relative —
 # whatever host:port this image ends up published on automatically becomes
 # the widget's origin. The customer-facing knob is `widgetOrigin` in the
-# snippet's `window.__nexa` config (apps/widget/src/loader.ts), which already
+# snippet's `window.__siyahtus` config (apps/widget/src/loader.ts), which already
 # points at wherever this container is reachable; nothing here needs to know
 # that address in advance or bake it in.
 #
@@ -33,7 +33,7 @@ RUN pnpm config set store-dir /pnpm-store \
     && pnpm config set fetch-timeout 300000 \
     && pnpm config set fetch-retries 5
 
-# ---- build: filtered workspace install (`@nexa/widget` + `@nexa/types`,
+# ---- build: filtered workspace install (`@siyahtus/widget` + `@siyahtus/types`,
 # skipping every other app's much larger dependency tree) + the two-pass
 # `vite build` (loader IIFE, then the widget/chat app — see
 # apps/widget/vite.config.ts's own comment on why it is two passes). ----
@@ -41,9 +41,9 @@ FROM base AS build
 ARG VITE_API_BASE_URL=http://localhost:4000/api/v1
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 COPY . .
-RUN --mount=type=cache,id=nexa-pnpm-store,target=/pnpm-store \
-    pnpm install --frozen-lockfile --filter @nexa/widget...
-RUN pnpm --filter @nexa/widget... run build
+RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
+    pnpm install --frozen-lockfile --filter @siyahtus/widget...
+RUN pnpm --filter @siyahtus/widget... run build
 
 # ---------------------------------------------------------------------------
 FROM ${NGINX_IMAGE} AS runtime

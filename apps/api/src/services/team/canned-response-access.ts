@@ -20,7 +20,7 @@
  * from the token, for the reason `resolveVisibility` gives: taking someone off
  * a team has to stop their access now, not when their token next rotates.
  */
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
 

@@ -4,7 +4,7 @@
  * `apps/rtm` already has one of these (`test/helpers/rtm-harness.ts`), and this
  * is deliberately not it: that one takes a gateway object built inside the test
  * process, which is exactly the thing the two-pod suite may not do. Importing it
- * across the package boundary is not open either — `@nexa/api`'s tsconfig
+ * across the package boundary is not open either — `@siyahtus/api`'s tsconfig
  * compiles its own tree, and a `../../rtm/**` import would drag the gateway's
  * sources under this package's `rootDir`.
  *

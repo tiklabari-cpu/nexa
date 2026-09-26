@@ -26,7 +26,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId, WORK_SCHEDULE_DAYS } from '@nexa/types';
+import { generateShortId, WORK_SCHEDULE_DAYS } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import { FileMailer, type Mailer } from '../../src/services/mail/mailer.js';
@@ -231,7 +231,7 @@ describe('SLA targets (FR-MOD-11.5 · 11.5-d)', () => {
   beforeEach(async () => {
     fx = await seedFixtures(owner, { plan: 'enterprise' });
     await clearRateLimits(server.app);
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-sla-mail-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-sla-mail-'));
     seq = 0;
   });
 

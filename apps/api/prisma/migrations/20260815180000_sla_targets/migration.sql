@@ -94,7 +94,7 @@ COMMENT ON TABLE sla_breaches IS
 -- thing would mark every conversation in the workspace as a breach the moment
 -- it opened, so the database refuses it rather than trusting the boundary.
 --
--- The ceiling is 90 days, matching SLA_MAX_TARGET_MINUTES in @nexa/types. It is
+-- The ceiling is 90 days, matching SLA_MAX_TARGET_MINUTES in @siyahtus/types. It is
 -- a typo guard rather than a business rule: a target past the retention window
 -- can never be breached by anything still on disk, so saving one switches the
 -- feature off while the settings screen goes on showing it as configured.
@@ -107,7 +107,7 @@ ALTER TABLE sla_policies
     CHECK (resolution_minutes IS NULL
            OR (resolution_minutes > 0 AND resolution_minutes <= 129600));
 
--- Mirrors SLA_SUBJECT_TYPES and SLA_TARGETS in @nexa/types. A row naming a
+-- Mirrors SLA_SUBJECT_TYPES and SLA_TARGETS in @siyahtus/types. A row naming a
 -- subject or a clock nothing knows how to render is a figure on a report with
 -- no way back to the case it came from — the same reasoning as
 -- siem_export_cursors_target_check.
@@ -139,28 +139,28 @@ ALTER TABLE sla_breaches
 -- direction that manufactures a problem out of nothing.
 ALTER TABLE sla_policies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY sla_policies_tenant ON sla_policies
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE sla_breaches ENABLE ROW LEVEL SECURITY;
 CREATE POLICY sla_breaches_tenant ON sla_breaches
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches both tables only through those
+-- The API connects as siyahtus_app and reaches both tables only through those
 -- policies. Granted explicitly: the schema-wide GRANT in 20260722154008 covered
 -- only the tables that existed then.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.sla_policies TO nexa_app;
-GRANT SELECT, INSERT, UPDATE ON public.sla_breaches TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.sla_policies TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE ON public.sla_breaches TO siyahtus_app;
 
 -- No DELETE on the breaches, and withholding it takes an explicit REVOKE: the
--- ALTER DEFAULT PRIVILEGES in 20260722090000 hands all four verbs to nexa_app
+-- ALTER DEFAULT PRIVILEGES in 20260722090000 hands all four verbs to siyahtus_app
 -- on every table created after it, so the narrower GRANT above is a no-op on its
 -- own. Mirrors `REVOKE DELETE ON scheduled_report_runs`.
 --
 -- The reason is what the row is for. A breach is evidence that a promise was
 -- missed, and the party with the strongest motive to remove it is the one that
 -- missed it. Retention still clears them — the ON DELETE CASCADE above is
--- carried out by the referencing table's owner, not by nexa_app — so NFR-C8 is
+-- carried out by the referencing table's owner, not by siyahtus_app — so NFR-C8 is
 -- unaffected. The policy row keeps its DELETE: erasing a *target* destroys no
 -- evidence, and a workspace that stops promising anything should be able to say
 -- so.
-REVOKE DELETE ON public.sla_breaches FROM nexa_app;
+REVOKE DELETE ON public.sla_breaches FROM siyahtus_app;

@@ -49,7 +49,7 @@ import type {
   AccessReviewLoginMethod,
   AccessReviewMemberStatus,
   AccessReviewProvisioning,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { CsvCell } from '../../routes/reports-export.js';
 
@@ -345,7 +345,7 @@ export function accessReviewCredentialTable(report: AccessReviewReport): AccessR
 }
 
 /**
- * `nexa-access-review-<section>-<YYYY-MM-DD>.csv`.
+ * `siyahtus-access-review-<section>-<YYYY-MM-DD>.csv`.
  *
  * Named for the day rather than a window, because unlike every other report
  * export this one has no reporting range — it is a snapshot of *now*. Two
@@ -354,5 +354,5 @@ export function accessReviewCredentialTable(report: AccessReviewReport): AccessR
  * day are the same evidence and may overwrite each other.
  */
 export function accessReviewFilename(section: string, generatedAt: Date): string {
-  return `nexa-access-review-${section}-${generatedAt.toISOString().slice(0, 10)}.csv`;
+  return `siyahtus-access-review-${section}-${generatedAt.toISOString().slice(0, 10)}.csv`;
 }

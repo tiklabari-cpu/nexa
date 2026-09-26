@@ -7,7 +7,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { CustomFieldValue } from '@nexa/types';
+import type { CustomFieldValue } from '@siyahtus/types';
 import { CustomFields } from './CustomFields.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 

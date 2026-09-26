@@ -10,7 +10,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,
@@ -31,7 +31,7 @@ describe('settings', () => {
   let adminToken: string;
   let readToken: string;
   // The widget/security/inbox settings are brand-scoped (a row per brand). With
-  // no `X-Nexa-Brand` header these endpoints resolve the license default brand,
+  // no `X-SiyahTus-Brand` header these endpoints resolve the license default brand,
   // so every license needs its default brand — the row the production backfill,
   // seed and signup all lay down.
   let brandA: string;
@@ -39,7 +39,7 @@ describe('settings', () => {
 
   const auth = (token: string, brand?: string) => ({
     authorization: `Bearer ${token}`,
-    ...(brand ? { 'x-nexa-brand': brand } : {}),
+    ...(brand ? { 'x-siyahtus-brand': brand } : {}),
   });
   // The compound primary key of every brand-scoped singleton, for reading a row
   // back straight through the owner client (RLS-exempt).
@@ -58,7 +58,7 @@ describe('settings', () => {
   });
 
   beforeEach(async () => {
-    // Turning the widget's Nexa branding off is the `white_label` entitlement
+    // Turning the widget's SiyahTuş branding off is the `white_label` entitlement
     // (FR-MOD-11.5); the appearance suite below is about FR-MOD-11.7's
     // customisation rules, so it runs on a plan that has bought it.
     fx = await seedFixtures(owner, { plan: 'enterprise' });
@@ -90,7 +90,7 @@ describe('settings', () => {
       const before = await server.post(
         '/customer/token',
         { organization_id: fx.a.organizationId, host_origin: 'https://newshop.example' },
-        { origin: 'https://widget.nexa.example' },
+        { origin: 'https://widget.siyahtus.example' },
       );
       expect(before.statusCode).toBe(403);
 
@@ -104,7 +104,7 @@ describe('settings', () => {
       const after = await server.post(
         '/customer/token',
         { organization_id: fx.a.organizationId, host_origin: 'https://newshop.example' },
-        { origin: 'https://widget.nexa.example' },
+        { origin: 'https://widget.siyahtus.example' },
       );
       expect(after.statusCode).toBe(200);
     });
@@ -121,7 +121,7 @@ describe('settings', () => {
       const token = await server.post(
         '/customer/token',
         { organization_id: fx.a.organizationId, host_origin: 'https://pasted.example' },
-        { origin: 'https://widget.nexa.example' },
+        { origin: 'https://widget.siyahtus.example' },
       );
       expect(token.statusCode).toBe(200);
     });
@@ -159,7 +159,7 @@ describe('settings', () => {
       const token = await server.post(
         '/customer/token',
         { organization_id: fx.a.organizationId, host_origin: 'https://temporary.example' },
-        { origin: 'https://widget.nexa.example' },
+        { origin: 'https://widget.siyahtus.example' },
       );
       expect(token.statusCode).toBe(403);
     });
@@ -1715,7 +1715,7 @@ describe('settings', () => {
       const minted = await server.post(
         '/customer/token',
         { organization_id: fx.a.organizationId, host_origin: `https://${fx.a.trustedDomain}` },
-        { origin: 'https://widget.nexa.example' },
+        { origin: 'https://widget.siyahtus.example' },
       );
       expect(minted.statusCode).toBe(200);
       expect(

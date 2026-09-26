@@ -30,7 +30,7 @@ DECLARE
   v_account UUID := gen_random_uuid();
 BEGIN
   IF EXISTS (SELECT 1 FROM accounts a WHERE a.email = p_email) THEN
-    RAISE EXCEPTION 'nexa_account_exists';
+    RAISE EXCEPTION 'siyahtus_account_exists';
   END IF;
 
   INSERT INTO organizations (id, name, region) VALUES (v_org, p_organization_name, 'eu');
@@ -48,7 +48,7 @@ BEGIN
   -- Public client: OAuth 2.1 uses PKCE rather than a secret for anything
   -- running in a browser, where no secret stays secret.
   INSERT INTO oauth_clients (id, organization_id, display_name, client_type, redirect_uris, scopes)
-  VALUES ('nexa-agent-app-' || v_org::TEXT, v_org, 'Nexa Agent App', 'public',
+  VALUES ('siyahtus-agent-app-' || v_org::TEXT, v_org, 'SiyahTuş Agent App', 'public',
           ARRAY['http://localhost:5173/auth/callback'], ARRAY[]::TEXT[]);
 
   RETURN QUERY SELECT v_account, v_license, v_org;
@@ -84,4 +84,4 @@ AS $$
 $$;
 
 REVOKE EXECUTE ON FUNCTION auth_list_memberships(UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_list_memberships(UUID) TO siyahtus_app;

@@ -25,7 +25,7 @@
  */
 import { type ReactElement } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { SharedReport } from '@nexa/types';
+import type { SharedReport } from '@siyahtus/types';
 import { ApiClient } from '../../lib/api-client.js';
 import { formatDate, formatDateTime } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';

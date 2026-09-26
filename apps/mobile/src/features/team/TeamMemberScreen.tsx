@@ -7,7 +7,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { WORK_SCHEDULE_DAYS } from '@nexa/types';
+import { WORK_SCHEDULE_DAYS } from '@siyahtus/types';
 
 import { useTeamApi } from './context';
 import type { Agent, AgentWorkSchedule } from './types';

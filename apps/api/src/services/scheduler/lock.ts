@@ -6,7 +6,7 @@
  * sweep three times: three retention passes deleting the same rows, three
  * scheduled-report mails to the same inbox. This is that guard.
  *
- *   SET nexa:sched:<job> <owner token> PX <ttl> NX
+ *   SET siyahtus:sched:<job> <owner token> PX <ttl> NX
  *
  * One round trip, and atomic by construction — `EXISTS` followed by `SET` would
  * let two instances both read "free" before either wrote.
@@ -61,8 +61,8 @@ end
 return 0
 `;
 
-/** Namespaced like `rl:` (rate limits) so `KEYS nexa:sched:*` shows the fleet's state. */
-export const LOCK_KEY_PREFIX = 'nexa:sched:';
+/** Namespaced like `rl:` (rate limits) so `KEYS siyahtus:sched:*` shows the fleet's state. */
+export const LOCK_KEY_PREFIX = 'siyahtus:sched:';
 
 /** Share of the interval a lock survives. See the header for why it is not 1. */
 export const LOCK_TTL_FRACTION = 0.9;

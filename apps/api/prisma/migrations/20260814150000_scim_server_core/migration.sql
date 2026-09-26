@@ -65,7 +65,7 @@ CREATE UNIQUE INDEX "agent_memberships_license_id_scim_external_id_key"
 -- membership, so a tenant-scoped session cannot see — and therefore cannot
 -- adopt — a person who already works for a different workspace. It would insert
 -- and hit the global unique index on `email`, turning "this colleague already
--- has a Nexa account" into a 500.
+-- has a SiyahTuş account" into a 500.
 --
 -- Deliberately NOT `auth_provision_sso_account` with extra arguments. The two
 -- differ on the case that matters:
@@ -138,4 +138,4 @@ END;
 $$;
 
 REVOKE EXECUTE ON FUNCTION scim_provision_member(BIGINT, CITEXT, TEXT, TEXT, TEXT, BOOLEAN) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION scim_provision_member(BIGINT, CITEXT, TEXT, TEXT, TEXT, BOOLEAN) TO nexa_app;
+GRANT EXECUTE ON FUNCTION scim_provision_member(BIGINT, CITEXT, TEXT, TEXT, TEXT, BOOLEAN) TO siyahtus_app;

@@ -51,7 +51,7 @@
  * or a cutoff at or after "now" — would select the entire table, so `cutoffFor`
  * refuses it: the retention job must never be one misconfiguration away from
  * deleting everything. "Unlimited" is therefore *not a number* here; see
- * `@nexa/types#RetentionWindow` for why that is the load-bearing choice.
+ * `@siyahtus/types#RetentionWindow` for why that is the load-bearing choice.
  *
  * The single-subject counterpart to this periodic sweep — the "right to
  * erasure" API NFR-C8 also names (GDPR Art. 17) — is `erasure.ts`. They share
@@ -63,7 +63,7 @@ import {
   type RetentionTier,
   retentionTierWindow,
   type RetentionWindow,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { type Env } from '../../config/env.js';
 
 export interface RetentionPolicy {

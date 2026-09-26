@@ -76,8 +76,8 @@ describe('HIPAA scope constraints (C4-e)', () => {
   beforeAll(async () => {
     owner = ownerClient();
     appRole = new PrismaClient({ datasourceUrl: APP_URL });
-    outOfRegion = await startTestServer({ NEXA_REGION: 'us', LLM_PROVIDER_REGION: 'eu' });
-    inRegion = await startTestServer({ NEXA_REGION: 'us' });
+    outOfRegion = await startTestServer({ SIYAHTUS_REGION: 'us', LLM_PROVIDER_REGION: 'eu' });
+    inRegion = await startTestServer({ SIYAHTUS_REGION: 'us' });
   });
 
   afterAll(async () => {
@@ -87,7 +87,7 @@ describe('HIPAA scope constraints (C4-e)', () => {
 
   beforeEach(async () => {
     fx = await seedFixtures(owner);
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-hipaa-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-hipaa-'));
     await clearRateLimits(outOfRegion.app);
     await clearRateLimits(inRegion.app);
   });
@@ -162,7 +162,7 @@ describe('HIPAA scope constraints (C4-e)', () => {
     });
 
     const aiAgent = await owner.aiAgent.create({
-      data: { licenseId: license.id, kind: 'ai_agent', name: 'Nexa AI', active: true },
+      data: { licenseId: license.id, kind: 'ai_agent', name: 'SiyahTuş AI', active: true },
       select: { id: true },
     });
 

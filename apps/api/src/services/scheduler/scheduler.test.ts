@@ -638,7 +638,7 @@ describe('snapshot', () => {
       name: 'sla',
       intervalMs: INTERVAL,
       run: async () => {
-        throw new RangeError('postgres://user:hunter2@db/nexa is unreachable');
+        throw new RangeError('postgres://user:hunter2@db/siyahtus is unreachable');
       },
     });
     instance.start();

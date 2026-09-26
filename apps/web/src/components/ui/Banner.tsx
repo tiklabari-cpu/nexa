@@ -69,7 +69,7 @@ const TONES: Record<BannerTone, ToneStyle> = {
   },
 };
 
-const STORE_PREFIX = 'nexa.banner.dismissed.';
+const STORE_PREFIX = 'siyahtus.banner.dismissed.';
 
 /** The `localStorage` key a persistent dismissal is remembered under. */
 export function bannerDismissKey(id: string): string {

@@ -8,32 +8,32 @@
  * — a failure that shows up as "chat does not update", not as "wrong region".
  */
 import { describe, expect, it } from 'vitest';
-import { REGIONS } from '@nexa/types';
+import { REGIONS } from '@siyahtus/types';
 import { OTEL_EXPORTERS } from '../telemetry/telemetry.js';
 import { SECRET_KEYS, parseEnv } from './env.js';
 
 const BASE: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
-  DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa',
+  DATABASE_URL: 'postgresql://siyahtus:siyahtus@127.0.0.1:5432/siyahtus',
   REDIS_URL: 'redis://127.0.0.1:6379',
   JWT_SIGNING_KEY: 'dev-only-jwt-signing-key-at-least-32-chars',
   CUSTOMER_TOKEN_SECRET: 'dev-only-customer-token-secret-32-chars',
 };
 
-describe('NEXA_REGION', () => {
+describe('SIYAHTUS_REGION', () => {
   it('accepts every region the shared list declares', () => {
     for (const region of REGIONS) {
-      expect(parseEnv({ ...BASE, NEXA_REGION: region }).NEXA_REGION).toBe(region);
+      expect(parseEnv({ ...BASE, SIYAHTUS_REGION: region }).SIYAHTUS_REGION).toBe(region);
     }
     expect(REGIONS).toContain('us');
   });
 
   it('defaults to eu when unset', () => {
-    expect(parseEnv(BASE).NEXA_REGION).toBe('eu');
+    expect(parseEnv(BASE).SIYAHTUS_REGION).toBe('eu');
   });
 
   it('refuses a region that is not one of them', () => {
-    expect(() => parseEnv({ ...BASE, NEXA_REGION: 'apac' })).toThrow(/NEXA_REGION/);
+    expect(() => parseEnv({ ...BASE, SIYAHTUS_REGION: 'apac' })).toThrow(/SIYAHTUS_REGION/);
   });
 });
 
@@ -83,7 +83,7 @@ describe('RTM_MAX_CONNECTIONS', () => {
     const env = parseEnv({
       ...BASE,
       NODE_ENV: 'production',
-      DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
+      DATABASE_APP_URL: 'postgresql://siyahtus_app:app-password@127.0.0.1:5432/siyahtus',
       JWT_SIGNING_KEY: 'jwt-0123456789abcdef0123456789abcdef',
       CUSTOMER_TOKEN_SECRET: 'customer-0123456789abcdef0123456789abcdef',
     });
@@ -152,7 +152,7 @@ describe('DATABASE_POOL_SIZE', () => {
   it('leaves an explicit connection_limit already on the url alone', () => {
     const env = parseEnv({
       ...BASE,
-      DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa?connection_limit=3',
+      DATABASE_URL: 'postgresql://siyahtus:siyahtus@127.0.0.1:5432/siyahtus?connection_limit=3',
       DATABASE_POOL_SIZE: '15',
     });
     expect(new URL(env.runtimeDatabaseUrl).searchParams.get('connection_limit')).toBe('3');
@@ -186,7 +186,7 @@ describe('production configuration', () => {
   const PROD_BASE: NodeJS.ProcessEnv = {
     ...BASE,
     NODE_ENV: 'production',
-    DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
+    DATABASE_APP_URL: 'postgresql://siyahtus_app:app-password@127.0.0.1:5432/siyahtus',
     JWT_SIGNING_KEY: realSecret('jwt'),
     CUSTOMER_TOKEN_SECRET: realSecret('customer'),
   };

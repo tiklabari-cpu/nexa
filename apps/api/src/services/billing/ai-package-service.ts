@@ -26,7 +26,7 @@
  * where the quota lands — `usage_records` is keyed `(license_id, metric,
  * period)`, so there is nowhere for an allowance to sit that outlives a period.
  */
-import { AI_PACKAGE_MAX_PACKS, aiPackagePriceCents, aiPackageResolutions } from '@nexa/types';
+import { AI_PACKAGE_MAX_PACKS, aiPackagePriceCents, aiPackageResolutions } from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { AI_RESOLUTION_OVERAGE_UNIT, currentPeriod } from './metering.js';
 

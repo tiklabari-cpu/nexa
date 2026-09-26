@@ -11,8 +11,8 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { hasAnyScope, isShortId } from '@nexa/types';
-import { ENHANCE_MODES, enhanceText, summariseConversation } from '@nexa/ai-mock';
+import { hasAnyScope, isShortId } from '@siyahtus/types';
+import { ENHANCE_MODES, enhanceText, summariseConversation } from '@siyahtus/ai-mock';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';

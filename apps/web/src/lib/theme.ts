@@ -47,7 +47,7 @@ export const THEME_NAMES: Record<Theme, string> = {
  * same default; `theme.test.ts` asserts the two agree, because a drift there
  * would show as a flash of the wrong theme on every load and nothing else.
  */
-export const THEME_STORAGE_KEY = 'nexa.theme';
+export const THEME_STORAGE_KEY = 'siyahtus.theme';
 
 /** What an agent who has never chosen sees, and what any unreadable value falls back to. */
 export const DEFAULT_THEME: Theme = 'dark';

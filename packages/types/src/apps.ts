@@ -456,7 +456,7 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     provider: 'oauth',
     icon: '⚡',
     description:
-      'Trigger zaps from workspace events — register a Zapier app through the Nexa partner portal.',
+      'Trigger zaps from workspace events — register a Zapier app through the SiyahTuş partner portal.',
     scopes: ['zaps.trigger', 'zaps.read'],
     automation: true,
     dataLabel: 'Zapier',
@@ -472,7 +472,7 @@ export const APP_CATALOG: readonly AppCatalogEntry[] = [
     provider: 'api_key',
     icon: '🔗',
     description:
-      'Run Make scenarios against this workspace — register a Make app through the Nexa partner portal.',
+      'Run Make scenarios against this workspace — register a Make app through the SiyahTuş partner portal.',
     scopes: ['scenarios.trigger', 'scenarios.read'],
     automation: true,
     dataLabel: 'Make',
@@ -1756,7 +1756,7 @@ export function connectableApps(): AppCatalogEntry[] {
  * The catalogue's original five (09.1) — one representative data app per
  * section, shipped first so the grid and the OAuth flow were real end to end
  * before 09.2 grew the directory. The "By Text" collection surfaces exactly
- * these: the integrations Nexa's own team built and proved the flow against,
+ * these: the integrations SiyahTuş's own team built and proved the flow against,
  * mirroring the reference product's own "Built by <vendor>" collection (e.g.
  * Intercom's App Store, `app-store?category=built-by-intercom`).
  */

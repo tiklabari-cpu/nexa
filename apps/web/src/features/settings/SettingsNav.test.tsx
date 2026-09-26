@@ -18,7 +18,7 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import { ADMIN_SCOPES, DEFAULT_AGENT_SCOPES } from '@nexa/types';
+import { ADMIN_SCOPES, DEFAULT_AGENT_SCOPES } from '@siyahtus/types';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { settings as EN_SETTINGS } from '../../locales/en/settings.js';
 import {

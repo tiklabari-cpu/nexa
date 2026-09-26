@@ -66,7 +66,7 @@ async function waitFor(predicate: () => boolean, tries = 50): Promise<void> {
 async function sendFirstMessage(search: string): Promise<Record<string, unknown>> {
   window.history.replaceState({}, '', `/widget.html${search}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
 

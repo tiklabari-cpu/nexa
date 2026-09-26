@@ -18,8 +18,8 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startTestServer, type TestServer } from '../helpers/server.js';
 
-const PANEL_ORIGIN = 'https://panel.nexa.test';
-const WIDGET_ORIGIN = 'https://widget.nexa.test';
+const PANEL_ORIGIN = 'https://panel.siyahtus.test';
+const WIDGET_ORIGIN = 'https://widget.siyahtus.test';
 const FOREIGN_ORIGIN = 'https://not-the-panel.example';
 
 /** 32+ characters and not the `dev-only-` placeholder — the production check refuses both. */
@@ -115,7 +115,7 @@ describe('a server built from a production environment', () => {
  * broken for no visible reason.
  */
 describe('a production server with several panel origins', () => {
-  const CHAT_ORIGIN = 'https://chat.nexa.test';
+  const CHAT_ORIGIN = 'https://chat.siyahtus.test';
   let server: TestServer;
 
   beforeAll(async () => {
@@ -147,7 +147,7 @@ describe('a production server with several panel origins', () => {
     // come up healthy and serve no one — the worst of the three outcomes,
     // because the process reports itself fine.
     await expect(
-      startTestServer({ ...PRODUCTION_ENV, WEB_ORIGIN: 'panel.nexa.test/app' }),
+      startTestServer({ ...PRODUCTION_ENV, WEB_ORIGIN: 'panel.siyahtus.test/app' }),
     ).rejects.toThrow(/WEB_ORIGIN/);
   });
 });

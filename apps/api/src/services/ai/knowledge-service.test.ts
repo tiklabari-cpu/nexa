@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { chunk, toVectorLiteral } from '@nexa/ai-mock';
+import { chunk, toVectorLiteral } from '@siyahtus/ai-mock';
 import { describe, expect, it } from 'vitest';
 import {
   FAKE_EMBEDDING_SPACE,

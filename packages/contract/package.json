@@ -1,5 +1,5 @@
 {
-  "name": "@nexa/contract",
+  "name": "@siyahtus/contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,7 +20,7 @@
     "test:unit": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@nexa/types": "workspace:*"
+    "@siyahtus/types": "workspace:*"
   },
   "devDependencies": {
     "@redocly/openapi-core": "^1.28.0",

@@ -29,8 +29,8 @@ import {
   WIDGET_COLOR_PATTERN,
   WIDGET_POSITIONS,
   WIDGET_THEMES,
-} from '@nexa/types';
-import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@nexa/types';
+} from '@siyahtus/types';
+import { SIEM_EXPORT_TARGETS, SLA_MAX_TARGET_MINUTES } from '@siyahtus/types';
 import type {
   CompanySector,
   CompanySize,
@@ -39,7 +39,7 @@ import type {
   SsoAttributeMappingKey,
   SsoConnection,
   SsoDomain,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { constantTimeEqual, generateToken, hashToken } from '../lib/crypto.js';
@@ -555,7 +555,7 @@ const SESSION_IDLE_TIMEOUT_MAX_SECONDS = CHAT_TIMEOUT_MAX_SECONDS;
  * Widget appearance (FR-MOD-11.7). Every field is optional so the customisation
  * screen can save one control at a time, but a body with none is rejected —
  * empty is a mistake, not "reset to defaults". The colour is pinned to the same
- * `#rrggbb` shape the database CHECK and `@nexa/types` normaliser enforce, so a
+ * `#rrggbb` shape the database CHECK and `@siyahtus/types` normaliser enforce, so a
  * value that reaches the install snippet and CSS can only ever be a colour.
  */
 const updateWidgetBody = z
@@ -740,7 +740,7 @@ const updateSiemBody = z
  * The value is a *tier*, not a number of days. That is what makes "unlimited"
  * unrepresentable as `0` — the one number the sweep's own guard exists to
  * refuse, because a zero window puts the cutoff at "now" and matches every row.
- * See `@nexa/types/retention.ts`.
+ * See `@siyahtus/types/retention.ts`.
  *
  * At least one field, like the other partial-update bodies here: an empty PATCH
  * would write an audit entry for a change nobody made.
@@ -1969,7 +1969,7 @@ export default async function settingsRoutes(
     '/settings/security',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
     async (request, reply) => {
-      // Brand-scoped: the row belongs to the active brand (`X-Nexa-Brand`) or the
+      // Brand-scoped: the row belongs to the active brand (`X-SiyahTus-Brand`) or the
       // license default when none is named — so a settings screen never reads
       // another brand's row, and never an arbitrary one when several exist.
       const { row, brandId } = await request.withTenant(async (tx) => {
@@ -2376,7 +2376,7 @@ export default async function settingsRoutes(
   // Gated like the rest of the security family — `access_rules` plus
   // `minimumRole: admin` — and for the same reason `/settings/compliance` is:
   // deciding that a copy of every security event in the workspace leaves for a
-  // system Nexa does not control is a workspace-security decision, not an
+  // system SiyahTuş does not control is a workspace-security decision, not an
   // inbox preference.
   //
   // Both the read and the write live here rather than beside the export itself,
@@ -2623,7 +2623,7 @@ export default async function settingsRoutes(
   // --- Widget appearance (FR-MOD-11.7) ---------------------------------------
   //
   // One field here is commercial rather than cosmetic: `powered_by`. Turning
-  // Nexa's branding off is the `white_label` entitlement (FR-MOD-11.5), so it
+  // SiyahTuş's branding off is the `white_label` entitlement (FR-MOD-11.5), so it
   // is gated in the handler rather than on the route — the rest of the body is
   // free on every plan, and a route-level `entitlement` would refuse an admin
   // changing their button colour.

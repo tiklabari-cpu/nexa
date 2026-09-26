@@ -147,7 +147,7 @@ let nwToken: string;
 
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
-    extraHTTPHeaders: { 'user-agent': 'nexa-e2e-public-kb' },
+    extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-public-kb' },
   });
   acmeToken = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
   nwToken = await ownerAccessTokenFor(apiCtx, NORTHWIND_OWNER);
@@ -185,7 +185,7 @@ test('a published KB article is anonymously readable, SEO-ready and XSS-safe; dr
   const TITLE = 'Returns and refunds';
   const MARKER = 'Return your Acme bike within 30 days for a full refund.';
   // Escaped-first rendering (PUBKB-d) must turn this into inert text, never a tag.
-  const XSS = '<img src=x onerror="window.__nexaKbXss = 1">';
+  const XSS = '<img src=x onerror="window.__siyahtusKbXss = 1">';
   const SEO_TITLE = 'Returns & refunds - Acme Bikes';
   const SEO_DESC = 'How to return an Acme bike within 30 days for a refund.';
   const articleUrl = kbArticle(ACME_KB_SLUG, ARTICLE_SLUG);
@@ -258,7 +258,9 @@ test('a published KB article is anonymously readable, SEO-ready and XSS-safe; dr
     expect(await reader.locator('img[onerror]').count()).toBe(0);
     await expect(reader.locator('article')).toContainText('onerror');
     expect(
-      await reader.evaluate(() => (window as unknown as { __nexaKbXss?: number }).__nexaKbXss),
+      await reader.evaluate(
+        () => (window as unknown as { __siyahtusKbXss?: number }).__siyahtusKbXss,
+      ),
     ).toBeUndefined();
 
     await reader.screenshot({ path: 'kanit/76.9-public-kb-article.png', fullPage: true });

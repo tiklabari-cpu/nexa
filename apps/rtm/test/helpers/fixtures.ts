@@ -7,7 +7,7 @@
  */
 import { createHash, createHmac, randomUUID } from 'node:crypto';
 import { PrismaClient } from '@prisma/client';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 
 export interface RtmTenant {
   organizationId: string;
@@ -50,12 +50,12 @@ export async function resetDatabase(db: PrismaClient): Promise<void> {
  * ignores the logical database that otherwise separates two concurrent runs.
  */
 async function applyLicenseIdOffset(db: PrismaClient): Promise<void> {
-  const raw = process.env['NEXA_TEST_LICENSE_ID_OFFSET'];
+  const raw = process.env['SIYAHTUS_TEST_LICENSE_ID_OFFSET'];
   if (!raw) return;
 
   const offset = Number(raw);
   if (!Number.isSafeInteger(offset) || offset <= 0) {
-    throw new Error(`NEXA_TEST_LICENSE_ID_OFFSET must be a positive integer, got "${raw}"`);
+    throw new Error(`SIYAHTUS_TEST_LICENSE_ID_OFFSET must be a positive integer, got "${raw}"`);
   }
   await db.$executeRawUnsafe(`ALTER SEQUENCE IF EXISTS licenses_id_seq RESTART WITH ${offset + 1}`);
 }

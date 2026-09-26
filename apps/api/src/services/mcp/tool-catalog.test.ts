@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isScope } from '@nexa/types';
+import { isScope } from '@siyahtus/types';
 import { MCP_TOOL_CATALOG, toolByName } from './tool-catalog.js';
 
 // KK (birebir): "search_tickets/list_chats/get_report/summarize_chat tool'ları"

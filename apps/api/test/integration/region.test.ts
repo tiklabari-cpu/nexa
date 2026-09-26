@@ -23,7 +23,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { REGIONS } from '@nexa/types';
+import { REGIONS } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
@@ -44,7 +44,7 @@ describe('region (C4-a)', () => {
     owner = ownerClient();
     app = new PrismaClient({ datasourceUrl: APP_URL });
     server = await startTestServer();
-    usServer = await startTestServer({ NEXA_REGION: 'us' });
+    usServer = await startTestServer({ SIYAHTUS_REGION: 'us' });
   });
 
   afterAll(async () => {
@@ -226,7 +226,7 @@ describe('region (C4-a)', () => {
     });
 
     it('answers 421 the same way at the us deployment for an eu workspace', async () => {
-      // The mirror, on the same build with `NEXA_REGION=us`. Without it the gate
+      // The mirror, on the same build with `SIYAHTUS_REGION=us`. Without it the gate
       // could be `region !== 'us'` — refusing correctly on this deployment for
       // the wrong reason, and refusing every legitimate signup on the other.
       const before = await tenantRowCounts();
@@ -338,7 +338,7 @@ describe('region (C4-a)', () => {
             data: { region: 'us' },
           }),
         ),
-      ).rejects.toThrow(/nexa_region_immutable/);
+      ).rejects.toThrow(/siyahtus_region_immutable/);
 
       expect(
         (await owner.organization.findUnique({
@@ -349,7 +349,7 @@ describe('region (C4-a)', () => {
     });
 
     it('refuses the change from the table owner too', async () => {
-      // A column privilege would have stopped only `nexa_app`. The owner is the
+      // A column privilege would have stopped only `siyahtus_app`. The owner is the
       // role a migration, a seed and a support session all run as, which is
       // where a quiet `UPDATE organizations SET region` would actually come
       // from.
@@ -358,20 +358,20 @@ describe('region (C4-a)', () => {
           where: { id: fx.a.organizationId },
           data: { region: 'us' },
         }),
-      ).rejects.toThrow(/nexa_region_immutable/);
+      ).rejects.toThrow(/siyahtus_region_immutable/);
     });
 
     it('refuses raw SQL, not just the ORM', async () => {
       await expect(
         owner.$executeRaw`UPDATE organizations SET region = 'us' WHERE id = ${fx.a.organizationId}::uuid`,
-      ).rejects.toThrow(/nexa_region_immutable/);
+      ).rejects.toThrow(/siyahtus_region_immutable/);
     });
 
     it('refuses a sweep that would move every workspace at once', async () => {
       // FOR EACH ROW, so a set-wide update fails on the first row it would move
       // rather than moving the ones it reached first.
       await expect(owner.$executeRaw`UPDATE organizations SET region = 'us'`).rejects.toThrow(
-        /nexa_region_immutable/,
+        /siyahtus_region_immutable/,
       );
 
       const regions = await owner.organization.findMany({ select: { region: true } });
@@ -427,7 +427,7 @@ describe('region (C4-a)', () => {
 
       await expect(
         owner.organization.update({ where: { id: created.id }, data: { region: 'eu' } }),
-      ).rejects.toThrow(/nexa_region_immutable/);
+      ).rejects.toThrow(/siyahtus_region_immutable/);
     });
   });
 
@@ -540,7 +540,7 @@ describe('region (C4-a)', () => {
     });
 
     it('decides residency before it reads anything belonging to the workspace', async () => {
-      // `X-Nexa-Brand` resolution queries the caller's brands and answers 404
+      // `X-SiyahTus-Brand` resolution queries the caller's brands and answers 404
       // for one it cannot see. Getting 421 here means the request was turned
       // away before that query ran — a workspace kept in another region must
       // not have its rows read to produce an error about it.
@@ -548,7 +548,7 @@ describe('region (C4-a)', () => {
 
       const response = await usServer.get('/auth/me', {
         authorization: `Bearer ${token}`,
-        'x-nexa-brand': '99999999-9999-4999-8999-999999999999',
+        'x-siyahtus-brand': '99999999-9999-4999-8999-999999999999',
       });
 
       expect(response.statusCode).toBe(421);

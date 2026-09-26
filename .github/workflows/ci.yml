@@ -24,12 +24,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: nexa
-          POSTGRES_PASSWORD: nexa_dev_password
-          POSTGRES_DB: nexa
+          POSTGRES_USER: siyahtus
+          POSTGRES_PASSWORD: siyahtus_dev_password
+          POSTGRES_DB: siyahtus
         ports: ['5433:5432']
         options: >-
-          --health-cmd "pg_isready -U nexa -d nexa"
+          --health-cmd "pg_isready -U siyahtus -d siyahtus"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -44,8 +44,8 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://nexa:nexa_dev_password@localhost:5433/nexa
-      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@localhost:5433/nexa
+      DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@localhost:5433/siyahtus
+      DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@localhost:5433/siyahtus
       REDIS_URL: redis://localhost:6380
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
@@ -72,15 +72,15 @@ jobs:
 
       - name: Prepare database extensions and app role
         run: |
-          PGPASSWORD=nexa_dev_password psql -h localhost -p 5433 -U nexa -d nexa \
+          PGPASSWORD=siyahtus_dev_password psql -h localhost -p 5433 -U siyahtus -d siyahtus \
             -v ON_ERROR_STOP=1 -f infra/db/init/00-extensions.sql
 
       - name: Build contract (OpenAPI bundle + generated types)
-        run: pnpm --filter @nexa/contract build
+        run: pnpm --filter @siyahtus/contract build
 
       - name: Verify generated types are in sync with the spec
         run: |
-          pnpm --filter @nexa/contract generate
+          pnpm --filter @siyahtus/contract generate
           if ! git diff --quiet -- packages/contract/src/generated; then
             echo "::error::Generated API types are stale. Run 'pnpm contract:generate' and commit the result."
             git diff -- packages/contract/src/generated
@@ -88,10 +88,10 @@ jobs:
           fi
 
       - name: Generate Prisma client
-        run: pnpm --filter @nexa/api db:generate
+        run: pnpm --filter @siyahtus/api db:generate
 
       - name: Apply migrations
-        run: pnpm --filter @nexa/api db:migrate
+        run: pnpm --filter @siyahtus/api db:migrate
 
       - name: Check for schema drift
         run: pnpm db:check-drift
@@ -112,7 +112,7 @@ jobs:
         run: pnpm build
 
       - name: Unit tests
-        run: turbo run test:unit --filter=!@nexa/mobile
+        run: turbo run test:unit --filter=!@siyahtus/mobile
 
       - name: Integration tests
         run: pnpm test:integration
@@ -138,10 +138,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Test
-        run: pnpm --filter @nexa/mobile test
+        run: pnpm --filter @siyahtus/mobile test
 
       - name: Build (expo export)
-        run: pnpm --filter @nexa/mobile build
+        run: pnpm --filter @siyahtus/mobile build
 
   e2e:
     name: End-to-end
@@ -153,12 +153,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg17
         env:
-          POSTGRES_USER: nexa
-          POSTGRES_PASSWORD: nexa_dev_password
-          POSTGRES_DB: nexa
+          POSTGRES_USER: siyahtus
+          POSTGRES_PASSWORD: siyahtus_dev_password
+          POSTGRES_DB: siyahtus
         ports: ['5433:5432']
         options: >-
-          --health-cmd "pg_isready -U nexa -d nexa"
+          --health-cmd "pg_isready -U siyahtus -d siyahtus"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -173,8 +173,8 @@ jobs:
 
     env:
       NODE_ENV: test
-      DATABASE_URL: postgresql://nexa:nexa_dev_password@localhost:5433/nexa
-      DATABASE_APP_URL: postgresql://nexa_app:nexa_app_dev_password@localhost:5433/nexa
+      DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@localhost:5433/siyahtus
+      DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@localhost:5433/siyahtus
       REDIS_URL: redis://localhost:6380
       JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
       WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
@@ -201,15 +201,15 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: |
-          PGPASSWORD=nexa_dev_password psql -h localhost -p 5433 -U nexa -d nexa \
+          PGPASSWORD=siyahtus_dev_password psql -h localhost -p 5433 -U siyahtus -d siyahtus \
             -v ON_ERROR_STOP=1 -f infra/db/init/00-extensions.sql
-      - run: pnpm --filter @nexa/contract build
-      - run: pnpm --filter @nexa/api db:generate
-      - run: pnpm --filter @nexa/api db:migrate
-      - run: pnpm --filter @nexa/api db:seed
+      - run: pnpm --filter @siyahtus/contract build
+      - run: pnpm --filter @siyahtus/api db:generate
+      - run: pnpm --filter @siyahtus/api db:migrate
+      - run: pnpm --filter @siyahtus/api db:seed
 
       - name: Install Playwright browser
-        run: pnpm --filter @nexa/e2e exec playwright install --with-deps chromium
+        run: pnpm --filter @siyahtus/e2e exec playwright install --with-deps chromium
 
       - name: Run end-to-end tests
         run: pnpm test:e2e

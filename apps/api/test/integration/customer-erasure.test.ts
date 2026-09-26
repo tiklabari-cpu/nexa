@@ -26,7 +26,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { buildEventId, generateShortId } from '@nexa/types';
+import { buildEventId, generateShortId } from '@siyahtus/types';
 import {
   grantToken,
   ownerClient,

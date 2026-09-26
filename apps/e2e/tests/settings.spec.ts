@@ -40,7 +40,7 @@ test.describe('website widgets', () => {
     await expect(row.getByText('Waiting for first message')).toBeVisible();
 
     // The snippet is revealed straight away and carries the widget bootstrap.
-    await expect(section.getByTestId('website-snippet')).toContainText('window.__nexa');
+    await expect(section.getByTestId('website-snippet')).toContainText('window.__siyahtus');
     await agentPage.screenshot({ path: 'kanit/7-website-pending.png', fullPage: true });
 
     // No dual source: the same action put the domain on the trusted allowlist

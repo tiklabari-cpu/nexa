@@ -11,7 +11,7 @@
  * are the real boundaries and not whatever day the suite runs on.
  */
 import { describe, expect, it } from 'vitest';
-import type { RelativeRange } from '@nexa/ai-mock';
+import type { RelativeRange } from '@siyahtus/ai-mock';
 import { biWindow } from './copilot-service.js';
 
 /** A Saturday, mid-morning UTC. Its ISO week opened Monday 2026-08-03. */

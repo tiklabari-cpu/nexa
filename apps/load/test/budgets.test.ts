@@ -211,7 +211,7 @@ describe('the two halves of the metric vocabulary stay in step', () => {
 
 describe('every request is tagged and counted by the same call', () => {
   it('nothing but lib/http.js imports k6/http', () => {
-    // The `op` tag picks the latency budget; `nexa_measured{op:…}` proves the
+    // The `op` tag picks the latency budget; `siyahtus_measured{op:…}` proves the
     // budget was driven. Set from two call sites they drift, and both drift
     // directions are silent: a tagged sample with no counter reads as
     // unexercised, a counter with no tagged sample reads as met.

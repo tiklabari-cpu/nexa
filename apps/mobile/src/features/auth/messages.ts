@@ -23,7 +23,7 @@ export const INVALID_CREDENTIALS = 'Invalid email or password.';
 
 /** A workspace that federates sign-in but names no connection to knock on. */
 export const SSO_REQUIRED =
-  'This workspace requires single sign-on. Continue from your identity provider’s Nexa tile.';
+  'This workspace requires single sign-on. Continue from your identity provider’s SiyahTuş tile.';
 
 /**
  * A membership with no `client_id`. The phone will not guess one — `13.7-b`
@@ -63,7 +63,7 @@ export function signInErrorMessage(error: unknown): string {
         return 'Check the email and password, then try again.';
       case 'service_unavailable':
       case 'internal':
-        return 'Nexa is having trouble right now. Try again in a moment.';
+        return 'SiyahTuş is having trouble right now. Try again in a moment.';
       default:
         return 'Could not sign in. Try again.';
     }

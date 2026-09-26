@@ -1,4 +1,4 @@
-# Nexa — production values overlay (tm 164.4, M-IAC-d). Sibling of
+# SiyahTuş — production values overlay (tm 164.4, M-IAC-d). Sibling of
 # ../../../.env.production.example (same discipline: no real secrets, one
 # instruction per line) but for `helm template`/`helm install`, not a
 # process environment file directly.
@@ -8,9 +8,9 @@
 # automatically; naming it below is for clarity, not necessity), this file
 # LAST so its overrides win:
 #
-#   helm template nexa infra/helm/nexa \
-#     -f infra/helm/nexa/values.yaml \
-#     -f infra/helm/nexa/values.production.example.yaml
+#   helm template siyahtus infra/helm/siyahtus \
+#     -f infra/helm/siyahtus/values.yaml \
+#     -f infra/helm/siyahtus/values.production.example.yaml
 #
 # Copy this file, fill in every <placeholder>, and do not commit the copy —
 # this file stays a template with no real values, exactly like
@@ -22,9 +22,9 @@
 image:
   # Where the four M-CONTAINER (tm 140) images live once pushed. The chart
   # default ("") means "already on the node", true only for a local
-  # kind/k3d smoke test — a real deployment pushes nexa-{api,rtm,web,widget}
+  # kind/k3d smoke test — a real deployment pushes siyahtus-{api,rtm,web,widget}
   # here first.
-  registry: "<container-registry>/nexa"
+  registry: "<container-registry>/siyahtus"
 
 apps:
   api:
@@ -107,7 +107,7 @@ config:
   # inherited from apps/api/src/config/env.ts's own dev default), every real
   # browser request from the agent panel is refused by CORS.
   #
-  # List EVERY origin a browser loads a Nexa page from — the agent panel, any
+  # List EVERY origin a browser loads a SiyahTuş page from — the agent panel, any
   # separately hosted chat page, AND WIDGET_BASE_URL's origin below. The widget
   # image proxies nothing (values.yaml's networkPolicy note says the same
   # thing from the other side): its browser code calls api cross-origin, so a
@@ -250,11 +250,11 @@ secrets:
   # Owner role: runs migrations (templates/migrate-job.yaml). Never used by
   # the request path — see DATABASE_APP_URL below.
   DATABASE_URL: "postgresql://<owner_user>:<owner_password>@<db-host>:5432/<db>"
-  # REQUIRED, and DIFFERENT from DATABASE_URL: the non-owner nexa_app role.
+  # REQUIRED, and DIFFERENT from DATABASE_URL: the non-owner siyahtus_app role.
   # Postgres exempts table owners from row level security, so pointing this
   # at the owner (or omitting it, which falls back to DATABASE_URL) silently
   # disables every tenant isolation policy while every test still passes.
-  DATABASE_APP_URL: "postgresql://nexa_app:<app_password>@<db-host>:5432/<db>"
+  DATABASE_APP_URL: "postgresql://siyahtus_app:<app_password>@<db-host>:5432/<db>"
   REDIS_URL: "redis://<redis-host>:6379"
   # Issued by the object store, not generated here — so unlike the five keys
   # above, no `dev-only-` production guard covers them and nothing refuses to

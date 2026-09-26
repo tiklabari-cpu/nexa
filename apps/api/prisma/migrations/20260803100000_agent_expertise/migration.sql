@@ -62,15 +62,15 @@ ALTER TABLE "agent_expertise" ADD CONSTRAINT "agent_expertise_agent_id_fkey" FOR
 -- enough — no join back through expertise is needed.
 ALTER TABLE expertise ENABLE ROW LEVEL SECURITY;
 CREATE POLICY expertise_tenant ON expertise
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE agent_expertise ENABLE ROW LEVEL SECURITY;
 CREATE POLICY agent_expertise_tenant ON agent_expertise
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The application role reaches the tables only through those policies. An
 -- expertise entry is edited (rename, archive); an assignment is only ever added
 -- or removed, never edited, so agent_expertise gets no UPDATE (mirroring
 -- ticket_tags).
-GRANT SELECT, INSERT, UPDATE, DELETE ON expertise TO nexa_app;
-GRANT SELECT, INSERT, DELETE ON agent_expertise TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON expertise TO siyahtus_app;
+GRANT SELECT, INSERT, DELETE ON agent_expertise TO siyahtus_app;

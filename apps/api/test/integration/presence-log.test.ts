@@ -21,7 +21,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterEach, afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WORK_SCHEDULE_DAYS, generateShortId } from '@nexa/types';
+import { WORK_SCHEDULE_DAYS, generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { RoutingService } from '../../src/services/routing/routing-service.js';
 import { presenceCoverage } from '../../src/services/staffing/presence-coverage.js';
@@ -39,7 +39,7 @@ const ALWAYS_ON_SHIFT = WORK_SCHEDULE_DAYS.map((day) => ({
 describe('agent presence log (PRD §5.3-Vardiya)', () => {
   let owner: PrismaClient;
   /**
-   * The runtime role, `nexa_app`. Isolation has to be attacked from the layer
+   * The runtime role, `siyahtus_app`. Isolation has to be attacked from the layer
    * the API actually uses: the owner connection owns these tables and Postgres
    * exempts owners from RLS, so a cross-tenant read through `owner` proves
    * nothing at all.

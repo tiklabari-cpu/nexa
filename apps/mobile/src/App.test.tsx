@@ -1,4 +1,4 @@
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { Linking } from 'react-native';
 
@@ -31,7 +31,7 @@ const tabButton = (label: string) => screen.getByLabelText(new RegExp(`^${label}
 const mockStore: { session: string | null; hang: boolean } = { session: null, hang: false };
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(async (key: string) => {
-    if (key !== 'nexa.session') return null;
+    if (key !== 'siyahtus.session') return null;
     if (mockStore.hang) return new Promise<string | null>(() => {});
     return mockStore.session;
   }),
@@ -265,8 +265,8 @@ describe('App', () => {
     mockPush.handler = null;
     mockPush.listeners = [];
     mockExtra.value = {
-      apiBaseUrl: 'https://api.nexa.test/api/v1',
-      rtmBaseUrl: 'wss://rtm.nexa.test',
+      apiBaseUrl: 'https://api.siyahtus.test/api/v1',
+      rtmBaseUrl: 'wss://rtm.siyahtus.test',
     };
     globalThis.fetch = jest.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
@@ -383,7 +383,7 @@ describe('App', () => {
       await screen.findByTestId('sign-in');
 
       await fireEvent.changeText(screen.getByTestId('sign-in-email'), 'owner@acme.localhost');
-      await fireEvent.changeText(screen.getByTestId('sign-in-password'), 'nexa-demo-password');
+      await fireEvent.changeText(screen.getByTestId('sign-in-password'), 'siyahtus-demo-password');
       await fireEvent.press(screen.getByTestId('sign-in-submit'));
 
       // The membership already said a password is not the way in, so none was
@@ -438,7 +438,7 @@ describe('App', () => {
   });
 
   /**
-   * `nexa://` URLs, end to end: the prefix `app.config.ts` registers, stripped by
+   * `siyahtus://` URLs, end to end: the prefix `app.config.ts` registers, stripped by
    * React Navigation and matched against the map in `app/linking.ts`. That map
    * is parsed on its own in `linking.test.ts`; what is proved here is that the
    * container is actually given it.
@@ -461,7 +461,7 @@ describe('App', () => {
     it('opens the conversation a link names instead of the tab it landed on', async () => {
       mockStore.session = STORED_SESSION;
       mockChats.value = [chat];
-      jest.spyOn(Linking, 'getInitialURL').mockResolvedValue('nexa://chats/chat-1');
+      jest.spyOn(Linking, 'getInitialURL').mockResolvedValue('siyahtus://chats/chat-1');
 
       await render(<App />);
 
@@ -473,7 +473,7 @@ describe('App', () => {
     it('loads the inbox underneath it, which is where the header gets a name', async () => {
       mockStore.session = STORED_SESSION;
       mockChats.value = [chat];
-      jest.spyOn(Linking, 'getInitialURL').mockResolvedValue('nexa://chats/chat-1');
+      jest.spyOn(Linking, 'getInitialURL').mockResolvedValue('siyahtus://chats/chat-1');
 
       await render(<App />);
       await screen.findByTestId('transcript-empty');
@@ -652,7 +652,7 @@ describe('App', () => {
       expect(screen.queryByTestId('transcript-empty')).not.toBeOnTheScreen();
 
       await fireEvent.changeText(screen.getByTestId('sign-in-email'), 'owner@acme.localhost');
-      await fireEvent.changeText(screen.getByTestId('sign-in-password'), 'nexa-demo-password');
+      await fireEvent.changeText(screen.getByTestId('sign-in-password'), 'siyahtus-demo-password');
       // One membership, so `SignInScreen` enters it without asking which
       // workspace — the picker is for people who belong to more than one.
       await fireEvent.press(screen.getByTestId('sign-in-submit'));
@@ -686,7 +686,7 @@ describe('App', () => {
   });
 
   it('says why the screen is empty instead of white-screening on a bad app.config.ts', async () => {
-    mockExtra.value = { apiBaseUrl: 'nope', rtmBaseUrl: 'wss://rtm.nexa.test' };
+    mockExtra.value = { apiBaseUrl: 'nope', rtmBaseUrl: 'wss://rtm.siyahtus.test' };
 
     await render(<App />);
 

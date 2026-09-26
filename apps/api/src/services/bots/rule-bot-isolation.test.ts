@@ -3,7 +3,7 @@
  * measured rather than asserted in prose (FR-MOD-06.6).
  *
  * PRD:577 asks for a bot that is "AI Agent'tan ayrı, LLM'siz". The existing AI
- * path is already deterministic — but only because `@nexa/ai-mock` is a stub
+ * path is already deterministic — but only because `@siyahtus/ai-mock` is a stub
  * (MASTER-PROMPT §5), which is a property of this build and not of the design.
  * A test that merely ran the engine and saw a fixed answer would pass just as
  * happily if the engine called `matchIntent`, so it would prove nothing.
@@ -75,11 +75,11 @@ describe('the rule bot reaches no AI at all (FR-MOD-06.6)', () => {
     expect(graph.files).toContain('services/bots/rule-bot-engine.ts');
   });
 
-  it('never imports @nexa/ai-mock', () => {
-    // The single most load-bearing assertion in this file: `@nexa/ai-mock` is
+  it('never imports @siyahtus/ai-mock', () => {
+    // The single most load-bearing assertion in this file: `@siyahtus/ai-mock` is
     // where `matchIntent`, `embed` and `compileInstruction` live, i.e. every
     // probabilistic decision in this product.
-    expect([...graph.packages]).not.toContain('@nexa/ai-mock');
+    expect([...graph.packages]).not.toContain('@siyahtus/ai-mock');
   });
 
   it('pulls in no module from the AI service directory', () => {
@@ -105,7 +105,7 @@ describe('the rule bot reaches no AI at all (FR-MOD-06.6)', () => {
     // Fastify, no `new Date()`. The service around it owns all three.
     const matcher = walk([join(HERE, 'rule-bot-matching.ts')]);
     expect(matcher.files).toEqual(['services/bots/rule-bot-matching.ts']);
-    expect([...matcher.packages]).toEqual(['@nexa/types']);
+    expect([...matcher.packages]).toEqual(['@siyahtus/types']);
     const source = readFileSync(join(HERE, 'rule-bot-matching.ts'), 'utf8');
     expect(source).not.toContain('new Date(');
     expect(source).not.toContain('Date.now(');

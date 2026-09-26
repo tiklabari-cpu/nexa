@@ -15,7 +15,7 @@ import type { RtmPushAction } from './rtm.js';
 
 /** One Redis channel per license — the coarsest split that never crosses tenants. */
 export function licenseChannel(licenseId: string | bigint): string {
-  return `nexa:rtm:license:${licenseId}`;
+  return `siyahtus:rtm:license:${licenseId}`;
 }
 
 /**
@@ -28,7 +28,7 @@ export function licenseChannel(licenseId: string | bigint): string {
  * regardless of what chat id a caller supplies.
  */
 export function typingStateKey(licenseId: string | bigint, chatId: string): string {
-  return `nexa:typing:${licenseId}:${chatId}`;
+  return `siyahtus:typing:${licenseId}:${chatId}`;
 }
 
 /** Seconds an agent-typing flag survives without a refreshing keystroke. */
@@ -42,7 +42,7 @@ export const AGENT_TYPING_TTL_SECONDS = 8;
  * same chat id in two tenants can never collide on one key.
  */
 export function composerStateKey(licenseId: string | bigint, chatId: string): string {
-  return `nexa:composer:${licenseId}:${chatId}`;
+  return `siyahtus:composer:${licenseId}:${chatId}`;
 }
 
 /** Seconds an agent stays registered as composing without a refresh. */

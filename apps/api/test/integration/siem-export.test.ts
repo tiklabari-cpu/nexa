@@ -279,9 +279,9 @@ describe('SIEM export', () => {
 
       const records = recordsOf(res.body);
       expect(records.map((r) => r.id)).toEqual(ids);
-      expect(res.headers['x-nexa-export-count']).toBe('3');
-      expect(res.headers['x-nexa-export-has-more']).toBe('false');
-      expect(res.headers['x-nexa-export-cursor']).toBeTruthy();
+      expect(res.headers['x-siyahtus-export-count']).toBe('3');
+      expect(res.headers['x-siyahtus-export-has-more']).toBe('false');
+      expect(res.headers['x-siyahtus-export-cursor']).toBeTruthy();
     });
 
     it('carries the workspace id on every record', async () => {
@@ -296,8 +296,8 @@ describe('SIEM export', () => {
       const res = await server.get('/audit-log/export', auth(exportToken));
       expect(res.statusCode).toBe(200);
       expect(res.body).toBe('');
-      expect(res.headers['x-nexa-export-count']).toBe('0');
-      expect(res.headers['x-nexa-export-has-more']).toBe('false');
+      expect(res.headers['x-siyahtus-export-count']).toBe('0');
+      expect(res.headers['x-siyahtus-export-has-more']).toBe('false');
     });
 
     it('clamps an over-large limit rather than refusing it', async () => {
@@ -332,8 +332,8 @@ describe('SIEM export', () => {
         const res = await server.get(url, auth(exportToken));
         expect(res.statusCode).toBe(200);
         seen.push(...recordsOf(res.body).map((r) => r.id));
-        cursor = res.headers['x-nexa-export-cursor'] as string;
-        expect(res.headers['x-nexa-export-has-more']).toBe(page < 2 ? 'true' : 'false');
+        cursor = res.headers['x-siyahtus-export-cursor'] as string;
+        expect(res.headers['x-siyahtus-export-has-more']).toBe(page < 2 ? 'true' : 'false');
       }
 
       // Every entry exactly once, in order.
@@ -347,7 +347,7 @@ describe('SIEM export', () => {
       await seedTrail(fx.a, 4);
 
       const first = await server.get('/audit-log/export?limit=2', auth(exportToken));
-      const cursor = first.headers['x-nexa-export-cursor'] as string;
+      const cursor = first.headers['x-siyahtus-export-cursor'] as string;
 
       const url = `/audit-log/export?limit=2&page_id=${encodeURIComponent(cursor)}`;
       const second = await server.get(url, auth(exportToken));
@@ -365,14 +365,14 @@ describe('SIEM export', () => {
       const ids = await seedTrail(fx.a, 2);
 
       const drained = await server.get('/audit-log/export', auth(exportToken));
-      const cursor = drained.headers['x-nexa-export-cursor'] as string;
+      const cursor = drained.headers['x-siyahtus-export-cursor'] as string;
 
       const empty = await server.get(
         `/audit-log/export?page_id=${encodeURIComponent(cursor)}`,
         auth(exportToken),
       );
       expect(empty.body).toBe('');
-      expect(empty.headers['x-nexa-export-cursor']).toBe(cursor);
+      expect(empty.headers['x-siyahtus-export-cursor']).toBe(cursor);
 
       // And that position still works: a later entry arrives, nothing before it
       // is re-sent.
@@ -392,7 +392,7 @@ describe('SIEM export', () => {
       const early = await seedTrail(fx.a, 2, 'early');
 
       const first = await server.get('/audit-log/export?limit=2', auth(exportToken));
-      const cursor = first.headers['x-nexa-export-cursor'] as string;
+      const cursor = first.headers['x-siyahtus-export-cursor'] as string;
       expect(recordsOf(first.body).map((r) => r.id)).toEqual(early);
 
       const late = await seedTrail(fx.a, 2, 'late');
@@ -421,7 +421,7 @@ describe('SIEM export', () => {
           : '/audit-log/export?limit=1';
         const res = await server.get(url, auth(exportToken));
         seen.push(...recordsOf(res.body).map((r) => r.id));
-        cursor = res.headers['x-nexa-export-cursor'] as string;
+        cursor = res.headers['x-siyahtus-export-cursor'] as string;
       }
 
       expect(seen.sort()).toEqual([...ids].sort());
@@ -701,17 +701,17 @@ describe('SIEM export', () => {
         WHERE tablename = 'siem_export_cursors'
       `;
       expect(policies).toHaveLength(1);
-      expect(policies[0]?.qual).toContain('nexa_current_license()');
+      expect(policies[0]?.qual).toContain('siyahtus_current_license()');
       // WITH CHECK matters more than USING here: moving another workspace's
       // cursor forward makes their delivery job skip everything it stepped
       // over, permanently. A boundary failure on this table destroys evidence
       // rather than leaking it.
-      expect(policies[0]?.withCheck).toContain('nexa_current_license()');
+      expect(policies[0]?.withCheck).toContain('siyahtus_current_license()');
     });
 
     it('does not let the application delete a row', async () => {
       const [grant] = await owner.$queryRaw<Array<{ can: boolean }>>`
-        SELECT has_table_privilege('nexa_app', 'public.siem_export_cursors', 'DELETE') AS can
+        SELECT has_table_privilege('siyahtus_app', 'public.siem_export_cursors', 'DELETE') AS can
       `;
       expect(grant?.can).toBe(false);
     });
@@ -802,8 +802,8 @@ describe('SIEM export', () => {
       return {
         records: recordsOf(res.body),
         body: res.body,
-        signature: res.headers['x-nexa-export-signature'] as string,
-        chainOk: res.headers['x-nexa-export-chain-ok'] === 'true',
+        signature: res.headers['x-siyahtus-export-signature'] as string,
+        chainOk: res.headers['x-siyahtus-export-chain-ok'] === 'true',
       };
     }
 
@@ -851,7 +851,7 @@ describe('SIEM export', () => {
     };
 
     beforeEach(async () => {
-      siemDir = await mkdtemp(join(tmpdir(), 'nexa-c6g-'));
+      siemDir = await mkdtemp(join(tmpdir(), 'siyahtus-c6g-'));
     });
 
     afterEach(async () => {

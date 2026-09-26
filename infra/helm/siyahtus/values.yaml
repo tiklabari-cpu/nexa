@@ -1,7 +1,7 @@
-# Nexa — Helm chart skeleton (tm 164.1, M-IAC-a). Deploy manifests only: nothing
+# SiyahTuş — Helm chart skeleton (tm 164.1, M-IAC-a). Deploy manifests only: nothing
 # in this chart is ever `helm install`ed against a real cluster by this repo
 # (CLAUDE.md / MASTER-PROMPT limits — no production deploy). `helm template`
-# is the acceptance check; see infra/helm/nexa/README.md.
+# is the acceptance check; see infra/helm/siyahtus/README.md.
 #
 # Deliberately NOT in this chart, and why:
 #   - Postgres / Redis:  M-IAC's own scope (PLAN.md §6C row 6) assumes a managed
@@ -10,7 +10,7 @@
 #     (M-IAC-d).
 #
 # Migration strategy is no longer on that list: tm 164.3 decided it, and the
-# answer is `migrationJob` below plus `NEXA_MIGRATE_ON_START: "false"` in
+# answer is `migrationJob` below plus `SIYAHTUS_MIGRATE_ON_START: "false"` in
 # `config` — a pre-install/pre-upgrade hook Job migrates, and the api pods'
 # own entrypoint step is switched off. The reasoning (including the measured
 # 10 s advisory-lock bound that decided it) is in
@@ -18,14 +18,14 @@
 
 image:
   # Empty registry means "just <repository>:<tag>", i.e. an image already
-  # present on the node — what M-CONTAINER's `nexa-<app>:local` tags are.
+  # present on the node — what M-CONTAINER's `siyahtus-<app>:local` tags are.
   # A real deployment sets this to wherever those four images are pushed
   # (tm 164.4 documents the registry/tag story).
   registry: ""
   pullPolicy: IfNotPresent
 
 # One entry per app M-CONTAINER (tm 140) builds an image for. `repository`
-# matches that image's tag in docker-compose.full.yml (`nexa-api:local`, …).
+# matches that image's tag in docker-compose.full.yml (`siyahtus-api:local`, …).
 # `needsSecrets` gates whether the Secret below is mounted — only api/rtm talk
 # to Postgres/Redis/sign tokens; web/widget are static-file nginx containers
 # and get none of that surface for no reason.
@@ -35,7 +35,7 @@ image:
 # how each is consumed.
 apps:
   api:
-    repository: nexa-api
+    repository: siyahtus-api
     tag: local
     port: 4000
     replicas: 1
@@ -55,7 +55,7 @@ apps:
       # inventing a new number — same tolerance tm 160.1 already chose, a
       # k8s mechanism instead of Docker's. Kept at 70 s even though tm 164.3
       # took the migrate step out of this pod's boot path
-      # (`NEXA_MIGRATE_ON_START: "false"` below): the number was never
+      # (`SIYAHTUS_MIGRATE_ON_START: "false"` below): the number was never
       # derived from the migration, it mirrors the image's own vetted
       # HEALTHCHECK budget, and shrinking it now would trade a real
       # tolerance for a cosmetic one.
@@ -87,7 +87,7 @@ apps:
     pdb:
       maxUnavailable: 1
   rtm:
-    repository: nexa-rtm
+    repository: siyahtus-rtm
     tag: local
     port: 4001
     replicas: 1
@@ -140,7 +140,7 @@ apps:
     pdb:
       maxUnavailable: 1
   web:
-    repository: nexa-web
+    repository: siyahtus-web
     tag: local
     port: 8080
     replicas: 1
@@ -174,7 +174,7 @@ apps:
     pdb:
       maxUnavailable: 1
   widget:
-    repository: nexa-widget
+    repository: siyahtus-widget
     tag: local
     port: 8080
     replicas: 1
@@ -208,7 +208,7 @@ apps:
 # the measurement that ruled out leaving it in the api pods' entrypoint.
 migrationJob:
   # Set false only if migrations are applied from somewhere this chart does not
-  # see — a CI step, or a DBA. Then `NEXA_MIGRATE_ON_START` above has to be
+  # see — a CI step, or a DBA. Then `SIYAHTUS_MIGRATE_ON_START` above has to be
   # revisited too, or nothing migrates at all.
   enabled: true
   # One retry: zero fails the release on a transient connection blip, and
@@ -356,14 +356,14 @@ networkPolicy:
 # is where a real deployment's full tuning belongs.
 config:
   NODE_ENV: production
-  NEXA_REGION: eu
+  SIYAHTUS_REGION: eu
   # tm 164.3: the api image migrates itself on every container start unless
   # this says otherwise (apps/api/docker-entrypoint.sh). Under more than one
   # replica that is a race whose loser exits 1 after Prisma's 10 s advisory-
   # lock wait — measured, see templates/migrate-job.yaml — so this chart turns
   # it off and migrates from the pre-upgrade Job instead. Quoted because a
   # ConfigMap value is a string; the entrypoint compares it as one.
-  NEXA_MIGRATE_ON_START: "false"
+  SIYAHTUS_MIGRATE_ON_START: "false"
   LOG_LEVEL: info
   API_PORT: "4000"
   API_HOST: "0.0.0.0"
@@ -446,7 +446,7 @@ config:
   # and a region the SigV4 signature is scoped to. See
   # values.production.example.yaml.
   STORAGE_S3_ENDPOINT: https://CHANGE_ME
-  STORAGE_S3_BUCKET: nexa-uploads-change-me
+  STORAGE_S3_BUCKET: siyahtus-uploads-change-me
 
 # Secret template — key NAMES only conceptually; the values below are the
 # SAME `dev-only-…` placeholders `.env.example` ships, not real secrets
@@ -469,8 +469,8 @@ secrets:
   CUSTOMER_TOKEN_SECRET: dev-only-customer-token-secret-change-me-0123456789
   UPLOAD_SIGNING_KEY: dev-only-upload-signing-key-change-me-0123456789
   AUDIT_CHAIN_SECRET: dev-only-audit-chain-secret-change-me-0123456789abcdef
-  DATABASE_URL: postgresql://nexa:CHANGE_ME@CHANGE_ME:5432/nexa
-  DATABASE_APP_URL: postgresql://nexa_app:CHANGE_ME@CHANGE_ME:5432/nexa
+  DATABASE_URL: postgresql://siyahtus:CHANGE_ME@CHANGE_ME:5432/siyahtus
+  DATABASE_APP_URL: postgresql://siyahtus_app:CHANGE_ME@CHANGE_ME:5432/siyahtus
   REDIS_URL: redis://CHANGE_ME:6379
   # Credentials for the bucket `config.STORAGE_S3_ENDPOINT`/`STORAGE_S3_BUCKET`
   # names (tm 242). `CHANGE_ME` rather than `dev-only-…` on purpose: the five

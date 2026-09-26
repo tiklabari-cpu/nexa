@@ -68,7 +68,7 @@ ALTER TABLE "inbound_email_addresses" ADD CONSTRAINT "inbound_email_addresses_li
 -- workspace's forwarding addresses are invisible to another (NFR-S5).
 ALTER TABLE inbound_email_addresses ENABLE ROW LEVEL SECURITY;
 CREATE POLICY inbound_email_addresses_tenant ON inbound_email_addresses
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- Which address a ticket arrived at. Nullable, with no backfill: a ticket that
 -- predates this column, or one that never came from e-mail at all, has no
@@ -98,8 +98,8 @@ $$;
 -- SECURITY DEFINER runs as the function owner, so EXECUTE is granted narrowly
 -- and never to PUBLIC.
 REVOKE EXECUTE ON FUNCTION email_resolve_inbound_address(TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION email_resolve_inbound_address(TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION email_resolve_inbound_address(TEXT) TO siyahtus_app;
 
--- The API connects as nexa_app. Default privileges already cover new tables, but
+-- The API connects as siyahtus_app. Default privileges already cover new tables, but
 -- grant explicitly so this migration is correct regardless of who owns it.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.inbound_email_addresses TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.inbound_email_addresses TO siyahtus_app;

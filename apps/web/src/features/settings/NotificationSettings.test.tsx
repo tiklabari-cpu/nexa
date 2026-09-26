@@ -19,7 +19,7 @@
  */
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from '@nexa/types';
+import { DEFAULT_NOTIFICATION_PREFERENCES, type NotificationPreferences } from '@siyahtus/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NotificationSettings } from './SettingsPage.js';
 import { useAuth } from '../../lib/auth-store.js';

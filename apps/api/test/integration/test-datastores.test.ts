@@ -49,12 +49,16 @@ describe('isolated test datastores', () => {
   // =========================================================================
 
   describe('drop guard', () => {
-    it.each(['nexa', 'postgres', 'template1', 'nexa_test', 'nexa_test_', 'nexa_test_zzzzzzzzzzzz'])(
-      'refuses to drop %s',
-      (name) => {
-        expect(() => assertDroppableDatabaseName(name)).toThrow(/refusing to drop/);
-      },
-    );
+    it.each([
+      'siyahtus',
+      'postgres',
+      'template1',
+      'siyahtus_test',
+      'siyahtus_test_',
+      'siyahtus_test_zzzzzzzzzzzz',
+    ])('refuses to drop %s', (name) => {
+      expect(() => assertDroppableDatabaseName(name)).toThrow(/refusing to drop/);
+    });
 
     it('accepts a name it minted itself', () => {
       expect(() => assertDroppableDatabaseName(isolatedDatabaseName())).not.toThrow();
@@ -69,14 +73,14 @@ describe('isolated test datastores', () => {
   describe('url rewriting', () => {
     it('keeps credentials, host and port when repointing Postgres', () => {
       expect(
-        withDatabaseName('postgresql://u:p@db.example:5433/nexa', 'nexa_test_0123456789ab'),
-      ).toBe('postgresql://u:p@db.example:5433/nexa_test_0123456789ab');
+        withDatabaseName('postgresql://u:p@db.example:5433/siyahtus', 'siyahtus_test_0123456789ab'),
+      ).toBe('postgresql://u:p@db.example:5433/siyahtus_test_0123456789ab');
     });
 
     it('preserves connection options', () => {
-      expect(withDatabaseName('postgresql://u:p@h:5433/nexa?sslmode=disable', 'other')).toContain(
-        'sslmode=disable',
-      );
+      expect(
+        withDatabaseName('postgresql://u:p@h:5433/siyahtus?sslmode=disable', 'other'),
+      ).toContain('sslmode=disable');
     });
 
     it('replaces a Redis index that is already there', () => {
@@ -85,7 +89,7 @@ describe('isolated test datastores', () => {
     });
 
     it('points the maintenance connection at postgres with a single connection', () => {
-      const url = new URL(adminUrl('postgresql://u:p@h:5433/nexa'));
+      const url = new URL(adminUrl('postgresql://u:p@h:5433/siyahtus'));
       expect(url.pathname).toBe('/postgres');
       expect(url.searchParams.get('connection_limit')).toBe('1');
     });
@@ -96,7 +100,7 @@ describe('isolated test datastores', () => {
 
     it('bounds the connection pool so two runs do not starve one server', () => {
       const url = new URL(
-        withTestConnectionBudget('postgresql://u:p@h:5433/nexa_test_0123456789ab'),
+        withTestConnectionBudget('postgresql://u:p@h:5433/siyahtus_test_0123456789ab'),
       );
       expect(Number(url.searchParams.get('connection_limit'))).toBeLessThanOrEqual(10);
       expect(Number(url.searchParams.get('connect_timeout'))).toBeGreaterThan(5);
@@ -104,7 +108,7 @@ describe('isolated test datastores', () => {
 
     it('never overrides a budget the caller set deliberately', () => {
       const url = new URL(
-        withTestConnectionBudget('postgresql://u:p@h:5433/nexa?connection_limit=1'),
+        withTestConnectionBudget('postgresql://u:p@h:5433/siyahtus?connection_limit=1'),
       );
       expect(url.searchParams.get('connection_limit')).toBe('1');
     });
@@ -158,12 +162,16 @@ describe('isolated test datastores', () => {
 
       try {
         expect(await databaseExists(admin, datastores.databaseName)).toBe(true);
-        expect(await bookkeeping.exists(`nexa:test:redis-slot:${datastores.redisIndex}`)).toBe(1);
+        expect(await bookkeeping.exists(`siyahtus:test:redis-slot:${datastores.redisIndex}`)).toBe(
+          1,
+        );
 
         await datastores.release();
 
         expect(await databaseExists(admin, datastores.databaseName)).toBe(false);
-        expect(await bookkeeping.exists(`nexa:test:redis-slot:${datastores.redisIndex}`)).toBe(0);
+        expect(await bookkeeping.exists(`siyahtus:test:redis-slot:${datastores.redisIndex}`)).toBe(
+          0,
+        );
 
         // Releasing twice is what a failed run does: the `finally` fires and
         // then the process exits. It must not throw on the second pass.
@@ -191,7 +199,7 @@ describe('isolated test datastores', () => {
         await admin.$executeRawUnsafe(`CREATE DATABASE "${abandoned}"`);
         await admin.$executeRawUnsafe(`CREATE DATABASE "${leased}"`);
         // Only one of them has a live owner.
-        await bookkeeping.set(`nexa:test:database:${leased}`, 'still-running', 'PX', 60_000);
+        await bookkeeping.set(`siyahtus:test:database:${leased}`, 'still-running', 'PX', 60_000);
 
         const dropped = await sweepAbandonedDatabases(admin, bookkeeping);
 
@@ -203,12 +211,12 @@ describe('isolated test datastores', () => {
         // And the database this very suite is running against — whose lease is
         // being renewed by the wrapper outside — survived its own sweep.
         const current = new URL(OWNER_URL!).pathname.slice(1);
-        if (current.startsWith('nexa_test_')) {
+        if (current.startsWith('siyahtus_test_')) {
           expect(dropped).not.toContain(current);
           expect(await databaseExists(admin, current)).toBe(true);
         }
       } finally {
-        await bookkeeping.del(`nexa:test:database:${leased}`);
+        await bookkeeping.del(`siyahtus:test:database:${leased}`);
         await admin
           .$executeRawUnsafe(`DROP DATABASE IF EXISTS "${leased}" WITH (FORCE)`)
           .catch(() => undefined);

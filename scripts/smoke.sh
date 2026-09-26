@@ -35,7 +35,7 @@ WIDGET_BASE="${WIDGET_BASE:-http://localhost:5174}"
 READY_TIMEOUT_S="${READY_TIMEOUT_S:-300}"
 # Seeded owner of the "Acme Bikes" demo workspace (apps/api/prisma/seed.ts).
 DEMO_EMAIL="${DEMO_EMAIL:-owner@acme.localhost}"
-DEMO_PASSWORD="${DEMO_PASSWORD:-nexa-demo-password}"
+DEMO_PASSWORD="${DEMO_PASSWORD:-siyahtus-demo-password}"
 SMOKE_PROFILE="${SMOKE_PROFILE:-demo}"
 case "$SMOKE_PROFILE" in
   demo) SMOKE_COMPOSE_FILE="${SMOKE_COMPOSE_FILE:-docker-compose.full.yml}" ;;
@@ -156,7 +156,7 @@ wait_for() {
   return 1
 }
 
-printf '\nNexa smoke test — containerised stack (%s)\n' "$SMOKE_PROFILE"
+printf '\nSiyahTuş smoke test — containerised stack (%s)\n' "$SMOKE_PROFILE"
 printf '  api %s · rtm %s · web %s · widget %s\n\n' \
   "$API_BASE" "$RTM_BASE" "$WEB_BASE" "$WIDGET_BASE"
 
@@ -196,7 +196,7 @@ check 'rtm /health is ok' \
 check_excludes 'rtm /health hides region/connections from an anonymous caller' \
   GET "$RTM_BASE/health" 200 '"region"'
 if [ "$SMOKE_PROFILE" = demo ]; then
-auth_header='Bearer nexa_pat_demo_acme'
+auth_header='Bearer siyahtus_pat_demo_acme'
 # The six background sweeps (M-SCHED) tick inside the api process. A stack
 # where none of them run looks identical to one with nothing to do — which is
 # why /health reports the scheduler and why this asserts on it.
@@ -225,12 +225,12 @@ check 'web SPA fallback serves a client route' GET "$WEB_BASE/app/inbox" 200 '<d
 # global name, not just the status: an SPA fallback in front of the wrong
 # service answers 200 for any path at all (measured — it passed this check
 # against the agent app until the body assertion was added).
-check 'widget serves loader.js' GET "$WIDGET_BASE/loader.js" 200 '__nexaLoader'
+check 'widget serves loader.js' GET "$WIDGET_BASE/loader.js" 200 '__siyahtusLoader'
 # The hosted Chat page (FR-MOD-08.5.9) — the demo entry point for the customer
 # half of the product in this stack, since the dev-only `demo.html` host page
 # is a Vite dev-server document (it loads `/src/loader.ts`) and is not part of
 # the built image.
-check 'widget serves the hosted Chat page' GET "$WIDGET_BASE/chat.html" 200 'nexa-widget-root'
+check 'widget serves the hosted Chat page' GET "$WIDGET_BASE/chat.html" 200 'siyahtus-widget-root'
 
 printf '\nWiring\n'
 # The seam this stack adds and `pnpm dev` does not have: the browser calls the

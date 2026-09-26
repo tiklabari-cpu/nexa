@@ -76,7 +76,7 @@ describe('per-workspace retention windows (NFR-C8)', () => {
     owner = ownerClient();
     appRole = new PrismaClient({ datasourceUrl: APP_URL });
     server = await startTestServer();
-    usServer = await startTestServer({ NEXA_REGION: 'us' });
+    usServer = await startTestServer({ SIYAHTUS_REGION: 'us' });
   });
 
   afterAll(async () => {

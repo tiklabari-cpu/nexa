@@ -63,5 +63,5 @@ export const tr: Record<string, string> = {
   'chat.end.closedMessage': 'Sohbet sona erdi.',
   'chat.end.startNew': 'Yeni bir sohbet başlat',
   'error.close': 'Sohbet bitirilemedi. Lütfen tekrar deneyin.',
-  poweredBy: 'Nexa ile güçlendirilmiştir',
+  poweredBy: 'SiyahTuş ile güçlendirilmiştir',
 };

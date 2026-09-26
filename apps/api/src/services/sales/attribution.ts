@@ -36,7 +36,7 @@ export interface AttributionCandidate {
    * When the visitor was last in this conversation.
    *
    * The *later* of the chat's creation and its most recent thread, not the
-   * creation alone. In Nexa a returning visitor reopens a thread on an existing
+   * creation alone. In SiyahTuş a returning visitor reopens a thread on an existing
    * chat, so `chats.created_at` can be months old for someone who chatted this
    * morning — attributing on creation would systematically fail to credit the
    * most engaged visitors, which are precisely the ones the report exists to

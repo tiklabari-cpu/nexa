@@ -141,7 +141,7 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.secret).toMatch(/^[A-Z2-7]{32}$/);
-      expect(body.issuer).toBe('Nexa');
+      expect(body.issuer).toBe('SiyahTuş');
       expect(body.account_name).toBe(fx.a.ownerEmail);
       // The URI's parameters are pinned to what verification computes; an app
       // importing a mismatched one produces plausible codes that never match.

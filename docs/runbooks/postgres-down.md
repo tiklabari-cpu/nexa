@@ -19,7 +19,7 @@
    ```
 
    (`apps/api`'s routes live under `/api/v1` — `apps/rtm`'s health routes do
-   not, see `infra/helm/nexa/values.yaml`'s per-app `probes.liveness`/`.readiness`.)
+   not, see `infra/helm/siyahtus/values.yaml`'s per-app `probes.liveness`/`.readiness`.)
 
    As an admin bearer token, `GET /api/v1/health` names which dependency and its
    latency/error class (`dependencies.database.status`/`.error`) — the driver

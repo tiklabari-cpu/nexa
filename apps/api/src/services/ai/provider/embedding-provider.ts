@@ -2,7 +2,7 @@
  * The seam between the product and whatever turns its text into vectors
  * (tm 255.7 · ADR docs/adr/pilot-llm-embedding-provider.md §4, §9.2, §10).
  *
- * Before this, `embed()` from `@nexa/ai-mock` was called straight from the
+ * Before this, `embed()` from `@siyahtus/ai-mock` was called straight from the
  * knowledge service, synchronously, inside the transaction that wrote the
  * chunks. A real model is a network call, so three things change together:
  * the call is asynchronous, it happens *before* any transaction opens (a

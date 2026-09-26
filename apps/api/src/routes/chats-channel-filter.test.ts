@@ -23,7 +23,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { ADAPTER_CHANNEL_TYPES } from '@nexa/types';
+import { ADAPTER_CHANNEL_TYPES } from '@siyahtus/types';
 
 // src/routes → apps/api → apps → repo root (the resolution `chart-storage.test.ts` uses).
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');

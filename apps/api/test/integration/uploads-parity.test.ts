@@ -90,7 +90,7 @@ interface Backend {
 }
 
 async function startLocalBackend(): Promise<Backend> {
-  const root = await mkdtemp(join(tmpdir(), 'nexa-parity-local-'));
+  const root = await mkdtemp(join(tmpdir(), 'siyahtus-parity-local-'));
   return {
     // `STORAGE_PROVIDER` explicitly, even though `local` is the default: the
     // repo's own `.env` is merged in under this, and a gate whose meaning
@@ -111,7 +111,7 @@ async function startLocalBackend(): Promise<Backend> {
 
 async function startS3Backend(): Promise<Backend> {
   const bucket = await startFakeBucket();
-  const root = await mkdtemp(join(tmpdir(), 'nexa-parity-s3-'));
+  const root = await mkdtemp(join(tmpdir(), 'siyahtus-parity-s3-'));
   return {
     // A private `STORAGE_LOCAL_DIR` as well, and it is load-bearing: without
     // one, a provider that silently fell back to `LocalStore` would write to

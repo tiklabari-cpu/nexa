@@ -88,7 +88,7 @@ function stubFetch(): void {
 function mountWidget(): HTMLElement {
   window.history.replaceState({}, '', `/widget.html?organization_id=org-1&api=${API}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   return root;
@@ -96,7 +96,7 @@ function mountWidget(): HTMLElement {
 
 /** Simulate the visitor having chatted here before — what `connect` stores. */
 function returningVisitor(): void {
-  window.localStorage.setItem('nexa.customer_id', 'cust-1');
+  window.localStorage.setItem('siyahtus.customer_id', 'cust-1');
 }
 
 function launcher(root: HTMLElement): HTMLButtonElement {

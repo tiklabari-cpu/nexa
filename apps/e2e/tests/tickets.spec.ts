@@ -200,7 +200,7 @@ test.describe('ticket e-mail template — a status change mails the customer (FR
   test.use({ viewport: { width: 1680, height: 1050 } });
 
   const TEMPLATE_NAME = 'E2E status notice';
-  const MARKER = 'nexa-e2e-template-marker';
+  const MARKER = 'siyahtus-e2e-template-marker';
   const SUBJECT = `${MARKER} {{ticket.id}} is {{ticket.status}}`;
   const BODY = `Hello {{customer.name}}, "{{ticket.subject}}" is now {{ticket.status}}. ${MARKER}`;
 

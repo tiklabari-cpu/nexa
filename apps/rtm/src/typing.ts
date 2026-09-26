@@ -16,7 +16,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Redis } from 'ioredis';
-import { AGENT_TYPING_TTL_SECONDS, typingStateKey } from '@nexa/types';
+import { AGENT_TYPING_TTL_SECONDS, typingStateKey } from '@siyahtus/types';
 import type { SocketPrincipal } from './auth.js';
 
 export class TypingService {

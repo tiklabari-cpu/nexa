@@ -36,7 +36,7 @@ export function AuthShell({ testID, subtitle, children }: AuthShellProps) {
           <Text style={[styles.markText, { color: colors.textInverse }]}>N</Text>
         </View>
         <View>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>Nexa</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]}>SiyahTuş</Text>
           <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
         </View>
       </View>

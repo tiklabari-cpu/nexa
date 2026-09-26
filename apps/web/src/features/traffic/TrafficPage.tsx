@@ -31,7 +31,7 @@
  * head-only read the right answer to a push about them, and not merely the
  * cheap one.
  */
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope } from '@siyahtus/types';
 import { useMutation, useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import {
   useCallback,
@@ -239,7 +239,7 @@ const ROW_ACTION_LABEL_KEY: Record<RowActionId, string> = {
 };
 
 /**
- * Scope check via `@nexa/types`, not `Array.includes` (13.2-k).
+ * Scope check via `@siyahtus/types`, not `Array.includes` (13.2-k).
  *
  * A raw `includes` misses every implication the server applies: `chats--all:rw`
  * expands to `chats--all:ro` there, so a plain membership test asked whether the

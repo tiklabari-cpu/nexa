@@ -4,7 +4,7 @@
  * that happens to touch the missing value.
  */
 import { z } from 'zod';
-import { DEFAULT_REGION, REGIONS } from '@nexa/types';
+import { DEFAULT_REGION, REGIONS } from '@siyahtus/types';
 import { TENANT_TRANSACTION_TIMEOUT_MS } from '../lib/tenant.js';
 import { consoleRedirectUri, DEV_CONSOLE_REDIRECT } from '../lib/console-redirect.js';
 // The provider vocabularies live with their factories, not here: a value this
@@ -118,11 +118,11 @@ export const envSchema = z.object({
    * Widened from `z.literal('eu')`: `us` has to pass here and in the RTM
    * gateway's identical schema, or a US deployment cannot boot at all.
    */
-  NEXA_REGION: z.enum(REGIONS).default(DEFAULT_REGION),
+  SIYAHTUS_REGION: z.enum(REGIONS).default(DEFAULT_REGION),
 
   DATABASE_URL: z.string().url(),
   /**
-   * Runtime connection. Uses the non-owner `nexa_app` role, because Postgres
+   * Runtime connection. Uses the non-owner `siyahtus_app` role, because Postgres
    * exempts table owners and superusers from row level security — connecting as
    * the owner would silently disable every tenant isolation policy.
    */
@@ -263,7 +263,7 @@ export const envSchema = z.object({
         'must be one or more comma-separated origins of the form scheme://host[:port] (e.g. "https://panel.example.com,https://chat.example.com") — no path, query or fragment',
     }),
   /// Origin serving the widget loader + iframe. The install snippet points
-  /// `window.__nexa.widgetOrigin` and the async `loader.js` at it. In
+  /// `window.__siyahtus.widgetOrigin` and the async `loader.js` at it. In
   /// production its origin has to appear in `WEB_ORIGIN` above, or the widget's
   /// own calls to this API are refused by CORS — see `productionProblems`.
   WIDGET_BASE_URL: z.string().url().default('http://localhost:5174'),
@@ -271,7 +271,7 @@ export const envSchema = z.object({
   /// per-workspace address is `<organization_id>@<domain>`; the inbound webhook
   /// reads the local part back to route the message. Must match what the web
   /// app shows on the Email channel card (`VITE_INBOUND_EMAIL_DOMAIN`).
-  INBOUND_EMAIL_DOMAIN: z.string().default('inbound.nexa.localhost'),
+  INBOUND_EMAIL_DOMAIN: z.string().default('inbound.siyahtus.localhost'),
   /// Shared secret the mail provider presents on the inbound webhook, standing
   /// in for a signed request. Optional in dev/test, where leaving it unset keeps
   /// the endpoint open (the recipient address is the only routing key) and the
@@ -681,7 +681,7 @@ export const envSchema = z.object({
    * a server. `true`/`false` overrides either way.
    *
    * Off does not mean the sweeps are unreachable: each one keeps its
-   * `pnpm --filter @nexa/api <job>:run` script, which is also how a deployment
+   * `pnpm --filter @siyahtus/api <job>:run` script, which is also how a deployment
    * that would rather drive them from a host cron does it.
    */
   SCHEDULER_ENABLED: z
@@ -1062,7 +1062,7 @@ function withPoolSize(url: string, poolSize: number | undefined): string {
  * `DATABASE_APP_URL` exists to prevent, arriving through a second door.
  *
  * The comparison is against the primary rather than against a hard-coded
- * `nexa_app`: a replica connecting as some third read-only role is a perfectly
+ * `siyahtus_app`: a replica connecting as some third read-only role is a perfectly
  * reasonable deployment, and this should not forbid it. What it forbids is a
  * replica that is *more* privileged than the connection the request path
  * already uses. Which is also why a deployment with no `DATABASE_APP_URL` at

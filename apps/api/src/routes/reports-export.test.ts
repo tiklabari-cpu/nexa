@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope } from '@siyahtus/types';
 import {
   EXPORT_SCOPES,
   REPORT_GROUPS,
@@ -134,13 +134,17 @@ describe('exportFilename', () => {
   it('encodes the group and the UTC window', () => {
     const from = new Date('2026-07-01T00:00:00.000Z');
     const to = new Date('2026-07-26T12:00:00.000Z');
-    expect(exportFilename('breakdown', from, to)).toBe('nexa-breakdown-2026-07-01-2026-07-26.csv');
+    expect(exportFilename('breakdown', from, to)).toBe(
+      'siyahtus-breakdown-2026-07-01-2026-07-26.csv',
+    );
   });
 
   it('carries the format as the extension, defaulting to csv', () => {
     const from = new Date('2026-07-01T00:00:00.000Z');
     const to = new Date('2026-07-26T12:00:00.000Z');
-    expect(exportFilename('leads', from, to, 'pdf')).toBe('nexa-leads-2026-07-01-2026-07-26.pdf');
+    expect(exportFilename('leads', from, to, 'pdf')).toBe(
+      'siyahtus-leads-2026-07-01-2026-07-26.pdf',
+    );
     // The v1 callers pass three arguments and must keep the name they had.
     expect(exportFilename('leads', from, to)).toBe(exportFilename('leads', from, to, 'csv'));
   });

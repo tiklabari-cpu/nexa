@@ -4,13 +4,13 @@
     {
       "name": "web",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@nexa/web", "dev"],
+      "runtimeArgs": ["--filter", "@siyahtus/web", "dev"],
       "port": 5173
     },
     {
       "name": "widget",
       "runtimeExecutable": "pnpm",
-      "runtimeArgs": ["--filter", "@nexa/widget", "dev"],
+      "runtimeArgs": ["--filter", "@siyahtus/widget", "dev"],
       "port": 5174
     }
   ]

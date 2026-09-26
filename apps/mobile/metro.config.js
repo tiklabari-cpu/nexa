@@ -7,7 +7,7 @@ const workspaceRoot = path.resolve(projectRoot, '../..');
 
 const config = getDefaultConfig(projectRoot);
 
-// Metro only watches the app folder by default. `@nexa/types` and `@nexa/contract`
+// Metro only watches the app folder by default. `@siyahtus/types` and `@siyahtus/contract`
 // are pnpm symlinks into `packages/`, so their sources live outside that tree and
 // would neither bundle nor hot-reload without this.
 config.watchFolders = [workspaceRoot];
@@ -30,7 +30,7 @@ config.resolver.nodeModulesPaths = [
 ];
 
 /**
- * `@nexa/types` is published as TypeScript source and its internal imports carry
+ * `@siyahtus/types` is published as TypeScript source and its internal imports carry
  * the ESM `.js` extension (`export * from './domain.js'`) — the form `tsc`,
  * `vite` and `tsx` all expect. Metro resolves that literally and fails, because
  * on disk the file is `domain.ts`. Retry those specifiers without the extension

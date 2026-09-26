@@ -63,5 +63,5 @@ export const en: Record<string, string> = {
   'chat.end.closedMessage': 'Chat ended.',
   'chat.end.startNew': 'Start a new chat',
   'error.close': 'Could not end the chat. Please try again.',
-  poweredBy: 'Powered by Nexa',
+  poweredBy: 'Powered by SiyahTuş',
 };

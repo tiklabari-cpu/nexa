@@ -12,7 +12,7 @@
 import type { PrismaClient } from '@prisma/client';
 import { Prisma } from '@prisma/client';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 import { deriveCodeChallenge, generateToken, hashPassword } from '../../src/lib/crypto.js';
 import { DEV_CONSOLE_REDIRECT } from '../../src/lib/console-redirect.js';
 import { ownerClient, resetDatabase } from '../helpers/fixtures.js';
@@ -229,7 +229,7 @@ describe('the console callback comes from WEB_APP_URL (tm 255.17)', () => {
     it('widens sandbox clients too, and never a partner app', async () => {
       const who = await signup(dev, 'mixed');
       const PARTNER_ID = '0123456789abcdef0123456789abcdef';
-      const SANDBOX_ID = `nexa-sandbox-app-${who.organizationId}`;
+      const SANDBOX_ID = `siyahtus-sandbox-app-${who.organizationId}`;
       await owner.oauthClient.createMany({
         data: [
           {
@@ -243,7 +243,7 @@ describe('the console callback comes from WEB_APP_URL (tm 255.17)', () => {
           {
             id: SANDBOX_ID,
             organizationId: who.organizationId,
-            displayName: 'Nexa Sandbox App',
+            displayName: 'SiyahTuş Sandbox App',
             clientType: 'public',
             redirectUris: [DEV_CONSOLE_REDIRECT, MOBILE_REDIRECT_URI],
             scopes: [],
@@ -301,7 +301,7 @@ describe('the console callback comes from WEB_APP_URL (tm 255.17)', () => {
           'owner@old-release.test'::citext, 'Owner', ${hash}, 'Old release', 14, 'eu'
         )`;
       expect(
-        await registeredRedirects(owner, `nexa-agent-app-${row!.created_organization}`),
+        await registeredRedirects(owner, `siyahtus-agent-app-${row!.created_organization}`),
       ).toEqual([DEV_CONSOLE_REDIRECT, MOBILE_REDIRECT_URI]);
     });
   });

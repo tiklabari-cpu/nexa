@@ -9,7 +9,7 @@ import { formatDateTime } from '../../lib/format.js';
 import { useChatAction } from './useInbox.js';
 import { formatDuration, useLiveDurationSeconds } from './visitDuration.js';
 import type { ChatDetail } from './types.js';
-import { hasAnyScope, type AppChatData } from '@nexa/types';
+import { hasAnyScope, type AppChatData } from '@siyahtus/types';
 
 /** Roles that may seize a chat from whoever holds it — mirrors the route's own gate. */
 const SUPERVISOR_ROLES = new Set(['admin', 'viceowner', 'owner']);

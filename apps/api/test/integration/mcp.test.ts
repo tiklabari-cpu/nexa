@@ -127,7 +127,7 @@ describe('MCP manifest (FR-MOD-08.8.3-b)', () => {
     const body = res.json() as Manifest;
 
     expect(body.protocol_version).toBe(MCP_PROTOCOL_VERSION);
-    expect(body.server.name).toBe('nexa');
+    expect(body.server.name).toBe('siyahtus');
     expect(body.server.version).toBeTruthy();
     // The URL an MCP client points at: the mcp mount under the API prefix.
     expect(body.server.url).toMatch(/\/api\/v1\/mcp$/);

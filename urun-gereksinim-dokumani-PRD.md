@@ -1,8 +1,8 @@
-# Ürün Gereksinim Dokümanı (PRD) — "Nexa" Canlı Destek + AI Müşteri Hizmetleri Platformu
+# Ürün Gereksinim Dokümanı (PRD) — "SiyahTuş" Canlı Destek + AI Müşteri Hizmetleri Platformu
 
 <!-- Bu belge, /Users/miracle/Desktop/livechat altındaki 4 perspektiften derlenen tüm analizlerin sentezidir. KOPYA değildir; ilham alınan ÖZGÜN bir platformun sıfırdan geliştirme gereksinim dokümanıdır. Çıktı dili Türkçe; kod/identifier/URL İngilizce. -->
 
-> Kod adı: **Nexa** (çalışma adı). Kaynaklarda incelenen ürünler LiveChat ve Text (text.com/app); Nexa bu iki ürünün TEK bir birleşik platformda yeniden tasarlanmış özgün halidir.
+> Kod adı: **SiyahTuş** (çalışma adı). Kaynaklarda incelenen ürünler LiveChat ve Text (text.com/app); SiyahTuş bu iki ürünün TEK bir birleşik platformda yeniden tasarlanmış özgün halidir.
 
 ---
 
@@ -13,7 +13,7 @@
 
 | Alan | Değer |
 |---|---|
-| Belge adı | Nexa — Canlı Destek + AI Müşteri Hizmetleri Platformu, Ürün Gereksinim Dokümanı (PRD) |
+| Belge adı | SiyahTuş — Canlı Destek + AI Müşteri Hizmetleri Platformu, Ürün Gereksinim Dokümanı (PRD) |
 | Versiyon | **1.0** |
 | Tarih | **2026-07-21** |
 | Sahip (Owner) | **Zoro** |
@@ -35,7 +35,7 @@
 
 | Terim / Kısaltma | Açıklama |
 |---|---|
-| **Nexa** | Bu PRD'de tanımlanan özgün platformun çalışma (kod) adı |
+| **SiyahTuş** | Bu PRD'de tanımlanan özgün platformun çalışma (kod) adı |
 | **Agent / Teammate** | İnsan müşteri temsilcisi (panel kullanıcısı) |
 | **AI Agent** | Müşteriyle doğrudan konuşan, niyet algılayan, adımlı skill yürüten otonom yapay zekâ ajanı |
 | **Copilot** | İnsan temsilciyi destekleyen (özet, yanıt önerisi) agent-assist AI; kendi bilgi tabanına sahip |
@@ -95,7 +95,7 @@ Dört perspektiften derlenen belgeler ve her birinin PRD'ye kattığı temel de�
 | **A** | `02-teknik-mimari.md` | Yeni text.com/app teknik özeti; Prisma modelleri, host ayrımı |
 | **Referans** | `text-com-arastirma-promptu.md` | Ürün niyeti: text.com/app'in modül-modül özgün klonu; React+Node.js; indeksleme ve kapsam kuralları |
 
-> **Marka/ürün birleştirme notu (Gözlem + Çıkarım):** Kaynaklardaki veriler iki ayrı ürün yüzeyinden gelir — eski **LiveChat** paneli (Home/Engage/Automate/Archives modülleri) ve yeni **Text App** (`text.com/app`; Inbox/Customers/Team/Playbook/Reports). Bu PRD ikisini **TEK birleşik Nexa ürünü** olarak sentezler: yeni Text mimarisi taban alınır, eski LiveChat'in özgün modülleri (Goals, görsel Workflows, Sales tracker, Command palette, zengin Home dashboard, Archives) Nexa'da tek üründe konumlandırılır.
+> **Marka/ürün birleştirme notu (Gözlem + Çıkarım):** Kaynaklardaki veriler iki ayrı ürün yüzeyinden gelir — eski **LiveChat** paneli (Home/Engage/Automate/Archives modülleri) ve yeni **Text App** (`text.com/app`; Inbox/Customers/Team/Playbook/Reports). Bu PRD ikisini **TEK birleşik SiyahTuş ürünü** olarak sentezler: yeni Text mimarisi taban alınır, eski LiveChat'in özgün modülleri (Goals, görsel Workflows, Sales tracker, Command palette, zengin Home dashboard, Archives) SiyahTuş'ta tek üründe konumlandırılır.
 <!-- /SECTION:1 -->
 
 <!-- SECTION:2 -->
@@ -103,26 +103,26 @@ Dört perspektiften derlenen belgeler ve her birinin PRD'ye kattığı temel de�
 
 ### 2.1 Yönetici Özeti
 
-**Nexa**, web sitesi, e-posta ve mesajlaşma kanallarından (Website widget, Chat page, Email, Facebook Messenger, Twilio SMS, WhatsApp; yakın vadede Instagram, Telegram) gelen tüm müşteri konuşmalarını **tek bir gelen kutusunda (omnichannel inbox)** toplayan, üzerine üç katmanlı bir yapay zekâ mimarisi kuran, canlı destek + AI müşteri hizmetleri platformudur.
+**SiyahTuş**, web sitesi, e-posta ve mesajlaşma kanallarından (Website widget, Chat page, Email, Facebook Messenger, Twilio SMS, WhatsApp; yakın vadede Instagram, Telegram) gelen tüm müşteri konuşmalarını **tek bir gelen kutusunda (omnichannel inbox)** toplayan, üzerine üç katmanlı bir yapay zekâ mimarisi kuran, canlı destek + AI müşteri hizmetleri platformudur.
 
 Üç AI katmanı: **(1) AI Agent** — müşteriyle doğrudan konuşan, niyet algılayan, doğal dille yazılıp adımlara derlenen `skill`'leri yürüten (bilgi iste, etiketle, özetle, mesaj gönder, ekibe aktar), RAG bilgi tabanıyla beslenen otonom ajan; **(2) Copilot** — insan temsilciyi anlık destekleyen (sohbet özeti, yanıt önerisi), kendi bilgi tabanına sahip agent-assist AI; **(3) yardımcı mikro-özellikler** — Reply Suggestions, mesaj tonu/dilbilgisi geliştirme, otomatik etiketleme.
 
 Ürün iki yüzeyden oluşur ve çekirdek değer bu iki yüzey arasındaki **gerçek zamanlı mesajlaşma omurgasıdır**: müşteri tarafında cross-origin iframe **widget**, temsilci tarafında `/app/<module>` derin-bağlantılı **SPA panel**. Bunları bir **RTM WebSocket** katmanı (stateless muadili Web API/REST ile birlikte) bağlar. Veri modeli **chat → thread → event** üçlüsüdür.
 
-İş modeli **koltuk + tüketim (metered)** hibritidir: **$99 / kullanıcı / ay** + dahil **200 AI resolution** (aşım $49.50/50) + **API call** aşımı ($29.50/100.000) + 14 günlük kartsız trial. **Gözlem:** Kaynak üründe üç tutarsız fiyat yüzeyi (eski LiveChat koltuk $19–89, `text.com/pricing` platform ücreti, in-app $99) bir zayıflık olarak öne çıkar; **Nexa bu sorunu tek, şeffaf, öngörülebilir bir fiyat yüzeyiyle çözmeyi bir farklılaştırıcı olarak benimser.**
+İş modeli **koltuk + tüketim (metered)** hibritidir: **$99 / kullanıcı / ay** + dahil **200 AI resolution** (aşım $49.50/50) + **API call** aşımı ($29.50/100.000) + 14 günlük kartsız trial. **Gözlem:** Kaynak üründe üç tutarsız fiyat yüzeyi (eski LiveChat koltuk $19–89, `text.com/pricing` platform ücreti, in-app $99) bir zayıflık olarak öne çıkar; **SiyahTuş bu sorunu tek, şeffaf, öngörülebilir bir fiyat yüzeyiyle çözmeyi bir farklılaştırıcı olarak benimser.**
 
-Nexa; küçük ekipler için hızlı kurulum ve düşük teknik bariyer (snippet + platform rehberi + kod-yazmadan AI skill), büyük/regüle ekipler için gelişmiş yönlendirme, rol/grup yönetimi, kurumsal güvenlik (SSO/2FA/audit) ve MCP tabanlı AI-native entegrasyon sunar. Hedef bir referans dikey olarak, kaynak verideki **çevrimiçi bahis/casino müşteri desteği** (KYC, para çekme, çevrim/wager, sorumlu oyun) senaryosu benimsenir; bu regüle dikey için hazır şablon skill kütüphanesi bir giriş avantajıdır.
+SiyahTuş; küçük ekipler için hızlı kurulum ve düşük teknik bariyer (snippet + platform rehberi + kod-yazmadan AI skill), büyük/regüle ekipler için gelişmiş yönlendirme, rol/grup yönetimi, kurumsal güvenlik (SSO/2FA/audit) ve MCP tabanlı AI-native entegrasyon sunar. Hedef bir referans dikey olarak, kaynak verideki **çevrimiçi bahis/casino müşteri desteği** (KYC, para çekme, çevrim/wager, sorumlu oyun) senaryosu benimsenir; bu regüle dikey için hazır şablon skill kütüphanesi bir giriş avantajıdır.
 
 ### 2.2 Ürün Vizyonu
 
 > **"Müşteri hizmetlerini bir maliyet merkezinden bir gelir/deneyim motoruna dönüştürmek."**
 
-Nexa'nın vizyonu, canlı sohbetin klasik reaktif desteğini; proaktif satış (traffic/campaigns/goals), otonom AI çözümü (AI Agent + Playbook) ve insan-AI işbirliği (Copilot) ile birleştiren, teknik olmayan ekiplerin bile **kod yazmadan güçlü otomasyon** kurabildiği, tek panelde omnichannel bir platform olmaktır. Uzun vadede ürün, MCP üzerinden harici AI asistanlarına açık, API-öncelikli ve genişletilebilir bir **AI-native müşteri iletişim işletim sistemi** olmayı hedefler.
+SiyahTuş'un vizyonu, canlı sohbetin klasik reaktif desteğini; proaktif satış (traffic/campaigns/goals), otonom AI çözümü (AI Agent + Playbook) ve insan-AI işbirliği (Copilot) ile birleştiren, teknik olmayan ekiplerin bile **kod yazmadan güçlü otomasyon** kurabildiği, tek panelde omnichannel bir platform olmaktır. Uzun vadede ürün, MCP üzerinden harici AI asistanlarına açık, API-öncelikli ve genişletilebilir bir **AI-native müşteri iletişim işletim sistemi** olmayı hedefler.
 
-**Konumlandırma ilkeleri (kaynak ilhamı + Nexa farklılaşması):**
-- **Gelir odaklı anlatı** (Gözlem: kaynak ürün "service as your profit engine" konumlanır) — Nexa da desteği dönüşüm/satış aracı olarak konumlar (proaktif kampanya, lead qualification, upsell skill'leri).
+**Konumlandırma ilkeleri (kaynak ilhamı + SiyahTuş farklılaşması):**
+- **Gelir odaklı anlatı** (Gözlem: kaynak ürün "service as your profit engine" konumlanır) — SiyahTuş da desteği dönüşüm/satış aracı olarak konumlar (proaktif kampanya, lead qualification, upsell skill'leri).
 - **AI'yı takımın parçası yap** — AI Agent ve Copilot, insan temsilcilerle aynı "Team" çatısında yönetilir.
-- **Şeffaf ve öngörülebilir AI faturası** (Nexa farklılaşması) — kota + %80 eşiğinde proaktif uyarı + net aşım fiyatı; rakiplerin öngörülemeyen AI maliyeti şikâyetine karşı.
+- **Şeffaf ve öngörülebilir AI faturası** (SiyahTuş farklılaşması) — kota + %80 eşiğinde proaktif uyarı + net aşım fiyatı; rakiplerin öngörülemeyen AI maliyeti şikâyetine karşı.
 - **Tek app / tam mobil parite** — tüm modüller tek mobil uygulamada.
 - **Regüle dikeyde nişleşme** — hazır uyumluluk şablonları (KYC/withdrawal/responsible-gambling).
 
@@ -141,7 +141,7 @@ Nexa'nın vizyonu, canlı sohbetin klasik reaktif desteğini; proaktif satış (
 
 ### 2.4 Değer Önerisi
 
-| Hedef | Nexa'nın sunduğu değer |
+| Hedef | SiyahTuş'un sunduğu değer |
 |---|---|
 | **Kanal birleştirme** | Tüm kanallar tek omnichannel inbox'ta; ortak `event` modeli; her yerde tek bağlam |
 | **AI ile ölçekleme** | AI Agent sohbetlerin büyük kısmını insana devretmeden çözer; "AI resolution" olarak ölçülür ve raporlanır (Manual/Assisted/Automated kırılımı) |
@@ -215,7 +215,7 @@ Nexa'nın vizyonu, canlı sohbetin klasik reaktif desteğini; proaktif satış (
 | **API calls (metered)** | Faturalanan API çağrısı | Gözlem: Billing "$29.50/100k extra" |
 | **Uptime / p99 latency** | Servis SLO'ları | Çıkarım/öneri: bkz. §7 NFR |
 
-> **Çelişki notu (Gözlem):** Kaynak ekranlarda AI Agent "off" iken Performance %100 resolution ve 7 chat gösteriyor; ayrıca metrikler "vs 0 for previous period" olduğundan yüzdeler şişkin görünüyor. **Nexa gereği:** Metrik kartları düşük-baz (low-N) durumunu açıkça işaretlemeli (ör. "n<30, gösterge güvenilir değil") ve AI Agent kapalıyken geçmiş performansı "arşiv" olarak ayırmalıdır.
+> **Çelişki notu (Gözlem):** Kaynak ekranlarda AI Agent "off" iken Performance %100 resolution ve 7 chat gösteriyor; ayrıca metrikler "vs 0 for previous period" olduğundan yüzdeler şişkin görünüyor. **SiyahTuş gereği:** Metrik kartları düşük-baz (low-N) durumunu açıkça işaretlemeli (ör. "n<30, gösterge güvenilir değil") ve AI Agent kapalıyken geçmiş performansı "arşiv" olarak ayırmalıdır.
 <!-- /SECTION:3 -->
 
 <!-- SECTION:4 -->
@@ -295,7 +295,7 @@ Bir admin olarak, AI Agent'ın kişiliğini, bilgisini ve yeteneklerini ayarlay�
 - KK1: Profile'da Name, Instructions (~10.000 karakter), Language, Tone, Answer length ayarlanır; sağda canlı Preview (FR-MOD-06.4).
 - KK2: Knowledge'a Website/File/Article/FAQ kaynağı eklenir, indekslenir (RAG) (FR-MOD-06.3).
 - KK3: Skill doğal dille yazılır → sıralı adımlara derlenir → Preview'de simüle edilir → Skill active toggle ile yayınlanır (FR-MOD-06.2).
-- KK4: **Readiness check:** Knowledge boş veya hiç aktif skill yokken "Turn on AI Agent" öncesi uyarı gösterilir (Nexa iyileştirmesi; FR-MOD-06.1).
+- KK4: **Readiness check:** Knowledge boş veya hiç aktif skill yokken "Turn on AI Agent" öncesi uyarı gösterilir (SiyahTuş iyileştirmesi; FR-MOD-06.1).
 - KK5: "AI Agent is off" durumunda müşteriye AI yanıtı gitmez (FR-MOD-06.5).
 
 **US-8 — Yönlendirme kurma**
@@ -308,13 +308,13 @@ Bir admin olarak, sohbetleri koşullara göre doğru ekibe yönlendirmek istiyor
 Bir owner olarak, AI'ın ne kadar çözdüğünü ve maliyeti öngörmek istiyorum, çünkü bütçe kontrolü istiyorum.
 - KK1: Reports Overview'da Manual/Assisted/Automated kırılımı ve AI resolution sayacı görünür (FR-MOD-07.3.2).
 - KK2: Billing'de kullanım sayacı (ör. "7/100", "0/200") gösterilir (FR-MOD-10.1.4).
-- KK3: **Kota %80'e ulaşınca proaktif uyarı e-postası** gönderilir (Nexa iyileştirmesi; FR-MOD-10.2).
+- KK3: **Kota %80'e ulaşınca proaktif uyarı e-postası** gönderilir (SiyahTuş iyileştirmesi; FR-MOD-10.2).
 - KK4: Aylık toplam ve "trial bitince ne kadar" net gösterilir; trial boyunca "Billed now $0" (FR-MOD-10.1.6).
 
 **US-10 — Kanal bağlama ve widget kurulumu**
 Bir admin olarak, siteme widget kurmak ve kanalları bağlamak istiyorum, çünkü müşterilere her yerde ulaşmak istiyorum.
 - KK1: Website widgets: Add website / Install code manually / Invite developer; snippet `</body>` öncesine (FR-MOD-08.5.2).
-- KK2: Kod yerleştikten sonra Status "Connected"; **doğrulama sinyali** ("test message received") gösterilir (Nexa iyileştirmesi; FR-MOD-08.5.2).
+- KK2: Kod yerleştikten sonra Status "Connected"; **doğrulama sinyali** ("test message received") gösterilir (SiyahTuş iyileştirmesi; FR-MOD-08.5.2).
 - KK3: Trusted domains allowlist ile widget yalnız izinli domainlerde çalışır (FR-MOD-08.9.1).
 - KK4: Diğer kanallar (Email/Messenger/Twilio/WhatsApp) OAuth/kimlik ile bağlanır (FR-MOD-08.5).
 
@@ -351,14 +351,14 @@ Bir müşteri olarak, WhatsApp/Email gibi tercih ettiğim kanaldan yazmak ve kon
 **US-15 — API/webhook/MCP entegrasyonu**
 Bir geliştirici olarak, programatik erişim ve olay bildirimleri istiyorum, çünkü kendi sistemlerimle entegre olmak istiyorum.
 - KK1: PAT ve OAuth 2.1 ile Agent/Customer/Configuration/Reports API'lerine erişim (FR-MOD-08.8.2, §8, EK-C).
-- KK2: Webhook kaydı + **HMAC-SHA256 imza doğrulaması** (Nexa iyileştirmesi) + retry (§7, EK-C).
+- KK2: Webhook kaydı + **HMAC-SHA256 imza doğrulaması** (SiyahTuş iyileştirmesi) + retry (§7, EK-C).
 - KK3: MCP sunucusu ile Claude/ChatGPT gibi araçlardan doğal dil sorgusu (FR-MOD-08.8.3).
 <!-- /SECTION:4 -->
 
 <!-- SECTION:5 -->
 ## 5. Kapsam ve Fazlandırma (MVP / v1 / v2 / Enterprise)
 
-Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca teslim sırasıdır (ürün bölünmesi değildir). Faz atamaları Perspektif D'nin P0–P3 önceliklendirmesi ve Perspektif C'nin (v2-05) etki×çaba matrisiyle hizalıdır. Efor tahminleri §10'da (kişi-ay) detaylandırılır.
+Tüm özellikler **TEK SiyahTuş ürününde** birleşir; fazlandırma yalnızca teslim sırasıdır (ürün bölünmesi değildir). Faz atamaları Perspektif D'nin P0–P3 önceliklendirmesi ve Perspektif C'nin (v2-05) etki×çaba matrisiyle hizalıdır. Efor tahminleri §10'da (kişi-ay) detaylandırılır.
 
 ### 5.1 MVP (Faz 0) — "Çalışan canlı sohbet çekirdeği" (~3–4 ay)
 
@@ -491,7 +491,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-01.4 | **Promosyon/onboarding banner'ları** (dismiss + CTA; "Take tour", "Top chat topics") | Could | Dismiss kalıcı; segmentli gösterim | — | Gözlem |
 | FR-MOD-01.5 | **Unpin side navigation** — nav daraltma (tercih saklanır) | Could | Pinned/Unpinned; kullanıcı bazında persist | — | Gözlem |
 
-> **Nexa notu (Gözlem→iyileştirme):** Banner'lar kalıcı kapatılabilir ve kullanıcı olgunluğuna göre segmentli gösterilmelidir; "Leads" pill'i domain-özel KPI'ya (ör. "Qualified players") bağlanabilir olmalı.
+> **SiyahTuş notu (Gözlem→iyileştirme):** Banner'lar kalıcı kapatılabilir ve kullanıcı olgunluğuna göre segmentli gösterilmelidir; "Leads" pill'i domain-özel KPI'ya (ör. "Qualified players") bağlanabilir olmalı.
 
 ### FR-MOD-02 — Inbox / Chats (Agent Dashboard)
 
@@ -500,14 +500,14 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-02.1.1 | **Chats grubu** — All / My chats / Queued / Unassigned / Supervised / Archive + canlı sayaç | Must (MVP) | Her öğe orta listeyi filtreler; sayaçlar RTM ile canlı | EK-C.1, routing | Gözlem |
 | FR-MOD-02.1.2 | **AI Agents grubu** — AI agent (aktif) / Solved | Must (v1) | AI konuşmalarını insan kuyruğundan ayırır; Solved → AI resolution sayacı | MOD-06, MOD-10 | Gözlem |
 | FR-MOD-02.1.3 | **Tickets grubu** — All / Unassigned / My open / More (grid) | Must (MVP temel) | Ticket'lar `sortBy=lastMessageAt&order=desc`; erişim/izin durumuna göre görünürlük | ticketing | Gözlem (+"Ticket views unavailable" hata-empty) |
-| FR-MOD-02.1.4 | **Views grubu** — WhatsApp/Messenger/Twilio SMS kanal görünümleri + "My recent chats" + **kullanıcı-tanımlı custom views** | Should (v1) | Kanal bağlı değilse channel-promo; custom saved views eklenebilir | MOD-08.5 | Gözlem + Nexa iyileştirmesi |
+| FR-MOD-02.1.4 | **Views grubu** — WhatsApp/Messenger/Twilio SMS kanal görünümleri + "My recent chats" + **kullanıcı-tanımlı custom views** | Should (v1) | Kanal bağlı değilse channel-promo; custom saved views eklenebilir | MOD-08.5 | Gözlem + SiyahTuş iyileştirmesi |
 | FR-MOD-02.2.1 | **Liste başlığı + sıralama** (Oldest/Newest, My chats kapsam) | Should | Sıralama/filtre uygulanır | — | Gözlem |
 | FR-MOD-02.2.2 | **Sohbet liste öğesi** (avatar+isim+önizleme+zaman+durum; unread; typing) | Must (MVP) | Tıklama transcript açar; RTM'de yukarı taşınır+unread | EK-C.1 | Gözlem ("Reopened - by agent — 9m") |
 | FR-MOD-02.2.3 | **Onboarding "Take tour" banner** | Could | Tek sefer + kalıcı kapatma | FR-MOD-01.4 | Gözlem |
 | FR-MOD-02.3.1 | **Transcript** — müşteri+ajan+AI+sistem olayları kronolojik; canlı akış | Must (MVP) | WebSocket ile canlı; skeleton; reverse infinite scroll; reconnect telafi | §8 events | Gözlem |
 | FR-MOD-02.3.2 | **Reply Suggestions çipleri** (AI, `Space` ile) | Should (v1) | Çip → composer'a düzenlenebilir metin | MOD-12 | Gözlem |
 | FR-MOD-02.3.3 | **Composer** (çok satır, placeholder, Enter gönder / Shift+Enter satır) | Must (MVP) | Boş mesaj engellenir; optimistic gönderim; hata retry | §8 send_event | Gözlem |
-| FR-MOD-02.3.4 | **Message type dropdown** (Reply / Internal note) | Must (MVP) | Note müşteriye gitmez; farklı stil; **Note modunda amber arka plan** (Nexa) | — | Gözlem + iyileştirme |
+| FR-MOD-02.3.4 | **Message type dropdown** (Reply / Internal note) | Must (MVP) | Note müşteriye gitmez; farklı stil; **Note modunda amber arka plan** (SiyahTuş) | — | Gözlem + iyileştirme |
 | FR-MOD-02.3.5 | **Composer araçları** (canned `#`, #tags, rich text, emoji, attach) | Must (MVP) | `#` canned menüsü; attach File sharing kurallarına tabi | MOD-08.7.2, 08.9.4 | Gözlem |
 | FR-MOD-02.3.6 | **Send butonu** (optimistic, disabled/loading/error) | Must (MVP) | Boşken pasif; hata retry | — | Gözlem |
 | FR-MOD-02.4.1–.6 | **Details paneli** — Chat info, Chat tags, Visited pages, Visit info (Device/Referring/Duration/IP), Assignee, Chat ID, Duration | Must (MVP) | Bölümler katlanır; tag/assignee anında kaydeder; süre/ziyaret canlı | EK-C.1, MOD-08.7.1 | Gözlem (IP 127.122.53.34, 7m49s, TI1H8CFKRV) |
@@ -528,7 +528,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-03.1.3 | **Ziyaretçi tablosu + satır aksiyonları** — Name/Email/Activity/**Chatting with**; Start chat / Supervise / Assign to me / edit | Should (v1) | Proaktif temas; "Chatting with" insan+AI ajanı gösterir (ör. "Hazal AI") | MOD-02 | Gözlem |
 | FR-MOD-03.2.1 | **Contacts header + arama + filter** ("Enter name, email, or phone"; "N customers") | Must (MVP) | Debounce arama; filtre paneli; sonuç yoksa empty | §8 customers | Gözlem (13 customers) |
 | FR-MOD-03.2.2 | **Contacts alt sekmeler** — All / Leads / Last 30 days | Should | Segment filtreleri; `sortBy=last_activity` | — | Gözlem (All 13/Leads 2) |
-| FR-MOD-03.2.3 | **Contacts tablosu** — Name/Email/Phone/Country(flag)/Last active/Chats/Tickets; satır → profil | Must (MVP) | Sıralanabilir; satır profili açar; custom kolonlar (Nexa: player ID/KYC/bakiye) | §8, MOD-08.7.6 | Gözlem |
+| FR-MOD-03.2.3 | **Contacts tablosu** — Name/Email/Phone/Country(flag)/Last active/Chats/Tickets; satır → profil | Must (MVP) | Sıralanabilir; satır profili açar; custom kolonlar (SiyahTuş: player ID/KYC/bakiye) | §8, MOD-08.7.6 | Gözlem |
 | FR-MOD-03.3.1 | **Campaigns alt sekmeler** — All/Ongoing/Scheduled/Inactive | Should (v1) | Durum bazlı filtre | §8 campaigns | Gözlem (Ongoing 2) |
 | FR-MOD-03.3.2 | **New campaign builder** (targeted message/greeting: koşullar + içerik + zamanlama) | Should (v1) | Tetikleyici+mesaj zorunlu; kayıt sonrası eşleşen ziyaretçiye otomatik gönderim | MOD-11.2 | Gözlem + Çıkarım (builder alanları) |
 | FR-MOD-03.3.3 | **Kampanya kartı** — Edit / View report; grid/list; active toggle; Recurring/One-time | Should (v1) | Düzenleme + performans (Displayed/Chats/Conversion) | MOD-07 | Gözlem (5 hazır kampanya; exit-intent) |
@@ -547,7 +547,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-04.5 | **Teams (Chatting Teams / departmanlar)** — grup CRUD, üye ekle/çıkar, **Primary agent önceliği**, yönlendirme hedefi | Must (MVP) | Routing hedefi; edit sayfası; Priority dropdown | FR-MOD-08.6.1 | Gözlem (gerçek: VIPAGENTS 10 üye) |
 | FR-MOD-04.6 | **Chatbots / Suspended agents sekmeleri** (bot hesapları ayrı; askıya alma) | Should (v1) | Bot hesabı ücretsiz; suspend/unsuspend | MOD-06, §8 | Gözlem (eski Team: Agents/Chatbots/Groups/Suspended) |
 
-> **RBAC netleştirme (Gözlem+Çıkarım):** Rota-seviyesi yetki gerçek (UI gizleme değil): yetkisiz kullanıcı "You don't have access to this view" boş-durumu görür (ör. Admin → Teams/Billing). Nexa'da yetki hem UI hem API/route katmanında zorlanır (§7).
+> **RBAC netleştirme (Gözlem+Çıkarım):** Rota-seviyesi yetki gerçek (UI gizleme değil): yetkisiz kullanıcı "You don't have access to this view" boş-durumu görür (ör. Admin → Teams/Billing). SiyahTuş'ta yetki hem UI hem API/route katmanında zorlanır (§7).
 
 ### FR-MOD-05 — Playbook (Automation / Skills Hub)
 
@@ -570,8 +570,8 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-06.2.4 | **Ordered steps (akordeon, reorder)** — detect-intent / request-info / tag / summarize / send-message / transfer-to-team | Must (v1) | Her adım araç çağrısı; drag reorder (+ **klavye alternatifi**); zorunlu parametre (ör. transfer hedefi) boşsa hata | §8 skills.steps | Gözlem (6 adımlı Withdrawal Issue) + a11y iyileştirme |
 | FR-MOD-06.2.5 | **Preview (canlı simülasyon)** — örnek mesaja karşı skill'i çalıştırır, adımları anlatır | Must (v1) | Örnek girdi → AI eylem narrasyonu (toplama, etiket, özet, transfer); hata gösterir | LLM | Gözlem |
 | FR-MOD-06.3.1 | **Knowledge alt sekmeler** — All / Websites / Files / Articles / FAQ | Must (v1) | Tür bazlı filtre | §8 knowledge_sources | Gözlem (All 13/Websites 1/Articles 12) |
-| FR-MOD-06.3.2 | **+ New source** — Website(crawl) / File / Article / FAQ; chunk+embedding+index | Must (v1) | Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; **bulk/CSV import** (Nexa) | §8 knowledge_chunks (pgvector) | Gözlem + iyileştirme (bulk yok) |
-| FR-MOD-06.3.3 | **Kaynak tablosu** — Name/Last Updated/Added by/Actions; düzenle/sil/yeniden-crawl | Must (v1) | … menü; silme onayı; kaynak retrieval'da kullanılır; **geçerlilik tarihi + otomatik yeniden crawl** (Nexa) | — | Gözlem (TR bahis makaleleri) + iyileştirme |
+| FR-MOD-06.3.2 | **+ New source** — Website(crawl) / File / Article / FAQ; chunk+embedding+index | Must (v1) | Geçersiz URL/tür reddi; crawl/parse; RAG indeksleme; **bulk/CSV import** (SiyahTuş) | §8 knowledge_chunks (pgvector) | Gözlem + iyileştirme (bulk yok) |
+| FR-MOD-06.3.3 | **Kaynak tablosu** — Name/Last Updated/Added by/Actions; düzenle/sil/yeniden-crawl | Must (v1) | … menü; silme onayı; kaynak retrieval'da kullanılır; **geçerlilik tarihi + otomatik yeniden crawl** (SiyahTuş) | — | Gözlem (TR bahis makaleleri) + iyileştirme |
 | FR-MOD-06.4 | **Profile (persona)** — Name/Avatar/Tone/Language/Answer length + canlı Preview | Must (v1) | Widget'ta persona görünür; çok dilli; zorunlu isim | MOD-11.3 | Gözlem (Vippark TR asistan; Tone Polite, Short) |
 | FR-MOD-06.5 | **Performance (AI analitiği)** — Resolution rate, AI chats, CSAT, Transferred % | Should (v1) | KPI kartları; düşük-baz uyarısı; AI off iken arşiv ayrımı | MOD-07.4, MOD-10 | Gözlem (%100 res, %57.1 transfer) |
 | FR-MOD-06.6 | **Chatbot (kural-tabanlı bot)** — deterministik akış/bot (AI Agent'tan ayrı, LLM'siz) | Should (MVP temel) | Kural bazlı bot; gruplara priority ile atanır | §8 bots | Gözlem (eski Automate Chatbots; bot token) |
@@ -593,7 +593,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 
 ### FR-MOD-08 — Settings (Omnichannel Configuration)
 
-**FR-MOD-08.1 — Settings kabuğu/kenar çubuğu:** Notifications, Company details, Desktop app; Channels; Routing; Inbox; Integrations; Security; Billing gruplu navigasyon; izin bazlı görünürlük; "Unpin side navigation" ile daraltma. (Must, MVP) — Gözlem. **Nexa iyileştirmesi:** Settings içi arama (20+ alt sayfa).
+**FR-MOD-08.1 — Settings kabuğu/kenar çubuğu:** Notifications, Company details, Desktop app; Channels; Routing; Inbox; Integrations; Security; Billing gruplu navigasyon; izin bazlı görünürlük; "Unpin side navigation" ile daraltma. (Must, MVP) — Gözlem. **SiyahTuş iyileştirmesi:** Settings içi arama (20+ alt sayfa).
 
 **FR-MOD-08.2 — Notifications:** ses/masaüstü/e-posta/tarayıcı bildirim tercihleri (yeni sohbet/atama/mention); kullanıcı bazında; **tarayıcı bildirimi varsayılan açık davet**. (Must, MVP) — Gözlem.
 
@@ -612,7 +612,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-08.5.5 | **Twilio SMS** | Must (v1) | Twilio kimlik/numara; SMS gönder-al | §8 | Gözlem |
 | FR-MOD-08.5.6 | **WhatsApp (Business)** | Must (v1) | WhatsApp bağlama; mesaj → chat | §8 | Gözlem |
 | FR-MOD-08.5.7 | **Instagram** (DM) | Should (Ent./v2) | Coming soon → Get notified → tam entegrasyon | §8 | Gözlem (SOON) |
-| FR-MOD-08.5.8 | **Telegram** | Should (Ent.) | Get notified → tam entegrasyon (**TR pazarında öncelik — Nexa**) | §8 | Gözlem (SOON) + iyileştirme |
+| FR-MOD-08.5.8 | **Telegram** | Should (Ent.) | Get notified → tam entegrasyon (**TR pazarında öncelik — SiyahTuş**) | §8 | Gözlem (SOON) + iyileştirme |
 | FR-MOD-08.5.9 | **Chat page** (hosted, paylaşılabilir link) | Must (MVP) | Get link; site olmadan sohbet | — | Gözlem |
 
 #### FR-MOD-08.6 — Routing
@@ -632,8 +632,8 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-08.7.3 | **Chat timeout** (boşta/timeout eşikleri) | Should (v1) | Pozitif süre; ölü sohbet otomatik kapanma | — | Gözlem |
 | FR-MOD-08.7.4 | **Chat transcripts** (otomatik e-posta transcript) | Should (v1) | Bitişte müşteri/ekibe transcript e-postası | MOD-08.7.5 | Gözlem |
 | FR-MOD-08.7.5 | **Ticket email templates** (markalı, değişkenli) | Should (v1) | Geçersiz değişken/format engeli | ticketing | Gözlem |
-| FR-MOD-08.7.6 | **Custom fields** (ticket/contact özel alanları) | Should (v1) | Tip/zorunluluk; Details+CRM'de görünür; Nexa: player ID/KYC/bakiye | MOD-03.2.3 | Gözlem |
-| FR-MOD-08.7.7 | **Forms builder** (pre-chat/post-chat/ticket/prospect; alan builder) | Should (v1) | En az bir alan; tip validasyon; widget'ta gösterim → contact/ticket'a yazma; Nexa: yaş/sorumlu-oyun onayı | MOD-11.2 | Gözlem |
+| FR-MOD-08.7.6 | **Custom fields** (ticket/contact özel alanları) | Should (v1) | Tip/zorunluluk; Details+CRM'de görünür; SiyahTuş: player ID/KYC/bakiye | MOD-03.2.3 | Gözlem |
+| FR-MOD-08.7.7 | **Forms builder** (pre-chat/post-chat/ticket/prospect; alan builder) | Should (v1) | En az bir alan; tip validasyon; widget'ta gösterim → contact/ticket'a yazma; SiyahTuş: yaş/sorumlu-oyun onayı | MOD-11.2 | Gözlem |
 
 #### FR-MOD-08.8 — Integrations (API Capabilities + Webhooks + MCP)
 
@@ -642,7 +642,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-08.8.1 | **Apps (marketplace) girişi** | Should (v1) | Üçüncü parti dizin (detay MOD-09) | MOD-09 | Gözlem |
 | FR-MOD-08.8.2 | **API access** — APIs & SDKs + Personal access tokens; PAT üret; API pricing/docs linkleri | Must (MVP) | PAT bir kez gösterilir; scope oluşturmada sabitlenir; API call billing sayacı; get-started kartları | §8, §7, EK-C | Gözlem (Reports/Agent Chat/Configuration/Customer Chat API) |
 | FR-MOD-08.8.3 | **MCP server** (mcp URL + Copy + Claude setup + örnek prompt) | Could (v2) | search_tickets/list_chats/get_report/summarize_chat tool'ları; OAuth scope bazlı; tenant izole | §7, LLM | Gözlem (mcp.text.com) |
-| FR-MOD-08.8.4 | **Webhooks** (register/list/unregister; olay push) | Must (v1) | **HMAC-SHA256 imza** (Nexa) + timestamp/nonce; retry (3×); SSRF koruması; secret log'a yazılmaz | §7, EK-C | Gözlem + kritik iyileştirme (HMAC yok) |
+| FR-MOD-08.8.4 | **Webhooks** (register/list/unregister; olay push) | Must (v1) | **HMAC-SHA256 imza** (SiyahTuş) + timestamp/nonce; retry (3×); SSRF koruması; secret log'a yazılmaz | §7, EK-C | Gözlem + kritik iyileştirme (HMAC yok) |
 
 #### FR-MOD-08.9 — Security
 
@@ -666,7 +666,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-09.3 | **API istek paketleri (marketplace)** — Essential/Pro/Pro+ | Could (v2) | Fiyatlı API paketleri satışı | MOD-10 | Gözlem (Essential 100K $29.99, Pro/Pro+ 500K $149.99) |
 | FR-MOD-09.4 | **Zapier/Make + Build-your-app + webhooks (partner/creator)** | Could (v2) | 700+ Zapier; partner/creator portalı | MOD-08.8.4 | Gözlem (v2-05: Zapier 700+; Apps: Build your app) |
 
-> **Nexa önceliklendirme (Gözlem→karar):** Bahis/fintech dikeyinde Stripe/ödeme + CRM (HubSpot/Salesforce) + Segment öne alınır; e-ticaret (Shopify/BigCommerce/Adobe/Medusa) MVP'de ertelenebilir. Çekirdek OAuth app framework korunur.
+> **SiyahTuş önceliklendirme (Gözlem→karar):** Bahis/fintech dikeyinde Stripe/ödeme + CRM (HubSpot/Salesforce) + Segment öne alınır; e-ticaret (Shopify/BigCommerce/Adobe/Medusa) MVP'de ertelenebilir. Çekirdek OAuth app framework korunur.
 
 ### FR-MOD-10 — Billing / Subscription / Trial
 
@@ -675,13 +675,13 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-10.1.1 | **Plan + Change plan** | Must (MVP) | Plan tier geçişi; downgrade kısıtları (kullanım>plan) | §8 subscriptions | Gözlem (Growth) |
 | FR-MOD-10.1.2 | **Billing cycle (Monthly/Annual)** + yıllık indirim | Must (MVP) | Annual seçince toplam yeniden hesap + indirim | — | Gözlem ("Save $480"/"%15-17") |
 | FR-MOD-10.1.3 | **Users stepper** ($/user/mo × qty) | Must (MVP) | Anlık toplam; alt sınır = aktif kullanıcı | MOD-04.4 | Gözlem ($99/user, 2 user) |
-| FR-MOD-10.1.4 | **AI resolutions meter + stepper** (dahil kota + aşım paketi) | Must (v1) | Sayaç "N/limit (% used)"; aşım paketi; **%80 proaktif uyarı** (Nexa) | MOD-06.5, §8 usage_records | Gözlem (0/200; $49.50/50) |
+| FR-MOD-10.1.4 | **AI resolutions meter + stepper** (dahil kota + aşım paketi) | Must (v1) | Sayaç "N/limit (% used)"; aşım paketi; **%80 proaktif uyarı** (SiyahTuş) | MOD-06.5, §8 usage_records | Gözlem (0/200; $49.50/50) |
 | FR-MOD-10.1.5 | **API calls** (aşım paketi) | Should (v1) | Aşım faturaya; sayaç | §8 | Gözlem ($29.50/100k) |
 | FR-MOD-10.1.6 | **Subscription summary + Enter payment details** | Must (MVP) | Toplam + "trial bitince X" + "Billed now $0"; ödeme formu (**kullanıcı doldurur; PRD/otomasyon kart girmez**) | §7 | Gözlem |
 | FR-MOD-10.2 | **14 günlük trial mantığı** (global rozet + kısıtlama) | Must (MVP) | Kayıt→trial; canlı gün sayacı; bitince kısıt/ödeme | FR-MOD-00.2, FR-MOD-01.1.6 | Gözlem |
 | FR-MOD-10.3 | **Invoices** (fatura geçmişi) + **Payment details** yönetimi | Should (v1) | Fatura listesi/indirme; ödeme yöntemi güncelleme | — | Gözlem |
 
-> **Fiyat yüzeyi kararı (Gözlem→Nexa farklılaşması):** Kaynak üründeki 3 tutarsız fiyat yüzeyi (koltuk $19–89 / platform ücreti / in-app $99) birleştirilir. Nexa önerisi: Free/Starter → Growth ($25–35/user, 100–300 AI çözüm dahil, opt-in aşım) → Scale → Enterprise; AI aşımı $0.50–0.75/çözüm; API aşımı ~$0.17/1.000; bot hesapları ücretsiz; yıllık %15–20 indirim.
+> **Fiyat yüzeyi kararı (Gözlem→SiyahTuş farklılaşması):** Kaynak üründeki 3 tutarsız fiyat yüzeyi (koltuk $19–89 / platform ücreti / in-app $99) birleştirilir. SiyahTuş önerisi: Free/Starter → Growth ($25–35/user, 100–300 AI çözüm dahil, opt-in aşım) → Scale → Enterprise; AI aşımı $0.50–0.75/çözüm; API aşımı ~$0.17/1.000; bot hesapları ücretsiz; yıllık %15–20 indirim.
 
 ### FR-MOD-11 — Customer Widget (Chat Widget, müşteri tarafı)
 
@@ -706,7 +706,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 
 ### FR-MOD-13 — Engage, Goals, Home Dashboard, Görsel Workflow Builder, Sales Tracker, Mobil (birleşik LiveChat mirası)
 
-> Bu modül, eski LiveChat panelinde bulunup yeni Text yüzeyinde farklı yerlere dağılmış/yeniden adlandırılmış özgün özellikleri **Nexa'da tek üründe** açıkça konumlar.
+> Bu modül, eski LiveChat panelinde bulunup yeni Text yüzeyinde farklı yerlere dağılmış/yeniden adlandırılmış özgün özellikleri **SiyahTuş'ta tek üründe** açıkça konumlar.
 
 | ID | Açıklama | Öncelik | Kabul Kriteri | Bağımlılıklar | Kaynak |
 |---|---|---|---|---|---|
@@ -716,7 +716,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 | FR-MOD-13.4 | **Görsel Workflow builder (nodes/edges)** — no-code, sürükle-bırak düğüm/kenar akış editörü; Empty workflow / şablon (31+); trigger+condition+action | Could (v2) | Görsel canvas (react-flow benzeri); şablon galerisi; canlı test; DB nodes/edges | §8 workflows, MOD-05 | Gözlem (Automate/Workflows Beta şablon galerisi) + Çıkarım (canvas) |
 | FR-MOD-13.5 | **Sales tracker** — satış/dönüşüm izleme kodu/kuralı; Ecommerce/Tracked sales | Could (v2) | İzleme yapılandırması; Reports Ecommerce ile ilişki | MOD-07.8, MOD-13.3 | Gözlem (Settings/Sales tracker) |
 | FR-MOD-13.6 | **Omnichannel Ticketing / HelpDesk katmanı** — asenkron ticket sistemi (merge/unmerge, followers, priority, silo, audit) | Should (v1) | Chat↔ticket köprüsü; ticket yaşam döngüsü; birleşik (ayrı ürün değil) | MOD-02.7, MOD-08.6.2 | Gözlem (HelpDesk API; upsell ekranı) |
-| FR-MOD-13.7 | **Mobil uygulamalar** — tüm modülleri kapsayan tek iOS/Android app + push bildirim | Should (v1) | Inbox/AI/CRM/Reports mobilde; push; **tam modül paritesi** (Nexa farklılaşması) | MOD-08.2 | Gözlem (Desktop app) + Çıkarım/roadmap |
+| FR-MOD-13.7 | **Mobil uygulamalar** — tüm modülleri kapsayan tek iOS/Android app + push bildirim | Should (v1) | Inbox/AI/CRM/Reports mobilde; push; **tam modül paritesi** (SiyahTuş farklılaşması) | MOD-08.2 | Gözlem (Desktop app) + Çıkarım/roadmap |
 | FR-MOD-13.8 | **Notifications (bildirim sistemi)** — ses/masaüstü/tarayıcı/e-posta + mobil push | Must (MVP) | Bkz. FR-MOD-08.2; kanallar arası tutarlı | MOD-08.2 | Gözlem |
 
 ### FR-EK — Çapraz Kesit Fonksiyonel Desenler
@@ -733,7 +733,7 @@ Tüm özellikler **TEK Nexa ürününde** birleşir; fazlandırma yalnızca tesl
 <!-- SECTION:7 -->
 ## 7. Fonksiyonel Olmayan Gereksinimler (NFR)
 
-Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Perspektif D (rapor-2 §6) + Perspektif C (v2-02 SLO, v2-04 güvenlik/uyumluluk). SLO rakamları kaynak ürünün yayınlanmış SLA'sı değil, **Nexa için önerilen mühendislik hedefleridir (Çıkarım)**.
+Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Perspektif D (rapor-2 §6) + Perspektif C (v2-02 SLO, v2-04 güvenlik/uyumluluk). SLO rakamları kaynak ürünün yayınlanmış SLA'sı değil, **SiyahTuş için önerilen mühendislik hedefleridir (Çıkarım)**.
 
 ### 7.1 Performans (NFR-P)
 
@@ -753,7 +753,7 @@ Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Per
 | ID | Gereksinim | Detay | Kaynak |
 |---|---|---|---|
 | NFR-S1 | **Kimlik doğrulama** | OAuth 2.1 (Auth Code + PKCE `S256`, code_verifier 43–128) temsilci; PAT (`Basic base64(account_id:PAT)`) sunucu; customer token (cookie grant, kısa TTL, `organization_id` kapsamlı, Customer Chat API dışına çıkamaz); bot token. Implicit grant **kullanılmaz** (OAuth 2.1). | Gözlem (v2-04) |
-| NFR-S2 | **Token yönetimi** | Access token TTL kısaltılır (kaynak 8 saat—uzun; Nexa ≤1 saat + refresh); maks 25 access+25 refresh/istemci; revocation; PAT/secret **hash'lenerek** saklanır (argon2/HMAC-SHA256), asla düz metin | Gözlem+iyileştirme |
+| NFR-S2 | **Token yönetimi** | Access token TTL kısaltılır (kaynak 8 saat—uzun; SiyahTuş ≤1 saat + refresh); maks 25 access+25 refresh/istemci; revocation; PAT/secret **hash'lenerek** saklanır (argon2/HMAC-SHA256), asla düz metin | Gözlem+iyileştirme |
 | NFR-S3 | **Yetkilendirme** | İki katman: rol (Owner/Admin/Agent) + scope (`chats--all:rw` vs `chats--my:rw`, `reports_read`…, ~63 scope). Rota+API seviyesi zorlama (UI gizleme değil) | Gözlem |
 | NFR-S4 | **Tenant izolasyonu** | Her sorgu `organization_id`/`license_id` filtreli; PostgreSQL **RLS** (`current_setting('app.current_org')`) + `TenantScopedRepository`; PgBouncer transaction-mode + `SET LOCAL`; **CI'da çapraz-tenant reddi negatif testleri** | Gözlem (v2-04, kritik R3) |
 | NFR-S5 | **IDOR koruması** | Kısa ID'ler (base32) tek başına yeterli değil; her istekte org+scope; enumeration için **404** (403 değil) | Gözlem |
@@ -775,7 +775,7 @@ Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Per
 | NFR-R4 | Darboğaz yönetimi | Postgres yazım throughput'u ana darboğaz → partition + read-replica + kuyruk (Kafka/RabbitMQ) |
 | NFR-R5 | Felaket kurtarma | Yedekleme + point-in-time recovery; yedekler de retention politikasına tabi |
 
-### 7.4 Uptime / SLA / SLO (NFR-U) — *Nexa önerisi (Çıkarım)*
+### 7.4 Uptime / SLA / SLO (NFR-U) — *SiyahTuş önerisi (Çıkarım)*
 
 | ID | Servis / SLI | SLO | Hata bütçesi (30 gün) |
 |---|---|---|---|
@@ -792,7 +792,7 @@ Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Per
 | NFR-A11Y1 | Standart | **WCAG 2.1 AA** (widget + panel), 2.2 hedefi |
 | NFR-A11Y2 | Renk bağımsız durum | Online/offline yalnız renkle değil, metin/ikonla da (1.4.1) |
 | NFR-A11Y3 | Kontrast | İkincil gri metin/grafik renkleri AA kontrast (1.4.3) |
-| NFR-A11Y4 | Klavye | Tüm etkileşim klavyeyle; **sürükle-bırak yeniden sıralamaya klavye alternatifi** (2.1.1 — kaynakta eksik, Nexa kritik) |
+| NFR-A11Y4 | Klavye | Tüm etkileşim klavyeyle; **sürükle-bırak yeniden sıralamaya klavye alternatifi** (2.1.1 — kaynakta eksik, SiyahTuş kritik) |
 | NFR-A11Y5 | Odak & isim | Focus visible (2.4.7); ikon-only butonlarda erişilebilir isim (4.1.2); target size (2.5.8) |
 | NFR-A11Y6 | ⌘K & liste | Komut paleti tam klavye gezilebilir; `role`/`aria-current` |
 
@@ -810,7 +810,7 @@ Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Per
 
 | ID | Çerçeve | Hedef durum | Not |
 |---|---|---|---|
-| NFR-C1 | **GDPR** | Uyumlu — DPA + SCC Module 2 + UK Addendum; Nexa=Processor | 10 gün alt-işleyen bildirim + 5 gün itiraz penceresi |
+| NFR-C1 | **GDPR** | Uyumlu — DPA + SCC Module 2 + UK Addendum; SiyahTuş=Processor | 10 gün alt-işleyen bildirim + 5 gün itiraz penceresi |
 | NFR-C2 | **KVKK** (TR) | Uyumlu (TR pazarı hedefi) | GDPR üzerinden + yerel KVKK gereklilikleri; VERBİS |
 | NFR-C3 | **CCPA/CPRA** | Uyumlu — Service Provider | — |
 | NFR-C4 | **HIPAA** | Şartlı (imzalı BAA + **yalnız US hosting**) — Enterprise | EU/`fra` bölgesinde HIPAA kapsamı yok |
@@ -827,7 +827,7 @@ Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Per
 
 | ID | Gereksinim | Hedef |
 |---|---|---|
-| NFR-M1 | Monorepo | pnpm/Turborepo; ortak `@nexa/types` (chat/thread/event/webhook kontratları tek kaynak) |
+| NFR-M1 | Monorepo | pnpm/Turborepo; ortak `@siyahtus/types` (chat/thread/event/webhook kontratları tek kaynak) |
 | NFR-M2 | Domain sınırları | DDD bounded contexts: messaging/routing/configuration/ai/reports/billing/identity; feature-sliced frontend |
 | NFR-M3 | SOLID | Transport↔domain ayrık; repository (DIP); skill step tipleri Strategy deseni (OCP) |
 | NFR-M4 | Test | Unit + Integration (testcontainers) + Contract (JSON Schema webhook/RTM) + E2E (Playwright: müşteri→routing→ajan→arşiv) + Load (k6/Gatling) + Security (cross-tenant/rate-limit) |
@@ -837,10 +837,10 @@ Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Per
 <!-- SECTION:8 -->
 ## 8. Bilgi Mimarisi, Üst Düzey Akışlar ve Veritabanı Şeması
 
-### 8.1 Bilgi Mimarisi (IA) — birleşik Nexa
+### 8.1 Bilgi Mimarisi (IA) — birleşik SiyahTuş
 
 İki yüzey, tek ürün:
-- **Agent SPA** (`app.nexa.example/app/<module>`): kalıcı kabuk (TopBar + Icon Rail + Module Sidebar + 3-pane + Right panel), client-side routing (React Router), kod bölme (`React.lazy`).
+- **Agent SPA** (`app.siyahtus.example/app/<module>`): kalıcı kabuk (TopBar + Icon Rail + Module Sidebar + 3-pane + Right panel), client-side routing (React Router), kod bölme (`React.lazy`).
 - **Customer Widget** (cross-origin iframe): async loader + `window.__lc`-benzeri config; CDN'den servis.
 
 **Birincil navigasyon (sol ikon rayı):** Home · Inbox · Customers (Real-time/Contacts/Campaigns) · Team (AI Agents/Copilot/Teammates/Teams) · Playbook · Engage (Traffic/Goals/Campaigns) · Reports · [alt] Settings · Help · Account.
@@ -858,7 +858,7 @@ Her NFR **`NFR-#`** ID'si + öncelik + ölçülebilir hedef taşır. Kaynak: Per
 /app/reports/{overview|ai-agent|metrics-breakdown|chat-topics}
 /app/settings/{notifications|company-details|channels|routing|...|security|billing}
 ```
-**IA iyileştirmeleri (Gözlem→Nexa):** Tickets üst-seviye görünür kılınır (yalnız Inbox'ta gizli değil); AI yetenekleri tek eve toplanır (Skills+Playbook tutarlılığı); Settings içi arama eklenir (20+ alt sayfa).
+**IA iyileştirmeleri (Gözlem→SiyahTuş):** Tickets üst-seviye görünür kılınır (yalnız Inbox'ta gizli değil); AI yetenekleri tek eve toplanır (Skills+Playbook tutarlılığı); Settings içi arama eklenir (20+ alt sayfa).
 
 ### 8.2 Üst Düzey Mimari (6 katman)
 
@@ -975,7 +975,7 @@ flowchart TB
 - **usage_records**(`id uuid pk`, `license_id fk`, `metric` [api_calls/ai_resolutions], `period char(6)`, `quantity`, `included`, `overage_unit`, `overage_unit_price_cents`; unique(license_id,metric,period)).
 - **ratings**(`id uuid pk`, `chat_id fk`, `value` [good/bad], `created_at`) — CSAT.
 - **security_settings** — trusted_domains, banned_customers, spam_filters, file_sharing_policy (license_id'ye bağlı yapılandırma).
-- **audit_log**(`id uuid pk`, `license_id fk`, `actor_id`, `action`, `target`, `metadata jsonb`, `created_at`) — Nexa (tüm planlarda temel).
+- **audit_log**(`id uuid pk`, `license_id fk`, `actor_id`, `action`, `target`, `metadata jsonb`, `created_at`) — SiyahTuş (tüm planlarda temel).
 
 **Kritik indeksler / kısıtlar:**
 - `chats`: `CREATE UNIQUE INDEX uq_one_active_chat ON chats(license_id, customer_id) WHERE active;`
@@ -1052,11 +1052,11 @@ erDiagram
 
 ### 9.3 Kısıtlar (Constraints)
 
-- C1: **Ödeme/finansal işlem ve kart verisi girişi otomasyon kapsamı dışıdır** — kullanıcı kendi girer (kaynak gözlem paketinde de yasak). Nexa PCI SAQ A; kart Stripe'a gider.
+- C1: **Ödeme/finansal işlem ve kart verisi girişi otomasyon kapsamı dışıdır** — kullanıcı kendi girer (kaynak gözlem paketinde de yasak). SiyahTuş PCI SAQ A; kart Stripe'a gider.
 - C2: **Veri bölgesi** kayıt anında sabitlenir (immutable `region`); yanlış bölge → `misdirected_request`.
 - C3: HIPAA yalnız US hosting + imzalı BAA ile (Enterprise); EU bölgesinde HIPAA kapsamı yok.
 - C4: AI çıkarımı bazı sağlayıcılarda "Worldwide" olabilir → EU veri sakinliği vaadi SCC ile telafi gerektirir.
-- C5: Kaynak API "action/RPC" tarzı (çoğu `POST`), versiyonlu (`v3.6`); Nexa kendi kontratını türetir ama chat→thread→event modeline sadık kalır.
+- C5: Kaynak API "action/RPC" tarzı (çoğu `POST`), versiyonlu (`v3.6`); SiyahTuş kendi kontratını türetir ama chat→thread→event modeline sadık kalır.
 - C6: Trial bitince erişim kısıtlanır; ödeme yoksa veri okunur ama yazma/aktif kanal kapanır (Çıkarım).
 - C7: Rakip fiyat/özellik verileri Temmuz 2026 anlıktır; değişebilir.
 
@@ -1141,7 +1141,7 @@ Kaynak: Perspektif C (v2-05) etki×çaba matrisi + faz-faz kişi-ay tahmini; Per
 ### 11.1 Kapsam Dışı (Out of Scope — bu sürüm/PRD)
 
 1. **Ödeme/finansal işlem otomasyonu:** kart bilgisi girişi, ödeme/transfer yürütme kapsam dışı (kullanıcı kendi yapar; PCI C1).
-2. **Kaynak ürünün birebir kopyalanması:** Nexa ilham alınan **özgün** üründür; kaynak markaların (LiveChat/Text) UI/marka varlıkları/telif içerikleri kopyalanmaz.
+2. **Kaynak ürünün birebir kopyalanması:** SiyahTuş ilham alınan **özgün** üründür; kaynak markaların (LiveChat/Text) UI/marka varlıkları/telif içerikleri kopyalanmaz.
 3. **Ses/telefon (voice/IVR):** Enterprise fazına ertelenir; MVP–v2 kapsam dışı.
 4. **Gerçek zamanlı canlı çeviri, sesli sentiment:** Enterprise fazı.
 5. **Ayrı kolon-tabanlı analitik ambar (ClickHouse/BigQuery), soğuk arşiv depolama:** P3/ölçek fazı.
@@ -1164,7 +1164,7 @@ Kaynak: Perspektif C (v2-05) etki×çaba matrisi + faz-faz kişi-ay tahmini; Per
 | Q7 | Görsel Workflow builder (nodes/edges) ile NL skill editörü nasıl birleşecek? (tek mi iki paradigma mı) | Ürün | Kaynakta iki ayrı (AI vs Workspace) |
 | Q8 | Rakip fiyatları değişken; konumlandırma hangi rakibe göre ana çapa? (Intercom/Zendesk vs Crisp/Tidio) | Pazarlama | v2-05 karşılaştırması EK-A |
 | Q9 | Regüle dikey (bahis) hedefi hukuki/marka riski taşır mı? Genel + dikey şablon dengesi? | Ürün/Hukuk | Referans dikey, tek dikey değil |
-| Q10 | Webhook/RTM tam olay kontratı ve sürümleme stratejisi (v3.6 türevi) nasıl dondurulacak? | Mimari | EK-C referans; `@nexa/types` |
+| Q10 | Webhook/RTM tam olay kontratı ve sürümleme stratejisi (v3.6 türevi) nasıl dondurulacak? | Mimari | EK-C referans; `@siyahtus/types` |
 | Q11 | Sayısal REST rate limit değerleri ve `Retry-After` politikası kesinleşecek | Mimari/Güvenlik | Kaynakta yayınlanmamış |
 | Q12 | Onboarding tohum verisi (örnek sohbet/KB/skill) sektöre göre değişecek mi? | Ürün | Dikey şablonlar |
 <!-- /SECTION:11 -->
@@ -1176,7 +1176,7 @@ Kaynak: Perspektif C (v2-05), Temmuz 2026 anlık verileri. Fiyatlar yıllık fat
 
 ### EK-A.1 Özellik & Fiyat Matrisi
 
-| Boyut | Nexa (hedef) | LiveChat/Text (ilham) | Intercom | Crisp | Tidio | Zendesk | Help Scout | Olark |
+| Boyut | SiyahTuş (hedef) | LiveChat/Text (ilham) | Intercom | Crisp | Tidio | Zendesk | Help Scout | Olark |
 |---|---|---|---|---|---|---|---|---|
 | **Fiyat modeli** | **Tek şeffaf yüzey**: koltuk + kota + opt-in aşım | 3 tutarsız yüzey (koltuk $19–89 + platform $1.499/ay + in-app $99) | Koltuk $29–132 + Fin $0,99/sonuç (+$9,99 satış nitelendirme) | Düz/workspace $0–295 + AI kredi | Kademe $0–300+ + Lyro $32,50/50 konuşma | Koltuk $19–115+ + zorunlu AI $50/koltuk + $1–2/çözüm | Koltuk $0–75 + AI Answers $0,75/çözüm | Düz $400/ay (AI dahil) veya $29/koltuk (insan) |
 | **AI/Chatbot** | AI Agent (NL skill + görsel builder) + Copilot | AI Agent + Copilot | Fin AI Agent (outcome) + Copilot $29/koltuk | AI ajan (kredi) | Lyro AI (konuşma-tabanlı) | Zendesk AI Agents (resolution) | AI Answers + AI Drafts | Aiden AI Website Agent |
@@ -1208,7 +1208,7 @@ Kaynak: Perspektif C (v2-05), Temmuz 2026 anlık verileri. Fiyatlar yıllık fat
 | **Olark** | Tahmin edilebilir sabit AI fiyatı (kota kaygısı yok) | Ticketing/KB yok, entegrasyon zayıf, dar özellik seti |
 | **LiveChat/Text (ilham)** | AI Agent skill-editörü + NL otomasyon, satış-odaklı proaktif, MCP | 3 tutarsız fiyat, mesaj düzenlenemez, sınırlı native kanal, mobil boşluk, ISO 27001 belirsiz |
 
-### EK-A.4 Nexa Farklılaştırma Stratejisi (v2-05 §5, §9)
+### EK-A.4 SiyahTuş Farklılaştırma Stratejisi (v2-05 §5, §9)
 
 1. **"Şeffaf AI faturası"** — Zendesk (2026: önceden uyarısız aşım) ve Intercom (öngörülemez Fin, 2–3x) karşısında: kota + %80 proaktif uyarı + öngörülebilir tek fiyat.
 2. **Regüle dikey nişleşme** — hazır KYC/withdrawal/responsible-gambling şablon skill kütüphanesi (Intercom/Zendesk'te bu derinlik yok).
@@ -1277,8 +1277,8 @@ Eski LiveChat — güncel taramanın önceki nesli (`images/*.jpg`, 24): 00_copi
 Eski LiveChat — arşiv (`gorseller/_eski/`, 11): fonksiyonel/01-chats-bos-durum ✓, 02-home-genel-bakis ✓, 03-engage-traffic ✓, 04-automate-ai-agent ✓, 06-team-agents ✓, 07-reports-son7gun ✓; teknik/01-widget-install-kodu ✓, 02-archives-teknik-detay ✓, 03-apps-api-paketleri ✓, 04-widget-preview ✓, 05-subscription-planlar ✓.
 
 **Görselden doğrulanan/çözülen çelişkiler:**
-- İki UI nesli (eski açık "LiveChat" mavi vs yeni koyu "Text") ve iki hesap (boş demo trial vs yoğun gerçek bahis/casino "vippark") ayrı ele alındı; PRD tek Nexa ürününde birleştirdi.
-- Plan çelişkisi: eski "Team $49" trial vs yeni "Growth $99/user/mo" → §EK-C.2'de her ikisi de raporlandı; Nexa tek yüzeye indirdi.
+- İki UI nesli (eski açık "LiveChat" mavi vs yeni koyu "Text") ve iki hesap (boş demo trial vs yoğun gerçek bahis/casino "vippark") ayrı ele alındı; PRD tek SiyahTuş ürününde birleştirdi.
+- Plan çelişkisi: eski "Team $49" trial vs yeni "Growth $99/user/mo" → §EK-C.2'de her ikisi de raporlandı; SiyahTuş tek yüzeye indirdi.
 - AI Agent "off" iken Performance %100/7 chat + "vs 0" düşük-baz → §3.3'te düşük-baz uyarısı gereği eklendi.
 - `04_workflows` "görsel node/edge canvas" değil, Beta şablon galerisi ekranıdır; gerçek canvas görüntüsü sette yok → FR-MOD-13.4 canvas'ı Çıkarım olarak işaretledi.
 - `12_helpdesk`, `08_apps` (API paketleri), `04_automate_overview` upsell/pazarlama ekranlarıdır → "mevcut özellik" gibi değil, birleşik/entegre olarak yazıldı.
@@ -1290,7 +1290,7 @@ Eski LiveChat — arşiv (`gorseller/_eski/`, 11): fonksiyonel/01-chats-bos-duru
 <!-- SECTION:EK-C -->
 ## EK-C. Gözlemlenen API Endpoint'leri ve Gerçek Fiyat/Plan Verisi
 
-Kaynak: Perspektif D (rapor-2 §4) + Perspektif C (v2-03). Taban host'lar (Gözlem): API `https://api.livechatinc.com/v3.6`, kimlik `https://accounts.livechat.com`, asset `cdn.static-text.com`, MCP `https://mcp.text.com/`, billing `billing.text.com`. Nexa kendi kontratını türetir ama chat→thread→event modeline ve bu desenlere sadık kalır.
+Kaynak: Perspektif D (rapor-2 §4) + Perspektif C (v2-03). Taban host'lar (Gözlem): API `https://api.livechatinc.com/v3.6`, kimlik `https://accounts.livechat.com`, asset `cdn.static-text.com`, MCP `https://mcp.text.com/`, billing `billing.text.com`. SiyahTuş kendi kontratını türetir ama chat→thread→event modeline ve bu desenlere sadık kalır.
 
 ### EK-C.1 Genel REST Deseni
 
@@ -1361,13 +1361,13 @@ Yanıt: `{ "name": "duration-report", "total": 369, "records": { "2026-07-14": {
 ### EK-C.4 Auth / Scope
 
 - **PAT:** `Basic base64(account_id:PAT)`; scope oluşturmada sabit; Customer Chat API'de çalışmaz.
-- **OAuth 2.1:** Authorization Code + PKCE(S256, verifier 43–128); `client_id`(32-hex) + secret + redirect whitelist + client_type. Token TTL kaynak varsayılan 28800s (8 saat) — Nexa kısaltır. Maks 25 access+25 refresh/istemci; 3 redirect/30s.
+- **OAuth 2.1:** Authorization Code + PKCE(S256, verifier 43–128); `client_id`(32-hex) + secret + redirect whitelist + client_type. Token TTL kaynak varsayılan 28800s (8 saat) — SiyahTuş kısaltır. Maks 25 access+25 refresh/istemci; 3 redirect/30s.
 - **Bot token:** `issue_bot_token`; scope `agents-bot--{my,all}:{ro,rw}`.
 - **~63 scope** (`resource--access:permission`, permission ∈ ro/rw/rc): `chats--all:rw`/`chats--my:rw`/`chats--access:rw`, `customers:rw`/`customers.ban:rw`, `agents--all:rw`, `groups--all:rw`, `tags--all:rw`, `canned_responses--groups/all:rw`, `properties.*`, `webhooks--all:rw`/`webhooks.state:rw`, `multicast:rw`, `reports_read`, `billing_manage`/`billing_admin`/`ledger_read`.
 
 ### EK-C.5 Webhooks
 
-`register_webhook` → HTTP POST push. Payload: `{ webhook_id, secret_key, action, organization_id, payload, additional_data }` (+ config olaylarında `requester{user_id,account_id,client_id}`). ~40 olay (RTM push muadili). Retry: ~10s timeout, HTTP 200 beklenir, ~1 dk'da max 3 tekrar. **Kaynak zayıflığı (Gözlem):** HMAC yok; `secret_key` düz metin payload içinde. **Nexa gereği:** HMAC-SHA256 imza + timestamp/nonce + SSRF koruması (NFR-S7).
+`register_webhook` → HTTP POST push. Payload: `{ webhook_id, secret_key, action, organization_id, payload, additional_data }` (+ config olaylarında `requester{user_id,account_id,client_id}`). ~40 olay (RTM push muadili). Retry: ~10s timeout, HTTP 200 beklenir, ~1 dk'da max 3 tekrar. **Kaynak zayıflığı (Gözlem):** HMAC yok; `secret_key` düz metin payload içinde. **SiyahTuş gereği:** HMAC-SHA256 imza + timestamp/nonce + SSRF koruması (NFR-S7).
 
 **chat_transferred örneği:**
 ```json
@@ -1383,7 +1383,7 @@ Yanıt: `{ "name": "duration-report", "total": 369, "records": { "2026-07-14": {
 
 ### EK-C.7 MCP Server
 
-`https://mcp.text.com/` — "Works with Claude, ChatGPT, and any MCP-compatible tool." Nexa tasarımı: OAuth 2.1 kimlikli kullanıcı bağlamında alttaki Agent Chat/Reports/Configuration API'lerini MCP tool olarak paketler (`search_tickets`, `list_chats`, `get_report`, `summarize_chat`); her tool çağrısı kullanıcının scope'larıyla ve `organization_id` ile sınırlı. Örnek prompt: "Find all tickets where customers ask about bulk orders".
+`https://mcp.text.com/` — "Works with Claude, ChatGPT, and any MCP-compatible tool." SiyahTuş tasarımı: OAuth 2.1 kimlikli kullanıcı bağlamında alttaki Agent Chat/Reports/Configuration API'lerini MCP tool olarak paketler (`search_tickets`, `list_chats`, `get_report`, `summarize_chat`); her tool çağrısı kullanıcının scope'larıyla ve `organization_id` ile sınırlı. Örnek prompt: "Find all tickets where customers ask about bulk orders".
 
 ### EK-C.8 Gerçek Fiyat / Plan Verisi
 
@@ -1411,9 +1411,9 @@ Yanıt: `{ "name": "duration-report", "total": 369, "records": { "2026-07-14": {
 
 **Marketplace API paketleri (Gözlem — `08_apps.jpg` / `_eski/…03-apps-api-paketleri.jpg`):** Essential 100K istek **$29.99/mo**; Pro 500K **$149.99/mo**; Pro+ 500K + ek uzman seansı **$149.99/mo**.
 
-> **Fiyat çelişkisi (Gözlem→çözüm):** Aynı ürün ailesinde üç yüzey görülür: eski LiveChat koltuk kademeleri ($19/$49/$79/Enterprise), yeni Text in-app Growth ($99/user + tüketim) ve marketplace API paketleri. Farklı hesap/dönem/ürün adlandırmalarından kaynaklanır (görsellerde license 100170061 vs 19854893; Team trial vs Growth). **Nexa bunları §FR-MOD-10 uyarınca tek şeffaf yüzeye indirir** (Free/Starter → Growth $25–35/user + kota → Scale → Enterprise; AI aşımı $0.50–0.75/çözüm; yıllık %15–20).
+> **Fiyat çelişkisi (Gözlem→çözüm):** Aynı ürün ailesinde üç yüzey görülür: eski LiveChat koltuk kademeleri ($19/$49/$79/Enterprise), yeni Text in-app Growth ($99/user + tüketim) ve marketplace API paketleri. Farklı hesap/dönem/ürün adlandırmalarından kaynaklanır (görsellerde license 100170061 vs 19854893; Team trial vs Growth). **SiyahTuş bunları §FR-MOD-10 uyarınca tek şeffaf yüzeye indirir** (Free/Starter → Growth $25–35/user + kota → Scale → Enterprise; AI aşımı $0.50–0.75/çözüm; yıllık %15–20).
 
 ---
 
-*(PRD sonu — Nexa v1.0 Taslak, 2026-07-21, Zoro.)*
+*(PRD sonu — SiyahTuş v1.0 Taslak, 2026-07-21, Zoro.)*
 <!-- /SECTION:EK-C -->

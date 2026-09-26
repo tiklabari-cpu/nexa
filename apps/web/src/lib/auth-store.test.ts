@@ -18,8 +18,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { useAuth as useAuthStore } from './auth-store.js';
 
-const REFRESH_KEY = 'nexa.refresh_token';
-const CLIENT_ID_KEY = 'nexa.client_id';
+const REFRESH_KEY = 'siyahtus.refresh_token';
+const CLIENT_ID_KEY = 'siyahtus.client_id';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -99,7 +99,7 @@ async function loadStore(): Promise<{
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem(REFRESH_KEY, 'refresh-0');
-  localStorage.setItem(CLIENT_ID_KEY, 'nexa-agent-app-acme');
+  localStorage.setItem(CLIENT_ID_KEY, 'siyahtus-agent-app-acme');
 });
 
 afterEach(() => {

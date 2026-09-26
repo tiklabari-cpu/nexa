@@ -141,29 +141,29 @@ ALTER TABLE scheduled_report_runs
 -- exfiltration channel for their own numbers.
 ALTER TABLE scheduled_reports ENABLE ROW LEVEL SECURITY;
 CREATE POLICY scheduled_reports_tenant ON scheduled_reports
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 ALTER TABLE scheduled_report_runs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY scheduled_report_runs_tenant ON scheduled_report_runs
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
--- The API connects as nexa_app and reaches both tables only through those
+-- The API connects as siyahtus_app and reaches both tables only through those
 -- policies. Granted explicitly: the schema-wide GRANT in 20260722154008 covered
 -- only the tables that existed then.
-GRANT SELECT, INSERT, UPDATE, DELETE ON public.scheduled_reports TO nexa_app;
-GRANT SELECT, INSERT, UPDATE ON public.scheduled_report_runs TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.scheduled_reports TO siyahtus_app;
+GRANT SELECT, INSERT, UPDATE ON public.scheduled_report_runs TO siyahtus_app;
 
 -- Runs get no DELETE, and withholding it takes an explicit REVOKE: the ALTER
 -- DEFAULT PRIVILEGES in 20260722090000 hands SELECT, INSERT, UPDATE, DELETE to
--- nexa_app on every table created after it, so the narrower GRANT above is a
+-- siyahtus_app on every table created after it, so the narrower GRANT above is a
 -- no-op on its own. Mirrors `REVOKE UPDATE, DELETE ON audit_log`.
 --
 -- The reason is the claim, not just record-keeping: a deletable run is a way to
 -- release a period that was already claimed and mail the same report a second
 -- time. A run is therefore resolved (UPDATE to 'sent' or 'failed'), never
 -- erased. Cancelling the schedule still clears its runs — the ON DELETE CASCADE
--- above is carried out by the referencing table's owner, not by nexa_app — and
+-- above is carried out by the referencing table's owner, not by siyahtus_app — and
 -- so does erasing the workspace, which is what NFR-C8 needs. Nothing prunes
 -- these rows on a timer today; a later window that wants a retention window can
 -- follow audit_prune_expired rather than loosen this grant.
-REVOKE DELETE ON public.scheduled_report_runs FROM nexa_app;
+REVOKE DELETE ON public.scheduled_report_runs FROM siyahtus_app;

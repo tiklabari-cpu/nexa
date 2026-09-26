@@ -17,7 +17,7 @@
  *      with no call made.
  */
 import type { PrismaClient } from '@prisma/client';
-import { chunk, embed, toVectorLiteral } from '@nexa/ai-mock';
+import { chunk, embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { TenantClient } from '../../src/lib/tenant.js';
 import { KnowledgeService } from '../../src/services/ai/knowledge-service.js';
@@ -41,7 +41,7 @@ const QUESTION = 'How long does delivery take?';
 
 /** A real embedder configured for Europe on a US deployment — the refusing shape. */
 const OUT_OF_REGION_EMBEDDER = {
-  NEXA_REGION: 'us',
+  SIYAHTUS_REGION: 'us',
   EMBEDDING_PROVIDER: 'openai',
   EMBEDDING_PROVIDER_REGION: 'eu',
   EMBEDDING_API_BASE_URL: 'https://eu.api.openai.com/v1',

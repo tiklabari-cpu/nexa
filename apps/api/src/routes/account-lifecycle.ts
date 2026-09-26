@@ -18,7 +18,7 @@ import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { LifecycleService } from '../services/auth/lifecycle-service.js';
 import { SEAT_CEILING } from '../lib/entitlements.js';
 import { pricingForPlan } from '../services/billing/subscription-service.js';
-import { REGIONS, servesRegion, type AgentRole } from '@nexa/types';
+import { REGIONS, servesRegion, type AgentRole } from '@siyahtus/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, mailFailureFields } from '../services/mail/delivery.js';
@@ -112,8 +112,8 @@ export default async function accountLifecycleRoutes(
     // right-hand side being safe was no help at all (tm 145). Here no row exists
     // yet, so a header would become the right-hand side and any caller could
     // reinstate this exact bug by asserting the region it wanted.
-    const region = body.region ?? env.NEXA_REGION;
-    if (!servesRegion(env.NEXA_REGION, region)) {
+    const region = body.region ?? env.SIYAHTUS_REGION;
+    if (!servesRegion(env.SIYAHTUS_REGION, region)) {
       // Regions only. Not the address, not the email, not the workspace name:
       // this line is written by the deployment that must not be holding these
       // people, so naming one of them here is the thing the refusal exists to
@@ -121,7 +121,7 @@ export default async function accountLifecycleRoutes(
       // is no audit entry for the same reason there is no workspace — the trail
       // is tenant-scoped and this request has no tenant to scope one to.
       request.log.warn(
-        { requested_region: region, served_region: env.NEXA_REGION },
+        { requested_region: region, served_region: env.SIYAHTUS_REGION },
         'signup refused: workspace region is not served by this deployment',
       );
 
@@ -135,7 +135,7 @@ export default async function accountLifecycleRoutes(
       throw new ApiError(
         'misdirected_request',
         'Workspaces in that region are created by the deployment that serves it.',
-        { details: { region, served_region: env.NEXA_REGION } },
+        { details: { region, served_region: env.SIYAHTUS_REGION } },
       );
     }
 
@@ -199,7 +199,7 @@ export default async function accountLifecycleRoutes(
         {
           to: body.email,
           kind: 'password_reset',
-          subject: 'Reset your Nexa password',
+          subject: 'Reset your SiyahTuş password',
           body: `Open this link to choose a new password:\n\n${env.WEB_APP_URL}/reset-password?token=${encodeURIComponent(token)}\n\nIt expires in one hour and works once.`,
         },
         (outcome) => {
@@ -449,7 +449,7 @@ export default async function accountLifecycleRoutes(
         deliver(mailer, {
           to: invite.email,
           kind: 'invitation',
-          subject: 'You have been invited to a Nexa workspace',
+          subject: 'You have been invited to a SiyahTuş workspace',
           body: `Open this link to join:\n\n${invite.accept_url}\n\nIt expires in seven days and works once.`,
         }),
       ),

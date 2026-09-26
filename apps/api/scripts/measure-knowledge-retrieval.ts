@@ -2,7 +2,7 @@
  * Measures what answering one question from the knowledge base costs, as the
  * knowledge base grows (tm 254 · PLAN §D173).
  *
- *     pnpm --filter @nexa/api measure:knowledge-retrieval [questions]
+ *     pnpm --filter @siyahtus/api measure:knowledge-retrieval [questions]
  *
  * The AI agent answers a customer inside the customer's own POST, so retrieval
  * spends NFR-P2's write budget (p99 < 300 ms for the whole request). This is the
@@ -32,13 +32,13 @@
  * hours. Each strategy gets its own single-connection client, ten untimed
  * questions, then the timed ones.
  *
- * Everything runs as `nexa_app` inside `withTenant` — row level security on, the
+ * Everything runs as `siyahtus_app` inside `withTenant` — row level security on, the
  * role and transaction the product uses. The vectors are the stub's, and the
  * rows are the ones `KnowledgeService.index` writes, one INSERT per source; the
  * HNSW index is built after the load from the statement in its own migration,
  * so the index measured is the index shipped.
  *
- * Nothing here touches the development database: a scratch `nexa_test_` one is
+ * Nothing here touches the development database: a scratch `siyahtus_test_` one is
  * created, migrated, measured and dropped — the prefix the test harness sweeps.
  */
 import { spawn } from 'node:child_process';
@@ -47,7 +47,7 @@ import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Prisma, PrismaClient } from '@prisma/client';
-import { embed, toVectorLiteral } from '@nexa/ai-mock';
+import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import { loadEnvFile } from '../src/config/load-env-file.js';
 import { withTenant, type TenantClient, type TenantContext } from '../src/lib/tenant.js';
 import { KnowledgeService } from '../src/services/ai/knowledge-service.js';

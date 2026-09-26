@@ -38,7 +38,7 @@ describe('uploads', () => {
   beforeAll(async () => {
     owner = ownerClient();
     server = await startTestServer({
-      STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'nexa-uploads-')),
+      STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'siyahtus-uploads-')),
     });
   });
 
@@ -249,7 +249,7 @@ describe('uploads', () => {
 
   it('refuses an expired grant', async () => {
     const brief = await startTestServer({
-      STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'nexa-uploads-')),
+      STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'siyahtus-uploads-')),
       UPLOAD_URL_TTL: '1',
     });
     try {
@@ -441,7 +441,7 @@ describe('uploads', () => {
 
     it('refuses the upload when the scanner is unreachable (fail closed)', async () => {
       const down = await startTestServer({
-        STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'nexa-uploads-')),
+        STORAGE_LOCAL_DIR: mkdtempSync(join(tmpdir(), 'siyahtus-uploads-')),
         VIRUS_SCANNER: 'unavailable',
       });
       try {

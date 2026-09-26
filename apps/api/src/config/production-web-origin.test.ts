@@ -29,7 +29,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../../../..'
 const read = (path: string): string => readFileSync(resolve(REPO_ROOT, path), 'utf8');
 
 const ENV_EXAMPLE = '.env.production.example';
-const CHART_OVERLAY = 'infra/helm/nexa/values.production.example.yaml';
+const CHART_OVERLAY = 'infra/helm/siyahtus/values.production.example.yaml';
 const CHECKLIST = 'docs/production-checklist.md';
 const README = 'README.md';
 

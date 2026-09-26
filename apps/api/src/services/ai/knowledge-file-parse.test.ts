@@ -10,7 +10,7 @@
  * about behaviour rather than about a fixture.
  */
 import { describe, expect, it } from 'vitest';
-import { KNOWLEDGE_FILE_MAX_BYTES } from '@nexa/types';
+import { KNOWLEDGE_FILE_MAX_BYTES } from '@siyahtus/types';
 import {
   isKnowledgeFileParseError,
   parseKnowledgeFile,

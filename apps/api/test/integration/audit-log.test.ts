@@ -17,7 +17,7 @@
 import { PrismaClient } from '@prisma/client';
 import { createHash } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { deriveCodeChallenge, generateToken, hashToken } from '../../src/lib/crypto.js';
 import { withTenant } from '../../src/lib/tenant.js';
 import { writeAuditEntry } from '../../src/services/audit/audit-log.js';
@@ -80,7 +80,7 @@ describe('audit log writer (NFR-S12)', () => {
     owner = ownerClient();
     appRole = new PrismaClient({ datasourceUrl: APP_URL });
     server = await startTestServer();
-    usServer = await startTestServer({ NEXA_REGION: 'us' });
+    usServer = await startTestServer({ SIYAHTUS_REGION: 'us' });
   });
 
   afterAll(async () => {
@@ -1807,7 +1807,7 @@ describe('audit log writer (NFR-S12)', () => {
       expect(await owner.auditLogEntry.findUnique({ where: { id: recent } })).not.toBeNull();
     });
 
-    it('leaves the table-level DELETE revoke intact — nexa_app still cannot delete', async () => {
+    it('leaves the table-level DELETE revoke intact — siyahtus_app still cannot delete', async () => {
       const old = await seedAt(fx.a.licenseId, daysAgo(40));
       // Even a row the function would prune cannot be removed by a direct DELETE:
       // the append-only grant is unchanged; the function is the only door.

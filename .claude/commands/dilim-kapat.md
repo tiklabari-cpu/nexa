@@ -46,7 +46,7 @@ oradadır ve çoğu §C'ye aittir.
   ```bash
   pnpm db:seed && curl -si -X POST http://localhost:4000/api/v1/auth/login \
     -H 'Content-Type: application/json' \
-    -d '{"email":"owner@acme.localhost","password":"nexa-demo-password"}' | head -1
+    -d '{"email":"owner@acme.localhost","password":"siyahtus-demo-password"}' | head -1
   ```
 
   `HTTP/1.1 200` görmeden dilim kapanmaz. (Entegrasyon paketi DB'yi truncate ettiği

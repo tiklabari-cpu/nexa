@@ -7,7 +7,7 @@
  * treating widget traffic as an agent (I4 — a customer token must never reach
  * beyond the Customer Chat API).
  */
-import type { AgentRole } from '@nexa/types';
+import type { AgentRole } from '@siyahtus/types';
 import type { TenantContext } from '../../lib/tenant.js';
 
 export interface AgentPrincipal {
@@ -167,7 +167,7 @@ export function scopesOf(principal: Principal): string[] {
 /**
  * Role rank and the scope ceiling each role carries.
  *
- * Defined in `@nexa/types` (`role-scopes.ts`) and re-exported here so the
+ * Defined in `@siyahtus/types` (`role-scopes.ts`) and re-exported here so the
  * existing call sites keep one import, and so the RTM gateway — a separate
  * process resolving the same credentials — reads the same list rather than a
  * copy of it (tm 145: a rule spelled twice is a rule that eventually disagrees
@@ -180,4 +180,4 @@ export {
   ADMIN_SCOPES,
   defaultScopesForRole,
   scopesWithinRole,
-} from '@nexa/types';
+} from '@siyahtus/types';

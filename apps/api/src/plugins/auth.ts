@@ -12,7 +12,7 @@
  */
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import fp from 'fastify-plugin';
-import { hasAnyScope, servesRegion, type AgentRole, type Region } from '@nexa/types';
+import { hasAnyScope, servesRegion, type AgentRole, type Region } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { costsTokenResolution, readCredential } from '../lib/credential.js';
@@ -51,7 +51,7 @@ declare module 'fastify' {
     /** The region half of `requirePrincipal`, with the same contract. */
     requireRegion: () => Region;
     /**
-     * The brand named by `X-Nexa-Brand`, validated to belong to the caller's
+     * The brand named by `X-SiyahTus-Brand`, validated to belong to the caller's
      * license (Multibrand, PRD §5.3). Undefined means license-wide. Resolved once
      * per request and folded into `tenant()`.
      */
@@ -134,7 +134,7 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
   });
 
   /**
-   * Resolve the `X-Nexa-Brand` header to a brand of the caller's license, or
+   * Resolve the `X-SiyahTus-Brand` header to a brand of the caller's license, or
    * undefined when absent (license-wide). The lookup runs under the caller's
    * license context, so RLS makes another license's brand invisible — it comes
    * back as "not found", which is why a foreign or malformed brand id is a 404
@@ -267,13 +267,17 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     // 421 would confirm the credential is real and merely at the wrong
     // address, which is exactly what that 404 declines to say.
     const requestedRegion = request.headers['x-region'];
-    const claimedRegion = typeof requestedRegion === 'string' ? requestedRegion : env.NEXA_REGION;
+    const claimedRegion =
+      typeof requestedRegion === 'string' ? requestedRegion : env.SIYAHTUS_REGION;
 
     // Two ways to be at the wrong door, one refusal and one trail, so neither
     // branch can be the one somebody forgets to record:
     //   - the workspace does not live here — the rule itself;
     //   - the caller named a region this deployment is not — the narrowing.
-    if (!servesRegion(env.NEXA_REGION, resolved.region) || claimedRegion !== env.NEXA_REGION) {
+    if (
+      !servesRegion(env.SIYAHTUS_REGION, resolved.region) ||
+      claimedRegion !== env.SIYAHTUS_REGION
+    ) {
       // Record that a request for this workspace arrived at the wrong door
       // (K5-4). Deliberately thin — the licence and the region that was asked
       // for, nothing else. Not the address, not the token, not who held it:
@@ -302,13 +306,13 @@ async function authPlugin(app: FastifyInstance, options: { env: Env }): Promise<
     }
 
     // --- Brand context (Multibrand, PRD §5.3) -----------------------------
-    // `X-Nexa-Brand` scopes the request to one brand of the caller's license, so
+    // `X-SiyahTus-Brand` scopes the request to one brand of the caller's license, so
     // a brand-scoped table (channels) sees only that brand's rows. Resolved
     // before the IP check below, because that check runs inside `withTenant` and
     // would otherwise carry a half-built context. Brand is an agent/bot concept
     // like scopes — a customer token names none.
     if (principal.kind === 'agent' || principal.kind === 'bot') {
-      request.brandId = await resolveBrand(principal, request.headers['x-nexa-brand']);
+      request.brandId = await resolveBrand(principal, request.headers['x-siyahtus-brand']);
     }
 
     // --- IP allow-list (FR-MOD-08.9.6) ------------------------------------

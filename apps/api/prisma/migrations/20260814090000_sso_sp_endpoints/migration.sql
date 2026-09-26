@@ -11,7 +11,7 @@
 -- "nothing" to every query in that state.
 --
 -- The established shape for that problem in this codebase is a SECURITY DEFINER
--- function with a pinned `search_path`, granted to `nexa_app` only: the same
+-- function with a pinned `search_path`, granted to `siyahtus_app` only: the same
 -- device `auth_find_account_for_login`, `auth_find_client` and
 -- `auth_accept_invitation` use. Each function below is narrow on purpose — one
 -- takes a connection id and returns exactly one connection, the other takes a
@@ -148,5 +148,5 @@ $$;
 REVOKE EXECUTE ON FUNCTION auth_find_sso_connection(UUID) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION auth_provision_sso_account(BIGINT, CITEXT, TEXT, TEXT) FROM PUBLIC;
 
-GRANT EXECUTE ON FUNCTION auth_find_sso_connection(UUID) TO nexa_app;
-GRANT EXECUTE ON FUNCTION auth_provision_sso_account(BIGINT, CITEXT, TEXT, TEXT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION auth_find_sso_connection(UUID) TO siyahtus_app;
+GRANT EXECUTE ON FUNCTION auth_provision_sso_account(BIGINT, CITEXT, TEXT, TEXT) TO siyahtus_app;

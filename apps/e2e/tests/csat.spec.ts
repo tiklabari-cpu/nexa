@@ -78,7 +78,7 @@ async function csat(): Promise<Csat> {
 
 test.beforeAll(async () => {
   apiCtx = await newApiContext.newContext({
-    extraHTTPHeaders: { 'user-agent': 'nexa-e2e-csat' },
+    extraHTTPHeaders: { 'user-agent': 'siyahtus-e2e-csat' },
   });
   ownerToken = await ownerAccessTokenFor(apiCtx, ACME_OWNER);
 

@@ -67,7 +67,7 @@ describe('ticket e-mail templates — the consuming half (FR-MOD-08.7.5)', () =>
 
   beforeAll(async () => {
     owner = ownerClient();
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-ticket-mail-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-ticket-mail-'));
     mailer = new FileMailer(mailDir);
     server = await startTestServer({}, { mailer });
   });
@@ -443,7 +443,7 @@ describe('ticket notice — the rendered body stays out of the log (FR-MOD-08.7.
 
   beforeAll(async () => {
     owner = ownerClient();
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-ticket-mail-log-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-ticket-mail-log-'));
   });
 
   afterAll(async () => {

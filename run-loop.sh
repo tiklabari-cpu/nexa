@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # =============================================================================
-# Nexa — Otonom Görev Döngüsü (CANLI loglamalı)
+# SiyahTuş — Otonom Görev Döngüsü (CANLI loglamalı)
 # Her task TEMİZ bir Claude Code penceresinde çalışır; durum Task Master + git'te.
 # Politika: full-otonom (bypassPermissions) | hata → 1 kez temiz pencerede retry
 #           → yine olmazsa DUR + bildir | efor task etiketine göre otomatik.
@@ -116,14 +116,14 @@ pretty(){
 # =============================================================================
 # Sanity: doğru dizinde miyiz?
 if [ ! -f "urun-gereksinim-dokumani-PRD.md" ] || [ ! -f "$RUNNER_PROMPT_FILE" ]; then
-  log "✖ HATA: bu script Nexa proje kökünde çalışmalı (PRD + $RUNNER_PROMPT_FILE burada olmalı)."
+  log "✖ HATA: bu script SiyahTuş proje kökünde çalışmalı (PRD + $RUNNER_PROMPT_FILE burada olmalı)."
   exit 1
 fi
 
 # Tek seferlik BOOTSTRAP (ilk çalıştırma) — canlı akar
 if [ ! -d ".taskmaster" ]; then
   log "⚙ İlk çalıştırma → kurulum (git + parse-prd + efor etiketleri). Canlı izliyorsun:"
-  claude -p "Bu depoyu Nexa otonom yapımına HAZIRLA. Kod YAZMA, yalnız kurulum:
+  claude -p "Bu depoyu SiyahTuş otonom yapımına HAZIRLA. Kod YAZMA, yalnız kurulum:
 1) Oku: CLAUDE.md, MASTER-PROMPT.md, CONVENTIONS.md, urun-gereksinim-dokumani-PRD.md.
 2) Git: repo yoksa 'git init' + 'git branch -M main'; remote yoksa
    'git remote add origin git@github.com:tiklabari-cpu/nexa.git'. .gitignore zaten var.

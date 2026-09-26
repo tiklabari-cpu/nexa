@@ -120,7 +120,7 @@ test.describe('header "Copy invite link" action (FR-MOD-04.3.1)', () => {
     agentPage,
     request,
   }) => {
-    const email = 'e2e-copy-invite-link@nexa.test';
+    const email = 'e2e-copy-invite-link@siyahtus.test';
     let invitationId: string | undefined;
 
     try {

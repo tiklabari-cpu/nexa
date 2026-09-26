@@ -36,7 +36,7 @@ ALTER TABLE "ticket_email_templates" ADD CONSTRAINT "ticket_email_templates_lice
 -- visible and writable only within its own license.
 ALTER TABLE ticket_email_templates ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ticket_email_templates_tenant ON ticket_email_templates
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The application role reaches the table only through that policy.
-GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_email_templates TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ticket_email_templates TO siyahtus_app;

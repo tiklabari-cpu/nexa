@@ -95,7 +95,7 @@ const MINUTES_PER_HOUR = 60;
  * ASSUMPTION (PLAN §5.2.22 open question 4 — the PRD states no figure): one
  * fixed threshold, aligned with the product's existing low-base rule
  * (`apps/web/src/features/playbook/performance.ts` `LOW_BASE_THRESHOLD = 20`),
- * so there is a single "how few is too few" number in Nexa instead of two that
+ * so there is a single "how few is too few" number in SiyahTuş instead of two that
  * drift apart. It is the whole cell's observed chats — not the per-hour average —
  * because it measures how much evidence there is, and evidence accumulates with
  * every occurrence of that hour. Overridable per call so a surface that wants a

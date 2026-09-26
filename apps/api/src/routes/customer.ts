@@ -20,7 +20,7 @@ import {
   SALES_TRACKER_MAX_AMOUNT_CENTS,
   SNEAK_PEEK_MAX_LENGTH,
   typingStateKey,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
 import { maskCardNumbers, maskOptional } from '../lib/cc-mask.js';

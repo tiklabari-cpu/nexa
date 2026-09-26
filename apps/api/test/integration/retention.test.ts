@@ -201,7 +201,7 @@ describe('retention sweep (NFR-C8)', () => {
   beforeEach(async () => {
     fx = await seedFixtures(owner);
     seq = 0;
-    mailDir = await mkdtemp(join(tmpdir(), 'nexa-retention-mail-'));
+    mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-retention-mail-'));
   });
 
   afterEach(async () => {
@@ -381,7 +381,7 @@ describe('retention sweep (NFR-C8)', () => {
   // ==========================================================================
   // Audit log window (NFR-S12: basic audit kept for "the last 30 days")
   //
-  // The audit log is append-only to `nexa_app`, so this window is the one the
+  // The audit log is append-only to `siyahtus_app`, so this window is the one the
   // sweep applies through the SECURITY DEFINER `audit_prune_expired` rather than
   // a `withTenant` delete.
   // ==========================================================================
@@ -489,7 +489,7 @@ describe('retention sweep (NFR-C8)', () => {
       expect(await auditExists(recent)).toBe(true);
     });
 
-    it('does not open a table-level DELETE for nexa_app', async () => {
+    it('does not open a table-level DELETE for siyahtus_app', async () => {
       const old = await seedAudit(fx.a, daysAgo(400));
       // A row the function *would* prune still cannot be removed by a direct
       // DELETE: the append-only grant is unchanged; the function is the only door.

@@ -12,7 +12,7 @@ import { useState } from 'react';
 
 export type RightPanelMode = 'details' | 'expanded';
 
-const STORAGE_KEY = 'nexa.inbox.right-panel';
+const STORAGE_KEY = 'siyahtus.inbox.right-panel';
 const DEFAULT_MODE: RightPanelMode = 'details';
 
 /** `localStorage` can throw on access (private mode, sandboxed frames). */

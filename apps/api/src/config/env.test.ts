@@ -2,7 +2,7 @@
  * Environment parsing — the region half (C4-a), the provider keys (M-PROV-a)
  * and the production branch (M-PROD-CFG-a).
  *
- * `NEXA_REGION` was `z.literal('eu')`, so a US deployment could not boot: the
+ * `SIYAHTUS_REGION` was `z.literal('eu')`, so a US deployment could not boot: the
  * process died at `parseEnv` before any of the region logic C4-b goes on to
  * build could run. The gateway carries an identical schema
  * (`apps/rtm/src/config/env.ts`), which is tested separately and for the same
@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { ZodTypeAny } from 'zod';
-import { REGIONS } from '@nexa/types';
+import { REGIONS } from '@siyahtus/types';
 import { EMBEDDING_PROVIDERS } from '../services/ai/provider/embedding-provider.js';
 import { LLM_PROVIDERS } from '../services/ai/provider/llm-provider.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
@@ -25,7 +25,7 @@ import { SECRET_KEYS, envSchema, parseEnv } from './env.js';
 /** The minimum a boot needs, so a failure below is about the region and nothing else. */
 const BASE: NodeJS.ProcessEnv = {
   NODE_ENV: 'test',
-  DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa',
+  DATABASE_URL: 'postgresql://siyahtus:siyahtus@127.0.0.1:5432/siyahtus',
   REDIS_URL: 'redis://127.0.0.1:6379',
   JWT_SIGNING_KEY: 'dev-only-jwt-signing-key-at-least-32-chars',
   WEBHOOK_HMAC_SEED: 'dev-only-webhook-hmac-seed-at-least-32-chars',
@@ -34,25 +34,25 @@ const BASE: NodeJS.ProcessEnv = {
   AUDIT_CHAIN_SECRET: 'dev-only-audit-chain-secret-at-least-32-chars',
 };
 
-describe('NEXA_REGION', () => {
+describe('SIYAHTUS_REGION', () => {
   it('accepts every region the shared list declares', () => {
     // Driven off REGIONS rather than a literal pair: adding a third region to
     // the list without widening this schema is exactly the failure this file
     // exists to catch, and a hard-coded ['eu','us'] here would not catch it.
     for (const region of REGIONS) {
-      expect(parseEnv({ ...BASE, NEXA_REGION: region }).NEXA_REGION).toBe(region);
+      expect(parseEnv({ ...BASE, SIYAHTUS_REGION: region }).SIYAHTUS_REGION).toBe(region);
     }
     expect(REGIONS).toContain('us');
   });
 
   it('defaults to eu when unset', () => {
-    expect(parseEnv(BASE).NEXA_REGION).toBe('eu');
+    expect(parseEnv(BASE).SIYAHTUS_REGION).toBe('eu');
   });
 
   it('refuses a region that is not one of them', () => {
     // Fail at boot, loudly. A process that shrugged at `apac` would serve
     // requests while claiming a residency guarantee nobody implements.
-    expect(() => parseEnv({ ...BASE, NEXA_REGION: 'apac' })).toThrow(/NEXA_REGION/);
+    expect(() => parseEnv({ ...BASE, SIYAHTUS_REGION: 'apac' })).toThrow(/SIYAHTUS_REGION/);
   });
 });
 
@@ -91,7 +91,7 @@ describe('provider selection', () => {
   const COMPANIONS: Record<string, NodeJS.ProcessEnv> = {
     s3: {
       STORAGE_S3_ENDPOINT: 'http://localhost:9000',
-      STORAGE_S3_BUCKET: 'nexa-uploads',
+      STORAGE_S3_BUCKET: 'siyahtus-uploads',
       STORAGE_S3_ACCESS_KEY_ID: 'minioadmin',
       STORAGE_S3_SECRET_ACCESS_KEY: 'minioadmin',
     },
@@ -101,7 +101,7 @@ describe('provider selection', () => {
     describe(key, () => {
       it('accepts every value its factory implements', () => {
         // Driven off the factory's own list rather than a literal, for the
-        // reason NEXA_REGION is: widening one side alone is precisely the drift
+        // reason SIYAHTUS_REGION is: widening one side alone is precisely the drift
         // this pair of readers exists to prevent.
         for (const value of vocabulary) {
           expect(parseEnv({ ...BASE, ...COMPANIONS[value], [key]: value })[key]).toBe(value);
@@ -136,7 +136,7 @@ describe('provider selection', () => {
     const S3: NodeJS.ProcessEnv = {
       STORAGE_PROVIDER: 's3',
       STORAGE_S3_ENDPOINT: 'http://minio:9000',
-      STORAGE_S3_BUCKET: 'nexa-uploads',
+      STORAGE_S3_BUCKET: 'siyahtus-uploads',
       STORAGE_S3_ACCESS_KEY_ID: 'minioadmin',
       STORAGE_S3_SECRET_ACCESS_KEY: 'minioadmin',
     };
@@ -148,7 +148,7 @@ describe('provider selection', () => {
         localDir: '.data/uploads',
         s3: {
           endpoint: 'http://minio:9000',
-          bucket: 'nexa-uploads',
+          bucket: 'siyahtus-uploads',
           region: 'eu-central-1',
           accessKeyId: 'minioadmin',
           secretAccessKey: 'minioadmin',
@@ -248,8 +248,8 @@ describe('production configuration', () => {
   /** What a real deployment sets: long enough, and not the published placeholder. */
   const realSecret = (label: string): string => `${label}-0123456789abcdef0123456789abcdef`;
 
-  const PANEL_ORIGIN = 'https://panel.nexa.test';
-  const WIDGET_ORIGIN = 'https://widget.nexa.test';
+  const PANEL_ORIGIN = 'https://panel.siyahtus.test';
+  const WIDGET_ORIGIN = 'https://widget.siyahtus.test';
 
   const PROD_BASE: NodeJS.ProcessEnv = {
     ...BASE,
@@ -260,7 +260,7 @@ describe('production configuration', () => {
     // describe would otherwise fail on that one problem.
     WEB_ORIGIN: `${PANEL_ORIGIN},${WIDGET_ORIGIN}`,
     WIDGET_BASE_URL: WIDGET_ORIGIN,
-    DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
+    DATABASE_APP_URL: 'postgresql://siyahtus_app:app-password@127.0.0.1:5432/siyahtus',
     INBOUND_EMAIL_SECRET: 'an-inbound-webhook-shared-secret',
     JWT_SIGNING_KEY: realSecret('jwt'),
     WEBHOOK_HMAC_SEED: realSecret('webhook'),
@@ -275,7 +275,7 @@ describe('production configuration', () => {
     expect(env.isProduction).toBe(true);
     expect(env.isTest).toBe(false);
     // The whole reason DATABASE_APP_URL is mandatory above: the request path has
-    // to reach Postgres as `nexa_app`, never as the owner.
+    // to reach Postgres as `siyahtus_app`, never as the owner.
     expect(env.runtimeDatabaseUrl).toBe(PROD_BASE['DATABASE_APP_URL']);
     expect(env.runtimeDatabaseUrl).not.toBe(env.DATABASE_URL);
   });
@@ -851,7 +851,7 @@ describe('production configuration', () => {
     it('boots when the list names the widget among several origins', () => {
       const env = parseEnv({
         ...PROD_BASE,
-        WEB_ORIGIN: `${PANEL_ORIGIN}, https://chat.nexa.test , ${WIDGET_ORIGIN}/`,
+        WEB_ORIGIN: `${PANEL_ORIGIN}, https://chat.siyahtus.test , ${WIDGET_ORIGIN}/`,
       });
 
       // Normalisation applies to the membership test as well: a trailing slash
@@ -892,12 +892,13 @@ describe('DATABASE_POOL_SIZE', () => {
   it('applies to DATABASE_APP_URL when one is configured, not the owner url', () => {
     const env = parseEnv({
       ...BASE,
-      DATABASE_APP_URL: 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa',
+      DATABASE_APP_URL: 'postgresql://siyahtus_app:app-password@127.0.0.1:5432/siyahtus',
       DATABASE_POOL_SIZE: '15',
     });
     const url = new URL(env.runtimeDatabaseUrl);
     expect(url.origin + url.pathname).toBe(
-      new URL('postgresql://nexa_app:app-password@127.0.0.1:5432/nexa').origin + '/nexa',
+      new URL('postgresql://siyahtus_app:app-password@127.0.0.1:5432/siyahtus').origin +
+        '/siyahtus',
     );
     expect(url.searchParams.get('connection_limit')).toBe('15');
     expect(new URL(env.DATABASE_URL).searchParams.get('connection_limit')).toBeNull();
@@ -906,7 +907,7 @@ describe('DATABASE_POOL_SIZE', () => {
   it('leaves an explicit connection_limit already on the url alone', () => {
     const env = parseEnv({
       ...BASE,
-      DATABASE_URL: 'postgresql://nexa:nexa@127.0.0.1:5432/nexa?connection_limit=3',
+      DATABASE_URL: 'postgresql://siyahtus:siyahtus@127.0.0.1:5432/siyahtus?connection_limit=3',
       DATABASE_POOL_SIZE: '15',
     });
     expect(new URL(env.runtimeDatabaseUrl).searchParams.get('connection_limit')).toBe('3');
@@ -932,7 +933,7 @@ describe('DATABASE_POOL_SIZE', () => {
  * wires it up that way is testing tenant isolation that is not there.
  */
 describe('DATABASE_REPLICA_URL', () => {
-  const APP_URL = 'postgresql://nexa_app:app-password@127.0.0.1:5432/nexa';
+  const APP_URL = 'postgresql://siyahtus_app:app-password@127.0.0.1:5432/siyahtus';
 
   it('is undefined when unset, so reads stay on the primary', () => {
     expect(parseEnv(BASE).replicaDatabaseUrl).toBeUndefined();
@@ -940,7 +941,7 @@ describe('DATABASE_REPLICA_URL', () => {
   });
 
   it('is carried through when set', () => {
-    const replica = 'postgresql://nexa_app:app-password@replica.internal:5432/nexa';
+    const replica = 'postgresql://siyahtus_app:app-password@replica.internal:5432/siyahtus';
     const env = parseEnv({ ...BASE, DATABASE_APP_URL: APP_URL, DATABASE_REPLICA_URL: replica });
     expect(env.replicaDatabaseUrl).toBe(replica);
   });
@@ -949,7 +950,7 @@ describe('DATABASE_REPLICA_URL', () => {
     const env = parseEnv({
       ...BASE,
       DATABASE_APP_URL: APP_URL,
-      DATABASE_REPLICA_URL: 'postgresql://nexa_app:app-password@replica.internal:5432/nexa',
+      DATABASE_REPLICA_URL: 'postgresql://siyahtus_app:app-password@replica.internal:5432/siyahtus',
       DATABASE_POOL_SIZE: '15',
     });
     expect(new URL(env.replicaDatabaseUrl!).searchParams.get('connection_limit')).toBe('15');
@@ -957,13 +958,13 @@ describe('DATABASE_REPLICA_URL', () => {
   });
 
   it('refuses a replica that connects as the table owner while the primary does not', () => {
-    // The failure being bought out: `nexa` owns the tables, Postgres exempts
+    // The failure being bought out: `siyahtus` owns the tables, Postgres exempts
     // owners from RLS, and this URL would be handed to every report query.
     expect(() =>
       parseEnv({
         ...BASE,
         DATABASE_APP_URL: APP_URL,
-        DATABASE_REPLICA_URL: 'postgresql://nexa:nexa@replica.internal:5432/nexa',
+        DATABASE_REPLICA_URL: 'postgresql://siyahtus:siyahtus@replica.internal:5432/siyahtus',
       }),
     ).toThrow(/DATABASE_REPLICA_URL/);
   });
@@ -975,14 +976,15 @@ describe('DATABASE_REPLICA_URL', () => {
           ...BASE,
           NODE_ENV: nodeEnv,
           DATABASE_APP_URL: APP_URL,
-          DATABASE_REPLICA_URL: 'postgresql://nexa:nexa@replica.internal:5432/nexa',
+          DATABASE_REPLICA_URL: 'postgresql://siyahtus:siyahtus@replica.internal:5432/siyahtus',
         }),
       ).toThrow(/row level security/);
     }
   });
 
-  it('allows a third read-only role — the rule is "not the owner", not "must be nexa_app"', () => {
-    const replica = 'postgresql://nexa_reporting:reporting-password@replica.internal:5432/nexa';
+  it('allows a third read-only role — the rule is "not the owner", not "must be siyahtus_app"', () => {
+    const replica =
+      'postgresql://siyahtus_reporting:reporting-password@replica.internal:5432/siyahtus';
     const env = parseEnv({ ...BASE, DATABASE_APP_URL: APP_URL, DATABASE_REPLICA_URL: replica });
     expect(env.replicaDatabaseUrl).toBe(replica);
   });

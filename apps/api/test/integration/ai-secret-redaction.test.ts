@@ -18,7 +18,7 @@ import { InMemoryMetricExporter, AggregationTemporality } from '@opentelemetry/s
 import { InMemorySpanExporter } from '@opentelemetry/sdk-trace-base';
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { embed } from '@nexa/ai-mock';
+import { embed } from '@siyahtus/ai-mock';
 import { PROVIDER_SECRET_ENV_KEYS } from '../../src/lib/log-redact.js';
 import { embeddingSpace } from '../../src/services/ai/provider/embedding-provider.js';
 import { createTelemetry } from '../../src/telemetry/telemetry.js';
@@ -102,7 +102,7 @@ describe('provider secrets and conversation text never reach a log line or a spa
     const log = new LineSink();
     const spans = new InMemorySpanExporter();
     const telemetry = createTelemetry({
-      serviceName: 'nexa-api-test',
+      serviceName: 'siyahtus-api-test',
       serviceVersion: '0.0.0-test',
       spanExporter: spans,
       metricExporter: new InMemoryMetricExporter(AggregationTemporality.CUMULATIVE),

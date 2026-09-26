@@ -30,7 +30,7 @@
  *   exactly as before.
  */
 import type { FastifyInstance } from 'fastify';
-import { roleAtLeast } from '@nexa/types';
+import { roleAtLeast } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 
 interface DependencyHealth {
@@ -146,7 +146,7 @@ export default async function healthRoutes(
         status,
         service: 'api',
         version: options.version,
-        region: options.env.NEXA_REGION,
+        region: options.env.SIYAHTUS_REGION,
         uptime_s: uptimeS(),
         dependencies: { database, redis },
         // Whether the five background sweeps are ticking in this process at all

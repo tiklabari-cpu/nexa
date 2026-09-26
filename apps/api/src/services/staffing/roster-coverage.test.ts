@@ -9,7 +9,7 @@
  * decision gets made on it.
  */
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_WORK_SCHEDULE, WORK_SCHEDULE_DAYS, type WorkScheduleSlot } from '@nexa/types';
+import { DEFAULT_WORK_SCHEDULE, WORK_SCHEDULE_DAYS, type WorkScheduleSlot } from '@siyahtus/types';
 import { rosterCoverage, type RosterCell, type RosterPlan } from './roster-coverage.js';
 
 /** Mid-January: northern-hemisphere winter offsets, no DST edge in sight. */

@@ -74,7 +74,7 @@ describe('AccessReviewExport — access review evidence surface (NFR-C6)', () =>
   it('downloads the members CSV under the name the server assigned', async () => {
     api.getFile.mockResolvedValue({
       blob: new Blob(['email,role\n']),
-      filename: 'nexa-access-review-members-2026-09-08.csv',
+      filename: 'siyahtus-access-review-members-2026-09-08.csv',
     });
     render(<AccessReviewExport />);
 
@@ -86,7 +86,7 @@ describe('AccessReviewExport — access review evidence surface (NFR-C6)', () =>
     // The date in that name is when the snapshot was taken; a client-invented
     // filename would drop it and the CSV would stop being dated evidence.
     await waitFor(() =>
-      expect(clicked?.download).toBe('nexa-access-review-members-2026-09-08.csv'),
+      expect(clicked?.download).toBe('siyahtus-access-review-members-2026-09-08.csv'),
     );
   });
 
@@ -102,7 +102,7 @@ describe('AccessReviewExport — access review evidence surface (NFR-C6)', () =>
       ),
     );
     // Only if the server sent no `content-disposition` at all.
-    await waitFor(() => expect(clicked?.download).toBe('nexa-access-review-credentials.csv'));
+    await waitFor(() => expect(clicked?.download).toBe('siyahtus-access-review-credentials.csv'));
   });
 
   it('shows the server’s own refusal rather than a generic failure', async () => {

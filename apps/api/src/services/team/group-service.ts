@@ -43,7 +43,7 @@
  * changed anything and only then appends — the rule `setMembershipSuspension`
  * already holds to, for the same reason and against the same caller.
  */
-import type { GroupPriority } from '@nexa/types';
+import type { GroupPriority } from '@siyahtus/types';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient } from '../../lib/tenant.js';
 import { writeAuditEntry, type AuditContext } from '../audit/audit-log.js';

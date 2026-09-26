@@ -2,7 +2,7 @@
  * The persona, on a live customer message (FR-MOD-06.4).
  *
  * `ai-agent-profile.test.ts` proves the five fields survive a round trip;
- * `persona.test.ts` in `@nexa/types` proves the rules those fields encode. What
+ * `persona.test.ts` in `@siyahtus/types` proves the rules those fields encode. What
  * neither can prove is the thing the audit actually found missing — that the
  * stored values reach the engine at all. Until this file existed, `tone`,
  * `languages` and `answer_length` were read by nothing in `apps/api/src`, so a
@@ -17,7 +17,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { embed, toVectorLiteral } from '@nexa/ai-mock';
+import { embed, toVectorLiteral } from '@siyahtus/ai-mock';
 import {
   grantToken,
   ownerClient,

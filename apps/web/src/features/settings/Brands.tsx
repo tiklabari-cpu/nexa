@@ -2,7 +2,7 @@
  * Brands (Multibrand, PRD §5.3) — the brand catalogue, not what a brand
  * contains. A license may run several brands under one subscription; each has
  * its own channels, websites and widget/security/inbox settings, selected
- * elsewhere via the `X-Nexa-Brand` header. This screen only manages the
+ * elsewhere via the `X-SiyahTus-Brand` header. This screen only manages the
  * catalogue itself: list, add, rename, remove. The `Default` brand every
  * license is created with can be renamed but never removed — the license
  * always needs exactly one default to fall back to.

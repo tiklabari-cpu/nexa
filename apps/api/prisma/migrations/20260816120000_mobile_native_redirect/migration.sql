@@ -4,7 +4,7 @@
 -- listening for one, and routing the code through a hosted page would put it in
 -- a browser the app does not control. RFC 8252 §7.1 answers this with a
 -- private-use URI scheme the operating system hands back to the app, and
--- `nexa://auth/callback` is Nexa's (`@nexa/types` · `MOBILE_REDIRECT_URI`).
+-- `siyahtus://auth/callback` is SiyahTuş's (`@siyahtus/types` · `MOBILE_REDIRECT_URI`).
 --
 -- No new client and no new grant. The mobile app signs in as the workspace's
 -- existing public client, through the same `/auth/authorize` → `/auth/token`
@@ -14,7 +14,7 @@
 --
 -- Sharing one client between the console and the phone is safe precisely
 -- because matching is exact and PKCE is mandatory. A hostile app that claims
--- `nexa://` on the same device can win the callback and read the code — the
+-- `siyahtus://` on the same device can win the callback and read the code — the
 -- collision RFC 8252 warns about — but it holds no verifier, so the code cannot
 -- be exchanged. The cost of that race is a sign-in that has to be retried, not
 -- a session in somebody else's hands.
@@ -29,9 +29,9 @@
 -- whoever registered the app, and adding one on their behalf would silently
 -- widen an allowlist its owner never touched.
 UPDATE oauth_clients
-   SET redirect_uris = redirect_uris || ARRAY['nexa://auth/callback']
- WHERE (id LIKE 'nexa-agent-app-%' OR id LIKE 'nexa-sandbox-app-%')
-   AND NOT ('nexa://auth/callback' = ANY (redirect_uris));
+   SET redirect_uris = redirect_uris || ARRAY['siyahtus://auth/callback']
+ WHERE (id LIKE 'siyahtus-agent-app-%' OR id LIKE 'siyahtus-sandbox-app-%')
+   AND NOT ('siyahtus://auth/callback' = ANY (redirect_uris));
 
 -- --------------------------------------------------------------------------
 -- New workspaces
@@ -64,7 +64,7 @@ DECLARE
   v_account UUID := gen_random_uuid();
 BEGIN
   IF EXISTS (SELECT 1 FROM accounts a WHERE a.email = p_email) THEN
-    RAISE EXCEPTION 'nexa_account_exists';
+    RAISE EXCEPTION 'siyahtus_account_exists';
   END IF;
 
   -- No validation of p_region here: `organizations_region_check` is the one
@@ -92,8 +92,8 @@ BEGIN
   -- running in a browser or on a phone, where no secret stays secret. Two
   -- callbacks, one client: the console's and the mobile app's.
   INSERT INTO oauth_clients (id, organization_id, display_name, client_type, redirect_uris, scopes)
-  VALUES ('nexa-agent-app-' || v_org::TEXT, v_org, 'Nexa Agent App', 'public',
-          ARRAY['http://localhost:5173/auth/callback', 'nexa://auth/callback'],
+  VALUES ('siyahtus-agent-app-' || v_org::TEXT, v_org, 'SiyahTuş Agent App', 'public',
+          ARRAY['http://localhost:5173/auth/callback', 'siyahtus://auth/callback'],
           ARRAY[]::TEXT[]);
 
   RETURN QUERY SELECT v_account, v_license, v_org;

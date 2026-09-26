@@ -159,10 +159,10 @@ describe('access review CSV tables (C6-e)', () => {
     // snapshot of now — so the day is what keeps two reviews from colliding in
     // a downloads folder.
     expect(accessReviewFilename('members', GENERATED_AT)).toBe(
-      'nexa-access-review-members-2026-08-15.csv',
+      'siyahtus-access-review-members-2026-08-15.csv',
     );
     expect(accessReviewFilename('credentials', GENERATED_AT)).toBe(
-      'nexa-access-review-credentials-2026-08-15.csv',
+      'siyahtus-access-review-credentials-2026-08-15.csv',
     );
   });
 

@@ -11,7 +11,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId, buildEventId, DEFAULT_WORK_SCHEDULE } from '@nexa/types';
+import { generateShortId, buildEventId, DEFAULT_WORK_SCHEDULE } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import { ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 
@@ -514,8 +514,8 @@ describe('data model invariants', () => {
         SELECT qual, with_check AS "withCheck" FROM pg_policies
         WHERE schemaname = 'public' AND tablename = ${partition}
       `;
-      expect(policy?.qual).toMatch(/nexa_current_license/);
-      expect(policy?.withCheck).toMatch(/nexa_current_license/);
+      expect(policy?.qual).toMatch(/siyahtus_current_license/);
+      expect(policy?.withCheck).toMatch(/siyahtus_current_license/);
     });
 
     it('opens a future month through the maintenance scheduler with relrowsecurity already on, not just via a direct events_ensure_partition call', async () => {
@@ -551,7 +551,7 @@ describe('data model invariants', () => {
 
       // As the runtime role, the connection the plugin really uses. Until
       // 20260925100000 this had to run as `owner`: events_ensure_partition was
-      // SECURITY INVOKER and nexa_app can neither create in `public` nor own
+      // SECURITY INVOKER and siyahtus_app can neither create in `public` nor own
       // `events` (§D131). Now the function carries the owner's rights itself
       // (§D187 · event-partition-maintenance.test.ts), so the stand-in is gone.
       await app.$queryRaw`SELECT events_maintain_partitions(${monthsAhead}::int, 1::int)`;
@@ -668,8 +668,8 @@ describe('data model invariants', () => {
       // tenant's rows on read, `with_check` is what refuses to plant one.
       expect(policies).toHaveLength(1);
       expect(policies[0]?.policyname).toBe('chat_supervisions_tenant');
-      expect(policies[0]?.qual).toMatch(/nexa_current_license/);
-      expect(policies[0]?.withCheck).toMatch(/nexa_current_license/);
+      expect(policies[0]?.qual).toMatch(/siyahtus_current_license/);
+      expect(policies[0]?.withCheck).toMatch(/siyahtus_current_license/);
     });
 
     it('keys a supervision by (chat, agent) and indexes the board read', async () => {
@@ -1136,7 +1136,7 @@ describe('data model invariants', () => {
       // report twice, so the API role can resolve a run but never erase one.
       const grants = await owner.$queryRaw<Array<{ table_name: string; privilege_type: string }>>`
         SELECT table_name, privilege_type FROM information_schema.role_table_grants
-        WHERE grantee = 'nexa_app'
+        WHERE grantee = 'siyahtus_app'
           AND table_name IN ('scheduled_reports', 'scheduled_report_runs')
         ORDER BY table_name, privilege_type
       `;
@@ -1260,7 +1260,7 @@ describe('data model invariants', () => {
     });
 
     it('takes a definition’s runs with it, and both with the license (cascade)', async () => {
-      // Withholding DELETE on runs from nexa_app must not leave orphans behind
+      // Withholding DELETE on runs from siyahtus_app must not leave orphans behind
       // when a schedule is cancelled: the referential action runs as the table
       // owner, so the cascade still fires.
       const report = await owner.scheduledReport.create({
@@ -1468,7 +1468,7 @@ describe('data model invariants', () => {
     it('grants the runtime role only what recording a sale needs', async () => {
       const grants = await owner.$queryRaw<Array<{ privilege_type: string }>>`
         SELECT privilege_type FROM information_schema.role_table_grants
-        WHERE grantee = 'nexa_app' AND table_name = 'api_package_purchases'
+        WHERE grantee = 'siyahtus_app' AND table_name = 'api_package_purchases'
       `;
       expect(grants.map((g) => g.privilege_type).sort()).toEqual(['INSERT', 'SELECT']);
     });
@@ -1519,7 +1519,7 @@ describe('data model invariants', () => {
     it('is removed when its license is deleted (onDelete cascade)', async () => {
       // NFR-C9: erasing a workspace erases its billing history with it, and the
       // narrowed grant above must not leave orphans behind — the cascade runs as
-      // the table owner, not as nexa_app.
+      // the table owner, not as siyahtus_app.
       await owner.apiPackagePurchase.create({ data: purchase({ licenseId: fx.b.licenseId }) });
       await owner.license.delete({ where: { id: fx.b.licenseId } });
 

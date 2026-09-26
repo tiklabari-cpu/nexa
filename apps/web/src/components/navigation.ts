@@ -1,4 +1,4 @@
-import { hasAnyScope } from '@nexa/types';
+import { hasAnyScope } from '@siyahtus/types';
 
 /**
  * The one list of navigable modules.

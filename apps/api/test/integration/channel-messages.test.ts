@@ -19,7 +19,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 
@@ -120,7 +120,7 @@ describe('channel message log (FR-MOD-08.5.4)', () => {
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
     // A channel belongs to a brand (brand_id is NOT NULL); connecting with no
-    // `X-Nexa-Brand` falls back to the license default, so each tenant needs one.
+    // `X-SiyahTus-Brand` falls back to the license default, so each tenant needs one.
     await owner.brand.createMany({
       data: [
         { licenseId: fx.a.licenseId, name: 'Default', slug: 'default', isDefault: true },

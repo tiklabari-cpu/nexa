@@ -55,7 +55,7 @@ Bir madde karşılanmıyorsa görev `done` olmaz — ya tamamla ya `blocked` yap
 ```bash
 pnpm db:seed && curl -sf -X POST http://localhost:4000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"owner@acme.localhost","password":"nexa-demo-password"}' >/dev/null \
+  -d '{"email":"owner@acme.localhost","password":"siyahtus-demo-password"}' >/dev/null \
   && echo "demo girişi OK" || echo "DEMO GİRİŞİ KIRIK — günlüğe yaz, done deme"
 ```
 
@@ -80,7 +80,7 @@ bırakmaz. Otonom çalışırken kimse ekrana bakmadığı için kanıtı test �
 sonradan inceler. Config'i değiştirme, her koşuyu şişirir.
 
 `kanit/` git'e girmez; yolları kapanış raporunda listele. Playwright'ın kendi raporu
-da durur: `pnpm --filter @nexa/e2e report`.
+da durur: `pnpm --filter @siyahtus/e2e report`.
 
 E2E paketi 4 sunucuyu (api, rtm, web, widget) kendi başlatır ve gerçek Chromium'da
 cross-origin iframe kurar — terminalde başsız çalışır, tarayıcı aracına ihtiyaç yok.

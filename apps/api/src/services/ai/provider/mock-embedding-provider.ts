@@ -3,7 +3,7 @@
  * an external service is mocked).
  *
  * Exactly the vectors the product has always written: `embed()` from
- * `@nexa/ai-mock`, the hashed bag of words, one text at a time — only now
+ * `@siyahtus/ai-mock`, the hashed bag of words, one text at a time — only now
  * behind the same asynchronous, batched `embed(texts)` a real model answers
  * through. So every test suite, the seed and any deployment without a model
  * keep the knowledge base they had, in the space they had it in
@@ -19,7 +19,7 @@
  * runs in this process and no provider bills a token of it, so a count
  * recorded from here would be spend that never happened.
  */
-import { embed, LEXICAL_EMBEDDING_SPACE } from '@nexa/ai-mock';
+import { embed, LEXICAL_EMBEDDING_SPACE } from '@siyahtus/ai-mock';
 import type { EmbeddingProvider, Embeddings } from './embedding-provider.js';
 
 export class MockEmbeddingProvider implements EmbeddingProvider {

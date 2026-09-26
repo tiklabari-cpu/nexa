@@ -32,7 +32,7 @@ import {
   licenseChannel,
   type PushAudience,
   type RtmPushAction,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { TenantContext } from '../../src/lib/tenant.js';
 import { ChatService } from '../../src/services/chat/chat-service.js';
 import { RealtimePublisher } from '../../src/services/realtime/publisher.js';

@@ -8,7 +8,7 @@ import {
   type Campaign,
   type CampaignStatus,
   type CampaignStatusFilter,
-} from '@nexa/types';
+} from '@siyahtus/types';
 
 /** The status sub-tabs in display order (FR-MOD-03.3.1). */
 export const CAMPAIGN_TABS: ReadonlyArray<{ id: CampaignStatusFilter; label: string }> = [

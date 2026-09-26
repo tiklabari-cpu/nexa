@@ -1,6 +1,6 @@
 -- Export integrity: the audit trail proves its own completeness (NFR-C6 · C6-c).
 --
--- The log has been append-only to `nexa_app` since slice 12 — INSERT and SELECT
+-- The log has been append-only to `siyahtus_app` since slice 12 — INSERT and SELECT
 -- granted, UPDATE and DELETE revoked, one SECURITY DEFINER hole for retention.
 -- That stops the application erasing evidence. It does not stop anyone who
 -- reaches the database *underneath* the application, and it says nothing at all
@@ -100,22 +100,22 @@ ALTER TABLE audit_log
 -- Both destroy the trail's ability to speak.
 ALTER TABLE audit_chain_heads ENABLE ROW LEVEL SECURITY;
 CREATE POLICY audit_chain_heads_tenant ON audit_chain_heads
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- INSERT and UPDATE, because advancing the chain is the writer's whole job.
 -- SELECT, because the verifier reads the anchor. Explicit, like every table
 -- created after the schema-wide grant in 20260722154008.
-GRANT SELECT, INSERT, UPDATE ON public.audit_chain_heads TO nexa_app;
+GRANT SELECT, INSERT, UPDATE ON public.audit_chain_heads TO siyahtus_app;
 
 -- No DELETE, and withholding it takes an explicit REVOKE (ALTER DEFAULT
--- PRIVILEGES in 20260722090000 hands all four to nexa_app on every new table).
+-- PRIVILEGES in 20260722090000 hands all four to siyahtus_app on every new table).
 -- Deleting the head is how you erase the memory that a chain ever existed: the
 -- next entry would start at 1 with no predecessor and the whole preceding trail
 -- would read as "before genesis", i.e. as rows nobody has to account for.
 -- Erasing the workspace still clears it — the ON DELETE CASCADE above is
--- carried out by the referencing table's owner, not by nexa_app — which is what
+-- carried out by the referencing table's owner, not by siyahtus_app — which is what
 -- NFR-C8 needs.
-REVOKE DELETE ON public.audit_chain_heads FROM nexa_app;
+REVOKE DELETE ON public.audit_chain_heads FROM siyahtus_app;
 
 -- ---------------------------------------------------------------------------
 -- Retention may not delete what has not been shipped
@@ -219,4 +219,4 @@ $$;
 -- nothing: EXECUTE defaults to PUBLIC for a new function, so the one hole in the
 -- append-only log stays reachable from exactly one role.
 REVOKE EXECUTE ON FUNCTION audit_prune_expired(BIGINT, TIMESTAMPTZ) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION audit_prune_expired(BIGINT, TIMESTAMPTZ) TO nexa_app;
+GRANT EXECUTE ON FUNCTION audit_prune_expired(BIGINT, TIMESTAMPTZ) TO siyahtus_app;

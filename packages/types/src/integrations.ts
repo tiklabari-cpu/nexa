@@ -5,7 +5,7 @@
  *
  * KK-derived: the PRD's "700+ Zapier" acceptance criterion is not a measurable
  * target (a workspace does not write 700 integrations) — its buildable
- * equivalent is that Nexa's own trigger/action surface can be published as
+ * equivalent is that SiyahTuş's own trigger/action surface can be published as
  * *one* Zapier/Make app. That publication needs exactly two lists: which
  * workspace events a subscriber can trigger on (`INTEGRATION_TRIGGERS` — one
  * entry per `WebhookAction`, `apps/api/src/services/webhooks/webhook-service.ts`)

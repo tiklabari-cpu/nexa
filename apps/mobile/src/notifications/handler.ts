@@ -21,7 +21,7 @@
  * does not want to be interrupted turns this off.
  */
 import * as Notifications from 'expo-notifications';
-import { readPushPayload } from '@nexa/types';
+import { readPushPayload } from '@siyahtus/types';
 
 /**
  * Shown, listed and audible — the answer for a notification this build can act
@@ -50,7 +50,7 @@ export const INTERRUPT: Notifications.NotificationBehavior = {
  * Not "discard": the title and body were written by the server and mean
  * something to the person reading them, so a delivery that arrives is not
  * erased. Not "interrupt" either: a tap on this one goes nowhere, because
- * `readPushPayload` refused it (`@nexa/types/push.ts` — no chat id names no
+ * `readPushPayload` refused it (`@siyahtus/types/push.ts` — no chat id names no
  * destination, and an unrecognised `kind` is a build that is behind the server).
  * Buzzing a pocket for something that leads nowhere when opened is the worse of
  * the two, so it is filed quietly and stays readable in the tray.

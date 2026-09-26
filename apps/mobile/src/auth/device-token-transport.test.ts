@@ -44,7 +44,7 @@ function fakeFetch(responses: Response[]) {
   return { impl, calls };
 }
 
-const API = 'https://api.nexa.test/api/v1';
+const API = 'https://api.siyahtus.test/api/v1';
 
 function device(overrides: Record<string, unknown> = {}): Response {
   return new Response(

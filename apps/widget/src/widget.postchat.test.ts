@@ -10,7 +10,7 @@
  * themselves (134.2's "End chat") or the poll noticed an agent archived it.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { WidgetFormField } from '@nexa/types';
+import type { WidgetFormField } from '@siyahtus/types';
 import { mount } from './widget.js';
 
 const API = 'https://api.test/v1';
@@ -96,7 +96,7 @@ function stubFetch(): void {
 function mountWidget(): HTMLElement {
   window.history.replaceState({}, '', `/widget.html?organization_id=org-1&api=${API}`);
   const root = document.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   document.body.append(root);
   mount(document, window);
   return root;

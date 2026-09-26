@@ -30,7 +30,7 @@
  * `permanent` therefore now means what its name says — the delivery is
  * genuinely over — and only the attempt that reaches the cap sets it.
  *
- * Network access is mocked across Nexa, so the sender is injectable: a real
+ * Network access is mocked across SiyahTuş, so the sender is injectable: a real
  * HTTP sender in production (`createHttpWebhookSender`), a controllable one in
  * tests. `attempt` is public for the same reason redelivery is a separate
  * module and not a second sender: there is exactly one way a webhook leaves

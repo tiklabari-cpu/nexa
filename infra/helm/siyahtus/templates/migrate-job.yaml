@@ -33,7 +33,7 @@ metadata:
   labels:
     app.kubernetes.io/name: migrate
     app.kubernetes.io/instance: {{ .Release.Name }}
-    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/part-of: siyahtus
     app.kubernetes.io/managed-by: {{ .Release.Service }}
   annotations:
     # pre-install *and* pre-upgrade: the schema has to be in place before the
@@ -101,7 +101,7 @@ spec:
             # the ConfigMap's `false` never reaches the migrate step. Set
             # explicitly so that a future change routing this Job *through* the
             # entrypoint does not silently turn the migration into a no-op.
-            - name: NEXA_MIGRATE_ON_START
+            - name: SIYAHTUS_MIGRATE_ON_START
               value: "true"
           # The migration client is thin — Postgres does the work — so this
           # reuses the api's own request/limit block rather than inventing a

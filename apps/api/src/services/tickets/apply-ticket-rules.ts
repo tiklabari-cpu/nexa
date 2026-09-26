@@ -14,7 +14,7 @@
  * now.
  */
 import type { Prisma } from '@prisma/client';
-import type { TicketRuleActions, TicketRuleConditions } from '@nexa/types';
+import type { TicketRuleActions, TicketRuleConditions } from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import { matchesTicketRule, type TicketRuleContext } from './ticket-rule-matching.js';
 

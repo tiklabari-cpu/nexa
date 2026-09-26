@@ -82,7 +82,7 @@ export class TotpSecretError extends Error {
 
 // --- Base32 (RFC 4648) ------------------------------------------------------
 //
-// Not the Crockford alphabet `@nexa/types` uses for chat IDs. That one drops
+// Not the Crockford alphabet `@siyahtus/types` uses for chat IDs. That one drops
 // I, L, O and U so an ID survives being read aloud, which makes it a different
 // encoding with a different symbol table. Authenticator apps decode RFC 4648
 // base32, upper case and unpadded, so the secret has to be exactly that.
@@ -277,7 +277,7 @@ export function verifyTotp({
 // --- otpauth URI ------------------------------------------------------------
 
 export interface OtpauthUriInput {
-  /** The site, as the authenticator app will list it — "Nexa". */
+  /** The site, as the authenticator app will list it — "SiyahTuş". */
   issuer: string;
   /** Which account on that site; the e-mail address. */
   accountName: string;

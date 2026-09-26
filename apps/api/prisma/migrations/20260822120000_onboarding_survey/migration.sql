@@ -15,7 +15,7 @@
 ALTER TABLE "licenses" ADD COLUMN     "survey_answer" TEXT,
 ADD COLUMN     "survey_answered_at" TIMESTAMPTZ(6);
 
--- A row naming a goal the checklist reorder (`@nexa/types`'
+-- A row naming a goal the checklist reorder (`@siyahtus/types`'
 -- `SURVEY_ANSWER_PRIORITY_STEP`) does not know is a personalization signal
 -- that silently does nothing, the same reasoning as device_tokens_platform_check.
 ALTER TABLE "licenses"

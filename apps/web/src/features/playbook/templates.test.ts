@@ -1,8 +1,8 @@
 /**
  * The catalogue's one hard promise: every template opens a skill the API will
- * accept. `POST /skills` runs `@nexa/ai-mock`'s `validateSteps`, and a template
+ * accept. `POST /skills` runs `@siyahtus/ai-mock`'s `validateSteps`, and a template
  * whose steps failed it would turn "Use template" into a 400 the admin cannot
- * fix. `apps/web` is deliberately decoupled from `@nexa/ai-mock` (it mirrors
+ * fix. `apps/web` is deliberately decoupled from `@siyahtus/ai-mock` (it mirrors
  * `SkillStep` in `types.ts`), so this test mirrors that validator's contract
  * here; `playbook.spec.ts` proves the real server end of it.
  */
@@ -25,7 +25,7 @@ import {
 } from './templates.js';
 import type { SkillStep } from './types.js';
 
-/** A faithful mirror of `@nexa/ai-mock` `validateStep`, kept in sync by intent. */
+/** A faithful mirror of `@siyahtus/ai-mock` `validateStep`, kept in sync by intent. */
 function stepIsValid(step: SkillStep): boolean {
   const nonEmpty = (v: unknown): v is string => typeof v === 'string' && v.trim().length > 0;
   switch (step.type) {

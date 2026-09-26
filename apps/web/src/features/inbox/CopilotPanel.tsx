@@ -41,7 +41,7 @@ const ENHANCE_MODE_LABEL_KEY: Record<EnhanceMode, string> = {
 /**
  * Example questions for the `not_understood` empty state (FR-EK-B.1).
  *
- * `apps/web` is deliberately decoupled from `@nexa/ai-mock` (the same split
+ * `apps/web` is deliberately decoupled from `@siyahtus/ai-mock` (the same split
  * `templates.test.ts` documents for skill steps), so these are not imported —
  * each phrase is copied verbatim from a `BI_METRICS` entry in
  * `packages/ai-mock/src/bi-intent.ts`, so clicking one is guaranteed to

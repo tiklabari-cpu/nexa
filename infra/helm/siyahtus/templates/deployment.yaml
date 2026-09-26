@@ -7,7 +7,7 @@
 #
 # Migrations are deliberately NOT part of any pod here — no init-container,
 # and the api image's own inline `prisma migrate deploy` is switched off by
-# `NEXA_MIGRATE_ON_START: "false"` in the ConfigMap. tm 164.3 moved that step
+# `SIYAHTUS_MIGRATE_ON_START: "false"` in the ConfigMap. tm 164.3 moved that step
 # to a pre-install/pre-upgrade hook Job (templates/migrate-job.yaml), which
 # carries the measurement behind the decision: Prisma serialises concurrent
 # migrations on an advisory lock but waits only 10 s for it, so under more
@@ -28,7 +28,7 @@ metadata:
   labels:
     app.kubernetes.io/name: {{ $name }}
     app.kubernetes.io/instance: {{ $.Release.Name }}
-    app.kubernetes.io/part-of: nexa
+    app.kubernetes.io/part-of: siyahtus
     app.kubernetes.io/managed-by: {{ $.Release.Service }}
 spec:
   replicas: {{ $app.replicas }}

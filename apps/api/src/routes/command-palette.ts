@@ -9,14 +9,14 @@
  * agent+bot `principals` list (a customer token gets a 404, never a 403).
  *
  * The answer is never a second computation of a number Reports already owns:
- * matching (`@nexa/ai-mock`, deterministic — no real LLM) only decides *which*
+ * matching (`@siyahtus/ai-mock`, deterministic — no real LLM) only decides *which*
  * field of `buildOverviewReport` to read, and the route reads it through the
  * exact same builder `GET /reports/overview` calls, so the two can never quote
  * different figures for the same license and window (ADR-09).
  */
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { matchPaletteTopic } from '@nexa/ai-mock';
+import { matchPaletteTopic } from '@siyahtus/ai-mock';
 import { ApiError } from '../lib/api-error.js';
 import { buildOverviewReport, resolveRange } from './reports.js';
 

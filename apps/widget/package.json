@@ -1,5 +1,5 @@
 {
-  "name": "@nexa/widget",
+  "name": "@siyahtus/widget",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "test:unit": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@nexa/types": "workspace:*"
+    "@siyahtus/types": "workspace:*"
   },
   "devDependencies": {
     "jsdom": "^25.0.1",

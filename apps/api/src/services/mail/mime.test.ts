@@ -80,7 +80,7 @@ describe('composeMessage', () => {
   });
 
   it('carries a Turkish subject and body intact, and keeps every line 7-bit and within its limit', () => {
-    const subject = 'Şifre sıfırlama bağlantınız — Nexa çalışma alanı "Ağaç İşleri" için 🔐';
+    const subject = 'Şifre sıfırlama bağlantınız — SiyahTuş çalışma alanı "Ağaç İşleri" için 🔐';
     const body = [
       'Merhaba Çağla,',
       '',

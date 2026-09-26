@@ -62,7 +62,7 @@ import {
   type CompanySector,
   type CompanySize,
   type CompanyDetails as CompanyDetailsValue,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';

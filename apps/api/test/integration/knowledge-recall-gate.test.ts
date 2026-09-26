@@ -15,7 +15,7 @@
  * questions on the path a real model's take — a non-lexical space, searched
  * only within itself (tm 255.7). The same set, the same harness and the same
  * verdict run against a real provider by hand:
- * `pnpm --filter @nexa/api measure:knowledge-recall`, which refuses to run
+ * `pnpm --filter @siyahtus/api measure:knowledge-recall`, which refuses to run
  * without a key rather than reporting green.
  *
  * A gate is only worth something if it can fail, so the second half degrades
@@ -28,7 +28,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
-import { chunk } from '@nexa/ai-mock';
+import { chunk } from '@siyahtus/ai-mock';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { TenantContext } from '../../src/lib/tenant.js';
 import { KnowledgeService, RETRIEVAL_THRESHOLD } from '../../src/services/ai/knowledge-service.js';

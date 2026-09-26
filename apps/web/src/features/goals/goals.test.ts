@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Goal, GoalFunnel } from '@nexa/types';
+import type { Goal, GoalFunnel } from '@siyahtus/types';
 import {
   GOAL_TABS,
   buildGoalDefinition,

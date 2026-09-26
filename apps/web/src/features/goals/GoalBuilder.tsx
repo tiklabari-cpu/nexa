@@ -25,7 +25,7 @@ import {
   buildGoalDefinition,
   type GoalTriggerType,
 } from './goals.js';
-import type { Goal } from '@nexa/types';
+import type { Goal } from '@siyahtus/types';
 
 export function GoalBuilder({
   api,

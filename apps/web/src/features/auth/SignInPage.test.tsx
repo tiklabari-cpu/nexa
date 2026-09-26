@@ -30,7 +30,7 @@ const WORKSPACE: Membership = {
   organization_name: 'Acme',
   role: 'agent',
   license_status: 'active',
-  client_id: 'nexa-agent-app-acme',
+  client_id: 'siyahtus-agent-app-acme',
   sso_enforced_connection_id: null,
   password_login_available: true,
 };
@@ -112,7 +112,7 @@ describe('SignInPage under SSO enforcement', () => {
     // button to find — the leg starts, with the connection and client the
     // membership named rather than anything guessed here.
     await waitFor(() =>
-      expect(startSsoLogin).toHaveBeenCalledWith(CONNECTION, 'nexa-agent-app-acme'),
+      expect(startSsoLogin).toHaveBeenCalledWith(CONNECTION, 'siyahtus-agent-app-acme'),
     );
     // And the password is never spent on a call the server would refuse.
     expect(signIn).not.toHaveBeenCalled();
@@ -369,8 +369,9 @@ describe('SignInPage enrollment from the refusal (S11-2FA-k)', () => {
 
   const ENROLLMENT = {
     secret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
-    otpauth_uri: 'otpauth://totp/Nexa:agent@acme.localhost?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
-    issuer: 'Nexa',
+    otpauth_uri:
+      'otpauth://totp/SiyahTuş:agent@acme.localhost?secret=JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP',
+    issuer: 'SiyahTuş',
     account_name: 'agent@acme.localhost',
   };
 

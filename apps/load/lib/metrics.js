@@ -24,7 +24,7 @@ export const rateLimited = new Counter(METRIC_NAMES.rateLimited);
  * One increment per operation performed, tagged by `op`.
  *
  * The companion to every latency budget: `p(99)<150` on a metric with no
- * samples passes, `nexa_measured{op:read} count>0` on the same empty run does
+ * samples passes, `siyahtus_measured{op:read} count>0` on the same empty run does
  * not. Incremented by `lib/http.js` from the same call that applies the tag.
  */
 export const measured = new Counter(METRIC_NAMES.measured);

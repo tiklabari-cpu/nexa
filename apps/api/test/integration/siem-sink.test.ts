@@ -130,7 +130,7 @@ describe('SIEM sink (NFR-C6 · C6-d)', () => {
     // (FR-MOD-11.5), so the workspaces it sweeps here hold it. The refusal
     // itself is proved in `entitlements.test.ts`.
     fx = await seedFixtures(owner, { plan: 'enterprise' });
-    siemDir = await mkdtemp(join(tmpdir(), 'nexa-siem-'));
+    siemDir = await mkdtemp(join(tmpdir(), 'siyahtus-siem-'));
     // An hour back, so a seeded entry is comfortably older than any horizon
     // and still leaves room for a test to write something "now" after it.
     clock = Date.now() - 3_600_000;
@@ -157,7 +157,7 @@ describe('SIEM sink (NFR-C6 · C6-d)', () => {
     expect((await recordsIn(fx.a, files[0]!)).map((r) => r.id)).toEqual(ids);
 
     // Detached signature sidecar — the file sink's equivalent of the pull
-    // endpoint's `x-nexa-export-signature` header.
+    // endpoint's `x-siyahtus-export-signature` header.
     const sig = await readFile(join(siemDir, fx.a.licenseId.toString(), `${files[0]}.sig`), 'utf8');
     expect(sig.length).toBeGreaterThan(0);
 
@@ -377,7 +377,7 @@ describe('SIEM sink (NFR-C6 · C6-d)', () => {
     async function runScript(
       envOverrides: Record<string, string> = {},
     ): Promise<{ stdout: string; stderr: string }> {
-      return run('pnpm', ['--filter', '@nexa/api', 'run', 'siem:run'], {
+      return run('pnpm', ['--filter', '@siyahtus/api', 'run', 'siem:run'], {
         cwd: repoRoot,
         env: { ...process.env, SIEM_DIR: scriptSiemDir, ...envOverrides },
         // See scheduled-reports-sweep.test.ts: pnpm is a shell shim on this
@@ -388,7 +388,7 @@ describe('SIEM sink (NFR-C6 · C6-d)', () => {
     }
 
     beforeEach(async () => {
-      scriptSiemDir = await mkdtemp(join(tmpdir(), 'nexa-siem-run-'));
+      scriptSiemDir = await mkdtemp(join(tmpdir(), 'siyahtus-siem-run-'));
     });
 
     afterEach(async () => {
@@ -426,7 +426,9 @@ describe('SIEM sink (NFR-C6 · C6-d)', () => {
 
     it('exits with a non-zero code and writes nothing when the database is unreachable', async () => {
       await expect(
-        runScript({ DATABASE_APP_URL: 'postgresql://nexa_app:wrong@127.0.0.1:1/nexa_unreachable' }),
+        runScript({
+          DATABASE_APP_URL: 'postgresql://siyahtus_app:wrong@127.0.0.1:1/siyahtus_unreachable',
+        }),
       ).rejects.toMatchObject({ code: 1 });
       expect(await ndjsonFiles(fx.a, scriptSiemDir)).toEqual([]);
     }, 30_000);

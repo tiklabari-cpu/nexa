@@ -6,7 +6,7 @@
  * makes a total isolation failure look like a passing test suite.
  */
 import { PrismaClient } from '@prisma/client';
-import { MOBILE_REDIRECT_URI } from '@nexa/types';
+import { MOBILE_REDIRECT_URI } from '@siyahtus/types';
 import { hashPassword, hashToken } from '../../src/lib/crypto.js';
 import { parseEnv, type Env } from '../../src/config/env.js';
 import type { AuditActorType, AuditContext } from '../../src/services/audit/audit-log.js';
@@ -118,7 +118,7 @@ export async function resetDatabase(db: PrismaClient): Promise<void> {
  *
  * Redis pub/sub channels are *not* scoped by logical database, and
  * `licenseChannel()` names them after an autoincrement id — so two concurrent
- * runs would both publish and subscribe on `nexa:rtm:license:1` and read each
+ * runs would both publish and subscribe on `siyahtus:rtm:license:1` and read each
  * other's envelopes, however well the rows underneath are separated. Offsetting
  * the sequence makes the channel names disjoint too.
  *
@@ -127,12 +127,12 @@ export async function resetDatabase(db: PrismaClient): Promise<void> {
  * against the shared database) means offset 0 and today's behaviour.
  */
 async function applyLicenseIdOffset(db: PrismaClient): Promise<void> {
-  const raw = process.env['NEXA_TEST_LICENSE_ID_OFFSET'];
+  const raw = process.env['SIYAHTUS_TEST_LICENSE_ID_OFFSET'];
   if (!raw) return;
 
   const offset = Number(raw);
   if (!Number.isSafeInteger(offset) || offset <= 0) {
-    throw new Error(`NEXA_TEST_LICENSE_ID_OFFSET must be a positive integer, got "${raw}"`);
+    throw new Error(`SIYAHTUS_TEST_LICENSE_ID_OFFSET must be a positive integer, got "${raw}"`);
   }
   await db.$executeRawUnsafe(`ALTER SEQUENCE IF EXISTS licenses_id_seq RESTART WITH ${offset + 1}`);
 }
@@ -191,7 +191,7 @@ async function seedTenant(db: PrismaClient, slug: string, index: number): Promis
     data: {
       id: clientId,
       organizationId: organization.id,
-      displayName: `Nexa Agent App (${slug})`,
+      displayName: `SiyahTuş Agent App (${slug})`,
       clientType: 'public',
       // The three shapes a first-party client really carries: the hosted
       // console, a developer's Vite server, and the phone's private-use scheme

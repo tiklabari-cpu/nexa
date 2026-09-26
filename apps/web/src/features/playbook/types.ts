@@ -1,4 +1,4 @@
-import type { AnswerLength } from '@nexa/types';
+import type { AnswerLength } from '@siyahtus/types';
 
 export type { AnswerLength };
 

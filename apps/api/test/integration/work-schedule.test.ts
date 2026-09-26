@@ -15,7 +15,7 @@
  */
 import type { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { DEFAULT_WORK_SCHEDULE, WORK_SCHEDULE_DAYS } from '@nexa/types';
+import { DEFAULT_WORK_SCHEDULE, WORK_SCHEDULE_DAYS } from '@siyahtus/types';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
 

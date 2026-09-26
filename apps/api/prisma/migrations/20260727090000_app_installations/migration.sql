@@ -1,5 +1,5 @@
 -- Apps marketplace (FR-MOD-09.1): which third-party integrations a workspace has
--- connected. The catalogue of available apps is static (in @nexa/types); this
+-- connected. The catalogue of available apps is static (in @siyahtus/types); this
 -- table records only the connections — one row per (license, app).
 --
 --   * app_installations — a license-scoped connection: the `app_id` from the
@@ -42,7 +42,7 @@ ALTER TABLE "app_installations"
 -- writable only within its own license.
 ALTER TABLE app_installations ENABLE ROW LEVEL SECURITY;
 CREATE POLICY app_installations_tenant ON app_installations
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The application role reaches the table only through that policy.
-GRANT SELECT, INSERT, UPDATE, DELETE ON app_installations TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON app_installations TO siyahtus_app;

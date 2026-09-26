@@ -103,7 +103,7 @@ function setUp(options: { holdToken: boolean }): Harness {
   // answer another's clicks.
   const doc = document.implementation.createHTMLDocument('widget');
   const root = doc.createElement('div');
-  root.id = 'nexa-widget-root';
+  root.id = 'siyahtus-widget-root';
   doc.body.append(root);
 
   window.history.replaceState({}, '', `/?organization_id=org_test&api=${API}`);

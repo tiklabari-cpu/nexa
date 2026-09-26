@@ -172,7 +172,7 @@ describe('omnichannel adapters (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)
     fx = await seedFixtures(owner);
     await clearRateLimits(server.app);
     // A channel belongs to a brand now (brand_id is NOT NULL); connecting with no
-    // `X-Nexa-Brand` falls back to the license default, so each tenant needs one —
+    // `X-SiyahTus-Brand` falls back to the license default, so each tenant needs one —
     // the single row signup/seed lay down for every real license.
     await owner.brand.createMany({
       data: [
@@ -911,7 +911,7 @@ describe('omnichannel adapters (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)
       expect(body.error.message).toBe('That channel address is already connected.');
 
       // Nothing in the response identifies the holder. Otherwise a public IG id
-      // becomes a lookup for "which workspace uses Nexa" (NFR-S5).
+      // becomes a lookup for "which workspace uses SiyahTuş" (NFR-S5).
       const raw = res.body;
       expect(raw).not.toContain(String(fx.a.licenseId));
       expect(raw).not.toContain(fx.a.organizationId);
@@ -946,7 +946,7 @@ describe('omnichannel adapters (FR-MOD-08.5.4 · FR-MOD-08.5.5 · FR-MOD-08.5.6)
       // workspace as well.
       const res = await server.post(`/channels/${ig.type}/connect`, ig.connect(ig.addressA), {
         ...auth(adminA),
-        'x-nexa-brand': second.id,
+        'x-siyahtus-brand': second.id,
       });
       expect(res.statusCode).toBe(400);
       expect(await connectedRows(ig.addressA)).toHaveLength(1);

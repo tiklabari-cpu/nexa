@@ -30,7 +30,7 @@ import {
   type HomeDashboard,
   type OnboardingSurveyAnswer,
   orderActivationSteps,
-} from '@nexa/types';
+} from '@siyahtus/types';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import { buildOverviewReport } from '../../routes/reports.js';
 

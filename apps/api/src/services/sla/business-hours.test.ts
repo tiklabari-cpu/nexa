@@ -8,7 +8,7 @@
  * has published no hours at all.
  */
 import { describe, expect, it } from 'vitest';
-import { WORK_SCHEDULE_DAYS, type WorkScheduleSlot } from '@nexa/types';
+import { WORK_SCHEDULE_DAYS, type WorkScheduleSlot } from '@siyahtus/types';
 import { buildBusinessWeek, elapsedMinutes, isBreach } from './business-hours.js';
 
 /** A weekday plan: the named days open for the given window, the rest off. */

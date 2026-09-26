@@ -17,7 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { generateShortId } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
 import { withTenant } from '../../src/lib/tenant.js';
 import {
   buildCasesReport,
@@ -60,7 +60,7 @@ describe('tenant isolation (RLS)', () => {
       const [role] = await app.$queryRaw<Array<{ rolname: string; rolsuper: boolean }>>`
         SELECT rolname, rolsuper FROM pg_roles WHERE rolname = current_user
       `;
-      expect(role?.rolname).toBe('nexa_app');
+      expect(role?.rolname).toBe('siyahtus_app');
       expect(role?.rolsuper).toBe(false);
 
       const [ownership] = await app.$queryRaw<Array<{ count: bigint }>>`
@@ -1172,7 +1172,7 @@ describe('tenant isolation (RLS)', () => {
     beforeAll(async () => {
       server = await startTestServer();
       await clearRateLimits(server.app);
-      mailDir = await mkdtemp(join(tmpdir(), 'nexa-chain-'));
+      mailDir = await mkdtemp(join(tmpdir(), 'siyahtus-chain-'));
       mailer = new FileMailer(mailDir);
 
       // Both scopes on both tokens on purpose: the four definition surfaces take

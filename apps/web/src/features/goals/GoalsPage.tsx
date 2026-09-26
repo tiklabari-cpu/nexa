@@ -23,7 +23,7 @@ import { CustomersTabs } from '../customers/CustomersTabs.js';
 import { GoalBuilder } from './GoalBuilder.js';
 import { GoalsFunnel } from './GoalsFunnel.js';
 import { GOAL_TABS, describeGoalTriggers, filterGoals, goalCounts } from './goals.js';
-import type { Goal, GoalFilter } from '@nexa/types';
+import type { Goal, GoalFilter } from '@siyahtus/types';
 
 /** `GOAL_TABS[].label` is English-only (see goals.ts). */
 const TAB_LABEL_KEY: Record<GoalFilter, string> = {

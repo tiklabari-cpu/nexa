@@ -14,8 +14,12 @@
  * The short chat/thread ids are minted here — the app owns the id format — and
  * passed in.
  */
-import { generateShortId } from '@nexa/types';
-import type { OnboardingSeedResult, OnboardingState, OnboardingSurveyAnswer } from '@nexa/types';
+import { generateShortId } from '@siyahtus/types';
+import type {
+  OnboardingSeedResult,
+  OnboardingState,
+  OnboardingSurveyAnswer,
+} from '@siyahtus/types';
 import type { TenantClient } from '../../lib/tenant.js';
 import type { TenantContext } from '../../lib/tenant.js';
 

@@ -2,14 +2,14 @@
 -- §D131 → §D187 · SEMA-MIMARI.8.4c).
 --
 -- plugins/database.ts opens the months ahead of "now" at boot and every six
--- hours, through DATABASE_APP_URL -- nexa_app, the role that owns nothing.
+-- hours, through DATABASE_APP_URL -- siyahtus_app, the role that owns nothing.
 -- Until this migration events_ensure_partition ran with its caller's rights,
 -- and the caller has neither of the two it needs. Measured 2026-09-25 on the
--- development database, connected as nexa_app:
+-- development database, connected as siyahtus_app:
 --
 --   SELECT events_ensure_partition(now() + interval '20 months');
 --     -> 42501 permission denied for schema public
---   ... and with GRANT CREATE ON SCHEMA public TO nexa_app added by hand:
+--   ... and with GRANT CREATE ON SCHEMA public TO siyahtus_app added by hand:
 --     -> 42501 must be owner of table events
 --
 -- So no narrower grant can fix it: attaching a partition is the table owner's
@@ -32,7 +32,7 @@
 --     the runtime role can open at most 121 partitions -- all of events, all
 --     born with row level security and the tenant policy, all owned by the
 --     owner of events and never by the caller (an owner is exempt from its own
---     table's row level security, so a partition nexa_app owned would be one it
+--     table's row level security, so a partition siyahtus_app owned would be one it
 --     could read across tenants).
 --
 --   events_secure_partition(p_name)  enables row level security on p_name and
@@ -118,8 +118,8 @@ BEGIN
   ) THEN
     EXECUTE format(
       'CREATE POLICY %I ON public.%I'
-      ' USING (license_id = nexa_current_license())'
-      ' WITH CHECK (license_id = nexa_current_license())',
+      ' USING (license_id = siyahtus_current_license())'
+      ' WITH CHECK (license_id = siyahtus_current_license())',
       v_policy, p_name
     );
   END IF;
@@ -191,7 +191,7 @@ BEGIN
             v_start
           );
     END;
-    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO nexa_app', v_name);
+    EXECUTE format('GRANT SELECT, INSERT, UPDATE, DELETE ON public.%I TO siyahtus_app', v_name);
   END IF;
 
   PERFORM events_secure_partition(v_name);
@@ -289,10 +289,10 @@ REVOKE EXECUTE ON FUNCTION events_maintain_partitions(INT, INT) FROM PUBLIC;
 REVOKE EXECUTE ON FUNCTION events_release_default_month(TIMESTAMPTZ) FROM PUBLIC;
 
 -- Reached only through events_ensure_partition, which already runs as the owner.
-REVOKE EXECUTE ON FUNCTION events_secure_partition(TEXT) FROM nexa_app;
+REVOKE EXECUTE ON FUNCTION events_secure_partition(TEXT) FROM siyahtus_app;
 
-GRANT EXECUTE ON FUNCTION events_ensure_partition(TIMESTAMPTZ) TO nexa_app;
+GRANT EXECUTE ON FUNCTION events_ensure_partition(TIMESTAMPTZ) TO siyahtus_app;
 -- SECURITY INVOKER, a loop over events_ensure_partition: granting it hands the
 -- runtime role nothing it does not already hold. Kept because the plugin still
 -- running during a rollout calls it.
-GRANT EXECUTE ON FUNCTION events_maintain_partitions(INT, INT) TO nexa_app;
+GRANT EXECUTE ON FUNCTION events_maintain_partitions(INT, INT) TO siyahtus_app;

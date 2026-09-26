@@ -27,7 +27,7 @@
  * protected store as the token, written just before it and cleared in the same
  * call, so the two can never disagree about which registration this is.
  */
-import { isDevicePlatform, type DevicePlatform } from '@nexa/types';
+import { isDevicePlatform, type DevicePlatform } from '@siyahtus/types';
 
 import { ApiClient } from '../lib/api-client';
 import type { DeviceTokenTransport } from './device-token';

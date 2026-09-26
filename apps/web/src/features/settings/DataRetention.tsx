@@ -24,7 +24,7 @@
  */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactElement } from 'react';
-import { RETENTION_TIERS, type RetentionTier } from '@nexa/types';
+import { RETENTION_TIERS, type RetentionTier } from '@siyahtus/types';
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';

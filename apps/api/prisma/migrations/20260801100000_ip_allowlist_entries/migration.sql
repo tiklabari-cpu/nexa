@@ -38,7 +38,7 @@ ALTER TABLE "ip_allowlist_entries" ADD CONSTRAINT "ip_allowlist_entries_license_
 -- visible and writable only within its own license.
 ALTER TABLE ip_allowlist_entries ENABLE ROW LEVEL SECURITY;
 CREATE POLICY ip_allowlist_entries_tenant ON ip_allowlist_entries
-  USING (license_id = nexa_current_license()) WITH CHECK (license_id = nexa_current_license());
+  USING (license_id = siyahtus_current_license()) WITH CHECK (license_id = siyahtus_current_license());
 
 -- The application role reaches the table only through that policy.
-GRANT SELECT, INSERT, UPDATE, DELETE ON ip_allowlist_entries TO nexa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ip_allowlist_entries TO siyahtus_app;

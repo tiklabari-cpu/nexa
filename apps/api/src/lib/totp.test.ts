@@ -379,8 +379,9 @@ describe('buildOtpauthUri', () => {
       accountName: 'ada@acme.test',
       secret: SECRET,
     });
-    expect(uri.startsWith('otpauth://totp/SiyahTuş:')).toBe(true);
-    expect(uri).toContain('issuer=SiyahTuş');
+    // The brand's `ş` is percent-encoded as UTF-8 in both places.
+    expect(uri.startsWith('otpauth://totp/SiyahTu%C5%9F:')).toBe(true);
+    expect(uri).toContain('issuer=SiyahTu%C5%9F');
     expect(uri).toContain(`secret=${SECRET}`);
   });
 
@@ -413,7 +414,7 @@ describe('buildOtpauthUri', () => {
       accountName: 'ada@acme.test',
       secret: SECRET,
     });
-    expect(uri).toContain('issuer=SiyahTuş%20Support');
+    expect(uri).toContain('issuer=SiyahTu%C5%9F%20Support');
     expect(uri).not.toContain('+');
   });
 

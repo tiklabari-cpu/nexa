@@ -37,7 +37,7 @@ sıfırdan, contract-first ve dikey dilimler halinde inşa etmek. MVP kritik yol
 - Contract-first: her özellik önce OpenAPI + @siyahtus/types → sonra backend → sonra frontend.
 
 ## Git / Repo
-- Remote: git@github.com:tiklabari-cpu/siyahtus.git (PRIVATE). İlk kurulum proje kökünde:
+- Remote: git@github.com:tiklabari-cpu/nexa.git (PRIVATE). İlk kurulum proje kökünde:
   `git init` → `git branch -M main` → `git remote add origin <url>` → .gitignore + ilk commit → push.
 - İzolasyon: yalnız `siyahtus` reposuna scope'lu FINE-GRAINED PAT kullan; diğer projelerine
   teknik olarak dokunamaz. .env / secret / anahtar ASLA commit'lenmez (.gitignore ilk commit'te).

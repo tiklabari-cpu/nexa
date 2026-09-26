@@ -53,7 +53,7 @@ claude mcp add taskmaster-ai -- npx -y task-master-ai   # Task Master MCP'yi pro
 
 # 2) Proje kökünde (siyahtus reposu) git hazır olsun
 git init && git branch -M main
-git remote add origin git@github.com:tiklabari-cpu/siyahtus.git
+git remote add origin git@github.com:tiklabari-cpu/nexa.git
 
 # 3) PRD'yi görev ağacına çevir (planı Task Master'a yükle)
 npx task-master-ai parse-prd urun-gereksinim-dokumani-PRD.md

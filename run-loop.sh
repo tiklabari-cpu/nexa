@@ -126,7 +126,7 @@ if [ ! -d ".taskmaster" ]; then
   claude -p "Bu depoyu SiyahTuş otonom yapımına HAZIRLA. Kod YAZMA, yalnız kurulum:
 1) Oku: CLAUDE.md, MASTER-PROMPT.md, CONVENTIONS.md, urun-gereksinim-dokumani-PRD.md.
 2) Git: repo yoksa 'git init' + 'git branch -M main'; remote yoksa
-   'git remote add origin git@github.com:tiklabari-cpu/siyahtus.git'. .gitignore zaten var.
+   'git remote add origin git@github.com:tiklabari-cpu/nexa.git'. .gitignore zaten var.
    İlk commit: doküman + döngü dosyaları → 'chore: bootstrap docs + autonomous loop' → push.
 3) Task Master kurulu değilse kur+ekle; 'task-master parse-prd urun-gereksinim-dokumani-PRD.md'
    ile PRD'yi görev ağacına çevir (MASTER-PROMPT 'MVP Kritik Yol' sırası + bağımlılıklar).

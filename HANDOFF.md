@@ -1,6 +1,6 @@
 # HANDOFF — SiyahTuş
 
-**Date:** güncel — bkz. Task log · **Branch:** `main` (Faz-0 + v1 + v2 planı burada) · **Remote:** https://github.com/tiklabari-cpu/siyahtus
+**Date:** güncel — bkz. Task log · **Branch:** `main` (Faz-0 + v1 + v2 planı burada) · **Remote:** https://github.com/tiklabari-cpu/nexa
 
 > **Dal durumu (2026-08-01):** `main` uzun süre `e118695` (tm 21) noktasında takılı kalmıştı; Faz-0
 > kapanışı, **tüm v1** ve v2 planlama turu yalnızca `docs/plan-expand-audit` üzerinde birikmişti
@@ -12,6 +12,14 @@
 ---
 
 ## Task log (newest-first)
+
+## MARKA — Nexa → SiyahTuş (sahibin isteği, §D192 · 2026-09-26)
+
+- **Yapıldı:** 765 izlenen dosyada 5693 değişim; düzyazı/arayüz `SiyahTuş`, ASCII tanımlayıcılar `siyahtus`/`SiyahTus`/`SIYAHTUS` (paketler `@siyahtus/*`, env `SIYAHTUS_*`, DB rolü/fonksiyonları, compose konteyner/volume adları, `SiyahTus-Brand` başlığı, depolama anahtarları, mobil bundle id, `infra/helm/siyahtus`). Türkçe ekler ses uyumuna göre çevrildi. İstisnalar §D192'de: PDF `/Producer` ASCII, `nexa-main` klasörü, GitHub uzağı `tiklabari-cpu/nexa`, test CA PEM'inin CN'i. Takip düzeltmeleri: `apps/web/nginx.conf` CSP hash'i (tema betiği anahtarı değişti), TOTP testleri `ş`'nin yüzde-kodlu hâlini (`SiyahTu%C5%9F`) bekliyor.
+- **Yerel ortam:** eski `nexa-db`/`nexa-redis` **durduruldu, silinmedi** (volume'ları duruyor); `docker compose up -d db redis` yeni `siyahtus-db`/`siyahtus-redis`'i sıfırdan kurdu, 100 migration + seed temiz. Kök `.env` (izlenmiyor) aynı kurala göre çevrildi. Sahibin önceden açık `pnpm dev` yığını eski env'le çalıştığı için api düştü/rtm 503 veriyor — yeniden başlatılmalı.
+- **Doğrulama:** typecheck+lint+build 28/28 (`--force`, 0 cached) · format:check · yedi denetim exit 0 · `db:check-drift` temiz · `contract:generate` fark yok · turbo test (api/web/e2e dışı) 10/10 · web `--maxWorkers=4` 181/2264 · api unit 105/1906 · api integration 51+51+49 = 151/3582 · turbo test:integration non-api 4/4 (rtm 8/111) · e2e özel yığında 309/313, kalan 4'ün 3'ü Node tarafından eski rtm'ye (4001) gitti, 1'i zamanlama — üç dosya (13 test) 4101'e çevrilmiş kopyayla yeniden koşuldu: 13/13. e2e'nin yeniden yazdığı 175 kanıt PNG'si geri alındı; eski kanıt görselleri eski adı gösterebilir.
+- **Varsayımlar:** canlı/pilot veritabanı yok, bu yüzden uygulanmış migration'lar yerinde düzenlendi (yeniden adlandırma migration'ı yazılmadı). Dış istemci (gömülü widget, webhook alıcısı) henüz yok, dolayısıyla başlık/anahtar/imza öneki değişimi kimseyi kırmıyor.
+- **Sonraki pencereye not:** konteyner adı artık `siyahtus-db` (`docker exec siyahtus-db psql -U siyahtus -d siyahtus`); filtreler `--filter @siyahtus/<app>`.
 
 ## DÜZELTME (panel) — `plan-count-drift` Faz 0: "Genel durum" hücresi `08.1`'in teslime çevrilişini kaçırmıştı; özet `60 ✅ · 0 ◐`'ye düzeltildi, damgalara dokunulmadı, görev açılmadı — done — 2026-09-25 UTC
 

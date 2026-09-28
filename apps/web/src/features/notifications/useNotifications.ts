@@ -151,7 +151,7 @@ function setFaviconBadge(on: boolean): void {
     ctx.font = 'bold 20px system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('N', 16, 17);
+    ctx.fillText('S', 16, 17);
 
     if (on) {
       ctx.fillStyle = '#ef4444';

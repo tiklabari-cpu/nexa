@@ -351,7 +351,7 @@ export function SignInPage(): ReactElement {
             aria-hidden="true"
             className="flex h-9 w-9 items-center justify-center rounded-md bg-brand-500 text-sm font-bold text-white"
           >
-            N
+            S
           </span>
           <div>
             <h1 className="text-lg font-semibold">SiyahTuş</h1>

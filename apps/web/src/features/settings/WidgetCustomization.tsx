@@ -368,7 +368,7 @@ function WidgetPreview({ appearance }: { appearance: WidgetAppearance }): ReactE
               style={{ background: 'rgba(255,255,255,.25)' }}
               aria-hidden="true"
             >
-              N
+              S
             </span>
             <span className="text-xs font-semibold">
               {t('settings.widgetCustomization.previewChatWithUs')}

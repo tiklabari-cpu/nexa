@@ -5,7 +5,7 @@
  * PNG chunk writer, so the repo does not gain a new devDependency for four
  * flat-color monograms. Source: brand-500 in `../src/theme/tokens.ts`
  * (`#2d67fa`, checked against it by `src/__tests__/assets.test.ts`) and a
- * plain block "N" — no external artwork is copied (13.7-u).
+ * plain block "S" — no external artwork is copied (13.7-u).
  *
  * Deterministic: every byte here comes from the constants below, so
  * re-running this script reproduces the committed PNGs exactly (`git status`
@@ -63,30 +63,34 @@ function canvas(width, height, color) {
 }
 
 /**
- * A plain block "N" — two vertical strokes and one diagonal, inside a
- * centered square that is `sizeFraction` of the canvas. Not rendered
- * typography; a monogram is all 13.7-u's KAPSAM DIŞI allows.
+ * A plain block "S" (SiyahTuş) — three horizontal bars joined by an upper-left
+ * and a lower-right vertical, inside a centered square that is `sizeFraction`
+ * of the canvas. Not rendered typography; a monogram is all 13.7-u's KAPSAM
+ * DIŞI allows.
  */
-function drawMonogramN(buf, width, height, sizeFraction, color) {
+function drawMonogramS(buf, width, height, sizeFraction, color) {
   const glyph = Math.round(Math.min(width, height) * sizeFraction);
   const x0 = Math.round((width - glyph) / 2);
   const y0 = Math.round((height - glyph) / 2);
   const stroke = Math.max(1, Math.round(glyph * 0.16));
+  const midTop = y0 + Math.round((glyph - stroke) / 2);
   for (let y = y0; y < y0 + glyph; y += 1) {
-    const t = (y - y0) / (glyph - 1);
-    const diagonalX = x0 + t * (glyph - 1);
     for (let x = x0; x < x0 + glyph; x += 1) {
-      const onLeft = x < x0 + stroke;
-      const onRight = x >= x0 + glyph - stroke;
-      const onDiagonal = Math.abs(x - diagonalX) <= stroke / 2;
-      if (onLeft || onRight || onDiagonal) buf.set(color, (y * width + x) * 4);
+      const onTop = y < y0 + stroke;
+      const onMiddle = y >= midTop && y < midTop + stroke;
+      const onBottom = y >= y0 + glyph - stroke;
+      const onUpperLeft = y < midTop && x < x0 + stroke;
+      const onLowerRight = y >= midTop && x >= x0 + glyph - stroke;
+      if (onTop || onMiddle || onBottom || onUpperLeft || onLowerRight) {
+        buf.set(color, (y * width + x) * 4);
+      }
     }
   }
 }
 
 function monogramPng(width, height, background, foreground, sizeFraction) {
   const buf = canvas(width, height, background);
-  drawMonogramN(buf, width, height, sizeFraction, foreground);
+  drawMonogramS(buf, width, height, sizeFraction, foreground);
   return encodePng(width, height, buf);
 }
 

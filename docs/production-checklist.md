@@ -250,7 +250,8 @@ and names the key. By name, what the pilot needs:
 - Embeddings: `EMBEDDING_PROVIDER=openai`, `EMBEDDING_PROVIDER_REGION`,
   `EMBEDDING_API_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`.
 - Mail: `MAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
-  `SMTP_FROM`.
+  `SMTP_FROM`. Optional: `ASSIGNEE_EMAIL_COOLDOWN_MS` (how long one e-mail to a chat's
+  assignee covers that chat; default 15 min).
 - Sign-up: `SIGNUP_ENABLED` stays `true` until the pilot's workspaces exist, then `false`
   (see **Run** below).
 
@@ -360,12 +361,19 @@ was not measured, which is not a pass.
 
 **Known risks at pilot readiness (tm 255.16).** Open, not fixed by this checklist:
 
-- Three notice mails are still sent **inside the request** that causes them: the assignee's
-  new-message notice (`routes/customer.ts` `notifyAssignee`), the chat transcript on close
-  (`chat-service` `#emailTranscript`) and the customer's ticket-status notice
-  (`routes/tickets.ts`). A failure never reaches the caller, but the delay does: one SMTP round
-  on a healthy server, and about 33 s on a hung one (3 × 10 s timeout + 1 + 2 s backoff).
-  Moving them onto `app.backgroundMail` is a separate task (PLAN §D179).
+- Courtesy mail is sent after the answer, and is not persisted. Until tm 256.4 the assignee's
+  new-message notice, the chat transcript on close and the customer's ticket-status notice
+  were sent inside the request that caused them, so a hung SMTP server held the visitor's
+  message, the archive and the ticket update for about 33 s (3 × 10 s timeout + 1 + 2 s
+  backoff, PLAN §D179). All three now go through `app.backgroundMail`, like the password
+  reset: the request answers at once, and a mail that did not go out leaves one `warn` line
+  with `event` `assignee_notification.mail`, `chat.transcript_mail` or `ticket.notice_mail`
+  and the carrier's classification, never the address. What remains is the queue's nature:
+  a mail in flight when the api stops is lost. A graceful stop waits for it, a crash does
+  not. The assignee's e-mail is also held to one per chat and assignee per
+  `ASSIGNEE_EMAIL_COOLDOWN_MS` (default 15 min, `0` mails every message), so a visitor typing
+  twenty lines no longer sends twenty mails against the sending limit invitations and resets
+  share. Handset push is not held.
 - The e2e suite is order-dependent (independent audit finding G9-GATE-a): full runs have
   failed on different single tests that each pass alone. That is test fixture state, not
   product code.

@@ -24,7 +24,7 @@ import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-servi
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { TicketEmailTemplateService } from '../services/tickets/ticket-email-template-service.js';
 import type { RenderedTicketEmail } from '../services/tickets/ticket-email.js';
-import type { Mailer } from '../services/mail/mailer.js';
+import { logUnsentMail } from '../services/mail/delivery.js';
 import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 
@@ -150,17 +150,9 @@ export default async function ticketRoutes(
   app: FastifyInstance,
   {
     automations,
-    mailer,
   }: {
     /** Fans a committed ticket creation out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
-    /**
-     * Delivers the templated customer notice a status change can carry
-     * (FR-MOD-08.7.5). Optional like `automations`: absent, the endpoint still
-     * refuses an unusable template — the validation is the requirement, the
-     * delivery is the effect.
-     */
-    mailer?: Mailer;
   } = {},
 ): Promise<void> {
   const tickets = new TicketService();
@@ -327,25 +319,27 @@ export default async function ticketRoutes(
       });
 
       // After the commit, never inside it: a mail must not be able to hold a
-      // transaction open or be undone by a rollback. A delivery failure is
-      // logged and not raised — the transition is already durable, and turning
-      // a committed change into a 500 would tell the agent it did not happen.
-      if (notice && mailer) {
-        try {
-          await mailer.send({
+      // transaction open or be undone by a rollback. Handed off rather than
+      // awaited (tm 256.4): the transition is already durable, so the agent's
+      // answer depends on neither the carrier's latency nor its failure — a 500
+      // would tell them it did not happen, and a hung server made them wait
+      // ~33 s to learn that it had. A failure is logged with the template id and
+      // the carrier's classification, never the message: this line goes to the
+      // same log the body is deliberately kept out of.
+      if (notice) {
+        app.backgroundMail.send(
+          {
             to: notice.to,
             kind: 'ticket_notice',
             subject: notice.subject,
             body: notice.body,
-          });
-        } catch (error) {
-          // The template id, not the message: this line goes to the same log
-          // the body is deliberately kept out of.
-          request.log.error(
-            { err: error, template_id: notice.templateId, ticket_id: ticketId },
-            'ticket notice delivery failed',
-          );
-        }
+          },
+          (outcome) =>
+            logUnsentMail(request.log, 'ticket.notice_mail', outcome, {
+              template_id: notice.templateId,
+              ticket_id: ticketId,
+            }),
+        );
       }
 
       return reply.send(ticket);

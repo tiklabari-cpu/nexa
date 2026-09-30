@@ -135,8 +135,12 @@ describe('ticket e-mail templates — the consuming half (FR-MOD-08.7.5)', () =>
     return (response.json() as { id: string }).id;
   }
 
-  const outbox = async (): Promise<SentMessage[]> =>
-    (await mailer.outbox()) as unknown as SentMessage[];
+  // The notice is handed to `backgroundMail` after the answer (tm 256.4): wait
+  // for it, or a "nothing was sent" assertion would pass before anything could be.
+  const outbox = async (): Promise<SentMessage[]> => {
+    await server.app.backgroundMail.settled();
+    return (await mailer.outbox()) as unknown as SentMessage[];
+  };
 
   const auditEntries = (action: string) =>
     owner.auditLogEntry.findMany({ where: { licenseId: fx.a.licenseId, action } });
@@ -505,6 +509,8 @@ describe('ticket notice — the rendered body stays out of the log (FR-MOD-08.7.
       auth,
     );
     expect(patched.statusCode).toBe(200);
+    // The notice goes out after the answer (tm 256.4); its lines count too.
+    await server.app.backgroundMail.settled();
 
     const written = sink.lines.join('\n');
     // The request is there — path, method, status, all still debuggable.

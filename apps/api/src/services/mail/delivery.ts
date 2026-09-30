@@ -86,18 +86,49 @@ export function mailFailureFields(error: unknown): Record<string, unknown> {
   return { code: 'unexpected', name, ...(message ? { message } : {}) };
 }
 
+/** The log surface an outcome is written to — satisfied by Fastify's logger and by pino. */
+export interface MailOutcomeLogger {
+  warn(details: Record<string, unknown>, message: string): void;
+}
+
+/**
+ * Log a mail that did not go out as `sent`; stay silent when it did (tm 256.4).
+ *
+ * The line carries `event` (which mail this was), the outcome and
+ * {@link mailFailureFields} — never the recipient, and never the message:
+ * a transcript or a ticket notice is the customer's text. `fields` is for what
+ * the caller can name safely, such as a chat or ticket id.
+ */
+export function logUnsentMail(
+  log: MailOutcomeLogger,
+  event: string,
+  outcome: MailOutcome,
+  fields: Record<string, unknown> = {},
+): void {
+  if (outcome.status === 'sent') return;
+  log.warn(
+    { event, outcome: outcome.status, mail: mailFailureFields(outcome.error), ...fields },
+    'mail not confirmed as sent',
+  );
+}
+
 /**
  * Mail a request does not wait for.
  *
- * For a response that must not depend on how the mail went — today only the
- * password reset. {@link BackgroundMail.send} returns at once and starts the
- * send on a later turn of the event loop, after the caller's response has been
- * handed to the socket, so neither the carrier's latency nor its failure can
- * reach the answer. The outcome is given to a callback, which logs it.
+ * For a response that must not depend on how the mail went — the password
+ * reset (tm 255.4), and since tm 256.4 the three courtesy mails a request used
+ * to sit through: the assignee's new-message notice, the end-of-chat
+ * transcript and a ticket's customer notice. {@link BackgroundMail.send}
+ * returns at once and starts the send on a later turn of the event loop, after
+ * the caller's response has been handed to the socket, so neither the
+ * carrier's latency nor its failure can reach the answer. The outcome is given
+ * to a callback, which logs it.
  *
  * Not a queue. Nothing is persisted, so a process that dies mid-send loses the
  * message — which for a reset is the same outcome as a lost email, and the
- * person asks again. What is tracked is the in-flight set, so a graceful
+ * person asks again; for the courtesy mails the thing they describe (the
+ * message, the closed chat, the ticket's new status) is already committed and
+ * on screen. What is tracked is the in-flight set, so a graceful
  * shutdown waits for it ({@link BackgroundMail.settled}, wired to `onClose`)
  * rather than cutting a send off halfway, and a test can wait for "the mail
  * that request started" without polling a mailbox.
@@ -119,6 +150,23 @@ export class BackgroundMail {
       .catch(() => undefined)
       .finally(() => this.#pending.delete(job));
     this.#pending.add(job);
+  }
+
+  /**
+   * This as a {@link Mailer}, for a service that takes one and is called
+   * from a request (tm 256.4 — `ChatService`'s close transcript, whose other
+   * callers are sweeps that may wait).
+   *
+   * `send` resolves once the message is handed over, so to the service every
+   * send succeeds: it cannot tell a failure, and it must not try to act on one.
+   * What actually happened goes to `onSettled`, with the message it was about.
+   */
+  asMailer(onSettled: (message: Message, outcome: MailOutcome) => void): Mailer {
+    return {
+      send: async (message) => {
+        this.send(message, (outcome) => onSettled(message, outcome));
+      },
+    };
   }
 
   /** Resolves once every send started so far — and any it started in turn — has finished. */

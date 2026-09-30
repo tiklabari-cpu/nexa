@@ -350,8 +350,9 @@ export async function buildServer({
     automations,
     knowledge,
   });
-  // Mail a response must not wait for (tm 255.4) — the password reset's, so its
-  // answer cannot depend on the carrier. Before the routes that use it.
+  // Mail a response must not wait for — the password reset's (tm 255.4), so its
+  // answer cannot depend on the carrier, and since tm 256.4 the assignee notice,
+  // the close transcript and the ticket notice. Before the routes that use it.
   await app.register(backgroundMail, { mailer });
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
@@ -400,15 +401,15 @@ export async function buildServer({
       // exception is deliberate).
       await api.register(scimRoutes, { baseUrl: `${env.API_BASE_URL}${API_PREFIX}/scim/v2` });
       await api.register(accountLifecycleRoutes, { env, mailer });
-      await api.register(chatRoutes, { env, mailer, push, automations });
+      await api.register(chatRoutes, { env, push, automations });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
-      await api.register(customerRoutes, { env, mailer, push, automations, llm, knowledge });
+      await api.register(customerRoutes, { env, push, automations, llm, knowledge });
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
       await api.register(goalRoutes);
-      await api.register(ticketRoutes, { automations, mailer });
+      await api.register(ticketRoutes, { automations });
       await api.register(ticketRuleRoutes);
       await api.register(botRoutes);
       await api.register(ticketEmailTemplateRoutes);

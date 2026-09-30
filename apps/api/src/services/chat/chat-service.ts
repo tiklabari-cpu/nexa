@@ -1230,7 +1230,10 @@ export class ChatService {
         if (!content) continue;
         // Each party on its own (tm 255.4): `deliver` does not throw, so the
         // visitor's copy failing no longer costs the agent theirs. The carrier
-        // logs its own failure; this service holds no logger to add to it.
+        // logs its own failure; this service holds no logger to add to it. The
+        // agent-archive route hands in `backgroundMail.asMailer` (tm 256.4), so
+        // there this returns as soon as the copy is handed over and the route's
+        // callback logs the outcome.
         await deliver(mailer, {
           to: recipient.to,
           kind: 'notification',

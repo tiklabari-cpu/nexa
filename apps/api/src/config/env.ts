@@ -637,6 +637,21 @@ export const envSchema = z.object({
    */
   SMTP_TIMEOUT_MS: z.coerce.number().int().positive().optional(),
   /**
+   * How long one e-mail to a chat's assignee covers that chat (FR-MOD-13.8 ·
+   * tm 256.4). The first visitor message mails the agent; further messages in
+   * the same chat stay quiet until this has passed, then the next one mails
+   * again. Per chat and per assignee, kept in Redis. `0` turns the window off —
+   * every message mails, the behaviour before tm 256.4. Handset push is not
+   * affected. Capped at a day: past that the agent would not hear about a
+   * conversation they left overnight.
+   */
+  ASSIGNEE_EMAIL_COOLDOWN_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .max(86_400_000)
+    .default(900_000),
+  /**
    * Outgoing push (M-PROV-a). Same pair of mocks as the mailer, spooling under
    * `PUSH_DIR` (13.7-d). A newer key than the rest — this channel arrived after
    * the others had theirs, and inherited the `NODE_ENV` branch instead.

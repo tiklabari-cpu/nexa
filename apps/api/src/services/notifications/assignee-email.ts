@@ -12,6 +12,11 @@
  * the *negatives* (queued/AI-only chat, an agent who opted out, an account with
  * no e-mail), and a pure function is the only way to test them without a mailer
  * and a database. FR-MOD-08.2 makes the opt-out per user and per license.
+ *
+ * How *often* is a fourth question, and not a pure one: whether this chat's
+ * assignee was already mailed within the window is shared across requests and
+ * API replicas, so it is kept in Redis — {@link claimAssigneeEmailWindow} below,
+ * asked only once the three above have said yes (tm 256.4).
  */
 
 export interface AssigneeChannel {
@@ -42,4 +47,74 @@ export function shouldEmailAssignee(
   // An account without an address cannot be reached; skip rather than send to
   // an empty recipient.
   return typeof channel.email === 'string' && channel.email.length > 0;
+}
+
+/** Where the per-chat, per-assignee e-mail window lives in Redis (tm 256.4). */
+export const ASSIGNEE_EMAIL_KEY_PREFIX = 'siyahtus:assignee-email:';
+
+export function assigneeEmailKey(
+  licenseId: bigint | string,
+  chatId: string,
+  assigneeId: string,
+): string {
+  return `${ASSIGNEE_EMAIL_KEY_PREFIX}${licenseId}:${chatId}:${assigneeId}`;
+}
+
+/**
+ * The slice of ioredis the window needs. Structural, like the scheduler's
+ * `LockRedis`, so a unit test can drive the rule without a Redis.
+ */
+export interface AssigneeEmailWindowRedis {
+  set(
+    key: string,
+    value: string,
+    millisecondsToken: 'PX',
+    milliseconds: number,
+    nx: 'NX',
+  ): Promise<'OK' | null>;
+}
+
+/**
+ * Whether this message may e-mail the assignee, or one already went to them
+ * about this chat within the last `cooldownMs` (tm 256.4).
+ *
+ * Before this, every visitor message was its own e-mail: twenty lines typed in
+ * a row were twenty messages in the agent's mailbox, and twenty sends against
+ * the mailbox's own sending limit — the limit invitations and password resets
+ * go out under too. The first message of a window mails; the rest of the
+ * window is covered by it, because the e-mail says "go and look", not what was
+ * said. Keyed by chat *and* assignee: a transfer hands the conversation to
+ * somebody who has not been told yet, so their window starts fresh.
+ *
+ * `SET NX PX` makes the claim and its expiry one command, so five messages
+ * arriving at once still mail once and a window can never outlive its length.
+ * A send that then fails does not reopen the window: the carrier has already
+ * retried it, and reopening would turn a broken carrier back into one attempt
+ * per message.
+ *
+ * `cooldownMs` 0 turns the window off — every message mails, as before. When
+ * Redis cannot answer the claim is granted, and `onUnavailable` is told why:
+ * the realtime path runs over the same Redis, so during that outage the e-mail
+ * may be the only thing that still reaches the agent, and the cost of failing
+ * open is the pre-window behaviour for as long as it lasts.
+ */
+export async function claimAssigneeEmailWindow(
+  redis: AssigneeEmailWindowRedis,
+  window: { licenseId: bigint | string; chatId: string; assigneeId: string; cooldownMs: number },
+  onUnavailable: (error: unknown) => void,
+): Promise<boolean> {
+  if (window.cooldownMs <= 0) return true;
+  try {
+    const claimed = await redis.set(
+      assigneeEmailKey(window.licenseId, window.chatId, window.assigneeId),
+      '1',
+      'PX',
+      window.cooldownMs,
+      'NX',
+    );
+    return claimed === 'OK';
+  } catch (error) {
+    onUnavailable(error);
+    return true;
+  }
 }

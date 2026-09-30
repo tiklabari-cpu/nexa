@@ -16,7 +16,7 @@ import { ChannelService } from '../services/channels/channel-service.js';
 import { hasChatScope } from '../services/chat/access.js';
 import { SupervisionService } from '../services/traffic/supervision-service.js';
 import { roleAtLeast } from '../services/auth/principal.js';
-import type { Mailer } from '../services/mail/mailer.js';
+import { logUnsentMail } from '../services/mail/delivery.js';
 import type { PushProvider } from '../services/push/push-provider.js';
 import { pushToAgentDevices } from '../services/notifications/push.js';
 import { RealtimePublisher } from '../services/realtime/publisher.js';
@@ -118,12 +118,10 @@ export default async function chatRoutes(
   app: FastifyInstance,
   {
     env,
-    mailer,
     push,
     automations,
   }: {
     env: Env;
-    mailer: Mailer;
     push: PushProvider;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
@@ -137,8 +135,13 @@ export default async function chatRoutes(
     new RealtimePublisher(app.redis, app.log),
     undefined,
     { aiOverageCents: env.AI_OVERAGE_CENTS, aiIncluded: env.AI_RESOLUTIONS_INCLUDED },
-    // The agent-archive path mails the transcript on close (FR-MOD-08.7.4).
-    mailer,
+    // The agent-archive path mails the transcript on close (FR-MOD-08.7.4) —
+    // through `backgroundMail`, so the archive answers without waiting for the
+    // carrier (tm 256.4). The sweeps that also close chats keep a plain mailer:
+    // nobody is waiting on them.
+    app.backgroundMail.asMailer((_message, outcome) =>
+      logUnsentMail(app.log, 'chat.transcript_mail', outcome),
+    ),
     // This is the route an agent answers on, so this is where a reply has to
     // find its way back to Messenger/SMS/WhatsApp/Instagram/Telegram
     // (FR-MOD-08.5.4-.8). The closure supplies the db handle the dispatcher

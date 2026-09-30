@@ -48,6 +48,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ApiClientError, errorMessageKey } from '../lib/api-client.js';
 import { useApiClient, useAuth, type CurrentAgent } from '../lib/auth-store.js';
+import { useSetRoutingStatus } from '../lib/routing-status.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
 import { Banner } from './ui/index.js';
@@ -115,7 +116,7 @@ export function CommandPalette(): ReactElement | null {
   // object changes identity on every unrelated write, and this list rebuilds on
   // every one of them if it depends on the object.
   const routingStatus = useAuth((s) => s.agent?.routing_status ?? null);
-  const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
+  const setRoutingStatus = useSetRoutingStatus();
 
   // The optimistic half: a local write with no request behind it, which is what
   // makes it usable as its own undo. Reading the store imperatively keeps this

@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 256.7 — PILOT-ROSTER-FRESH: palet/inbox durum yazımından sonra `['team','agents']` gecersizleniyor; Team listesi eski durumu göstermiyor — done — 2026-09-30 UTC
+
+- **Yapıldı:** `lib/routing-status.ts` `useSetRoutingStatus` (store yazımı başarılıysa roster invalidate; hata → dokunmaz). `CommandPalette.tsx` ve `InboxPage.tsx` bunu kullanıyor. Test: `routing-status.test.tsx` (2) + palette (+2). PLAN `K04.3.3` bloğu açıldı, damgalar değişmedi.
+- **Doğrulama:** typecheck 13/13 + lint 10/10 `--force` · format:check · build 8/8 `--force` (0 cached) · yedi `audit:*` exit 0 · web `--maxWorkers=4` 183/2276 · e2e `command-palette.spec.ts` 4/4 (tek başına). api/rtm integration ve tam e2e koşulmadı (değişiklik yalnız apps/web).
+- **Varsayımlar:** Invalidate `void` — refetch beklenmiyor; palet zaten kapanmış, Team ekranı açılınca tazeliği görür. `kanit/*.png` yeniden yazımı geri alındı.
+- **Sonraki pencereye not:** tam e2e koşusunda `command-palette.spec.ts:131` yeniden kırmızı olursa kaynak artık bu değil (RTM/zamanlama). `git push` 403 (bilinen), iş yerelde `main`'de.
+
 ## tm 256.9 — PILOT-WEBHOOK-PIN: webhook bağlantısı SSRF denetiminin onayladığı adrese sabitlendi, DNS-rebinding kapandı; `08.8.4` + `S7` ✅, Faz-1 kapısı yeniden kapalı — done — 2026-09-30 UTC
 
 - **Yapıldı:** `lib/ssrf.ts`: `resolvePublicHttpTarget` (ad bir kez çözülür, her adres denetlenir, adresler döner) + `pinnedConnection` (`lookup` yalnız o adreslerle ve DNS'e sormadan; literal IP'li URL ancak kendi adresi sabitse; boş sabit `ERR_SSRF_UNPINNED`); `assertPublicHttpUrlResolved` kaldırıldı. `isPrivateV6` kanonik sekiz kelimeyle: eşlenmiş biçimin her yazılışı, NAT64/6to4 gömülü IPv4'üyle, `ff00::/8`, `fec0::/10`'un tamamı, bölge kimliği reddi. `createHttpWebhookSender` `fetch` yerine `node:http(s)` + sabit `lookup`, `agent: false`, `rejectUnauthorized: true`, SNI kayıtlı ad; `WebhookSender` artık `(target, request)`. Yönlendirme reddi, `AbortError` ve imza değişmedi; ağ hatası kodla loglanıyor, `User-Agent: SiyahTus-Webhooks/1.0`. Yeni `webhook-sender.test.ts` (13; gerçek soket, çıkış bekçisi, atılık test CA'sı `test/helpers/webhook-certificates.ts`). PLAN §D199, K08.8.4 + KS7 maddeleri, iki damga `✅`, Faz-1 satırı 53/0/0 · `Must` 20/0/0 · Kapanış kapalı.

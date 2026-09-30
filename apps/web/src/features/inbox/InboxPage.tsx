@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
+import { useSetRoutingStatus } from '../../lib/routing-status.js';
 import { useRealtimeStatus } from '../../lib/realtime-status.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { StatusDot } from '../../components/StatusDot.js';
@@ -292,7 +293,7 @@ export function InboxPage(): ReactElement {
   useMarkSeen(seenChatId, lastVisibleEventAt);
 
   const agent = useAuth((s) => s.agent);
-  const setRoutingStatus = useAuth((s) => s.setRoutingStatus);
+  const setRoutingStatus = useSetRoutingStatus();
 
   // Whether the right-hand Details panel is shown or collapsed to give the
   // transcript the full width. The choice is remembered across reloads.

@@ -254,6 +254,11 @@ export const AUDIT_ACTIONS = [
   'settings.ip_allowlist_removed',
   'billing.subscription_updated',
   'billing.payment_method_updated',
+  // The licence left the trial gate because the workspace now has a plan and a
+  // card (FR-MOD-10.2 · tm 256.1). Written once, on the transition — the
+  // answer to "when did this workspace start paying, and from which state"
+  // (`metadata.from`: trialing, read_only or past_due).
+  'billing.license_activated',
   'billing.api_package_purchased',
   // AI-resolution overage packs (FR-MOD-10.1.4). Written only for a sale, never
   // for an idempotent replay — the trail is the answer to "who spent this", and

@@ -306,6 +306,18 @@ was not measured, which is not a pass.
       `SMOKE_ADMIN_TOKEN=<the owner's access token>`: it mints a visitor token from the widget
       origin, cross-origin, and reads the admin `/health` — scheduler enabled and
       `event_partitions.last_status: ok` (tm 255.14).
+- [ ] Decide what happens when a pilot workspace's trial ends (tm 256.1). Every workspace
+      starts a trial of `TRIAL_DAYS` days (default 14, read at sign-up) and turns read-only
+      when it ends — agents cannot answer and visitors cannot write. The product's own way
+      back is a plan plus a card on the Billing page, and the pilot takes no real payments.
+      So either set `TRIAL_DAYS` in `.env` before the pilot workspaces sign up, long enough
+      that no trial ends inside the pilot, or activate each pilot workspace by hand once it
+      exists, as the owner role:
+      `docker compose -f docker-compose.pilot.yml exec db psql -U siyahtus -d siyahtus -c "UPDATE licenses SET status = 'active', trial_ends_at = NULL WHERE organization_id = (SELECT id FROM organizations WHERE name = '<workspace name>') AND status IN ('trialing', 'read_only')"`.
+      It prints `UPDATE 1`; two workspaces with the same name make it fail instead of
+      guessing — use the organization id then. This path writes no audit entry (the
+      audit chain is signed inside the api), so record who was activated and when
+      somewhere of your own.
 
 **Data.**
 

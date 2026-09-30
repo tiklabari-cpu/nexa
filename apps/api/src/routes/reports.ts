@@ -5,7 +5,7 @@
  * from the same query (ADR-09). Two independent counters would drift, and the
  * first anyone would notice is a customer disputing a bill.
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
   ACCESS_REVIEW_SECTIONS,
@@ -120,6 +120,7 @@ import {
   upsertPaymentMethod,
 } from '../services/billing/payment-method-service.js';
 import { createPaymentProvider } from '../services/billing/payment-provider.js';
+import { activateIfPaid } from '../services/billing/license-activation.js';
 import {
   purchaseApiPackage,
   serialiseApiPackagePurchase,
@@ -421,6 +422,23 @@ function usageConfig(env: Env): {
     apiOverageCents: env.API_CALL_OVERAGE_CENTS,
     apiIncluded: env.API_CALLS_INCLUDED,
   };
+}
+
+/**
+ * Lift the trial gate when this write completed a purchase (plan + card), and
+ * leave an audit entry only on the transition itself (tm 256.1 · FR-MOD-10.2).
+ */
+async function recordActivation(
+  tx: TenantClient,
+  tenant: TenantContext,
+  request: FastifyRequest,
+): Promise<void> {
+  const activation = await activateIfPaid(tx, tenant);
+  if (!activation.activated) return;
+  await writeAuditEntry(tx, request.auditContext(), {
+    action: 'billing.license_activated',
+    metadata: { from: activation.from },
+  });
 }
 
 async function buildSubscriptionView(
@@ -2133,6 +2151,9 @@ export default async function reportRoutes(
           action: 'billing.subscription_updated',
           metadata: { fields: Object.keys(body) },
         });
+        // A plan with a card already on file completes the purchase: the
+        // licence leaves the trial gate here (tm 256.1).
+        await recordActivation(tx, tenant, request);
         // Read the whole view back in the same transaction, so the reply is a
         // real GET rather than a hand-assembled echo that could drift from it.
         return buildSubscriptionView(tx, tenant, env);
@@ -2249,6 +2270,9 @@ export default async function reportRoutes(
           action: 'billing.payment_method_updated',
           metadata: { brand: stored.brand, last4: stored.last4 },
         });
+        // The other half of the same purchase: a card for a plan already
+        // chosen lifts the trial gate too, in either order (tm 256.1).
+        await recordActivation(tx, tenant, request);
         return stored;
       });
 

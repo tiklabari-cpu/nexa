@@ -2,7 +2,7 @@
  * Billing checkout + invoices + payment method + bought capacity —
  * FR-MOD-10.1.1–.3, .4, .6, 10.3 and 09.3.
  *
- * The demo workspace is on a trial, so nothing is billed now; what this proves
+ * The demo workspace starts on a trial, and nothing is ever billed; what this proves
  * is that the levers work end to end — the plan tier picker, the cycle toggle
  * and seats stepper persist through `PATCH /billing/subscription` and the
  * summary recomputes — that invoices list and download (10.3), and that the
@@ -18,7 +18,9 @@
  * `workers: 1`), so "restore before returning" is what keeps that read
  * deterministic rather than a race. The API-package purchase below cannot put
  * itself back (a sale is a permanent record, deliberately), so it asserts
- * deltas instead.
+ * deltas instead. Neither can the checkout's card: next to a plan it is a
+ * purchase, and the workspace leaves its trial for the rest of the run (tm
+ * 256.1) — nothing after it in the suite reads the trial.
  */
 import type { Locator } from '@playwright/test';
 import { expect, test } from './fixtures.js';
@@ -53,7 +55,30 @@ async function readIncluded(terms: Locator): Promise<number> {
 }
 
 test.describe('billing checkout', () => {
-  test('changes plan tier, seats and cycle, lists invoices, and saves a payment method (FR-MOD-10.1.1)', async ({
+  /**
+   * FR-MOD-01.1.6 — the trial badge lives in the shell, so it is proof from any
+   * module, not just Billing. The demo workspace is on a 14-day trial, so the
+   * banner counts down the days and its Subscribe CTA routes to Billing.
+   *
+   * First in the file on purpose: the checkout test below puts a card next to
+   * Acme's plan, which is a purchase and ends the trial (tm 256.1). The global
+   * setup reseeds, so every run starts here on a trial again.
+   */
+  test('shell shows the trial countdown and Subscribe routes to billing', async ({ agentPage }) => {
+    await agentPage.goto('/app/inbox');
+
+    const badge = agentPage.getByTestId('trial-badge');
+    await expect(badge).toBeVisible();
+    await expect(badge).toContainText(/\d+ days? left in your trial\./);
+    await agentPage.screenshot({ path: 'kanit/15-trial-badge.png', fullPage: true });
+
+    // The CTA leaves the current module and lands on Billing.
+    await badge.getByRole('link', { name: 'Subscribe' }).click();
+    await expect(agentPage).toHaveURL(/\/app\/billing$/);
+    await expect(agentPage.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
+  });
+
+  test('changes plan tier, seats and cycle, lists invoices, and saves a payment method (FR-MOD-10.1.1 · FR-MOD-10.2)', async ({
     agentPage,
   }) => {
     await agentPage.goto('/app/billing');
@@ -167,8 +192,15 @@ test.describe('billing checkout', () => {
     await expect(form.getByLabel(/card number/i)).toHaveCount(0);
     await form.getByLabel('Last 4 digits').fill('4242');
     await form.getByLabel('Cardholder name').fill('Demo Owner');
+    // The plan alone (Acme's seeded row, and every change above) bought
+    // nothing: the trial is still running while no card is on file.
+    const trialBadge = agentPage.getByTestId('trial-badge');
+    await expect(trialBadge).toBeVisible();
     await form.getByRole('button', { name: 'Save' }).click();
     await expect(payment.getByTestId('payment-method')).toContainText('ending 4242');
+    // Plan plus card is a purchase: the trial ends early, and the shell badge
+    // goes with it without a reload (FR-MOD-10.2 · tm 256.1).
+    await expect(trialBadge).toHaveCount(0);
 
     // Annual recomputes the summary and states the saving.
     await annual.click();
@@ -357,24 +389,5 @@ test.describe('billing checkout', () => {
     // invoice cannot be in one image.
     await openInvoice.scrollIntoViewIfNeeded();
     await agentPage.screenshot({ path: 'kanit/10.1.4-ai-pack-invoice.png', fullPage: true });
-  });
-
-  /**
-   * FR-MOD-01.1.6 — the trial badge lives in the shell, so it is proof from any
-   * module, not just Billing. The demo workspace is on a 14-day trial, so the
-   * banner counts down the days and its Subscribe CTA routes to Billing.
-   */
-  test('shell shows the trial countdown and Subscribe routes to billing', async ({ agentPage }) => {
-    await agentPage.goto('/app/inbox');
-
-    const badge = agentPage.getByTestId('trial-badge');
-    await expect(badge).toBeVisible();
-    await expect(badge).toContainText(/\d+ days? left in your trial\./);
-    await agentPage.screenshot({ path: 'kanit/15-trial-badge.png', fullPage: true });
-
-    // The CTA leaves the current module and lands on Billing.
-    await badge.getByRole('link', { name: 'Subscribe' }).click();
-    await expect(agentPage).toHaveURL(/\/app\/billing$/);
-    await expect(agentPage.getByRole('heading', { name: 'Billing', level: 1 })).toBeVisible();
   });
 });

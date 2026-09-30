@@ -10,7 +10,7 @@
  * (ADR-09), so the meter can never quote a number the bill disagrees with.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
@@ -1033,6 +1033,35 @@ describe('BillingPage — payment method (FR-MOD-10.3)', () => {
     });
     // The section re-reads from the reply — the saved card is now shown.
     expect(await screen.findByTestId('payment-method')).toHaveTextContent('ending 1111');
+  });
+
+  it('re-reads the subscription once a card is saved — plan plus card lifts the trial gate (FR-MOD-10.2)', async () => {
+    // The API makes the licence active in the same write (tm 256.1), so the
+    // cached view — its `access`, and the trial banner reading it — is stale.
+    const user = userEvent.setup();
+    api.put.mockResolvedValue({
+      brand: 'mastercard',
+      last4: '1111',
+      exp_month: 8,
+      exp_year: 2029,
+      holder_name: 'Sam Lee',
+      updated_at: '2026-07-26T00:00:00.000Z',
+    });
+    mockBilling({ paymentMethod: null });
+    renderBilling(<BillingPage />);
+    const subscriptionReads = () =>
+      api.get.mock.calls.filter(([path]) => path === '/billing/subscription').length;
+
+    await user.click(await screen.findByRole('button', { name: /add payment method/i }));
+    await user.selectOptions(screen.getByLabelText('Card brand'), 'mastercard');
+    await user.type(screen.getByLabelText('Last 4 digits'), '1111');
+    await user.selectOptions(screen.getByLabelText('Expiry month'), '8');
+    await user.selectOptions(screen.getByLabelText('Expiry year'), '2029');
+    await user.type(screen.getByLabelText('Cardholder name'), 'Sam Lee');
+    const before = subscriptionReads();
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(subscriptionReads()).toBeGreaterThan(before));
   });
 });
 

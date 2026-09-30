@@ -212,8 +212,9 @@ export function buildSchedulerJobs({
       async run(context) {
         // The only job here that talks to the outside world, so it is the only
         // one built with the real HTTP sender. Everything that makes a webhook
-        // safe to send — the DNS re-check, the signature — lives inside
-        // `WebhookDispatcher.attempt`, which is what the redeliverer calls.
+        // safe to send — the DNS re-check, the connection pinned to what it
+        // checked, the signature — lives inside `WebhookDispatcher.attempt`,
+        // which is what the redeliverer calls.
         const report = await new WebhookRedeliverer(db, {
           sender: createHttpWebhookSender(),
           auditChainSecret: env.AUDIT_CHAIN_SECRET,

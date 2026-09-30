@@ -36,7 +36,7 @@ import { clearRateLimits, startTestServer, type TestServer } from '../helpers/se
 
 /**
  * A literal public IP, so the SSRF guard's DNS re-check short-circuits (see
- * `assertPublicHttpUrlResolved`) and the suite needs no network — not even to
+ * `resolvePublicHttpTarget`) and the suite needs no network — not even to
  * resolve a name. The sender below never opens a socket either way.
  */
 const RECEIVER = 'https://93.184.216.34/zap/catch';
@@ -94,8 +94,8 @@ describe('workspace event → zap (FR-MOD-09.4)', () => {
         // The mock provider (MASTER-PROMPT §5): records the signed request and
         // answers from `status`. No request ever reaches hooks.zapier.com — in
         // this suite or anywhere else in the repo.
-        webhookSender: async (url, request): Promise<WebhookSendResult> => {
-          received.push({ url: url.toString(), request });
+        webhookSender: async (target, request): Promise<WebhookSendResult> => {
+          received.push({ url: target.url.toString(), request });
           return status >= 200 && status < 300
             ? { ok: true, statusCode: status }
             : { ok: false, statusCode: status, error: `http_${status}` };

@@ -19,6 +19,7 @@
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { isScope, type IntegrationAction, type IntegrationTrigger } from '@siyahtus/types';
+import type { PublicHttpTarget } from '../../src/lib/ssrf.js';
 import { withTenant } from '../../src/lib/tenant.js';
 import {
   WebhookDispatcher,
@@ -314,9 +315,9 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
     } {
       let count = 0;
       let last: { url: URL; headers: Record<string, string>; body: string } | null = null;
-      const sender: WebhookSender = async (url, request) => {
+      const sender: WebhookSender = async (target, request) => {
         count += 1;
-        last = { url, headers: request.headers, body: request.body };
+        last = { url: target.url, headers: request.headers, body: request.body };
         if (count <= failFirst) return { ok: false, statusCode: 500, error: 'http_500' };
         return { ok: true, statusCode: 200 };
       };
@@ -446,6 +447,41 @@ describe('webhooks (FR-MOD-08.8.4)', () => {
       const rows = await deliveriesFor(webhook.id);
       expect(rows).toHaveLength(3);
       expect(rows.every((r) => r.ok === false && r.error === 'ssrf_blocked')).toBe(true);
+    });
+
+    it('pins each attempt to the addresses its own check approved (DNS rebinding)', async () => {
+      const webhook = await registerDeliverable();
+      // One zero-TTL record: public for the first question, the metadata
+      // endpoint for every one after — what an attacker flips between asks.
+      let asked = 0;
+      const rebindingResolver = async (): Promise<string[]> => {
+        asked += 1;
+        return asked === 1 ? [PUBLIC_IP] : ['169.254.169.254'];
+      };
+      const targets: PublicHttpTarget[] = [];
+      const sender: WebhookSender = async (target) => {
+        targets.push(target);
+        return { ok: false, statusCode: 500, error: 'http_500' };
+      };
+
+      const outcome = await withTenant(appRole, contextA(), (tx) =>
+        new WebhookDispatcher({
+          sender,
+          resolver: rebindingResolver,
+          sleep: async () => {},
+          backoffMs: () => 0,
+        }).deliver(tx, contextA(), webhook, { chat_id: 'R' }),
+      );
+
+      expect(outcome.delivered).toBe(false);
+      // DNS was asked once per attempt, and only the first attempt — the one
+      // whose check passed — reached the sender, pinned to what it checked.
+      expect(asked).toBe(3);
+      expect(targets).toHaveLength(1);
+      expect(targets[0]?.url.href).toBe(webhook.url);
+      expect(targets[0]?.addresses).toEqual([{ address: PUBLIC_IP, family: 4 }]);
+      const rows = await deliveriesFor(webhook.id);
+      expect(rows.map((r) => r.error)).toEqual(['http_500', 'ssrf_blocked', 'ssrf_blocked']);
     });
 
     it("keeps a tenant's delivery log invisible to another tenant", async () => {

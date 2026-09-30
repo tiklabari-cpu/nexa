@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 256 (açılış) — PILOT-GO-LIVE-GAPS: 2026-09-30 bağımsız kontrolün bulguları epic olarak açıldı; `10.2`, `08.8.4`, `S7` `◐`; Faz-0 ve Faz-1 kapıları yeniden açık — done — 2026-09-30 UTC
+
+- **Yapıldı:** Bağımsız kontrol (tam kapı `--force` + tam e2e + pilot provası + güvenlik incelemesi + 2026-09-15 bulgularının yeniden yoklanması) → epic tm 256, on bir alt görev (file:line kanıtlı). Damgalar ve gerekçe §D193; K10.2 / K08.8.4 / KS7'ye `◐` maddeleri; PLAN.md:20–21'in üçer hücresi.
+- **Doğrulama:** ürün kodu değişmedi. Kontrolün sayıları §D193(1). Panel tanılaması başsız koşuldu: `plan-count-drift` 0, Faz-0 ve Faz-1 `open true`.
+- **Varsayımlar:** `tasks.json` elle yazıldı (CLI id'leri sayıya çeviriyor, `testStrategy` yazamıyor); etiketler §5.1.1 matrisine göre.
+- **Sonraki pencereye not:** sıra 256.1 → 256.11; 256.1 Faz-0'ı, 256.9 Faz-1'i yeniden kapatır — kapanış hücresinde tarihçe yazarken büyük harfli kelimeyi kullanma, panel ayrıştırıcısı onu açık okur. `git push` 403 (bilinen), iş yerelde `main`'de.
+
 ## MARKA — Nexa → SiyahTuş (sahibin isteği, §D192 · 2026-09-26)
 
 - **Yapıldı:** 765 izlenen dosyada 5693 değişim; düzyazı/arayüz `SiyahTuş`, ASCII tanımlayıcılar `siyahtus`/`SiyahTus`/`SIYAHTUS` (paketler `@siyahtus/*`, env `SIYAHTUS_*`, DB rolü/fonksiyonları, compose konteyner/volume adları, `SiyahTus-Brand` başlığı, depolama anahtarları, mobil bundle id, `infra/helm/siyahtus`). Türkçe ekler ses uyumuna göre çevrildi. İstisnalar §D192'de: PDF `/Producer` ASCII, `nexa-main` klasörü, GitHub uzağı `tiklabari-cpu/nexa`, test CA PEM'inin CN'i. Takip düzeltmeleri: `apps/web/nginx.conf` CSP hash'i (tema betiği anahtarı değişti), TOTP testleri `ş`'nin yüzde-kodlu hâlini (`SiyahTu%C5%9F`) bekliyor.

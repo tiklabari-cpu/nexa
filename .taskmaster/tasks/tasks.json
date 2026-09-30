@@ -10412,11 +10412,11 @@
             "description": "Palet sohbet kabulunu durdurunca Team ekrani 30 sn'ye kadar eski 'Accepting chats'i gosterebiliyor; liste yalniz RTM push'una guveniyor. e2e command-palette.spec.ts:131 tam kosularda iki kez kirmizi (2026-09-13, 2026-09-30), tek basina yesil.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: tm 255 details (degismedi). Bu epic'in kaynagi: 2026-09-30 bagimsiz kontrol (PLAN SD193, HANDOFF ust blok).\n\nKODDA BUGUN:\n- apps/web/src/lib/auth-store.ts:516-522 setRoutingStatus PUT /agents/me/routing-status sonrasi yalniz auth store'u gunceller; sorgu onbellegine dokunmaz.\n- apps/web/src/components/CommandPalette.tsx:117-136 paletin eylemi bu store fonksiyonunu kullanir.\n- apps/web/src/features/inbox/useInbox.ts:1109 ve :1163 ['team','agents'] yalniz RTM olayiyla guncellenir.\n- e2e 2026-09-30: 'Received: ... Accepting chats' (PUT 200 alindiktan SONRA), tek basina 3/3.\n\nKAPSAM: basarili durum yazimindan sonra ['team','agents'] gecersizlenir (palet ve inbox yolu ayni noktadan). Test: web birim.\n\nPLAN: damga degismez (04.3.3 / 01.1.3 KK'si calisiyor, tazelik kusuru); K04.3.3 maddesi.",
             "testStrategy": "Web birim: setRoutingStatus basarili -> ['team','agents'] invalidate edildi; basarisiz -> edilmedi. e2e command-palette.spec.ts tek basina ve tam kosuda yesil. DoD: CONVENTIONS S1 tamami.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "256",
             "priority": "low",
-            "updatedAt": "2026-09-30T20:46:31.814Z"
+            "updatedAt": "2026-09-30T20:57:48.485Z"
           },
           {
             "id": 8,
@@ -10480,12 +10480,12 @@
             "updatedAt": "2026-09-30T11:49:11.000Z"
           }
         ],
-        "updatedAt": "2026-09-30T20:46:31.814Z"
+        "updatedAt": "2026-09-30T20:57:48.485Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-30T20:46:31.815Z",
+      "lastModified": "2026-09-30T20:57:48.486Z",
       "taskCount": 256,
       "completedCount": 255,
       "tags": [

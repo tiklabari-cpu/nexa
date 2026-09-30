@@ -86,6 +86,25 @@ describe('SIGNUP_ENABLED', () => {
   );
 });
 
+/** The assignee e-mail window (FR-MOD-13.8 · tm 256.4). */
+describe('ASSIGNEE_EMAIL_COOLDOWN_MS', () => {
+  it('is fifteen minutes when unset', () => {
+    expect(parseEnv(BASE).ASSIGNEE_EMAIL_COOLDOWN_MS).toBe(900_000);
+  });
+
+  it('reads 0 as "no window" rather than refusing it', () => {
+    expect(parseEnv({ ...BASE, ASSIGNEE_EMAIL_COOLDOWN_MS: '0' }).ASSIGNEE_EMAIL_COOLDOWN_MS).toBe(
+      0,
+    );
+  });
+
+  it.each(['-1', '1.5', 'soon', '86400001'])('refuses %j', (value) => {
+    expect(() => parseEnv({ ...BASE, ASSIGNEE_EMAIL_COOLDOWN_MS: value })).toThrow(
+      /ASSIGNEE_EMAIL_COOLDOWN_MS/,
+    );
+  });
+});
+
 /**
  * The provider keys (M-PROV-a · §D113/K3).
  *

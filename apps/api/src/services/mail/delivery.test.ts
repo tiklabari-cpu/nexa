@@ -9,7 +9,13 @@
  * built from.
  */
 import { describe, expect, it } from 'vitest';
-import { BackgroundMail, deliver, mailFailureFields, type MailOutcome } from './delivery.js';
+import {
+  BackgroundMail,
+  deliver,
+  logUnsentMail,
+  mailFailureFields,
+  type MailOutcome,
+} from './delivery.js';
 import type { Mailer, Message } from './mailer.js';
 import { PermanentMailError, TransientMailError } from './mail-error.js';
 
@@ -154,5 +160,84 @@ describe('BackgroundMail', () => {
     release();
     await waiting;
     expect(settled).toBe(true);
+  });
+});
+
+describe('BackgroundMail.asMailer (tm 256.4)', () => {
+  it('resolves before the mailer is touched, and reports the message with its outcome', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sent: Message[] = [];
+    const background = new BackgroundMail({
+      send: async (message) => {
+        await gate;
+        sent.push(message);
+      },
+    });
+    const reports: Array<{ message: Message; outcome: MailOutcome }> = [];
+    const mailer = background.asMailer((message, outcome) => reports.push({ message, outcome }));
+
+    // A carrier that has not answered does not hold the caller up.
+    await mailer.send(MESSAGE);
+    expect(sent).toEqual([]);
+    expect(reports).toEqual([]);
+
+    release();
+    await background.settled();
+    expect(sent).toEqual([MESSAGE]);
+    expect(reports).toEqual([{ message: MESSAGE, outcome: { status: 'sent' } }]);
+  });
+
+  it('keeps a failure away from the caller and gives it to the callback', async () => {
+    const error = new PermanentMailError({ code: 'rejected', phase: 'rcpt_to', smtpCode: 550 });
+    const background = new BackgroundMail(failingWith(error));
+    const outcomes: MailOutcome[] = [];
+
+    await expect(
+      background.asMailer((_message, outcome) => outcomes.push(outcome)).send(MESSAGE),
+    ).resolves.toBeUndefined();
+    await background.settled();
+
+    expect(outcomes).toEqual([{ status: 'failed', error }]);
+  });
+});
+
+describe('logUnsentMail (tm 256.4)', () => {
+  function recorder() {
+    const lines: Array<{ details: Record<string, unknown>; message: string }> = [];
+    return {
+      lines,
+      warn: (details: Record<string, unknown>, message: string) => lines.push({ details, message }),
+    };
+  }
+
+  it('is silent about a mail that went out', () => {
+    const log = recorder();
+    logUnsentMail(log, 'ticket.notice_mail', { status: 'sent' });
+    expect(log.lines).toEqual([]);
+  });
+
+  it('names the event, the outcome and the classification — and not the recipient', () => {
+    const log = recorder();
+    const error = new TransientMailError({ code: 'connection', phase: 'connect' });
+    logUnsentMail(log, 'ticket.notice_mail', { status: 'failed', error }, { ticket_id: 't-1' });
+
+    expect(log.lines).toHaveLength(1);
+    expect(log.lines[0]!.details).toEqual({
+      event: 'ticket.notice_mail',
+      outcome: 'failed',
+      mail: mailFailureFields(error),
+      ticket_id: 't-1',
+    });
+    expect(JSON.stringify(log.lines)).not.toContain(MESSAGE.to);
+  });
+
+  it('logs unconfirmed as its own outcome, not as failed', () => {
+    const log = recorder();
+    const error = new PermanentMailError({ code: 'unconfirmed', phase: 'data' });
+    logUnsentMail(log, 'chat.transcript_mail', { status: 'unconfirmed', error });
+    expect(log.lines[0]!.details['outcome']).toBe('unconfirmed');
   });
 });

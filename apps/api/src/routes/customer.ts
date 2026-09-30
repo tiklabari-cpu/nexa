@@ -43,9 +43,12 @@ import { SkillEngine } from '../services/ai/skill-engine.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
 import { assertUploadedAttachment } from '../services/storage/attachment.js';
-import type { Mailer } from '../services/mail/mailer.js';
+import { logUnsentMail } from '../services/mail/delivery.js';
 import type { PushEventKind, PushProvider } from '../services/push/push-provider.js';
-import { shouldEmailAssignee } from '../services/notifications/assignee-email.js';
+import {
+  claimAssigneeEmailWindow,
+  shouldEmailAssignee,
+} from '../services/notifications/assignee-email.js';
 import { pushToAgentDevices } from '../services/notifications/push.js';
 import { resolveAttribution } from '../services/sales/attribution.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -253,14 +256,12 @@ export default async function customerRoutes(
   app: FastifyInstance,
   {
     env,
-    mailer,
     push,
     automations,
     llm,
     knowledge,
   }: {
     env: Env;
-    mailer: Mailer;
     push: PushProvider;
     /** Writes the AI Agent's knowledge answers (tm 255.5). */
     llm: LlmProvider;
@@ -347,7 +348,8 @@ export default async function customerRoutes(
    * realtime, so a mail or provider failure must not fail the visitor's send.
    * Only fires when there is a human assignee — a queued or AI-only chat has
    * nobody to notify, and notifying on every message to an unassigned chat
-   * would be noise.
+   * would be noise. The e-mail is further held to one per chat and assignee per
+   * `ASSIGNEE_EMAIL_COOLDOWN_MS`, and sent in the background (tm 256.4).
    *
    * The two channels are gated separately and neither can suppress the other:
    * an agent who reads e-mail on a laptop and one who only carries a phone have
@@ -409,12 +411,36 @@ export default async function customerRoutes(
       // (FR-MOD-13.8); the guard narrows `email` to a string for the send.
       if (!shouldEmailAssignee(channel)) return;
 
-      await mailer.send({
-        to: channel.email,
-        kind: 'notification',
-        subject: 'New message from a visitor',
-        body: `Hi ${channel.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,
-      });
+      // One e-mail per chat and assignee per window (tm 256.4): the first
+      // message of a burst says "go and look", the rest would only repeat it
+      // against the mailbox's sending limit. After the opt-out on purpose — an
+      // agent who has the channel off must not use up a window.
+      const open = await claimAssigneeEmailWindow(
+        app.redis,
+        {
+          licenseId,
+          chatId,
+          assigneeId: channel.assigneeId,
+          cooldownMs: env.ASSIGNEE_EMAIL_COOLDOWN_MS,
+        },
+        (error) =>
+          request.log.warn({ err: error, chatId }, 'assignee e-mail window unavailable; mailing'),
+      );
+      if (!open) return;
+
+      // Handed off, not awaited (tm 256.4): the visitor's message is committed
+      // and on its way over realtime, so neither the carrier's latency (~33 s
+      // against a hung server) nor its failure belongs in their answer.
+      app.backgroundMail.send(
+        {
+          to: channel.email,
+          kind: 'notification',
+          subject: 'New message from a visitor',
+          body: `Hi ${channel.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,
+        },
+        (outcome) =>
+          logUnsentMail(request.log, 'assignee_notification.mail', outcome, { chat_id: chatId }),
+      );
     } catch (error) {
       // The realtime push already reached the agent's open inbox; e-mail and
       // handset are the courtesy for when it is not open.

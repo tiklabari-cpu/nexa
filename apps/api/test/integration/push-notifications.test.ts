@@ -142,6 +142,12 @@ describe('agent push notifications', () => {
     return { token, response };
   }
 
+  /** The assignee's e-mails — sent after the answer (tm 256.4), so waited for first. */
+  async function notificationMails() {
+    await server.app.backgroundMail.settled();
+    return (await mailer.outbox()).filter((m) => m.kind === 'notification');
+  }
+
   it('pushes to the assigned agent’s handset when a visitor starts a chat', async () => {
     await visitorWrites('My order is late');
 
@@ -201,7 +207,7 @@ describe('agent push notifications', () => {
     // …and the e-mail still goes out. The two channels are one preference set,
     // not one decision: silencing the phone is not a request to stop being
     // told at all.
-    expect((await mailer.outbox()).filter((m) => m.kind === 'notification')).toHaveLength(1);
+    expect(await notificationMails()).toHaveLength(1);
   });
 
   it('does not push when the master switch is off', async () => {
@@ -229,7 +235,7 @@ describe('agent push notifications', () => {
     await visitorWrites('phone only, thanks');
 
     expect(await push.delivered()).toHaveLength(1);
-    expect((await mailer.outbox()).filter((m) => m.kind === 'notification')).toEqual([]);
+    expect(await notificationMails()).toEqual([]);
   });
 
   /**

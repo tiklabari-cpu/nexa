@@ -265,6 +265,8 @@ describe('card masking at write time (FR-MOD-08.9.5)', () => {
     // The agent archive path is the one wired with the mailer.
     const archived = await server.post(`/chats/${chatId}/deactivate`, undefined, auth(agentToken));
     expect(archived.statusCode).toBe(200);
+    // The transcript is handed to `backgroundMail` after the answer (tm 256.4).
+    await server.app.backgroundMail.settled();
 
     const names = await readdir(mailDir);
     const spool = (await Promise.all(names.map((n) => readFile(join(mailDir, n), 'utf8')))).join(

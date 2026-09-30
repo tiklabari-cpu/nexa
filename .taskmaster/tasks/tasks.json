@@ -10376,11 +10376,11 @@
             "description": "Atanmis sohbette ziyaretcinin HER mesaji temsilciye ayri e-posta (20 mesaj = 20 e-posta) ve bu posta ziyaretcinin istegi icinde bekleniyor; kapanista transcript ve ticket bildirimi de istek icinde. Posta kutusunun gonderim siniri davet/sifirlama postalarini da durdurabilir.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: tm 255 details (degismedi). Bu epic'in kaynagi: 2026-09-30 bagimsiz kontrol (PLAN SD193, HANDOFF ust blok).\n\nXHIGH GEREKCESI: (3) teslim garantisi (kuyruk/tekrar -- yanlisi mesaj kaybeder ya da cogaltir).\n\nKODDA BUGUN:\n- apps/api/src/routes/customer.ts:412 notifyAssignee -> await mailer.send (cagri :739 ve :781, her ziyaretci mesajinda).\n- apps/api/src/services/notifications/assignee-email.ts:34-45 shouldEmailAssignee yalniz opt-out'a bakar; bekleme suresi yok; tercih varsayilan acik (schema.prisma:244).\n- chat-service.ts:864/:923 -> :1234 #emailTranscript istek icinde; routes/tickets.ts:335 musteri ticket-durum bildirimi istek icinde.\n- plugins/background-mail.ts + services/mail/delivery.ts:105 BackgroundMail var, yalniz account-lifecycle.ts:198 (sifre sifirlama) kullaniyor.\n- production-checklist S9 'Known risks' (1): asili SMTP'de ~33 s gecikme; PLAN SD179.\n\nKAPSAM: (1) Temsilci e-postasi sohbet+temsilci basina bekleme suresiyle (Redis SET NX PX; ASSIGNEE_EMAIL_COOLDOWN_MS, varsayilan 15 dk, 0 = kapali); cihaz push'u degismez. (2) Uc posta (temsilci bildirimi, kapanis transcripti, ticket durum bildirimi) app.backgroundMail uzerinden -- yanit postayi beklemez, sonuc log'da mailFailureFields ile. (3) checklist S9 risk (1) guncellenir.\n\nKAPSAM DISI: AI yanitinin istekten ayrilmasi (256.10).\n\nPLAN: 13.8 ✅ kalir (KK: e-posta bildirimi var ve calisiyor); K13.8 maddesi + SD kaydi.",
             "testStrategy": "Entegrasyon: bekleme suresi icinde 5 ziyaretci mesaji -> 1 e-posta; sure dolunca ikinci; opt-out yine 0; asili (hic donmeyen) mailer ile ziyaretci POST'u, kapanis ve ticket guncellemesi posta beklemeden doner; transcript + ticket bildirimi yine teslim edilir (settled). DoD: CONVENTIONS S1 tamami; e2e auth-mail + ilgili bildirim akislari yesil.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "256",
             "priority": "high",
-            "updatedAt": "2026-09-30T16:13:32.894Z"
+            "updatedAt": "2026-09-30T17:35:06.140Z"
           },
           {
             "id": 5,
@@ -10480,12 +10480,12 @@
             "updatedAt": "2026-09-30T11:49:11.000Z"
           }
         ],
-        "updatedAt": "2026-09-30T16:13:32.894Z"
+        "updatedAt": "2026-09-30T17:35:06.140Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-30T16:13:32.894Z",
+      "lastModified": "2026-09-30T17:35:06.141Z",
       "taskCount": 256,
       "completedCount": 255,
       "tags": [

@@ -17,6 +17,7 @@ import {
   type EmbeddingProviderOptions,
 } from '../services/ai/provider/embedding-provider.js';
 import { LLM_PROVIDERS, type LlmProviderOptions } from '../services/ai/provider/llm-provider.js';
+import { RETRIEVAL_THRESHOLD } from '../services/ai/knowledge-service.js';
 import {
   embeddingEndpointProblem,
   llmEndpointProblem,
@@ -583,6 +584,19 @@ export const envSchema = z.object({
    * fraction of a second, so it is kept well under the chat timeout.
    */
   EMBEDDING_TIMEOUT_MS: z.coerce.number().int().positive().max(120_000).default(10_000),
+  /**
+   * The cosine similarity below which a knowledge passage is not an answer
+   * (FR-MOD-06.3.2 · tm 256.6): the AI hands the conversation to a human
+   * instead. The default was measured in the stub's space only (tm 255.8 ·
+   * PLAN §D183); a real embedding model scores on its own scale, so
+   * `measure:knowledge-recall` sweeps the golden set and the value chosen from
+   * it goes here — a restart, not a rebuild. A cosine is in [-1, 1]. A bare
+   * `RETRIEVAL_THRESHOLD=` is refused rather than read as 0, which would answer
+   * from almost any passage.
+   */
+  RETRIEVAL_THRESHOLD: z
+    .preprocess((value) => (value === '' ? Number.NaN : value), z.coerce.number().min(-1).max(1))
+    .default(RETRIEVAL_THRESHOLD),
   /**
    * Outgoing mail (M-PROV-a). `file` writes each message under `MAIL_DIR`
    * instead of sending it (PLAN A4); `null` discards, which is what the test

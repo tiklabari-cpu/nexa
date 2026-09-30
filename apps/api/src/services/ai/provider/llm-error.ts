@@ -103,7 +103,23 @@ export interface LlmFailureDetails {
   reason?: string | null;
   /** Tokens the call spent anyway — a `no_answer` is billed like an answer. */
   usage?: LlmUsage | null;
+  /**
+   * What the operator can change when the failure is the configuration's, not
+   * the conversation's. One of this module's own sentences, never provider
+   * text: {@link LLM_EMPTY_LENGTH_HINT} (tm 256.6).
+   */
+  hint?: string | null;
 }
+
+/**
+ * A reply cut off at `max_completion_tokens` before it held any text. A
+ * reasoning model counts its hidden reasoning against that limit, so at the
+ * default `LLM_MAX_OUTPUT_TOKENS` (400) it can spend all of it thinking and
+ * answer nothing, on every question; `no_answer`/`length` alone does not say
+ * so (tm 256.6).
+ */
+export const LLM_EMPTY_LENGTH_HINT =
+  'the output limit ran out before any text; a reasoning model spends LLM_MAX_OUTPUT_TOKENS on reasoning, so choose a non-reasoning chat model for LLM_MODEL or raise LLM_MAX_OUTPUT_TOKENS';
 
 export class LlmProviderError extends Error {
   override readonly name = 'LlmProviderError';
@@ -113,6 +129,7 @@ export class LlmProviderError extends Error {
   readonly requestId: string | null;
   readonly reason: string | null;
   readonly usage: LlmUsage | null;
+  readonly hint: string | null;
   /** Requests made before giving up; 0 when the call was refused before one was made. */
   attempts = 0;
 
@@ -132,6 +149,7 @@ export class LlmProviderError extends Error {
     this.requestId = details.requestId ?? null;
     this.reason = details.reason ?? null;
     this.usage = details.usage ?? null;
+    this.hint = details.hint ?? null;
   }
 
   /** Whether another attempt could succeed — the retry loop's question. */

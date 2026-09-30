@@ -19,7 +19,12 @@ import {
 } from '../../../test/helpers/fake-openai.js';
 import { FakeLlmProvider } from '../../../test/helpers/fake-llm-provider.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import type { KnowledgeSearch, KnowledgeService, RetrievedChunk } from './knowledge-service.js';
+import {
+  RETRIEVAL_THRESHOLD,
+  type KnowledgeSearch,
+  type KnowledgeService,
+  type RetrievedChunk,
+} from './knowledge-service.js';
 import { EMBEDDING_FAILURE_KINDS, EmbeddingProviderError } from './provider/embedding-error.js';
 import { LLM_FAILURE_KINDS, type LlmFailureKind } from './provider/llm-error.js';
 import { buildAnswerPrompt } from './provider/answer-prompt.js';
@@ -93,9 +98,11 @@ function knowledgeWith(
   {
     chunks = [HIT],
     chunksInScope = chunks.length,
-  }: { chunks?: RetrievedChunk[]; chunksInScope?: number } = {},
+    threshold = RETRIEVAL_THRESHOLD,
+  }: { chunks?: RetrievedChunk[]; chunksInScope?: number; threshold?: number } = {},
 ): KnowledgeService {
   return {
+    threshold,
     embedQuery,
     search: async (): Promise<KnowledgeSearch> => ({ strategy: 'exact', chunksInScope, chunks }),
   } as unknown as KnowledgeService;
@@ -470,6 +477,23 @@ describe('a knowledge search that cannot run hands the conversation to a human (
       'nothing searchable in the knowledge base — empty, or not yet re-embedded for openai:text-embedding-3-small',
     );
     expect(detail(missed)).toBe('nothing in the knowledge base above 0.25 similarity');
+  });
+
+  it('names the threshold the knowledge service searched at, not the compiled default (tm 256.6)', async () => {
+    const embedded = async () => ({
+      space: 'test:space',
+      vector: '[1]',
+      usage: { inputTokens: 0 },
+    });
+    const missed = await engine(
+      new FakeLlmProvider(),
+      20_000,
+      knowledgeWith(embedded, { chunks: [], chunksInScope: 12, threshold: 0.42 }),
+    ).run(workspace(KNOWLEDGE_ANSWER).db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(missed.log.find((entry) => entry.step === 'send_message')!.detail).toBe(
+      'nothing in the knowledge base above 0.42 similarity',
+    );
   });
 });
 

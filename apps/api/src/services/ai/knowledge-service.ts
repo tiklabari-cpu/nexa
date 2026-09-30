@@ -91,6 +91,9 @@ export interface RetrievedChunk {
  * Below this a "match" is noise. Answering a customer from an unrelated article
  * is worse than admitting there is no answer, so the engine treats a miss as a
  * reason to hand over rather than something to paper over.
+ *
+ * The default of the `RETRIEVAL_THRESHOLD` setting (tm 256.6), which is what
+ * the server passes as {@link KnowledgeServiceOptions.retrievalThreshold}.
  */
 export const RETRIEVAL_THRESHOLD = 0.25;
 
@@ -178,10 +181,12 @@ export interface KnowledgeServiceOptions {
    */
   exactSearchCeiling?: number;
   /**
-   * Overrides {@link RETRIEVAL_THRESHOLD}. The server never sets it: the recall
-   * gate raises and lowers it to prove it goes red when the threshold moves,
-   * and `measure:knowledge-recall` sets it to -1 to read every score a
-   * question has (tm 255.8 · PLAN §D183).
+   * Overrides {@link RETRIEVAL_THRESHOLD}. The server sets it from the
+   * `RETRIEVAL_THRESHOLD` setting (tm 256.6), so a value measured in the real
+   * embedding space needs a restart rather than a rebuild. The recall gate
+   * raises and lowers it to prove it goes red when the threshold moves, and
+   * `measure:knowledge-recall` sets it to -1 to read every score a question
+   * has (tm 255.8 · PLAN §D183).
    */
   retrievalThreshold?: number;
 }

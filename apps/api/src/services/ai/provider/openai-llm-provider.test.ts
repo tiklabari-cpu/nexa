@@ -22,7 +22,7 @@ import {
   type OpenAiHandler as Handler,
 } from '../../../../test/helpers/fake-openai.js';
 import { buildAnswerPrompt } from './answer-prompt.js';
-import { LlmProviderError, type LlmFailureKind } from './llm-error.js';
+import { LLM_EMPTY_LENGTH_HINT, LlmProviderError, type LlmFailureKind } from './llm-error.js';
 import type { LlmCompletionRequest, OpenAiSettings } from './llm-provider.js';
 import {
   LLM_CIRCUIT_FAILURE_THRESHOLD,
@@ -588,6 +588,55 @@ describe('a reply that is not an answer is a failure, never a message', () => {
     expect(error).toMatchObject({ kind, reason });
     // Neither is retried: the same prompt would get the same reply.
     expect(net.calls).toHaveLength(1);
+  });
+
+  // A reasoning model spends max_completion_tokens thinking and can answer
+  // nothing at all, on every question; the log says what to change (tm 256.6).
+  it.each<[string, string | null]>([
+    ['no content', null],
+    ['blank content', '  \n'],
+  ])(
+    'says in llm.failed what to change when a reply is cut off with %s',
+    async (_label, content) => {
+      const net = fakeFetch(
+        completion(
+          content,
+          { finish_reason: 'length' },
+          { usage: { prompt_tokens: 120, completion_tokens: 400 } },
+        ),
+      );
+      const { instance, log } = adapter(net.impl);
+      const error = await failure(instance.complete(REQUEST));
+
+      expect(error).toMatchObject({
+        kind: 'no_answer',
+        reason: 'length',
+        hint: LLM_EMPTY_LENGTH_HINT,
+      });
+      const failed = log.lines.find((line) => line.details['event'] === 'llm.failed');
+      expect(failed?.level).toBe('warn');
+      expect(failed?.details).toMatchObject({ reason: 'length', hint: LLM_EMPTY_LENGTH_HINT });
+      expect(LLM_EMPTY_LENGTH_HINT).toMatch(/LLM_MAX_OUTPUT_TOKENS/);
+      expect(LLM_EMPTY_LENGTH_HINT).toMatch(/non-reasoning/);
+    },
+  );
+
+  it('gives no hint when a cut-off reply held text — that is a long answer, not a setting', async () => {
+    const { instance, log } = adapter(
+      fakeFetch(completion('Refunds are issued within', { finish_reason: 'length' })).impl,
+    );
+    const error = await failure(instance.complete(REQUEST));
+
+    expect(error).toMatchObject({ kind: 'no_answer', reason: 'length', hint: null });
+    const failed = log.lines.find((line) => line.details['event'] === 'llm.failed');
+    expect(failed?.details).not.toHaveProperty('hint');
+  });
+
+  it('gives no hint for an empty reply that finished on its own', async () => {
+    const error = await failure(
+      adapter(fakeFetch(completion('   ')).impl).instance.complete(REQUEST),
+    );
+    expect(error).toMatchObject({ kind: 'no_answer', reason: 'empty', hint: null });
   });
 
   it('still reports what a no-answer cost', async () => {

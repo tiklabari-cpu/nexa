@@ -73,7 +73,6 @@ import {
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import {
   ANSWER_RETRIEVAL_LIMIT,
-  RETRIEVAL_THRESHOLD,
   type EmbeddedQuery,
   type KnowledgeService,
 } from './knowledge-service.js';
@@ -543,7 +542,7 @@ export class SkillEngine {
               // it: an empty knowledge base, or one still stored in another
               // embedding space than the one questions are asked in (PLAN §D182).
               `nothing searchable in the knowledge base — empty, or not yet re-embedded for ${question.space}`
-            : `nothing in the knowledge base above ${RETRIEVAL_THRESHOLD} similarity`,
+            : `nothing in the knowledge base above ${this.#knowledge.threshold} similarity`,
       };
     }
 

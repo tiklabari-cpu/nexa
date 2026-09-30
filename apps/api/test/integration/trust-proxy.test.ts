@@ -243,6 +243,58 @@ describe('trusted proxy hops (TRUST_PROXY_HOPS)', () => {
     expect((res.json() as { error: { type: string } }).error.type).toBe('not_allowed');
   });
 
+  // --- A public peer is never a proxy (GHSA-3m5p-2c4r-xxw2, tm 256.2) ---------
+
+  /** A request whose socket peer is `peer` — somebody who dialled us directly. */
+  const direct = (hops: (typeof HOP_COUNTS)[number], peer: string, chain: string) =>
+    at(hops).app.inject({
+      method: 'GET',
+      url: at(hops).url('/auth/me'),
+      headers: from(chain),
+      remoteAddress: peer,
+    });
+
+  it('reads a public peer as the client, whatever its header says', async () => {
+    // The advisory. Before Fastify 5.12.1 a numeric `trustProxy` trusted the
+    // peer without looking at its address, so a caller who got past the proxy
+    // and dialled this process from the internet named their own address in
+    // one header entry. Now the count applies only to a peer on loopback or a
+    // private network. This caller is neither, so the header is ignored and the
+    // allow-list decides about the caller's real address.
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const spoofed = await direct('1', CLIENT, ALLOWED);
+    expect(spoofed.statusCode).toBe(403);
+    expect((spoofed.json() as { error: { type: string } }).error.type).toBe('not_allowed');
+
+    // A higher count does not change that. The first hop is what is refused.
+    const deeper = await direct('2', CLIENT, forwarded(ALLOWED));
+    expect(deeper.statusCode).toBe(403);
+  });
+
+  it('still admits that public peer when the list covers its own address', async () => {
+    // Without this the case above would pass just as well if a public peer were
+    // refused outright. It is not refused. Its address is the one being judged.
+    await enforce(fx.a, ['203.0.113.0/24', `${CLIENT}/32`]);
+
+    const res = await direct('1', CLIENT, ALLOWED);
+
+    expect(res.statusCode).toBe(200);
+  });
+
+  it('keeps trusting a private-network proxy, the peer every shipped topology has', async () => {
+    // A compose network or a Kubernetes pod network: the reverse proxy we run
+    // connects from 172.16/12 or 10/8. Its attested entry is the client, exactly
+    // as it is over loopback in the rest of this file.
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const viaCompose = await direct('1', '172.18.0.5', ALLOWED);
+    expect(viaCompose.statusCode).toBe(200);
+
+    const viaPodNetwork = await direct('1', '10.42.0.17', CLIENT);
+    expect(viaPodNetwork.statusCode).toBe(403);
+  });
+
   // --- The default ------------------------------------------------------------
 
   it('defaults to one hop, so the behaviour every other suite pins is unchanged', async () => {

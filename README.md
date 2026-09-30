@@ -547,11 +547,20 @@ itself:
 Capped at `8` — past a handful this stops describing a topology and starts meaning "trust
 the whole chain", which is what the setting exists to prevent.
 
+**The proxy next to the process must connect from a private address.** The count only
+applies when the socket peer is loopback, link-local or RFC 1918 / RFC 4193. That is how
+a compose network, a published port on the host and a Kubernetes pod network all reach
+the API. A peer on a public address is taken as the client and its header is ignored. This
+closes [GHSA-3m5p-2c4r-xxw2](https://github.com/advisories/GHSA-3m5p-2c4r-xxw2), where a
+caller who dialled the API from the internet named their own address. It also means a
+reverse proxy on another machine, reaching the API over a public IP, makes every request
+look like it came from that proxy. Put the two on a private network.
+
 **Counting is only half of it: something has to guarantee the count.** Hops are counted
 from the right because the entries a real proxy appended are the ones nobody else could
 have written — but that reasoning holds only for a request that actually crossed those
-proxies. A caller who reaches the process _beside_ the proxy instead of _through_ it
-writes the one entry itself and is believed, at any non-zero count. Measured, not argued:
+proxies. A caller on the private network who reaches the process _beside_ the proxy
+instead of _through_ it writes the one entry itself and is believed, at any non-zero count. Measured, not argued:
 in [`apps/api/test/integration/trust-proxy.test.ts`](apps/api/test/integration/trust-proxy.test.ts)
 an enforced IP allow-list answers `200` to an invented address at `TRUST_PROXY_HOPS=1`,
 and refuses the identical header on the identical server once a proxy really appended to

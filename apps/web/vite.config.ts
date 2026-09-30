@@ -3,6 +3,19 @@ import { defineConfig } from 'vitest/config';
 
 const API_TARGET = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
 
+/** Long-cached vendor chunks: package name → chunk. Everything else stays in the app chunk. */
+const VENDOR_CHUNKS: Record<string, string> = {
+  react: 'react',
+  'react-dom': 'react',
+  scheduler: 'react',
+  'react-router': 'react',
+  'react-router-dom': 'react',
+  cookie: 'react',
+  'set-cookie-parser': 'react',
+  '@tanstack/react-query': 'query',
+  '@tanstack/query-core': 'query',
+};
+
 export default defineConfig({
   plugins: [react()],
   server: {
@@ -18,9 +31,13 @@ export default defineConfig({
     sourcemap: true,
     rollupOptions: {
       output: {
-        manualChunks: {
-          react: ['react', 'react-dom', 'react-router-dom'],
-          query: ['@tanstack/react-query'],
+        // Matched by package directory, not listed by import name. Since v7,
+        // react-router-dom only re-exports react-router, which this app does not
+        // depend on directly, so the object form cannot resolve it and the
+        // router would land in the app chunk.
+        manualChunks(id) {
+          const pkg = /.*[\\/]node_modules[\\/]((?:@[^\\/]+[\\/])?[^\\/]+)/.exec(id)?.[1];
+          return pkg ? VENDOR_CHUNKS[pkg.replace('\\', '/')] : undefined;
         },
       },
     },

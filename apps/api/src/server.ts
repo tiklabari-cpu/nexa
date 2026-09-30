@@ -1,7 +1,7 @@
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import sensible from '@fastify/sensible';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import { randomUUID } from 'node:crypto';
 import type { Env } from './config/env.js';
 import errorHandler from './plugins/error-handler.js';
@@ -14,6 +14,7 @@ import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
 import { logSafeUrl, PROVIDER_SECRET_LOG_PATHS } from './lib/log-redact.js';
+import { trustProxyFor } from './lib/trust-proxy.js';
 import licenseGate from './plugins/license-gate.js';
 import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
@@ -236,11 +237,16 @@ export async function buildServer({
     // allow-list. Zero is not "off": Fastify skips the decoration entirely and
     // `request.ip` is the socket peer, which is the correct — and the only safe
     // — reading when nothing in front of us appends to the header.
-    trustProxy: env.TRUST_PROXY_HOPS,
+    //
+    // The count only applies when the immediate peer is on loopback or a
+    // private network. A bare number trusted any peer, which is
+    // GHSA-3m5p-2c4r-xxw2; `lib/trust-proxy.ts` has the rest.
+    trustProxy: trustProxyFor(env.TRUST_PROXY_HOPS),
     // A test that hands us a stream is asking to read the request line; every
     // other test keeps it off, because thousands of lines nobody reads is what
-    // made it off in the first place.
-    disableRequestLogging: env.isTest && !logStream,
+    // made it off in the first place. (The top-level option is FSTDEP023 from
+    // Fastify 5.12; the controller takes the same value.)
+    logController: new LogController({ disableRequestLogging: env.isTest && !logStream }),
     bodyLimit: 1_048_576, // 1 MiB — attachments go through signed upload URLs
     // Do not let `close()` tear down live connections (M-OPS-b).
     //

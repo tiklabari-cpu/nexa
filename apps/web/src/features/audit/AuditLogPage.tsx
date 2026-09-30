@@ -161,7 +161,11 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
   { labelKey: 'audit.group.salesTracking', actions: ['sale.tracked'] },
   {
     labelKey: 'audit.group.billing',
-    actions: ['billing.subscription_updated', 'billing.payment_method_updated'],
+    actions: [
+      'billing.subscription_updated',
+      'billing.payment_method_updated',
+      'billing.license_activated',
+    ],
   },
   {
     labelKey: 'audit.group.webhooks',

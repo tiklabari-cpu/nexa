@@ -10330,7 +10330,7 @@
         "description": "Butun kapilar yesilken kodda dogrulanan ve hicbir gorevde olmayan pilot engelleri ile ilk hafta sorunlari. Her alt gorev 2026-09-30'da file:line kaniti ile acildi.",
         "details": "KAYNAK: 2026-09-30 bagimsiz hazirlik kontrolu (commit 983bf9f9). Butun kapilar --force ile YESIL olculdu: typecheck+lint+build 28/28, birim 5.464, entegrasyon api 3.582 + rtm 111, e2e 311/313 (iki kirmizi tek basina 3/3), pilot compose sifirdan smoke 16/16 + 17/17. Ama hicbir kapinin olcmedigi, gercek pilotu durduran ya da ilk haftada can yakacak bosluklar koda karsi dogrulandi; hicbiri Task Master'da yoktu. Bu epic onlari kapatir.\n\nPILOT KAPSAMI + SIR SINIRI: tm 255 details ile AYNI (degismedi). Gercek saglayiciya istek, gercek sir, deploy YOK.\n\nSIRA: 256.1 deneme kilidi -> 256.2 bagimlilik guvenligi -> 256.3 kayit anahtari -> 256.4 bildirim e-postasi -> 256.5 kenar/ops -> 256.6 API hijyeni -> 256.7 roster tazeligi -> 256.8 yazma takilmasi -> 256.9 webhook DNS sabitleme -> 256.10 AI yanitini istekten ayirma -> 256.11 kapanis dogrulamasi.\n\nDAMGA KARARLARI (acilis turunda, PLAN SD193): 10.2 ◐ (256.1 geri cevirir; Faz-0 kapisi yeniden acildi), 08.8.4 ◐ ve S7 ◐ (256.9 geri cevirir; Faz-1 kapisi yeniden acildi). Diger alt gorevlerin satirlari ✅ kalir, gerekceleri SD193'te.\n\nBU EPIC'TE OLMAYANLAR (kayitli, bilerek disarida): Copilot yardimcilarinin gercek LLM'e baglanmasi (SD180/SD181, sahip karari -- sonraki epic adayi); ulke yonlendirmesi/GeoIP (US-8 KK1); raporlarin UTC gun siniri; KB PDF/Word; widget dil sayisi; 2FA yonetici sifirlamasi (SD132); RTM /health tavani (SD137); e2e sira bagimliligi (G9-GATE-a); odeme/kanallar/push/S3/K8s/sosyal giris/MCP (sahip karari 2026-09-22).",
         "testStrategy": "Epic ancak 11 alt gorevin hepsi done olunca done olur (CONVENTIONS S4). Kapanis kaniti 256.11'den gelir: (1) CONVENTIONS S1 kapisinin tamami --force ile yesil; (2) pnpm audit --prod'da pilot yolunda (api/rtm/web/widget/packages) advisory yok; (3) pilot compose sifirdan + ilk calisma alani + OAuth ile admin /health: smoke 19/19; (4) Faz-0 ve Faz-1 kapilari yeniden KAPALI, 10.2 / 08.8.4 / S7 ✅; (5) panel tanilamasi git-unpushed disinda temiz.",
-        "status": "pending",
+        "status": "in-progress",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -10340,11 +10340,11 @@
             "description": "Her calisma alani kayittan 14 gun sonra salt-okunur oluyor ve urunde geri donus yolu yok. Abonelik + kart lisansi 'active' yapmali; TRIAL_DAYS env gercekten okunmali; pilot musterileri icin operatorun elle aktive etme yolu belgelenmeli.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: tm 255 details (degismedi). Bu epic'in kaynagi: 2026-09-30 bagimsiz kontrol (PLAN SD193, HANDOFF ust blok).\n\nXHIGH GEREKCESI: (2) para dogrulugu + erisim kapisi (license-gate her yazma istegini reddediyor).\n\nKODDA BUGUN (2026-09-30 olculdu):\n- apps/api/src/services/auth/lifecycle-service.ts:30 TRIAL_DAYS = 14 sabit; :140 auth_signup'a bu sabit gidiyor.\n- apps/api/src/config/env.ts:443 TRIAL_DAYS env semada var ama HICBIR yer okumuyor (grep env.TRIAL_DAYS = 0).\n- apps/api/src/services/billing/metering.ts:233-259 trialState: status 'trialing' + trial_ends_at gecmis -> access 'read_only'.\n- apps/api/src/plugins/license-gate.ts:39-57 read_only iken her POST/PUT/PATCH/DELETE 402 license_expired (ajan VE widget ziyaretcisi).\n- licenses.status'u 'trialing'den baska bir degere ceviren KOD YOK (TS + SQL grep). subscription-service.ts:234 yalniz subscriptions.status='active' yaziyor.\n- reports.ts:2105 PATCH /billing/subscription ve :2224 PUT /billing/payment-method allowWhenReadOnly; testler (reports-billing.test.ts:4791, :5333) yalniz bu iki rotanin 200 dondugunu olcuyor, sonrasinda yazmanin acildigini DEGIL.\n- Mesaj metni 'subscribe to start new conversations' diyor ama abone olmak kilidi kaldirmiyor.\n\nKAPSAM:\n1) Signup, deneme uzunlugunu env.TRIAL_DAYS'ten alsin (varsayilan 14 degismez).\n2) Odeme yolu: calisma alaninin HEM abonelik satiri HEM kayitli odeme yontemi varsa lisans 'active' olur (deneme icinde erken abone olan da). Tetik: PATCH /billing/subscription ve PUT /billing/payment-method sonrasi, ayni transaction'da. Denetim kaydi (billing.license_activated). Idempotent.\n3) Pilot operator yolu: odeme sahte oldugu icin pilot musterisi odeme yapmaz; production-checklist S9'a sahip rolu ile tek SQL (docker compose exec db psql) + TRIAL_DAYS notu yazilir.\n4) Web: aktif lisansta deneme seridi gorunmez (mevcut davranis olculur, gerekirse duzeltilir).\n\nKAPSAM DISI: gercek odeme/Stripe, fatura kesme, past_due akisi.\n\nPLAN: 10.2 ◐ -> ✅ (K10.2 maddesi); Faz-0 Must sayaci + Genel durum + Kapanis hucresi yeniden KAPALI (AÇIK kelimesi tarihcede YAZILMAZ -- panelin ayristiricisi).",
             "testStrategy": "Kirmizi-once entegrasyon: (a) deneme suresi gecmis lisans -> PATCH subscription + PUT payment-method -> sonra olagan bir yazma (ornegin POST bir kaynak) 2xx, /billing/subscription access 'active'; (b) yalniz biri varken hala 402; (c) TRIAL_DAYS=30 ile signup -> trial_ends_at ~ simdi+30g; (d) denetim kaydi yazildi; (e) tekrar cagri idempotent. Birim: trialState degismedi. DoD: CONVENTIONS S1 tamami; ilgili e2e (billing/trial) yesil. PLAN 10.2 ✅ + K10.2 + Faz-0 hucreleri; panel tanilamasi plan-count-drift 0.",
-            "status": "pending",
+            "status": "done",
             "dependencies": [],
             "parentId": "256",
             "priority": "high",
-            "updatedAt": "2026-09-30T11:49:11.000Z"
+            "updatedAt": "2026-09-30T13:31:59.011Z"
           },
           {
             "id": 2,
@@ -10480,12 +10480,12 @@
             "updatedAt": "2026-09-30T11:49:11.000Z"
           }
         ],
-        "updatedAt": "2026-09-30T11:49:11.000Z"
+        "updatedAt": "2026-09-30T13:31:59.011Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-30T11:49:11.000Z",
+      "lastModified": "2026-09-30T13:31:59.011Z",
       "taskCount": 256,
       "completedCount": 255,
       "tags": [

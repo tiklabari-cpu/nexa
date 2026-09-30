@@ -440,7 +440,14 @@ export const envSchema = z.object({
    */
   SIEM_PROVIDER: z.enum(SIEM_PROVIDERS).default('file'),
 
-  TRIAL_DAYS: z.coerce.number().int().positive().default(14),
+  /**
+   * Length of a new workspace's trial, in days (FR-MOD-10.2). Read at sign-up
+   * (`LifecycleService`) — until tm 256.1 this key was parsed and then ignored,
+   * and every trial was the hard-coded 14. It only shapes workspaces created
+   * after a change; an existing trial keeps the end date it was given. Capped at
+   * ten years: past that it stops describing a trial.
+   */
+  TRIAL_DAYS: z.coerce.number().int().positive().max(3650).default(14),
   UNIT_PRICE_CENTS: z.coerce.number().int().nonnegative().default(9900),
   AI_RESOLUTIONS_INCLUDED: z.coerce.number().int().nonnegative().default(200),
   AI_OVERAGE_CENTS: z.coerce.number().int().nonnegative().default(50),

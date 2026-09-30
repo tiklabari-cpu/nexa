@@ -1305,6 +1305,10 @@ function PaymentMethodSection({ readOnly }: { readOnly: boolean }): ReactElement
     }) => api.put<PaymentMethod>('/billing/payment-method', body),
     onSuccess: (updated) => {
       queryClient.setQueryData(['billing', 'payment-method'], { payment_method: updated });
+      // A card for a plan already chosen completes the purchase and the API
+      // lifts the trial gate in the same write (tm 256.1), so the subscription
+      // view — its `access`, and the trial banner that reads it — is stale now.
+      void queryClient.invalidateQueries({ queryKey: ['billing', 'subscription'] });
       setEditing(false);
     },
   });

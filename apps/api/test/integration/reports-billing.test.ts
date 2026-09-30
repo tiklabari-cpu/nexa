@@ -34,6 +34,7 @@ import {
 } from '../../src/services/billing/metering.js';
 import { purchaseApiPackage } from '../../src/services/billing/api-package-service.js';
 import { purchaseAiPackage } from '../../src/services/billing/ai-package-service.js';
+import { activateIfPaid } from '../../src/services/billing/license-activation.js';
 
 describe('reports and billing', () => {
   let owner: PrismaClient;
@@ -4590,6 +4591,188 @@ describe('reports and billing', () => {
     it('keeps a live trial writable (FR-MOD-10.2)', async () => {
       const response = await server.post('/chats', { customer_id: fx.a.customerId }, auth);
       expect([200, 201]).toContain(response.statusCode);
+    });
+  });
+
+  // FR-MOD-10.2 · tm 256.1: the way back. The gate's own refusal says
+  // "subscribe to start new conversations", and until tm 256.1 doing exactly
+  // that wrote a subscription row and a card and left the licence `trialing`
+  // for good — the tests above only proved the two billing routes answer 200
+  // while read-only, never that anything opened afterwards. Both halves are
+  // needed (a plan with nothing to charge, or a card with nothing to charge
+  // for, is not a purchase), in either order.
+  describe('the way back from the trial gate', () => {
+    const card = {
+      brand: 'visa',
+      last4: '4242',
+      exp_month: 12,
+      exp_year: 2030,
+      holder_name: 'Jane Doe',
+    };
+    const expire = () =>
+      owner.license.update({
+        where: { id: fx.a.licenseId },
+        data: { trialEndsAt: new Date(Date.now() - 86_400_000) },
+      });
+    const write = () => server.post('/chats', { customer_id: fx.a.customerId }, auth);
+
+    it('lifts the read-only gate once a plan and a card are both on file (FR-MOD-10.2)', async () => {
+      await expire();
+      expect((await write()).statusCode).toBe(402);
+
+      const planned = await server.patch('/billing/subscription', { seats: 2 }, auth);
+      expect(planned.statusCode).toBe(200);
+      // A plan alone is not a purchase — there is nothing to charge it to.
+      expect(planned.json().access).toBe('read_only');
+      expect((await write()).statusCode).toBe(402);
+
+      expect((await server.put('/billing/payment-method', card, auth)).statusCode).toBe(200);
+
+      const view = await server.get('/billing/subscription', auth);
+      expect(view.json().access).toBe('active');
+      expect(view.json().trial.ends_at).toBeNull();
+      expect([200, 201]).toContain((await write()).statusCode);
+
+      const license = await owner.license.findUniqueOrThrow({ where: { id: fx.a.licenseId } });
+      expect(license.status).toBe('active');
+      expect(license.trialEndsAt).toBeNull();
+    });
+
+    it('completes in the other order too — the card first, then the plan (FR-MOD-10.2)', async () => {
+      await expire();
+      expect((await server.put('/billing/payment-method', card, auth)).statusCode).toBe(200);
+      // A card alone is not a purchase either.
+      expect((await write()).statusCode).toBe(402);
+
+      const planned = await server.patch('/billing/subscription', { seats: 2 }, auth);
+      expect(planned.statusCode).toBe(200);
+      expect(planned.json().access).toBe('active');
+      expect([200, 201]).toContain((await write()).statusCode);
+    });
+
+    it('ends a running trial early and records the transition exactly once (FR-MOD-10.2)', async () => {
+      // The fixture's trial is still running: paying ends it, banner and all.
+      await server.patch('/billing/subscription', { seats: 2 }, auth);
+      await server.put('/billing/payment-method', card, auth);
+      // Repeats of either half change nothing about the licence.
+      await server.put('/billing/payment-method', { ...card, last4: '1881' }, auth);
+      await server.patch('/billing/subscription', { seats: 3 }, auth);
+
+      expect((await server.get('/billing/subscription', auth)).json().access).toBe('active');
+      const entries = await owner.auditLogEntry.findMany({
+        where: { licenseId: fx.a.licenseId, action: 'billing.license_activated' },
+      });
+      expect(entries).toHaveLength(1);
+      expect(entries[0]!.metadata).toMatchObject({ from: 'trialing' });
+    });
+
+    it('does not bring a cancelled licence back through a checkout (FR-MOD-10.2)', async () => {
+      // A cancelled workspace's tokens are already refused, so this is asked of
+      // the rule itself, as the API's own role, with both halves on file.
+      await owner.subscription.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          status: 'active',
+          seats: 2,
+          unitPriceCents: 9900,
+          aiResolutionsIncluded: 200,
+        },
+      });
+      await owner.paymentMethod.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          brand: 'visa',
+          last4: '4242',
+          expMonth: 12,
+          expYear: 2030,
+          holderName: 'Jane Doe',
+        },
+      });
+      await owner.license.update({ where: { id: fx.a.licenseId }, data: { status: 'canceled' } });
+
+      const tenant = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
+      const result = await withTenant(appRole, tenant, (tx) => activateIfPaid(tx, tenant));
+      expect(result).toEqual({ activated: false });
+      const license = await owner.license.findUniqueOrThrow({ where: { id: fx.a.licenseId } });
+      expect(license.status).toBe('canceled');
+    });
+
+    it('activates when the plan and the card are saved at the same moment (FR-MOD-10.2)', async () => {
+      // Two admins, or two tabs: each transaction writes its own half and only
+      // then looks for the other. Staged here in the one order that loses the
+      // purchase without a lock — both halves written, neither committed, then
+      // both checks — and that deadlocks with the wrong one (`FOR UPDATE`
+      // against the key-share lock each foreign-key insert holds).
+      await expire();
+      const tenant = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
+      const signal = () => {
+        let open!: () => void;
+        const opened = new Promise<void>((resolve) => (open = resolve));
+        return { open, opened };
+      };
+      const planWritten = signal();
+      const cardWritten = signal();
+      const planChecked = signal();
+      const commitPlan = signal();
+
+      const planSide = withTenant(appRole, tenant, async (tx) => {
+        await tx.subscription.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            status: 'active',
+            seats: 2,
+            unitPriceCents: 9900,
+            aiResolutionsIncluded: 200,
+          },
+        });
+        planWritten.open();
+        await cardWritten.opened;
+        const result = await activateIfPaid(tx, tenant);
+        planChecked.open();
+        await commitPlan.opened;
+        return result;
+      });
+      const cardSide = withTenant(appRole, tenant, async (tx) => {
+        await planWritten.opened;
+        await tx.paymentMethod.create({
+          data: {
+            licenseId: fx.a.licenseId,
+            brand: 'visa',
+            last4: '4242',
+            expMonth: 12,
+            expYear: 2030,
+            holderName: 'Jane Doe',
+          },
+        });
+        cardWritten.open();
+        await planChecked.opened;
+        return activateIfPaid(tx, tenant);
+      });
+
+      // Raced against both sides, so a side that throws (a lock timeout, a
+      // deadlock) fails the test with its own error rather than a hang.
+      await Promise.race([planChecked.opened, planSide, cardSide]);
+      // The card side must be queued behind the plan side's lock; without one it
+      // has already run its check against the uncommitted plan and found none.
+      const deadline = Date.now() + 5_000;
+      for (;;) {
+        const [row] = await owner.$queryRaw<Array<{ waiting: number }>>`
+          SELECT count(*)::int AS waiting FROM pg_stat_activity
+          WHERE datname = current_database() AND usename = 'siyahtus_app'
+            AND wait_event_type = 'Lock' AND query LIKE '%FROM licenses%'
+        `;
+        if ((row?.waiting ?? 0) > 0 || Date.now() > deadline) break;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      }
+      commitPlan.open();
+
+      const [plan, card] = await Promise.all([planSide, cardSide]);
+      // The plan side saw no committed card; the card side, let through only
+      // once the plan committed, saw both.
+      expect(plan).toEqual({ activated: false });
+      expect(card).toEqual({ activated: true, from: 'trialing' });
+      const license = await owner.license.findUniqueOrThrow({ where: { id: fx.a.licenseId } });
+      expect(license.status).toBe('active');
     });
   });
 

@@ -400,6 +400,30 @@ describe('account lifecycle', () => {
       expect(days).toBeLessThan(14.1);
     });
 
+    it("runs the trial for the deployment's TRIAL_DAYS, not a hard-coded 14 (FR-MOD-10.2)", async () => {
+      // Until tm 256.1 the key was parsed and then ignored: every trial was 14
+      // days whatever the deployment said.
+      const configured = await startTestServer({ TRIAL_DAYS: '30' });
+      try {
+        const response = await configured.post('/auth/signup', {
+          email: 'pilot@thirtyco.test',
+          password: STRONG_PASSWORD,
+          name: 'Pilot',
+          organization_name: 'ThirtyCo',
+        });
+        expect(response.statusCode).toBe(201);
+
+        const license = await owner.license.findFirst({
+          where: { organization: { name: 'ThirtyCo' } },
+        });
+        const days = (license!.trialEndsAt!.getTime() - Date.now()) / 86_400_000;
+        expect(days).toBeGreaterThan(29.9);
+        expect(days).toBeLessThan(30.1);
+      } finally {
+        await configured.close();
+      }
+    });
+
     it('opens the workspace with a team the owner is in (FR-MOD-04.5)', async () => {
       // Routing resolves an agent through `group_agents` (ADR-08 step 2), so a
       // workspace with no team can receive a conversation and show it to

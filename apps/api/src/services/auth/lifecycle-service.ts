@@ -27,6 +27,7 @@ import { hashPassword } from '../../lib/crypto.js';
 import { type AgentRole, type Region } from '@siyahtus/types';
 import { ROLE_RANK } from './principal.js';
 
+/** The default trial length; the deployment's `TRIAL_DAYS` overrides it (tm 256.1). */
 export const TRIAL_DAYS = 14;
 const RESET_TTL_MS = 60 * 60 * 1000; // one hour
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -101,16 +102,28 @@ export class LifecycleService {
   readonly #db: PrismaClient;
   readonly #appUrl: string;
   readonly #consoleRedirect: string;
+  readonly #trialDays: number;
 
   /**
    * @param consoleRedirect The console callback a new workspace's OAuth client
    *   registers — `env.consoleRedirectUri`, i.e. server configuration and never
    *   anything a request carried (tm 255.17).
+   * @param trialDays How long a new workspace's trial runs — `env.TRIAL_DAYS`
+   *   (tm 256.1). Same trust boundary as the redirect: configuration only.
    */
-  constructor(db: PrismaClient, appUrl: string, consoleRedirect: string) {
+  constructor(
+    db: PrismaClient,
+    appUrl: string,
+    consoleRedirect: string,
+    trialDays: number = TRIAL_DAYS,
+  ) {
+    if (!Number.isInteger(trialDays) || trialDays < 1) {
+      throw new RangeError(`trialDays must be a positive integer, got ${trialDays}`);
+    }
     this.#db = db;
     this.#appUrl = appUrl.replace(/\/+$/, '');
     this.#consoleRedirect = consoleRedirect;
+    this.#trialDays = trialDays;
   }
 
   async signup(input: {
@@ -137,7 +150,7 @@ export class LifecycleService {
       created = await this.#db.$queryRaw`
         SELECT * FROM auth_signup(
           ${input.email}::citext, ${input.name}, ${passwordHash},
-          ${input.organizationName}, ${TRIAL_DAYS}::int, ${input.region},
+          ${input.organizationName}, ${this.#trialDays}::int, ${input.region},
           ${this.#consoleRedirect}
         )`;
     } catch (error) {

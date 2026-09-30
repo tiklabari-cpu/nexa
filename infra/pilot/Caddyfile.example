@@ -1,0 +1,65 @@
+# SiyahTuş pilot — the reverse proxy in front of docker-compose.pilot.yml (tm 256.5).
+#
+# The compose file publishes its four ports on 127.0.0.1 only; this is the one
+# public side. Caddy runs on the same host (not in the compose project — it
+# dials 127.0.0.1), obtains and renews the TLS certificates itself, and serves
+# four hostnames. Replace `example.com` with the pilot's domain; each name then
+# goes into `.env`:
+#
+#   panel.example.com   WEB_APP_URL, and the first origin in WEB_ORIGIN
+#   widget.example.com  WIDGET_BASE_URL, and the second origin in WEB_ORIGIN
+#   api.example.com     API_BASE_URL  (https://)
+#   rtm.example.com     RTM_BASE_URL  (wss://)
+#
+# The ports below are the compose defaults. A `SIYAHTUS_*_HOST_PORT` line in
+# `.env` moves one; change the matching line here with it.
+#
+# Why every path is one hop, and why that matters: the api derives the caller's
+# address (rate limit, IP ban, agent IP allow-list) from X-Forwarded-For and
+# trusts exactly TRUST_PROXY_HOPS entries of it — one number for every path.
+# The panel's nginx also proxies `/api/`, and it appends to X-Forwarded-For, so
+# a panel request sent through it would arrive with two hops while the widget's
+# arrives with one. The panel site therefore sends `/api/*` straight to the
+# api, past the panel's nginx, and TRUST_PROXY_HOPS=1 is right for all four
+# names (docs/production-checklist.md §9, "Reverse proxy").
+#
+# Caddy does not believe an X-Forwarded-For the client sent: without a
+# `trusted_proxies` option it replaces the header with the address it saw.
+# Keep it that way — adding `trusted_proxies` here lets any caller choose the
+# address the api sees.
+#
+# Check the syntax without installing Caddy (from the repository root):
+#   docker run --rm -v "$PWD/infra/pilot/Caddyfile.example:/etc/caddy/Caddyfile:ro" \
+#     caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+# On the host: copy this to /etc/caddy/Caddyfile, edit the names, then
+# `caddy validate --config /etc/caddy/Caddyfile` and `systemctl reload caddy`.
+{
+	# The address Let's Encrypt writes to about certificate expiry. Optional.
+	# email ops@example.com
+}
+
+# The agent panel. REST goes to the api directly (one hop); everything else is
+# the panel's static app, served by its own nginx.
+panel.example.com {
+	handle /api/* {
+		reverse_proxy 127.0.0.1:4000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:5173
+	}
+}
+
+# The customer widget: loader.js, the iframe document and the hosted Chat page.
+widget.example.com {
+	reverse_proxy 127.0.0.1:5174
+}
+
+# The api, called cross-origin by the widget and by customers' own integrations.
+api.example.com {
+	reverse_proxy 127.0.0.1:4000
+}
+
+# RTM. Caddy passes the WebSocket upgrade through on its own.
+rtm.example.com {
+	reverse_proxy 127.0.0.1:4001
+}

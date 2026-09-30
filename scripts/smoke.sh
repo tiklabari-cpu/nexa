@@ -231,6 +231,22 @@ check 'widget serves loader.js' GET "$WIDGET_BASE/loader.js" 200 '__siyahtusLoad
 # is a Vite dev-server document (it loads `/src/loader.ts`) and is not part of
 # the built image.
 check 'widget serves the hosted Chat page' GET "$WIDGET_BASE/chat.html" 200 'siyahtus-widget-root'
+# No source maps in the images (tm 256.5): a served `.map` is the panel's
+# original TypeScript, comments included. The bundle is named by content hash,
+# so read its name from the document first; then the map beside it must be a
+# 404 and the bundle must not name one. The loader is the widget file every
+# embedding page downloads.
+request GET "$WEB_BASE/" >/dev/null
+web_script="$(grep -o '/assets/[^"]*\.js' "$body_file" | head -1)"
+if [ -n "$web_script" ]; then
+  check 'web serves no source map for its bundle' GET "$WEB_BASE$web_script.map" 404
+  check_excludes 'web bundle names no source map' \
+    GET "$WEB_BASE$web_script" 200 'sourceMappingURL='
+else
+  fail 'web serves no source map for its bundle' "$WEB_BASE/ names no /assets/*.js"
+fi
+check_excludes 'widget loader.js names no source map' \
+  GET "$WIDGET_BASE/loader.js" 200 'sourceMappingURL='
 
 printf '\nWiring\n'
 # The seam this stack adds and `pnpm dev` does not have: the browser calls the

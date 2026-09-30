@@ -43,7 +43,11 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 COPY . .
 RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
     pnpm install --frozen-lockfile --filter @siyahtus/widget...
-RUN pnpm --filter @siyahtus/widget... run build
+# No source maps in the image (tm 256.5), for the same reason as
+# apps/web/Dockerfile: `vite.config.ts` turns them off on this variable for
+# both passes, and the check fails the image if either pass left one behind.
+ENV SIYAHTUS_BUILD_SOURCEMAPS=false
+RUN pnpm --filter @siyahtus/widget... run build     && if find apps/widget/dist -name '*.map' | grep -q .         || grep -rlq 'sourceMappingURL=' apps/widget/dist; then         echo 'apps/widget/dist still carries source maps' >&2; exit 1;     fi
 
 # ---------------------------------------------------------------------------
 FROM ${NGINX_IMAGE} AS runtime

@@ -76,6 +76,7 @@ function stubFetch(): ReturnType<typeof vi.fn> {
 function renderPalette(
   scopes: string[],
   routingStatus: 'accepting_chats' | 'not_accepting_chats' | 'offline' = 'accepting_chats',
+  queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
 ) {
   useAuth.setState({
     status: 'signed-in',
@@ -92,7 +93,6 @@ function renderPalette(
     },
   });
 
-  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/app/inbox']}>
@@ -468,6 +468,31 @@ describe('command palette — action triggering', () => {
       expect(useAuth.getState().agent?.routing_status).toBe('not_accepting_chats'),
     );
     expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('refreshes the Team roster after the toggle lands, so that screen cannot show the old status', async () => {
+    stubRoutingStatus(() => jsonResponse({ routing_status: 'not_accepting_chats' }));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'accepting_chats', queryClient);
+
+    await chooseToggle(user);
+
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['team', 'agents'] }));
+  });
+
+  it('does not refresh the Team roster when the toggle is refused', async () => {
+    stubRoutingStatus(() => errorResponse(403, 'authorization', 'Your token cannot.'));
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const user = userEvent.setup();
+    renderPalette(['agents--my:rw'], 'accepting_chats', queryClient);
+
+    await chooseToggle(user);
+    await screen.findByRole('alert');
+
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
   it('toggles back on from a paused agent', async () => {

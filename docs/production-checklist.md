@@ -251,6 +251,8 @@ and names the key. By name, what the pilot needs:
   `EMBEDDING_API_BASE_URL`, `EMBEDDING_MODEL`, `EMBEDDING_API_KEY`.
 - Mail: `MAIL_PROVIDER=smtp`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`,
   `SMTP_FROM`.
+- Sign-up: `SIGNUP_ENABLED` stays `true` until the pilot's workspaces exist, then `false`
+  (see **Run** below).
 
 Values go into `.env` on the host and nowhere else — not into a ticket, a log, a commit or
 this document.
@@ -306,6 +308,18 @@ was not measured, which is not a pass.
       `SMOKE_ADMIN_TOKEN=<the owner's access token>`: it mints a visitor token from the widget
       origin, cross-origin, and reads the admin `/health` — scheduler enabled and
       `event_partitions.last_status: ok` (tm 255.14).
+- [ ] Close sign-up once the pilot's own workspaces exist (tm 256.3). Sign-up is anonymous
+      and checks no email: while it is open, anyone who finds the address can create a
+      workspace and spend the pilot's model key and mailbox. Set `SIGNUP_ENABLED=false` in
+      `.env`, then `docker compose -f docker-compose.pilot.yml up -d` (Compose re-creates the
+      containers whose environment changed; no rebuild). Only `true` and `false` are read —
+      any other value, an empty one included, stops the api at boot with `SIGNUP_ENABLED`
+      named in the log. Check it from outside:
+      `curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' <API_BASE_URL>/api/v1/auth/signup`
+      prints `403` (the body says `not_allowed`, `details.reason: signup_closed`, and nothing
+      is written). The panel's sign-up form says sign-up is closed. Teammates still join by
+      invitation from Settings; to add another workspace later, open it for that one sign-up
+      and close it again.
 - [ ] Decide what happens when a pilot workspace's trial ends (tm 256.1). Every workspace
       starts a trial of `TRIAL_DAYS` days (default 14, read at sign-up) and turns read-only
       when it ends — agents cannot answer and visitors cannot write. The product's own way

@@ -441,6 +441,27 @@ export const envSchema = z.object({
   SIEM_PROVIDER: z.enum(SIEM_PROVIDERS).default('file'),
 
   /**
+   * Whether `POST /auth/signup` creates workspaces at all (FR-MOD-00.2 · tm 256.3).
+   * On by default, so development, the test suites and the demo stack keep the
+   * open sign-up they were built around. A pilot turns it off once its own
+   * workspaces exist: sign-up is anonymous and checks no email, so on a public
+   * address anyone could open a workspace and spend the deployment's model key
+   * and mailbox. Closed, the route answers 403 `not_allowed` with
+   * `details.reason: 'signup_closed'` before it reads the body or the database.
+   * Invitations are unaffected — they are how a closed deployment still grows.
+   *
+   * Only the two literal words. `SIGNUP_ENABLED=` (empty), `0`, `no` or `False`
+   * stop the boot instead of being read as one or the other: an operator who
+   * wrote one of those meant *something*, and guessing "open" for a line that
+   * was meant to close the door is the one wrong guess that cannot be seen
+   * from outside.
+   */
+  SIGNUP_ENABLED: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
+
+  /**
    * Length of a new workspace's trial, in days (FR-MOD-10.2). Read at sign-up
    * (`LifecycleService`) — until tm 256.1 this key was parsed and then ignored,
    * and every trial was the hard-coded 14. It only shapes workspaces created

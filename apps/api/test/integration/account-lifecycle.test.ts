@@ -14,9 +14,10 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { PrismaClient } from '@prisma/client';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { grantToken, ownerClient, seedFixtures, type Fixtures } from '../helpers/fixtures.js';
 import { clearRateLimits, startTestServer, type TestServer } from '../helpers/server.js';
+import { LifecycleService } from '../../src/services/auth/lifecycle-service.js';
 import { FileMailer } from '../../src/services/mail/mailer.js';
 
 const STRONG_PASSWORD = 'a-quite-long-passphrase';
@@ -505,6 +506,155 @@ describe('account lifecycle', () => {
         password: STRONG_PASSWORD,
       });
       expect(login.statusCode).toBe(200);
+    });
+  });
+
+  // =========================================================================
+  // A deployment that has closed sign-up (SIGNUP_ENABLED=false · tm 256.3)
+  //
+  // Sign-up is anonymous and checks no email, so on a public pilot address it
+  // lets a stranger open a workspace and spend the owner's model key and
+  // mailbox. Closed, the route must refuse before it reads anything: every
+  // assertion below is "nothing written, nothing looked up", not merely "403".
+  // =========================================================================
+
+  describe('closed sign-up (SIGNUP_ENABLED=false)', () => {
+    let closed: TestServer;
+
+    beforeAll(async () => {
+      closed = await startTestServer({ SIGNUP_ENABLED: 'false' });
+    });
+
+    afterAll(async () => {
+      await closed.close();
+    });
+
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    /** Everything `auth_signup` writes, so "nothing was created" is checked as a whole. */
+    async function tenantRowCounts() {
+      const [organizations, accounts, licenses] = await Promise.all([
+        owner.organization.count(),
+        owner.account.count(),
+        owner.license.count(),
+      ]);
+      return { organizations, accounts, licenses };
+    }
+
+    function expectSignupClosed(response: Awaited<ReturnType<TestServer['post']>>): void {
+      expect(response.statusCode).toBe(403);
+      const { error } = response.json() as {
+        error: { type: string; details?: Record<string, unknown> };
+      };
+      expect(error.type).toBe('not_allowed');
+      expect(error.details).toEqual({ reason: 'signup_closed' });
+    }
+
+    it('answers 403 not_allowed / signup_closed and writes nothing', async () => {
+      const before = await tenantRowCounts();
+      const signup = vi.spyOn(LifecycleService.prototype, 'signup');
+
+      const response = await closed.post('/auth/signup', {
+        email: 'stranger@closed.test',
+        password: STRONG_PASSWORD,
+        name: 'Stranger',
+        organization_name: 'Uninvited NewCo',
+      });
+
+      expectSignupClosed(response);
+      // Not called at all, not called and rolled back: the refusal is in front
+      // of `auth_signup`, so the database never sees the request.
+      expect(signup).not.toHaveBeenCalled();
+      expect(await tenantRowCounts()).toEqual(before);
+      expect(await owner.organization.count({ where: { name: 'Uninvited NewCo' } })).toBe(0);
+      expect(await owner.account.count({ where: { email: 'stranger@closed.test' } })).toBe(0);
+    });
+
+    it('gives an address that already has an account the same answer, not 409', async () => {
+      // Open, a taken address is a deliberate 409 (see the contract). Closed,
+      // that 409 would be the only thing the route still did — an oracle for
+      // which addresses hold an account, on a door that no longer opens.
+      const response = await closed.post('/auth/signup', {
+        email: fx.a.ownerEmail,
+        password: STRONG_PASSWORD,
+        name: 'Impostor',
+        organization_name: 'Should Not Exist',
+      });
+
+      expectSignupClosed(response);
+    });
+
+    it('refuses before validating the body', async () => {
+      // A form that says "password too short" on a closed deployment sends the
+      // person round again for nothing.
+      expectSignupClosed(
+        await closed.post('/auth/signup', {
+          email: 'not-an-address',
+          password: 'tiny',
+          name: '',
+          organization_name: '',
+        }),
+      );
+      expectSignupClosed(await closed.post('/auth/signup', {}));
+    });
+
+    it('still refuses a region this deployment does not serve with the same 403', async () => {
+      // One answer for every sign-up. The residency gate (C4-h) only matters
+      // when a workspace could be created; closed, none can.
+      const before = await tenantRowCounts();
+
+      expectSignupClosed(
+        await closed.post('/auth/signup', {
+          email: 'founder@elsewhere.test',
+          password: STRONG_PASSWORD,
+          name: 'Founder',
+          organization_name: 'Elsewhere NewCo',
+          region: 'us',
+        }),
+      );
+      expect(await tenantRowCounts()).toEqual(before);
+    });
+
+    it('leaves invitations working — the way a closed deployment still grows', async () => {
+      const invited = await closed.post(
+        '/invitations',
+        { emails: ['teammate@closed.test'], role: 'agent' },
+        auth(ownerToken),
+      );
+      expect(invited.statusCode).toBe(201);
+      const acceptUrl = (invited.json() as { items: Array<{ accept_url: string }> }).items[0]!
+        .accept_url;
+      const token = new URL(acceptUrl).searchParams.get('token')!;
+
+      const accepted = await closed.post('/auth/invitations/accept', {
+        token,
+        name: 'Teammate',
+        password: STRONG_PASSWORD,
+      });
+      expect(accepted.statusCode).toBe(200);
+      expect(await owner.account.count({ where: { email: 'teammate@closed.test' } })).toBe(1);
+    });
+
+    it('creates the workspace when SIGNUP_ENABLED is spelled true (FR-MOD-00.2)', async () => {
+      // The switch closes sign-up; it must not be what keeps it open by
+      // accident. An explicit `true` is the same door as the unset default.
+      const open = await startTestServer({ SIGNUP_ENABLED: 'true' });
+      try {
+        const response = await open.post('/auth/signup', {
+          email: 'founder@explicitly-open.test',
+          password: STRONG_PASSWORD,
+          name: 'Founder',
+          organization_name: 'Explicitly Open NewCo',
+        });
+        expect(response.statusCode).toBe(201);
+        expect(await owner.organization.count({ where: { name: 'Explicitly Open NewCo' } })).toBe(
+          1,
+        );
+      } finally {
+        await open.close();
+      }
     });
   });
 

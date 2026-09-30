@@ -98,6 +98,8 @@ export const auth: Messages = {
   'auth.signup.submitting': 'Creating…',
   'auth.signup.errorGeneric': 'Could not create that workspace.',
   'auth.signup.errorAccountExists': 'An account already exists for that email — sign in instead.',
+  'auth.signup.errorSignupClosed':
+    'Nothing was created. Sign-up is closed at this address — ask the owner of an existing workspace to invite you.',
   'auth.signup.errorRegionMismatch':
     'Nothing was created. This address only creates workspaces in {region} — choose that data region, or sign up at the address that serves the one you picked.',
   'auth.signup.errorRegionUnknown':

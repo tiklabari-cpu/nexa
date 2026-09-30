@@ -158,6 +158,13 @@ function signupFailureMessage(failure: unknown, t: TFunction): string {
     return t('auth.signup.errorAccountExists');
   }
 
+  // A deployment that has closed sign-up (tm 256.3). The generic sentence would
+  // send the person round again; this one says retrying cannot work and names
+  // the way in that still does.
+  if (failure.type === 'not_allowed' && failure.details?.['reason'] === 'signup_closed') {
+    return t('auth.signup.errorSignupClosed');
+  }
+
   if (failure.type === 'misdirected_request') {
     const served = failure.details?.['served_region'];
     if (isRegion(served)) {

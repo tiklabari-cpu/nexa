@@ -26,6 +26,7 @@
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import type { HostResolver, PublicHttpTarget } from '../../src/lib/ssrf.js';
 import { withTenant, type TenantContext } from '../../src/lib/tenant.js';
 import { WebhookRedeliverer } from '../../src/services/webhooks/redelivery.js';
 import {
@@ -46,11 +47,12 @@ const PUBLIC_IP = '93.184.216.34';
 /** Records every send, and answers with whatever the test scripted. */
 function recordingSender(reply: (call: number) => WebhookSendResult): {
   sender: WebhookSender;
-  calls: () => Array<{ url: URL; headers: Record<string, string>; body: string }>;
+  calls: () => Array<{ target: PublicHttpTarget; headers: Record<string, string>; body: string }>;
 } {
-  const calls: Array<{ url: URL; headers: Record<string, string>; body: string }> = [];
-  const sender: WebhookSender = async (url, request) => {
-    calls.push({ url, headers: request.headers, body: request.body });
+  const calls: Array<{ target: PublicHttpTarget; headers: Record<string, string>; body: string }> =
+    [];
+  const sender: WebhookSender = async (target, request) => {
+    calls.push({ target, headers: request.headers, body: request.body });
     return reply(calls.length);
   };
   return { sender, calls: () => calls };
@@ -136,7 +138,7 @@ describe('webhook redelivery (M-SCHED-e)', () => {
    */
   function redeliverer(
     sender: WebhookSender,
-    overrides: { maxAttempts?: number; leaseMs?: number } = {},
+    overrides: { maxAttempts?: number; leaseMs?: number; resolver?: HostResolver } = {},
   ): WebhookRedeliverer {
     return new WebhookRedeliverer(appRole, {
       sender,
@@ -195,8 +197,32 @@ describe('webhook redelivery (M-SCHED-e)', () => {
         signature: call?.headers['X-Webhook-Signature'],
       }),
     ).toEqual({ ok: true });
-    // The URL that was actually posted to is the one the SSRF check resolved.
-    expect(call?.url.href).toBe(webhook.url);
+    // The URL that was actually posted to is the one the SSRF check resolved,
+    // pinned to the address that check approved (tm 256.9).
+    expect(call?.target.url.href).toBe(webhook.url);
+    expect(call?.target.addresses).toEqual([{ address: PUBLIC_IP, family: 4 }]);
+  });
+
+  it('re-checks DNS at sweep time: a name that now resolves inward is refused, and nothing is sent', async () => {
+    const webhook = await registerWebhook(contextA());
+    await queueFailedDelivery(contextA(), webhook);
+
+    // Public when the event fired; the metadata endpoint by the time the sweep
+    // runs. The sweep goes through `attempt`, so it resolves afresh and refuses.
+    const script = recordingSender(ALWAYS_OK);
+    const report = await redeliverer(script.sender, {
+      resolver: async () => ['169.254.169.254'],
+    }).run({ now: laterThanBackoff() });
+
+    expect(script.calls()).toHaveLength(0);
+    expect(report.totals).toMatchObject({ attempted: 1, delivered: 0, requeued: 1 });
+    const newest = (await rowsFor(webhook.id)).at(-1);
+    expect(newest).toMatchObject({
+      attempt: 4,
+      ok: false,
+      error: 'ssrf_blocked',
+      state: 'pending',
+    });
   });
 
   it('leaves a row that is not due yet alone', async () => {

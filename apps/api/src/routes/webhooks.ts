@@ -7,7 +7,8 @@
  * refuses a private, loopback, link-local or non-http(s) target on the way in,
  * so an obviously-internal address never reaches storage. The stronger,
  * DNS-resolving re-check runs again at delivery time (the dispatcher), because a
- * name that is public today can point inward tomorrow.
+ * name that is public today can point inward tomorrow — and the POST is pinned
+ * to the address that check approved, so it cannot point inward in between.
  *
  * The signing secret is returned only from the register response; `GET /webhooks`
  * never carries it (see `WebhookService`).

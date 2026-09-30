@@ -5,12 +5,14 @@
  * action, and each attempt is signed, SSRF-checked, and logged:
  *
  *   1. Re-resolve the target and refuse a private/loopback/link-local address
- *      (`assertPublicHttpUrlResolved`). DNS is re-checked here, not trusted from
+ *      (`resolvePublicHttpTarget`). DNS is re-checked here, not trusted from
  *      registration, because it can change underneath a stored URL (TOCTOU).
  *   2. Sign the body (HMAC-SHA256 + timestamp + nonce). The secret never leaves
  *      this process — only the signature is sent.
- *   3. POST it, following no redirects (a 3xx could point inward), with a short
- *      timeout.
+ *   3. POST it to an address step 1 checked and to no other — the connection
+ *      is pinned, so DNS cannot change between the check and the connect
+ *      either (tm 256.9) — following no redirects (a 3xx could point inward),
+ *      with a short timeout.
  *   4. Write one `webhook_deliveries` row for the attempt — the complete,
  *      auditable trail NFR-M5 requires — carrying the queue state that decides
  *      what happens next.
@@ -38,8 +40,15 @@
  * through it rather than around it.
  */
 import { randomUUID } from 'node:crypto';
+import http from 'node:http';
+import https from 'node:https';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
-import { assertPublicHttpUrlResolved, type HostResolver } from '../../lib/ssrf.js';
+import {
+  pinnedConnection,
+  resolvePublicHttpTarget,
+  type HostResolver,
+  type PublicHttpTarget,
+} from '../../lib/ssrf.js';
 import { isApiError } from '../../lib/api-error.js';
 import { signWebhook } from './signature.js';
 
@@ -124,8 +133,15 @@ export interface WebhookRequest {
   timeoutMs: number;
 }
 
-/** Performs the actual HTTP POST. Replaceable so tests need no network. */
-export type WebhookSender = (url: URL, request: WebhookRequest) => Promise<WebhookSendResult>;
+/**
+ * Performs the actual HTTP POST to a checked target — the URL, whose name
+ * `Host` and TLS SNI carry, and the addresses the connection is pinned to.
+ * Replaceable so tests need no network.
+ */
+export type WebhookSender = (
+  target: PublicHttpTarget,
+  request: WebhookRequest,
+) => Promise<WebhookSendResult>;
 
 /** The webhook fields delivery needs — includes the secret, so never logged. */
 export interface DeliverableWebhook {
@@ -258,14 +274,15 @@ export class WebhookDispatcher {
    * One signed, SSRF-guarded POST. Never throws — a failure is a result.
    *
    * Public so a scheduled redelivery re-uses this exact path rather than
-   * opening a second one: the DNS re-check and the signature are guards, and a
-   * guard that only the first attempt goes through is not a guard.
+   * opening a second one: the DNS re-check, the pin and the signature are
+   * guards, and a guard that only the first attempt goes through is not a guard.
    */
   async attempt(webhook: DeliverableWebhook, body: string): Promise<WebhookSendResult> {
-    let url: URL;
+    let target: PublicHttpTarget;
     try {
-      // Re-checked on every send, not trusted from registration (TOCTOU).
-      url = await assertPublicHttpUrlResolved(webhook.url, this.resolver);
+      // Re-checked on every send, not trusted from registration (TOCTOU), and
+      // the sender connects to exactly the addresses this approved.
+      target = await resolvePublicHttpTarget(webhook.url, this.resolver);
     } catch (error) {
       return {
         ok: false,
@@ -275,7 +292,7 @@ export class WebhookDispatcher {
 
     const signed = signWebhook(webhook.secretKey, body);
     try {
-      return await this.sender(url, {
+      return await this.sender(target, {
         headers: { 'content-type': 'application/json', ...signed.headers },
         body,
         timeoutMs: this.timeoutMs,
@@ -359,35 +376,109 @@ export function writeableAttempt(
   };
 }
 
+/** Sent on every delivery, so a receiver can tell webhook traffic from anything else. */
+export const WEBHOOK_USER_AGENT = 'SiyahTus-Webhooks/1.0';
+
+export interface HttpWebhookSenderOptions {
+  /**
+   * Trust anchors a receiver's certificate is verified against, replacing
+   * Node's bundled roots. For tests — a local HTTPS receiver signed by a
+   * throwaway CA; production passes nothing. It adds no way to skip the check.
+   */
+  ca?: string;
+}
+
 /**
- * The production HTTP sender: POST with the signature headers, following no
- * redirects and bounded by a timeout. `fetch` is a parameter so the redirect and
- * timeout behaviour can be unit-tested without a real network.
+ * The production HTTP sender: POST with the signature headers to the pinned
+ * target, following no redirects and bounded by a timeout.
+ *
+ * `node:http`/`node:https` rather than `fetch`, because the whole point is the
+ * one knob `fetch` does not take: `lookup`. The request goes to the target's
+ * URL — so `Host`, SNI and the certificate check all see the registered name —
+ * but the name is never looked up; the socket gets the checked addresses from
+ * `pinnedConnection` (tm 256.9). With `fetch`, the check's answer was thrown
+ * away and the connection asked DNS again.
+ *
+ * What stays as it was: a 3xx is a failure and is not followed (`http.request`
+ * never follows one), an exchange with no status by the timeout is aborted and
+ * logged as `AbortError`, the signature headers go out untouched, and only 2xx
+ * counts.
+ * TLS verification is explicitly on, so `NODE_TLS_REJECT_UNAUTHORIZED=0`
+ * cannot switch it off for webhooks. A network failure is now logged by its
+ * code (`ECONNREFUSED`, `ERR_TLS_CERT_ALTNAME_INVALID`) instead of `fetch`'s
+ * blanket `TypeError`.
  */
-export function createHttpWebhookSender(fetchImpl: typeof fetch = fetch): WebhookSender {
-  return async (url, request) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), request.timeoutMs);
-    try {
-      const response = await fetchImpl(url, {
-        method: 'POST',
-        headers: request.headers,
-        body: request.body,
-        // A 3xx is a redirect we refuse to follow: it could send the POST — and
-        // its signature headers — to an internal address the SSRF check never saw.
-        redirect: 'manual',
-        signal: controller.signal,
-      });
-      // Only 2xx is a delivery. A 3xx (status preserved by redirect:'manual', or
-      // 0 for an opaque redirect) and any 4xx/5xx are failures worth retrying.
-      const ok = response.status >= 200 && response.status < 300;
-      return ok
-        ? { ok, statusCode: response.status }
-        : { ok, statusCode: response.status, error: `http_${response.status}` };
-    } catch (error) {
-      return { ok: false, error: error instanceof Error ? error.name : 'fetch_error' };
-    } finally {
-      clearTimeout(timer);
-    }
-  };
+export function createHttpWebhookSender(options: HttpWebhookSenderOptions = {}): WebhookSender {
+  return (target, request) =>
+    new Promise<WebhookSendResult>((resolve) => {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), request.timeoutMs);
+      let settled = false;
+      const settle = (result: WebhookSendResult): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        resolve(result);
+      };
+
+      const onResponse = (response: http.IncomingMessage): void => {
+        const status = response.statusCode ?? 0;
+        // The status is the whole result. The body is dropped unread: reading
+        // it would let a receiver hold the connection for as long as it cared
+        // to stream, and a reset after this is expected, not a failure.
+        response.on('error', () => {});
+        response.destroy();
+        // Only 2xx is a delivery. A 3xx and any 4xx/5xx are failures worth retrying.
+        const ok = status >= 200 && status < 300;
+        settle(
+          ok ? { ok, statusCode: status } : { ok, statusCode: status, error: `http_${status}` },
+        );
+      };
+
+      try {
+        const { lookup, servername } = pinnedConnection(target);
+        const common: http.RequestOptions = {
+          method: 'POST',
+          headers: {
+            'user-agent': WEBHOOK_USER_AGENT,
+            ...request.headers,
+            'content-length': String(Buffer.byteLength(request.body)),
+          },
+          lookup,
+          // One connection per attempt, never a pooled one: a kept-alive socket
+          // was pinned by an earlier attempt's check, not by this one.
+          agent: false,
+          signal: controller.signal,
+        };
+        const outgoing =
+          target.url.protocol === 'https:'
+            ? https.request(
+                target.url,
+                {
+                  ...common,
+                  ...(servername ? { servername } : {}),
+                  rejectUnauthorized: true,
+                  ...(options.ca ? { ca: options.ca } : {}),
+                },
+                onResponse,
+              )
+            : http.request(target.url, common, onResponse);
+        outgoing.on('error', (error) => settle(sendFailure(error)));
+        outgoing.end(request.body);
+      } catch (error) {
+        settle(sendFailure(error));
+      }
+    });
+}
+
+/**
+ * A failure the way the delivery log records it. A timeout keeps the name it
+ * has always been logged under; anything else is recorded by its code, which
+ * says what went wrong. Never the message — a message can carry an address.
+ */
+function sendFailure(error: unknown): WebhookSendResult {
+  if (!(error instanceof Error)) return { ok: false, error: 'send_error' };
+  if (error.name === 'AbortError') return { ok: false, error: 'AbortError' };
+  const { code } = error as NodeJS.ErrnoException;
+  return { ok: false, error: typeof code === 'string' && code !== '' ? code : error.name };
 }

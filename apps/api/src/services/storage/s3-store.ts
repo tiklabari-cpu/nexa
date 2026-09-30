@@ -19,9 +19,9 @@
  * SigV4 lives here, as a pure function over a request description, checked in
  * the tests against AWS's own published vectors rather than against itself.
  *
- * `fetch` is injectable for the reason `createHttpWebhookSender`'s is: the
- * interesting behaviour of this module is what it does with the *answers*, and
- * that has to be testable without standing anything up.
+ * `fetch` is injectable because the interesting behaviour of this module is
+ * what it does with the *answers*, and that has to be testable without
+ * standing anything up.
  *
  * ## The rule this module is really about
  *

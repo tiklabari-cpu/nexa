@@ -11,13 +11,29 @@
  * private network — by literal IP (v4 and v6, including IPv4-mapped) and by the
  * `localhost` name.
  *
- * The boundary this does NOT cross alone: a public hostname that *resolves* to a
- * private address (DNS rebinding) passes the literal check. A production fetcher
- * must additionally resolve the host and re-check the resolved IP, and pin it for
- * the connection. That belongs in the fetcher; this function guards the URL.
+ * ## A name is not an address
+ *
+ * `assertPublicHttpUrl` guards the URL, and that is enough for a caller that
+ * only stores or parses one (registration, the mocked crawler). A caller that
+ * opens a connection needs the other half: `hooks.evil.example` passes the
+ * literal check because it is a name, and resolves to `169.254.169.254`.
+ *
+ * Resolving and checking is still not enough on its own (tm 256.9). Until then
+ * the webhook sender checked the answer and then gave `fetch` the *name*, and
+ * `fetch` resolved it again for itself. A zero-TTL record answers the check
+ * with a public address and the connection, a moment later, with `127.0.0.1`
+ * (DNS rebinding — a time-of-check/time-of-use gap). So the two go together:
+ *
+ *   - `resolvePublicHttpTarget` resolves the name once and checks *every*
+ *     address, refusing the target if any one of them is internal;
+ *   - `pinnedConnection` is how a request is made to that target: its `lookup`
+ *     answers with exactly those addresses and never asks DNS, while the URL
+ *     keeps its name — so `Host` and TLS SNI still carry it and the
+ *     certificate is still checked against it.
  */
+import type { LookupAddress, LookupOptions } from 'node:dns';
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { isIP, type LookupFunction } from 'node:net';
 import { ApiError } from './api-error.js';
 
 /**
@@ -61,9 +77,9 @@ function normaliseHost(hostname: string): string {
 }
 
 /**
- * Resolve a hostname to its addresses. Injectable so a test needs no real DNS,
- * and so a deployment can swap in a resolver that pins the address for the
- * connection that follows.
+ * Resolve a hostname to its addresses. Injectable so a test needs no real DNS.
+ * Whatever it answers is what the connection is pinned to, so it is asked once
+ * per attempt and never again for that attempt.
  */
 export type HostResolver = (hostname: string) => Promise<string[]>;
 
@@ -72,45 +88,147 @@ const defaultResolver: HostResolver = async (hostname) => {
   return results.map((record) => record.address);
 };
 
+/** One address a connection may use — resolved, checked, never re-resolved. */
+export interface PinnedAddress {
+  address: string;
+  family: 4 | 6;
+}
+
 /**
- * The literal guard (`assertPublicHttpUrl`) plus the DNS re-check it deliberately
- * leaves to its caller: resolve the host and refuse if *any* resolved address is
- * private, loopback or link-local.
- *
- * This is what closes the DNS-rebinding gap — `hooks.evil.example` that passes
- * the literal check because it is a name, then resolves to `169.254.169.254`.
- * Because DNS can change between registration and delivery (TOCTOU), the webhook
- * path runs this again immediately before every send, not only when the URL is
- * first stored.
+ * Where a request may go: the URL it was asked for, whose hostname `Host` and
+ * TLS SNI keep carrying, and every address that name resolved to, each one
+ * checked. A literal IP is its own single address.
  */
-export async function assertPublicHttpUrlResolved(
+export interface PublicHttpTarget {
+  url: URL;
+  addresses: readonly PinnedAddress[];
+}
+
+/**
+ * The literal guard (`assertPublicHttpUrl`) plus the DNS check it deliberately
+ * leaves to its caller: resolve the host and refuse if *any* resolved address
+ * is private, loopback or link-local — then hand back the addresses, so the
+ * connection is made to what was checked and not to a fresh answer.
+ *
+ * Because DNS can change between registration and delivery, the webhook path
+ * runs this immediately before every send, not only when the URL is stored;
+ * because it can also change between this check and the connection, the
+ * connection uses this function's answer (`pinnedConnection`).
+ */
+export async function resolvePublicHttpTarget(
   raw: string,
   resolver: HostResolver = defaultResolver,
-): Promise<URL> {
+): Promise<PublicHttpTarget> {
   const url = assertPublicHttpUrl(raw);
 
   const host = normaliseHost(url.hostname);
   // A literal IP was already range-checked by assertPublicHttpUrl; there is
   // nothing to resolve, and calling DNS on an IP would be pointless.
-  if (isIP(host)) return url;
+  const literal = isIP(host);
+  if (literal === 4 || literal === 6)
+    return { url, addresses: [{ address: host, family: literal }] };
 
-  let addresses: string[];
+  let answers: string[];
   try {
-    addresses = await resolver(host);
+    answers = await resolver(host);
   } catch {
     throw ApiError.validation('That host could not be resolved.');
   }
-  if (addresses.length === 0) {
+  if (answers.length === 0) {
     throw ApiError.validation('That host could not be resolved.');
   }
-  for (const address of addresses) {
-    if (isBlockedHost(address)) {
+
+  const addresses: PinnedAddress[] = [];
+  for (const answer of answers) {
+    const family = isIP(answer);
+    // An answer that is not an address cannot be range-checked, so it cannot
+    // be connected to either.
+    if (family !== 4 && family !== 6) {
+      throw ApiError.validation('That host could not be resolved.');
+    }
+    if (isBlockedHost(answer)) {
       throw ApiError.validation(
         'That address resolves to a private or internal host and cannot be fetched.',
       );
     }
+    addresses.push({ address: answer, family });
   }
-  return url;
+  return { url, addresses };
+}
+
+/** The `code` a connection carries when it is asked to go somewhere it was not pinned. */
+export const UNPINNED_CODE = 'ERR_SSRF_UNPINNED';
+
+function unpinned(message: string): NodeJS.ErrnoException {
+  const error: NodeJS.ErrnoException = new Error(message);
+  error.code = UNPINNED_CODE;
+  return error;
+}
+
+/**
+ * How a request is made to a checked target without asking DNS again.
+ *
+ * `lookup` goes to `http.request` / `https.request` (and through them to
+ * `net.connect`) in place of the system resolver. It answers only for the
+ * target's own hostname and only with the pinned addresses — all of them when
+ * the socket asks for all (Node's happy-eyeballs connect does), so a receiver
+ * with an IPv6 and an IPv4 address still falls back from one to the other, but
+ * never to an address the check did not see. `servername` is the registered
+ * name for TLS SNI (RFC 6066: never an address); the certificate is verified
+ * against the same name.
+ *
+ * A literal-IP URL is connected to without any lookup at all, so it is only
+ * accepted when that very address is the pin — otherwise the pin would be
+ * decoration. Throws `ERR_SSRF_UNPINNED` for that and for a target that pins
+ * nothing.
+ */
+export function pinnedConnection(target: PublicHttpTarget): {
+  lookup: LookupFunction;
+  servername: string | undefined;
+} {
+  const hostname = normaliseHost(target.url.hostname);
+  const pinned = target.addresses;
+  if (pinned.length === 0) throw unpinned('The target pins no address to connect to.');
+  if (isIP(hostname) !== 0 && !pinned.some((entry) => entry.address === hostname)) {
+    throw unpinned('The target URL names an address it does not pin.');
+  }
+
+  const pinnedLookup: LookupFunction = (requested, options: LookupOptions, callback) => {
+    const family = requestedFamily(options.family);
+    const eligible = family === 0 ? pinned : pinned.filter((entry) => entry.family === family);
+    process.nextTick(() => {
+      // Only ever asked for the target's own name; anything else is not this
+      // lookup's to answer, and answering it would connect somewhere unchecked.
+      if (normaliseHost(requested) !== hostname) {
+        callback(unpinned('The connection asked for a host the target does not pin.'), '');
+        return;
+      }
+      const first = eligible[0];
+      if (!first) {
+        callback(unpinned('The target pins no address of the requested family.'), '');
+        return;
+      }
+      if (options.all) {
+        callback(
+          null,
+          eligible.map((entry): LookupAddress => ({
+            address: entry.address,
+            family: entry.family,
+          })),
+        );
+      } else {
+        callback(null, first.address, first.family);
+      }
+    });
+  };
+
+  return { lookup: pinnedLookup, servername: isIP(hostname) === 0 ? hostname : undefined };
+}
+
+function requestedFamily(family: LookupOptions['family']): 0 | 4 | 6 {
+  if (family === 4 || family === 'IPv4') return 4;
+  if (family === 6 || family === 'IPv6') return 6;
+  return 0;
 }
 
 /** True when a host names this machine or a private/reserved network. */
@@ -122,7 +240,7 @@ export function isBlockedHost(host: string): boolean {
   if (kind === 4) return isPrivateV4(host);
   if (kind === 6) return isPrivateV6(host);
 
-  // A public hostname passes the literal check (see the DNS-rebinding note above).
+  // A public hostname passes the literal check (see "A name is not an address").
   return false;
 }
 
@@ -146,26 +264,75 @@ function isPrivateV4(ip: string): boolean {
   return false;
 }
 
+/**
+ * Judged on the address's eight 16-bit words, not on how it happens to be
+ * spelled: since tm 256.9 a resolver's AAAA answer goes straight to the socket,
+ * so `0:0:0:0:0:ffff:7f00:1`, `::FFFF:127.0.0.1` and `::ffff:7f00:1` must all
+ * read as the loopback address they are.
+ */
 function isPrivateV6(ip: string): boolean {
-  const host = ip.toLowerCase();
+  const words = ipv6Words(ip);
+  // An address this cannot read is an address it cannot vouch for.
+  if (!words) return true;
+  const [w0, w1, w2, w3, w4, w5, w6, w7] = words as [
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+    number,
+  ];
 
-  // Anything in `::/xx` — the unspecified address, loopback `::1`, and both the
-  // IPv4-mapped (`::ffff:a.b.c.d`, which WHATWG URL rewrites to `::ffff:7f00:1`)
-  // and IPv4-compatible forms. None are globally routable, and blocking the
-  // whole prefix is what stops the mapped-address bypass regardless of how the
-  // URL parser compressed it.
-  if (host.startsWith('::')) return true;
-
-  const head = host.split(':')[0] ?? '';
-  if (
-    head.startsWith('fe8') ||
-    head.startsWith('fe9') ||
-    head.startsWith('fea') ||
-    head.startsWith('feb')
-  ) {
-    return true; // fe80::/10 link-local
+  // NAT64 (RFC 6052): the well-known prefix carries an IPv4 address in its
+  // last 32 bits, and a translator on the path delivers the packet to *that*
+  // address — so it is judged as the IPv4 address it stands for.
+  if (w0 === 0x64 && w1 === 0xff9b && w2 === 0 && w3 === 0 && w4 === 0 && w5 === 0) {
+    return isPrivateV4(wordsToV4(w6, w7));
   }
-  if (head.startsWith('fc') || head.startsWith('fd')) return true; // fc00::/7 unique-local
-  if (head.startsWith('fec')) return true; // fec0::/10 deprecated site-local
+  // Local-use NAT64 (RFC 8215, 64:ff9b:1::/48): translates into the operator's
+  // own network by definition.
+  if (w0 === 0x64 && w1 === 0xff9b && w2 === 1) return true;
+  // The rest of ::/8 — the unspecified address, loopback `::1`, IPv4-mapped
+  // (`::ffff:a.b.c.d`) and IPv4-compatible forms. None are globally routable,
+  // and blocking the whole prefix is what stops the mapped-address bypass
+  // regardless of how it was written.
+  if (w0 < 0x0100) return true;
+  // 6to4 (2002::/16): an IPv4 address in bits 16–47, reached through it.
+  if (w0 === 0x2002) return isPrivateV4(wordsToV4(w1, w2));
+  if ((w0 & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((w0 & 0xffc0) === 0xfec0) return true; // fec0::/10 deprecated site-local
+  if ((w0 & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((w0 & 0xff00) === 0xff00) return true; // ff00::/8 multicast
   return false;
+}
+
+/**
+ * The eight words of an IPv6 address, or null if it is not one this can read.
+ *
+ * Parsed from the WHATWG serialisation, which is canonical: lowercase, at most
+ * one `::`, and an IPv4 tail rewritten as two hex words. It also refuses a
+ * zone id (`fe80::1%eth0`) — an address scoped to one link is never a target.
+ */
+function ipv6Words(ip: string): number[] | null {
+  let canonical: string;
+  try {
+    canonical = new URL(`http://[${ip}]/`).hostname.slice(1, -1);
+  } catch {
+    return null;
+  }
+  const [head = '', tail] = canonical.split('::');
+  const left = head === '' ? [] : head.split(':');
+  const right = tail === undefined || tail === '' ? [] : tail.split(':');
+  const gap = 8 - left.length - right.length;
+  if (tail === undefined ? gap !== 0 : gap < 1) return null;
+  const words = [...left, ...Array<string>(tail === undefined ? 0 : gap).fill('0'), ...right].map(
+    (word) => Number.parseInt(word, 16),
+  );
+  return words.length === 8 && words.every((word) => word >= 0 && word <= 0xffff) ? words : null;
+}
+
+function wordsToV4(high: number, low: number): string {
+  return `${high >> 8}.${high & 0xff}.${low >> 8}.${low & 0xff}`;
 }

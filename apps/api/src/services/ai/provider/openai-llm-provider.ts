@@ -6,7 +6,7 @@
  * `model`, `messages` and `max_completion_tokens` and nothing else — no
  * streaming, no tools, no response format (ADR §5, §6). The answer is
  * `choices[0].message.content`, the bill is `usage`. The network is a
- * constructor argument (`fetchImpl`, the `createHttpWebhookSender` pattern), so
+ * constructor argument (`fetchImpl`, as in `s3-store.ts`), so
  * every test of this file runs without a provider and without a key.
  *
  * ## When it fails

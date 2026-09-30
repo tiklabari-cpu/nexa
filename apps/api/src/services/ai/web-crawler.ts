@@ -10,7 +10,11 @@
  * turned into knowledge.
  *
  * The SSRF guard (`assertPublicHttpUrl`) runs *before* anything here, in the
- * route, so a private URL never reaches the fetcher at all.
+ * route, so a private URL never reaches the fetcher at all. That literal check
+ * is enough only because this fetcher opens no connection: a real one must
+ * resolve through `resolvePublicHttpTarget` and connect through
+ * `pinnedConnection` (`lib/ssrf.ts`), as the webhook sender does — a checked
+ * name is not a checked address (tm 256.9).
  */
 
 export interface CrawlResult {

@@ -10364,11 +10364,11 @@
             "description": "POST /auth/signup herkese acik, e-posta dogrulamasi yok, kapatma anahtari yok. Canli adreste yabancilar calisma alani acip sahibin OpenAI anahtarini ve posta kutusunu (calisma alani basina 200'e kadar davet) kullanabilir.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: tm 255 details (degismedi). Bu epic'in kaynagi: 2026-09-30 bagimsiz kontrol (PLAN SD193, HANDOFF ust blok).\n\nXHIGH GEREKCESI: (1) kimlik dogrulamasiz uc noktada yeni politika.\n\nKODDA BUGUN:\n- apps/api/src/routes/account-lifecycle.ts:77 POST /auth/signup public, oturumu hemen donuyor; env anahtari yok (env.ts grep SIGNUP = 0).\n- account-lifecycle.ts:395 POST /invitations istek basina 50 adres; lib/entitlements.ts:196 SEAT_CEILING = 200.\n- apps/web/src/features/auth/PublicPages.tsx:154 signupFailureMessage bilinmeyen hatayi genel mesaja cevirir; :202 cagri.\n\nKAPSAM: SIGNUP_ENABLED (true|false, varsayilan true: dev/test/demo degismez). false iken signup, VERITABANINA DOKUNMADAN 403 not_allowed + details.reason 'signup_closed' (hata taksonomisi degismez). Web kayit ekrani bu durumu kendi mesajiyla soyler (butun locale'ler, i18n kapsama testi). .env.example + .env.production.example + production-checklist S9: ilk calisma alan(lar)i acildiktan sonra SIGNUP_ENABLED=false + up -d. Davet akisi degismez.\n\nKAPSAM DISI: e-posta dogrulamasi, davet-kodu ile kayit, CAPTCHA.\n\nPLAN: damga degismez (00.2 KK'si kayit akisini tarif eder, o calisiyor); SD kaydi + K00.2 maddesi.",
             "testStrategy": "Entegrasyon: SIGNUP_ENABLED=false -> 403 not_allowed, details.reason signup_closed, hicbir organizations/accounts satiri yazilmadi; true -> 201 (mevcut testler degismeden yesil). env birim testi (true/false/bos/gecersiz). Web birim: kayit ekrani signup_closed mesajini gosterir. i18n-coverage yesil. DoD: CONVENTIONS S1 tamami; e2e signup/onboarding akislari yesil.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "256",
             "priority": "high",
-            "updatedAt": "2026-09-30T14:58:16.681Z"
+            "updatedAt": "2026-09-30T16:11:56.039Z"
           },
           {
             "id": 4,
@@ -10480,12 +10480,12 @@
             "updatedAt": "2026-09-30T11:49:11.000Z"
           }
         ],
-        "updatedAt": "2026-09-30T14:58:16.681Z"
+        "updatedAt": "2026-09-30T16:11:56.039Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-30T14:58:16.682Z",
+      "lastModified": "2026-09-30T16:11:56.039Z",
       "taskCount": 256,
       "completedCount": 255,
       "tags": [

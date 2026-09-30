@@ -277,7 +277,19 @@ its billing are accepted, and whether the pilot's region is `eu` or `us`. Once a
 `RETRIEVAL_THRESHOLD` has to be measured once in the real embedding space. It was only
 measured in the stub's space (tm 255.8, PLAN §D183 (5)): with the four `EMBEDDING_*` keys set,
 run `pnpm --filter @siyahtus/api measure:knowledge-recall`. Exit 0 means PASS, 1 FAIL, 2 means it
-was not measured, which is not a pass.
+was not measured, which is not a pass. The threshold is a setting since tm 256.6: the command
+measures the value in `.env` (default `0.25`), marks it `*` in its sweep, and names the key.
+If the sweep points to a different value, set `RETRIEVAL_THRESHOLD=<value>` in `.env` (a
+number in `[-1, 1]`; an empty value stops the api at boot) and restart the api with
+`docker compose -f docker-compose.pilot.yml up -d api`. No rebuild is needed. Run the command
+again to confirm PASS at the new value.
+
+**Choosing `LLM_MODEL` (tm 256.6).** Pick a chat model that answers without a reasoning phase.
+A reasoning model counts its hidden reasoning against `max_completion_tokens`, which the api
+sets from `LLM_MAX_OUTPUT_TOKENS` (default 400). It can use all of it on reasoning and return no
+text, and every customer question then goes to a human. The api logs this as a `warn` line with
+`event` `llm.failed`, `kind` `no_answer`, `reason` `length` and a `hint` field that names both
+fixes. If the account only offers reasoning models, raise `LLM_MAX_OUTPUT_TOKENS` (at most 16384) until the `hint` lines stop, and note that the output is billed at the higher count.
 
 **Reverse proxy (tm 256.5).** [`infra/pilot/Caddyfile.example`](../infra/pilot/Caddyfile.example)
 is a ready configuration for Caddy on the pilot host. It serves four names, gets and renews
@@ -438,8 +450,6 @@ Certificates, DNS records and the host itself are the owner's.
 - Outside the pilot by the owner's decision (2026-09-22): payments/Stripe, messaging channels,
   mobile push, S3 + virus scanning + SIEM + load testing, the MCP protocol, social sign-in, and
   Kubernetes (the Helm chart is kept, not used).
-- A malformed JSON request body is answered 500 instead of 400 (found in tm 255.15, no task
-  open).
 
 ## Explicitly out of scope
 

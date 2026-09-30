@@ -33,6 +33,7 @@ async function main(): Promise<void> {
   // embedded with anything else would land in a space questions never search.
   const knowledge = new KnowledgeService({
     embeddings: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+    retrievalThreshold: env.RETRIEVAL_THRESHOLD,
   });
   try {
     const report = await new KnowledgeRefreshSweeper(db, {

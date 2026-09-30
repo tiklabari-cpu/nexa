@@ -104,6 +104,7 @@ export function buildSchedulerJobs({
   automations,
   knowledge = new KnowledgeService({
     embeddings: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+    retrievalThreshold: env.RETRIEVAL_THRESHOLD,
   }),
 }: SchedulerJobsOptions): JobDefinition[] {
   const intervals = jobIntervals(env);

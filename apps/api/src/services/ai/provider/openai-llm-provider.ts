@@ -49,7 +49,7 @@
 import pino from 'pino';
 import { LLM_SECRET_LOG_PATHS } from '../../../lib/log-redact.js';
 import { CircuitBreaker, type CircuitPermit } from './circuit-breaker.js';
-import { LlmProviderError } from './llm-error.js';
+import { LLM_EMPTY_LENGTH_HINT, LlmProviderError } from './llm-error.js';
 import type {
   LlmCompletion,
   LlmCompletionRequest,
@@ -454,10 +454,14 @@ function readCompletion(
     return malformed('shape');
   }
 
-  const unanswered = (reason: string) =>
-    failed(new LlmProviderError('no_answer', { ...meta, reason, usage }));
+  const unanswered = (reason: string, hint?: string) =>
+    failed(new LlmProviderError('no_answer', { ...meta, reason, usage, hint: hint ?? null }));
   // `length` is a reply cut off at max_completion_tokens; `content_filter` and
-  // anything else are not a finished reply either.
+  // anything else are not a finished reply either. Cut off before any text at
+  // all is the configuration's failure, not the question's: said in the log.
+  if (finish === 'length' && !(typeof content === 'string' && content.trim())) {
+    return unanswered('length', LLM_EMPTY_LENGTH_HINT);
+  }
   if (finish !== 'stop') return unanswered(safeToken(finish, SAFE_CODE) ?? 'finish_reason');
   if (typeof refusal === 'string' && refusal.trim()) return unanswered('refusal');
   const answer = typeof content === 'string' ? content.trim() : '';
@@ -481,5 +485,6 @@ function failureFields(error: LlmProviderError): Record<string, unknown> {
     ...(error.code ? { code: error.code } : {}),
     ...(error.reason ? { reason: error.reason } : {}),
     ...(error.requestId ? { requestId: error.requestId } : {}),
+    ...(error.hint ? { hint: error.hint } : {}),
   };
 }

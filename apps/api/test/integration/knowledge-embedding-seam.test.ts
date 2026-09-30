@@ -282,6 +282,48 @@ describe('the embedding seam (FR-MOD-06.3.2)', () => {
     });
   });
 
+  // The threshold measured in the real space is a setting, not a rebuild
+  // (tm 256.6): the server hands `RETRIEVAL_THRESHOLD` to its one knowledge
+  // service, so the customer path cuts where the operator said.
+  describe('the server searches at RETRIEVAL_THRESHOLD, not at the compiled default', () => {
+    const embeddings = new FakeEmbeddingProvider();
+    let strict: TestServer;
+
+    beforeAll(async () => {
+      strict = await startTestServer({ RETRIEVAL_THRESHOLD: '0.99' }, { embeddings });
+    });
+
+    afterAll(async () => {
+      await strict.close();
+    });
+
+    beforeEach(async () => {
+      await seedFixtures(owner);
+      await clearRateLimits(strict.app);
+      embeddings.reset();
+    });
+
+    it('hands the question to a human when the best passage scores under the setting (FR-MOD-06.3.2)', async () => {
+      const ws = await seedWorkspace();
+      expect((await addArticle(strict, ws)).statusCode).toBe(201);
+      const delivery = (await chunksOf(ws.licenseId)).find((row) => row.chunk_text === DELIVERY)!;
+      const questionScore = await similarityTo(delivery.id, fakeEmbedding(QUESTION));
+      // The same passage the default server answers from above: a real match,
+      // cut only because the setting asks for more.
+      expect(questionScore).toBeGreaterThan(0.25);
+      expect(questionScore).toBeLessThan(0.99);
+
+      const { events } = await customerAsks(strict, ws, QUESTION);
+
+      expect(events.filter((event) => event.authorType === 'bot')).toHaveLength(0);
+      const run = await lastRun(ws);
+      expect(run?.log.outcome).toBe('skipped');
+      expect(run?.log.entries.find((entry) => entry.step === 'send_message')?.detail).toBe(
+        'nothing in the knowledge base above 0.99 similarity',
+      );
+    });
+  });
+
   describe('indexing fails and says so when the provider cannot embed — nothing is written', () => {
     const embeddings = new FakeEmbeddingProvider();
     let server: TestServer;

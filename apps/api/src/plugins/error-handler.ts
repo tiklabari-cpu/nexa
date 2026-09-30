@@ -37,17 +37,25 @@ function normalise(error: unknown): ApiError {
   if (fastifyError.validation) {
     return ApiError.validation(fastifyError.message ?? 'Request failed validation.');
   }
-  if (
-    fastifyError.code === 'FST_ERR_CTP_EMPTY_JSON_BODY' ||
-    fastifyError.code === 'FST_ERR_CTP_INVALID_MEDIA_TYPE'
-  ) {
-    return ApiError.validation(fastifyError.message ?? 'Invalid request body.');
-  }
   // A body over `bodyLimit` was answering 500 with a generic envelope, which
   // reads as "we broke" when the caller is the one who has to change something.
   // Found while pinning the 1 MiB limit down for uploads (FR-MOD-08.9.4).
   if (fastifyError.code === 'FST_ERR_CTP_BODY_TOO_LARGE') {
     return ApiError.validation('Request body is larger than this endpoint accepts.');
+  }
+  // Every other body the content-type parser refuses — malformed JSON, an empty
+  // JSON body, a media type nothing parses, a body shorter than its
+  // Content-Length — is the caller's to fix too. Matched by prefix and by
+  // Fastify's own 4xx, not by a list: a malformed JSON body was missing from
+  // the list and answered 500 with an error-level line (tm 256.6). The parser's
+  // 500s (a parser registered twice, …) are ours and stay `internal`.
+  if (
+    fastifyError.code?.startsWith('FST_ERR_CTP_') &&
+    fastifyError.statusCode !== undefined &&
+    fastifyError.statusCode >= 400 &&
+    fastifyError.statusCode < 500
+  ) {
+    return ApiError.validation(fastifyError.message ?? 'Invalid request body.');
   }
   if (fastifyError.statusCode === 404) return ApiError.notFound('Route not found.');
   if (fastifyError.statusCode === 401) return ApiError.authentication();

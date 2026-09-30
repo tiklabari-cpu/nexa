@@ -297,7 +297,10 @@ export async function buildServer({
       logger: app.log.child({ component: 'embedding' }),
       ...(embeddingFetch ? { fetchImpl: embeddingFetch } : {}),
     });
-  const knowledge = new KnowledgeService({ embeddings });
+  const knowledge = new KnowledgeService({
+    embeddings,
+    retrievalThreshold: env.RETRIEVAL_THRESHOLD,
+  });
 
   await app.register(errorHandler);
   // First, and with no dependencies of its own: `/health/ready` has to be able

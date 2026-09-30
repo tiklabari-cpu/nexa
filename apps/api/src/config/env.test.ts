@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ZodTypeAny } from 'zod';
 import { REGIONS } from '@siyahtus/types';
+import { RETRIEVAL_THRESHOLD } from '../services/ai/knowledge-service.js';
 import { EMBEDDING_PROVIDERS } from '../services/ai/provider/embedding-provider.js';
 import { LLM_PROVIDERS } from '../services/ai/provider/llm-provider.js';
 import { SIEM_PROVIDERS } from '../services/audit/siem-target.js';
@@ -102,6 +103,27 @@ describe('ASSIGNEE_EMAIL_COOLDOWN_MS', () => {
     expect(() => parseEnv({ ...BASE, ASSIGNEE_EMAIL_COOLDOWN_MS: value })).toThrow(
       /ASSIGNEE_EMAIL_COOLDOWN_MS/,
     );
+  });
+});
+
+/** The knowledge retrieval threshold, a setting since tm 256.6. */
+describe('RETRIEVAL_THRESHOLD (FR-MOD-06.3.2)', () => {
+  it('is the measured stub default when unset', () => {
+    expect(parseEnv(BASE).RETRIEVAL_THRESHOLD).toBe(RETRIEVAL_THRESHOLD);
+    expect(RETRIEVAL_THRESHOLD).toBe(0.25);
+  });
+
+  it.each([
+    ['0.42', 0.42],
+    ['-1', -1],
+    ['1', 1],
+    ['0', 0],
+  ])('reads %j as %d', (value, expected) => {
+    expect(parseEnv({ ...BASE, RETRIEVAL_THRESHOLD: value }).RETRIEVAL_THRESHOLD).toBe(expected);
+  });
+
+  it.each(['', '1.01', '-1.5', 'high', '0,3'])('refuses %j at boot', (value) => {
+    expect(() => parseEnv({ ...BASE, RETRIEVAL_THRESHOLD: value })).toThrow(/RETRIEVAL_THRESHOLD/);
   });
 });
 

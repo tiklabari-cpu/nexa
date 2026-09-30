@@ -25,6 +25,10 @@
  * the full ranking is read once and the threshold can be moved along it: the
  * sweep says what recall@k and the false answers would be at each value — the
  * measurement `RETRIEVAL_THRESHOLD` has to be re-decided from in a new space.
+ * The threshold under test is the configured one (the `RETRIEVAL_THRESHOLD`
+ * setting, tm 256.6; the stub is measured at the default), and the summary
+ * says how to move it: one line in `.env` and a restart of the api — no
+ * rebuild.
  *
  * The report goes to stdout as JSON, a summary to stderr. Exit 0 when the
  * gate holds, 1 when it does not, 2 when nothing was measured.
@@ -71,9 +75,18 @@ function parseArgs(argv: string[]): { stub: boolean } {
   return { stub };
 }
 
-/** The provider to measure, or why there is none. */
-function chooseProvider(stub: boolean): EmbeddingProvider | string {
-  if (stub) return new MockEmbeddingProvider();
+/** The setting the threshold is read from — what the summary tells the operator to change. */
+const THRESHOLD_SETTING = 'RETRIEVAL_THRESHOLD';
+
+interface Subject {
+  provider: EmbeddingProvider;
+  /** The threshold the api would search at with this configuration. */
+  threshold: number;
+}
+
+/** The provider to measure and its configured threshold, or why there is none. */
+function chooseProvider(stub: boolean): Subject | string {
+  if (stub) return { provider: new MockEmbeddingProvider(), threshold: RETRIEVAL_THRESHOLD };
   const env = parseEnv();
   if (env.EMBEDDING_PROVIDER === 'mock') {
     return 'EMBEDDING_PROVIDER is mock — set EMBEDDING_PROVIDER=openai to measure a real model (or pass --stub to measure the stub on purpose)';
@@ -81,18 +94,22 @@ function chooseProvider(stub: boolean): EmbeddingProvider | string {
   if (!env.embedding.openai) {
     return `EMBEDDING_PROVIDER=${env.EMBEDDING_PROVIDER} needs EMBEDDING_API_BASE_URL, EMBEDDING_MODEL and EMBEDDING_API_KEY`;
   }
-  return createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding);
+  return {
+    provider: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+    threshold: env.RETRIEVAL_THRESHOLD,
+  };
 }
 
 async function main(): Promise<number> {
   const args = parseArgs(process.argv.slice(2));
-  const provider = chooseProvider(args.stub);
-  if (typeof provider === 'string') {
+  const subject = chooseProvider(args.stub);
+  if (typeof subject === 'string') {
     process.stderr.write(
-      `measure:knowledge-recall SKIPPED — ${provider}. Nothing was measured; this is not a pass.\n`,
+      `measure:knowledge-recall SKIPPED — ${subject}. Nothing was measured; this is not a pass.\n`,
     );
     return SKIPPED;
   }
+  const { provider, threshold } = subject;
 
   const set = loadGoldenSet();
   const datastores = await provisionIsolatedDatastores();
@@ -100,7 +117,7 @@ async function main(): Promise<number> {
   const owner = ownerClient();
   const app = new PrismaClient({ datasourceUrl: process.env['DATABASE_APP_URL'] });
   try {
-    const knowledge = new KnowledgeService({ embeddings: provider });
+    const knowledge = new KnowledgeService({ embeddings: provider, retrievalThreshold: threshold });
     const fx = await seedFixtures(owner);
     const tenant = { licenseId: fx.a.licenseId, organizationId: fx.a.organizationId };
     const agents = await seedGoldenKnowledgeBase(owner, knowledge, tenant, set);
@@ -123,7 +140,7 @@ async function main(): Promise<number> {
       embedded,
       limit: FULL_RANKING,
     });
-    const thresholds = [...new Set([...SWEEP, RETRIEVAL_THRESHOLD])].sort((a, b) => a - b);
+    const thresholds = [...new Set([...SWEEP, threshold])].sort((a, b) => a - b);
     const calibration = calibrate(set, rankings, thresholds);
 
     process.stdout.write(
@@ -131,7 +148,8 @@ async function main(): Promise<number> {
         {
           provider: provider.id,
           space: provider.space,
-          threshold: RETRIEVAL_THRESHOLD,
+          threshold,
+          thresholdSetting: THRESHOLD_SETTING,
           gate: RECALL_GATE,
           verdict: failures.length === 0 ? 'pass' : 'fail',
           failures,
@@ -145,13 +163,14 @@ async function main(): Promise<number> {
     const sweep = calibration.sweep
       .map(
         (row) =>
-          `  ${row.threshold.toFixed(2)}${row.threshold === RETRIEVAL_THRESHOLD ? '*' : ' '}  recall@${RECALL_GATE.k} ${row.found}/${report.answerable}  false answers ${row.falseAnswers}/${report.unanswerable}`,
+          `  ${row.threshold.toFixed(2)}${row.threshold === threshold ? '*' : ' '}  recall@${RECALL_GATE.k} ${row.found}/${report.answerable}  false answers ${row.falseAnswers}/${report.unanswerable}`,
       )
       .join('\n');
     process.stderr.write(
       `measure:knowledge-recall — ${provider.space}\n${formatReport(report)}\n` +
-        `threshold sweep (* = RETRIEVAL_THRESHOLD):\n${sweep}\n` +
-        `verdict: ${failures.length === 0 ? 'PASS' : `FAIL — ${failures.join('; ')}`}\n`,
+        `threshold sweep (* = ${THRESHOLD_SETTING}, now ${threshold}):\n${sweep}\n` +
+        `verdict: ${failures.length === 0 ? 'PASS' : `FAIL — ${failures.join('; ')}`}\n` +
+        `to search at another value: ${THRESHOLD_SETTING}=<value> in .env, then restart the api — no rebuild\n`,
     );
     return failures.length === 0 ? 0 : 1;
   } finally {

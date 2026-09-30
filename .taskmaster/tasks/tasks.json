@@ -10436,11 +10436,11 @@
             "description": "assertPublicHttpUrlResolved adi cozer ve denetler, ama gonderici fetch'e adi verir ve fetch yeniden cozer (TOCTOU). Kotu niyetli bir calisma alani yoneticisi DNS'i iki cozumleme arasinda cevirerek imzali POST'u 127.0.0.1 / 169.254.169.254 / Redis'e yollatabilir. 08.8.4 ve S7 bu yuzden ◐.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: tm 255 details (degismedi). Bu epic'in kaynagi: 2026-09-30 bagimsiz kontrol (PLAN SD193, HANDOFF ust blok).\n\nOPUS-MAX GEREKCESI: guvenlik siniri (SSRF).\n\nKODDA BUGUN:\n- apps/api/src/lib/ssrf.ts:14-17 kendi yorumu: 'A production fetcher must additionally resolve the host and re-check the resolved IP, and pin it for the connection. That belongs in the fetcher'.\n- ssrf.ts:86-114 assertPublicHttpUrlResolved adresleri denetler, yalniz URL doner.\n- apps/api/src/services/webhooks/webhook-dispatcher.ts:264-274 attempt() denetler; :367-393 createHttpWebhookSender fetch(url) ile ADI verir -> yeniden cozumleme.\n\nKAPSAM: denetlenen adres baglantiya sabitlenir (Host basligi ve TLS SNI orijinal ad olarak korunur; IPv4/IPv6; birden fazla adres varsa hepsi denetlenir, sabitlenen denetlenmislerden biri); yonlendirme reddi, zaman asimi ve imza davranisi degismez; zamanlanmis yeniden teslim ayni yoldan gecer.\n\nPLAN: 08.8.4 ◐ -> ✅ ve S7 ◐ -> ✅ (K08.8.4, KS7); Faz-1 Must sayaci + Genel durum + Kapanis hucresi yeniden KAPALI (AÇIK kelimesi tarihcede yazilmaz).",
             "testStrategy": "Kirmizi-once: ilk cagrida genel, ikincide 127.0.0.1 donen sahte cozumleyiciyle teslim ic adrese GITMEZ (yerel dinleyici hic istek almaz); normal teslim Host/SNI korunarak basarili (yerel HTTPS test sunucusu ya da enjekte baglanti); IPv6 literal/eslenmis adresler; mevcut ssrf + webhook testleri yesil. DoD: CONVENTIONS S1 tamami; e2e webhook/developers akislari yesil.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "256",
             "priority": "high",
-            "updatedAt": "2026-09-30T19:19:36.367Z"
+            "updatedAt": "2026-09-30T20:42:06.119Z"
           },
           {
             "id": 10,
@@ -10480,12 +10480,12 @@
             "updatedAt": "2026-09-30T11:49:11.000Z"
           }
         ],
-        "updatedAt": "2026-09-30T19:19:36.367Z"
+        "updatedAt": "2026-09-30T20:42:06.119Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-30T19:19:36.368Z",
+      "lastModified": "2026-09-30T20:42:06.120Z",
       "taskCount": 256,
       "completedCount": 255,
       "tags": [

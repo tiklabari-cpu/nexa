@@ -57,6 +57,36 @@ describe('SIYAHTUS_REGION', () => {
 });
 
 /**
+ * The sign-up switch (tm 256.3). Open unless a deployment says otherwise, and
+ * only the two literal words count: the value that matters is the one written
+ * to close the door, so a spelling that cannot be read stops the boot rather
+ * than being taken as "open".
+ */
+describe('SIGNUP_ENABLED', () => {
+  it('is open when unset, so dev, test and the demo keep their sign-up', () => {
+    expect(parseEnv(BASE).SIGNUP_ENABLED).toBe(true);
+  });
+
+  it('reads true and false', () => {
+    expect(parseEnv({ ...BASE, SIGNUP_ENABLED: 'true' }).SIGNUP_ENABLED).toBe(true);
+    expect(parseEnv({ ...BASE, SIGNUP_ENABLED: 'false' }).SIGNUP_ENABLED).toBe(false);
+  });
+
+  it('refuses an empty value rather than guessing which way it was meant', () => {
+    // `SIGNUP_ENABLED=` in a compose `.env` arrives as '' — a line someone
+    // wrote, most likely on the way to `false`.
+    expect(() => parseEnv({ ...BASE, SIGNUP_ENABLED: '' })).toThrow(/SIGNUP_ENABLED/);
+  });
+
+  it.each(['0', '1', 'no', 'off', 'False', 'TRUE', ' false'])(
+    'refuses %j instead of reading it as open or closed',
+    (value) => {
+      expect(() => parseEnv({ ...BASE, SIGNUP_ENABLED: value })).toThrow(/SIGNUP_ENABLED/);
+    },
+  );
+});
+
+/**
  * The provider keys (M-PROV-a · §D113/K3).
  *
  * §D113/K3 found `MAIL_PROVIDER`, `STORAGE_PROVIDER` and `STRIPE_PROVIDER`
@@ -278,6 +308,13 @@ describe('production configuration', () => {
     // to reach Postgres as `siyahtus_app`, never as the owner.
     expect(env.runtimeDatabaseUrl).toBe(PROD_BASE['DATABASE_APP_URL']);
     expect(env.runtimeDatabaseUrl).not.toBe(env.DATABASE_URL);
+  });
+
+  it('boots with sign-up open or closed — neither is a production requirement (tm 256.3)', () => {
+    // The pilot needs it open for its first workspace and closed after, both
+    // under NODE_ENV=production, so production must not insist on either.
+    expect(parseEnv(PROD_BASE).SIGNUP_ENABLED).toBe(true);
+    expect(parseEnv({ ...PROD_BASE, SIGNUP_ENABLED: 'false' }).SIGNUP_ENABLED).toBe(false);
   });
 
   it('runs the sweeps and telemetry by default, where test does not', () => {

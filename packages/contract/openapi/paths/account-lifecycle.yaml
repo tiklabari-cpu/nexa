@@ -67,6 +67,18 @@ signup:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Session" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "403":
+        description: |
+          Sign-up is closed on this deployment (`SIGNUP_ENABLED=false`, tm
+          256.3): `error.type` is `not_allowed` and `error.details.reason` is
+          `signup_closed`. **Nothing was created**, and nothing was read either —
+          the refusal comes before the body is validated and before any account
+          lookup, so a closed deployment answers every sign-up the same way and
+          stops confirming which addresses hold an account (the `409` below).
+          Invitations are unaffected.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "409":
         description: An account already exists for that email.
         content:

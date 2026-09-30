@@ -144,6 +144,100 @@ describe('SignUpPage residency refusal (C4-h)', () => {
   });
 });
 
+/**
+ * A deployment that has closed sign-up (tm 256.3): 403 `not_allowed` with
+ * `details.reason: 'signup_closed'`. The generic "Could not create that
+ * workspace." reads as "try again", and no retry can work — the sentence has
+ * to say so and point at the way in that still exists, an invitation.
+ */
+describe('SignUpPage closed sign-up', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetLocale();
+  });
+
+  function closedSignup(details: Record<string, unknown> = { reason: 'signup_closed' }): void {
+    vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(
+      new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'Sign-up is closed on this deployment.',
+        requestId: 'req_3',
+        details,
+      }),
+    );
+  }
+
+  async function fill(labels: {
+    workspace: string;
+    name: string;
+    email: string;
+    password: string;
+    submit: string;
+  }): Promise<void> {
+    await userEvent.type(screen.getByLabelText(labels.workspace), 'Acme');
+    await userEvent.type(screen.getByLabelText(labels.name), 'Robin');
+    await userEvent.type(screen.getByLabelText(labels.email), 'robin@example.com');
+    await userEvent.type(screen.getByLabelText(labels.password), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: labels.submit }));
+  }
+
+  it('says sign-up is closed, that nothing was created, and to ask for an invitation', async () => {
+    closedSignup();
+    renderAt(<SignUpPage />);
+    await fill({
+      workspace: 'Workspace name',
+      name: 'Your name',
+      email: 'Email',
+      password: 'Password',
+      submit: 'Create workspace',
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Nothing was created. Sign-up is closed at this address — ask the owner of an existing workspace to invite you.',
+    );
+    expect(alert).not.toHaveTextContent('Could not create that workspace.');
+  });
+
+  it('says it in Turkish when that is the active locale', async () => {
+    closedSignup();
+    renderWithLocale(
+      <MemoryRouter initialEntries={['/']}>
+        <SignUpPage />
+      </MemoryRouter>,
+      'tr',
+    );
+    await fill({
+      workspace: 'Çalışma alanı adı',
+      name: 'Adınız',
+      email: 'E-posta',
+      password: 'Parola',
+      submit: 'Çalışma alanı oluştur',
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Hiçbir şey oluşturulmadı. Bu adreste kayıt kapalı — var olan bir çalışma alanının sahibinden sizi davet etmesini isteyin.',
+    );
+  });
+
+  it('keeps the generic message for any other not_allowed refusal', async () => {
+    // Keyed on the reason, not on the status: a 403 for something else must
+    // not tell the person sign-up is closed.
+    closedSignup({ reason: 'something_else' });
+    renderAt(<SignUpPage />);
+    await fill({
+      workspace: 'Workspace name',
+      name: 'Your name',
+      email: 'Email',
+      password: 'Password',
+      submit: 'Create workspace',
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not create that workspace.');
+  });
+});
+
 describe('ResetPasswordPage validation', () => {
   it('keeps Set password disabled until the password is long enough', async () => {
     renderAt(<ResetPasswordPage />, '/reset-password?token=abc');

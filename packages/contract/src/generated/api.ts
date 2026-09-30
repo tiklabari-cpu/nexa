@@ -13098,6 +13098,23 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      /**
+       * @description Sign-up is closed on this deployment (`SIGNUP_ENABLED=false`, tm
+       *     256.3): `error.type` is `not_allowed` and `error.details.reason` is
+       *     `signup_closed`. **Nothing was created**, and nothing was read either —
+       *     the refusal comes before the body is validated and before any account
+       *     lookup, so a closed deployment answers every sign-up the same way and
+       *     stops confirming which addresses hold an account (the `409` below).
+       *     Invitations are unaffected.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       /** @description An account already exists for that email. */
       409: {
         headers: {

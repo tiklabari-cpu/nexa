@@ -95,6 +95,8 @@ export const auth: Messages = {
   'auth.signup.errorGeneric': 'O çalışma alanı oluşturulamadı.',
   'auth.signup.errorAccountExists':
     'Bu e-posta için zaten bir hesap var — bunun yerine oturum açın.',
+  'auth.signup.errorSignupClosed':
+    'Hiçbir şey oluşturulmadı. Bu adreste kayıt kapalı — var olan bir çalışma alanının sahibinden sizi davet etmesini isteyin.',
   'auth.signup.errorRegionMismatch':
     'Hiçbir şey oluşturulmadı. Bu adres yalnızca {region} bölgesinde çalışma alanı oluşturur — o veri bölgesini seçin veya seçtiğiniz bölgeye hizmet veren adresten kaydolun.',
   'auth.signup.errorRegionUnknown':

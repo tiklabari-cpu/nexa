@@ -80,6 +80,25 @@ export default async function accountLifecycleRoutes(
   );
 
   app.post('/auth/signup', { config: { public: true } }, async (request, reply) => {
+    // --- Closed sign-up (tm 256.3) -------------------------------------------
+    // The first thing the handler does, ahead of the body and the database. A
+    // closed door has one answer: validating first would tell someone to fix a
+    // password they can never use, and the account lookup inside `auth_signup`
+    // would go on telling a stranger which addresses already hold an account
+    // (409) on a deployment that no longer takes sign-ups at all.
+    //
+    // `not_allowed` rather than a new error type: nothing about the request is
+    // wrong and no credential is missing — this deployment has chosen not to do
+    // it. `details.reason` is what the form reads to say so; the taxonomy stays
+    // as ADR-06 fixed it.
+    if (!env.SIGNUP_ENABLED) {
+      throw new ApiError(
+        'not_allowed',
+        'Sign-up is closed on this deployment. Ask the owner of a workspace to invite you.',
+        { details: { reason: 'signup_closed' } },
+      );
+    }
+
     const body = parse(signupBody, request.body);
 
     // --- Data residency (NFR-C4 · C4-h) --------------------------------------

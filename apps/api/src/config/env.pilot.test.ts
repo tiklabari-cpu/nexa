@@ -293,3 +293,85 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
     expect(block(/^ {2}widget:$/)).toMatch(/VITE_API_BASE_URL: \$\{API_BASE_URL[^}]*\}\/api\/v1/);
   });
 });
+
+/** Lines of a Caddyfile with its `#` comments dropped. */
+function caddyLines(source: string): string[] {
+  return source
+    .split('\n')
+    .map((line) => line.replace(/(^|\s)#.*$/, '').trimEnd())
+    .filter((line) => line.trim() !== '');
+}
+
+/** Top-level site blocks (`name {` … `}` at column 0), by site address. */
+function caddySites(source: string): Map<string, string[]> {
+  const sites = new Map<string, string[]>();
+  let current: string[] | null = null;
+  for (const line of caddyLines(source)) {
+    const open = /^(\S+) \{$/.exec(line);
+    if (open) sites.set(open[1]!, (current = []));
+    else if (line === '}') current = null;
+    else current?.push(line.trim());
+  }
+  return sites;
+}
+
+describe("the pilot's edge and operations (tm 256.5)", () => {
+  const CADDYFILE = read('infra/pilot/Caddyfile.example');
+  const sites = caddySites(CADDYFILE);
+
+  /** The host port compose publishes a service on by default. */
+  function publishedPort(service: string): string {
+    const port = /- '127\.0\.0\.1:\$\{SIYAHTUS_[A-Z]+_HOST_PORT:-(\d+)\}:\d+'/.exec(
+      block(new RegExp(`^ {2}${service}:$`)),
+    )?.[1];
+    if (!port) throw new Error(`docker-compose.pilot.yml publishes no port for ${service}`);
+    return port;
+  }
+
+  /** Every upstream a site's `reverse_proxy` lines dial. */
+  const upstreams = (site: string): string[] =>
+    (sites.get(site) ?? []).flatMap((line) => /^reverse_proxy (\S+)$/.exec(line)?.[1] ?? []);
+
+  it("rotates every service's log: json-file, bounded size and file count", () => {
+    const logging = block(/^x-logging:/);
+    expect(logging).toMatch(/^\s+driver: json-file$/m);
+    expect(logging).toMatch(/^\s+max-size: \d+m$/m);
+    expect(logging).toMatch(/^\s+max-file: '\d+'$/m);
+    for (const service of ['db', 'redis', 'api', 'rtm', 'web', 'widget']) {
+      expect(block(new RegExp(`^ {2}${service}:$`)), service).toContain('logging: *logging');
+    }
+    // A seventh service added without it fails here.
+    const services = COMPOSE.match(/^ {4}restart: /gm) ?? [];
+    expect(COMPOSE.match(/^ {4}logging: \*logging$/gm)).toHaveLength(services.length);
+  });
+
+  it('serves the four public names, each to the published port of its service', () => {
+    expect([...sites.keys()]).toEqual([
+      'panel.example.com',
+      'widget.example.com',
+      'api.example.com',
+      'rtm.example.com',
+    ]);
+    expect(upstreams('widget.example.com')).toEqual([`127.0.0.1:${publishedPort('widget')}`]);
+    expect(upstreams('api.example.com')).toEqual([`127.0.0.1:${publishedPort('api')}`]);
+    expect(upstreams('rtm.example.com')).toEqual([`127.0.0.1:${publishedPort('rtm')}`]);
+  });
+
+  it("sends the panel's /api/* straight to the api — one hop on every path, as TRUST_PROXY_HOPS=1 says", () => {
+    const panel = (sites.get('panel.example.com') ?? []).join('\n');
+    expect(panel).toContain(`handle /api/* {\nreverse_proxy 127.0.0.1:${publishedPort('api')}\n}`);
+    expect(panel).toContain(`handle {\nreverse_proxy 127.0.0.1:${publishedPort('web')}\n}`);
+    // Nothing else on the panel's name reaches the api by another route.
+    expect(upstreams('panel.example.com')).toEqual([
+      `127.0.0.1:${publishedPort('api')}`,
+      `127.0.0.1:${publishedPort('web')}`,
+    ]);
+    expect(TEMPLATE_ENTRIES['TRUST_PROXY_HOPS']).toBe('1');
+  });
+
+  it('never believes an X-Forwarded-For the client sent', () => {
+    const uncommented = caddyLines(CADDYFILE).join('\n');
+    expect(uncommented).not.toContain('trusted_proxies');
+    expect(uncommented).not.toMatch(/header_up\s+\+?X-Forwarded-For/i);
+  });
+});

@@ -58,7 +58,13 @@ RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
     pnpm install --frozen-lockfile --filter @siyahtus/web...
 ARG VITE_RTM_URL=ws://localhost:4001/v1/agent/rtm/ws
 ENV VITE_RTM_URL=${VITE_RTM_URL}
-RUN pnpm --filter @siyahtus/web... run build
+# No source maps in the image (tm 256.5): served from `/assets/`, a `.map` hands
+# anyone the panel's original TypeScript, comments included. `vite.config.ts`
+# turns them off on this one variable; a local `pnpm build` keeps them. The
+# check after the build fails the image rather than trusting the switch — a
+# map file, or a bundle still naming one, stops it here.
+ENV SIYAHTUS_BUILD_SOURCEMAPS=false
+RUN pnpm --filter @siyahtus/web... run build     && if find apps/web/dist -name '*.map' | grep -q .         || grep -rlq 'sourceMappingURL=' apps/web/dist; then         echo 'apps/web/dist still carries source maps' >&2; exit 1;     fi
 
 # ---------------------------------------------------------------------------
 FROM ${NGINX_IMAGE} AS runtime

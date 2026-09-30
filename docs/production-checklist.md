@@ -228,9 +228,10 @@ failing.
 
 The controlled production pilot (owner decision 2026-09-22) runs on one Docker host from
 [`docker-compose.pilot.yml`](../docker-compose.pilot.yml), under `NODE_ENV=production`, with
-no demo seed. The file publishes every port on `127.0.0.1` only: DNS, TLS and the reverse
-proxy in front of it are the host's, not this repository's. Sections 1–8 still apply; this
-one is the order of operations for that stack.
+no demo seed. The file publishes every port on `127.0.0.1` only. The reverse proxy in front
+of it runs on the host; **Reverse proxy** below gives a ready Caddy configuration for it. DNS
+and the host are the owner's. Sections 1–8 still apply; this one is the order of operations
+for that stack.
 
 **Keys.** `cp .env.production.example .env` next to the compose file (never committed —
 `.gitignore` covers `.env`), then replace every `<…>`. Boot refuses a copy with one left in
@@ -277,6 +278,31 @@ its billing are accepted, and whether the pilot's region is `eu` or `us`. Once a
 measured in the stub's space (tm 255.8, PLAN §D183 (5)): with the four `EMBEDDING_*` keys set,
 run `pnpm --filter @siyahtus/api measure:knowledge-recall`. Exit 0 means PASS, 1 FAIL, 2 means it
 was not measured, which is not a pass.
+
+**Reverse proxy (tm 256.5).** [`infra/pilot/Caddyfile.example`](../infra/pilot/Caddyfile.example)
+is a ready configuration for Caddy on the pilot host. It serves four names, gets and renews
+their certificates itself, and dials the four ports the compose file publishes on `127.0.0.1`.
+Certificates, DNS records and the host itself are the owner's.
+
+- [ ] Four DNS names point at the host: the panel, the widget, the api and RTM. They become
+      `WEB_APP_URL` and the first `WEB_ORIGIN` entry, `WIDGET_BASE_URL` and the second
+      `WEB_ORIGIN` entry, `API_BASE_URL` (`https://`) and `RTM_BASE_URL` (`wss://`).
+- [ ] Copy the example to `/etc/caddy/Caddyfile` and replace `example.com`. If `.env` moves a
+      port with a `SIYAHTUS_*_HOST_PORT` line, change the matching `reverse_proxy` line too.
+      `caddy validate --config /etc/caddy/Caddyfile` exits 0, then `systemctl reload caddy`.
+      Without Caddy installed, the same check runs in a container from the repository root:
+      `docker run --rm -v "$PWD/infra/pilot/Caddyfile.example:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`.
+- [ ] `TRUST_PROXY_HOPS=1`, and it is right for every path only because of how the panel is
+      routed. The panel's own nginx also proxies `/api/` and appends to `X-Forwarded-For`, so a
+      panel request through it would reach the api with two hops while the widget's has one,
+      and one number cannot describe both. The Caddyfile sends the panel's `/api/*` straight to
+      the api instead, so all four names are one hop. Keep that `handle /api/*` block.
+- [ ] Do not add `trusted_proxies` to the Caddyfile. Without it Caddy replaces any
+      `X-Forwarded-For` the caller sent with the address it actually saw. With it, a caller
+      can choose the address the api's rate limit, IP ban and agent allow-list see.
+- [ ] Run the smoke test against the public names:
+      `API_BASE=https://api.… RTM_BASE=https://rtm.… WEB_BASE=https://panel.… WIDGET_BASE=https://widget.… SMOKE_PROFILE=pilot ./scripts/smoke.sh`.
+      It also checks that neither image serves source maps (both are built without them).
 
 **Run.**
 
@@ -349,9 +375,41 @@ was not measured, which is not a pass.
       `backups/db-<UTC>.dump`, and `make pilot-restore-drill` proves one restores (on a
       database with no chat yet it fails "RLS enforcement not exercised" — it will not call
       isolation verified without rows to verify it on; run it again after the first
-      conversation). Copying
-      archives off the host is not part of this repository's scope — until something does, a
-      lost disk loses the backups with the database.
+      conversation).
+- [ ] Backups run every day without anyone remembering to (tm 256.5). A line in
+      `/etc/cron.d/siyahtus-backup`, with the repository at `/opt/siyahtus`:
+      `15 3 * * * root cd /opt/siyahtus && COMPOSE_FILE=docker-compose.pilot.yml ./scripts/backup.sh >>/var/log/siyahtus-backup.log 2>&1`.
+      The script deletes its own archives older than `BACKUP_RETENTION_DAYS` (default 30,
+      NFR-C8). Read the log after the first night: it ends in `Done.` and a size.
+- [ ] A copy leaves the host. A backup on the same disk as the database is lost with it. The
+      archives hold every workspace's personal data, so the copy is encrypted and the place
+      it goes is the owner's. Any one of these, after the backup line:
+  - an S3-compatible bucket in another account or provider, through `rclone` with a `crypt`
+    remote: `45 3 * * * root rclone copy /opt/siyahtus/backups <remote>: --max-age 24h && rclone delete <remote>: --min-age 30d`;
+  - another machine over SSH: `rsync -a --delete /opt/siyahtus/backups/ <user>@<host>:siyahtus-backups/`
+    (`--delete` keeps the other side's retention equal to this one's);
+  - at the least, the hosting provider's own volume snapshots. They survive a lost disk, not a
+    lost account.
+
+  Whichever it is, the other side also keeps no more than 30 days, or an erasure honoured in
+  the database lives on there.
+
+- [ ] Restore from the off-host copy, not only from the local file. Once a month: take a
+      fresh backup (`make pilot-backup`), send it through the same copy, fetch it back into
+      another directory, and drill the fetched file straight away:
+      `COMPOSE_FILE=docker-compose.pilot.yml APP_DB_PASSWORD=<SIYAHTUS_APP_DB_PASSWORD> ./scripts/restore-drill.sh --dump <fetched file>`.
+      It restores into a scratch database, verifies it and drops it; exit 0 is the claim. Do it
+      at once because the drill compares row counts with the live database: last night's
+      archive reports every chat written since as a failure. A copy that was never restored
+      is not yet a backup.
+- [ ] Something outside the host watches it (tm 256.5). Nothing in this stack reports its own
+      death. The pilot has no monitoring stack, and when the host is down its mail is down
+      too. Use an external uptime service that alerts somewhere other than the pilot's mailbox
+      (another address, SMS, a phone app), and check every one to five minutes:
+      `https://api.…/api/v1/health/ready` and `https://rtm.…/health/ready` (both 200 only with
+      Postgres and Redis reachable), `https://panel.…/` and `https://widget.…/loader.js`. Most
+      such services also take a heartbeat: add `&& curl -fsS <heartbeat URL>` to the backup
+      line, and a night without a backup raises an alert too.
 - [ ] `OTEL_EXPORTER=none` (the template sets it): there is no collector in the pilot, and
       the `console` default prints every span into the container log — measured, only 33 of
       566 lines in five minutes were the api's own log records. `docker compose -f docker-compose.pilot.yml logs api` should read

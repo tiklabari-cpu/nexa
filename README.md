@@ -544,6 +544,12 @@ itself:
 | A CDN/load balancer in front of that reverse proxy         | `2`                |
 | Each additional hop that appends to `X-Forwarded-For`      | `+1`               |
 
+The panel needs care. Its nginx also proxies `/api/`, so a proxy in front of the panel that
+forwards `/api/*` to that nginx makes the panel's path two hops, while the widget, which
+calls the api directly, has one. One number cannot describe both. The pilot's
+[`infra/pilot/Caddyfile.example`](infra/pilot/Caddyfile.example) sends the panel's `/api/*`
+straight to the api, so every path is one hop and `1` is right (tm 256.5).
+
 Capped at `8` — past a handful this stops describing a topology and starts meaning "trust
 the whole chain", which is what the setting exists to prevent.
 

@@ -3,6 +3,14 @@ import { defineConfig } from 'vitest/config';
 
 const API_TARGET = process.env['API_BASE_URL'] ?? 'http://localhost:4000';
 
+/**
+ * Source maps are on for every build except the container image's
+ * (tm 256.5): the Dockerfile sets `SIYAHTUS_BUILD_SOURCEMAPS=false`, so the
+ * served bundle neither ships `.map` files nor names one. Only `false` turns
+ * them off.
+ */
+const SOURCEMAPS = process.env['SIYAHTUS_BUILD_SOURCEMAPS'] !== 'false';
+
 /** Long-cached vendor chunks: package name → chunk. Everything else stays in the app chunk. */
 const VENDOR_CHUNKS: Record<string, string> = {
   react: 'react',
@@ -28,7 +36,7 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: SOURCEMAPS,
     rollupOptions: {
       output: {
         // Matched by package directory, not listed by import name. Since v7,

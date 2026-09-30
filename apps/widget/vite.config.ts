@@ -17,6 +17,10 @@ import { defineConfig } from 'vitest/config';
  */
 export default defineConfig(({ mode }) => {
   const isLoader = mode === 'loader';
+  // Off only in the container image (tm 256.5): the Dockerfile sets
+  // `SIYAHTUS_BUILD_SOURCEMAPS=false`, so neither pass ships a `.map` file or
+  // names one. Every other build keeps them.
+  const sourcemap = process.env['SIYAHTUS_BUILD_SOURCEMAPS'] !== 'false';
 
   return {
     build: isLoader
@@ -26,7 +30,7 @@ export default defineConfig(({ mode }) => {
           emptyOutDir: true,
           target: 'es2019',
           minify: 'terser',
-          sourcemap: true,
+          sourcemap,
           lib: {
             entry: resolve(import.meta.dirname, 'src/loader.ts'),
             name: '__siyahtusLoader',
@@ -39,7 +43,7 @@ export default defineConfig(({ mode }) => {
           emptyOutDir: false,
           target: 'es2020',
           minify: 'terser',
-          sourcemap: true,
+          sourcemap,
           rollupOptions: {
             input: {
               widget: resolve(import.meta.dirname, 'widget.html'),

@@ -6,6 +6,8 @@
 # part in front of it: DNS, TLS certificates and the reverse proxy that
 # terminates HTTPS are the host's, and every port below is published on
 # 127.0.0.1 only, for that proxy to reach. Nothing here listens publicly.
+# infra/pilot/Caddyfile.example is that proxy's configuration (tm 256.5): one
+# hop on every path, which is what TRUST_PROXY_HOPS=1 assumes.
 #
 #   cp .env.production.example .env        # then fill in every <…> value
 #   docker compose -f docker-compose.pilot.yml up --build -d
@@ -51,6 +53,16 @@ x-app-env-file: &app-env-file
   - path: ${SIYAHTUS_ENV_FILE:-.env}
     required: true
 
+# Log rotation for every service (tm 256.5). Docker's default `json-file`
+# driver keeps a container's whole log forever, so a pilot left running fills
+# the disk the database lives on. Five files of 10 MB each per container: about
+# 300 MB for all six, and `docker compose logs` still reads every one of them.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: 10m
+    max-file: '5'
+
 services:
   # --- Datastores ---------------------------------------------------------
   # Same images as the dev and demo stacks. No host port: nothing outside the
@@ -59,6 +71,7 @@ services:
   db:
     image: pgvector/pgvector:pg17
     restart: unless-stopped
+    logging: *logging
     environment:
       POSTGRES_USER: siyahtus
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
@@ -85,6 +98,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *logging
     # Append-only on, snapshots off: presence and rate-limit state survive a
     # restart without a second persistence mechanism to reason about.
     command: ['redis-server', '--appendonly', 'yes', '--save', '']
@@ -109,6 +123,7 @@ services:
       dockerfile: apps/api/Dockerfile
     image: siyahtus-api:pilot
     restart: unless-stopped
+    logging: *logging
     env_file: *app-env-file
     environment:
       <<: *app-environment
@@ -137,6 +152,7 @@ services:
       dockerfile: apps/rtm/Dockerfile
     image: siyahtus-rtm:pilot
     restart: unless-stopped
+    logging: *logging
     env_file: *app-env-file
     environment: *app-environment
     ports:
@@ -158,6 +174,7 @@ services:
         VITE_RTM_URL: ${RTM_BASE_URL:?set RTM_BASE_URL in .env}/v1/agent/rtm/ws
     image: siyahtus-web:pilot
     restart: unless-stopped
+    logging: *logging
     environment:
       API_UPSTREAM: http://api:4000
       RTM_UPSTREAM: http://rtm:4001
@@ -180,6 +197,7 @@ services:
         VITE_API_BASE_URL: ${API_BASE_URL:?set API_BASE_URL in .env}/api/v1
     image: siyahtus-widget:pilot
     restart: unless-stopped
+    logging: *logging
     environment:
       # The widget's CSP has to allow both addresses it connects to: the api
       # above, and the RTM URL the api returns with every customer token.

@@ -129,6 +129,7 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["SIYAHTUS_BUILD_SOURCEMAPS"],
       "outputs": ["dist/**", "build/**", ".vite/**"]
     },
     "generate": {

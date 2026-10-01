@@ -444,6 +444,17 @@ Certificates, DNS records and the host itself are the owner's.
   `ASSIGNEE_EMAIL_COOLDOWN_MS` (default 15 min, `0` mails every message), so a visitor typing
   twenty lines no longer sends twenty mails against the sending limit invitations and resets
   share. Handset push is not held.
+- The AI Agent's and the rule bot's answers are written after the visitor's send returns, and
+  are not persisted. Until tm 256.10 the send waited for them — up to `EMBEDDING_TIMEOUT_MS` +
+  `LLM_TIMEOUT_MS` (10 s + 20 s) with the widget's Send button locked. They now run in the api
+  process after the response, one message at a time per chat, followed by the assignee's
+  notice; the widget receives the answer over its socket or its next poll, like an agent's
+  reply. A graceful stop waits for answers already on their way, inside the same 15 s close
+  ceiling a held request had; a crash, or a model call the ceiling cuts off, loses that answer
+  and the message stays unanswered in the inbox for a human — the same outcome as a model
+  error. A chat 20 messages behind leaves the next one for a human and logs `warn`
+  `visitor follow-ups backed up; leaving this message for a human`. The per-chat order holds
+  within one api process, which is what the pilot runs.
 - The e2e suite is order-dependent (independent audit finding G9-GATE-a): full runs have
   failed on different single tests that each pass alone. That is test fixture state, not
   product code.

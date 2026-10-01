@@ -421,5 +421,63 @@ describe('agent push notifications', () => {
 
       expect(await push.delivered()).toEqual([]);
     });
+
+    it('does not push the agent a rule bot just took the chat from (tm 256.10)', async () => {
+      // The notice runs after the answer, both after the visitor's response:
+      // it reads the assignee the bot's transfer left, not the one before it.
+      const support = await owner.group.findFirstOrThrow({
+        where: { licenseId: fx.a.licenseId, name: 'Support' },
+        select: { id: true },
+      });
+      const billing = await owner.group.create({
+        data: { licenseId: fx.a.licenseId, name: 'Billing' },
+        select: { id: true },
+      });
+      await owner.groupAgent.create({
+        data: {
+          licenseId: fx.a.licenseId,
+          groupId: billing.id,
+          agentId: fx.a.ownerAccountId,
+          priority: 'normal',
+        },
+      });
+      const adminToken = await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['agents-bot--all:rw'],
+      });
+      const bot = await server.post(
+        '/settings/bots',
+        { name: 'Sales desk', groups: [{ group_id: Number(support.id), priority: 'normal' }] },
+        auth(adminToken),
+      );
+      expect(bot.statusCode).toBe(201);
+      const rule = await server.post(
+        `/settings/bots/${(bot.json() as { id: string }).id}/rules`,
+        {
+          name: 'Buyers to billing',
+          conditions: { message_word: 'buy' },
+          actions: { transfer_to_group_id: Number(billing.id) },
+        },
+        auth(adminToken),
+      );
+      expect(rule.statusCode).toBe(201);
+
+      const { token, response } = await visitorWrites('please transfer me');
+      const chatId = (response.json() as { chat_id: string }).chat_id;
+      await rm(pushDir, { recursive: true, force: true });
+
+      const sent = await server.post(
+        '/customer/chat/events',
+        { text: 'i want to buy the pro plan' },
+        auth(token),
+      );
+      expect(sent.statusCode).toBe(201);
+
+      const access = await owner.chatAccess.findMany({ where: { chatId } });
+      expect(access.map((a) => a.groupId)).toEqual([billing.id]);
+      expect(await push.delivered()).toEqual([]);
+    });
   });
 });

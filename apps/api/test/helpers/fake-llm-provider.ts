@@ -28,12 +28,20 @@ export interface FakeLlmProviderOptions {
   usage?: LlmUsage;
   /** Throw this instead of answering — a provider failure. */
   fail?: Error;
+  /**
+   * Awaited before answering, with the request and its 0-based position — a
+   * model that is still thinking, for as long as the test holds it (tm 256.10).
+   */
+  hold?: (request: LlmCompletionRequest, call: number) => Promise<void>;
 }
 
 export class FakeLlmProvider implements LlmProvider {
   readonly id: LlmProviderId;
   /** Every request, in order. `calls.length` is the call count. */
   readonly calls: LlmCompletionRequest[] = [];
+  /** Calls started and not yet answered, and the most there ever were at once. */
+  inFlight = 0;
+  maxInFlight = 0;
   readonly #options: FakeLlmProviderOptions;
 
   constructor(options: FakeLlmProviderOptions = {}) {
@@ -42,16 +50,25 @@ export class FakeLlmProvider implements LlmProvider {
   }
 
   async complete(request: LlmCompletionRequest): Promise<LlmCompletion> {
-    this.calls.push(request);
-    if (this.#options.fail) throw this.#options.fail;
-    const reply = this.#options.reply ?? FAKE_LLM_REPLY;
-    return {
-      text: typeof reply === 'function' ? reply(request) : reply,
-      usage: this.#options.usage ?? { inputTokens: 100, outputTokens: 10 },
-    };
+    const call = this.calls.push(request) - 1;
+    this.inFlight += 1;
+    this.maxInFlight = Math.max(this.maxInFlight, this.inFlight);
+    try {
+      if (this.#options.hold) await this.#options.hold(request, call);
+      if (this.#options.fail) throw this.#options.fail;
+      const reply = this.#options.reply ?? FAKE_LLM_REPLY;
+      return {
+        text: typeof reply === 'function' ? reply(request) : reply,
+        usage: this.#options.usage ?? { inputTokens: 100, outputTokens: 10 },
+      };
+    } finally {
+      this.inFlight -= 1;
+    }
   }
 
   reset(): void {
     this.calls.length = 0;
+    this.inFlight = 0;
+    this.maxInFlight = 0;
   }
 }

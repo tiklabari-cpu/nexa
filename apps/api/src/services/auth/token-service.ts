@@ -58,6 +58,9 @@ export type TokenResolution =
   | { ok: false; reason: TokenRejection };
 
 export class TokenService {
+  /** Tokens whose `last_used_at` stamp is on its way to the database — see touch(). */
+  readonly #stamping = new Set<string>();
+
   constructor(private readonly db: PrismaClient) {}
 
   /**
@@ -228,6 +231,8 @@ export class TokenService {
    * read the same pre-touch value; that is safe because the comparison is
    * monotonic in `lastActive`: a staler read can only push a session over the
    * edge, never admit one that should have expired. The race is fail-closed.
+   * So is touch() skipping a stamp while one for the same token is in flight:
+   * the value stays older, never newer, than the request it skipped.
    */
   async #idleExpired(tx: TenantClient, tokenId: string): Promise<boolean> {
     const settings = await tx.securitySettings.findFirst({
@@ -257,9 +262,29 @@ export class TokenService {
     return true;
   }
 
-  /** Fire-and-forget: a failed bookkeeping update must not fail the request. */
+  /**
+   * Fire-and-forget: a failed bookkeeping update must not fail the request.
+   *
+   * At most one stamp per token is in flight (tm 256.8). Fire-and-forget frees
+   * the request, not the pool: the `UPDATE` holds a pooled connection for as
+   * long as it waits, and a page load fires a dozen requests with one token, so
+   * a stamp per request queued a dozen `UPDATE`s on one row — each holding a
+   * connection until the one ahead had committed and flushed its WAL. Measured
+   * in the e2e suite: 17 to 20 of the API's 29 connections parked in that queue
+   * with two left idle; one slower flush and every request in the process waits
+   * out the pool timeout and fails (`test/integration/token-touch.test.ts`).
+   *
+   * Skipped rather than queued: a stamp in flight already records this session
+   * as active, and the next request after it lands stamps again. Unlike
+   * `LastSeenRecorder` there is no time window — `last_used_at` feeds the idle
+   * timeout, which may be set to a few seconds.
+   */
   touch(tokenId: string): void {
-    void this.db.$executeRaw`SELECT auth_touch_token(${tokenId}::uuid)`.catch(() => undefined);
+    if (this.#stamping.has(tokenId)) return;
+    this.#stamping.add(tokenId);
+    void this.db.$executeRaw`SELECT auth_touch_token(${tokenId}::uuid)`
+      .catch(() => undefined)
+      .finally(() => this.#stamping.delete(tokenId));
   }
 
   async issue(input: {

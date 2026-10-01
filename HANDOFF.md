@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 256.8 — PILOT-WRITE-STALL: 10 sn cevapsız yazmanın iki ölçülmüş kaynağı — üründeki (token `last_used_at` damga kuyruğunun havuzu tutması) kapatıldı, ortamdaki (host bellek baskısının Vite/API'yi dondurması) ölçülüp kayda geçti — done — 2026-10-01 UTC
+
+- **Yapıldı:** `TokenService.touch` token başına tek uçuş (`#stamping`; aynı token için damga yoldayken yenisi atlanır, bitince silinir). Önce: her istek kendi `UPDATE api_tokens`'ını atıyor, sayfa yükünün paralel istekleri aynı satırda kuyruk kurup havuzu tutuyordu (29 bağlantının 17–20'si, 2 boşta; kilit bekleyen satırların tamamı bu). Sonra: üç koşuda 17.098 örnekte kilit bekleme 0. Test: `token-service.test.ts` (4) + `test/integration/token-touch.test.ts` (2; kırmızı-önce eski kodda P2028 → 500). PLAN §D200 + KM-SCALE maddesi; damgalar değişmedi (§D193 bu takılmanın KK bozmadığını kaydetmişti).
+- **Doğrulama:** typecheck+lint 23/23 · build 8/8 (`--force`, 0 cached) · format:check · yedi `audit:*` exit 0 (sweep PARTIAL 0) · contract:generate fark yok · turbo test (api/web/e2e dışı) 10/10 `--force` · web `--maxWorkers=4` 183/2276 · api unit 108/1999 · api integration beş parça 31+31+31+31+30 = 154/3613 · rtm integration 8/111 · tam e2e iki koşu 313/313 + 313/313 (prob + örnekleyici açıkken) · mutantlar 5/5 kırmızı.
+- **Varsayımlar:** `last_used_at` için zaman penceresi yok (boşta zaman aşımı 1 s'ye inebiliyor); atlanan damga değeri yalnız eskitir → fail-closed. İki tarihi olayın hangi kaynaktan geldiği o koşularda veri olmadığı için ayırt edilemedi; ikisi de bu turda ölçüldü.
+- **Sonraki pencereye not:** Bu makine bellek baskısında (15,6 GB RAM, ~47 GB taahhüt, sayfa dosyası 6–8 GB): başka bir döngü ağır test koşarken Vite 10 s / API 7,6 s 0 CPU ile dondu ve üç e2e testi kırmızı oldu (koşu durduruldu, sayılmadı). Bir e2e kırmızısını ürüne yazmadan önce o dakikada host sayfalamasına bak — host-freeze bekçisi yalnız test işçisini izliyor, Vite/API donmasını raporlayan bir bekçi ayrı iş olabilir. `reports-billing.test.ts` "the purchase on the invoice" 7 testi 00:00 UTC'yi (ay sınırı) geçen koşuda kırmızıydı, aynı gün yeşil — ay sınırına bağlı olduğundan şüpheli, doğrulanmadı. Tanı betikleri ve günlükleri `C:\tmp\stall` (repo dışı); dev DB'nin üç tanı ayarı geri alındı. `git push` 403 (bilinen).
+
 ## tm 256.7 — PILOT-ROSTER-FRESH: palet/inbox durum yazımından sonra `['team','agents']` gecersizleniyor; Team listesi eski durumu göstermiyor — done — 2026-09-30 UTC
 
 - **Yapıldı:** `lib/routing-status.ts` `useSetRoutingStatus` (store yazımı başarılıysa roster invalidate; hata → dokunmaz). `CommandPalette.tsx` ve `InboxPage.tsx` bunu kullanıyor. Test: `routing-status.test.tsx` (2) + palette (+2). PLAN `K04.3.3` bloğu açıldı, damgalar değişmedi.

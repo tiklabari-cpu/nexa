@@ -10330,7 +10330,7 @@
         "description": "Butun kapilar yesilken kodda dogrulanan ve hicbir gorevde olmayan pilot engelleri ile ilk hafta sorunlari. Her alt gorev 2026-09-30'da file:line kaniti ile acildi.",
         "details": "KAYNAK: 2026-09-30 bagimsiz hazirlik kontrolu (commit 983bf9f9). Butun kapilar --force ile YESIL olculdu: typecheck+lint+build 28/28, birim 5.464, entegrasyon api 3.582 + rtm 111, e2e 311/313 (iki kirmizi tek basina 3/3), pilot compose sifirdan smoke 16/16 + 17/17. Ama hicbir kapinin olcmedigi, gercek pilotu durduran ya da ilk haftada can yakacak bosluklar koda karsi dogrulandi; hicbiri Task Master'da yoktu. Bu epic onlari kapatir.\n\nPILOT KAPSAMI + SIR SINIRI: tm 255 details ile AYNI (degismedi). Gercek saglayiciya istek, gercek sir, deploy YOK.\n\nSIRA: 256.1 deneme kilidi -> 256.2 bagimlilik guvenligi -> 256.3 kayit anahtari -> 256.4 bildirim e-postasi -> 256.5 kenar/ops -> 256.6 API hijyeni -> 256.7 roster tazeligi -> 256.8 yazma takilmasi -> 256.9 webhook DNS sabitleme -> 256.10 AI yanitini istekten ayirma -> 256.11 kapanis dogrulamasi.\n\nDAMGA KARARLARI (acilis turunda, PLAN SD193): 10.2 ◐ (256.1 geri cevirir; Faz-0 kapisi yeniden acildi), 08.8.4 ◐ ve S7 ◐ (256.9 geri cevirir; Faz-1 kapisi yeniden acildi). Diger alt gorevlerin satirlari ✅ kalir, gerekceleri SD193'te.\n\nBU EPIC'TE OLMAYANLAR (kayitli, bilerek disarida): Copilot yardimcilarinin gercek LLM'e baglanmasi (SD180/SD181, sahip karari -- sonraki epic adayi); ulke yonlendirmesi/GeoIP (US-8 KK1); raporlarin UTC gun siniri; KB PDF/Word; widget dil sayisi; 2FA yonetici sifirlamasi (SD132); RTM /health tavani (SD137); e2e sira bagimliligi (G9-GATE-a); odeme/kanallar/push/S3/K8s/sosyal giris/MCP (sahip karari 2026-09-22).",
         "testStrategy": "Epic ancak 11 alt gorevin hepsi done olunca done olur (CONVENTIONS S4). Kapanis kaniti 256.11'den gelir: (1) CONVENTIONS S1 kapisinin tamami --force ile yesil; (2) pnpm audit --prod'da pilot yolunda (api/rtm/web/widget/packages) advisory yok; (3) pilot compose sifirdan + ilk calisma alani + OAuth ile admin /health: smoke 19/19; (4) Faz-0 ve Faz-1 kapilari yeniden KAPALI, 10.2 / 08.8.4 / S7 ✅; (5) panel tanilamasi git-unpushed disinda temiz.",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [
@@ -10462,7 +10462,7 @@
             "description": "Epic'in kapanis dogrulamasi; urun kodu degistirmez (kirmizi bulursa ilgili gorevi yeniden acar).",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: tm 255 details (degismedi). Bu epic'in kaynagi: 2026-09-30 bagimsiz kontrol (PLAN SD193, HANDOFF ust blok).\n\nKAPSAM: (1) CONVENTIONS S1 tamami --force, '0 cached' yazili; (2) tam e2e iki kez (PNG gurultusu geri alinir); (3) docker-compose.pilot.yml benzersiz -p ile sifirdan, sahte env repo disinda, ilk calisma alani + OAuth PKCE ile sahip token'i -> SMOKE_ORGANIZATION_ID + SMOKE_ADMIN_TOKEN ile smoke 19/19 (event_partitions ok), kaynak haritasi 404, bozuk JSON 400, down -v ayni -p; (4) pnpm audit --prod pilot yolunda temiz; (5) panel tanilamasi git-unpushed disinda temiz, Faz-0/Faz-1 open=false closed=true; (6) production-checklist S9 'Known risks' guncel; (7) HANDOFF + PLAN SD kapanis kaydi.",
             "testStrategy": "Yukaridaki yedi maddenin her biri komut ciktisi/exit code ile HANDOFF'ta. Kirmizi varsa ilgili alt gorev yeniden acilir, bu gorev done olmaz.",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [
               "256.1",
               "256.2",
@@ -10477,17 +10477,17 @@
             ],
             "parentId": "256",
             "priority": "high",
-            "updatedAt": "2026-10-01T04:01:58.560Z"
+            "updatedAt": "2026-10-01T06:23:28.153Z"
           }
         ],
-        "updatedAt": "2026-10-01T04:01:58.560Z"
+        "updatedAt": "2026-10-01T06:23:28.153Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-01T04:01:58.561Z",
+      "lastModified": "2026-10-01T06:23:28.154Z",
       "taskCount": 256,
-      "completedCount": 255,
+      "completedCount": 256,
       "tags": [
         "master"
       ]

@@ -13,6 +13,7 @@ import aiResidency from './plugins/ai-residency.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
+import followUps from './plugins/follow-ups.js';
 import { logSafeUrl, PROVIDER_SECRET_LOG_PATHS } from './lib/log-redact.js';
 import { trustProxyFor } from './lib/trust-proxy.js';
 import licenseGate from './plugins/license-gate.js';
@@ -357,6 +358,10 @@ export async function buildServer({
   // answer cannot depend on the carrier, and since tm 256.4 the assignee notice,
   // the close transcript and the ticket notice. Before the routes that use it.
   await app.register(backgroundMail, { mailer });
+  // What a visitor's message sets off after its response (tm 256.10): the rule
+  // bot, the AI Agent and the assignee's notice. After `backgroundMail`, which
+  // the notice writes to, so its drain on close runs first.
+  await app.register(followUps);
   // Before `auth`, and that order is load-bearing (M-SEC-c1 · §D116 LOW/1).
   // Fastify runs every `onRequest` hook before any `preHandler`, and within a
   // phase in registration order — so this is what puts the rate limiter's

@@ -13,6 +13,12 @@
  * this runs only when no rule took the conversation over; the ordering, and why
  * it is that way round, is written at the one place that decides it —
  * `respondToCustomerMessage` in `routes/customer.ts`.
+ *
+ * Nor does it run inside the customer's request any more (tm 256.10): the
+ * route hands it to `app.followUps`, so it starts after the response has been
+ * written, one message at a time per chat. `request` is still what it is
+ * given — its tenant, its logger, `withTenant` over the server's pool — none
+ * of which depends on the connection the response went out on.
  */
 import type { FastifyRequest } from 'fastify';
 import type { BotPrincipal } from '../auth/principal.js';

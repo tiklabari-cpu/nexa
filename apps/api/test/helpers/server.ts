@@ -7,7 +7,7 @@
  * A mocked repository would assert that the test double behaves, which is not
  * the question.
  */
-import type { FastifyInstance, LightMyRequestResponse } from 'fastify';
+import type { FastifyInstance, InjectOptions, LightMyRequestResponse } from 'fastify';
 import { buildServer, API_PREFIX, type BuildServerOptions } from '../../src/server.js';
 import { testEnv } from './fixtures.js';
 
@@ -35,32 +35,45 @@ export async function startTestServer(
 
   const url = (path: string): string => `${API_PREFIX}${path}`;
 
+  /**
+   * One request, returned once the follow-ups it set off have finished
+   * (tm 256.10): a visitor's message is answered after its response, so a
+   * suite asserting on the answer would otherwise race it. These helpers read
+   * the state the visitor eventually sees; a test about the gap itself — the
+   * response arriving before the answer — calls `app.inject` directly.
+   */
+  const request = async (options: InjectOptions): Promise<LightMyRequestResponse> => {
+    const response = await app.inject(options);
+    await app.followUps.settled();
+    return response;
+  };
+
   return {
     app,
     url,
-    get: (path, headers = {}) => app.inject({ method: 'GET', url: url(path), headers }),
+    get: (path, headers = {}) => request({ method: 'GET', url: url(path), headers }),
     post: (path, payload, headers = {}) =>
-      app.inject({
+      request({
         method: 'POST',
         url: url(path),
         headers,
         ...(payload === undefined ? {} : { payload: payload as object }),
       }),
     put: (path, payload, headers = {}) =>
-      app.inject({
+      request({
         method: 'PUT',
         url: url(path),
         headers,
         ...(payload === undefined ? {} : { payload: payload as object }),
       }),
     patch: (path, payload, headers = {}) =>
-      app.inject({
+      request({
         method: 'PATCH',
         url: url(path),
         headers,
         ...(payload === undefined ? {} : { payload: payload as object }),
       }),
-    del: (path, headers = {}) => app.inject({ method: 'DELETE', url: url(path), headers }),
+    del: (path, headers = {}) => request({ method: 'DELETE', url: url(path), headers }),
     close: async () => {
       await app.close();
     },

@@ -313,6 +313,48 @@ export default async function customerRoutes(
   const store = createObjectStore(env.STORAGE_PROVIDER, env.storage);
 
   /**
+   * Everything a visitor's committed message sets off besides its own
+   * delivery: an answer — the rule bot, then the AI Agent — and then the
+   * assignee's notice. The order is the one this handler always ran them in
+   * (the notice reads the assignee a bot's transfer may just have changed);
+   * what moved is *when* (tm 256.10). They run after the response, through
+   * `app.followUps`, one message at a time per chat, so the visitor's send no
+   * longer waits out the model (up to `EMBEDDING_TIMEOUT_MS` +
+   * `LLM_TIMEOUT_MS`) behind a locked send button. The answer reaches the
+   * widget the way an agent's reply does — the socket, or the next poll.
+   *
+   * Only for a message that was not a replay: the same message arriving twice
+   * must not be answered or announced twice. An attachment with no text gives
+   * the bot and the skill nothing to match, so it is only announced.
+   *
+   * Everything read from `request` here is plain data or reaches the database
+   * through `app.db` (`withTenant`, `requireAiInference`), none of it through
+   * the connection, so it outlives the response unchanged; `request.log` keeps
+   * the request id on whatever the answer logs.
+   */
+  function followUp(
+    request: FastifyRequest,
+    chatId: string,
+    kind: PushEventKind,
+    text: string | undefined,
+    pageUrl: string | null,
+  ): void {
+    const queued = app.followUps.enqueue(`${request.tenant().licenseId}:${chatId}`, async () => {
+      if (text?.trim()) await respondToCustomerMessage(request, chatId, text, pageUrl);
+      await notifyAssignee(request, chatId, kind);
+    });
+    if (!queued) {
+      // The bound in `follow-ups.ts`: a chat this far behind is being written
+      // to faster than anything can answer it. The message is committed and in
+      // the inbox; it is left for a human, like any other failure here.
+      request.log.warn(
+        { chat_id: chatId, pending: app.followUps.maxPerKey },
+        'visitor follow-ups backed up; leaving this message for a human',
+      );
+    }
+  }
+
+  /**
    * Answer an incoming customer message: the deterministic rule bot first
    * (FR-MOD-06.6), the AI Agent second.
    *
@@ -349,7 +391,8 @@ export default async function customerRoutes(
    * Only fires when there is a human assignee — a queued or AI-only chat has
    * nobody to notify, and notifying on every message to an unassigned chat
    * would be noise. The e-mail is further held to one per chat and assignee per
-   * `ASSIGNEE_EMAIL_COOLDOWN_MS`, and sent in the background (tm 256.4).
+   * `ASSIGNEE_EMAIL_COOLDOWN_MS`, and sent in the background (tm 256.4). The
+   * whole notice runs after the visitor's response, from `followUp` (tm 256.10).
    *
    * The two channels are gated separately and neither can suppress the other:
    * an agent who reads e-mail on a laptop and one who only carries a phone have
@@ -753,16 +796,9 @@ export default async function customerRoutes(
           ...(body.idempotency_key ? { idempotencyKey: body.idempotency_key } : {}),
         });
 
-        // A replay is the same message arriving twice; running the skill again
-        // would answer the customer twice for one question. An attachment with no
-        // text gives the skill nothing to match, so it is left for a human.
-        if (!replayed && maskedText?.trim()) {
-          await respondToCustomerMessage(request, existing.id, maskedText, body.url ?? null);
-        }
-
-        // A replay is the same message arriving twice — do not notify again, on
-        // either channel.
-        if (!replayed) await notifyAssignee(request, existing.id, 'message');
+        // A replay is the same message arriving twice; answering or notifying
+        // again would do both twice for one question.
+        if (!replayed) followUp(request, existing.id, 'message', maskedText, body.url ?? null);
 
         return reply.status(replayed ? 200 : 201).send({ chat_id: existing.id, event });
       }
@@ -796,17 +832,16 @@ export default async function customerRoutes(
         request.log.warn({ err: error }, 'could not record campaign engagement');
       }
 
-      if (maskedText?.trim()) {
-        await respondToCustomerMessage(request, chat.id, maskedText, body.url ?? null);
-      }
+      const events = await chats.listEvents(tenant, principal, chat.id, { limit: 10 });
 
       // Routing may have assigned this brand-new chat to an agent — that is the
       // "assignment" notification (FR-MOD-13.8). `new_chat` rather than
       // `assignment` because of how it reads on a phone: nobody handed this to
-      // the agent, a visitor walked in.
-      await notifyAssignee(request, chat.id, 'new_chat');
+      // the agent, a visitor walked in. Handed in after the read above, so the
+      // `event` this answers with is what the visitor's message produced, never
+      // a reply that happened to commit first.
+      followUp(request, chat.id, 'new_chat', maskedText, body.url ?? null);
 
-      const events = await chats.listEvents(tenant, principal, chat.id, { limit: 10 });
       return reply.status(201).send({
         chat_id: chat.id,
         queue_position: chat.thread?.queue_position ?? null,

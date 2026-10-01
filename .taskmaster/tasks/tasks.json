@@ -10424,11 +10424,11 @@
             "description": "2026-09-30 tam e2e'de POST /api/v1/skills 10 sn icinde hic cevap almadi (trace), 2026-09-15'te campaigns olusturma ayni belirtiyi verdi. Isleyici tek transaction'da tek INSERT. Canlida 'kaydet'e basinca 10 sn takilma olarak gorunur.",
             "details": "PENCERE PROTOKOLU: TASK-RUNNER-PROMPT.md. DoD kapisi CONVENTIONS.md S1; git S2; handoff S3; kapsam disiplini S5; gereksinim etiketi S7. Sinirlar CLAUDE.md. Pilot kapsami ve sir siniri: tm 255 details (degismedi). Bu epic'in kaynagi: 2026-09-30 bagimsiz kontrol (PLAN SD193, HANDOFF ust blok).\n\nOPUS-MAX GEREKCESI: kilit/transaction teshisi.\n\nOLCULEN (2026-09-30):\n- a11y.spec.ts:1005 (light) 'the skill editor ...' -> waitForResponse 10 s zaman asimi; trace: POST /api/v1/skills 00:24:42.083Z status -1; oncesi ve sonrasi istekler 25-400 ms. Tek basina 3/3.\n- apps/api/src/routes/playbook.ts:441 isleyici: withTenant icinde aiAgent.findFirst + skill.create + creatorName.\n- apps/api/src/lib/tenant.ts:49 TENANT_TRANSACTION_TIMEOUT_MS = 10 s; maxWait Prisma varsayilani 2 s (havuz tukenmesi 2 s'de hata verirdi, 10 s asili kalmazdi).\n- siyahtus-db log'unda o dakikada hata yok; log_lock_waits = off, log_min_duration_statement = -1.\n- HANDOFF/memory: 2026-09-15 campaigns.spec.ts:13 'Saving...' 10 s, satir yazilmadi.\n\nKAPSAM: yeniden uretim (tam ya da daraltilmis e2e) sirasinda kilit bekleme kaydi + pg_stat_activity ornekleme + api istek suresi log'u; kok neden kanitla adlandirilir; urun kusuruysa duzeltme + regresyon testi; ortam/test kaynakliysa olcumle belgelenir ve gerekirse test duzeltilir. Dev DB ayari degistirildiyse geri alinir.\n\nPLAN: damga karari olcume gore (kusur bir KK'yi bozuyorsa o satir); SD kaydi.",
             "testStrategy": "Kok neden kanitli (log satiri / pg_stat_activity ornegi / trace). Urun kusuruysa: kirmizi-once regresyon testi + duzeltme + ilgili e2e iki tam kosuda yesil. Degilse: olcum HANDOFF + SD'de, ayar geri alindi. DoD: CONVENTIONS S1 (degisiklik varsa).",
-            "status": "in-progress",
+            "status": "done",
             "dependencies": [],
             "parentId": "256",
             "priority": "medium",
-            "updatedAt": "2026-09-30T21:00:34.242Z"
+            "updatedAt": "2026-10-01T02:29:51.053Z"
           },
           {
             "id": 9,
@@ -10480,12 +10480,12 @@
             "updatedAt": "2026-09-30T11:49:11.000Z"
           }
         ],
-        "updatedAt": "2026-09-30T21:00:34.242Z"
+        "updatedAt": "2026-10-01T02:29:51.053Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-09-30T21:00:34.243Z",
+      "lastModified": "2026-10-01T02:29:51.054Z",
       "taskCount": 256,
       "completedCount": 255,
       "tags": [

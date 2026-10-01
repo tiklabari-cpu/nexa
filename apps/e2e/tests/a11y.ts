@@ -149,6 +149,29 @@ export interface ScanOptions {
 }
 
 /**
+ * Jump every running CSS transition to its end before axe reads colours.
+ *
+ * axe measures computed colours, and a computed colour mid-transition is a
+ * blend no user ever reads: the composer's tabs (`transition-colors`, 150 ms)
+ * were scanned 2.22:1 and 3.44:1 in a full e2e run (tm 256.11) while their
+ * settled pairs measure 4.5:1 and above, because the click that selected the
+ * note tab was still fading both tabs when the scan began. Finishing the
+ * transition scans the state the click leads to; CSS animations (spinners,
+ * some of them infinite) are left alone.
+ */
+async function settleTransitions(page: Page): Promise<void> {
+  for (const frame of page.frames()) {
+    await frame
+      .evaluate(() => {
+        for (const animation of document.getAnimations()) {
+          if (animation instanceof CSSTransition) animation.finish();
+        }
+      })
+      .catch(() => undefined); // a frame that navigated away has nothing left to settle
+  }
+}
+
+/**
  * Run axe over the current page and file the result.
  *
  * The full axe result is attached to the Playwright report — not just the
@@ -165,6 +188,7 @@ export async function scanScreen(
   if (options.include) builder = builder.include(options.include);
   if (options.exclude) builder = builder.exclude(options.exclude);
 
+  await settleTransitions(page);
   const results = await builder.analyze();
   const scan = partitionViolations(screen, results.violations);
 

@@ -429,7 +429,8 @@ Certificates, DNS records and the host itself are the owner's.
 - [ ] Uploads: the pilot keeps file sharing off (tm 255.13). A workspace that turns it on
       stores files under `/tmp` inside the api container; they do not survive `up --build`.
 
-**Known risks at pilot readiness (tm 255.16).** Open, not fixed by this checklist:
+**Known risks at pilot readiness (tm 255.16, re-checked at the tm 256 closing gate, tm 256.11
+on 2026-10-01).** Open, not fixed by this checklist:
 
 - Courtesy mail is sent after the answer, and is not persisted. Until tm 256.4 the assignee's
   new-message notice, the chat transcript on close and the customer's ticket-status notice
@@ -455,9 +456,23 @@ Certificates, DNS records and the host itself are the owner's.
   error. A chat 20 messages behind leaves the next one for a human and logs `warn`
   `visitor follow-ups backed up; leaving this message for a human`. The per-chat order holds
   within one api process, which is what the pilot runs.
+- Outgoing webhooks connect directly to the address their SSRF check approved (tm 256.9) and
+  ignore `HTTP_PROXY`/`HTTPS_PROXY`: a proxy that resolved the name itself would undo the pin.
+  The pilot host needs direct egress for webhooks; behind a mandatory egress proxy they fail
+  with a logged network error.
+- `pnpm audit --prod` on 2026-10-01 reported 27 advisories (7 moderate, 20 high). Every path
+  starts at `apps/mobile` (the Expo tool chain); none reaches the api, rtm, web or widget
+  images, and mobile is outside the pilot. New advisories arrive weekly (51 became 59 within
+  tm 256.2), so run it again before go-live and read the paths, not the count.
+- Memory pressure stalls requests without failing them. On the development machine a host
+  paging under load froze Vite for 10 s and the api for 7.6 s at almost no CPU (tm 256.8,
+  PLAN §D200), and nothing in the stack reports it. Give the pilot host enough RAM that the
+  six containers do not swap, and watch the host's own memory and paging, not only the probe.
 - The e2e suite is order-dependent (independent audit finding G9-GATE-a): full runs have
   failed on different single tests that each pass alone. That is test fixture state, not
-  product code.
+  product code. At the tm 256 closing gate one full run failed an axe scan that measured the
+  composer's tabs halfway through their 150 ms colour transition; the scan now finishes CSS
+  transitions before it reads colours.
 - Outside the pilot by the owner's decision (2026-09-22): payments/Stripe, messaging channels,
   mobile push, S3 + virus scanning + SIEM + load testing, the MCP protocol, social sign-in, and
   Kubernetes (the Helm chart is kept, not used).

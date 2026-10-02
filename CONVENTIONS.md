@@ -96,7 +96,25 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   koşturdum, üçü de yeşil" demenin hiçbir anlamı yok demektir. Bir kırmızıyı kovalarken ya da bir
   flake düzeltmesini kanıtlarken **`--force` şart**:
   `npx turbo run test --force --filter=!@siyahtus/e2e`. Normal DoD kapısında `--force` gerekmez.
-- **Tek komut olarak kapı, bir pencerenin komut tavanını aşar.** `@siyahtus/api`'nin `test` script'i unit
+- **Paralel parçalar ve başlıklı kapı (2026-10-02) — aşağıdaki elle parçalamanın yerini alır.**
+  `@siyahtus/api`'nin `test` ve `test:integration` script'leri artık
+  `apps/api/scripts/run-sharded.ts` üzerinden koşar: süiti 5 parçaya böler (CPU/4, tavan 6;
+  `SIYAHTUS_TEST_JOBS=<n>` ya da `--jobs=<n>` ile değişir) ve parçaları **aynı anda** koşturur. Her
+  parça kendi izole veritabanını alır (§1.1), yani iki pencerenin aynı anda test koşmasından farkı
+  yoktur. Dosyalar bir önceki koşunun dosya sürelerine göre dağıtılır
+  (`apps/api/node_modules/.cache/run-sharded/timings.json`; yoksa vitest `--shard`). Ölçüldü:
+  api unit + integration **269 dosya / 5729 test, 5 dk 14 sn** (eskiden tek sırada ~25 dk);
+  integration tek başına ~6 dk. Özet satırı (`Test Files … (269)`) tüm parçaların toplamıdır —
+  sayı eşleştirmesi için onu kullan. CPU sayısı 4'ün altındaysa (CI) eskisi gibi tek süreç koşar.
+  Kökte `pnpm test:gate` kapının test kısmını **başlıklar** halinde koşar ve sonunda tek tablo
+  basar: `build` → `statik` (typecheck+lint, format:check) ∥ `birim` (`test:unit`) →
+  `entegrasyon` (`test:integration`, `--concurrency=1`) → isteğe bağlı `e2e` (`--e2e`, kök
+  `.env` yüklenir). Yalnız bazı başlıklar: `pnpm test:gate birim entegrasyon`; önbelleksiz:
+  `--force`. Ölçüldü (`--force`): build 1:08, statik ∥ birim 2:39, entegrasyon 6:56 — toplam
+  10:43. Pencerenin 10 dk tavanını aşabilir; arka planda koş, logların yolu ilk satırda.
+  **e2e paralelleşmez:** sabit portlar + tek tohumlu `siyahtus` veritabanı + `zz-suite-state`
+  sıraya bağlı; `workers: 1` bilinçli kalır.
+- **(Tarihçe — paralel parçalardan önce)** **Tek komut olarak kapı, bir pencerenin komut tavanını aşar.** `@siyahtus/api`'nin `test` script'i unit
   **ve** integration'ı birlikte koşar, `fileParallelism: false` ile sırayla: tek başına ~858 s, yani
   `pnpm -w test` ~15 dk. Pencerenin komut tavanı 10 dk. `pnpm -w test:integration` için zaten
   kullanılan çözüm burada da geçerli — **parçala ve her parçanın exit code'unu yaz**; içerik aynı

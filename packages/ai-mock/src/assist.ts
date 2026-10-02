@@ -3,11 +3,14 @@
  *
  * Copilot needs three kinds of generated text — a conversation summary, a
  * suggested reply, and a tone/grammar rewrite. Like the embedding stub next to
- * it, none of it calls a model: the platform ships without an LLM, so these are
- * pure functions with the one property tests and demos depend on — same input,
- * same output. Swapping in a real provider means replacing these functions and
- * nothing else. The reply draft is assembled by the route from retrieved
- * knowledge; this module owns the summary and the rewrite.
+ * it, none of it calls a model: these are pure functions with the one property
+ * tests and demos depend on — same input, same output.
+ *
+ * They are what the API serves when `LLM_PROVIDER=mock` (the default). The
+ * summary (tm 257.5) and the rewrite (tm 257.6) are written by the configured
+ * model on any other provider and reach these functions only through that
+ * provider switch (`copilot-summary.ts`, `copilot-enhance.ts`); the reply draft
+ * is assembled by the route from retrieved knowledge and uses neither.
  */
 
 /** One turn of a conversation, reduced to who spoke and what they said. */

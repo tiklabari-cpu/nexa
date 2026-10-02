@@ -6712,7 +6712,10 @@ components:
         failed, or its circuit breaker is open after repeated failures.
         `error.details.kind` names the failure class (`timeout`, `no_answer`,
         `circuit_open`, …). Nothing was written; the request can simply be
-        repeated.
+        repeated. On the draft rewrite (tm 257.6) `kind: no_answer` also
+        carries `error.details.reason` (`length`, `refusal`, `empty`, …); with
+        `length` the same draft will be cut off again, so it should be
+        shortened rather than retried.
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

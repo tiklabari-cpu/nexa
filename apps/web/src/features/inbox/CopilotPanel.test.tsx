@@ -8,12 +8,24 @@
  * leaving summary available (FR-MOD-02.8).
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { DeploymentConfig } from '@siyahtus/types';
 import { CopilotPanel } from './CopilotPanel.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
+
+// `GET /deployment` is the one read the panel makes besides its own assists;
+// stubbing the hook keeps it out of `calls`.
+const deployment = vi.hoisted(() => ({ pilot: false }));
+vi.mock('../../lib/deployment.js', () => ({
+  useDeployment: (): DeploymentConfig => ({
+    pilot_mode: deployment.pilot,
+    contact_email: null,
+    signup_enabled: true,
+  }),
+}));
 
 function okJson(body: unknown): Response {
   return {
@@ -66,6 +78,7 @@ function renderPanel(canDraft = true) {
 
 beforeEach(() => {
   useCopilotDraftStore.setState({ byChat: {} });
+  deployment.pilot = false;
 });
 
 afterEach(() => {
@@ -142,6 +155,57 @@ describe('CopilotPanel', () => {
     await waitFor(() => expect(screen.getByText('Hello, we cannot do that.')).toBeTruthy());
     const call = calls.find((c) => c.path === '/copilot/chats/CHAT123/enhance');
     expect(call?.body).toEqual({ text: "we can't do that", mode: 'formal' });
+  });
+
+  it('takes 10 000 characters of draft on an ordinary deployment and 2 000 in the pilot (FR-MOD-12.3)', () => {
+    stubFetch({});
+    renderPanel();
+    expect(screen.getByLabelText('Draft to improve')).toHaveProperty('maxLength', 10_000);
+    cleanup();
+
+    deployment.pilot = true;
+    renderPanel();
+    expect(screen.getByLabelText('Draft to improve')).toHaveProperty('maxLength', 2_000);
+  });
+
+  describe('when the model does not write the rewrite (FR-MOD-12.3)', () => {
+    function failEnhance(details: Record<string, unknown>): void {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: false,
+          status: 503,
+          headers: { get: () => null },
+          json: async () => ({
+            error: { type: 'service_unavailable', message: 'The model did not answer.', details },
+          }),
+        })),
+      );
+    }
+
+    it('tells the agent to shorten a draft the model cut off, rather than to retry', async () => {
+      failEnhance({ kind: 'no_answer', reason: 'length' });
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Draft to improve'), 'a very long draft');
+      await userEvent.click(screen.getByRole('button', { name: 'Fix grammar' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'This draft could not be rewritten in this mode — shorten it and try again.',
+      );
+    });
+
+    it('keeps the plain message for any other failure', async () => {
+      failEnhance({ kind: 'timeout' });
+      renderPanel();
+
+      await userEvent.type(screen.getByLabelText('Draft to improve'), 'a draft');
+      await userEvent.click(screen.getByRole('button', { name: 'Fix grammar' }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'Could not rewrite that — try again.',
+      );
+    });
   });
 
   it('switches back to Details from its header', async () => {

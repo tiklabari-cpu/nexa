@@ -18,6 +18,8 @@ import { useState, type ReactElement } from 'react';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Skeleton } from '../../components/Skeleton.js';
 import { Panel, PanelSection } from '../../components/ui/index.js';
+import { ApiClientError } from '../../lib/api-client.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { formatCount, formatDate, formatRate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { offerDraft } from './copilotDraft.js';
@@ -28,6 +30,26 @@ import {
   useCopilotSummary,
   type EnhanceMode,
 } from './useCopilot.js';
+
+/**
+ * How long a draft the panel takes: the contract's cap, and the public pilot's
+ * own lower one (`PILOT_ENHANCE_MAX_CHARS` in the API, which refuses longer).
+ */
+const ENHANCE_MAX_CHARS = 10_000;
+const PILOT_ENHANCE_MAX_CHARS = 2_000;
+
+/**
+ * A rewrite the model cut off (`503`, `details.kind: no_answer`, `reason:
+ * length`): the same draft would be cut off again, so the panel says to shorten
+ * it instead of offering a plain retry.
+ */
+function isCutOff(error: unknown): boolean {
+  return (
+    error instanceof ApiClientError &&
+    error.details?.['kind'] === 'no_answer' &&
+    error.details['reason'] === 'length'
+  );
+}
 
 const ENHANCE_MODE_IDS: readonly EnhanceMode[] = ['rephrase', 'friendly', 'formal', 'grammar'];
 
@@ -101,6 +123,7 @@ export function CopilotPanel({
   const reply = useCopilotReply(chatId);
   const enhance = useCopilotEnhance(chatId);
   const bi = useCopilotBi();
+  const { pilot_mode: pilotMode } = useDeployment();
   const [draftText, setDraftText] = useState('');
   const [biQuestion, setBiQuestion] = useState('');
   const t = useTranslate();
@@ -208,7 +231,7 @@ export function CopilotPanel({
           value={draftText}
           onChange={(event) => setDraftText(event.target.value)}
           rows={3}
-          maxLength={10_000}
+          maxLength={pilotMode ? PILOT_ENHANCE_MAX_CHARS : ENHANCE_MAX_CHARS}
           placeholder={t('inbox.copilot.enhance.placeholder')}
           className="w-full resize-none rounded-md border border-border bg-inset px-2 py-1.5 text-xs outline-none placeholder:text-content-tertiary"
         />
@@ -227,7 +250,11 @@ export function CopilotPanel({
         </div>
         {enhance.isError && (
           <p role="alert" className="text-2xs text-danger">
-            {t('inbox.copilot.enhance.error')}
+            {t(
+              isCutOff(enhance.error)
+                ? 'inbox.copilot.enhance.errorTooLong'
+                : 'inbox.copilot.enhance.error',
+            )}
           </p>
         )}
         {enhance.data && (

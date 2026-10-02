@@ -7,12 +7,14 @@
  * agent+bot turn a customer's request into a 404 before it reaches a handler).
  * The chat routes (12.3) are the in-conversation assists: a summary that lands
  * as an internal note, a reply drafted from the copilot base, and a tone/grammar
- * rewrite. Every assist records a run so Reports counts the chat as "assisted".
+ * rewrite — the summary and the rewrite written by the configured model, the reply
+ * draft assembled from the copilot base. Every assist records a run so Reports
+ * counts the chat as "assisted".
  */
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { hasAnyScope, isShortId } from '@siyahtus/types';
-import { ENHANCE_MODES, enhanceText } from '@siyahtus/ai-mock';
+import { ENHANCE_MODES } from '@siyahtus/ai-mock';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
@@ -20,6 +22,12 @@ import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { scopesOf } from '../services/auth/principal.js';
 import { CopilotService } from '../services/ai/copilot-service.js';
+import {
+  ENHANCE_TEXT_MAX_CHARS,
+  PILOT_ENHANCE_MAX_CHARS,
+  writeEnhancedText,
+  type EnhancedText,
+} from '../services/ai/copilot-enhance.js';
 import {
   SUMMARY_LANGUAGES,
   writeConversationSummary,
@@ -96,8 +104,13 @@ const summaryBody = z.object({
   language: z.enum(SUMMARY_LANGUAGES).default('en'),
 });
 
+/**
+ * 10 000 characters is the contract's cap and the agent's send limit. The public
+ * pilot refuses longer than {@link PILOT_ENHANCE_MAX_CHARS} in the handler, not
+ * here: the schema cannot know the deployment.
+ */
 const enhanceBody = z.object({
-  text: z.string().trim().min(1).max(10_000),
+  text: z.string().trim().min(1).max(ENHANCE_TEXT_MAX_CHARS),
   mode: z.enum(ENHANCE_MODES).default('rephrase'),
 });
 
@@ -135,9 +148,9 @@ export default async function copilotRoutes(
     /** The server's one knowledge service, over its configured embedding provider (tm 255.7). */
     knowledge: KnowledgeService;
     /**
-     * Who writes the summary (tm 257.5) — Copilot's own instance, not the one
-     * that answers visitors, so a run of failed summaries opens only this
-     * circuit breaker (`server.ts`).
+     * Who writes the summary (tm 257.5) and the draft rewrite (tm 257.6) —
+     * Copilot's own instance, not the one that answers visitors, so a run of
+     * failed calls opens only this circuit breaker (`server.ts`).
      */
     llm: LlmProvider;
   },
@@ -156,6 +169,35 @@ export default async function copilotRoutes(
     undefined,
     automations,
   );
+
+  /**
+   * The operator's line for a model that did not answer: which failure, never
+   * the conversation, the draft, the prompt or the provider's words
+   * (`llm-error.ts`).
+   */
+  function logLlmFailure(
+    request: FastifyRequest,
+    event: string,
+    chatId: string,
+    error: LlmProviderError,
+    { mode, message }: { mode?: string; message: string },
+  ): void {
+    request.log.warn(
+      {
+        event,
+        chat_id: chatId,
+        provider: llm.id,
+        ...(mode !== undefined ? { mode } : {}),
+        kind: error.kind,
+        transient: error.transient,
+        ...(error.status !== null ? { status: error.status } : {}),
+        ...(error.code !== null ? { code: error.code } : {}),
+        ...(error.reason !== null ? { reason: error.reason } : {}),
+        ...(error.requestId !== null ? { provider_request_id: error.requestId } : {}),
+      },
+      message,
+    );
+  }
 
   // --- Knowledge (12.2) ------------------------------------------------------
 
@@ -259,22 +301,9 @@ export default async function copilotRoutes(
         });
       } catch (error) {
         if (!(error instanceof LlmProviderError)) throw error;
-        // The operator's line: which failure, never the conversation, the
-        // prompt or the provider's words (`llm-error.ts`).
-        request.log.warn(
-          {
-            event: 'copilot.summary.failed',
-            chat_id: chatId,
-            provider: llm.id,
-            kind: error.kind,
-            transient: error.transient,
-            ...(error.status !== null ? { status: error.status } : {}),
-            ...(error.code !== null ? { code: error.code } : {}),
-            ...(error.reason !== null ? { reason: error.reason } : {}),
-            ...(error.requestId !== null ? { provider_request_id: error.requestId } : {}),
-          },
-          'copilot summary could not be written; nothing was saved',
-        );
+        logLlmFailure(request, 'copilot.summary.failed', chatId, error, {
+          message: 'copilot summary could not be written; nothing was saved',
+        });
         throw new ApiError(
           'service_unavailable',
           `The summary could not be written: the model did not answer (${error.kind}). Nothing was saved — try again in a moment.`,
@@ -354,14 +383,56 @@ export default async function copilotRoutes(
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
+      // The pilot's own, lower limit — before the chat lookup and any model
+      // call, so a long paste costs nothing. The contract's 10 000 stays: an
+      // OpenAPI document cannot differ per deployment.
+      if (env.PILOT_MODE && body.text.length > PILOT_ENHANCE_MAX_CHARS) {
+        throw ApiError.validation(
+          `text: the pilot rewrites drafts of up to ${PILOT_ENHANCE_MAX_CHARS} characters — shorten it and try again.`,
+          { reason: 'enhance_too_long', max_length: PILOT_ENHANCE_MAX_CHARS },
+        );
+      }
+
       await chats.get(tenant, principal, chatId);
-      const text = enhanceText(body.text, body.mode);
+
+      // Written with no transaction open, and nothing recorded when the model
+      // does not answer — as the summary does.
+      let written: EnhancedText;
+      try {
+        written = await writeEnhancedText(llm, body.text, body.mode, {
+          maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+          maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+          timeoutMs: env.LLM_TIMEOUT_MS,
+        });
+      } catch (error) {
+        if (!(error instanceof LlmProviderError)) throw error;
+        logLlmFailure(request, 'copilot.enhance.failed', chatId, error, {
+          mode: body.mode,
+          message: 'copilot rewrite could not be written; nothing was recorded',
+        });
+        throw new ApiError(
+          'service_unavailable',
+          `The draft could not be rewritten: the model did not answer (${error.kind}). Nothing was recorded — try again in a moment.`,
+          {
+            // `reason` only for a reply the model cut off or refused: the one
+            // failure the same draft will keep producing, which the panel tells
+            // the agent to shorten rather than retry. A short, fixed token
+            // (`llm-error.ts`) — never the model's words.
+            details: {
+              kind: error.kind,
+              ...(error.kind === 'no_answer' && error.reason !== null
+                ? { reason: error.reason }
+                : {}),
+            },
+          },
+        );
+      }
 
       await request.withTenant((tx) =>
-        copilot.recordAssist(tx, tenant, chatId, 'enhance', body.mode),
+        copilot.recordAssist(tx, tenant, chatId, 'enhance', body.mode, written.usage),
       );
 
-      return reply.send({ text, mode: body.mode });
+      return reply.send({ text: written.text, mode: body.mode });
     },
   );
 

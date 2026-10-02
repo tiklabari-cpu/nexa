@@ -273,8 +273,18 @@ enhance:
     summary: Rewrite a draft in a chosen register
     description: |
       Improves the grammar or tone of a draft reply (FR-MOD-12.3) — rephrase,
-      friendlier, more formal, or a plain grammar tidy. Deterministic, so the
-      same draft always yields the same rewrite.
+      friendlier, more formal, or a plain grammar tidy.
+
+      Who writes it is the deployment's `LLM_PROVIDER` (tm 257.6). It is
+      deterministic only with the stub (`mock`, the default): the same draft then
+      always yields the same rewrite. With a configured model the output can
+      differ between calls, the draft is rewritten in its own language (not
+      translated), and card numbers are masked in what is sent and what comes
+      back. When the model does not answer — or answers with more than 10 000
+      characters, which could not be sent — the response is a 503 and nothing is
+      recorded. In the public pilot (`GET /deployment` `pilot_mode`) a draft
+      longer than 2 000 characters is refused with a 400 whose
+      `error.details.reason` is `enhance_too_long`, before any model call.
     requestBody:
       required: true
       content:
@@ -301,3 +311,4 @@ enhance:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/LlmUnavailable" }

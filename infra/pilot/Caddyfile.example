@@ -1,5 +1,17 @@
 # SiyahTuş pilot — the reverse proxy in front of docker-compose.pilot.yml (tm 256.5).
 #
+# LATER, AND DNS-ONLY (tm 257.10). The pilot's edge today is a Cloudflare
+# Tunnel (infra/pilot/cloudflared/config.example.yml), serving the same four
+# names from the same ports. This file is for when the host is reached
+# directly: the four DNS records must be DNS-only (grey cloud). Behind an
+# orange (proxied) record it is NOT supported. Caddy would replace
+# X-Forwarded-For with the Cloudflare edge's address, so every visitor would
+# collapse onto the edge. Fixing that needs `trusted_proxies` here plus
+# TRUST_PROXY_HOPS=2, and apps/api/src/config/env.pilot.test.ts forbids
+# `trusted_proxies` ("never believes an X-Forwarded-For the client sent").
+# Switching edges is stopping cloudflared and starting Caddy; compose and .env
+# do not change.
+#
 # The compose file publishes its four ports on 127.0.0.1 only; this is the one
 # public side. Caddy runs on the same host (not in the compose project — it
 # dials 127.0.0.1), obtains and renews the TLS certificates itself, and serves

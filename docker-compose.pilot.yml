@@ -6,8 +6,16 @@
 # part in front of it: DNS, TLS certificates and the reverse proxy that
 # terminates HTTPS are the host's, and every port below is published on
 # 127.0.0.1 only, for that proxy to reach. Nothing here listens publicly.
-# infra/pilot/Caddyfile.example is that proxy's configuration (tm 256.5): one
-# hop on every path, which is what TRUST_PROXY_HOPS=1 assumes.
+# There are two such edges, both on the host and outside this project, both
+# serving the same four names from these four ports, with one hop on every
+# path, which is what TRUST_PROXY_HOPS=1 assumes (tm 257.10):
+#   now    a locally managed Cloudflare Tunnel run by systemd —
+#          infra/pilot/cloudflared/config.example.yml; its credentials stay in
+#          /etc/cloudflared, never in .env (x-app-env-file below hands the whole
+#          of .env to api and rtm)
+#   later  Caddy on DNS-only records — infra/pilot/Caddyfile.example (tm 256.5)
+# Changing edge is stopping one service and starting the other; this file and
+# .env stay as they are.
 #
 #   cp .env.production.example .env        # then fill in every <…> value
 #   docker compose -f docker-compose.pilot.yml up --build -d

@@ -537,12 +537,29 @@ security bug, not a cosmetic one:
 Count the reverse proxies between the internet and this process, not including the process
 itself:
 
-| Topology                                                   | `TRUST_PROXY_HOPS` |
-| ---------------------------------------------------------- | ------------------ |
-| Nothing in front — the process is reached directly         | `0`                |
-| One reverse proxy (e.g. the compose stack's nginx sidecar) | `1` (default)      |
-| A CDN/load balancer in front of that reverse proxy         | `2`                |
-| Each additional hop that appends to `X-Forwarded-For`      | `+1`               |
+| Topology                                                        | `TRUST_PROXY_HOPS`                                    |
+| --------------------------------------------------------------- | ----------------------------------------------------- |
+| Nothing in front — the process is reached directly              | `0`                                                   |
+| One reverse proxy (e.g. the compose stack's nginx sidecar)      | `1` (default)                                         |
+| Cloudflare Tunnel (cloudflared on the host, dialling 127.0.0.1) | `1` — confirmed by the opening-day measurement        |
+| A CDN/load balancer in front of that reverse proxy              | `2` — Caddy behind an orange cloud: not for the pilot |
+| Each additional hop that appends to `X-Forwarded-For`           | `+1`                                                  |
+
+**A Cloudflare Tunnel is one hop, not "a CDN in front of a proxy".** Cloudflare's edge
+appends the visitor to `X-Forwarded-For`, and cloudflared, on the host, passes the header on
+and dials the published port. Nothing else appends, so the count is `1`. Reading the row
+below it as "Cloudflare in front, so `2`" counts an entry nobody wrote. The api then reads
+one step too far left, at the value the caller sent, which is the bypass above (measured in
+`trust-proxy.test.ts`, "Cloudflare Tunnel at TRUST_PROXY_HOPS=2"). The `1` follows the
+tunnel's documented default; the pilot confirms it on opening day against the real tunnel
+([`scripts/edge-rehearsal/README.md`](scripts/edge-rehearsal/README.md)). If cloudflared
+turns out to add an entry of its own, the fix is `2` in `.env`.
+
+**Caddy behind an orange-cloud (proxied) record is not supported for the pilot.** Caddy
+replaces the header with its own peer, which is a Cloudflare edge address, so every visitor
+would collapse onto the edge. Fixing that takes `trusted_proxies` in the Caddyfile plus `2`
+here, and the pilot's Caddyfile guard forbids `trusted_proxies`. Caddy is the pilot's edge
+only on a DNS-only (grey-cloud) record.
 
 The panel needs care. Its nginx also proxies `/api/`, so a proxy in front of the panel that
 forwards `/api/*` to that nginx makes the panel's path two hops, while the widget, which

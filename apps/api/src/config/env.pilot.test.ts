@@ -315,18 +315,18 @@ function caddySites(source: string): Map<string, string[]> {
   return sites;
 }
 
+/** The host port compose publishes a service on by default. */
+function publishedPort(service: string): string {
+  const port = /- '127\.0\.0\.1:\$\{SIYAHTUS_[A-Z]+_HOST_PORT:-(\d+)\}:\d+'/.exec(
+    block(new RegExp(`^ {2}${service}:$`)),
+  )?.[1];
+  if (!port) throw new Error(`docker-compose.pilot.yml publishes no port for ${service}`);
+  return port;
+}
+
 describe("the pilot's edge and operations (tm 256.5)", () => {
   const CADDYFILE = read('infra/pilot/Caddyfile.example');
   const sites = caddySites(CADDYFILE);
-
-  /** The host port compose publishes a service on by default. */
-  function publishedPort(service: string): string {
-    const port = /- '127\.0\.0\.1:\$\{SIYAHTUS_[A-Z]+_HOST_PORT:-(\d+)\}:\d+'/.exec(
-      block(new RegExp(`^ {2}${service}:$`)),
-    )?.[1];
-    if (!port) throw new Error(`docker-compose.pilot.yml publishes no port for ${service}`);
-    return port;
-  }
 
   /** Every upstream a site's `reverse_proxy` lines dial. */
   const upstreams = (site: string): string[] =>
@@ -373,5 +373,158 @@ describe("the pilot's edge and operations (tm 256.5)", () => {
     const uncommented = caddyLines(CADDYFILE).join('\n');
     expect(uncommented).not.toContain('trusted_proxies');
     expect(uncommented).not.toMatch(/header_up\s+\+?X-Forwarded-For/i);
+  });
+});
+
+/** One cloudflared ingress rule — first match wins, as cloudflared reads them. */
+type TunnelRule = { hostname?: string; path?: string; service?: string };
+const TUNNEL_RULE_KEYS = new Set(['hostname', 'path', 'service']);
+
+/**
+ * `infra/pilot/cloudflared/config.example.yml`, read without a YAML parser
+ * (apps/api has none, and the guard is not worth a dependency). The shape is
+ * held to what the example uses — top-level `key: value` lines and an
+ * `ingress:` list of flat `- key: value` rules — and any other line is an
+ * error: a guard that skipped a line it did not understand could pass a file
+ * whose routing it never read.
+ */
+function tunnelConfig(source: string): { top: Record<string, string>; ingress: TunnelRule[] } {
+  const top: Record<string, string> = {};
+  const ingress: TunnelRule[] = [];
+  let inIngress = false;
+  const addKey = (rule: TunnelRule, key: string, value: string, raw: string): void => {
+    if (!TUNNEL_RULE_KEYS.has(key) || key in rule) {
+      throw new Error(`config.example.yml: unexpected or repeated rule key in: ${raw}`);
+    }
+    rule[key as keyof TunnelRule] = value;
+  };
+  for (const raw of source.split('\n')) {
+    const line = raw.replace(/(^|\s)#.*$/, '').trimEnd();
+    if (line.trim() === '') continue;
+    const topLevel = /^([a-z][a-z-]*):(?: (\S+))?$/.exec(line);
+    const opens = /^ {2}- ([a-zA-Z]+): (\S+)$/.exec(line);
+    const continues = /^ {4}([a-zA-Z]+): (\S+)$/.exec(line);
+    if (topLevel) {
+      inIngress = topLevel[1] === 'ingress' && topLevel[2] === undefined;
+      if (!inIngress) top[topLevel[1]!] = topLevel[2] ?? '';
+    } else if (inIngress && opens) {
+      const rule: TunnelRule = {};
+      addKey(rule, opens[1]!, opens[2]!, raw);
+      ingress.push(rule);
+    } else if (inIngress && continues && ingress.length > 0) {
+      addKey(ingress.at(-1)!, continues[1]!, continues[2]!, raw);
+    } else {
+      throw new Error(`config.example.yml: a line this guard does not understand: ${raw}`);
+    }
+  }
+  return { top, ingress };
+}
+
+describe("the pilot's Cloudflare Tunnel edge (tm 257.10)", () => {
+  // Read lazily: a missing file is a failed test with the path in it, not a
+  // collection error that hides every other test in this file.
+  const TUNNEL_PATH = 'infra/pilot/cloudflared/config.example.yml';
+  const tunnelText = (): string => read(TUNNEL_PATH);
+  const tunnel = () => tunnelConfig(tunnelText());
+  const caddyNames = (): string[] => [...caddySites(read('infra/pilot/Caddyfile.example')).keys()];
+  const origin = (service: string): string => `http://127.0.0.1:${publishedPort(service)}`;
+  const rulesFor = (hostname: string): TunnelRule[] =>
+    tunnel().ingress.filter((rule) => rule.hostname === hostname);
+
+  it('is a locally managed tunnel whose identity lives outside the repository', () => {
+    // A tunnel created in the dashboard ignores this file's ingress, so the
+    // rules guarded below would be guarding nothing; `tunnel` +
+    // `credentials-file` is what makes the file the one cloudflared obeys.
+    const { top, ingress } = tunnel();
+    expect(top).toEqual({
+      tunnel: '<tunnel-uuid>',
+      'credentials-file': '/etc/cloudflared/<tunnel-uuid>.json',
+    });
+    expect(ingress).toHaveLength(6);
+  });
+
+  it('serves the same four names as the Caddyfile — the edge can change, the names cannot', () => {
+    // API_BASE_URL and RTM_BASE_URL are baked into the widget and panel
+    // bundles at build time (docker-compose.pilot.yml, VITE_API_BASE_URL and
+    // VITE_RTM_URL), so moving to the other edge must not move a name.
+    const names = [
+      ...new Set(tunnel().ingress.flatMap((rule) => (rule.hostname ? [rule.hostname] : []))),
+    ];
+    expect(names.sort()).toEqual(caddyNames().sort());
+    expect(names).toHaveLength(4);
+  });
+
+  it("dials each name's published port on 127.0.0.1", () => {
+    expect(rulesFor('api.example.com')).toEqual([
+      { hostname: 'api.example.com', service: origin('api') },
+    ]);
+    expect(rulesFor('rtm.example.com')).toEqual([
+      { hostname: 'rtm.example.com', service: origin('rtm') },
+    ]);
+    expect(rulesFor('widget.example.com')).toEqual([
+      { hostname: 'widget.example.com', service: origin('widget') },
+    ]);
+  });
+
+  it('never names localhost, which may resolve to ::1 where compose publishes nothing', () => {
+    const uncommented = tunnelText()
+      .split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n');
+    expect(uncommented).not.toMatch(/localhost/i);
+  });
+
+  it("sends the panel's /api/ to the api before the panel's catch-all — one hop, as TRUST_PROXY_HOPS=1 says", () => {
+    // First match wins. Below the catch-all, the panel's /api/ would reach the
+    // api through the panel's nginx — a second hop, and every panel user on
+    // one address (PLAN §D197).
+    expect(rulesFor('panel.example.com')).toEqual([
+      { hostname: 'panel.example.com', path: '^/api/', service: origin('api') },
+      { hostname: 'panel.example.com', service: origin('web') },
+    ]);
+    expect(TEMPLATE_ENTRIES['TRUST_PROXY_HOPS']).toBe('1');
+  });
+
+  it('ends in a nameless 404, and no earlier rule is nameless', () => {
+    // A nameless rule matches every request, so one above the end would take
+    // the traffic of every rule after it.
+    const { ingress } = tunnel();
+    expect(ingress.at(-1)).toEqual({ service: 'http_status:404' });
+    for (const rule of ingress.slice(0, -1)) expect(rule.hostname, rule.service).toBeDefined();
+  });
+
+  it('keeps a tunnel credential out of .env, which compose hands whole to api and rtm', () => {
+    for (const key of Object.keys(TEMPLATE_ENTRIES)) {
+      expect(key).not.toMatch(/TUNNEL|CLOUDFLARE/);
+    }
+    const composeUncommented = COMPOSE.split('\n')
+      .filter((line) => !line.trimStart().startsWith('#'))
+      .join('\n');
+    expect(composeUncommented).not.toMatch(/TUNNEL|CLOUDFLARE/i);
+  });
+
+  const lines = (path: string): string[] => read(path).split(/\r?\n/);
+
+  it.each([
+    ['.gitignore', '**/.cloudflared/'],
+    ['.gitignore', 'infra/pilot/cloudflared/*.json'],
+    ['.gitignore', 'infra/pilot/cloudflared/config.yml'],
+    ['.dockerignore', '**/.env'],
+    ['.dockerignore', '**/.env.*'],
+    ['.dockerignore', '**/*.pem'],
+    ['.dockerignore', '**/*.key'],
+    ['.dockerignore', '**/secrets/'],
+    ['.dockerignore', '**/.cloudflared/'],
+    ['.dockerignore', '**/cloudflared/*.json'],
+    ['.dockerignore', 'backups/'],
+  ])('%s carries the line %s', (file, line) => {
+    expect(lines(file)).toContain(line);
+  });
+
+  it('.dockerignore still lets .env.example in, after the patterns that would drop it', () => {
+    // Docker applies the last matching line, so the exception only works below them.
+    const docker = lines('.dockerignore');
+    expect(docker.indexOf('**/.env.*')).toBeGreaterThanOrEqual(0);
+    expect(docker.lastIndexOf('!.env.example')).toBeGreaterThan(docker.indexOf('**/.env.*'));
   });
 });

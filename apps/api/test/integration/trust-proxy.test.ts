@@ -24,7 +24,9 @@
  * The topology below is fixed and real: a customer's browser reaches an edge
  * (CDN), which reaches an ingress, which reaches this process. Two hops append
  * to the header, so `TRUST_PROXY_HOPS=2` is the correct value and every other
- * value in this file is a deployment mistake being measured.
+ * value in this file is a deployment mistake being measured — except in "The
+ * pilot's two edges" near the end, which models the pilot's own one-hop edges
+ * (tm 257.10) and says so there.
  */
 import { PrismaClient } from '@prisma/client';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
@@ -293,6 +295,148 @@ describe('trusted proxy hops (TRUST_PROXY_HOPS)', () => {
 
     const viaPodNetwork = await direct('1', '10.42.0.17', CLIENT);
     expect(viaPodNetwork.statusCode).toBe(403);
+  });
+
+  // --- The pilot's two edges (tm 257.10) --------------------------------------
+  //
+  // A topology of its own, and the one exception to the two-hop chain at the
+  // top of this file: the pilot runs behind a Cloudflare Tunnel now and may run
+  // behind Caddy, reached directly (DNS-only), later. Both are written for
+  // TRUST_PROXY_HOPS=1 (infra/pilot/cloudflared/config.example.yml,
+  // infra/pilot/Caddyfile.example). They differ in how they build the header,
+  // and the three functions below are that difference: the header the api
+  // receives when a visitor at `visitor` sent `sent`, or nothing. They model
+  // each edge's documented default. scripts/edge-rehearsal measures the same
+  // thing against a running api, and the real tunnel is measured on opening
+  // day — if cloudflared turned out to append an entry of its own, the count
+  // would be 2 and the first case below says why it is not 2 until then.
+
+  /**
+   * Cloudflare Tunnel. The edge appends the visitor to whatever the visitor
+   * sent; cloudflared, on the host, passes the header on and dials the
+   * published port.
+   */
+  const throughTunnel = (visitor: string, sent?: string): string =>
+    sent ? `${sent}, ${visitor}` : visitor;
+  /**
+   * Caddy, DNS-only. With no `trusted_proxies` it does not keep what the
+   * visitor sent: it replaces the header with the peer it saw.
+   */
+  const throughCaddy = (visitor: string, _sent?: string): string => visitor;
+  /**
+   * Caddy behind an orange-cloud (proxied) record. The edge appends the
+   * visitor, then Caddy, trusting nobody, replaces the whole header with its
+   * own peer: the edge.
+   */
+  const throughCaddyBehindTheEdge = (_visitor: string, _sent?: string): string => EDGE;
+
+  /** Where the edge process on the host reaches the api from, through a published port. */
+  const HOST_PEERS = [SOCKET, '172.18.0.1'];
+  const fromEdge = (hops: (typeof HOP_COUNTS)[number], chain: string, peer = SOCKET) =>
+    direct(hops, peer, chain);
+
+  it('Cloudflare Tunnel: reads the visitor the edge appended, never the address the visitor wrote', async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    // Loopback, or the compose bridge's gateway when Docker's proxy relays the
+    // published port: either way a private peer, so the one hop is honoured.
+    for (const peer of HOST_PEERS) {
+      const spoofed = await fromEdge('1', throughTunnel(CLIENT, ALLOWED), peer);
+      expect(spoofed.statusCode, peer).toBe(403);
+      expect((spoofed.json() as { error: { type: string } }).error.type).toBe('not_allowed');
+
+      const genuine = await fromEdge('1', throughTunnel(ALLOWED), peer);
+      expect(genuine.statusCode, peer).toBe(200);
+
+      // A visitor behind a proxy of their own arrives with a longer header and
+      // is still read at the address the edge attested.
+      const behindTheirProxy = await fromEdge('1', throughTunnel(ALLOWED, CLIENT), peer);
+      expect(behindTheirProxy.statusCode, peer).toBe(200);
+    }
+  });
+
+  it('Cloudflare Tunnel at TRUST_PROXY_HOPS=2 believes the address the visitor wrote', async () => {
+    // README's warning, measured: "a CDN in front of a reverse proxy = 2" read
+    // as "Cloudflare in front = 2" counts an entry cloudflared did not add,
+    // and the allow-list matches the value the caller chose.
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const spoofed = await fromEdge('2', throughTunnel(CLIENT, ALLOWED));
+
+    expect(spoofed.statusCode).toBe(200);
+  });
+
+  it('Cloudflare Tunnel: each visitor keeps their own anonymous budget, and rewriting the header buys no new one (NFR-S8)', async () => {
+    // The anonymous bucket (sign-in, token exchange, the widget's token) is
+    // keyed by `request.ip`. Through the tunnel at the pilot's count it has to
+    // be one bucket per visitor: not one for the whole tunnel, and not a fresh
+    // one for every value a caller writes in front of their own address.
+    const server = await startTestServer({ TRUST_PROXY_HOPS: '1', RATE_LIMIT_ANON_PER_MIN: '2' });
+    try {
+      await clearRateLimits(server.app);
+      const anonymous = (chain: string) => server.get('/auth/me', { 'x-forwarded-for': chain });
+
+      expect((await anonymous(throughTunnel(CLIENT))).statusCode).toBe(401);
+      expect((await anonymous(throughTunnel(CLIENT))).statusCode).toBe(401);
+      for (const sent of ['203.0.113.50', '203.0.113.51, 203.0.113.52']) {
+        const rotated = await anonymous(throughTunnel(CLIENT, sent));
+        expect(rotated.statusCode, sent).toBe(429);
+        expect(Number(rotated.headers['retry-after'])).toBeGreaterThan(0);
+      }
+
+      // Another visitor through the same tunnel, from the same peer.
+      expect((await anonymous(throughTunnel('198.51.100.8'))).statusCode).toBe(401);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('Cloudflare Tunnel at TRUST_PROXY_HOPS=2 hands out a fresh anonymous budget per forged entry', async () => {
+    const server = await startTestServer({ TRUST_PROXY_HOPS: '2', RATE_LIMIT_ANON_PER_MIN: '2' });
+    try {
+      await clearRateLimits(server.app);
+      const anonymous = (chain: string) => server.get('/auth/me', { 'x-forwarded-for': chain });
+
+      expect((await anonymous(throughTunnel(CLIENT))).statusCode).toBe(401);
+      expect((await anonymous(throughTunnel(CLIENT))).statusCode).toBe(401);
+      expect((await anonymous(throughTunnel(CLIENT))).statusCode).toBe(429);
+
+      // The same exhausted visitor, one made-up entry later.
+      expect((await anonymous(throughTunnel(CLIENT, '203.0.113.60'))).statusCode).toBe(401);
+    } finally {
+      await server.close();
+    }
+  });
+
+  it("Caddy, DNS-only: the visitor's own header never reaches the api", async () => {
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    for (const peer of HOST_PEERS) {
+      const spoofed = await fromEdge('1', throughCaddy(CLIENT, ALLOWED), peer);
+      expect(spoofed.statusCode, peer).toBe(403);
+
+      const genuine = await fromEdge('1', throughCaddy(ALLOWED, CLIENT), peer);
+      expect(genuine.statusCode, peer).toBe(200);
+    }
+  });
+
+  it('Caddy behind the orange cloud: every visitor arrives as the edge — a placement the pilot does not support', async () => {
+    // Making this work needs Caddy to trust Cloudflare's ranges
+    // (`trusted_proxies`) and the api to count two hops. The Caddyfile guard
+    // forbids `trusted_proxies` (env.pilot.test.ts) because the same line
+    // behind a grey-cloud record would let any caller choose their address,
+    // so the supported Caddy placement is DNS-only and nothing else.
+    await enforce(fx.a, ['203.0.113.0/24']);
+
+    const allowedVisitor = await fromEdge('1', throughCaddyBehindTheEdge(ALLOWED));
+    expect(allowedVisitor.statusCode).toBe(403);
+
+    // The address it judged was the edge's, so listing the edge admits anyone.
+    await owner.ipAllowlistEntry.create({
+      data: { organizationId: fx.a.organizationId, licenseId: fx.a.licenseId, entry: `${EDGE}/32` },
+    });
+    const anybody = await fromEdge('1', throughCaddyBehindTheEdge(CLIENT));
+    expect(anybody.statusCode).toBe(200);
   });
 
   // --- The default ------------------------------------------------------------

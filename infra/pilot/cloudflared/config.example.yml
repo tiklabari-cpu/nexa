@@ -1,0 +1,95 @@
+# SiyahTuş pilot — the Cloudflare Tunnel in front of docker-compose.pilot.yml (tm 257.10).
+#
+# The pilot's edge today. infra/pilot/Caddyfile.example is the other one, for
+# later, when the host is reached directly (DNS-only). Both run on the host,
+# outside the compose project; both dial the four ports compose publishes on
+# 127.0.0.1; both serve the same four names. Moving from one to the other is
+# stopping one systemd service and starting the other. Compose, .env and the
+# built images do not change: API_BASE_URL and RTM_BASE_URL are baked into the
+# widget and panel bundles, which is why the names must be the same on both.
+#
+# LOCALLY MANAGED, on purpose. A tunnel created in the Cloudflare dashboard,
+# or installed with the `cloudflared service install <token>` line the
+# dashboard hands out, is remotely managed: its routes live in the dashboard
+# and cloudflared IGNORES the ingress rules in this file. The order and the
+# one-hop rule below would then be guarding nothing. Create the tunnel from the
+# host's shell instead (replace example.com with the pilot's domain):
+#
+#   cloudflared tunnel login                  # once; writes ~/.cloudflared/cert.pem
+#   cloudflared tunnel create siyahtus-pilot  # prints the UUID, writes ~/.cloudflared/<UUID>.json
+#   sudo install -d -m 700 /etc/cloudflared
+#   sudo mv ~/.cloudflared/<UUID>.json /etc/cloudflared/
+#   sudo cp infra/pilot/cloudflared/config.example.yml /etc/cloudflared/config.yml
+#   # edit /etc/cloudflared/config.yml: the UUID (twice) and the four names
+#   cloudflared tunnel --config /etc/cloudflared/config.yml ingress validate
+#   cloudflared tunnel --config /etc/cloudflared/config.yml ingress rule https://panel.example.com/api/v1/health/live
+#   cloudflared tunnel route dns siyahtus-pilot panel.example.com  # and widget., api., rtm.
+#
+# `ingress rule` prints the rule a URL matches: for the panel's /api/ it has
+# to be the one with `path: ^/api/` and the api's port, not the catch-all.
+#
+# Run it as a systemd service that reads this file. The unit, at
+# /etc/systemd/system/cloudflared.service, then `systemctl enable --now cloudflared`:
+#
+#   [Unit]
+#   Description=cloudflared - SiyahTuş pilot edge
+#   After=network-online.target
+#   Wants=network-online.target
+#
+#   [Service]
+#   ExecStart=/usr/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
+#   Restart=on-failure
+#   RestartSec=5
+#
+#   [Install]
+#   WantedBy=multi-user.target
+#
+# SECRETS stay out of the repository and out of .env. The credentials file
+# (<UUID>.json) and cert.pem are the tunnel's identity: whoever holds them can
+# serve the pilot's names. .env is no place for them or for a tunnel token:
+# docker-compose.pilot.yml hands the whole of .env to the api and rtm
+# containers (x-app-env-file), so a token there would sit in the application's
+# environment. A config.yml or a *.json next to this file, and a .cloudflared/
+# directory anywhere, are git-ignored and docker-ignored.
+#
+# THE CLIENT ADDRESS. The api takes the visitor from X-Forwarded-For and
+# trusts TRUST_PROXY_HOPS=1 entries of it. It never reads CF-Connecting-IP. The
+# edge appends the visitor to the header; cloudflared passes it on and dials
+# from 127.0.0.1. One hop is the expected count, and it is measured on opening
+# day, not assumed (scripts/edge-rehearsal/README.md says what the local
+# rehearsal proves and what it cannot). If cloudflared turns out to append an
+# entry of its own, the fix is TRUST_PROXY_HOPS=2 in .env and no code.
+#
+# The panel's /api/ rule comes BEFORE the panel's catch-all and goes to the
+# api directly. First match wins. Through the panel's nginx it would be a
+# second hop, and every panel user would share one address (PLAN §D197).
+#
+# 127.0.0.1, never localhost: localhost may resolve to ::1, and compose
+# publishes on IPv4 loopback only. The ports are the compose defaults; a
+# SIYAHTUS_*_HOST_PORT line in .env moves one, so change the matching rule too.
+#
+# apps/api/src/config/env.pilot.test.ts reads this file and fails if the names
+# stop matching the Caddyfile's, a rule leaves 127.0.0.1 or its published port,
+# the panel's /api/ rule falls below the catch-all, or the 404 rule goes.
+tunnel: <tunnel-uuid>
+credentials-file: /etc/cloudflared/<tunnel-uuid>.json
+
+ingress:
+  # The agent panel. REST goes to the api directly (one hop); everything else
+  # is the panel's static app, served by its own nginx.
+  - hostname: panel.example.com
+    path: ^/api/
+    service: http://127.0.0.1:4000
+  - hostname: panel.example.com
+    service: http://127.0.0.1:5173
+  # The api, called cross-origin by the widget and by customers' own integrations.
+  - hostname: api.example.com
+    service: http://127.0.0.1:4000
+  # RTM. cloudflared passes the WebSocket upgrade through on its own.
+  - hostname: rtm.example.com
+    service: http://127.0.0.1:4001
+  # The customer widget: loader.js, the iframe document and the hosted Chat page.
+  - hostname: widget.example.com
+    service: http://127.0.0.1:5174
+  # Anything else (another name pointed at this tunnel, a typo) gets a 404.
+  - service: http_status:404

@@ -23,8 +23,18 @@ vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.curr
 const { ChannelsGrid } = await import('./Channels.js');
 
 const OWNER = [...DEFAULT_AGENT_SCOPES, ...ADMIN_SCOPES];
-const PILOT: DeploymentConfig = { pilot_mode: true, contact_email: null, signup_enabled: true };
-const ORDINARY: DeploymentConfig = { pilot_mode: false, contact_email: null, signup_enabled: true };
+const PILOT: DeploymentConfig = {
+  pilot_mode: true,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
+const ORDINARY: DeploymentConfig = {
+  pilot_mode: false,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
 
 const englishLabel = (section: SettingsSectionEntry): string =>
   EN_SETTINGS[section.labelKey] ?? section.labelKey;

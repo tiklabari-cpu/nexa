@@ -31,9 +31,14 @@ async function withServer(
 }
 
 describe('GET /deployment', () => {
-  it('answers an anonymous caller with exactly the three deployment fields, off by default', async () => {
+  it('answers an anonymous caller with exactly the four deployment fields, off by default', async () => {
     await withServer(
-      { PILOT_MODE: undefined, PILOT_CONTACT_EMAIL: undefined, SIGNUP_ENABLED: undefined },
+      {
+        PILOT_MODE: undefined,
+        PILOT_CONTACT_EMAIL: undefined,
+        SIGNUP_ENABLED: undefined,
+        SIGNUP_EMAIL_VERIFICATION: undefined,
+      },
       async (server) => {
         const response = await server.get('/deployment');
 
@@ -44,6 +49,7 @@ describe('GET /deployment', () => {
           pilot_mode: false,
           contact_email: null,
           signup_enabled: true,
+          email_verification_required: false,
         });
         expect(response.headers['cache-control']).toBe('no-cache');
       },
@@ -61,6 +67,7 @@ describe('GET /deployment', () => {
           pilot_mode: true,
           contact_email: 'pilot-desk@siyahtus.test',
           signup_enabled: true,
+          email_verification_required: false,
         });
       },
     );
@@ -69,6 +76,12 @@ describe('GET /deployment', () => {
   it('reports closed sign-up', async () => {
     await withServer({ SIGNUP_ENABLED: 'false' }, async (server) => {
       expect((await server.get('/deployment')).json().signup_enabled).toBe(false);
+    });
+  });
+
+  it('reports that a new owner must verify the address (tm 257.7)', async () => {
+    await withServer({ SIGNUP_EMAIL_VERIFICATION: 'true' }, async (server) => {
+      expect((await server.get('/deployment')).json().email_verification_required).toBe(true);
     });
   });
 

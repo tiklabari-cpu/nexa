@@ -24,6 +24,7 @@ vi.mock('../../lib/deployment.js', () => ({
     pilot_mode: deployment.pilot,
     contact_email: null,
     signup_enabled: true,
+    email_verification_required: false,
   }),
 }));
 

@@ -213,6 +213,11 @@ model Account {
   passwordHash String?   @map("password_hash")
   lastSeenAt   DateTime? @map("last_seen_at") @db.Timestamptz(6)
   createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// When somebody proved this address (tm 257.7). Null only for an owner who
+  /// signed up while `SIGNUP_EMAIL_VERIFICATION=true` and has not yet opened the
+  /// link with the password; every other way an account is made — invitation,
+  /// SSO, SCIM, the seed — is verified by this default.
+  emailVerifiedAt DateTime? @default(now()) @map("email_verified_at") @db.Timestamptz(6)
 
   memberships        AgentMembership[]
   authorizationCodes OauthAuthorizationCode[]
@@ -220,6 +225,7 @@ model Account {
   groupMemberships   GroupAgent[]
   expertise          AgentExpertise[]
   passwordResets     PasswordResetToken[]
+  emailVerifications EmailVerificationToken[]
   invitationsSent    Invitation[]
   ticketFollows      TicketFollower[]
   workSchedules      WorkSchedule[]
@@ -1167,6 +1173,24 @@ model PasswordResetToken {
 
   @@index([accountId])
   @@map("password_reset_tokens")
+}
+
+/// A sign-up's "prove this address" link (tm 257.7) — `PasswordResetToken`'s
+/// design: only the hash is stored, RLS hides every row from the application
+/// role, and the `auth_*` SECURITY DEFINER functions are the only readers.
+/// Redeemed with the account's password, never with the token alone.
+model EmailVerificationToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  accountId String    @map("account_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  account Account @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([accountId])
+  @@map("email_verification_tokens")
 }
 
 /// TOTP secret for two-factor authentication (NFR-S11 · FR-MOD-00.1 ·

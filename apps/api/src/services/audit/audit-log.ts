@@ -56,6 +56,13 @@ export const AUDIT_ACTIONS = [
   'auth.sso_login',
   'auth.sso_login_failed',
   'auth.password_reset',
+  // Sign-up email verification (tm 257.7). `verification_sent` is a link
+  // issued — at sign-up or on request — and `email_verified` the owner opening
+  // it with the password. An account fact written into each workspace the
+  // account belongs to, as `auth.password_reset` is; a sign-up whose link was
+  // never opened is the gap between the two.
+  'auth.verification_sent',
+  'auth.email_verified',
   // A bearer token (access or refresh) was revoked through `/auth/revoke`
   // (RFC 7009). No entry is written when the presented token matches nothing —
   // the endpoint answers 200 either way, so the trail only ever names a

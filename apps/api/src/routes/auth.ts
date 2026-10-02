@@ -552,8 +552,17 @@ export default async function authRoutes(
     // sign-in screen that asks for the code in the same breath as the password
     // instead of after a round trip that reads as a failure.
     const twoFactorEnabled = await twoFactor.isActive(account.id);
+    // Whether `/auth/authorize` will refuse this owner for an unproven address
+    // (tm 257.7), so the screen can say "check your inbox" before the round
+    // trip instead of after it — `two_factor_enabled`'s reasoning, and the same
+    // non-disclosure: the password has just been proved.
+    const emailVerified = (await oauth.isEmailVerified(account.email)) !== false;
     return reply.send({
-      account: { ...account, two_factor_enabled: twoFactorEnabled },
+      account: {
+        ...account,
+        two_factor_enabled: twoFactorEnabled,
+        email_verified: emailVerified,
+      },
       memberships: memberships.map((m) => ({
         license_id: m.license_id.toString(),
         organization_id: m.organization_id,
@@ -631,6 +640,28 @@ export default async function authRoutes(
     }
     if (membership.license_status === 'canceled') {
       throw new ApiError('license_expired', 'This workspace is no longer active.');
+    }
+
+    // --- Email verification (tm 257.7 · ADR K-e(1)) -------------------------
+    //
+    // An owner who signed up while the deployment verifies email cannot sign
+    // in until the link has been opened with this same password. Here, the
+    // one place a password becomes a code, rather than at `/auth/login` —
+    // the reasoning the SSO gate below gives for itself.
+    //
+    // After the password and the workspace, so the refusal tells nothing to
+    // anyone who has not proved both. Before single sign-on and the second
+    // factor: neither says anything about who owns the address, and a refused
+    // sign-in must not spend a thirty-second code.
+    //
+    // `not_allowed` + a reason rather than a new error type (§D195(4)). Off,
+    // nothing is read — the flag-off sign-in is the one it always was.
+    if (env.SIGNUP_EMAIL_VERIFICATION && (await oauth.isEmailVerified(account.email)) === false) {
+      throw new ApiError(
+        'not_allowed',
+        'Confirm your email address first: open the link we sent when you signed up.',
+        { details: { reason: 'email_unverified' } },
+      );
     }
 
     // --- SSO enforcement (NFR-S11 · S11-h) ----------------------------------

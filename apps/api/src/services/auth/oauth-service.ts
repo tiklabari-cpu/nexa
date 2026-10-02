@@ -188,6 +188,18 @@ export class OauthService {
     return { id: account.id, email: account.email, name: account.name };
   }
 
+  /**
+   * Whether somebody has proved this address (tm 257.7): false only for an
+   * owner who signed up while `SIGNUP_EMAIL_VERIFICATION=true` and has not
+   * opened the link yet; null when no account holds it. By address rather
+   * than by id because the SAML door asks before it provisions anybody.
+   */
+  async isEmailVerified(email: string): Promise<boolean | null> {
+    const [row] = await this.db.$queryRaw<Array<{ verified: boolean | null }>>`
+      SELECT auth_email_verified(${email}::citext) AS verified`;
+    return row?.verified ?? null;
+  }
+
   async listMemberships(accountId: string): Promise<Membership[]> {
     return this.db.$queryRaw<Membership[]>`
       SELECT * FROM auth_list_memberships(${accountId}::uuid)

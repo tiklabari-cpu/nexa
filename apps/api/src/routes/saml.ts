@@ -147,7 +147,13 @@ type LoginRejection =
    */
   | 'email_domain_unverified'
   /** No membership this person may sign in with — suspended, or awaiting approval. */
-  | 'membership_not_active';
+  | 'membership_not_active'
+  /**
+   * The address belongs to an owner who signed up with a password and has not
+   * verified it (tm 257.7). Unlike every other reason here this one is also
+   * told to the caller — see the check in the ACS.
+   */
+  | 'email_unverified';
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -505,6 +511,34 @@ export default async function samlRoutes(
       const client = await oauth.findClient(pending.clientId);
       if (!client || client.organization_id !== connection.organization_id) {
         return refuse(request, connection, 'client_unavailable');
+      }
+
+      // --- Email verification (tm 257.7) -------------------------------------
+      // `/auth/authorize`'s gate, at this door too. An unverified account at
+      // this address was made by a public sign-up with a password — perhaps a
+      // stranger's. Signing it in here, or provisioning it a membership, would
+      // put this workspace behind that password the moment the address counted
+      // as proven. So it is refused before provisioning writes anything, and a
+      // password reset (which proves the address and replaces the password) is
+      // the way through.
+      //
+      // Told to the caller, unlike the forgery reasons `refuse` keeps to the
+      // trail: the assertion was genuine and this says nothing about how to
+      // forge one — only what the person has to do next.
+      if (
+        env.SIGNUP_EMAIL_VERIFICATION &&
+        (await oauth.isEmailVerified(identity.identity.email)) === false
+      ) {
+        await audit(request, connection, {
+          action: 'auth.sso_login_failed',
+          target: `sso_connection:${connection.id}`,
+          metadata: { reason: 'email_unverified' satisfies LoginRejection },
+        });
+        throw new ApiError(
+          'not_allowed',
+          'This address has not been confirmed yet. Reset your password to confirm it, then sign in again.',
+          { details: { reason: 'email_unverified' } },
+        );
       }
 
       // Just-in-time provisioning. The resolver leaves an existing account and

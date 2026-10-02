@@ -30,8 +30,18 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 
 const { TrafficPage } = await import('./TrafficPage.js');
 
-const PILOT: DeploymentConfig = { pilot_mode: true, contact_email: null, signup_enabled: true };
-const ORDINARY: DeploymentConfig = { pilot_mode: false, contact_email: null, signup_enabled: true };
+const PILOT: DeploymentConfig = {
+  pilot_mode: true,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
+const ORDINARY: DeploymentConfig = {
+  pilot_mode: false,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
 
 function renderPage(config: DeploymentConfig): void {
   deployment.current = config;

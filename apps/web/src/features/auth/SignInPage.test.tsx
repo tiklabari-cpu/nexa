@@ -23,7 +23,12 @@ import type { DeploymentConfig } from '@siyahtus/types';
  * exactly as it did before the read existed.
  */
 const deployment = vi.hoisted(() => ({
-  current: { pilot_mode: false, contact_email: null, signup_enabled: true } as DeploymentConfig,
+  current: {
+    pilot_mode: false,
+    contact_email: null,
+    signup_enabled: true,
+    email_verification_required: false,
+  } as DeploymentConfig,
 }));
 vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
 
@@ -73,7 +78,12 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  deployment.current = { pilot_mode: false, contact_email: null, signup_enabled: true };
+  deployment.current = {
+    pilot_mode: false,
+    contact_email: null,
+    signup_enabled: true,
+    email_verification_required: false,
+  };
   useAuth.setState({
     listWorkspaces: original.listWorkspaces,
     signIn: original.signIn,
@@ -590,6 +600,7 @@ describe('SignInPage demo credentials', () => {
       pilot_mode: true,
       contact_email: 'pilot-desk@siyahtus.test',
       signup_enabled: true,
+      email_verification_required: false,
     };
     renderSignIn();
     expect(screen.queryByText(DEMO)).not.toBeInTheDocument();
@@ -616,6 +627,7 @@ describe('SignInPage create-workspace link', () => {
       pilot_mode: true,
       contact_email: 'pilot-desk@siyahtus.test',
       signup_enabled: false,
+      email_verification_required: false,
     };
     renderSignIn();
     expect(screen.queryByText(/New here\?/)).not.toBeInTheDocument();

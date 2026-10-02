@@ -21,8 +21,18 @@ interface SeatFixture {
   ceiling: number;
 }
 
-const PILOT: DeploymentConfig = { pilot_mode: true, contact_email: null, signup_enabled: true };
-const ORDINARY: DeploymentConfig = { pilot_mode: false, contact_email: null, signup_enabled: true };
+const PILOT: DeploymentConfig = {
+  pilot_mode: true,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
+const ORDINARY: DeploymentConfig = {
+  pilot_mode: false,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
 
 const deployment = vi.hoisted(() => ({ current: null as unknown as DeploymentConfig }));
 vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));

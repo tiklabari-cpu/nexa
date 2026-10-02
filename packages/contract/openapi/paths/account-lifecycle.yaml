@@ -27,6 +27,18 @@ signup:
       and simply needs to sign in, and every path back to that realisation is
       worse than the disclosure. Recovery has no such excuse: there is nothing
       useful to tell the sender either way.
+
+      **Unless the deployment verifies email** (`SIGNUP_EMAIL_VERIFICATION=true`,
+      tm 257.7 — read it from `GET /deployment`,
+      `email_verification_required`). Then the inbox *is* the answer, for both:
+      a new address and a taken one get the same `202`, byte for byte, and no
+      `409` is ever sent. What differs goes to the mailbox, after the answer —
+      a new address is sent a link to `/verify-email?token=…`, a taken one a
+      notice that it already has an account (sign in, or reset the password).
+      The workspace exists from this call on, but its owner cannot sign in —
+      `/auth/authorize` answers `403` `email_unverified` — until
+      `POST /auth/verify-email` is called with the link's token **and** this
+      password. The trial starts then, not now.
     requestBody:
       required: true
       content:
@@ -62,10 +74,19 @@ signup:
                   workspace created before this field existed still is.
     responses:
       "201":
-        description: Workspace created
+        description: Workspace created (`SIGNUP_EMAIL_VERIFICATION=false`).
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Session" }
+      "202":
+        description: |
+          `SIGNUP_EMAIL_VERIFICATION=true`: the same body whether the address
+          was new (workspace created, link mailed) or already held an account
+          (nothing created, notice mailed). No session — the owner signs in
+          after `POST /auth/verify-email`.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/NeutralMessage" }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "403":
         description: |
@@ -80,7 +101,10 @@ signup:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "409":
-        description: An account already exists for that email.
+        description: |
+          An account already exists for that email. Only while
+          `SIGNUP_EMAIL_VERIFICATION=false`; with it on, a taken address gets
+          the `202`.
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
@@ -153,6 +177,16 @@ passwordResetConfirm:
     tags: [Auth]
     operationId: confirmPasswordReset
     summary: Set a new password with a reset token
+    description: |
+      Revokes every session the old password opened: refresh tokens, and — since
+      tm 257.7 — the account's access tokens, personal access tokens and
+      enrollment tickets too. A workspace's SCIM token is not the account's
+      session and is left alone.
+
+      Also proves the address: the person has just opened a link mailed to it
+      and chosen the password. An owner still waiting on sign-up verification
+      is verified by it (and their trial starts), and any outstanding
+      verification link is spent.
     responses:
       "204": { description: Password changed; existing sessions revoked. }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
@@ -172,6 +206,90 @@ passwordResetConfirm:
             properties:
               token: { type: string, minLength: 20, maxLength: 200 }
               password: { type: string, minLength: 12, maxLength: 200 }
+
+verifyEmail:
+  post:
+    tags: [Auth]
+    operationId: verifyEmail
+    summary: Prove a new owner's address — the link's token and the password
+    description: |
+      Completes a sign-up made while `SIGNUP_EMAIL_VERIFICATION=true` (tm 257.7).
+      **Both halves are required.** The token proves the mailbox, the password
+      proves the person who chose it; either alone is a takeover. A link alone
+      would let whoever reads the mail — the real owner of an address a
+      stranger signed up with — activate the stranger's password; a password
+      alone is what the stranger already has.
+
+      The token is spent only when the password matches, so a wrong password
+      leaves the link working. Password attempts are budgeted per link (five an
+      hour; then `429`), and asking for a new link starts a new budget and
+      spends the old link.
+
+      Unknown, expired and used links and a wrong password are **one answer**
+      (`401`, same body): each distinction would tell someone holding a stale
+      link something about the account.
+
+      On success the address is verified, any other outstanding link is spent,
+      the workspace's trial starts now, and the answer is the same session
+      shape sign-up returns — the client continues with `/auth/authorize`.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [token, password]
+            properties:
+              token: { type: string, minLength: 20, maxLength: 200 }
+              password: { type: string, minLength: 1, maxLength: 512 }
+    responses:
+      "200":
+        description: Verified
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Session" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "401":
+        description: |
+          The link is unknown, expired or already used, or the password does
+          not match — one answer for all four.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+
+verifyEmailResend:
+  post:
+    tags: [Auth]
+    operationId: resendEmailVerification
+    summary: Mail a new verification link
+    description: |
+      **Always 202, with the same body**, whether the address has an account,
+      has one that is already verified, has none, or has asked too often this
+      hour (tm 257.7) — the password-reset rule, for the same reason.
+
+      Only an account still waiting on verification is mailed, after the
+      answer; the new link spends every earlier one. Each address may ask a
+      few times an hour; past that the answer is the same and nothing is sent.
+    security: []
+    requestBody:
+      required: true
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [email]
+            properties:
+              email: { type: string, maxLength: 320 }
+    responses:
+      "202":
+        description: Accepted, whatever the address.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/NeutralMessage" }
+      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
 
 invitations:
   get:
@@ -383,7 +501,12 @@ invitationPreview:
                 role: { type: string, enum: [admin, agent] }
                 needs_password:
                   type: boolean
-                  description: False when the address already has an account.
+                  description: |
+                    False when the address already has a verified account. An
+                    account nobody has verified yet (a sign-up waiting on its
+                    link, tm 257.7) counts as no account: its password may be a
+                    stranger's, so accepting sets a new one, verifies the
+                    address and revokes the old password's sessions.
       "401":
         description: Unknown, expired or already-used invitation.
         content:
@@ -432,7 +555,9 @@ invitationAccept:
                 type: string
                 minLength: 12
                 maxLength: 200
-                description: Required only when the address has no account yet.
+                description: |
+                  Required when the address has no verified account yet
+                  (`needs_password` in the preview); `400` without it.
     responses:
       "200":
         description: Joined

@@ -58,7 +58,12 @@ beforeEach(() => {
 
 describe('/app/billing (tm 257.2)', () => {
   it('lands in the inbox in the public pilot', async () => {
-    deployment.current = { pilot_mode: true, contact_email: null, signup_enabled: true };
+    deployment.current = {
+      pilot_mode: true,
+      contact_email: null,
+      signup_enabled: true,
+      email_verification_required: false,
+    };
     renderAt('/app/billing');
     expect(await screen.findByText('Inbox module')).toBeInTheDocument();
     expect(screen.queryByText('Billing module')).toBeNull();
@@ -66,7 +71,12 @@ describe('/app/billing (tm 257.2)', () => {
   });
 
   it('opens the Billing page on an ordinary deployment', async () => {
-    deployment.current = { pilot_mode: false, contact_email: null, signup_enabled: true };
+    deployment.current = {
+      pilot_mode: false,
+      contact_email: null,
+      signup_enabled: true,
+      email_verification_required: false,
+    };
     renderAt('/app/billing');
     expect(await screen.findByText('Billing module')).toBeInTheDocument();
     expect(screen.getByTestId('location')).toHaveTextContent('/app/billing');

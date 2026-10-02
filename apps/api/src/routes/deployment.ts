@@ -38,6 +38,7 @@ export default async function deploymentRoutes(
         pilot_mode: env.PILOT_MODE,
         contact_email: env.PILOT_CONTACT_EMAIL ?? null,
         signup_enabled: env.SIGNUP_ENABLED,
+        email_verification_required: env.SIGNUP_EMAIL_VERIFICATION,
       };
       // A cache may keep it but must ask again: switching pilot mode off and
       // restarting has to be seen on the next read, not after a max-age.

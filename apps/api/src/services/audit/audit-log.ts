@@ -165,6 +165,12 @@ export const AUDIT_ACTIONS = [
   // trail can only answer the first. It names the two regions and the provider;
   // the content that was about to be sent is, necessarily, not in it.
   'compliance.ai_region_blocked',
+  // The new workspace's owner accepted the deployment's terms of service at
+  // sign-up (tm 257.9 · ADR K-f), with the version in metadata. A secondary
+  // trail: this log is pruned, and the record that lasts is the licence's own
+  // `terms_accepted_at` + `terms_version`, written in the transaction that
+  // created the workspace.
+  'compliance.terms_accepted',
   // Team membership.
   //
   // Shared with SCIM provisioning (NFR-S11 · S11-f) rather than duplicated: a

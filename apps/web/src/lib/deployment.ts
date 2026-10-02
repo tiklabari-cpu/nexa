@@ -26,6 +26,11 @@ export const DEPLOYMENT_FALLBACK: DeploymentConfig = {
   contact_email: null,
   signup_enabled: true,
   email_verification_required: false,
+  // No documents named: no terms box and no links (tm 257.9). The server
+  // still refuses a sign-up without acceptance if it does name terms.
+  privacy_policy_url: null,
+  terms_url: null,
+  terms_version: null,
 };
 
 /**

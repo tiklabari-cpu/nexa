@@ -48,6 +48,10 @@ describe('useDeployment', () => {
       contact_email: null,
       signup_enabled: true,
       email_verification_required: false,
+      // No documents named, so no terms box and no links (tm 257.9).
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     });
     expect(DEPLOYMENT_FALLBACK).toStrictEqual(result.current);
   });

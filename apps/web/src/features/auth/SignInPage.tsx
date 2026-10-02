@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth, type Membership, type TwoFactorEnrollment } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useDeployment } from '../../lib/deployment.js';
+import { LegalLinks } from './LegalLinks.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
 import { downloadRecoveryCodes } from '../../lib/recovery-codes.js';
@@ -581,6 +582,8 @@ export function SignInPage(): ReactElement {
             {t('auth.signin.demoCredentials')}
           </p>
         )}
+        {/* The deployment's documents, when it names them (tm 257.9). */}
+        <LegalLinks className="mt-4" />
       </div>
     </main>
   );

@@ -713,7 +713,16 @@ components:
         Deployment-wide settings (tm 257.13), the same for every caller and
         never about a workspace. Each field the panel reads to hide something
         is also enforced by the API itself.
-      required: [pilot_mode, contact_email, signup_enabled, email_verification_required]
+      required:
+        [
+          pilot_mode,
+          contact_email,
+          signup_enabled,
+          email_verification_required,
+          privacy_policy_url,
+          terms_url,
+          terms_version,
+        ]
       additionalProperties: false
       properties:
         pilot_mode:
@@ -741,6 +750,32 @@ components:
             sign-in (`SIGNUP_EMAIL_VERIFICATION`, tm 257.7): sign-up then
             answers `202` with no session, and `/auth/authorize` refuses the
             owner with `403` `email_unverified` until `POST /auth/verify-email`.
+        privacy_policy_url:
+          type: string
+          nullable: true
+          format: uri
+          description: |
+            This deployment's privacy policy (`PRIVACY_POLICY_URL`, tm 257.9),
+            an `https` address; `null` when the deployment names none. One
+            policy for the whole deployment — the panel's users and the widget's
+            visitors alike.
+        terms_url:
+          type: string
+          nullable: true
+          format: uri
+          description: |
+            This deployment's terms of service (`TERMS_URL`), an `https`
+            address; `null` when the deployment names none. Set, sign-up
+            requires accepting them: `POST /auth/signup` must carry
+            `terms_version` equal to the one below.
+        terms_version:
+          type: string
+          nullable: true
+          maxLength: 64
+          description: |
+            The version of the terms at `terms_url` (`TERMS_VERSION`), the value
+            a sign-up form sends back as `terms_version`. Never `null` while
+            `terms_url` is set.
 
     DependencyHealth:
       type: object

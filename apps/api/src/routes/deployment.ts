@@ -39,6 +39,11 @@ export default async function deploymentRoutes(
         contact_email: env.PILOT_CONTACT_EMAIL ?? null,
         signup_enabled: env.SIGNUP_ENABLED,
         email_verification_required: env.SIGNUP_EMAIL_VERIFICATION,
+        // The legal links (tm 257.9): public documents, shown on the sign-in,
+        // sign-up and invitation pages before anyone has a session.
+        privacy_policy_url: env.PRIVACY_POLICY_URL ?? null,
+        terms_url: env.TERMS_URL ?? null,
+        terms_version: env.TERMS_VERSION ?? null,
       };
       // A cache may keep it but must ask again: switching pilot mode off and
       // restarting has to be seen on the next read, not after a max-age.

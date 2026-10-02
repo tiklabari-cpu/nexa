@@ -28,6 +28,9 @@ const deployment = vi.hoisted(() => ({
     contact_email: null,
     signup_enabled: true,
     email_verification_required: false,
+    privacy_policy_url: null,
+    terms_url: null,
+    terms_version: null,
   } as DeploymentConfig,
 }));
 vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
@@ -83,6 +86,9 @@ afterEach(() => {
     contact_email: null,
     signup_enabled: true,
     email_verification_required: false,
+    privacy_policy_url: null,
+    terms_url: null,
+    terms_version: null,
   };
   useAuth.setState({
     listWorkspaces: original.listWorkspaces,
@@ -601,6 +607,9 @@ describe('SignInPage demo credentials', () => {
       contact_email: 'pilot-desk@siyahtus.test',
       signup_enabled: true,
       email_verification_required: false,
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     };
     renderSignIn();
     expect(screen.queryByText(DEMO)).not.toBeInTheDocument();
@@ -628,6 +637,9 @@ describe('SignInPage create-workspace link', () => {
       contact_email: 'pilot-desk@siyahtus.test',
       signup_enabled: false,
       email_verification_required: false,
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     };
     renderSignIn();
     expect(screen.queryByText(/New here\?/)).not.toBeInTheDocument();
@@ -635,5 +647,40 @@ describe('SignInPage create-workspace link', () => {
     // Signing in and recovering a password are unaffected.
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /forgot/i })).toBeInTheDocument();
+  });
+});
+
+/** The deployment's documents under the sign-in card (tm 257.9 · ADR K-f). */
+describe('SignInPage legal links', () => {
+  it('shows none where the deployment names no documents', () => {
+    renderSignIn();
+    expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Privacy Policy' })).toBeNull();
+  });
+
+  it('links the terms and the privacy policy, in a new tab, where they are named', () => {
+    deployment.current = {
+      ...deployment.current,
+      privacy_policy_url: 'https://siyahtus.test/privacy',
+      terms_url: 'https://siyahtus.test/terms',
+      terms_version: '2026-10-01',
+    };
+    renderSignIn();
+    const terms = screen.getByRole('link', { name: 'Terms of Service' });
+    const privacy = screen.getByRole('link', { name: 'Privacy Policy' });
+    expect(terms).toHaveAttribute('href', 'https://siyahtus.test/terms');
+    expect(privacy).toHaveAttribute('href', 'https://siyahtus.test/privacy');
+    expect(terms).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(privacy).toHaveAttribute('target', '_blank');
+  });
+
+  it('links the privacy policy alone when no terms are named', () => {
+    deployment.current = {
+      ...deployment.current,
+      privacy_policy_url: 'https://siyahtus.test/privacy',
+    };
+    renderSignIn();
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull();
   });
 });

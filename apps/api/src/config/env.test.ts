@@ -176,6 +176,75 @@ describe('SIGNUP_EMAIL_VERIFICATION', () => {
   });
 });
 
+/**
+ * The legal links (tm 257.9 · ADR K-f). Unset by default, so sign-up asks for
+ * nothing; a version is required wherever terms are named.
+ */
+describe('PRIVACY_POLICY_URL · TERMS_URL · TERMS_VERSION', () => {
+  const LEGAL = {
+    PRIVACY_POLICY_URL: 'https://siyahtus.test/privacy',
+    TERMS_URL: 'https://siyahtus.test/terms',
+    TERMS_VERSION: '2026-10-01',
+  };
+
+  it('are unset by default, so dev, the suites, the demo and e2e sign up as before', () => {
+    const env = parseEnv(BASE);
+    expect(env.PRIVACY_POLICY_URL).toBeUndefined();
+    expect(env.TERMS_URL).toBeUndefined();
+    expect(env.TERMS_VERSION).toBeUndefined();
+  });
+
+  it('reads the three together', () => {
+    const env = parseEnv({ ...BASE, ...LEGAL });
+    expect(env.PRIVACY_POLICY_URL).toBe(LEGAL.PRIVACY_POLICY_URL);
+    expect(env.TERMS_URL).toBe(LEGAL.TERMS_URL);
+    expect(env.TERMS_VERSION).toBe('2026-10-01');
+  });
+
+  it('stops the boot in every environment when TERMS_URL has no TERMS_VERSION, naming it', () => {
+    for (const NODE_ENV of ['test', 'development']) {
+      expect(() => parseEnv({ ...BASE, NODE_ENV, TERMS_URL: LEGAL.TERMS_URL })).toThrow(
+        /TERMS_VERSION is required when TERMS_URL is set/,
+      );
+    }
+  });
+
+  it.each(['PRIVACY_POLICY_URL', 'TERMS_URL'] as const)(
+    'refuses %s that is not an https address, naming it',
+    (key) => {
+      for (const value of [
+        'http://siyahtus.test/legal',
+        'siyahtus.test/legal',
+        '/legal',
+        'ftp://siyahtus.test/legal',
+      ]) {
+        expect(() => parseEnv({ ...BASE, ...LEGAL, [key]: value }), value).toThrow(new RegExp(key));
+      }
+    },
+  );
+
+  it('refuses a TERMS_VERSION that is empty, has whitespace or is longer than 64', () => {
+    for (const value of ['', 'October 2026', ' 2026-10-01', 'v'.repeat(65)]) {
+      expect(() => parseEnv({ ...BASE, ...LEGAL, TERMS_VERSION: value }), value).toThrow(
+        /TERMS_VERSION/,
+      );
+    }
+    expect(
+      parseEnv({ ...BASE, ...LEGAL, TERMS_VERSION: 'v'.repeat(64) }).TERMS_VERSION,
+    ).toHaveLength(64);
+  });
+
+  it('takes a privacy policy alone — only terms need a version', () => {
+    expect(
+      parseEnv({ ...BASE, PRIVACY_POLICY_URL: LEGAL.PRIVACY_POLICY_URL }).PRIVACY_POLICY_URL,
+    ).toBe(LEGAL.PRIVACY_POLICY_URL);
+  });
+
+  it('needs none of them outside production, even with PILOT_MODE=true', () => {
+    expect(() => parseEnv({ ...BASE, PILOT_MODE: 'true' })).not.toThrow();
+  });
+});
+
 /** The `GET /deployment` bucket (tm 257.13). */
 describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
   it('is 600 per minute when unset', () => {
@@ -491,6 +560,9 @@ describe('production configuration', () => {
     expect(env.PILOT_MODE).toBe(false);
     expect(env.LLM_PROVIDER).toBe('mock');
     expect(env.MAIL_PROVIDER).toBe('file');
+    // Nor are the legal links (tm 257.9): Helm sets none of them.
+    expect(env.TERMS_URL).toBeUndefined();
+    expect(env.PRIVACY_POLICY_URL).toBeUndefined();
   });
 
   /**
@@ -525,6 +597,10 @@ describe('production configuration', () => {
       SMTP_FROM: 'desk@siyahtus.test',
       // Public sign-up in the pilot verifies the address (tm 257.7).
       SIGNUP_EMAIL_VERIFICATION: 'true',
+      // The legal minimum (tm 257.9).
+      PRIVACY_POLICY_URL: 'https://siyahtus.test/privacy',
+      TERMS_URL: 'https://siyahtus.test/terms',
+      TERMS_VERSION: '2026-10-01',
     };
 
     const problemsOf = (source: NodeJS.ProcessEnv): string => {
@@ -574,6 +650,26 @@ describe('production configuration', () => {
         /PILOT_CONTACT_EMAIL[\s\S]*LLM_PROVIDER[\s\S]*EMBEDDING_PROVIDER[\s\S]*MAIL_PROVIDER/,
       );
       expect(message).not.toContain('pilot-desk@siyahtus.test');
+    });
+
+    it.each(['PRIVACY_POLICY_URL', 'TERMS_URL', 'TERMS_VERSION'] as const)(
+      'refuses to boot without %s, naming it (tm 257.9)',
+      (key) => {
+        const source = { ...PILOT };
+        delete source[key];
+        const message = problemsOf(source);
+        expect(message).toMatch(new RegExp(`${key} is required`));
+        // TERMS_URL without its version is the every-environment rule's to
+        // name; either way the one key that is missing is the only one named.
+        expect(message.trim().split('\n')).toHaveLength(2);
+      },
+    );
+
+    it('names all three legal keys at once when none is set (tm 257.9)', () => {
+      const { PRIVACY_POLICY_URL: _p, TERMS_URL: _t, TERMS_VERSION: _v, ...withoutLegal } = PILOT;
+      expect(problemsOf(withoutLegal)).toMatch(
+        /PRIVACY_POLICY_URL is required[\s\S]*TERMS_URL is required[\s\S]*TERMS_VERSION is required[\s\S]*PILOT_MODE=true/,
+      );
     });
 
     /**

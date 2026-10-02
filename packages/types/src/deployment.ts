@@ -19,4 +19,13 @@ export interface DeploymentConfig {
    * and the new owner signs in only after `POST /auth/verify-email`.
    */
   email_verification_required: boolean;
+  /** `PRIVACY_POLICY_URL` (tm 257.9), an `https` address, or `null` when none is named. */
+  privacy_policy_url: string | null;
+  /**
+   * `TERMS_URL` (tm 257.9), or `null`. Set, `POST /auth/signup` requires
+   * `terms_version` equal to the field below.
+   */
+  terms_url: string | null;
+  /** `TERMS_VERSION`: what a sign-up sends back once the terms are accepted. */
+  terms_version: string | null;
 }

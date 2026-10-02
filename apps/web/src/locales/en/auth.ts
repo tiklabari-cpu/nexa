@@ -104,6 +104,12 @@ export const auth: Messages = {
     'Nothing was created. This address only creates workspaces in {region} — choose that data region, or sign up at the address that serves the one you picked.',
   'auth.signup.errorRegionUnknown':
     'Nothing was created. This address does not create workspaces in the data region you picked.',
+  'auth.signup.termsAgree': 'I agree to the Terms of Service and the Privacy Policy.',
+  'auth.signup.termsAgreeTermsOnly': 'I agree to the Terms of Service.',
+  'auth.signup.errorTermsNotAccepted':
+    'Nothing was created. Tick the box to accept the Terms of Service, then try again.',
+  'auth.signup.errorTermsOutdated':
+    'Nothing was created. The Terms of Service changed after this page was opened — reload the page, read the current terms and accept them.',
   'auth.signup.region.eu': 'European Union',
   'auth.signup.region.us': 'United States',
 
@@ -137,6 +143,8 @@ export const auth: Messages = {
   'auth.join.subtitle': 'Invited as {role} · {email}',
   'auth.join.existingAccountNotice':
     'You already have a SiyahTuş account for this address. Accepting adds this workspace to it.',
+  'auth.join.termsNotice':
+    'By joining, you work under the Terms of Service this workspace accepted. The terms and the privacy policy are linked below.',
   'auth.join.passwordHint': 'At least {count} characters.',
   'auth.join.submit': 'Join workspace',
   'auth.join.submitting': 'Joining…',
@@ -144,6 +152,10 @@ export const auth: Messages = {
 
   // Shared across the public pages
   'auth.common.backToSignIn': 'Back to sign in',
+
+  // The deployment's documents (tm 257.9)
+  'auth.legal.terms': 'Terms of Service',
+  'auth.legal.privacy': 'Privacy Policy',
 
   // OAuth/SSO callback
   'auth.callback.signingIn': 'Signing you in…',

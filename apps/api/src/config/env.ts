@@ -36,6 +36,12 @@ const secret = (minLength: number) =>
     .min(minLength, `must be at least ${minLength} characters`)
     .refine((v) => !/^(changeme|secret|password)$/i.test(v), 'must not be a placeholder value');
 
+/** An absolute `https://` address (the legal links, tm 257.9). */
+const httpsUrl = z
+  .string()
+  .url()
+  .refine((v) => v.startsWith('https://'), 'must be an https:// address');
+
 /**
  * Reads `WEB_ORIGIN` as a comma-separated origin list, or `null` if any entry is
  * not an origin (M-PROD-CFG-b).
@@ -455,7 +461,9 @@ export const envSchema = z.object({
    * open sign-up they were built around. Sign-up is anonymous: on a public
    * address anyone can open a workspace and spend the deployment's model key
    * and mailbox, and unless `SIGNUP_EMAIL_VERIFICATION` is on it checks no
-   * email either; closing it is the emergency brake. Closed, the route answers
+   * email either; closing it is the emergency brake. With `TERMS_URL` set it
+   * also requires accepting the terms (tm 257.9) — required in the pilot,
+   * which is tied to `PILOT_MODE` rather than to this switch (ADR K-f). Closed, the route answers
    * 403 `not_allowed` with `details.reason: 'signup_closed'` before it reads
    * the body or the database.
    * Invitations are unaffected — they are how a closed deployment still grows.
@@ -523,6 +531,30 @@ export const envSchema = z.object({
    * texts point at nobody. Public by design: it is printed on screens.
    */
   PILOT_CONTACT_EMAIL: z.string().email().optional(),
+
+  /**
+   * The deployment's privacy policy and terms of service (tm 257.9 · ADR
+   * docs/adr/pilot-public-readiness.md K-f). Links only: the texts are the
+   * owner's, published wherever these point. `GET /deployment` hands all three
+   * to the panel, which shows the links on sign-in, sign-up and `/join`.
+   *
+   * `TERMS_URL` set makes sign-up require acceptance: `POST /auth/signup` must
+   * carry `terms_version` equal to `TERMS_VERSION`, and the acceptance is
+   * written on the new workspace's licence, with that version, inside
+   * `auth_signup`. The version is how a change of terms is told apart from the
+   * ones a workspace accepted, so `TERMS_URL` without `TERMS_VERSION` stops the
+   * boot in every environment. Unset, sign-up asks for nothing (dev, the test
+   * suites, the demo and e2e).
+   *
+   * Required in production while `PILOT_MODE=true` — tied to the pilot rather
+   * than to `SIGNUP_ENABLED=true`, because the widget's privacy link is needed
+   * with sign-up closed too (ADR §6). `https://` only: a policy served over
+   * plain http can be rewritten on the way to the person reading it.
+   */
+  PRIVACY_POLICY_URL: httpsUrl.optional(),
+  TERMS_URL: httpsUrl.optional(),
+  /** A label, not a number: `2026-10-01` is the suggested shape. No whitespace. */
+  TERMS_VERSION: z.string().min(1).max(64).regex(/^\S+$/, 'must not contain whitespace').optional(),
 
   /**
    * Length of a new workspace's trial, in days (FR-MOD-10.2). Read at sign-up
@@ -1220,6 +1252,17 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
         'SIGNUP_EMAIL_VERIFICATION must be true in production when PILOT_MODE=true: public sign-up must make a new owner prove the address before the first sign-in.',
       );
     }
+    // The legal minimum (tm 257.9 · ADR K-f): real people sign up, and the
+    // widget shows its visitors the privacy policy. A missing version with a
+    // URL present is already refused in every environment, so a key is named
+    // only when it is absent.
+    for (const key of ['PRIVACY_POLICY_URL', 'TERMS_URL', 'TERMS_VERSION'] as const) {
+      if (!env[key]) {
+        problems.push(
+          `${key} is required in production when PILOT_MODE=true: sign-up records acceptance of the terms, and the sign-in, sign-up and invitation pages link to both documents.`,
+        );
+      }
+    }
     // One deployment, one region (tm 257.4 · ADR K-e): the sign-up form sends
     // no region, so every workspace lands in `SIYAHTUS_REGION`, and a provider
     // declared anywhere else would carry its conversations out of the region
@@ -1435,6 +1478,15 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   const storage = storageProblems(env);
   if (storage.length > 0) {
     throw new Error(`Invalid environment:\n${storage.map((p) => `  ${p}`).join('\n')}`);
+  }
+
+  // Every environment, like the two checks above: a deployment that names its
+  // terms but not their version would require acceptance of nothing it can
+  // record, and every sign-up would be refused as outdated (tm 257.9).
+  if (env.TERMS_URL && !env.TERMS_VERSION) {
+    throw new Error(
+      'Invalid environment:\n  TERMS_VERSION is required when TERMS_URL is set: sign-up records which version of the terms a workspace accepted.',
+    );
   }
 
   if (replicaEscalatesPrivilege(env)) {

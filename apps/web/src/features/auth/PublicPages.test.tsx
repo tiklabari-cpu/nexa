@@ -4,11 +4,11 @@
  * error line — no page-local `email.includes('@')` or `valid` boolean.
  */
 import { MemoryRouter } from 'react-router-dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement } from 'react';
-import { ForgotPasswordPage, ResetPasswordPage, SignUpPage } from './PublicPages.js';
+import { ForgotPasswordPage, JoinPage, ResetPasswordPage, SignUpPage } from './PublicPages.js';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { DeploymentConfig } from '@siyahtus/types';
@@ -24,6 +24,9 @@ const deployment = vi.hoisted(() => ({
     contact_email: null,
     signup_enabled: true,
     email_verification_required: false,
+    privacy_policy_url: null,
+    terms_url: null,
+    terms_version: null,
   } as DeploymentConfig,
 }));
 vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
@@ -34,6 +37,9 @@ afterEach(() => {
     contact_email: null,
     signup_enabled: true,
     email_verification_required: false,
+    privacy_policy_url: null,
+    terms_url: null,
+    terms_version: null,
   };
 });
 
@@ -315,6 +321,9 @@ describe('SignUpPage in pilot mode (NFR-C9)', () => {
       contact_email: 'pilot-desk@siyahtus.test',
       signup_enabled: true,
       email_verification_required: false,
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     };
   }
 
@@ -376,5 +385,161 @@ describe('SignUpPage localisation (NFR-I18N2)', () => {
     expect(screen.getByRole('heading', { name: 'Çalışma alanı oluştur' })).toBeInTheDocument();
     expect(screen.getByLabelText('Çalışma alanı adı')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Çalışma alanı oluştur' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The legal minimum (tm 257.9 · ADR K-f). With terms named, sign-up asks for
+ * acceptance — a box outside the form primitive, so the four fields' rules are
+ * untouched — and sends the version it showed; every public page links the
+ * documents. With none named, nothing appears (the tests above, unchanged).
+ */
+describe('SignUpPage and the public pages with terms of service (tm 257.9)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function withTerms(privacy = true): void {
+    deployment.current = {
+      ...deployment.current,
+      privacy_policy_url: privacy ? 'https://siyahtus.test/privacy' : null,
+      terms_url: 'https://siyahtus.test/terms',
+      terms_version: '2026-10-01',
+    };
+  }
+
+  async function fillSignUp(): Promise<void> {
+    await userEvent.type(screen.getByLabelText('Workspace name'), 'Acme');
+    await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
+    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
+  }
+
+  it('shows no box and no links when the deployment names no documents', () => {
+    renderAt(<SignUpPage />);
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Privacy Policy' })).toBeNull();
+  });
+
+  it('keeps Create workspace disabled until the box is ticked', async () => {
+    withTerms();
+    renderAt(<SignUpPage />);
+    await fillSignUp();
+    const submit = screen.getByRole('button', { name: 'Create workspace' });
+    expect(submit).toBeDisabled();
+
+    const box = screen.getByRole('checkbox', {
+      name: 'I agree to the Terms of Service and the Privacy Policy.',
+    });
+    await userEvent.click(box);
+    expect(submit).toBeEnabled();
+    await userEvent.click(box);
+    expect(submit).toBeDisabled();
+  });
+
+  it('links both documents beside the box, in a new tab, outside the label', () => {
+    withTerms();
+    renderAt(<SignUpPage />);
+    const box = screen.getByRole('checkbox');
+    const description = document.getElementById(box.getAttribute('aria-describedby')!)!;
+    const terms = within(description).getByRole('link', { name: 'Terms of Service' });
+    const privacy = within(description).getByRole('link', { name: 'Privacy Policy' });
+    expect(terms).toHaveAttribute('href', 'https://siyahtus.test/terms');
+    expect(privacy).toHaveAttribute('href', 'https://siyahtus.test/privacy');
+    for (const link of [terms, privacy]) {
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(link.closest('label')).toBeNull();
+    }
+    // The four fields are still found by their own labels.
+    expect(screen.getByLabelText('Password')).toHaveAttribute('type', 'password');
+  });
+
+  it('names only the terms when no privacy policy is set', () => {
+    withTerms(false);
+    renderAt(<SignUpPage />);
+    expect(screen.getByRole('checkbox', { name: 'I agree to the Terms of Service.' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Privacy Policy' })).toBeNull();
+  });
+
+  it('sends the version it showed', async () => {
+    withTerms();
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(new Error('stop here'));
+    renderAt(<SignUpPage />);
+    await fillSignUp();
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    await screen.findByRole('alert');
+    expect(post.mock.calls[0]![1]).toMatchObject({ terms_version: '2026-10-01' });
+  });
+
+  it.each([
+    ['terms_not_accepted', /Tick the box to accept the Terms of Service/],
+    ['terms_outdated', /changed after this page was opened — reload the page/],
+  ])('explains a %s refusal in its own words', async (reason, text) => {
+    withTerms();
+    vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(
+      new ApiClientError({
+        type: 'validation',
+        status: 400,
+        message: 'refused',
+        requestId: 'req_1',
+        details: { reason },
+      }),
+    );
+    renderAt(<SignUpPage />);
+    await fillSignUp();
+    await userEvent.click(screen.getByRole('checkbox'));
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(text);
+  });
+
+  it('links the documents under the forgot-password and reset pages too', () => {
+    withTerms();
+    renderAt(<ForgotPasswordPage />);
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
+      'href',
+      'https://siyahtus.test/terms',
+    );
+    expect(screen.getByRole('link', { name: 'Privacy Policy' })).toHaveAttribute(
+      'href',
+      'https://siyahtus.test/privacy',
+    );
+  });
+
+  it('tells an invited person the workspace accepted the terms, with no box to tick', async () => {
+    withTerms();
+    vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue({
+      organization_name: 'Acme',
+      email: 'robin@example.com',
+      role: 'agent',
+      needs_password: false,
+    });
+    renderAt(<JoinPage />, '/join?token=abcdefghijklmnopqrstuvwxyz');
+
+    expect(
+      await screen.findByText(
+        /By joining, you work under the Terms of Service this workspace accepted/,
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).toBeNull();
+    expect(screen.getByRole('link', { name: 'Terms of Service' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Join workspace' })).toBeEnabled();
+  });
+
+  it('says nothing about terms on the join page when none are named', async () => {
+    vi.spyOn(ApiClient.prototype, 'get').mockResolvedValue({
+      organization_name: 'Acme',
+      email: 'robin@example.com',
+      role: 'agent',
+      needs_password: false,
+    });
+    renderAt(<JoinPage />, '/join?token=abcdefghijklmnopqrstuvwxyz');
+    await screen.findByRole('button', { name: 'Join workspace' });
+    expect(screen.queryByText(/By joining/)).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull();
   });
 });

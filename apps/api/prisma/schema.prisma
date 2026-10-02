@@ -91,6 +91,14 @@ model License {
   /// `licenses_baa_requires_us_region` trigger enforces that across tables,
   /// which Prisma cannot model, so this comment is where the schema says so.
   hipaaBaaSignedAt      DateTime? @map("hipaa_baa_signed_at") @db.Timestamptz(6)
+  /// When the workspace's owner accepted the deployment's terms of service at
+  /// sign-up (tm 257.9 · `TERMS_URL`), and which version (`TERMS_VERSION`) —
+  /// both null when the deployment named no terms. Written only by
+  /// `auth_signup`, in the transaction that creates the workspace;
+  /// `licenses_terms_acceptance_check` keeps the two null together, which
+  /// Prisma cannot model, so this comment is where the schema says so.
+  termsAcceptedAt       DateTime? @map("terms_accepted_at") @db.Timestamptz(6)
+  termsVersion          String?   @map("terms_version")
   /// This workspace's own retention window for closed conversations (NFR-C8),
   /// or null to inherit the deployment default (`RETENTION_THREAD_DAYS`). One of
   /// `@siyahtus/types`' `RETENTION_TIERS` — `'30d' | '60d' | '365d' | 'unlimited'` —

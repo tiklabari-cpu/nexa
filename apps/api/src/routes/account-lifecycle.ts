@@ -59,6 +59,10 @@ const signupBody = z.object({
   // serves — see the gate in the route below for why it cannot mean a fixed
   // `eu` any more (C4-h).
   region: z.enum(REGIONS).optional(),
+  // The version of the terms the person ticked "I agree" to (tm 257.9) — what
+  // `GET /deployment` handed the form. Checked against `TERMS_VERSION` in the
+  // route; ignored while the deployment names no terms.
+  terms_version: z.string().max(64).optional(),
 });
 
 const resetRequestBody = z.object({ email: z.string().trim().max(320) });
@@ -216,6 +220,35 @@ export default async function accountLifecycleRoutes(
 
     const body = parse(signupBody, request.body);
 
+    // --- Terms of service (tm 257.9 · ADR K-f) --------------------------------
+    // Right after the body is read and before anything else is: the region
+    // gate below and `lifecycle.signup` both act on a request that has agreed
+    // to the terms, and an acceptance checked after the workspace exists is
+    // not a condition of creating it.
+    //
+    // Two refusals, kept apart because they ask for different things: no
+    // version means the box was not ticked — tick it; a different version
+    // means the terms changed after the form was loaded — reload and read
+    // them. Answering the second with the first's text would send someone
+    // round a loop of ticking a box that can never be enough.
+    //
+    // `validation`, not a new error type: the request is incomplete or stale,
+    // and `details.reason` is what the form reads to say which.
+    const termsVersion = env.TERMS_URL ? body.terms_version : undefined;
+    if (env.TERMS_URL) {
+      if (termsVersion === undefined) {
+        throw ApiError.validation('Accept the terms of service to create a workspace.', {
+          reason: 'terms_not_accepted',
+        });
+      }
+      if (termsVersion !== env.TERMS_VERSION) {
+        throw ApiError.validation(
+          'The terms of service have changed since this page was loaded. Reload it and accept the current terms.',
+          { reason: 'terms_outdated' },
+        );
+      }
+    }
+
     // --- Data residency (NFR-C4 · C4-h) --------------------------------------
     // The only anonymous route that creates a tenant, and therefore the one the
     // region gate in `plugins/auth.ts` structurally cannot cover: that gate
@@ -307,6 +340,7 @@ export default async function accountLifecycleRoutes(
           organizationName: body.organization_name,
           region,
           emailVerified: false,
+          termsVersion,
         });
         created = { session, link: await lifecycle.requestEmailVerification(body.email) };
       } catch (error) {
@@ -314,7 +348,7 @@ export default async function accountLifecycleRoutes(
       }
 
       if (created) {
-        await recordWorkspaceCreated(request, created.session, region);
+        await recordWorkspaceCreated(request, created.session, region, termsVersion);
         // Null only if the account were already verified, which a sign-up
         // that has just created it cannot be. Without a link there is nothing
         // to send, and the owner can ask for one.
@@ -358,8 +392,9 @@ export default async function accountLifecycleRoutes(
       name: body.name,
       organizationName: body.organization_name,
       region,
+      termsVersion,
     });
-    await recordWorkspaceCreated(request, session, region);
+    await recordWorkspaceCreated(request, session, region, termsVersion);
 
     return reply.code(201).send(session);
   });
@@ -369,11 +404,16 @@ export default async function accountLifecycleRoutes(
    * password-reset confirmation below: a completed signup must not be undone
    * because the trail could not be written. A brand-new account has exactly
    * one membership — its own workspace.
+   *
+   * With an accepted terms version (tm 257.9) a second row records it — a
+   * secondary trail only: the audit log is pruned after `RETENTION_AUDIT_DAYS`,
+   * and the record that lasts is the licence's own `terms_version`.
    */
   async function recordWorkspaceCreated(
     request: FastifyRequest,
     session: Session,
     region: string,
+    termsVersion: string | undefined,
   ): Promise<void> {
     const membership = session.memberships[0];
     if (membership) {
@@ -382,25 +422,29 @@ export default async function accountLifecycleRoutes(
           licenseId: BigInt(membership.license_id),
           organizationId: membership.organization_id,
         };
-        await withTenant(app.db, tenant, (tx) =>
-          writeAuditEntry(
-            tx,
-            request.auditContext({
-              licenseId: tenant.licenseId,
-              actorId: session.account.id,
-              actorType: 'agent',
-            }),
-            {
-              action: 'workspace.created',
+        await withTenant(app.db, tenant, async (tx) => {
+          const context = request.auditContext({
+            licenseId: tenant.licenseId,
+            actorId: session.account.id,
+            actorType: 'agent',
+          });
+          await writeAuditEntry(tx, context, {
+            action: 'workspace.created',
+            target: `organization:${membership.organization_id}`,
+            // `auth_signup` always lands a new workspace on the `growth`
+            // plan (see the migration) — there is no other value yet to read
+            // back. The region is the resolved one, which the gate above has
+            // already proven is this deployment's.
+            metadata: { region, plan: 'growth' },
+          });
+          if (termsVersion !== undefined) {
+            await writeAuditEntry(tx, context, {
+              action: 'compliance.terms_accepted',
               target: `organization:${membership.organization_id}`,
-              // `auth_signup` always lands a new workspace on the `growth`
-              // plan (see the migration) — there is no other value yet to read
-              // back. The region is the resolved one, which the gate above has
-              // already proven is this deployment's.
-              metadata: { region, plan: 'growth' },
-            },
-          ),
-        );
+              metadata: { terms_version: termsVersion },
+            });
+          }
+        });
       } catch (err) {
         request.log.warn({ err }, 'failed to record workspace creation in audit log');
       }

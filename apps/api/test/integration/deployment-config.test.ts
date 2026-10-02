@@ -2,7 +2,7 @@
  * `GET /deployment` — the one anonymous read of this deployment's settings
  * (tm 257.13 · ADR docs/adr/pilot-public-readiness.md K-a).
  *
- * Three things are pinned here. The body is exactly the three deployment-wide
+ * Three things are pinned here. The body is exactly the deployment-wide
  * fields and nothing else: `/health` was narrowed for an anonymous caller
  * (M-SEC-b2) and this route must not become the way around that. It reflects
  * the configuration it was booted with. And it is metered on its own bucket —
@@ -31,13 +31,16 @@ async function withServer(
 }
 
 describe('GET /deployment', () => {
-  it('answers an anonymous caller with exactly the four deployment fields, off by default', async () => {
+  it('answers an anonymous caller with exactly the seven deployment fields, off by default', async () => {
     await withServer(
       {
         PILOT_MODE: undefined,
         PILOT_CONTACT_EMAIL: undefined,
         SIGNUP_ENABLED: undefined,
         SIGNUP_EMAIL_VERIFICATION: undefined,
+        PRIVACY_POLICY_URL: undefined,
+        TERMS_URL: undefined,
+        TERMS_VERSION: undefined,
       },
       async (server) => {
         const response = await server.get('/deployment');
@@ -50,6 +53,10 @@ describe('GET /deployment', () => {
           contact_email: null,
           signup_enabled: true,
           email_verification_required: false,
+          // The legal links (tm 257.9), unset unless the deployment names them.
+          privacy_policy_url: null,
+          terms_url: null,
+          terms_version: null,
         });
         expect(response.headers['cache-control']).toBe('no-cache');
       },
@@ -68,7 +75,27 @@ describe('GET /deployment', () => {
           contact_email: 'pilot-desk@siyahtus.test',
           signup_enabled: true,
           email_verification_required: false,
+          // The legal links (tm 257.9), unset unless the deployment names them.
+          privacy_policy_url: null,
+          terms_url: null,
+          terms_version: null,
         });
+      },
+    );
+  });
+
+  it('reports the legal links and the terms version when they are set (tm 257.9)', async () => {
+    await withServer(
+      {
+        PRIVACY_POLICY_URL: 'https://siyahtus.test/privacy',
+        TERMS_URL: 'https://siyahtus.test/terms',
+        TERMS_VERSION: '2026-10-01',
+      },
+      async (server) => {
+        const body = (await server.get('/deployment')).json();
+        expect(body.privacy_policy_url).toBe('https://siyahtus.test/privacy');
+        expect(body.terms_url).toBe('https://siyahtus.test/terms');
+        expect(body.terms_version).toBe('2026-10-01');
       },
     );
   });

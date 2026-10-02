@@ -146,6 +146,10 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     // address it shows pilot users is the template's fill-in, filled.
     expect(env.PILOT_MODE).toBe(true);
     expect(env.PILOT_CONTACT_EMAIL).toBe('pilot@siyahtus.test');
+    // The legal links, filled in, are https addresses with a version (tm 257.9).
+    expect(env.PRIVACY_POLICY_URL).toMatch(/^https:\/\//);
+    expect(env.TERMS_URL).toMatch(/^https:\/\//);
+    expect(env.TERMS_VERSION).toBeTruthy();
   });
 
   const REQUIRED = [
@@ -168,6 +172,10 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     'EMBEDDING_API_KEY',
     'EMBEDDING_PROVIDER_REGION',
     'PILOT_CONTACT_EMAIL',
+    // The legal minimum (tm 257.9 · ADR K-f).
+    'PRIVACY_POLICY_URL',
+    'TERMS_URL',
+    'TERMS_VERSION',
   ];
 
   it.each(REQUIRED)('refuses to boot without %s, and says so by name', (key) => {
@@ -244,6 +252,9 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
       'EMBEDDING_API_KEY',
       'SMTP_PASSWORD',
       'INBOUND_EMAIL_SECRET',
+      'PRIVACY_POLICY_URL',
+      'TERMS_URL',
+      'TERMS_VERSION',
     ]) {
       expect(keys).toContain(key);
     }

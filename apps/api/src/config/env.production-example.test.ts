@@ -64,6 +64,13 @@ describe('.env.production.example documents what parseEnv requires in production
     expect(uncommentedValueOf('PILOT_CONTACT_EMAIL')).toMatch(/^<[^<>]+>$/);
   });
 
+  it('carries the three legal keys, uncommented, left to fill in (tm 257.9)', () => {
+    // The pilot requires them; the texts and their version are the owner's.
+    expect(uncommentedValueOf('PRIVACY_POLICY_URL')).toMatch(/^https:\/\/<[^<>]+>\//);
+    expect(uncommentedValueOf('TERMS_URL')).toMatch(/^https:\/\/<[^<>]+>\//);
+    expect(uncommentedValueOf('TERMS_VERSION')).toMatch(/^<[^<>]+>$/);
+  });
+
   it.each([
     'LLM_API_KEY',
     'EMBEDDING_API_KEY',

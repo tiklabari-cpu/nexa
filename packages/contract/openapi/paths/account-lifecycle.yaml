@@ -72,6 +72,18 @@ signup:
                   address you are talking to — rather than a fixed value. On the
                   European deployment that is `eu`, which is where every
                   workspace created before this field existed still is.
+              terms_version:
+                type: string
+                maxLength: 64
+                description: |
+                  The version of the terms of service the person accepted (tm
+                  257.9) — `GET /deployment`'s `terms_version`, sent only once
+                  they ticked the box. Required while the deployment names terms
+                  (`terms_url` not `null`); ignored when it names none. The
+                  acceptance is recorded on the new workspace's licence, with
+                  this version, in the same transaction that creates it: the
+                  party to the terms is the workspace, so invited teammates do
+                  not accept again.
     responses:
       "201":
         description: Workspace created (`SIGNUP_EMAIL_VERIFICATION=false`).
@@ -87,7 +99,21 @@ signup:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/NeutralMessage" }
-      "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
+      "400":
+        description: |
+          Malformed or failing validation (`error.type` `validation`). **Nothing
+          was created.** While the deployment names terms of service (tm 257.9),
+          two refusals carry `error.details.reason`:
+
+          - `terms_not_accepted` — no `terms_version` was sent: the box was not
+            ticked.
+          - `terms_outdated` — a `terms_version` other than the current one was
+            sent: the terms changed after the form was loaded. Reload
+            `GET /deployment` and ask again; resending the same value cannot
+            succeed.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "403":
         description: |
           Sign-up is closed on this deployment (`SIGNUP_ENABLED=false`, tm

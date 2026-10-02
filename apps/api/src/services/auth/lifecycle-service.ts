@@ -161,6 +161,12 @@ export class LifecycleService {
      * behaviour every caller had before.
      */
     emailVerified?: boolean;
+    /**
+     * The version of the terms of service the new owner accepted (tm 257.9),
+     * recorded on the licence inside `auth_signup` — the same transaction that
+     * creates the workspace. Omitted when the deployment names no terms.
+     */
+    termsVersion?: string;
   }): Promise<Session> {
     const passwordHash = await hashPassword(input.password);
 
@@ -173,7 +179,8 @@ export class LifecycleService {
         SELECT * FROM auth_signup(
           ${input.email}::citext, ${input.name}, ${passwordHash},
           ${input.organizationName}, ${this.#trialDays}::int, ${input.region},
-          ${this.#consoleRedirect}, ${input.emailVerified ?? true}::boolean
+          ${this.#consoleRedirect}, ${input.emailVerified ?? true}::boolean,
+          ${input.termsVersion ?? null}::text
         )`;
     } catch (error) {
       if (isAccountExists(error)) {

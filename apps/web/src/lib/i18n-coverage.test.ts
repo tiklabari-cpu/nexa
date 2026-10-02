@@ -51,6 +51,7 @@ const TRANSLATED_FILES: readonly string[] = [
   'src/components/PresenceAvatars.tsx',
   'src/components/Tour.tsx',
   'src/features/auth/AuthCallbackPage.tsx',
+  'src/features/auth/LegalLinks.tsx',
   'src/features/auth/PublicPages.tsx',
   'src/features/auth/SignInPage.tsx',
   'src/features/onboarding/OnboardingWizard.tsx',

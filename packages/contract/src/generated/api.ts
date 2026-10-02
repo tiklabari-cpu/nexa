@@ -7837,6 +7837,28 @@ export interface components {
        *     owner with `403` `email_unverified` until `POST /auth/verify-email`.
        */
       email_verification_required: boolean;
+      /**
+       * Format: uri
+       * @description This deployment's privacy policy (`PRIVACY_POLICY_URL`, tm 257.9),
+       *     an `https` address; `null` when the deployment names none. One
+       *     policy for the whole deployment — the panel's users and the widget's
+       *     visitors alike.
+       */
+      privacy_policy_url: string | null;
+      /**
+       * Format: uri
+       * @description This deployment's terms of service (`TERMS_URL`), an `https`
+       *     address; `null` when the deployment names none. Set, sign-up
+       *     requires accepting them: `POST /auth/signup` must carry
+       *     `terms_version` equal to the one below.
+       */
+      terms_url: string | null;
+      /**
+       * @description The version of the terms at `terms_url` (`TERMS_VERSION`), the value
+       *     a sign-up form sends back as `terms_version`. Never `null` while
+       *     `terms_url` is set.
+       */
+      terms_version: string | null;
     };
     DependencyHealth: {
       /** @enum {string} */
@@ -13412,6 +13434,17 @@ export interface operations {
            * @enum {string}
            */
           region?: 'eu' | 'us';
+          /**
+           * @description The version of the terms of service the person accepted (tm
+           *     257.9) — `GET /deployment`'s `terms_version`, sent only once
+           *     they ticked the box. Required while the deployment names terms
+           *     (`terms_url` not `null`); ignored when it names none. The
+           *     acceptance is recorded on the new workspace's licence, with
+           *     this version, in the same transaction that creates it: the
+           *     party to the terms is the workspace, so invited teammates do
+           *     not accept again.
+           */
+          terms_version?: string;
         };
       };
     };
@@ -13439,7 +13472,26 @@ export interface operations {
           'application/json': components['schemas']['NeutralMessage'];
         };
       };
-      400: components['responses']['BadRequest'];
+      /**
+       * @description Malformed or failing validation (`error.type` `validation`). **Nothing
+       *     was created.** While the deployment names terms of service (tm 257.9),
+       *     two refusals carry `error.details.reason`:
+       *
+       *     - `terms_not_accepted` — no `terms_version` was sent: the box was not
+       *       ticked.
+       *     - `terms_outdated` — a `terms_version` other than the current one was
+       *       sent: the terms changed after the form was loaded. Reload
+       *       `GET /deployment` and ask again; resending the same value cannot
+       *       succeed.
+       */
+      400: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       /**
        * @description Sign-up is closed on this deployment (`SIGNUP_ENABLED=false`, tm
        *     256.3): `error.type` is `not_allowed` and `error.details.reason` is

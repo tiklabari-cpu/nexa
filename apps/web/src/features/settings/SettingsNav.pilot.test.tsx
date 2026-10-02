@@ -59,6 +59,9 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
       contact_email: null,
       signup_enabled: true,
       email_verification_required: false,
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     });
     expect(within(nav).queryByText('Billing')).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Subscription and invoices' })).toBeNull();
@@ -72,6 +75,9 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
       contact_email: null,
       signup_enabled: true,
       email_verification_required: false,
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     });
     expect(within(nav).getByText('Billing')).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Subscription and invoices' })).toHaveAttribute(

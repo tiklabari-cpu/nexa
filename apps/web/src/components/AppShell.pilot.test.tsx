@@ -24,12 +24,18 @@ const ORDINARY: DeploymentConfig = {
   contact_email: null,
   signup_enabled: true,
   email_verification_required: false,
+  privacy_policy_url: null,
+  terms_url: null,
+  terms_version: null,
 };
 const PILOT: DeploymentConfig = {
   pilot_mode: true,
   contact_email: 'pilot-contact@example.test',
   signup_enabled: true,
   email_verification_required: false,
+  privacy_policy_url: null,
+  terms_url: null,
+  terms_version: null,
 };
 
 const deployment = vi.hoisted(() => ({ current: null as unknown as DeploymentConfig }));

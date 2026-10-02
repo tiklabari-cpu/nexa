@@ -101,6 +101,12 @@ export const auth: Messages = {
     'Hiçbir şey oluşturulmadı. Bu adres yalnızca {region} bölgesinde çalışma alanı oluşturur — o veri bölgesini seçin veya seçtiğiniz bölgeye hizmet veren adresten kaydolun.',
   'auth.signup.errorRegionUnknown':
     'Hiçbir şey oluşturulmadı. Bu adres, seçtiğiniz veri bölgesinde çalışma alanı oluşturmuyor.',
+  'auth.signup.termsAgree': 'Kullanım Koşulları’nı ve Gizlilik Politikası’nı kabul ediyorum.',
+  'auth.signup.termsAgreeTermsOnly': 'Kullanım Koşulları’nı kabul ediyorum.',
+  'auth.signup.errorTermsNotAccepted':
+    'Hiçbir şey oluşturulmadı. Kullanım Koşulları’nı kabul etmek için kutuyu işaretleyin ve yeniden deneyin.',
+  'auth.signup.errorTermsOutdated':
+    'Hiçbir şey oluşturulmadı. Bu sayfa açıldıktan sonra Kullanım Koşulları değişti — sayfayı yenileyin, güncel koşulları okuyup kabul edin.',
   'auth.signup.region.eu': 'Avrupa Birliği',
   'auth.signup.region.us': 'Amerika Birleşik Devletleri',
 
@@ -134,6 +140,8 @@ export const auth: Messages = {
   'auth.join.subtitle': '{role} olarak davet edildiniz · {email}',
   'auth.join.existingAccountNotice':
     'Bu adres için zaten bir SiyahTuş hesabınız var. Kabul etmek bu çalışma alanını hesabınıza ekler.',
+  'auth.join.termsNotice':
+    'Katılarak bu çalışma alanının kabul ettiği Kullanım Koşulları’na tabi olursunuz. Koşullar ve gizlilik politikası aşağıda bağlantılıdır.',
   'auth.join.passwordHint': 'En az {count} karakter.',
   'auth.join.submit': 'Çalışma alanına katıl',
   'auth.join.submitting': 'Katılınıyor…',
@@ -141,6 +149,10 @@ export const auth: Messages = {
 
   // Shared across the public pages
   'auth.common.backToSignIn': 'Oturum açmaya dön',
+
+  // Dağıtımın belgeleri (tm 257.9)
+  'auth.legal.terms': 'Kullanım Koşulları',
+  'auth.legal.privacy': 'Gizlilik Politikası',
 
   // OAuth/SSO callback
   'auth.callback.signingIn': 'Oturumunuz açılıyor…',

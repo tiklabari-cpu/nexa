@@ -158,7 +158,7 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
     // an auditor asks for by name (NFR-C4). Settings entries record a
     // configuration somebody can change back.
     labelKey: 'audit.group.compliance',
-    actions: ['compliance.baa_signed', 'compliance.ai_region_blocked'],
+    actions: ['compliance.baa_signed', 'compliance.ai_region_blocked', 'compliance.terms_accepted'],
   },
   { labelKey: 'audit.group.salesTracking', actions: ['sale.tracked'] },
   {

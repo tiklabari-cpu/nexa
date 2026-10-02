@@ -1114,6 +1114,40 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // The terms box and the legal links (tm 257.9) appear only where the
+      // deployment names its documents, which the e2e stack does not — so the
+      // setting is faked at the network edge for this page alone, and the dev
+      // API every other test shares is left as it is.
+      test('sign-up page with the terms box has no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await page.route('**/api/v1/deployment', (route) =>
+          route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              pilot_mode: false,
+              contact_email: null,
+              signup_enabled: true,
+              email_verification_required: false,
+              privacy_policy_url: 'https://siyahtus.test/privacy',
+              terms_url: 'https://siyahtus.test/terms',
+              terms_version: '2026-10-01',
+            }),
+          }),
+        );
+        await pinTheme(page, theme);
+        await page.goto('/signup');
+        await scanPanel(page, 'Sign up with terms', theme, testInfo, async () => {
+          await expect(
+            page.getByRole('checkbox', {
+              name: 'I agree to the Terms of Service and the Privacy Policy.',
+            }),
+          ).toBeVisible();
+          await expect(page.getByRole('link', { name: 'Privacy Policy' }).first()).toBeVisible();
+        });
+      });
+
       test('forgot-password page has no serious or critical violations', async ({
         page,
       }, testInfo) => {

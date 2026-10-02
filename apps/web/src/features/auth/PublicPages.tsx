@@ -19,6 +19,7 @@ import { useAuth } from '../../lib/auth-store.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { Banner } from '../../components/ui/index.js';
+import { LegalLink, LegalLinks } from './LegalLinks.js';
 import {
   FieldError,
   compose,
@@ -58,6 +59,8 @@ function AuthCard({
         </header>
         <div className="rounded-lg border border-border bg-surface p-5">{children}</div>
         {footer && <p className="mt-4 text-center text-xs text-content-tertiary">{footer}</p>}
+        {/* Every public screen, the deployment's documents (tm 257.9). */}
+        <LegalLinks />
       </div>
     </main>
   );
@@ -166,6 +169,16 @@ function signupFailureMessage(failure: unknown, t: TFunction): string {
     return t('auth.signup.errorSignupClosed');
   }
 
+  // Terms of service (tm 257.9). Two different asks, so two sentences: an
+  // unticked box is ticked; a stale version means the terms changed under an
+  // open form, and only a reload shows the new ones — ticking again cannot.
+  if (failure.type === 'validation' && failure.details?.['reason'] === 'terms_not_accepted') {
+    return t('auth.signup.errorTermsNotAccepted');
+  }
+  if (failure.type === 'validation' && failure.details?.['reason'] === 'terms_outdated') {
+    return t('auth.signup.errorTermsOutdated');
+  }
+
   if (failure.type === 'misdirected_request') {
     const served = failure.details?.['served_region'];
     if (isRegion(served)) {
@@ -193,7 +206,19 @@ export function SignUpPage(): ReactElement {
   // choose, and the server files the workspace where it runs. Hiding the
   // picker is not enough — the state still holds 'eu', and sending it would
   // get every sign-up refused (421) by a deployment that serves 'us'.
-  const { pilot_mode: pilotMode } = useDeployment();
+  const {
+    pilot_mode: pilotMode,
+    terms_url: termsUrl,
+    terms_version: termsVersion,
+    privacy_policy_url: privacyUrl,
+  } = useDeployment();
+  // The terms box (tm 257.9) sits outside the form primitive, like the region
+  // picker: a tick is not a string a validator has an opinion about, and the
+  // four fields' rules stay exactly as they were. Shown only when the
+  // deployment names terms; when it does not, or the answer never came, there
+  // is no box — and the server still refuses a sign-up without acceptance.
+  const termsRequired = Boolean(termsUrl && termsVersion);
+  const [termsAccepted, setTermsAccepted] = useState(false);
 
   const form = useForm({
     initial: { organization: '', name: '', email: '', password: '' },
@@ -219,6 +244,9 @@ export function SignUpPage(): ReactElement {
             name: values.name.trim(),
             organization_name: values.organization.trim(),
             ...(pilotMode ? {} : { region }),
+            // The version the person was shown, which the server compares
+            // with its own (`terms_outdated` when they differ).
+            ...(termsRequired && termsAccepted ? { terms_version: termsVersion } : {}),
           },
         );
         // Straight into the workspace. Making someone sign in again immediately
@@ -305,10 +333,38 @@ export function SignUpPage(): ReactElement {
           error={form.errorFor('password')}
           hint={t('auth.signup.passwordHint', { count: MIN_PASSWORD })}
         />
+        {termsRequired && termsUrl && (
+          <div className="mb-4 flex items-start gap-2">
+            <input
+              id="signup-terms"
+              type="checkbox"
+              checked={termsAccepted}
+              onChange={(event) => setTermsAccepted(event.target.checked)}
+              aria-describedby="signup-terms-links"
+              className="mt-0.5"
+            />
+            <div className="text-xs">
+              {/* The label is the sentence only; the links are their own line,
+                  so neither leaks into the other's accessible name. */}
+              <label htmlFor="signup-terms" className="block font-medium">
+                {privacyUrl ? t('auth.signup.termsAgree') : t('auth.signup.termsAgreeTermsOnly')}
+              </label>
+              <p id="signup-terms-links" className="mt-0.5 text-content-secondary">
+                <LegalLink href={termsUrl}>{t('auth.legal.terms')}</LegalLink>
+                {privacyUrl && (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <LegalLink href={privacyUrl}>{t('auth.legal.privacy')}</LegalLink>
+                  </>
+                )}
+              </p>
+            </div>
+          </div>
+        )}
         {/* Disabled until the form can actually succeed (FR-EK-A.1). */}
         <button
           type="submit"
-          disabled={!form.canSubmit}
+          disabled={!form.canSubmit || (termsRequired && !termsAccepted)}
           className="w-full rounded-md bg-brand-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         >
           {form.isSubmitting ? t('auth.signup.submitting') : t('auth.signup.submit')}
@@ -461,6 +517,10 @@ export function JoinPage(): ReactElement {
   const [invalid, setInvalid] = useState(false);
 
   const signIn = useAuth((s) => s.signIn);
+  // No box here (tm 257.9 · ADR K-f): the party to the terms is the workspace,
+  // and its owner accepted them at sign-up. A joiner is told, and given the
+  // links under the card.
+  const { terms_url: termsUrl } = useDeployment();
 
   useEffect(() => {
     let cancelled = false;
@@ -565,6 +625,9 @@ export function JoinPage(): ReactElement {
           <p className="mb-4 text-sm text-content-secondary">
             {t('auth.join.existingAccountNotice')}
           </p>
+        )}
+        {termsUrl && (
+          <p className="mb-4 text-xs text-content-secondary">{t('auth.join.termsNotice')}</p>
         )}
         <button
           type="submit"

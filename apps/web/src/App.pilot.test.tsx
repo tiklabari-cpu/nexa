@@ -63,6 +63,9 @@ describe('/app/billing (tm 257.2)', () => {
       contact_email: null,
       signup_enabled: true,
       email_verification_required: false,
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     };
     renderAt('/app/billing');
     expect(await screen.findByText('Inbox module')).toBeInTheDocument();
@@ -76,6 +79,9 @@ describe('/app/billing (tm 257.2)', () => {
       contact_email: null,
       signup_enabled: true,
       email_verification_required: false,
+      privacy_policy_url: null,
+      terms_url: null,
+      terms_version: null,
     };
     renderAt('/app/billing');
     expect(await screen.findByText('Billing module')).toBeInTheDocument();

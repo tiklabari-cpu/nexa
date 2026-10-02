@@ -1623,8 +1623,12 @@ model Skill {
 /// The three token columns are what the run's inference cost, as the providers
 /// reported it (tm 255.9): the chat model's input and output, and the question's
 /// embedding. The AI Agent report sums them beside its run count. A stub
-/// provider bills nothing and records 0; Copilot assists record 0 too — their
-/// query embedding is logged per call (`embedding.completed`), not metered.
+/// provider bills nothing and records 0. A Copilot summary written by a model
+/// records its chat-model tokens on its own assist run (tm 257.5), so a count
+/// of a workspace's model calls can include Copilot's; the AI Agent report
+/// reads `ai_agent` skills only and does not. Copilot's other assists record 0
+/// — a reply draft's query embedding is logged per call
+/// (`embedding.completed`), not metered.
 model SkillRun {
   id              String   @id @default(uuid()) @db.Uuid
   skillId         String   @map("skill_id") @db.Uuid

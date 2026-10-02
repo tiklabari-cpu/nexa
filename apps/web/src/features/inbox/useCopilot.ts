@@ -8,6 +8,7 @@
  */
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useLocale } from '../../lib/i18n.js';
 import { eventsKey } from './useInbox.js';
 
 export interface CopilotSummary {
@@ -41,12 +42,17 @@ export interface CopilotBiAnswer {
   range: { from: string; to: string } | null;
 }
 
-/** Summarise the conversation into an internal note (12.3 / 02.5). */
+/**
+ * Summarise the conversation into an internal note (12.3 / 02.5), in the
+ * panel's language — a model writes it in the language asked for (tm 257.5).
+ */
 export function useCopilotSummary(chatId: string) {
   const api = useApiClient();
   const queryClient = useQueryClient();
+  const { locale } = useLocale();
   return useMutation({
-    mutationFn: () => api.post<CopilotSummary>(`/copilot/chats/${chatId}/summary`),
+    mutationFn: () =>
+      api.post<CopilotSummary>(`/copilot/chats/${chatId}/summary`, { language: locale }),
     onSuccess: () => {
       // The note is a new event on the chat — refresh the transcript so it shows.
       void queryClient.invalidateQueries({ queryKey: eventsKey(chatId) });

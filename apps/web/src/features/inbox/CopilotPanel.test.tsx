@@ -95,6 +95,9 @@ describe('CopilotPanel', () => {
     expect(screen.getByText('Added as an internal note.')).toBeTruthy();
     const summaryCall = calls.find((c) => c.path === '/copilot/chats/CHAT123/summary');
     expect(summaryCall?.method).toBe('POST');
+    // The panel's language travels with the request — a model writes the
+    // summary in it (tm 257.5).
+    expect(summaryCall?.body).toEqual({ language: 'en' });
   });
 
   it('drafts a reply and hands it to the composer rather than sending it (12.3)', async () => {
@@ -382,5 +385,24 @@ describe('CopilotPanel localisation (NFR-I18N2)', () => {
       'tr',
     );
     expect(screen.getByRole('button', { name: 'Sohbeti özetle' })).toBeInTheDocument();
+  });
+
+  it('asks for the summary in Turkish when that is the active locale (FR-MOD-12.3)', async () => {
+    const { calls } = stubFetch({
+      '/summary': { summary: 'Müşteri geciken siparişini sordu.', note_event_id: 'e1' },
+    });
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    renderWithLocale(
+      <QueryClientProvider client={queryClient}>
+        <CopilotPanel chatId="CHAT123" canDraft onShowDetails={vi.fn()} onCollapse={vi.fn()} />
+      </QueryClientProvider>,
+      'tr',
+    );
+
+    await userEvent.click(screen.getByRole('button', { name: 'Sohbeti özetle' }));
+
+    await waitFor(() => expect(screen.getByText(/geciken siparişini/)).toBeInTheDocument());
+    const summaryCall = calls.find((c) => c.path === '/copilot/chats/CHAT123/summary');
+    expect(summaryCall?.body).toEqual({ language: 'tr' });
   });
 });

@@ -118,6 +118,13 @@ export interface BuildServerOptions {
    */
   llm?: LlmProvider;
   /**
+   * Who writes Copilot's summary (tm 257.5). Omitted, `llm` when a test
+   * injected one — so a suite that hands in one recorder sees every call —
+   * and otherwise a second instance built from the same `LLM_PROVIDER`, with
+   * a circuit breaker of its own.
+   */
+  copilotLlm?: LlmProvider;
+  /**
    * How the `openai` adapter reaches the network (tm 255.6). Omitted, the
    * global `fetch`. A test passes a recorder here rather than a whole `llm`
    * when the point is the adapter the *server* builds from `env` — its logger,
@@ -142,6 +149,7 @@ export async function buildServer({
   logStream,
   webhookSender,
   llm: injectedLlm,
+  copilotLlm: injectedCopilotLlm,
   llmFetch,
   embeddings: injectedEmbeddings,
   embeddingFetch,
@@ -286,6 +294,21 @@ export async function buildServer({
     injectedLlm ??
     createLlmProvider(env.LLM_PROVIDER, env.llm, {
       logger: app.log.child({ component: 'llm' }),
+      ...(llmFetch ? { fetchImpl: llmFetch } : {}),
+    });
+  // Copilot's own instance of the same provider (tm 257.5 · ADR
+  // `pilot-public-readiness.md` K-h). The circuit breaker lives on the
+  // instance, so sharing one would let five failed summaries — long
+  // transcripts are the likeliest to time out — hand every visitor's next
+  // question to a human for thirty seconds. Same settings, same logger
+  // component; `surface` tells the two apart in the log. Embeddings are
+  // shared on purpose (below): a reply draft's question is one short query,
+  // and the knowledge it searches was indexed by that one provider.
+  const copilotLlm =
+    injectedCopilotLlm ??
+    injectedLlm ??
+    createLlmProvider(env.LLM_PROVIDER, env.llm, {
+      logger: app.log.child({ component: 'llm', surface: 'copilot' }),
       ...(llmFetch ? { fetchImpl: llmFetch } : {}),
     });
   // One provider and one knowledge service for the whole process (tm 255.7):
@@ -446,7 +469,7 @@ export async function buildServer({
       await api.register(publicKbSitemapRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
       });
-      await api.register(copilotRoutes, { env, automations, knowledge });
+      await api.register(copilotRoutes, { env, automations, knowledge, llm: copilotLlm });
       await api.register(commandPaletteRoutes);
       await api.register(appRoutes, { env });
       await api.register(auditLogRoutes, { env });

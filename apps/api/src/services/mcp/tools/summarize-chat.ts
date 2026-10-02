@@ -2,9 +2,13 @@
  * `summarize_chat` — MCP adapter for the copilot conversation summary
  * (FR-MOD-08.8.3-f).
  *
- * It reads a chat's transcript, summarises it with the same deterministic
- * `summariseConversation` the copilot route uses, and returns the summary — and
- * nothing else. Unlike `POST /copilot/chats/:chatId/summary`, which files the
+ * It reads a chat's transcript, summarises it with the deterministic
+ * `summariseConversation` — the text the copilot route returns on
+ * `LLM_PROVIDER=mock` — and returns the summary, and nothing else. On a real
+ * model the panel's summary is the model's (tm 257.5) and this one stays the
+ * stub's, on purpose (ADR `pilot-public-readiness.md` K-h): the executor runs
+ * inside the caller's tenant transaction, and a model call of up to
+ * `LLM_TIMEOUT_MS` (20 s) would outlast it. Unlike `POST /copilot/chats/:chatId/summary`, which files the
  * summary as an internal note, this tool is **read-only** (assumption 7): the
  * copilot route's write path is untouched, no `events` row is added, and no
  * `skill_run` is recorded. That is why the catalogue gates it behind the same

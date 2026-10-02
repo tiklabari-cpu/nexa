@@ -1339,6 +1339,12 @@ modelle koşturmak bütçeyi, gerçekten muhakeme isteyen güvenlik/algoritma i�
 | `[OPUS-XHIGH]` | opus | xhigh | Görev detayında adıyla yazılı şu dört gerekçeden en az biri: **(1) güvenlik yüzeyi** — webhook/imza doğrulama, OAuth takası, dışarıdan gelen güvenilmez girdiyi ayrıştırma, SSRF'e açık dış istek, yeni yetkili endpoint ya da scope genişletme; **(2) para doğruluğu** — tahsilat, abonelik, faturaya giden ölçüm; **(3) teslim güvencesi** — bir hatanın mesaj kaybına ya da çift gönderime yol açabildiği yeniden deneme/kuyruk durumu; **(4) pencere içinde verilecek karar** — KK yoruma açık, tasarım ya da kalibrasyon kararı henüz verilmemiş. |
 | `[OPUS-MAX]` | opus | max | Güvenlik sınırı (authN/authZ, erişim kontrolü, kripto), tenant/marka izolasyonu, eşzamanlılık/kilit, algoritma tasarımı, çapraz-kesen veri modeli değişikliği. |
 
+**Model sürümü:** Opus = Opus 5.5, Sonnet = Sonnet 5.5 (run-loop.sh'de tam kimlikle sabit,
+2026-10-02). Etiketteki `sonnet`/`opus` bir aile adıdır; `run-loop.sh` onu `MODEL_SMALL` =
+`claude-sonnet-5-5` / `MODEL_BIG` = `claude-opus-5-5`'e çevirir. Etikete sürüm yazılmaz
+(`[OPUS-5.5-XHIGH]` tanınmaz, opus+max'a düşer); sürüm gerekiyorsa başlıkta etiketin
+ARKASINA parantezle yazılır: `KOD [OPUS-XHIGH] (Opus 5.5 · gerekçe: …) açıklama`.
+
 **Efor tabanı `high`'dır** (2026-09-21 · kullanıcı kararı · §D175). Önceki kural — "high ile
 yapılabilecek işi xhigh'a yükselt"; kaynağı _"Güvenlik olarak high gereken işlerde xhigh
 kullansın."_ — kaldırıldı. `xhigh` artık bir taban değil, gerekçe isteyen bir istisnadır: gerekçe

@@ -22,9 +22,12 @@ set -uo pipefail
 #   [MAX] → opus+max · [XHIGH] veya etiketsiz → opus+xhigh
 # Efor tabanı high'dır; xhigh görev detayında adı yazılı bir gerekçe ister
 # (2026-09-21 · PLAN §D175). Güvenlik işi asla sonnet'e verilmez (PLAN §5.1.1).
-MODEL="opus"                # varsayılan/geri-uyum modeli
-MODEL_BIG="opus"
-MODEL_SMALL="sonnet"
+# Etiketteki "sonnet"/"opus" bir aile adıdır; pencere aşağıdaki TAM kimlikle açılır
+# (2026-10-02 · PLAN §5.1.1): Opus = Opus 5.5, Sonnet = Sonnet 5.5. Etiket listesi ve
+# pick_schema'daki enum aynen kalır — çeviriyi görev döngüsündeki `case "$mdl"` yapar.
+MODEL="claude-opus-5-5"     # varsayılan/geri-uyum modeli (bootstrap + pick_next)
+MODEL_BIG="claude-opus-5-5"
+MODEL_SMALL="claude-sonnet-5-5"
 EFFORT_MAX="max"            # opus 'max' desteklemiyorsa: "high"
 EFFORT_XHIGH="xhigh"
 EFFORT_HIGH="high"

@@ -39,8 +39,18 @@ vi.mock('../../lib/auth-store.js', async (importOriginal) => {
 
 const { InboxPage } = await import('./InboxPage.js');
 
-const PILOT: DeploymentConfig = { pilot_mode: true, contact_email: null, signup_enabled: true };
-const ORDINARY: DeploymentConfig = { pilot_mode: false, contact_email: null, signup_enabled: true };
+const PILOT: DeploymentConfig = {
+  pilot_mode: true,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
+const ORDINARY: DeploymentConfig = {
+  pilot_mode: false,
+  contact_email: null,
+  signup_enabled: true,
+  email_verification_required: false,
+};
 
 /** `GET /channels` as the API answers it. */
 let channels: Array<{ type: string; connected: boolean }> = [];

@@ -202,6 +202,12 @@ export interface paths {
      *     minted only when the account holds no active factor, and it is spent by the
      *     activation it exists for. Sign-in is then repeated with the new `code`.
      *
+     *     An owner who signed up while the deployment verifies email
+     *     (`SIGNUP_EMAIL_VERIFICATION=true`, tm 257.7) and has not yet opened the
+     *     link is refused with `not_allowed` (403) and `details.reason:
+     *     "email_unverified"` — after the password and the workspace check, before
+     *     single sign-on and the second factor. `POST /auth/verify-email` lifts it.
+     *
      *     The SAML assertion path is deliberately exempt: a federated sign-in has
      *     already been vouched for by the identity provider, which is where the
      *     workspace's MFA lives. Refresh-token rotation and personal access tokens
@@ -410,6 +416,18 @@ export interface paths {
      *     and simply needs to sign in, and every path back to that realisation is
      *     worse than the disclosure. Recovery has no such excuse: there is nothing
      *     useful to tell the sender either way.
+     *
+     *     **Unless the deployment verifies email** (`SIGNUP_EMAIL_VERIFICATION=true`,
+     *     tm 257.7 — read it from `GET /deployment`,
+     *     `email_verification_required`). Then the inbox *is* the answer, for both:
+     *     a new address and a taken one get the same `202`, byte for byte, and no
+     *     `409` is ever sent. What differs goes to the mailbox, after the answer —
+     *     a new address is sent a link to `/verify-email?token=…`, a taken one a
+     *     notice that it already has an account (sign in, or reset the password).
+     *     The workspace exists from this call on, but its owner cannot sign in —
+     *     `/auth/authorize` answers `403` `email_unverified` — until
+     *     `POST /auth/verify-email` is called with the link's token **and** this
+     *     password. The trial starts then, not now.
      */
     post: operations['signup'];
     delete?: never;
@@ -460,8 +478,83 @@ export interface paths {
     };
     get?: never;
     put?: never;
-    /** Set a new password with a reset token */
+    /**
+     * Set a new password with a reset token
+     * @description Revokes every session the old password opened: refresh tokens, and — since
+     *     tm 257.7 — the account's access tokens, personal access tokens and
+     *     enrollment tickets too. A workspace's SCIM token is not the account's
+     *     session and is left alone.
+     *
+     *     Also proves the address: the person has just opened a link mailed to it
+     *     and chosen the password. An owner still waiting on sign-up verification
+     *     is verified by it (and their trial starts), and any outstanding
+     *     verification link is spent.
+     */
     post: operations['confirmPasswordReset'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/verify-email': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Prove a new owner's address — the link's token and the password
+     * @description Completes a sign-up made while `SIGNUP_EMAIL_VERIFICATION=true` (tm 257.7).
+     *     **Both halves are required.** The token proves the mailbox, the password
+     *     proves the person who chose it; either alone is a takeover. A link alone
+     *     would let whoever reads the mail — the real owner of an address a
+     *     stranger signed up with — activate the stranger's password; a password
+     *     alone is what the stranger already has.
+     *
+     *     The token is spent only when the password matches, so a wrong password
+     *     leaves the link working. Password attempts are budgeted per link (five an
+     *     hour; then `429`), and asking for a new link starts a new budget and
+     *     spends the old link.
+     *
+     *     Unknown, expired and used links and a wrong password are **one answer**
+     *     (`401`, same body): each distinction would tell someone holding a stale
+     *     link something about the account.
+     *
+     *     On success the address is verified, any other outstanding link is spent,
+     *     the workspace's trial starts now, and the answer is the same session
+     *     shape sign-up returns — the client continues with `/auth/authorize`.
+     */
+    post: operations['verifyEmail'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/auth/verify-email/resend': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    /**
+     * Mail a new verification link
+     * @description **Always 202, with the same body**, whether the address has an account,
+     *     has one that is already verified, has none, or has asked too often this
+     *     hour (tm 257.7) — the password-reset rule, for the same reason.
+     *
+     *     Only an account still waiting on verification is mailed, after the
+     *     answer; the new link spends every earlier one. Each address may ask a
+     *     few times an hour; past that the answer is the same and nothing is sent.
+     */
+    post: operations['resendEmailVerification'];
     delete?: never;
     options?: never;
     head?: never;
@@ -7728,6 +7821,13 @@ export interface components {
        *     (`SIGNUP_ENABLED`); off, it answers `403` with `signup_closed`.
        */
       signup_enabled: boolean;
+      /**
+       * @description Whether a new owner must prove the address before the first
+       *     sign-in (`SIGNUP_EMAIL_VERIFICATION`, tm 257.7): sign-up then
+       *     answers `202` with no session, and `/auth/authorize` refuses the
+       *     owner with `403` `email_unverified` until `POST /auth/verify-email`.
+       */
+      email_verification_required: boolean;
     };
     DependencyHealth: {
       /** @enum {string} */
@@ -10439,6 +10539,15 @@ export interface components {
         client_id?: string | null;
       }[];
     };
+    /**
+     * @description An answer that is the same whatever happened behind it (tm 257.7) — a
+     *     sign-up to a new or a taken address, a resend to an address with or
+     *     without an account. What differs goes to the mailbox, after the answer.
+     */
+    NeutralMessage: {
+      /** @example Check your inbox to continue. */
+      message: string;
+    };
     Invitation: {
       /** Format: uuid */
       id: string;
@@ -12858,6 +12967,8 @@ export interface operations {
               name: string;
               /** @description Whether this account holds an active second factor, so `/auth/authorize` will require `code`. An account fact, not a workspace one — one authenticator covers every membership — which is why it sits here rather than being repeated down the list. No disclosure: the caller has just proved this account's password, and the next call would say so anyway. */
               two_factor_enabled?: boolean;
+              /** @description Whether somebody has proved this address (tm 257.7). False only for an owner who signed up while the deployment verifies email and has not opened the link yet; with `GET /deployment`'s `email_verification_required` true, `/auth/authorize` will refuse such an account with `email_unverified`, so the screen can say "check your inbox" first. Same reasoning as `two_factor_enabled`: the caller has just proved the password. */
+              email_verified?: boolean;
             };
             memberships: {
               license_id: string;
@@ -12944,7 +13055,7 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
-      /** @description The requested scopes are unavailable, or the workspace requires single sign-on and the caller is not an owner. The latter carries `details.sso_connection_id`. */
+      /** @description The requested scopes are unavailable, or the workspace requires single sign-on and the caller is not an owner (carries `details.sso_connection_id`), or the account's address is not verified yet (`not_allowed`, `details.reason: "email_unverified"`). */
       403: {
         headers: {
           [name: string]: unknown;
@@ -13217,6 +13328,22 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
+      /**
+       * @description The asserted address belongs to an account that signed up with a
+       *     password and has not verified it yet (`not_allowed`,
+       *     `details.reason: "email_unverified"`, tm 257.7). Signing it in would
+       *     make its password — perhaps a stranger's — good for this workspace;
+       *     resetting the password proves the address and lifts it. Nothing is
+       *     provisioned.
+       */
+      403: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
     };
@@ -13258,13 +13385,27 @@ export interface operations {
       };
     };
     responses: {
-      /** @description Workspace created */
+      /** @description Workspace created (`SIGNUP_EMAIL_VERIFICATION=false`). */
       201: {
         headers: {
           [name: string]: unknown;
         };
         content: {
           'application/json': components['schemas']['Session'];
+        };
+      };
+      /**
+       * @description `SIGNUP_EMAIL_VERIFICATION=true`: the same body whether the address
+       *     was new (workspace created, link mailed) or already held an account
+       *     (nothing created, notice mailed). No session — the owner signs in
+       *     after `POST /auth/verify-email`.
+       */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['NeutralMessage'];
         };
       };
       400: components['responses']['BadRequest'];
@@ -13285,7 +13426,11 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
-      /** @description An account already exists for that email. */
+      /**
+       * @description An account already exists for that email. Only while
+       *     `SIGNUP_EMAIL_VERIFICATION=false`; with it on, a taken address gets
+       *     the `202`.
+       */
       409: {
         headers: {
           [name: string]: unknown;
@@ -13387,6 +13532,75 @@ export interface operations {
       429: components['responses']['TooManyRequests'];
     };
   };
+  verifyEmail: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          token: string;
+          password: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Verified */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Session'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      /**
+       * @description The link is unknown, expired or already used, or the password does
+       *     not match — one answer for all four.
+       */
+      401: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
+    };
+  };
+  resendEmailVerification: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': {
+          email: string;
+        };
+      };
+    };
+    responses: {
+      /** @description Accepted, whatever the address. */
+      202: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['NeutralMessage'];
+        };
+      };
+      400: components['responses']['BadRequest'];
+      429: components['responses']['TooManyRequests'];
+    };
+  };
   previewInvitation: {
     parameters: {
       query: {
@@ -13409,7 +13623,13 @@ export interface operations {
             email: string;
             /** @enum {string} */
             role: 'admin' | 'agent';
-            /** @description False when the address already has an account. */
+            /**
+             * @description False when the address already has a verified account. An
+             *     account nobody has verified yet (a sign-up waiting on its
+             *     link, tm 257.7) counts as no account: its password may be a
+             *     stranger's, so accepting sets a new one, verifies the
+             *     address and revokes the old password's sessions.
+             */
             needs_password: boolean;
           };
         };
@@ -13438,7 +13658,10 @@ export interface operations {
         'application/json': {
           token: string;
           name?: string;
-          /** @description Required only when the address has no account yet. */
+          /**
+           * @description Required when the address has no verified account yet
+           *     (`needs_password` in the preview); `400` without it.
+           */
           password?: string;
         };
       };

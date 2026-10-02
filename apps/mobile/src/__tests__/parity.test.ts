@@ -888,7 +888,13 @@ describe('module parity matrix — what is still owed', () => {
       // before anyone signs in. The API refuses those surfaces itself, and the
       // app carries none of them (no billing, channels or marketplace), so it
       // has nothing to hide; nothing here re-scopes.
-      contractEndpoints: 220,
+      // 220 -> 222 with `/auth/verify-email` and `/auth/verify-email/resend`
+      // (tm 257.7) — a new owner proving the address the web sign-up form
+      // used. The app has no sign-up (it signs into workspaces that exist),
+      // and an owner who has not verified is refused at `/auth/authorize`
+      // like anywhere else, with `email_unverified`; the link opens in the
+      // web panel. A boundary rather than a gap, and nothing here re-scopes.
+      contractEndpoints: 222,
       scopeBoundaries: 1,
     });
   });

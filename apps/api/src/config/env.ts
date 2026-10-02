@@ -452,11 +452,12 @@ export const envSchema = z.object({
   /**
    * Whether `POST /auth/signup` creates workspaces at all (FR-MOD-00.2 · tm 256.3).
    * On by default, so development, the test suites and the demo stack keep the
-   * open sign-up they were built around. A pilot turns it off once its own
-   * workspaces exist: sign-up is anonymous and checks no email, so on a public
-   * address anyone could open a workspace and spend the deployment's model key
-   * and mailbox. Closed, the route answers 403 `not_allowed` with
-   * `details.reason: 'signup_closed'` before it reads the body or the database.
+   * open sign-up they were built around. Sign-up is anonymous: on a public
+   * address anyone can open a workspace and spend the deployment's model key
+   * and mailbox, and unless `SIGNUP_EMAIL_VERIFICATION` is on it checks no
+   * email either; closing it is the emergency brake. Closed, the route answers
+   * 403 `not_allowed` with `details.reason: 'signup_closed'` before it reads
+   * the body or the database.
    * Invitations are unaffected — they are how a closed deployment still grows.
    *
    * Only the two literal words. `SIGNUP_ENABLED=` (empty), `0`, `no` or `False`
@@ -469,6 +470,33 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+  /**
+   * Whether a new owner must prove the address before the first sign-in (tm
+   * 257.7 · ADR docs/adr/pilot-public-readiness.md K-e(1)). Off by default, and
+   * off means sign-up answers exactly as before: 201 with the session, 409 for
+   * a taken address. On, `POST /auth/signup` answers 202 with one body whether
+   * the address was new or taken, mails a link (or, for a taken address, an
+   * "you already have an account" notice) after the answer, and
+   * `/auth/authorize` refuses the owner with 403 `email_unverified` until
+   * `POST /auth/verify-email` is called with the link's token AND the
+   * password. A separate question from `SIGNUP_ENABLED`: whether strangers may
+   * sign up, and whether they must prove the address when they do.
+   *
+   * Required in production while `PILOT_MODE=true`, and in production it needs
+   * `MAIL_PROVIDER=smtp` — a link nobody receives locks every new owner out.
+   * Only the two literal words, like `SIGNUP_ENABLED`.
+   */
+  SIGNUP_EMAIL_VERIFICATION: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /**
+   * How long a verification link works, in hours (tm 257.7). A day by default;
+   * capped at a week, past which a link sitting in a mailbox is a standing
+   * credential rather than a confirmation step. Asking again mails a new link
+   * and spends the old one.
+   */
+  SIGNUP_VERIFICATION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(24),
 
   /**
    * Whether this deployment is the public pilot (tm 257.13 · ADR
@@ -1124,6 +1152,17 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     );
   }
 
+  // Tied to the switch itself, which is off by default (Helm and the plain
+  // production base never set it): a verification link that goes to a spool
+  // file instead of a mailbox locks every new owner out of the workspace they
+  // just created (tm 257.7). Under `PILOT_MODE=true` the pilot's own rule below
+  // already names `MAIL_PROVIDER`, and one key is named once.
+  if (env.SIGNUP_EMAIL_VERIFICATION && env.MAIL_PROVIDER !== 'smtp' && !env.PILOT_MODE) {
+    problems.push(
+      'MAIL_PROVIDER must be smtp in production when SIGNUP_EMAIL_VERIFICATION=true: a new owner cannot sign in until the verification link arrives, and anything else delivers it to nobody.',
+    );
+  }
+
   // The public pilot (tm 257.13 · ADR K-b). Tied to `PILOT_MODE`, not to
   // production alone: Helm and the plain production base run the stub model
   // and file mail on purpose, and neither is the pilot. With real people on
@@ -1149,6 +1188,15 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     if (env.MAIL_PROVIDER !== 'smtp') {
       problems.push(
         'MAIL_PROVIDER must be smtp in production when PILOT_MODE=true: anything else delivers no invitation, reset or notice to anyone.',
+      );
+    }
+    // Sign-up is open to the public in the pilot (tm 257.7 · ADR K-e(1)), and
+    // an owner who never proved the address is how a stranger squats someone
+    // else's — and how the real owner is later told the address "already has
+    // an account".
+    if (!env.SIGNUP_EMAIL_VERIFICATION) {
+      problems.push(
+        'SIGNUP_EMAIL_VERIFICATION must be true in production when PILOT_MODE=true: public sign-up must make a new owner prove the address before the first sign-in.',
       );
     }
     // One deployment, one region (tm 257.4 · ADR K-e): the sign-up form sends

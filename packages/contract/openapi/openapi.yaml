@@ -168,6 +168,10 @@ paths:
     $ref: "./paths/account-lifecycle.yaml#/passwordReset"
   /auth/password-reset/confirm:
     $ref: "./paths/account-lifecycle.yaml#/passwordResetConfirm"
+  /auth/verify-email:
+    $ref: "./paths/account-lifecycle.yaml#/verifyEmail"
+  /auth/verify-email/resend:
+    $ref: "./paths/account-lifecycle.yaml#/verifyEmailResend"
   /auth/invitations/preview:
     $ref: "./paths/account-lifecycle.yaml#/invitationPreview"
   /auth/invitations/accept:
@@ -709,7 +713,7 @@ components:
         Deployment-wide settings (tm 257.13), the same for every caller and
         never about a workspace. Each field the panel reads to hide something
         is also enforced by the API itself.
-      required: [pilot_mode, contact_email, signup_enabled]
+      required: [pilot_mode, contact_email, signup_enabled, email_verification_required]
       additionalProperties: false
       properties:
         pilot_mode:
@@ -730,6 +734,13 @@ components:
           description: |
             Whether `POST /auth/signup` creates workspaces here
             (`SIGNUP_ENABLED`); off, it answers `403` with `signup_closed`.
+        email_verification_required:
+          type: boolean
+          description: |
+            Whether a new owner must prove the address before the first
+            sign-in (`SIGNUP_EMAIL_VERIFICATION`, tm 257.7): sign-up then
+            answers `202` with no session, and `/auth/authorize` refuses the
+            owner with `403` `email_unverified` until `POST /auth/verify-email`.
 
     DependencyHealth:
       type: object
@@ -4209,6 +4220,18 @@ components:
                   not have to derive one from the organisation name — which had
                   no answer for a workspace created through signup, and
                   collided for two organisations sharing a first word.
+
+    NeutralMessage:
+      type: object
+      description: |
+        An answer that is the same whatever happened behind it (tm 257.7) — a
+        sign-up to a new or a taken address, a resend to an address with or
+        without an account. What differs goes to the mailbox, after the answer.
+      required: [message]
+      properties:
+        message:
+          type: string
+          example: Check your inbox to continue.
 
     Invitation:
       type: object

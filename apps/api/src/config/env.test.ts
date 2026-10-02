@@ -129,6 +129,53 @@ describe('PILOT_MODE', () => {
   });
 });
 
+/**
+ * Sign-up email verification (tm 257.7 · ADR K-e(1)). Off unless chosen, and
+ * read like the two switches above.
+ */
+describe('SIGNUP_EMAIL_VERIFICATION', () => {
+  it('is off when unset, so sign-up answers 201 and signs straight in as before', () => {
+    expect(parseEnv(BASE).SIGNUP_EMAIL_VERIFICATION).toBe(false);
+  });
+
+  it('reads true and false', () => {
+    expect(parseEnv({ ...BASE, SIGNUP_EMAIL_VERIFICATION: 'true' }).SIGNUP_EMAIL_VERIFICATION).toBe(
+      true,
+    );
+    expect(
+      parseEnv({ ...BASE, SIGNUP_EMAIL_VERIFICATION: 'false' }).SIGNUP_EMAIL_VERIFICATION,
+    ).toBe(false);
+  });
+
+  it.each(['', '0', '1', 'no', 'False', 'TRUE', ' true'])(
+    'refuses %j instead of reading it as on or off',
+    (value) => {
+      expect(() => parseEnv({ ...BASE, SIGNUP_EMAIL_VERIFICATION: value })).toThrow(
+        /SIGNUP_EMAIL_VERIFICATION/,
+      );
+    },
+  );
+
+  it('keeps a link for a day by default, and between an hour and a week', () => {
+    expect(parseEnv(BASE).SIGNUP_VERIFICATION_TTL_HOURS).toBe(24);
+    expect(
+      parseEnv({ ...BASE, SIGNUP_VERIFICATION_TTL_HOURS: '1' }).SIGNUP_VERIFICATION_TTL_HOURS,
+    ).toBe(1);
+    expect(
+      parseEnv({ ...BASE, SIGNUP_VERIFICATION_TTL_HOURS: '168' }).SIGNUP_VERIFICATION_TTL_HOURS,
+    ).toBe(168);
+    for (const value of ['0', '-1', '1.5', '169', 'a day']) {
+      expect(() => parseEnv({ ...BASE, SIGNUP_VERIFICATION_TTL_HOURS: value }), value).toThrow(
+        /SIGNUP_VERIFICATION_TTL_HOURS/,
+      );
+    }
+  });
+
+  it('needs no mail rule outside production', () => {
+    expect(() => parseEnv({ ...BASE, SIGNUP_EMAIL_VERIFICATION: 'true' })).not.toThrow();
+  });
+});
+
 /** The `GET /deployment` bucket (tm 257.13). */
 describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
   it('is 600 per minute when unset', () => {
@@ -452,6 +499,8 @@ describe('production configuration', () => {
       SMTP_USERNAME: 'mailer-login',
       SMTP_PASSWORD: realSecret('smtp'),
       SMTP_FROM: 'desk@siyahtus.test',
+      // Public sign-up in the pilot verifies the address (tm 257.7).
+      SIGNUP_EMAIL_VERIFICATION: 'true',
     };
 
     const problemsOf = (source: NodeJS.ProcessEnv): string => {
@@ -591,11 +640,65 @@ describe('production configuration', () => {
           ...PILOT,
           PILOT_MODE: 'false',
           PILOT_CONTACT_EMAIL: undefined,
+          // Its own switch with its own mail rule (tm 257.7), not a pilot rule.
+          SIGNUP_EMAIL_VERIFICATION: 'false',
           LLM_PROVIDER: 'mock',
           EMBEDDING_PROVIDER: 'mock',
           MAIL_PROVIDER: 'file',
         }),
       ).not.toThrow();
+    });
+
+    it('refuses to boot with SIGNUP_EMAIL_VERIFICATION off, naming it (tm 257.7)', () => {
+      const message = problemsOf({ ...PILOT, SIGNUP_EMAIL_VERIFICATION: 'false' });
+      expect(message).toMatch(/SIGNUP_EMAIL_VERIFICATION must be true/);
+      expect(message).toMatch(/PILOT_MODE=true/);
+      expect(message.trim().split('\n')).toHaveLength(2);
+    });
+
+    it('names MAIL_PROVIDER once when verification is on and mail is a stub', () => {
+      // Both rules want smtp; the pilot's speaks, the verification one stays
+      // quiet rather than repeating the key.
+      const message = problemsOf({ ...PILOT, MAIL_PROVIDER: 'file' });
+      expect(message.match(/MAIL_PROVIDER must be smtp/g)).toHaveLength(1);
+    });
+  });
+
+  /**
+   * `SIGNUP_EMAIL_VERIFICATION=true` in production (tm 257.7 · ADR K-e(1)),
+   * outside the pilot as well: the switch is off unless chosen, so Helm and
+   * this base are untouched, and once chosen a link that reaches no mailbox
+   * locks every new owner out of the workspace they just made.
+   */
+  describe('SIGNUP_EMAIL_VERIFICATION=true', () => {
+    it('refuses file mail, naming MAIL_PROVIDER and the switch', () => {
+      let message = '';
+      try {
+        parseEnv({ ...PROD_BASE, SIGNUP_EMAIL_VERIFICATION: 'true' });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toMatch(/MAIL_PROVIDER must be smtp/);
+      expect(message).toMatch(/SIGNUP_EMAIL_VERIFICATION=true/);
+      expect(message.trim().split('\n')).toHaveLength(2);
+    });
+
+    it('boots on SMTP', () => {
+      const env = parseEnv({
+        ...PROD_BASE,
+        SIGNUP_EMAIL_VERIFICATION: 'true',
+        MAIL_PROVIDER: 'smtp',
+        SMTP_HOST: 'smtp.siyahtus.test',
+        SMTP_PORT: '587',
+        SMTP_USERNAME: 'mailer-login',
+        SMTP_PASSWORD: realSecret('smtp'),
+        SMTP_FROM: 'desk@siyahtus.test',
+      });
+      expect(env.SIGNUP_EMAIL_VERIFICATION).toBe(true);
+    });
+
+    it('is not a production requirement on its own', () => {
+      expect(parseEnv(PROD_BASE).SIGNUP_EMAIL_VERIFICATION).toBe(false);
     });
   });
 

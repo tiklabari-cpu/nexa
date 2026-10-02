@@ -13,6 +13,7 @@ const PILOT = {
   pilot_mode: true,
   contact_email: 'pilot-desk@siyahtus.test',
   signup_enabled: true,
+  email_verification_required: false,
 };
 
 function json(body: unknown, status = 200): Response {
@@ -46,6 +47,7 @@ describe('useDeployment', () => {
       pilot_mode: false,
       contact_email: null,
       signup_enabled: true,
+      email_verification_required: false,
     });
     expect(DEPLOYMENT_FALLBACK).toStrictEqual(result.current);
   });

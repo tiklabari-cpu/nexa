@@ -19,12 +19,22 @@ import type { DeploymentConfig } from '@siyahtus/types';
  * exactly as it did before the page read it.
  */
 const deployment = vi.hoisted(() => ({
-  current: { pilot_mode: false, contact_email: null, signup_enabled: true } as DeploymentConfig,
+  current: {
+    pilot_mode: false,
+    contact_email: null,
+    signup_enabled: true,
+    email_verification_required: false,
+  } as DeploymentConfig,
 }));
 vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
 
 afterEach(() => {
-  deployment.current = { pilot_mode: false, contact_email: null, signup_enabled: true };
+  deployment.current = {
+    pilot_mode: false,
+    contact_email: null,
+    signup_enabled: true,
+    email_verification_required: false,
+  };
 });
 
 function renderAt(ui: ReactElement, path = '/'): void {
@@ -304,6 +314,7 @@ describe('SignUpPage in pilot mode (NFR-C9)', () => {
       pilot_mode: true,
       contact_email: 'pilot-desk@siyahtus.test',
       signup_enabled: true,
+      email_verification_required: false,
     };
   }
 

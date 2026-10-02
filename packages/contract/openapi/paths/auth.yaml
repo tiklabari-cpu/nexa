@@ -70,6 +70,18 @@ login:
                         repeated down the list. No disclosure: the caller has
                         just proved this account's password, and the next call
                         would say so anyway.
+                    email_verified:
+                      type: boolean
+                      description: >-
+                        Whether somebody has proved this address (tm 257.7).
+                        False only for an owner who signed up while the
+                        deployment verifies email and has not opened the link
+                        yet; with `GET /deployment`'s
+                        `email_verification_required` true, `/auth/authorize`
+                        will refuse such an account with `email_unverified`, so
+                        the screen can say "check your inbox" first. Same
+                        reasoning as `two_factor_enabled`: the caller has just
+                        proved the password.
                 memberships:
                   type: array
                   items:
@@ -150,6 +162,12 @@ authorize:
       minted only when the account holds no active factor, and it is spent by the
       activation it exists for. Sign-in is then repeated with the new `code`.
 
+      An owner who signed up while the deployment verifies email
+      (`SIGNUP_EMAIL_VERIFICATION=true`, tm 257.7) and has not yet opened the
+      link is refused with `not_allowed` (403) and `details.reason:
+      "email_unverified"` — after the password and the workspace check, before
+      single sign-on and the second factor. `POST /auth/verify-email` lifts it.
+
       The SAML assertion path is deliberately exempt: a federated sign-in has
       already been vouched for by the identity provider, which is where the
       workspace's MFA lives. Refresh-token rotation and personal access tokens
@@ -226,8 +244,9 @@ authorize:
       "403":
         description: >-
           The requested scopes are unavailable, or the workspace requires single
-          sign-on and the caller is not an owner. The latter carries
-          `details.sso_connection_id`.
+          sign-on and the caller is not an owner (carries
+          `details.sso_connection_id`), or the account's address is not verified
+          yet (`not_allowed`, `details.reason: "email_unverified"`).
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }

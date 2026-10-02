@@ -54,7 +54,12 @@ function renderNav(config: DeploymentConfig): HTMLElement {
 
 describe('Settings navigation in the public pilot (tm 257.2)', () => {
   it('drops the Billing entry and its emptied group heading, and nothing else', () => {
-    const nav = renderNav({ pilot_mode: true, contact_email: null, signup_enabled: true });
+    const nav = renderNav({
+      pilot_mode: true,
+      contact_email: null,
+      signup_enabled: true,
+      email_verification_required: false,
+    });
     expect(within(nav).queryByText('Billing')).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Subscription and invoices' })).toBeNull();
     expect(within(nav).getAllByRole('link')).toHaveLength(SETTINGS_SECTIONS.length - 1);
@@ -62,7 +67,12 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
   });
 
   it('keeps it on an ordinary deployment', () => {
-    const nav = renderNav({ pilot_mode: false, contact_email: null, signup_enabled: true });
+    const nav = renderNav({
+      pilot_mode: false,
+      contact_email: null,
+      signup_enabled: true,
+      email_verification_required: false,
+    });
     expect(within(nav).getByText('Billing')).toBeInTheDocument();
     expect(within(nav).getByRole('link', { name: 'Subscription and invoices' })).toHaveAttribute(
       'href',

@@ -31,8 +31,20 @@ export interface Message {
    * and for one more: it is the only kind that leaves the workspace carrying
    * text the workspace wrote, so "what did we send our customers" is a mailbox
    * filter rather than an audit reconstruction.
+   *
+   * `email_verification` (the sign-up link) and `account_exists_notice` (what
+   * a taken address is sent instead) are the two halves of one indistinguishable
+   * 202 (tm 257.7): the answer cannot say which happened, so the mailbox is
+   * where a test — and the pilot rehearsal's spool check — tells them apart.
    */
-  kind: 'password_reset' | 'invitation' | 'notification' | 'scheduled_report' | 'ticket_notice';
+  kind:
+    | 'password_reset'
+    | 'invitation'
+    | 'notification'
+    | 'scheduled_report'
+    | 'ticket_notice'
+    | 'email_verification'
+    | 'account_exists_notice';
 }
 
 export interface Mailer {

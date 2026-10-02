@@ -25,6 +25,7 @@ export const DEPLOYMENT_FALLBACK: DeploymentConfig = {
   pilot_mode: false,
   contact_email: null,
   signup_enabled: true,
+  email_verification_required: false,
 };
 
 /**

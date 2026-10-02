@@ -9,13 +9,14 @@
  * the one thing only a real address gets, which is why it is sent after the
  * answer rather than before it (tm 255.4).
  */
-import type { FastifyInstance } from 'fastify';
+import { createHash } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import { withTenant } from '../lib/tenant.js';
-import { writeAuditEntry } from '../services/audit/audit-log.js';
-import { LifecycleService } from '../services/auth/lifecycle-service.js';
+import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
+import { LifecycleService, hashToken, type Session } from '../services/auth/lifecycle-service.js';
 import { SEAT_CEILING } from '../lib/entitlements.js';
 import { pricingForPlan } from '../services/billing/subscription-service.js';
 import { REGIONS, servesRegion, type AgentRole } from '@siyahtus/types';
@@ -24,6 +25,27 @@ import type { Mailer } from '../services/mail/mailer.js';
 import { deliver, mailFailureFields } from '../services/mail/delivery.js';
 
 const NEUTRAL_RESET_MESSAGE = 'If an account exists for that address, we sent a link.';
+
+/**
+ * The one answer a sign-up gets while `SIGNUP_EMAIL_VERIFICATION=true` (tm
+ * 257.7), whether the address was new or already held an account. What
+ * differs — a link, or an "you already have an account" notice — is in the
+ * mailbox, which only the address's owner can read.
+ */
+const NEUTRAL_SIGNUP_MESSAGE = 'Check your inbox to continue.';
+const NEUTRAL_RESEND_MESSAGE = 'If that address is waiting to be confirmed, we sent a new link.';
+const NEUTRAL_VERIFY_FAILURE = 'This link is no longer valid, or the password does not match.';
+
+/**
+ * Password attempts per verification link per hour. Charged per presentation,
+ * like the second factor's budget: an honest owner spends one, and a budget
+ * charged only on failures would let a caller past it keep guessing. Asking
+ * for a new link starts a new budget — and spends the old link.
+ */
+const VERIFY_ATTEMPTS_PER_HOUR = 5;
+/** New links per address per hour, on top of the anonymous per-IP limit. */
+const VERIFY_RESENDS_PER_HOUR = 3;
+const HOUR_MS = 3_600_000;
 
 const signupBody = z.object({
   email: z.string().trim().email().max(320),
@@ -40,6 +62,13 @@ const signupBody = z.object({
 });
 
 const resetRequestBody = z.object({ email: z.string().trim().max(320) });
+const verifyBody = z.object({
+  token: z.string().min(20).max(200),
+  // `/auth/login`'s bounds, not sign-up's: this is a password being presented,
+  // not chosen, and a rule here would only describe the one that was.
+  password: z.string().min(1).max(512),
+});
+const resendBody = z.object({ email: z.string().trim().max(320) });
 const resetConfirmBody = z.object({
   token: z.string().min(20).max(200),
   password: z.string().min(12).max(200),
@@ -77,7 +106,93 @@ export default async function accountLifecycleRoutes(
     env.WEB_APP_URL,
     env.consoleRedirectUri,
     env.TRIAL_DAYS,
+    env.SIGNUP_VERIFICATION_TTL_HOURS,
   );
+
+  /**
+   * An account-level event, written once into each workspace the account can
+   * reach — the audit log is tenant-scoped. Best-effort: a completed change
+   * must not be undone because the trail could not be written.
+   */
+  async function recordForAccount(
+    request: FastifyRequest,
+    accountId: string,
+    entry: AuditEntry,
+  ): Promise<void> {
+    try {
+      for (const tenant of await lifecycle.membershipTenants(accountId)) {
+        await withTenant(app.db, tenant, (tx) =>
+          writeAuditEntry(
+            tx,
+            request.auditContext({
+              licenseId: tenant.licenseId,
+              actorId: accountId,
+              actorType: 'agent',
+            }),
+            entry,
+          ),
+        );
+      }
+    } catch (err) {
+      request.log.warn(
+        { err, action: entry.action },
+        'failed to record account event in audit log',
+      );
+    }
+  }
+
+  /**
+   * Mail a verification link, after the answer (tm 257.7). The audit entry is
+   * written from the same callback, so a request that mails writes nothing
+   * more before answering than one that does not.
+   */
+  function sendVerificationLink(
+    request: FastifyRequest,
+    to: string,
+    token: string,
+    accountId: string,
+    via: 'signup' | 'resend',
+  ): void {
+    const hours = lifecycle.verificationTtlHours;
+    app.backgroundMail.send(
+      {
+        to,
+        kind: 'email_verification',
+        subject: 'Confirm your email address for SiyahTuş',
+        body: `Open this link to confirm this address and finish setting up your workspace:\n\n${env.WEB_APP_URL}/verify-email?token=${encodeURIComponent(token)}\n\nYou will be asked for the password you chose when you signed up. The link expires in ${hours} ${hours === 1 ? 'hour' : 'hours'} and works once.\n\nIf you did not sign up, ignore this message: without the password the link does nothing.`,
+      },
+      async (outcome) => {
+        if (outcome.status !== 'sent') {
+          request.log.warn(
+            {
+              event: 'email_verification.mail',
+              outcome: outcome.status,
+              mail: mailFailureFields(outcome.error),
+            },
+            'verification email not confirmed as sent',
+          );
+        }
+        await recordForAccount(request, accountId, {
+          action: 'auth.verification_sent',
+          metadata: { via },
+        });
+      },
+    );
+  }
+
+  /**
+   * Take one from an hourly budget, or report it is empty. Fails open when
+   * Redis is unreachable, like `plugins/rate-limit.ts` and the second factor's
+   * budget: a cache outage must not lock every new owner out.
+   */
+  async function spend(request: FastifyRequest, key: string, limit: number): Promise<boolean> {
+    try {
+      return (await app.rateLimiter.consume(key, limit, HOUR_MS)).allowed;
+    } catch (error) {
+      request.log.error({ err: error, bucket: key.split(':')[1] }, 'budget unavailable — allowing');
+      return true;
+    }
+  }
 
   app.post('/auth/signup', { config: { public: true } }, async (request, reply) => {
     // --- Closed sign-up (tm 256.3) -------------------------------------------
@@ -163,6 +278,80 @@ export default async function accountLifecycleRoutes(
       );
     }
 
+    // --- Email verification (tm 257.7 · ADR K-e(1)) ---------------------------
+    // On, the answer must not say whether the address was free: a new address
+    // and a taken one get the same 202, byte for byte, and `409` is never sent.
+    // What differs goes to the mailbox, after the answer — a link to a new
+    // address, a "you already have an account" notice to a taken one.
+    //
+    // A taken address is left exactly as it is. Replacing a pending sign-up
+    // with this one would either keep the takeover open (the newest password
+    // wins whoever owns the mailbox) or let anyone cancel anyone's pending
+    // sign-up; the notice points the real owner at sign-in and the password
+    // reset, which proves the mailbox and replaces the password.
+    //
+    // Timing is not equal: a new address creates a workspace before
+    // answering, a taken one stops at the existence check. Both pay the
+    // password hash and neither waits on mail; the remaining gap is the
+    // per-IP sign-up limit's to bound (tm 257.14).
+    if (env.SIGNUP_EMAIL_VERIFICATION) {
+      let created: {
+        session: Session;
+        link: { token: string; accountId: string } | null;
+      } | null = null;
+      try {
+        const session = await lifecycle.signup({
+          email: body.email,
+          password: body.password,
+          name: body.name,
+          organizationName: body.organization_name,
+          region,
+          emailVerified: false,
+        });
+        created = { session, link: await lifecycle.requestEmailVerification(body.email) };
+      } catch (error) {
+        if (!(error instanceof ApiError && error.type === 'account_exists')) throw error;
+      }
+
+      if (created) {
+        await recordWorkspaceCreated(request, created.session, region);
+        // Null only if the account were already verified, which a sign-up
+        // that has just created it cannot be. Without a link there is nothing
+        // to send, and the owner can ask for one.
+        if (created.link) {
+          sendVerificationLink(
+            request,
+            body.email,
+            created.link.token,
+            created.link.accountId,
+            'signup',
+          );
+        }
+      } else {
+        app.backgroundMail.send(
+          {
+            to: body.email,
+            kind: 'account_exists_notice',
+            subject: 'You already have a SiyahTuş account',
+            body: `Someone — perhaps you — just tried to create a SiyahTuş workspace with this address, but it already has an account, so nothing was created.\n\nTo get in, sign in at ${env.WEB_APP_URL}/signin. If you do not remember the password, reset it at ${env.WEB_APP_URL}/forgot-password.\n\nIf this was not you, you can ignore this message: nothing about your account has changed.`,
+          },
+          (outcome) => {
+            if (outcome.status === 'sent') return;
+            request.log.warn(
+              {
+                event: 'account_exists_notice.mail',
+                outcome: outcome.status,
+                mail: mailFailureFields(outcome.error),
+              },
+              'account-exists notice not confirmed as sent',
+            );
+          },
+        );
+      }
+
+      return reply.code(202).send({ message: NEUTRAL_SIGNUP_MESSAGE });
+    }
+
     const session = await lifecycle.signup({
       email: body.email,
       password: body.password,
@@ -170,10 +359,22 @@ export default async function accountLifecycleRoutes(
       organizationName: body.organization_name,
       region,
     });
+    await recordWorkspaceCreated(request, session, region);
 
-    // Best-effort, like the password-reset confirmation below: a completed
-    // signup must not be undone because the trail could not be written. A
-    // brand-new account has exactly one membership — its own workspace.
+    return reply.code(201).send(session);
+  });
+
+  /**
+   * The first row a new workspace's trail gets. Best-effort, like the
+   * password-reset confirmation below: a completed signup must not be undone
+   * because the trail could not be written. A brand-new account has exactly
+   * one membership — its own workspace.
+   */
+  async function recordWorkspaceCreated(
+    request: FastifyRequest,
+    session: Session,
+    region: string,
+  ): Promise<void> {
     const membership = session.memberships[0];
     if (membership) {
       try {
@@ -204,9 +405,7 @@ export default async function accountLifecycleRoutes(
         request.log.warn({ err }, 'failed to record workspace creation in audit log');
       }
     }
-
-    return reply.code(201).send(session);
-  });
+  }
 
   app.post('/auth/password-reset', { config: { public: true } }, async (request, reply) => {
     const body = parse(resetRequestBody, request.body);
@@ -276,6 +475,56 @@ export default async function accountLifecycleRoutes(
     }
 
     return reply.code(204).send();
+  });
+
+  // --- Email verification (tm 257.7 · ADR K-e(1)) ----------------------------
+  //
+  // Both routes answer whatever `SIGNUP_EMAIL_VERIFICATION` says now. With it
+  // off no unverified account is ever created, so they have nothing to do; an
+  // owner left unverified from a time it was on can still finish, and a link
+  // already in a mailbox still works — proving an address is never harmful.
+
+  app.post('/auth/verify-email', { config: { public: true } }, async (request, reply) => {
+    const body = parse(verifyBody, request.body);
+
+    // Charged before anything is looked up, and keyed by the link's hash so
+    // the token never reaches Redis. An unknown link is charged like a real
+    // one: a 429 that only real links could earn would say which are real.
+    if (!(await spend(request, `rl:verify:${hashToken(body.token)}`, VERIFY_ATTEMPTS_PER_HOUR))) {
+      throw ApiError.tooManyRequests(
+        3600,
+        'Too many attempts with this link. Ask for a new one, or wait before trying again.',
+      );
+    }
+
+    const session = await lifecycle.verifyEmail(body.token, body.password);
+    // Unknown, expired, used, wrong password: one answer. A wrong password
+    // leaves the link working — it is the budget above that bounds guessing.
+    if (!session) throw ApiError.authentication(NEUTRAL_VERIFY_FAILURE);
+
+    await recordForAccount(request, session.account.id, { action: 'auth.email_verified' });
+    return reply.send(session);
+  });
+
+  app.post('/auth/verify-email/resend', { config: { public: true } }, async (request, reply) => {
+    const body = parse(resendBody, request.body);
+
+    // Keyed by the address, lower-cased and hashed, so the bucket name is not
+    // a list of the addresses somebody asked about. Charged whether or not an
+    // account holds it, and an empty budget answers the same 202: a limit that
+    // only real accounts could exhaust would be the enumeration this route
+    // exists to avoid.
+    const bucket = createHash('sha256').update(body.email.toLowerCase()).digest('hex');
+    if (await spend(request, `rl:verifyresend:${bucket}`, VERIFY_RESENDS_PER_HOUR)) {
+      // One database call on every branch; the mail and the trail entry only
+      // an unverified account gets both happen after the answer.
+      const pending = await lifecycle.requestEmailVerification(body.email);
+      if (pending) {
+        sendVerificationLink(request, body.email, pending.token, pending.accountId, 'resend');
+      }
+    }
+
+    return reply.code(202).send({ message: NEUTRAL_RESEND_MESSAGE });
   });
 
   app.get('/auth/invitations/preview', { config: { public: true } }, async (request, reply) => {

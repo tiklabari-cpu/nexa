@@ -14,4 +14,9 @@ export interface DeploymentConfig {
   contact_email: string | null;
   /** `SIGNUP_ENABLED`: whether `POST /auth/signup` creates workspaces here. */
   signup_enabled: boolean;
+  /**
+   * `SIGNUP_EMAIL_VERIFICATION` (tm 257.7): sign-up answers 202 with no session,
+   * and the new owner signs in only after `POST /auth/verify-email`.
+   */
+  email_verification_required: boolean;
 }

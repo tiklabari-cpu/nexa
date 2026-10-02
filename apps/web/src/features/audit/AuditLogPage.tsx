@@ -114,6 +114,8 @@ const ACTION_GROUPS: ReadonlyArray<{ labelKey: string; actions: readonly string[
       'auth.login',
       'auth.login_failed',
       'auth.password_reset',
+      'auth.verification_sent',
+      'auth.email_verified',
       'auth.ip_denied',
       // Grouped with the sign-in refusals because it is the same question —
       // "who was turned away at the door, and why" — even though the door in

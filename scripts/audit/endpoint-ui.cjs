@@ -311,7 +311,22 @@ const INDIRECT = [
  * collection endpoint has a screen and one verb on the item does not, so a
  * thing can be made but not changed, or made but not removed.
  */
-const TRACKED = [];
+const TRACKED = [
+  {
+    op: 'POST /auth/verify-email',
+    owner: 'tm 257.16',
+    reason:
+      'sign-up email verification (tm 257.7) is the API core; the panel page the mailed ' +
+      '`/verify-email?token=…` link opens — token plus password — is 257.16.',
+  },
+  {
+    op: 'POST /auth/verify-email/resend',
+    owner: 'tm 257.16',
+    reason:
+      'the "send the link again" action on the same 257.16 screens; the API answers 202 ' +
+      'whatever the address, and the panel has no button for it yet.',
+  },
+];
 
 /** `/chats/{chatId}/events` -> a regex matching how the clients write it. */
 function pathMatcher(path) {

@@ -9,8 +9,9 @@
  * pre-auth need, each returning the minimum, instead of relaxing row level
  * security for the application role.
  *
- * Tokens (reset and invite) are random 32-byte values. Only their hash is
- * stored, so a leaked backup of either table is not a set of working links.
+ * Tokens (reset, invite and email verification) are random 32-byte values.
+ * Only their hash is stored, so a leaked backup of any of the tables is not a
+ * set of working links.
  */
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 import type { PrismaClient } from '@prisma/client';
@@ -23,12 +24,14 @@ import {
 } from '../../lib/tenant.js';
 import { assertInviteSeatCeiling } from '../../lib/entitlements.js';
 import { ensureSeatsCoverHeadcount } from '../billing/subscription-service.js';
-import { hashPassword } from '../../lib/crypto.js';
+import { hashPassword, verifyPassword } from '../../lib/crypto.js';
 import { type AgentRole, type Region } from '@siyahtus/types';
 import { ROLE_RANK } from './principal.js';
 
 /** The default trial length; the deployment's `TRIAL_DAYS` overrides it (tm 256.1). */
 export const TRIAL_DAYS = 14;
+/** The default life of a sign-up verification link; `SIGNUP_VERIFICATION_TTL_HOURS` overrides it. */
+export const VERIFICATION_TTL_HOURS = 24;
 const RESET_TTL_MS = 60 * 60 * 1000; // one hour
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -93,8 +96,11 @@ function newToken(): { token: string; hash: string } {
  * guessing to slow down; the hash exists only so the stored form is useless if
  * read. A slow KDF here would add latency to every reset and invite lookup
  * without adding security.
+ *
+ * Exported for the verification route's attempt budget, which is keyed by
+ * the link (`rl:verify:<hash>`) and must never put the token itself in Redis.
  */
-function hashToken(token: string): string {
+export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
 }
 
@@ -103,6 +109,7 @@ export class LifecycleService {
   readonly #appUrl: string;
   readonly #consoleRedirect: string;
   readonly #trialDays: number;
+  readonly #verificationTtlMs: number;
 
   /**
    * @param consoleRedirect The console callback a new workspace's OAuth client
@@ -110,20 +117,29 @@ export class LifecycleService {
    *   anything a request carried (tm 255.17).
    * @param trialDays How long a new workspace's trial runs — `env.TRIAL_DAYS`
    *   (tm 256.1). Same trust boundary as the redirect: configuration only.
+   * @param verificationTtlHours How long a sign-up verification link works —
+   *   `env.SIGNUP_VERIFICATION_TTL_HOURS` (tm 257.7).
    */
   constructor(
     db: PrismaClient,
     appUrl: string,
     consoleRedirect: string,
     trialDays: number = TRIAL_DAYS,
+    verificationTtlHours: number = VERIFICATION_TTL_HOURS,
   ) {
     if (!Number.isInteger(trialDays) || trialDays < 1) {
       throw new RangeError(`trialDays must be a positive integer, got ${trialDays}`);
+    }
+    if (!Number.isInteger(verificationTtlHours) || verificationTtlHours < 1) {
+      throw new RangeError(
+        `verificationTtlHours must be a positive integer, got ${verificationTtlHours}`,
+      );
     }
     this.#db = db;
     this.#appUrl = appUrl.replace(/\/+$/, '');
     this.#consoleRedirect = consoleRedirect;
     this.#trialDays = trialDays;
+    this.#verificationTtlMs = verificationTtlHours * 60 * 60 * 1000;
   }
 
   async signup(input: {
@@ -139,6 +155,12 @@ export class LifecycleService {
      * only one that can also refuse.
      */
     region: Region;
+    /**
+     * False creates an owner who must prove the address before signing in
+     * (`SIGNUP_EMAIL_VERIFICATION`, tm 257.7). Omitted means verified — the
+     * behaviour every caller had before.
+     */
+    emailVerified?: boolean;
   }): Promise<Session> {
     const passwordHash = await hashPassword(input.password);
 
@@ -151,7 +173,7 @@ export class LifecycleService {
         SELECT * FROM auth_signup(
           ${input.email}::citext, ${input.name}, ${passwordHash},
           ${input.organizationName}, ${this.#trialDays}::int, ${input.region},
-          ${this.#consoleRedirect}
+          ${this.#consoleRedirect}, ${input.emailVerified ?? true}::boolean
         )`;
     } catch (error) {
       if (isAccountExists(error)) {
@@ -258,11 +280,20 @@ export class LifecycleService {
     return row?.recorded ? token : null;
   }
 
-  /** Returns the id of the account whose password was changed, for auditing. */
+  /**
+   * Returns the id of the account whose password was changed, for auditing.
+   *
+   * Besides the password, the function revokes every session the old one
+   * opened (refresh, access and personal tokens) and verifies the address — a
+   * reset is a link mailed there, opened, and a password chosen (tm 257.7).
+   * The trial length goes with it because an owner still waiting on sign-up
+   * verification starts the trial here.
+   */
   async confirmPasswordReset(token: string, password: string): Promise<string> {
     const passwordHash = await hashPassword(password);
     const rows = await this.#db.$queryRaw<Array<{ reset_account: string }>>`
-      SELECT * FROM auth_consume_password_reset(${hashToken(token)}, ${passwordHash})`;
+      SELECT * FROM auth_consume_password_reset(
+        ${hashToken(token)}, ${passwordHash}, ${this.#trialDays}::int)`;
 
     const row = rows[0];
     if (!row) {
@@ -271,6 +302,72 @@ export class LifecycleService {
       throw ApiError.authentication('This reset link is no longer valid.');
     }
     return row.reset_account;
+  }
+
+  /**
+   * Records a verification link for an address whose account is still waiting
+   * on one (tm 257.7), spending any earlier link. Null for an address with no
+   * account, or one already verified; otherwise the link's token and whose
+   * account it is (for the trail, written after the answer).
+   *
+   * `requestPasswordReset`'s contract: the route must answer identically
+   * whatever this returns, and it does.
+   */
+  async requestEmailVerification(
+    email: string,
+  ): Promise<{ token: string; accountId: string } | null> {
+    const { token, hash } = newToken();
+    const expiresAt = new Date(Date.now() + this.#verificationTtlMs);
+    const [row] = await this.#db.$queryRaw<Array<{ recorded: string | null }>>`
+      SELECT auth_request_email_verification(${email}::citext, ${hash}, ${expiresAt}) AS recorded`;
+    return row?.recorded ? { token, accountId: row.recorded } : null;
+  }
+
+  /** How long a verification link works, in hours — the mail says so. */
+  get verificationTtlHours(): number {
+    return this.#verificationTtlMs / (60 * 60 * 1000);
+  }
+
+  /**
+   * Redeem a verification link — with the account's password (tm 257.7).
+   *
+   * The token alone is a takeover: whoever reads the mailbox would activate a
+   * password somebody else chose. So the link is looked up, the password is
+   * verified against the account it belongs to, and only then is the link
+   * spent — inside a function that also checks the password is still the one
+   * just verified, so a reset that lands in between makes it match nothing.
+   * A wrong password spends nothing; the route budgets the attempts.
+   *
+   * Null for every failure — unknown, expired or used link, or the wrong
+   * password — and the scrypt cost is paid on every path, so neither the
+   * answer nor its timing separates "no such link" from "wrong password".
+   */
+  async verifyEmail(token: string, password: string): Promise<Session | null> {
+    const hash = hashToken(token);
+    const [pending] = await this.#db.$queryRaw<
+      Array<{ pending_account: string; password_hash: string | null }>
+    >`SELECT * FROM auth_find_email_verification(${hash})`;
+
+    const matches = await verifyPassword(password, pending?.password_hash ?? null);
+    if (!pending || !pending.password_hash || !matches) return null;
+
+    // The account's email and name come back from the function, for the reason
+    // `auth_accept_invitation` returns them: a follow-up read would run with no
+    // tenant context and row level security would hide the row.
+    const [verified] = await this.#db.$queryRaw<
+      Array<{ verified_account: string; verified_email: string; verified_name: string }>
+    >`SELECT * FROM auth_consume_email_verification(
+        ${hash}, ${pending.password_hash}, ${this.#trialDays}::int)`;
+    if (!verified) return null;
+
+    return {
+      account: {
+        id: verified.verified_account,
+        email: verified.verified_email,
+        name: verified.verified_name,
+      },
+      memberships: await this.#membershipsOf(verified.verified_account),
+    };
   }
 
   /**
@@ -444,15 +541,33 @@ export class LifecycleService {
         // The obvious follow-up query would run with no tenant context — the
         // person has only just joined — and row level security would filter it
         // away, failing the request *after* the invitation had been consumed.
-        const rows = await tx.$queryRaw<
-          Array<{
-            joined_account: string;
-            joined_license: bigint;
-            joined_email: string;
-            joined_name: string;
-          }>
-        >`SELECT * FROM auth_accept_invitation(
-            ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash})`;
+        //
+        // An address whose account nobody has verified (tm 257.7) is joined
+        // like a newcomer's: the password is required and replaces the old
+        // one, the address becomes verified and the old password's sessions
+        // are revoked — all inside the function. The trial length is for that
+        // account's own workspace, whose trial starts when the address is
+        // proven.
+        let rows: Array<{
+          joined_account: string;
+          joined_license: bigint;
+          joined_email: string;
+          joined_name: string;
+        }>;
+        try {
+          rows = await tx.$queryRaw`SELECT * FROM auth_accept_invitation(
+              ${hashToken(input.token)}, ${input.name ?? null}, ${passwordHash},
+              ${this.#trialDays}::int)`;
+        } catch (error) {
+          if (error instanceof Error && /siyahtus_password_required/.test(error.message)) {
+            // The whole transaction rolls back with this throw, so the
+            // invitation is not spent: the screen can ask again.
+            throw ApiError.validation('password: Required to accept this invitation.', {
+              password_required: true,
+            });
+          }
+          throw error;
+        }
 
         const row = rows[0];
         // Nothing was written on this branch — the UPDATE inside the function

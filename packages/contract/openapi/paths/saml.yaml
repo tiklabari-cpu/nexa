@@ -185,5 +185,16 @@ acs:
             schema: { type: string }
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
+      "403":
+        description: |
+          The asserted address belongs to an account that signed up with a
+          password and has not verified it yet (`not_allowed`,
+          `details.reason: "email_unverified"`, tm 257.7). Signing it in would
+          make its password — perhaps a stranger's — good for this workspace;
+          resetting the password proves the address and lifts it. Nothing is
+          provisioned.
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

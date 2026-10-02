@@ -598,3 +598,30 @@ describe('SignInPage demo credentials', () => {
     expect(screen.getByRole('link', { name: 'Create a workspace' })).toBeInTheDocument();
   });
 });
+
+/**
+ * The "New here?" line (tm 257.4). A deployment that has closed sign-up used
+ * to teach that only after a filled-in form came back 403; the link is not
+ * offered there at all.
+ */
+describe('SignInPage create-workspace link', () => {
+  it('is offered where sign-up is open', () => {
+    renderSignIn();
+    expect(screen.getByText(/New here\?/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create a workspace' })).toBeInTheDocument();
+  });
+
+  it('is gone, with its lead-in text, where sign-up is closed', () => {
+    deployment.current = {
+      pilot_mode: true,
+      contact_email: 'pilot-desk@siyahtus.test',
+      signup_enabled: false,
+    };
+    renderSignIn();
+    expect(screen.queryByText(/New here\?/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Create a workspace' })).not.toBeInTheDocument();
+    // Signing in and recovering a password are unaffected.
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /forgot/i })).toBeInTheDocument();
+  });
+});

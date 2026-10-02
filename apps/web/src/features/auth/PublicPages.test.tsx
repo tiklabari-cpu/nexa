@@ -11,6 +11,21 @@ import type { ReactElement } from 'react';
 import { ForgotPasswordPage, ResetPasswordPage, SignUpPage } from './PublicPages.js';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
+import type { DeploymentConfig } from '@siyahtus/types';
+
+/**
+ * `GET /deployment` through its one seam (tm 257.4). An ordinary deployment
+ * unless a test says otherwise, so every test outside the pilot block runs
+ * exactly as it did before the page read it.
+ */
+const deployment = vi.hoisted(() => ({
+  current: { pilot_mode: false, contact_email: null, signup_enabled: true } as DeploymentConfig,
+}));
+vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
+
+afterEach(() => {
+  deployment.current = { pilot_mode: false, contact_email: null, signup_enabled: true };
+});
 
 function renderAt(ui: ReactElement, path = '/'): void {
   render(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
@@ -270,6 +285,69 @@ describe('ForgotPasswordPage validation', () => {
     await userEvent.clear(field);
     await userEvent.type(field, 'robin@example.com');
     expect(submit).toBeEnabled();
+  });
+});
+
+/**
+ * The pilot is one deployment in one region (tm 257.4 · NFR-C9). The picker and
+ * its permanence warning have nothing to offer, and — the part a hidden select
+ * alone would get wrong — the request must not carry `region` at all: the form
+ * state still holds 'eu', and a deployment serving 'us' refuses that with a 421.
+ */
+describe('SignUpPage in pilot mode (NFR-C9)', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function pilot(): void {
+    deployment.current = {
+      pilot_mode: true,
+      contact_email: 'pilot-desk@siyahtus.test',
+      signup_enabled: true,
+    };
+  }
+
+  it('shows neither the region picker nor its warning', () => {
+    pilot();
+    renderAt(<SignUpPage />);
+    expect(screen.queryByLabelText('Data region')).not.toBeInTheDocument();
+    expect(screen.queryByText(/cannot be changed after your workspace is created/i)).toBeNull();
+    // The rest of the form is unchanged.
+    expect(screen.getByLabelText('Workspace name')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create workspace' })).toBeDisabled();
+  });
+
+  it('sends no region key — the server files the workspace where it runs', async () => {
+    pilot();
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(new Error('stop here'));
+    renderAt(<SignUpPage />);
+    await userEvent.type(screen.getByLabelText('Workspace name'), ' Acme ');
+    await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
+    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    await screen.findByRole('alert');
+    expect(post).toHaveBeenCalledTimes(1);
+    const [path, body] = post.mock.calls[0]!;
+    expect(path).toBe('/auth/signup');
+    expect(Object.keys(body as object).sort()).toEqual(
+      ['email', 'name', 'organization_name', 'password'].sort(),
+    );
+  });
+
+  it('still sends the chosen region on an ordinary deployment', async () => {
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(new Error('stop here'));
+    renderAt(<SignUpPage />);
+    await userEvent.type(screen.getByLabelText('Workspace name'), 'Acme');
+    await userEvent.selectOptions(screen.getByLabelText('Data region'), 'us');
+    await userEvent.type(screen.getByLabelText('Your name'), 'Robin');
+    await userEvent.type(screen.getByLabelText('Email'), 'robin@example.com');
+    await userEvent.type(screen.getByLabelText('Password'), 'longenoughpass');
+    await userEvent.click(screen.getByRole('button', { name: 'Create workspace' }));
+
+    await screen.findByRole('alert');
+    expect(post.mock.calls[0]![1]).toMatchObject({ region: 'us' });
   });
 });
 

@@ -434,6 +434,8 @@ describe('production configuration', () => {
       ...PROD_BASE,
       PILOT_MODE: 'true',
       PILOT_CONTACT_EMAIL: 'pilot-desk@siyahtus.test',
+      // The pilot's one region, which its providers have to answer in (tm 257.4).
+      SIYAHTUS_REGION: 'us',
       LLM_PROVIDER: 'openai',
       LLM_PROVIDER_REGION: 'us',
       LLM_API_BASE_URL: 'https://us.api.openai.com/v1',
@@ -499,6 +501,88 @@ describe('production configuration', () => {
         /PILOT_CONTACT_EMAIL[\s\S]*LLM_PROVIDER[\s\S]*EMBEDDING_PROVIDER[\s\S]*MAIL_PROVIDER/,
       );
       expect(message).not.toContain('pilot-desk@siyahtus.test');
+    });
+
+    /**
+     * One deployment, one region (tm 257.4 · NFR-C9). The sign-up form sends no
+     * region in the pilot, so every workspace is filed in `SIYAHTUS_REGION`; a
+     * provider declared elsewhere (and the host rule makes the host follow the
+     * declaration) would receive their conversations across the border, and the
+     * residency check only refuses HIPAA-scoped workspaces.
+     */
+    describe('provider regions (NFR-C9)', () => {
+      it.each([
+        [
+          'LLM_PROVIDER_REGION',
+          { LLM_PROVIDER_REGION: 'eu', LLM_API_BASE_URL: 'https://eu.api.openai.com/v1' },
+        ],
+        [
+          'EMBEDDING_PROVIDER_REGION',
+          {
+            EMBEDDING_PROVIDER_REGION: 'eu',
+            EMBEDDING_API_BASE_URL: 'https://eu.api.openai.com/v1',
+          },
+        ],
+      ] as const)('refuses a %s that is not SIYAHTUS_REGION, naming the key', (key, override) => {
+        // The host follows the declaration, so the host rule is satisfied and
+        // only the equality rule is left to speak.
+        const message = problemsOf({ ...PILOT, ...override });
+        expect(message).toMatch(new RegExp(`${key} must equal SIYAHTUS_REGION`));
+        expect(message).toMatch(/PILOT_MODE=true/);
+        expect(message.trim().split('\n')).toHaveLength(2);
+      });
+
+      it('names both providers when both are elsewhere', () => {
+        const message = problemsOf({
+          ...PILOT,
+          LLM_PROVIDER_REGION: 'eu',
+          LLM_API_BASE_URL: 'https://eu.api.openai.com/v1',
+          EMBEDDING_PROVIDER_REGION: 'eu',
+          EMBEDDING_API_BASE_URL: 'https://eu.api.openai.com/v1',
+        });
+        expect(message).toMatch(
+          /LLM_PROVIDER_REGION must equal[\s\S]*EMBEDDING_PROVIDER_REGION must equal/,
+        );
+      });
+
+      it('boots when the deployment and both providers are all in the other region', () => {
+        expect(() =>
+          parseEnv({
+            ...PILOT,
+            SIYAHTUS_REGION: 'eu',
+            LLM_PROVIDER_REGION: 'eu',
+            LLM_API_BASE_URL: 'https://eu.api.openai.com/v1',
+            EMBEDDING_PROVIDER_REGION: 'eu',
+            EMBEDDING_API_BASE_URL: 'https://eu.api.openai.com/v1',
+          }),
+        ).not.toThrow();
+      });
+
+      it('does not compare a stub, which runs in this process and is its region', () => {
+        // Each stub is refused on its own rule; the region rule must not add a
+        // second line about a region nobody declared.
+        const message = problemsOf({
+          ...PILOT,
+          LLM_PROVIDER: 'mock',
+          LLM_PROVIDER_REGION: 'eu',
+          EMBEDDING_PROVIDER: 'mock',
+          EMBEDDING_PROVIDER_REGION: 'eu',
+        });
+        expect(message).not.toMatch(/PROVIDER_REGION must equal/);
+      });
+
+      it('leaves an ordinary production deployment free to mix regions', () => {
+        // Not a pilot, so not this rule: the same mix the provider tests below
+        // pin (a host-matched provider region that is not the deployment's own).
+        expect(() =>
+          parseEnv({
+            ...PILOT,
+            PILOT_MODE: 'false',
+            LLM_PROVIDER_REGION: 'eu',
+            LLM_API_BASE_URL: 'https://eu.api.openai.com/v1',
+          }),
+        ).not.toThrow();
+      });
     });
 
     it('asks none of it when the switch is off, even with every stub in place', () => {

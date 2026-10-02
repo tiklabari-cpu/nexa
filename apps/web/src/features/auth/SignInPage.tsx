@@ -128,7 +128,7 @@ export function SignInPage(): ReactElement {
   const startSsoLogin = useAuth((s) => s.startSsoLogin);
   // The seed's demo owner exists only where the seed ran; the public pilot
   // has no seed, so the line would hand strangers a login that does not work.
-  const { pilot_mode: pilotMode } = useDeployment();
+  const { pilot_mode: pilotMode, signup_enabled: signupEnabled } = useDeployment();
 
   const [params] = useSearchParams();
   const ssoParam = params.get('sso');
@@ -565,12 +565,16 @@ export function SignInPage(): ReactElement {
             {t('auth.signin.forgotPassword')}
           </Link>
         </p>
-        <p className="mt-2 text-center text-xs text-content-secondary">
-          {t('auth.signin.newHere')}{' '}
-          <Link to="/signup" className="text-content-brand underline">
-            {t('auth.signin.createWorkspace')}
-          </Link>
-        </p>
+        {/* A deployment that has closed sign-up answers a filled-in form with a
+            403; the link is not offered at all (tm 257.4). */}
+        {signupEnabled && (
+          <p className="mt-2 text-center text-xs text-content-secondary">
+            {t('auth.signin.newHere')}{' '}
+            <Link to="/signup" className="text-content-brand underline">
+              {t('auth.signin.createWorkspace')}
+            </Link>
+          </p>
+        )}
 
         {!pilotMode && (
           <p className="mt-4 text-center text-2xs text-content-tertiary">

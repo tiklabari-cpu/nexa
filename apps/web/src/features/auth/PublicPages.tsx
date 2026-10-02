@@ -16,6 +16,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { DEFAULT_REGION, REGIONS, type Region } from '@siyahtus/types';
 import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { Banner } from '../../components/ui/index.js';
 import {
@@ -188,6 +189,11 @@ export function SignUpPage(): ReactElement {
   // string validator has an opinion about — the same split `InviteTeammates`
   // uses for its role picker.
   const [region, setRegion] = useState<Region>(DEFAULT_REGION);
+  // The pilot is one deployment in one region (tm 257.4): there is nothing to
+  // choose, and the server files the workspace where it runs. Hiding the
+  // picker is not enough — the state still holds 'eu', and sending it would
+  // get every sign-up refused (421) by a deployment that serves 'us'.
+  const { pilot_mode: pilotMode } = useDeployment();
 
   const form = useForm({
     initial: { organization: '', name: '', email: '', password: '' },
@@ -212,7 +218,7 @@ export function SignUpPage(): ReactElement {
             password: values.password,
             name: values.name.trim(),
             organization_name: values.organization.trim(),
-            region,
+            ...(pilotMode ? {} : { region }),
           },
         );
         // Straight into the workspace. Making someone sign in again immediately
@@ -248,26 +254,30 @@ export function SignUpPage(): ReactElement {
           error={form.errorFor('organization')}
           autoFocus
         />
-        <div className="mb-4">
-          <label htmlFor="signup-region" className="mb-1.5 block text-sm font-medium">
-            {t('auth.fields.dataRegion')}
-          </label>
-          <select
-            id="signup-region"
-            value={region}
-            onChange={(event) => setRegion(event.target.value as Region)}
-            className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
-          >
-            {REGIONS.map((value) => (
-              <option key={value} value={value}>
-                {t(`auth.signup.region.${value}`)}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Banner tone="warning" className="mb-4">
-          {t('auth.signup.regionWarning')}
-        </Banner>
+        {!pilotMode && (
+          <>
+            <div className="mb-4">
+              <label htmlFor="signup-region" className="mb-1.5 block text-sm font-medium">
+                {t('auth.fields.dataRegion')}
+              </label>
+              <select
+                id="signup-region"
+                value={region}
+                onChange={(event) => setRegion(event.target.value as Region)}
+                className="w-full rounded-md border border-border bg-inset px-3 py-2 text-sm"
+              >
+                {REGIONS.map((value) => (
+                  <option key={value} value={value}>
+                    {t(`auth.signup.region.${value}`)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Banner tone="warning" className="mb-4">
+              {t('auth.signup.regionWarning')}
+            </Banner>
+          </>
+        )}
         <Field
           id="name"
           label={t('auth.fields.yourName')}

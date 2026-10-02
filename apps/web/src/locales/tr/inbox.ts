@@ -255,6 +255,8 @@ export const inbox: Messages = {
   'inbox.copilot.enhance.mode.formal': 'Daha resmi',
   'inbox.copilot.enhance.mode.grammar': 'Dil bilgisini düzelt',
   'inbox.copilot.enhance.error': 'Yeniden yazılamadı — yeniden deneyin.',
+  'inbox.copilot.enhance.errorTooLong':
+    'Bu taslak bu modda yeniden yazılamadı — kısaltıp yeniden deneyin.',
   'inbox.copilot.section.bi': 'Raporlarınız hakkında sorun',
   'inbox.copilot.bi.description':
     'Bu çalışma alanıyla ilgili bir rapor sorusu sorun, ör. bu hafta kaç sohbet kapandı.',

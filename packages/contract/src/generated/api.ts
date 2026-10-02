@@ -3067,8 +3067,18 @@ export interface paths {
     /**
      * Rewrite a draft in a chosen register
      * @description Improves the grammar or tone of a draft reply (FR-MOD-12.3) — rephrase,
-     *     friendlier, more formal, or a plain grammar tidy. Deterministic, so the
-     *     same draft always yields the same rewrite.
+     *     friendlier, more formal, or a plain grammar tidy.
+     *
+     *     Who writes it is the deployment's `LLM_PROVIDER` (tm 257.6). It is
+     *     deterministic only with the stub (`mock`, the default): the same draft then
+     *     always yields the same rewrite. With a configured model the output can
+     *     differ between calls, the draft is rewritten in its own language (not
+     *     translated), and card numbers are masked in what is sent and what comes
+     *     back. When the model does not answer — or answers with more than 10 000
+     *     characters, which could not be sent — the response is a 503 and nothing is
+     *     recorded. In the public pilot (`GET /deployment` `pilot_mode`) a draft
+     *     longer than 2 000 characters is refused with a 400 whose
+     *     `error.details.reason` is `enhance_too_long`, before any model call.
      */
     post: operations['copilotEnhance'];
     delete?: never;
@@ -12509,7 +12519,10 @@ export interface components {
      *     failed, or its circuit breaker is open after repeated failures.
      *     `error.details.kind` names the failure class (`timeout`, `no_answer`,
      *     `circuit_open`, …). Nothing was written; the request can simply be
-     *     repeated.
+     *     repeated. On the draft rewrite (tm 257.6) `kind: no_answer` also
+     *     carries `error.details.reason` (`length`, `refusal`, `empty`, …); with
+     *     `length` the same draft will be cut off again, so it should be
+     *     shortened rather than retried.
      */
     LlmUnavailable: {
       headers: {
@@ -17219,6 +17232,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['LlmUnavailable'];
     };
   };
   copilotBi: {

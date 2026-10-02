@@ -273,6 +273,8 @@ export const inbox: Messages = {
   'inbox.copilot.enhance.mode.formal': 'More formal',
   'inbox.copilot.enhance.mode.grammar': 'Fix grammar',
   'inbox.copilot.enhance.error': 'Could not rewrite that — try again.',
+  'inbox.copilot.enhance.errorTooLong':
+    'This draft could not be rewritten in this mode — shorten it and try again.',
   'inbox.copilot.section.bi': 'Ask about your reports',
   'inbox.copilot.bi.description':
     'Ask a report question about this workspace, e.g. how many chats closed this week.',

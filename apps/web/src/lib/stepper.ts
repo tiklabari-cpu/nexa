@@ -34,7 +34,10 @@ const clamp = (value: number, count: number): number => Math.max(0, Math.min(val
  * primary action advances or finishes.
  */
 export function useStepper(count: number): Stepper {
-  const [index, setIndex] = useState(0);
+  const [rawIndex, setIndex] = useState(0);
+  // `count` may shrink under a live stepper (the pilot wizard drops a step once
+  // `GET /deployment` answers); the position follows it rather than dangling.
+  const index = clamp(rawIndex, count);
 
   const next = useCallback(() => setIndex((i) => clamp(i + 1, count)), [count]);
   const back = useCallback(() => setIndex((i) => clamp(i - 1, count)), [count]);

@@ -44,11 +44,23 @@ import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { emailList, FieldError, required, splitList, useForm } from '../../lib/form.js';
 import { useTranslate } from '../../lib/i18n.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { useStepper } from '../../lib/stepper.js';
 
 type StepId = 'welcome' | 'website' | 'channels' | 'company' | 'team';
 
 const STEPS: readonly StepId[] = ['welcome', 'website', 'channels', 'company', 'team'];
+
+/**
+ * The public pilot (tm 257.3) has no channel to preview — the step shows
+ * Messenger, WhatsApp, SMS and the rest, which the pilot does not offer — so
+ * its wizard has four steps and reads "Step N of 4". Flag off: all five.
+ */
+const PILOT_STEPS: readonly StepId[] = STEPS.filter((id) => id !== 'channels');
+
+function stepsFor(pilotMode: boolean): readonly StepId[] {
+  return pilotMode ? PILOT_STEPS : STEPS;
+}
 
 const STEP_LABEL_KEYS: Record<StepId, string> = {
   welcome: 'auth.onboarding.steps.welcome',
@@ -67,8 +79,10 @@ export function OnboardingWizard(): ReactElement {
 
   // The shared stepper owns the index and its bounds; the wizard only says how
   // many steps there are and what the last one does (FR-EK-A.2).
-  const steps = useStepper(STEPS.length);
-  const stepId = STEPS[steps.index]!;
+  const { pilot_mode: pilotMode } = useDeployment();
+  const stepList = stepsFor(pilotMode);
+  const steps = useStepper(stepList.length);
+  const stepId = stepList[steps.index]!;
 
   const state = useQuery({
     queryKey: ['onboarding-state'],
@@ -96,8 +110,8 @@ export function OnboardingWizard(): ReactElement {
   useEffect(() => {
     if (resumed.current || !state.data || state.data.completed) return;
     resumed.current = true;
-    if (state.data.demo_seeded) steps.goTo(STEPS.indexOf('team'));
-  }, [state.data, steps]);
+    if (state.data.demo_seeded) steps.goTo(stepList.indexOf('team'));
+  }, [state.data, steps, stepList]);
 
   // Completing and skipping are the same server call — the workspace is set up
   // either way. On success the local gate flips and the shell takes over.
@@ -134,10 +148,10 @@ export function OnboardingWizard(): ReactElement {
           </button>
         </header>
 
-        <Stepper current={steps.index} />
+        <Stepper current={steps.index} steps={stepList} />
 
         <div className="px-6 py-6">
-          {stepId === 'welcome' && <WelcomeStep name={agentName} />}
+          {stepId === 'welcome' && <WelcomeStep name={agentName} pilotMode={pilotMode} />}
           {stepId === 'website' && <WebsiteStep />}
           {stepId === 'channels' && <ChannelsStep />}
           {stepId === 'company' && <CompanySizeStep />}
@@ -186,14 +200,14 @@ export function OnboardingWizard(): ReactElement {
   );
 }
 
-function Stepper({ current }: { current: number }): ReactElement {
+function Stepper({ current, steps }: { current: number; steps: readonly StepId[] }): ReactElement {
   const t = useTranslate();
   return (
     <ol
       className="flex items-center gap-2 px-6 pt-4"
       aria-label={t('auth.onboarding.progressLabel')}
     >
-      {STEPS.map((id, index) => {
+      {steps.map((id, index) => {
         const state = index < current ? 'done' : index === current ? 'current' : 'todo';
         return (
           <li key={id} className="flex flex-1 flex-col gap-1">
@@ -215,7 +229,13 @@ function Stepper({ current }: { current: number }): ReactElement {
   );
 }
 
-function WelcomeStep({ name }: { name: string | null }): ReactElement {
+function WelcomeStep({
+  name,
+  pilotMode,
+}: {
+  name: string | null;
+  pilotMode: boolean;
+}): ReactElement {
   const t = useTranslate();
   const first = name?.trim().split(/\s+/)[0];
   return (
@@ -226,7 +246,7 @@ function WelcomeStep({ name }: { name: string | null }): ReactElement {
       <p className="text-sm text-content-secondary">{t('auth.onboarding.welcome.body')}</p>
       <ul className="mt-1 flex flex-col gap-2 text-sm text-content-secondary">
         <li>• {t('auth.onboarding.welcome.bulletWebsite')}</li>
-        <li>• {t('auth.onboarding.welcome.bulletChannels')}</li>
+        {!pilotMode && <li>• {t('auth.onboarding.welcome.bulletChannels')}</li>}
         <li>• {t('auth.onboarding.welcome.bulletCompany')}</li>
         <li>• {t('auth.onboarding.welcome.bulletTeam')}</li>
         <li>• {t('auth.onboarding.welcome.bulletSample')}</li>

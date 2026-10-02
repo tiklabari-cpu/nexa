@@ -297,6 +297,37 @@ describe('docker-compose.pilot.yml runs the product the production way (tm 255.1
     );
     expect(block(/^ {2}widget:$/)).toMatch(/VITE_API_BASE_URL: \$\{API_BASE_URL[^}]*\}\/api\/v1/);
   });
+
+  // tm 257.3: the panel's three other public addresses are baked in as well, or
+  // the pilot shows localhost on the Chat page link, the KB article link and
+  // the e-mail domain (the web Dockerfile used to know only VITE_RTM_URL).
+  it('bakes the Chat page, KB and e-mail addresses into the panel bundle too', () => {
+    const web = block(/^ {2}web:$/);
+    expect(web).toMatch(/VITE_WIDGET_URL: \$\{WIDGET_BASE_URL:\?[^}]*\}\s*$/m);
+    expect(web).toMatch(/VITE_KB_PUBLIC_BASE: \$\{API_BASE_URL:\?[^}]*\}\/api\/v1\s*$/m);
+    expect(web).toMatch(/VITE_INBOUND_EMAIL_DOMAIN: \$\{INBOUND_EMAIL_DOMAIN:\?[^}]*\}\s*$/m);
+    // The three source keys exist in the template the compose reads from.
+    const entries = templateEntries();
+    for (const key of ['WIDGET_BASE_URL', 'API_BASE_URL', 'INBOUND_EMAIL_DOMAIN']) {
+      expect(entries).toHaveProperty([key]);
+    }
+    // Compose fills in a build arg only if the Dockerfile declares it.
+    const dockerfile = read('apps/web/Dockerfile');
+    for (const key of ['VITE_WIDGET_URL', 'VITE_KB_PUBLIC_BASE', 'VITE_INBOUND_EMAIL_DOMAIN']) {
+      expect(dockerfile).toContain(`\nARG ${key}=`);
+      expect(dockerfile).toContain(`\nENV ${key}=\${${key}}\n`);
+    }
+  });
+
+  // An empty default would not fall back to the source's own localhost (`??`
+  // only catches undefined) and would turn the Chat page link into a relative
+  // '/chat.html'; the demo compose passes none of the three, so it needs them.
+  it('keeps the web Dockerfile defaults at the localhost values the demo build has always had', () => {
+    const dockerfile = read('apps/web/Dockerfile');
+    expect(dockerfile).toMatch(/^ARG VITE_WIDGET_URL=http:\/\/localhost:5174$/m);
+    expect(dockerfile).toMatch(/^ARG VITE_KB_PUBLIC_BASE=http:\/\/localhost:4000\/api\/v1$/m);
+    expect(dockerfile).toMatch(/^ARG VITE_INBOUND_EMAIL_DOMAIN=inbound\.siyahtus\.localhost$/m);
+  });
 });
 
 /** Lines of a Caddyfile with its `#` comments dropped. */

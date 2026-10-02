@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../lib/auth-store.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { useSetRoutingStatus } from '../../lib/routing-status.js';
 import { useRealtimeStatus } from '../../lib/realtime-status.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -302,7 +303,13 @@ export function InboxPage(): ReactElement {
   // The "Views" group (FR-MOD-02.1.4): channel views and custom saved views.
   // Channel state is owner/admin-only, so an ordinary agent never fires the
   // request — their Views group is just their own saved views.
-  const canChannels = canReadChannels(agent?.scopes ?? []);
+  //
+  // The public pilot has no adapter channel to list or promote (tm 257.3): the
+  // flag shuts the request and the whole channel block with it — the promo
+  // would otherwise offer Messenger/WhatsApp/SMS, and a failed query is not
+  // "pending", so it would show on an error too.
+  const { pilot_mode: pilotMode } = useDeployment();
+  const canChannels = canReadChannels(agent?.scopes ?? []) && !pilotMode;
   const channels = useConnectedChannels(canChannels);
   const channelItems = channels.data?.items ?? [];
   const savedViews = useSavedViews();

@@ -47,6 +47,18 @@ describe('useStepper', () => {
     expect(result.current.index).toBe(0);
   });
 
+  it('follows a count that shrinks under it instead of pointing past the last step', () => {
+    // The pilot wizard drops a step once `GET /deployment` answers (tm 257.3).
+    const { result, rerender } = renderHook(({ count }) => useStepper(count), {
+      initialProps: { count: 5 },
+    });
+    act(() => result.current.goTo(4));
+    rerender({ count: 4 });
+    expect(result.current.index).toBe(3);
+    expect(result.current.current).toBe(4);
+    expect(result.current.isLast).toBe(true);
+  });
+
   it('reset returns to the first step', () => {
     const { result } = renderHook(() => useStepper(4));
     act(() => result.current.goTo(3));

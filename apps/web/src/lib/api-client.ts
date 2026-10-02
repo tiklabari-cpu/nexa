@@ -43,9 +43,26 @@ export class ApiClientError extends Error {
   }
 }
 
+/** The sentence for {@link isAiDailyCap}: "today's AI allowance is used up; it renews at 00:00 UTC". */
+export const AI_DAILY_CAP_MESSAGE_KEY = 'common.limits.aiDailyCap';
+
+/**
+ * Whether `error` is the daily AI cap (tm 257.8): a 429 `limit_reached` with
+ * `details.reason: 'ai_daily_cap'`. `limit_reached` alone means a plan limit,
+ * whose sentence ("the limit for your plan") would be wrong here — the cap is
+ * the deployment's, per UTC day, and upgrading changes nothing.
+ */
+export function isAiDailyCap(error: unknown): boolean {
+  return (
+    error instanceof ApiClientError &&
+    error.type === 'limit_reached' &&
+    error.details?.['reason'] === 'ai_daily_cap'
+  );
+}
+
 /**
  * The `common.errors.*` key whose sentence answers `error` in the agent's
- * language (NFR-I18N2).
+ * language (NFR-I18N2) — or, for the daily AI cap, {@link AI_DAILY_CAP_MESSAGE_KEY}.
  *
  * The ADR-06 `type` is the only part of a failure that is both stable and
  * translatable. `error.message` is English prose the API wrote for whoever
@@ -63,6 +80,10 @@ export class ApiClientError extends Error {
  */
 export function errorMessageKey(error: unknown): string {
   if (!(error instanceof ApiClientError)) return 'common.errors.unknown';
+  // The one `limit_reached` that is not about the plan (tm 257.8): today's AI
+  // allowance is used up and comes back at UTC midnight. Outside
+  // `common.errors.*`, whose keys are exactly the error types.
+  if (isAiDailyCap(error)) return AI_DAILY_CAP_MESSAGE_KEY;
   // The type is *typed* as `ErrorType | 'network'`, but it is read straight off the
   // wire — a server ahead of this build, or a proxy writing its own envelope,
   // can put anything there. Narrowing against the real taxonomy is what keeps

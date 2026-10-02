@@ -660,6 +660,27 @@ export const envSchema = z.object({
     .preprocess((value) => (value === '' ? Number.NaN : value), z.coerce.number().min(-1).max(1))
     .default(RETRIEVAL_THRESHOLD),
   /**
+   * Daily AI token caps (tm 257.8 · ADR `docs/adr/pilot-public-readiness.md`
+   * K-e(3)). Sign-up is public in the pilot, so a stranger can open a
+   * workspace and point visitors at it; these bound what the provider bills
+   * per UTC day — per workspace, so one tenant cannot spend the key, and for
+   * the whole deployment, so many cannot either. Counted in tokens, the unit
+   * the provider bills (a request count is beaten by one long transcript), in
+   * Postgres (`ai_daily_usage`, `services/ai/ai-daily-budget.ts`), and only
+   * for a provider that is not `mock`: the stub bills nothing, so dev, the
+   * test suites and e2e never meet a cap. The LLM meter counts input + output;
+   * the embedding meter counts input (its call sites are tm 257.20).
+   *
+   * At least 1, and no "off": an operator who wants no cap writes a number
+   * nobody reaches. The defaults are the ADR's cautious ones — a pilot raises
+   * them after reading a day's usage, it does not discover them on the
+   * provider's invoice.
+   */
+  AI_DAILY_LLM_TOKENS_PER_WORKSPACE: z.coerce.number().int().min(1).default(200_000),
+  AI_DAILY_LLM_TOKENS_GLOBAL: z.coerce.number().int().min(1).default(2_000_000),
+  AI_DAILY_EMBEDDING_TOKENS_PER_WORKSPACE: z.coerce.number().int().min(1).default(2_000_000),
+  AI_DAILY_EMBEDDING_TOKENS_GLOBAL: z.coerce.number().int().min(1).default(20_000_000),
+  /**
    * Outgoing mail (M-PROV-a). `file` writes each message under `MAIL_DIR`
    * instead of sending it (PLAN A4); `null` discards, which is what the test
    * fixture asks for so a suite that sends hundreds of invitations leaves

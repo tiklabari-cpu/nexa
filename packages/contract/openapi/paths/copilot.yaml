@@ -108,7 +108,10 @@ summary:
       asks for. On a model, the conversation (card numbers masked, long ones
       shortened to fit `LLM_MAX_PROMPT_CHARS`, oldest middle messages first) is
       summarised in `language`; when the model does not answer, the response is
-      a 503 and nothing is written — no note and no assist.
+      a 503 and nothing is written — no note and no assist. A model call counts
+      against today's AI allowance (tm 257.8); once that is used up the
+      response is a 429 with `error.details.reason: ai_daily_cap`, the model is
+      not called and nothing is written.
     requestBody:
       required: false
       content:
@@ -140,7 +143,7 @@ summary:
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/LlmUnavailable" }
 
 reply:
@@ -284,7 +287,10 @@ enhance:
       characters, which could not be sent — the response is a 503 and nothing is
       recorded. In the public pilot (`GET /deployment` `pilot_mode`) a draft
       longer than 2 000 characters is refused with a 400 whose
-      `error.details.reason` is `enhance_too_long`, before any model call.
+      `error.details.reason` is `enhance_too_long`, before any model call. A
+      model call counts against today's AI allowance (tm 257.8); once that is
+      used up the response is a 429 with `error.details.reason: ai_daily_cap`
+      and nothing is recorded.
     requestBody:
       required: true
       content:
@@ -310,5 +316,5 @@ enhance:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/LlmUnavailable" }

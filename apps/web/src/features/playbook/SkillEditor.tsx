@@ -33,7 +33,7 @@ import { Card, ErrorNotice } from '../../components/Page.js';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Modal } from '../../components/ui/index.js';
 import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
-import { errorMessageKey } from '../../lib/api-client.js';
+import { AI_DAILY_CAP_MESSAGE_KEY, errorMessageKey, isAiDailyCap } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { useLeaveGuard, shouldWarnOnLeave } from '../../lib/dirty-guard.js';
 import { formatDateTime } from '../../lib/format.js';
@@ -682,7 +682,12 @@ export function SkillEditor({
 
           {preview.isError && (
             <p role="alert" className="text-2xs text-danger">
-              {t('playbook.editor.previewError')}
+              {/* Today's AI allowance (tm 257.8) is not a failed run: say so. */}
+              {t(
+                isAiDailyCap(preview.error)
+                  ? AI_DAILY_CAP_MESSAGE_KEY
+                  : 'playbook.editor.previewError',
+              )}
             </p>
           )}
         </div>

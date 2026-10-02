@@ -10,6 +10,7 @@ import { createTelemetry, type Telemetry } from './telemetry/telemetry.js';
 import auth from './plugins/auth.js';
 import audit from './plugins/audit.js';
 import aiResidency from './plugins/ai-residency.js';
+import aiBudget from './plugins/ai-budget.js';
 import backgroundMail from './plugins/background-mail.js';
 import database from './plugins/database.js';
 import entitlementGate from './plugins/entitlement-gate.js';
@@ -45,6 +46,8 @@ import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
 import { KnowledgeService } from './services/ai/knowledge-service.js';
+import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
+import { MeteredLlm } from './services/ai/metered-llm.js';
 import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
 import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
 import { createWorkspaceEventDispatcher } from './services/webhooks/workspace-events.js';
@@ -369,6 +372,15 @@ export async function buildServer({
 
   await app.register(database, { env });
   await app.register(redis, { env });
+  // The daily AI caps (tm 257.8): one budget over the primary, and every
+  // model the routes call goes through it — the visitor's and Copilot's
+  // instances alike, so both spend from the same workspace and deployment
+  // allowance. On `mock` nothing is counted.
+  const aiDailyBudget = new AiDailyBudget(app.db, aiDailyCaps(env), {
+    logger: app.log.child({ component: 'ai-budget' }),
+  });
+  const meteredLlm = new MeteredLlm(llm, aiDailyBudget);
+  const meteredCopilotLlm = new MeteredLlm(copilotLlm, aiDailyBudget);
   // One emitter for the whole server: the caller the webhook stack never had
   // (FR-MOD-09.4). Built here, once `database` has decorated `app.db`, and
   // handed both to the sweeps and to every route that commits an event
@@ -421,6 +433,14 @@ export async function buildServer({
   // write under `/billing/`, where the two above have already answered the
   // general questions.
   await app.register(sandboxGate);
+  // The daily AI caps' early answer (tm 257.8) — after the gates above, so an
+  // expired or out-of-region workspace is told that first, and before any
+  // handler that would call a model.
+  await app.register(aiBudget, {
+    budget: aiDailyBudget,
+    metered: meteredLlm.metered || meteredCopilotLlm.metered,
+    minimum: env.LLM_MAX_OUTPUT_TOKENS,
+  });
   // The public pilot's refusals (tm 257.13). Registered after the three gates
   // above but it answers before all of them: it hooks `onRequest`, which runs
   // ahead of every `preHandler`, because a refused route must not parse its
@@ -454,7 +474,7 @@ export async function buildServer({
       await api.register(chatRoutes, { env, push, automations });
       await api.register(agentRoutes);
       await api.register(notificationRoutes);
-      await api.register(customerRoutes, { env, push, automations, llm, knowledge });
+      await api.register(customerRoutes, { env, push, automations, llm: meteredLlm, knowledge });
       await api.register(customerDirectoryRoutes);
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
@@ -479,7 +499,7 @@ export async function buildServer({
         version: VERSION,
       });
       await api.register(uploadRoutes, { env });
-      await api.register(playbookRoutes, { env, llm, knowledge });
+      await api.register(playbookRoutes, { env, llm: meteredLlm, knowledge });
       await api.register(kbRoutes);
       await api.register(publicKbRoutes);
       await api.register(publicKbHtmlRoutes, {
@@ -488,7 +508,7 @@ export async function buildServer({
       await api.register(publicKbSitemapRoutes, {
         canonicalBase: `${env.API_BASE_URL}${API_PREFIX}`,
       });
-      await api.register(copilotRoutes, { env, automations, knowledge, llm: copilotLlm });
+      await api.register(copilotRoutes, { env, automations, knowledge, llm: meteredCopilotLlm });
       await api.register(commandPaletteRoutes);
       await api.register(appRoutes, { env });
       await api.register(auditLogRoutes, { env });

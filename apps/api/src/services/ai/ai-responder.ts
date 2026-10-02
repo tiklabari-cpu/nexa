@@ -24,6 +24,7 @@ import type { FastifyRequest } from 'fastify';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
+import { AiDailyCapError } from './ai-daily-budget.js';
 import type { SkillEngine, SkillRunResult } from './skill-engine.js';
 
 /** Author id the AI's own events and actions carry. */
@@ -67,6 +68,26 @@ export class AiResponder {
         { err: error, chat_id: chatId },
         'ai inference refused for this workspace; leaving the message for a human',
       );
+      return null;
+    }
+
+    // The daily AI caps (tm 257.8), before the question is embedded: this is
+    // the surface strangers drive — a visitor on any page that carries the
+    // widget — so a workspace that has used today's allowance spends nothing
+    // more on it. The refusal leaves the message for a human, like the check
+    // above; its one log line was written where the cap decided it
+    // (`ai-daily-budget.ts`), so nothing more is logged for it here. A cap that
+    // could not be read (Postgres away) is not a cap that let the call through:
+    // the message waits for a human too.
+    try {
+      await request.requireAiBudget();
+    } catch (error) {
+      if (!(error instanceof AiDailyCapError)) {
+        request.log.error(
+          { err: error, chat_id: chatId },
+          'daily AI cap could not be checked; leaving the message for a human',
+        );
+      }
       return null;
     }
 

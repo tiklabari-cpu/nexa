@@ -189,6 +189,30 @@ describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
   });
 });
 
+/** The daily AI token caps (tm 257.8). */
+describe('AI_DAILY_*_TOKENS_*', () => {
+  const DEFAULTS = {
+    AI_DAILY_LLM_TOKENS_PER_WORKSPACE: 200_000,
+    AI_DAILY_LLM_TOKENS_GLOBAL: 2_000_000,
+    AI_DAILY_EMBEDDING_TOKENS_PER_WORKSPACE: 2_000_000,
+    AI_DAILY_EMBEDDING_TOKENS_GLOBAL: 20_000_000,
+  } as const;
+
+  it('takes the ADR’s cautious defaults when unset', () => {
+    expect(parseEnv(BASE)).toMatchObject(DEFAULTS);
+  });
+
+  for (const key of Object.keys(DEFAULTS) as Array<keyof typeof DEFAULTS>) {
+    it(`reads ${key} as a whole number of tokens, at least 1 — no "off"`, () => {
+      expect(parseEnv({ ...BASE, [key]: '1' })[key]).toBe(1);
+      expect(parseEnv({ ...BASE, [key]: '750000' })[key]).toBe(750_000);
+      for (const value of ['0', '-5', '1.5', 'unlimited', '']) {
+        expect(() => parseEnv({ ...BASE, [key]: value }), value).toThrow(new RegExp(key));
+      }
+    });
+  }
+});
+
 /** The assignee e-mail window (FR-MOD-13.8 · tm 256.4). */
 describe('ASSIGNEE_EMAIL_COOLDOWN_MS', () => {
   it('is fifteen minutes when unset', () => {

@@ -164,6 +164,7 @@ model License {
   webhookDeliveries      WebhookDelivery[]
   subscriptions          Subscription[]
   usageRecords           UsageRecord[]
+  aiDailyUsage           AiDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
   invoices               Invoice[]
@@ -2193,6 +2194,35 @@ model UsageRecord {
 
   @@unique([licenseId, metric, period])
   @@map("usage_records")
+}
+
+/// Today's AI tokens against the daily caps (tm 257.8 · ADR
+/// `docs/adr/pilot-public-readiness.md` K-e(3)) — one row per workspace, UTC
+/// day and meter, plus one row per day and meter with `licenseId` null for
+/// the whole deployment. `reserved` is what calls in flight were allowed to
+/// spend, `used` what finished calls really cost; a call fits when
+/// `reserved + used + its estimate` stays within the cap, on both rows.
+///
+/// Not written through Prisma: the `ai_budget_*` SECURITY DEFINER functions
+/// (migration 20261002150000) are the only writers, so the check and the
+/// increment are one statement and the deployment row is out of every
+/// tenant's reach. Unique with NULLS NOT DISTINCT, which Prisma cannot say —
+/// the index Prisma sees is the same three columns.
+model AiDailyUsage {
+  id        String   @id @default(uuid()) @db.Uuid
+  licenseId BigInt?  @map("license_id")
+  /// `yyyymmdd`, UTC.
+  day       String   @db.Char(8)
+  /// `llm` (input + output tokens) or `embedding` (input tokens).
+  meter     String
+  reserved  BigInt   @default(0)
+  used      BigInt   @default(0)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, day, meter])
+  @@map("ai_daily_usage")
 }
 
 /// One purchased API request package (FR-MOD-09.3).

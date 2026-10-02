@@ -55,6 +55,14 @@
  * a failure that was billed anyway (`no_answer`) — go into the `skill_runs` row
  * in the same transaction that counts the run, so the AI Agent report reads
  * runs and their cost from one place and the two cannot drift.
+ *
+ * **Every model call is counted against the daily AI caps (tm 257.8).** The
+ * engine calls through a `MeteredLlm` with the run's workspace. A call the cap
+ * refuses was never made; the run ends as a model failure does — nothing more
+ * is said, a human answers — but it is not a provider failure and is not filed
+ * as one: `capped` names the cap, `failure` stays empty. A live run is still
+ * recorded (its question was embedded, and that cost is on the run); a preview
+ * rethrows the refusal, which its route answers with a 429.
  */
 import {
   matchIntent,
@@ -76,6 +84,8 @@ import {
   type EmbeddedQuery,
   type KnowledgeService,
 } from './knowledge-service.js';
+import { AiDailyCapError } from './ai-daily-budget.js';
+import { MeteredLlm } from './metered-llm.js';
 import { buildAnswerPrompt } from './provider/answer-prompt.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
 import { LlmProviderError, type LlmFailureKind } from './provider/llm-error.js';
@@ -92,8 +102,12 @@ import {
 export type TenantRunner = <T>(fn: (tx: TenantClient) => Promise<T>) => Promise<T>;
 
 export interface SkillEngineOptions {
-  /** Writes the answer a knowledge `send_message` step composes. */
-  llm: LlmProvider;
+  /**
+   * Writes the answer a knowledge `send_message` step composes. The server
+   * passes a `MeteredLlm` (tm 257.8), so every call is counted against the
+   * daily AI caps; a bare provider is counted by nothing (a unit test's).
+   */
+  llm: LlmProvider | MeteredLlm;
   /** `LLM_MAX_OUTPUT_TOKENS`, passed on every call. */
   maxOutputTokens: number;
   /** `LLM_TIMEOUT_MS`, passed on every call. */
@@ -169,6 +183,11 @@ export interface SkillRunResult {
    * off: the model failed, or the knowledge search it needed could not run.
    */
   failure: SkillFailure | null;
+  /**
+   * The daily AI cap that refused the model call, when that is what stopped
+   * the AI (tm 257.8). Not a `failure`: no provider was asked.
+   */
+  capped: AiDailyCapError | null;
   /** Tokens the run's provider calls cost — recorded on the run. */
   usage: SkillRunUsage;
   log: SkillRunLogEntry[];
@@ -183,19 +202,20 @@ const NOTHING_RAN: SkillRunResult = {
   transferTo: null,
   summary: null,
   failure: null,
+  capped: null,
   usage: NOTHING_SPENT,
   log: [],
 };
 
 export class SkillEngine {
   readonly #knowledge: KnowledgeService;
-  readonly #llm: LlmProvider;
+  readonly #llm: MeteredLlm;
   readonly #limits: { maxOutputTokens: number; timeoutMs: number };
   readonly #maxPromptChars: number;
 
   constructor(options: SkillEngineOptions) {
     this.#knowledge = options.knowledge;
-    this.#llm = options.llm;
+    this.#llm = MeteredLlm.wrap(options.llm);
     this.#limits = { maxOutputTokens: options.maxOutputTokens, timeoutMs: options.timeoutMs };
     this.#maxPromptChars = options.maxPromptChars;
   }
@@ -328,6 +348,9 @@ export class SkillEngine {
       persona,
       answerIn: language.answerIn,
     });
+    // A preview the cap stopped is not a result to show: what the skill would
+    // say is unknown, and the author is told why instead (429, tm 257.8).
+    if (result.capped) throw result.capped;
 
     return { ...result, errors: [] };
   }
@@ -376,6 +399,7 @@ export class SkillEngine {
     let transferTo: string | null = null;
     let summary: string | null = null;
     let failure: SkillFailure | null = null;
+    let capped: AiDailyCapError | null = null;
     let usage = NOTHING_SPENT;
 
     for (const step of input.steps) {
@@ -388,10 +412,13 @@ export class SkillEngine {
 
       // A failed model call ends the AI's side of the exchange, not the skill:
       // what it would still *say* is skipped, what a human needs still runs.
-      if (failure && (step.type === 'send_message' || step.type === 'request_info')) {
+      // A call the daily cap refused ends it the same way (tm 257.8).
+      if ((failure || capped) && (step.type === 'send_message' || step.type === 'request_info')) {
         log.push({
           step: step.type,
-          detail: 'skipped — the model could not answer, a human replies',
+          detail: capped
+            ? "skipped — today's AI cap is reached, a human replies"
+            : 'skipped — the model could not answer, a human replies',
           ok: true,
         });
         continue;
@@ -437,8 +464,9 @@ export class SkillEngine {
             answerIn: input.answerIn,
           });
           usage = addUsage(usage, outcome.spent);
-          if (outcome.failure) {
-            failure = outcome.failure;
+          if (outcome.failure || outcome.capped) {
+            failure = outcome.failure ?? null;
+            capped = outcome.capped ?? null;
             // Withdrawn, not just left unset: a question a `request_info` queued
             // earlier would reach the customer as the AI's last word before a
             // silence (see the file header).
@@ -462,7 +490,7 @@ export class SkillEngine {
     }
 
     return {
-      outcome: transferTo || failure ? 'handed_off' : reply ? 'answered' : 'skipped',
+      outcome: transferTo || failure || capped ? 'handed_off' : reply ? 'answered' : 'skipped',
       skillId: input.skill.id,
       skillName: input.skill.name,
       reply,
@@ -470,6 +498,7 @@ export class SkillEngine {
       transferTo,
       summary,
       failure,
+      capped,
       usage,
       log,
     };
@@ -489,6 +518,8 @@ export class SkillEngine {
     text: string | null;
     detail: string;
     failure?: SkillFailure;
+    /** The daily AI cap refused the model call (tm 257.8); nothing was asked. */
+    capped?: AiDailyCapError;
     /** Tokens this step's provider calls cost, billed whether or not it answered. */
     spent?: Partial<SkillRunUsage>;
   }> {
@@ -561,8 +592,19 @@ export class SkillEngine {
       // Measured where the prompt is whole, so the refusal comes before the
       // provider — any provider — is reached (tm 255.9).
       refuseOverlongPrompt(prompt, this.#maxPromptChars);
-      completion = await this.#llm.complete({ ...prompt, ...this.#limits });
+      completion = await this.#llm.complete(tenant, { ...prompt, ...this.#limits });
     } catch (error) {
+      if (error instanceof AiDailyCapError) {
+        // Refused before any provider was reached (tm 257.8): the question's
+        // embedding is the run's only cost, and the refusal was logged once
+        // where the cap decided it (`ai-daily-budget.ts`).
+        return {
+          text: null,
+          capped: error,
+          spent: { embeddingTokens },
+          detail: `today's AI cap is reached (${error.scope}) — handed to a human`,
+        };
+      }
       // A defect is not a provider failure: it propagates to the responder's
       // catch and is logged with its stack rather than filed as a hand-off.
       if (!(error instanceof LlmProviderError)) throw error;

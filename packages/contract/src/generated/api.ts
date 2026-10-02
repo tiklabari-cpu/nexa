@@ -2713,7 +2713,10 @@ export interface paths {
      * Run a step list against a sample message without saving anything
      * @description Uses the same engine that serves customers, including knowledge
      *     retrieval — a preview running different logic would be worse than none.
-     *     Nothing is written: no events, no tags, no run record.
+     *     Nothing is written: no events, no tags, no run record. A preview is a
+     *     real model call on the deployment's key and counts against today's AI
+     *     allowance (tm 257.8); once that is used up the answer is a 429 with
+     *     `error.details.reason: ai_daily_cap` instead of a result.
      */
     post: operations['previewSkill'];
     delete?: never;
@@ -3110,7 +3113,10 @@ export interface paths {
      *     asks for. On a model, the conversation (card numbers masked, long ones
      *     shortened to fit `LLM_MAX_PROMPT_CHARS`, oldest middle messages first) is
      *     summarised in `language`; when the model does not answer, the response is
-     *     a 503 and nothing is written — no note and no assist.
+     *     a 503 and nothing is written — no note and no assist. A model call counts
+     *     against today's AI allowance (tm 257.8); once that is used up the
+     *     response is a 429 with `error.details.reason: ai_daily_cap`, the model is
+     *     not called and nothing is written.
      */
     post: operations['copilotSummary'];
     delete?: never;
@@ -3171,7 +3177,10 @@ export interface paths {
      *     characters, which could not be sent — the response is a 503 and nothing is
      *     recorded. In the public pilot (`GET /deployment` `pilot_mode`) a draft
      *     longer than 2 000 characters is refused with a 400 whose
-     *     `error.details.reason` is `enhance_too_long`, before any model call.
+     *     `error.details.reason` is `enhance_too_long`, before any model call. A
+     *     model call counts against today's AI allowance (tm 257.8); once that is
+     *     used up the response is a 429 with `error.details.reason: ai_daily_cap`
+     *     and nothing is recorded.
      */
     post: operations['copilotEnhance'];
     delete?: never;
@@ -12641,6 +12650,28 @@ export interface components {
         'application/json': components['schemas']['Error'];
       };
     };
+    /**
+     * @description Either the rate limit (`too_many_requests`, as everywhere), or today's
+     *     AI allowance is used up (`limit_reached`, tm 257.8):
+     *     `error.details.reason` is `ai_daily_cap`, `error.details.meter` the
+     *     counter (`llm`) and `error.details.scope` whose allowance it was —
+     *     `workspace` (this workspace's) or `global` (the whole deployment's).
+     *     The model was not called and nothing was written. Allowances are
+     *     counted in provider tokens per UTC day and renew at 00:00 UTC, which
+     *     `Retry-After` counts down to; retrying sooner gets the same answer.
+     *     Only a deployment with a real model counts; the in-process stub never
+     *     returns the cap.
+     */
+    TooManyRequestsOrAiDailyCap: {
+      headers: {
+        /** @description Seconds until the caller may retry — for the AI cap, until the next 00:00 UTC. */
+        'Retry-After'?: number;
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
     /** @description Rate limit exceeded */
     TooManyRequests: {
       headers: {
@@ -16854,7 +16885,7 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
     };
   };
   getSkill: {
@@ -17378,7 +17409,7 @@ export interface operations {
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['LlmUnavailable'];
     };
   };
@@ -17454,7 +17485,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['LlmUnavailable'];
     };
   };

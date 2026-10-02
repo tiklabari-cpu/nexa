@@ -209,6 +209,45 @@ describe('CopilotPanel', () => {
     });
   });
 
+  describe('when today’s AI allowance is used up (tm 257.8)', () => {
+    beforeEach(() => {
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async () => ({
+          ok: false,
+          status: 429,
+          headers: {
+            get: (name: string) => (name.toLowerCase() === 'retry-after' ? '3600' : null),
+          },
+          json: async () => ({
+            error: {
+              type: 'limit_reached',
+              message: 'Daily cap.',
+              details: { reason: 'ai_daily_cap', meter: 'llm', scope: 'workspace' },
+            },
+          }),
+        })),
+      );
+    });
+
+    it('says so for the summary, rather than "try again"', async () => {
+      renderPanel();
+      await userEvent.click(screen.getByRole('button', { name: 'Summarise conversation' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        "Today's AI allowance is used up; it renews at midnight UTC.",
+      );
+    });
+
+    it('says so for the rewrite, rather than "try again"', async () => {
+      renderPanel();
+      await userEvent.type(screen.getByLabelText('Draft to improve'), 'a draft');
+      await userEvent.click(screen.getByRole('button', { name: 'Fix grammar' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        "Today's AI allowance is used up; it renews at midnight UTC.",
+      );
+    });
+  });
+
   it('switches back to Details from its header', async () => {
     stubFetch({});
     const { onShowDetails } = renderPanel();

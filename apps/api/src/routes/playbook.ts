@@ -42,7 +42,7 @@ import {
 import { crawl } from '../services/ai/web-crawler.js';
 import { computeNextRefreshAt, fetchRefreshedText } from '../services/ai/knowledge-refresh.js';
 import type { Env } from '../config/env.js';
-import type { LlmProvider } from '../services/ai/provider/llm-provider.js';
+import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 import type { TenantClient } from '../lib/tenant.js';
 
@@ -331,7 +331,11 @@ export default async function playbookRoutes(
     knowledge,
   }: {
     env: Env;
-    llm: LlmProvider;
+    /**
+     * The visitors' model, counted against the same daily AI caps (tm 257.8):
+     * a preview is a real call on the deployment's key.
+     */
+    llm: MeteredLlm;
     /**
      * The server's one knowledge service, over its configured embedding
      * provider (tm 255.7) — the same instance the customer path searches with,
@@ -554,7 +558,10 @@ export default async function playbookRoutes(
 
   // Both authoring endpoints declare `aiInference` (NFR-C4 · C4-e): compiling
   // turns a natural-language instruction into steps, and a preview runs the
-  // real engine over a message the author supplies.
+  // real engine over a message the author supplies. Only the preview declares
+  // `aiBudget` (tm 257.8): compiling is deterministic and calls no model, and
+  // a preview that would cross today's AI cap is a 429 — before the gate, or
+  // from the engine when the call itself does not fit.
   app.post(
     '/skills/compile',
     { config: { scopes: WRITE, aiInference: true } },
@@ -567,7 +574,7 @@ export default async function playbookRoutes(
 
   app.post(
     '/skills/preview',
-    { config: { scopes: WRITE, aiInference: true } },
+    { config: { scopes: WRITE, aiInference: true, aiBudget: true } },
     async (request, reply) => {
       const body = parse(previewBody, request.body);
       const tenant = request.tenant();

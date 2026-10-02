@@ -6742,6 +6742,25 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    TooManyRequestsOrAiDailyCap:
+      description: |
+        Either the rate limit (`too_many_requests`, as everywhere), or today's
+        AI allowance is used up (`limit_reached`, tm 257.8):
+        `error.details.reason` is `ai_daily_cap`, `error.details.meter` the
+        counter (`llm`) and `error.details.scope` whose allowance it was —
+        `workspace` (this workspace's) or `global` (the whole deployment's).
+        The model was not called and nothing was written. Allowances are
+        counted in provider tokens per UTC day and renew at 00:00 UTC, which
+        `Retry-After` counts down to; retrying sooner gets the same answer.
+        Only a deployment with a real model counts; the in-process stub never
+        returns the cap.
+      headers:
+        Retry-After:
+          description: Seconds until the caller may retry — for the AI cap, until the next 00:00 UTC.
+          schema: { type: integer }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     TooManyRequests:
       description: Rate limit exceeded
       headers:

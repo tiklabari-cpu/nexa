@@ -11,6 +11,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiClientError } from '../../lib/api-client.js';
 import type * as AuthStore from '../../lib/auth-store.js';
 import { confirmLeave } from '../../lib/dirty-guard.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
@@ -731,5 +732,35 @@ describe('SkillEditor — delete (tm 246)', () => {
   it('offers no delete control without edit permission', () => {
     renderEditor(makeSkill([]), false);
     expect(screen.queryByRole('button', { name: 'Delete skill' })).not.toBeInTheDocument();
+  });
+});
+
+describe('SkillEditor — preview at the daily AI cap (tm 257.8)', () => {
+  const steps: SkillStep[] = [{ type: 'send_message', source: 'knowledge' }];
+
+  it('says today’s AI allowance is used up instead of a failed preview (tm 257.8)', async () => {
+    const user = userEvent.setup();
+    api.post.mockImplementation((path: string) => {
+      if (path === '/skills/preview') {
+        return Promise.reject(
+          new ApiClientError({
+            type: 'limit_reached',
+            status: 429,
+            message: 'Daily cap.',
+            requestId: 'rq-cap',
+            details: { reason: 'ai_daily_cap', meter: 'llm', scope: 'global' },
+          }),
+        );
+      }
+      return Promise.reject(new Error(`unexpected post ${path}`));
+    });
+
+    renderEditor(makeSkill(steps));
+    await user.click(screen.getByRole('button', { name: 'Run preview' }));
+
+    expect(
+      await screen.findByText("Today's AI allowance is used up; it renews at midnight UTC."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Could not run the preview.')).toBeNull();
   });
 });

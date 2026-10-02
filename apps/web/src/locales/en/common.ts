@@ -70,4 +70,7 @@ export const common: Messages = {
   'common.actions.tourSkip': 'Skip',
   'common.actions.tourDone': 'Done',
   'common.actions.tourProgress': 'Step {current} of {count}',
+  // A `limit_reached` that is not the plan's (tm 257.8): the deployment's daily
+  // AI allowance, chosen by `errorMessageKey` from `details.reason`.
+  'common.limits.aiDailyCap': "Today's AI allowance is used up; it renews at midnight UTC.",
 };

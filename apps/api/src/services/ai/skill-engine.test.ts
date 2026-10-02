@@ -30,6 +30,8 @@ import { LLM_FAILURE_KINDS, type LlmFailureKind } from './provider/llm-error.js'
 import { buildAnswerPrompt } from './provider/answer-prompt.js';
 import { promptLength, type LlmProvider } from './provider/llm-provider.js';
 import { MockLlmProvider } from './provider/mock-llm-provider.js';
+import { AiDailyCapError, type AiDailyBudget } from './ai-daily-budget.js';
+import { MeteredLlm } from './metered-llm.js';
 import { OpenAiLlmProvider } from './provider/openai-llm-provider.js';
 import { SkillEngine, type SkillRunLogEntry, type TenantRunner } from './skill-engine.js';
 
@@ -745,5 +747,92 @@ describe('every failure class ends the same way for the customer (FR-05-06.EK1)'
       reason: null,
     });
     expect(JSON.stringify([outage.failure, refusedKey.failure])).not.toContain('Incorrect API key');
+  });
+});
+
+describe('the daily AI cap (tm 257.8)', () => {
+  /** A budget that refuses every reservation, as a capped workspace's would. */
+  function cappedLlm(fake: FakeLlmProvider, scope: 'workspace' | 'global' = 'workspace') {
+    const refusal = new AiDailyCapError('llm', scope, 120);
+    const budget = {
+      reserve: async () => {
+        throw refusal;
+      },
+      settle: async () => {
+        throw new Error('nothing was reserved, so nothing may be settled');
+      },
+    } as unknown as AiDailyBudget;
+    return { llm: new MeteredLlm(fake, budget), refusal };
+  }
+
+  function cappedEngine(llm: MeteredLlm): SkillEngine {
+    return new SkillEngine({
+      llm,
+      maxOutputTokens: 400,
+      timeoutMs: 20_000,
+      maxPromptChars: MAX_PROMPT_CHARS,
+      knowledge,
+    });
+  }
+
+  it('hands a live run to a human without asking the model, records it with the embedding it spent, and files no provider failure', async () => {
+    const fake = new FakeLlmProvider();
+    const { llm, refusal } = cappedLlm(fake, 'global');
+    const ws = workspace([
+      { type: 'request_info', field: 'order number', prompt: 'What is your order number?' },
+      ...KNOWLEDGE_ANSWER,
+      { type: 'send_message', source: 'knowledge' },
+      { type: 'tag', tag: 'delivery' },
+    ]);
+
+    const result = await cappedEngine(llm).run(ws.db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    expect(fake.calls).toHaveLength(0);
+    expect(result.capped).toBe(refusal);
+    expect(result.failure).toBeNull();
+    expect(result.outcome).toBe('handed_off');
+    // The question an earlier step queued is withdrawn, the second answer is
+    // never attempted, and what a human needs still runs.
+    expect(result.reply).toBeNull();
+    expect(result.tags).toEqual(['delivery']);
+    expect(result.log.map((entry) => [entry.step, entry.ok])).toEqual([
+      ['detect_intent', true],
+      ['request_info', true],
+      ['send_message', false],
+      ['send_message', true],
+      ['tag', true],
+    ]);
+    expect(result.log[2]!.detail).toBe("today's AI cap is reached (global) — handed to a human");
+    expect(result.log[3]!.detail).toBe("skipped — today's AI cap is reached, a human replies");
+    expect(ws.runs).toHaveLength(1);
+    expect(ws.runs[0]).toMatchObject({
+      status: 'failed',
+      llmInputTokens: 0,
+      llmOutputTokens: 0,
+      embeddingTokens: QUESTION_TOKENS,
+    });
+  });
+
+  it('turns a capped preview into the refusal itself, with nothing to show', async () => {
+    const fake = new FakeLlmProvider();
+    const { llm, refusal } = cappedLlm(fake);
+    const ws = workspace(KNOWLEDGE_ANSWER);
+    await expect(
+      cappedEngine(llm).preview(ws.db, TENANT, { steps: KNOWLEDGE_ANSWER, message: MESSAGE }),
+    ).rejects.toBe(refusal);
+    expect(fake.calls).toHaveLength(0);
+    expect(ws.runs).toHaveLength(0);
+  });
+
+  it('never meets the cap with a fixed reply, which asks no model', async () => {
+    const fake = new FakeLlmProvider();
+    const { llm } = cappedLlm(fake);
+    const ws = workspace([{ type: 'send_message', source: 'text', text: 'We are open 9 to 5.' }]);
+    const result = await cappedEngine(llm).run(ws.db, TENANT, { message: MESSAGE, chatId: 'c' });
+    expect(result).toMatchObject({
+      outcome: 'answered',
+      reply: 'We are open 9 to 5.',
+      capped: null,
+    });
   });
 });

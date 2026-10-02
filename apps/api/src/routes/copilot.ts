@@ -34,7 +34,7 @@ import {
   type ConversationSummary,
 } from '../services/ai/copilot-summary.js';
 import { LlmProviderError } from '../services/ai/provider/llm-error.js';
-import type { LlmProvider } from '../services/ai/provider/llm-provider.js';
+import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { refuseUnembeddable, type KnowledgeService } from '../services/ai/knowledge-service.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { ChatService } from '../services/chat/chat-service.js';
@@ -150,9 +150,13 @@ export default async function copilotRoutes(
     /**
      * Who writes the summary (tm 257.5) and the draft rewrite (tm 257.6) —
      * Copilot's own instance, not the one that answers visitors, so a run of
-     * failed calls opens only this circuit breaker (`server.ts`).
+     * failed calls opens only this circuit breaker (`server.ts`). Counted
+     * against the same daily AI caps as the visitors' model (tm 257.8): both
+     * routes declare `aiBudget`, and a call that does not fit today's
+     * allowance is a 429 (`AiDailyCapError`) — not a 503, because trying again
+     * before UTC midnight cannot help.
      */
-    llm: LlmProvider;
+    llm: MeteredLlm;
   },
 ): Promise<void> {
   const copilot = new CopilotService(knowledge);
@@ -272,7 +276,7 @@ export default async function copilotRoutes(
 
   app.post<{ Params: { chatId: string } }>(
     '/copilot/chats/:chatId/summary',
-    { config: { scopes: CHAT_WRITE, aiInference: true } },
+    { config: { scopes: CHAT_WRITE, aiInference: true, aiBudget: true } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const { language } = parse(summaryBody, request.body ?? {});
@@ -291,9 +295,11 @@ export default async function copilotRoutes(
       // Written with no transaction open — a model call may take up to
       // `LLM_TIMEOUT_MS`. When it does not answer, nothing is written: no
       // half a note, and no assist run, so the chat is not counted as helped.
+      // A call the daily AI cap refuses (tm 257.8) is not a provider failure
+      // and passes the catch below untouched, as its own 429.
       let written: ConversationSummary;
       try {
-        written = await writeConversationSummary(llm, turns, {
+        written = await writeConversationSummary(llm.forTenant(tenant), turns, {
           language,
           maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
           maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
@@ -376,7 +382,7 @@ export default async function copilotRoutes(
 
   app.post<{ Params: { chatId: string } }>(
     '/copilot/chats/:chatId/enhance',
-    { config: { scopes: CHAT_WRITE, aiInference: true } },
+    { config: { scopes: CHAT_WRITE, aiInference: true, aiBudget: true } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
       const body = parse(enhanceBody, request.body);
@@ -399,7 +405,7 @@ export default async function copilotRoutes(
       // does not answer — as the summary does.
       let written: EnhancedText;
       try {
-        written = await writeEnhancedText(llm, body.text, body.mode, {
+        written = await writeEnhancedText(llm.forTenant(tenant), body.text, body.mode, {
           maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
           maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
           timeoutMs: env.LLM_TIMEOUT_MS,

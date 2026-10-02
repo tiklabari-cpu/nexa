@@ -7,7 +7,7 @@
  * English, never a raw `some.key`, and a key that exists nowhere must not throw.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { ApiClientError, errorMessageKey } from './api-client.js';
+import { ApiClientError, errorMessageKey, isAiDailyCap } from './api-client.js';
 import { formatCount, setFormatLocale } from './format.js';
 import { detectLocale, translate, useLocaleStore, type Locale } from './i18n.js';
 import { mergeNamespaces, NAMESPACES, type Messages, type Namespace } from '../locales/index.js';
@@ -143,6 +143,49 @@ describe('errorMessageKey', () => {
     // And the sentence the user sees is the catalogue's, in their language —
     // never the server's English prose.
     expect(translate('tr', errorMessageKey(error))).toBe('Bu sohbet artık etkin değil.');
+  });
+
+  it('names the daily AI cap apart from a plan limit, in both languages (tm 257.8)', () => {
+    const cap = new ApiClientError({
+      type: 'limit_reached',
+      status: 429,
+      message: "Today's AI allowance for this workspace is used up; it renews at 00:00 UTC.",
+      requestId: 'rq-cap',
+      details: { reason: 'ai_daily_cap', meter: 'llm', scope: 'workspace' },
+      retryAfterSeconds: 3_600,
+    });
+    expect(isAiDailyCap(cap)).toBe(true);
+    expect(errorMessageKey(cap)).toBe('common.limits.aiDailyCap');
+    expect(translate('en', errorMessageKey(cap))).toBe(
+      "Today's AI allowance is used up; it renews at midnight UTC.",
+    );
+    expect(translate('tr', errorMessageKey(cap))).toBe(
+      'Bugünkü AI kotası doldu; UTC gece yarısı yenilenir.',
+    );
+
+    // Every other `limit_reached` is still the plan's.
+    const plan = new ApiClientError({
+      type: 'limit_reached',
+      status: 429,
+      message: 'Plan limit.',
+      requestId: 'rq-plan',
+      details: { reason: 'skills' },
+    });
+    expect(isAiDailyCap(plan)).toBe(false);
+    expect(errorMessageKey(plan)).toBe('common.errors.limit_reached');
+    // The reason alone, on another type, is not the cap either.
+    expect(
+      isAiDailyCap(
+        new ApiClientError({
+          type: 'too_many_requests',
+          status: 429,
+          message: 'Slow down.',
+          requestId: 'rq-rl',
+          details: { reason: 'ai_daily_cap' },
+        }),
+      ),
+    ).toBe(false);
+    expect(isAiDailyCap(new Error('ai_daily_cap'))).toBe(false);
   });
 
   it('covers the client-only network failure', () => {

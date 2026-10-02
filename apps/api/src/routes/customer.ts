@@ -38,7 +38,7 @@ import { fireCampaignsAtVisitor } from '../services/campaigns/campaign-trigger.j
 import { createGoalConversionRecorder } from '../services/goals/goal-triggers.js';
 import { AiResponder } from '../services/ai/ai-responder.js';
 import type { KnowledgeService } from '../services/ai/knowledge-service.js';
-import type { LlmProvider } from '../services/ai/provider/llm-provider.js';
+import type { MeteredLlm } from '../services/ai/metered-llm.js';
 import { SkillEngine } from '../services/ai/skill-engine.js';
 import { RuleBotResponder } from '../services/bots/rule-bot-responder.js';
 import { createObjectStore } from '../services/storage/object-store.js';
@@ -263,8 +263,11 @@ export default async function customerRoutes(
   }: {
     env: Env;
     push: PushProvider;
-    /** Writes the AI Agent's knowledge answers (tm 255.5). */
-    llm: LlmProvider;
+    /**
+     * Writes the AI Agent's knowledge answers (tm 255.5), every call counted
+     * against the daily AI caps (tm 257.8).
+     */
+    llm: MeteredLlm;
     /**
      * Finds the passages those answers stand on — the server's one instance,
      * over its configured embedding provider (tm 255.7). Until then the engine

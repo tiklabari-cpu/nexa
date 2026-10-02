@@ -54,4 +54,6 @@ export const common: Messages = {
   'common.actions.tourSkip': 'Atla',
   'common.actions.tourDone': 'Bitti',
   'common.actions.tourProgress': 'Adım {current} / {count}',
+  // The deployment's daily AI allowance (tm 257.8) — not the plan's limit.
+  'common.limits.aiDailyCap': 'Bugünkü AI kotası doldu; UTC gece yarısı yenilenir.',
 };

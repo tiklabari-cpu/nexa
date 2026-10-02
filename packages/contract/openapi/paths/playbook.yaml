@@ -252,7 +252,10 @@ preview:
     description: |
       Uses the same engine that serves customers, including knowledge
       retrieval — a preview running different logic would be worse than none.
-      Nothing is written: no events, no tags, no run record.
+      Nothing is written: no events, no tags, no run record. A preview is a
+      real model call on the deployment's key and counts against today's AI
+      allowance (tm 257.8); once that is used up the answer is a 429 with
+      `error.details.reason: ai_daily_cap` instead of a result.
     requestBody:
       required: true
       content:
@@ -275,7 +278,7 @@ preview:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
 
 runs:
   parameters:

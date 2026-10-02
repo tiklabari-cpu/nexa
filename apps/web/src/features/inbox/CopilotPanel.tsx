@@ -18,7 +18,7 @@ import { useState, type ReactElement } from 'react';
 import { EmptyState } from '../../components/EmptyState.js';
 import { Skeleton } from '../../components/Skeleton.js';
 import { Panel, PanelSection } from '../../components/ui/index.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { AI_DAILY_CAP_MESSAGE_KEY, ApiClientError, isAiDailyCap } from '../../lib/api-client.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { formatCount, formatDate, formatRate } from '../../lib/format.js';
 import { useTranslate } from '../../lib/i18n.js';
@@ -169,7 +169,12 @@ export function CopilotPanel({
         </button>
         {summary.isError && (
           <p role="alert" className="text-2xs text-danger">
-            {t('inbox.copilot.summary.error')}
+            {/* Today's AI allowance (tm 257.8): retrying before midnight UTC cannot help. */}
+            {t(
+              isAiDailyCap(summary.error)
+                ? AI_DAILY_CAP_MESSAGE_KEY
+                : 'inbox.copilot.summary.error',
+            )}
           </p>
         )}
         {summary.data && (
@@ -251,9 +256,11 @@ export function CopilotPanel({
         {enhance.isError && (
           <p role="alert" className="text-2xs text-danger">
             {t(
-              isCutOff(enhance.error)
-                ? 'inbox.copilot.enhance.errorTooLong'
-                : 'inbox.copilot.enhance.error',
+              isAiDailyCap(enhance.error)
+                ? AI_DAILY_CAP_MESSAGE_KEY
+                : isCutOff(enhance.error)
+                  ? 'inbox.copilot.enhance.errorTooLong'
+                  : 'inbox.copilot.enhance.error',
             )}
           </p>
         )}

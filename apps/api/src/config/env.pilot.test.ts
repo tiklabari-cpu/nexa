@@ -177,6 +177,36 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     expect(() => parseEnv(source)).toThrow(key);
   });
 
+  /**
+   * One deployment, one region (tm 257.4 · NFR-C9). The template is all `us`
+   * — the region OpenAI serves without an approval — and the five lines that
+   * name a region move together, because the host rule refuses one changed
+   * alone. The compose file hands api and rtm one `env_file`, so a region of
+   * its own on either service would split them; it must not set one.
+   */
+  it('ships all five region lines as us, and the pilot rule holds on them (NFR-C9)', () => {
+    expect(TEMPLATE_ENTRIES['SIYAHTUS_REGION']).toBe('us');
+    expect(TEMPLATE_ENTRIES['LLM_PROVIDER_REGION']).toBe('us');
+    expect(TEMPLATE_ENTRIES['EMBEDDING_PROVIDER_REGION']).toBe('us');
+    expect(TEMPLATE_ENTRIES['LLM_API_BASE_URL']).toBe('https://us.api.openai.com/v1');
+    expect(TEMPLATE_ENTRIES['EMBEDDING_API_BASE_URL']).toBe('https://us.api.openai.com/v1');
+
+    const env = parseEnv(PILOT_ENV);
+    expect(env.SIYAHTUS_REGION).toBe('us');
+    expect(env.LLM_PROVIDER_REGION).toBe(env.SIYAHTUS_REGION);
+    expect(env.EMBEDDING_PROVIDER_REGION).toBe(env.SIYAHTUS_REGION);
+  });
+
+  it('refuses a template whose deployment region drifts from its providers, naming both keys', () => {
+    expect(() => parseEnv({ ...PILOT_ENV, SIYAHTUS_REGION: 'eu' })).toThrow(
+      /LLM_PROVIDER_REGION must equal SIYAHTUS_REGION[\s\S]*EMBEDDING_PROVIDER_REGION must equal SIYAHTUS_REGION/,
+    );
+  });
+
+  it('gives api and rtm one region by giving neither service a region of its own', () => {
+    expect(COMPOSE).not.toMatch(/SIYAHTUS_REGION/);
+  });
+
   it('refuses a WEB_ORIGIN that drops the widget, naming WEB_ORIGIN', () => {
     const panelOnly = PILOT_ENV['WEB_APP_URL']!;
     expect(() => parseEnv({ ...PILOT_ENV, WEB_ORIGIN: panelOnly })).toThrow(

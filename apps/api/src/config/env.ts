@@ -1151,6 +1151,31 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
         'MAIL_PROVIDER must be smtp in production when PILOT_MODE=true: anything else delivers no invitation, reset or notice to anyone.',
       );
     }
+    // One deployment, one region (tm 257.4 · ADR K-e): the sign-up form sends
+    // no region, so every workspace lands in `SIYAHTUS_REGION`, and a provider
+    // declared anywhere else would carry its conversations out of the region
+    // they were filed in — silently, because the residency check only refuses
+    // HIPAA-scoped workspaces. A stub runs in this process and is its region
+    // by construction, so only a real provider is compared. A region left
+    // unset is already named above, so it is not named twice.
+    if (
+      env.LLM_PROVIDER !== 'mock' &&
+      env.LLM_PROVIDER_REGION &&
+      env.LLM_PROVIDER_REGION !== env.SIYAHTUS_REGION
+    ) {
+      problems.push(
+        `LLM_PROVIDER_REGION must equal SIYAHTUS_REGION in production when PILOT_MODE=true: the pilot files every workspace in ${env.SIYAHTUS_REGION}, and a model served from ${env.LLM_PROVIDER_REGION} would receive their conversations outside it.`,
+      );
+    }
+    if (
+      env.EMBEDDING_PROVIDER !== 'mock' &&
+      env.EMBEDDING_PROVIDER_REGION &&
+      env.EMBEDDING_PROVIDER_REGION !== env.SIYAHTUS_REGION
+    ) {
+      problems.push(
+        `EMBEDDING_PROVIDER_REGION must equal SIYAHTUS_REGION in production when PILOT_MODE=true: the pilot files every workspace in ${env.SIYAHTUS_REGION}, and an embedder served from ${env.EMBEDDING_PROVIDER_REGION} would receive their messages outside it.`,
+      );
+    }
   }
 
   return problems;

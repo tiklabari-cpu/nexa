@@ -77,6 +77,12 @@
 - **Dal sağlayıcı kimliğine göre:** `llm.id === 'mock'` (`mock-llm-provider.ts:28`) → bugünkü çıktı bayt bayt; aksi hâlde `complete()`. Pilot bayrağına göre ayırmak yanlış: production mock'a izin veriyor (Helm) ve `MockLlmProvider.complete` yalnız `buildAnswerPrompt` istemini tanıyor, yabancı istemde düz `Error` atıyor (`mock-llm-provider.ts:31-36`) → bayrak açık + mock = 500.
 - **Ayrı örnek, ayrı devre kesici:** Copilot'un uzun transkriptli istekleri zaman aşımına düşerse ziyaretçi cevaplarının devresini açmamalı.
 - **Hata:** 503 `service_unavailable` + `details.kind`; yarım özet nota yazılmaz, assist kaydı oluşmaz. MCP `summarize_chat` (`services/mcp/tool-catalog.ts:133`) ai-mock'ta kalır; panel özetinden farklı olabilir (§3.3).
+- **Uygulandı (tm 257.5) — bilinen yan etkiler ve sınırlar:**
+  - **MCP ve panel özeti farklı.** MCP aracı kiracı işleminin içinde koşuyor (`services/mcp/tools/summarize-chat.ts`); 20 sn'lik bir model çağrısı o işlemi aşar. Gerçek modelde panel özeti modelin, MCP özeti stub'ın metnidir.
+  - **Not, isteyenin dilinde.** Özet istekle gelen `language` (`en`|`tr`, varsayılan `en`) ile yazılır; aktif sohbette bu metin iç not olur, yani Türkçe panelden istenen not ekibin İngilizce okuyan üyelerine de Türkçe görünür. Mobil gövde göndermez → İngilizce. `mock` sağlayıcıda dil yok sayılır (stub hep İngilizce).
+  - **Mobil zaman aşımı modelden kısa.** Mobil istemci 15 sn'de vazgeçer (`apps/mobile/src/lib/api-client.ts:87`), `LLM_TIMEOUT_MS` 20 sn. 15–20 sn süren bir özet mobilde hata görünür ama sunucuda tamamlanır ve not yazılır; yeniden denemek ikinci notu yazar. Kabul edildi (nadir; not iç nottur).
+  - **Kenar zaman aşımı.** Cloudflare'in kaynak cevabını bekleme süresi ~100 sn; `LLM_TIMEOUT_MS` (en çok 120 000) bunun altında tutulmalı — runbook (257.11) bunu yazar.
+  - **Başarısız çağrının token'ı kaydedilmez.** `no_answer`/`length` faturalanır ama 503'te assist yazılmadığı için token'ı hiçbir satıra düşmez; yalnız `copilot.summary.failed` uyarı satırı kalır. 257.8 Copilot çağrılarını sayarken bunu hesaba katmalı.
 
 ## 3. Sahte yüzey envanteri (K-d)
 

@@ -37,6 +37,7 @@ import {
   type QueryEmbedding,
 } from './knowledge-service.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
+import type { LlmUsage } from './provider/llm-provider.js';
 import type { TenantRunner } from './skill-engine.js';
 
 const COPILOT_KIND = 'copilot';
@@ -147,6 +148,10 @@ export class CopilotService {
    * Record that Copilot assisted this chat. Feeds the Reports "assisted" split
    * (07.3.2), which keys off the existence of a `skill_run` for the chat — so
    * this is the one line that makes 12.1's "feeds the Assisted metric" true.
+   *
+   * `usage` is what a model call cost, when the assist made one (the summary,
+   * tm 257.5) — written on the run on the AI Agent answer's terms, so a
+   * per-workspace count of model tokens can include Copilot's.
    */
   async recordAssist(
     tx: TenantClient,
@@ -154,6 +159,7 @@ export class CopilotService {
     chatId: string,
     action: string,
     detail: string,
+    usage?: LlmUsage,
   ): Promise<void> {
     const skillId = await this.ensureSkillId(tx, tenant);
     await tx.skillRun.create({
@@ -163,6 +169,9 @@ export class CopilotService {
         licenseId: tenant.licenseId,
         status: 'succeeded',
         log: { outcome: `copilot_${action}`, entries: [{ step: action, detail, ok: true }] },
+        ...(usage
+          ? { llmInputTokens: usage.inputTokens, llmOutputTokens: usage.outputTokens }
+          : {}),
       },
     });
     await tx.skill.update({ where: { id: skillId }, data: { runsCount: { increment: 1 } } });

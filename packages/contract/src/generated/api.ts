@@ -2976,6 +2976,13 @@ export interface paths {
      *     On an archived chat (FR-MOD-02.8), the summary is still produced — that is
      *     the moment an agent is most likely to want one — but archive is read-only,
      *     so no internal note is written and `note_event_id` comes back null.
+     *
+     *     Who writes it is the deployment's `LLM_PROVIDER` (tm 257.5). On `mock`
+     *     it is the deterministic stub's summary, in English, whatever `language`
+     *     asks for. On a model, the conversation (card numbers masked, long ones
+     *     shortened to fit `LLM_MAX_PROMPT_CHARS`, oldest middle messages first) is
+     *     summarised in `language`; when the model does not answer, the response is
+     *     a 503 and nothing is written — no note and no assist.
      */
     post: operations['copilotSummary'];
     delete?: never;
@@ -12388,6 +12395,22 @@ export interface components {
         'application/json': components['schemas']['Error'];
       };
     };
+    /**
+     * @description The language model did not write the text (`service_unavailable`,
+     *     tm 257.5): it timed out, refused or cut off its answer, the provider
+     *     failed, or its circuit breaker is open after repeated failures.
+     *     `error.details.kind` names the failure class (`timeout`, `no_answer`,
+     *     `circuit_open`, …). Nothing was written; the request can simply be
+     *     repeated.
+     */
+    LlmUnavailable: {
+      headers: {
+        [name: string]: unknown;
+      };
+      content: {
+        'application/json': components['schemas']['Error'];
+      };
+    };
     /** @description Rate limit exceeded */
     TooManyRequests: {
       headers: {
@@ -16954,7 +16977,18 @@ export interface operations {
       };
       cookie?: never;
     };
-    requestBody?: never;
+    requestBody?: {
+      content: {
+        'application/json': {
+          /**
+           * @description The panel language the summary is written in. Ignored by the `mock` provider.
+           * @default en
+           * @enum {string}
+           */
+          language?: 'en' | 'tr';
+        };
+      };
+    };
     responses: {
       /** @description Summary produced, written as an internal note when the chat is active */
       201: {
@@ -16975,6 +17009,7 @@ export interface operations {
       404: components['responses']['NotFound'];
       409: components['responses']['Conflict'];
       429: components['responses']['TooManyRequests'];
+      503: components['responses']['LlmUnavailable'];
     };
   };
   copilotReply: {

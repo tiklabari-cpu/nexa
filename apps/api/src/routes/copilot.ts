@@ -12,7 +12,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { hasAnyScope, isShortId } from '@siyahtus/types';
-import { ENHANCE_MODES, enhanceText, summariseConversation } from '@siyahtus/ai-mock';
+import { ENHANCE_MODES, enhanceText } from '@siyahtus/ai-mock';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
 import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-events.js';
@@ -20,6 +20,13 @@ import { assertPublicHttpUrl } from '../lib/ssrf.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
 import { scopesOf } from '../services/auth/principal.js';
 import { CopilotService } from '../services/ai/copilot-service.js';
+import {
+  SUMMARY_LANGUAGES,
+  writeConversationSummary,
+  type ConversationSummary,
+} from '../services/ai/copilot-summary.js';
+import { LlmProviderError } from '../services/ai/provider/llm-error.js';
+import type { LlmProvider } from '../services/ai/provider/llm-provider.js';
 import { refuseUnembeddable, type KnowledgeService } from '../services/ai/knowledge-service.js';
 import { crawl } from '../services/ai/web-crawler.js';
 import { ChatService } from '../services/chat/chat-service.js';
@@ -80,6 +87,15 @@ const createSourceBody = z
     }
   });
 
+/**
+ * The panel's language, so the summary reads in the language of the person who
+ * asked for it (tm 257.5). Optional: the mobile app sends no body and gets
+ * English. The stub's summary is English whatever is asked for.
+ */
+const summaryBody = z.object({
+  language: z.enum(SUMMARY_LANGUAGES).default('en'),
+});
+
 const enhanceBody = z.object({
   text: z.string().trim().min(1).max(10_000),
   mode: z.enum(ENHANCE_MODES).default('rephrase'),
@@ -111,12 +127,19 @@ export default async function copilotRoutes(
     env,
     automations,
     knowledge,
+    llm,
   }: {
     env: Env;
     /** Fans a committed lifecycle event out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
     /** The server's one knowledge service, over its configured embedding provider (tm 255.7). */
     knowledge: KnowledgeService;
+    /**
+     * Who writes the summary (tm 257.5) — Copilot's own instance, not the one
+     * that answers visitors, so a run of failed summaries opens only this
+     * circuit breaker (`server.ts`).
+     */
+    llm: LlmProvider;
   },
 ): Promise<void> {
   const copilot = new CopilotService(knowledge);
@@ -210,6 +233,7 @@ export default async function copilotRoutes(
     { config: { scopes: CHAT_WRITE, aiInference: true } },
     async (request, reply) => {
       const chatId = parse(chatIdSchema, request.params.chatId);
+      const { language } = parse(summaryBody, request.body ?? {});
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
@@ -221,7 +245,43 @@ export default async function copilotRoutes(
       const chat = await chats.get(tenant, principal, chatId);
 
       const turns = await request.withTenant((tx) => copilot.conversationTurns(tx, chatId));
-      const summary = summariseConversation(turns);
+
+      // Written with no transaction open — a model call may take up to
+      // `LLM_TIMEOUT_MS`. When it does not answer, nothing is written: no
+      // half a note, and no assist run, so the chat is not counted as helped.
+      let written: ConversationSummary;
+      try {
+        written = await writeConversationSummary(llm, turns, {
+          language,
+          maxPromptChars: env.LLM_MAX_PROMPT_CHARS,
+          maxOutputTokens: env.LLM_MAX_OUTPUT_TOKENS,
+          timeoutMs: env.LLM_TIMEOUT_MS,
+        });
+      } catch (error) {
+        if (!(error instanceof LlmProviderError)) throw error;
+        // The operator's line: which failure, never the conversation, the
+        // prompt or the provider's words (`llm-error.ts`).
+        request.log.warn(
+          {
+            event: 'copilot.summary.failed',
+            chat_id: chatId,
+            provider: llm.id,
+            kind: error.kind,
+            transient: error.transient,
+            ...(error.status !== null ? { status: error.status } : {}),
+            ...(error.code !== null ? { code: error.code } : {}),
+            ...(error.reason !== null ? { reason: error.reason } : {}),
+            ...(error.requestId !== null ? { provider_request_id: error.requestId } : {}),
+          },
+          'copilot summary could not be written; nothing was saved',
+        );
+        throw new ApiError(
+          'service_unavailable',
+          `The summary could not be written: the model did not answer (${error.kind}). Nothing was saved — try again in a moment.`,
+          { details: { kind: error.kind } },
+        );
+      }
+      const summary = written.text;
 
       // On an active chat the summary lands as an internal note through the same
       // path the composer uses, so it fans out over RTM and is filtered from the
@@ -239,7 +299,7 @@ export default async function copilotRoutes(
         : null;
 
       await request.withTenant((tx) =>
-        copilot.recordAssist(tx, tenant, chatId, 'summary', summary),
+        copilot.recordAssist(tx, tenant, chatId, 'summary', summary, written.usage),
       );
 
       return reply.status(201).send({ summary, note_event_id: noteEventId });

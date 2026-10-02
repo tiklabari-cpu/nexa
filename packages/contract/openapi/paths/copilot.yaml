@@ -102,6 +102,25 @@ summary:
       On an archived chat (FR-MOD-02.8), the summary is still produced — that is
       the moment an agent is most likely to want one — but archive is read-only,
       so no internal note is written and `note_event_id` comes back null.
+
+      Who writes it is the deployment's `LLM_PROVIDER` (tm 257.5). On `mock`
+      it is the deterministic stub's summary, in English, whatever `language`
+      asks for. On a model, the conversation (card numbers masked, long ones
+      shortened to fit `LLM_MAX_PROMPT_CHARS`, oldest middle messages first) is
+      summarised in `language`; when the model does not answer, the response is
+      a 503 and nothing is written — no note and no assist.
+    requestBody:
+      required: false
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              language:
+                type: string
+                enum: [en, tr]
+                default: en
+                description: The panel language the summary is written in. Ignored by the `mock` provider.
     responses:
       "201":
         description: Summary produced, written as an internal note when the chat is active
@@ -122,6 +141,7 @@ summary:
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
       "409": { $ref: "../openapi.yaml#/components/responses/Conflict" }
       "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "503": { $ref: "../openapi.yaml#/components/responses/LlmUnavailable" }
 
 reply:
   parameters:

@@ -6673,6 +6673,17 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+    LlmUnavailable:
+      description: |
+        The language model did not write the text (`service_unavailable`,
+        tm 257.5): it timed out, refused or cut off its answer, the provider
+        failed, or its circuit breaker is open after repeated failures.
+        `error.details.kind` names the failure class (`timeout`, `no_answer`,
+        `circuit_open`, …). Nothing was written; the request can simply be
+        repeated.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
     TooManyRequests:
       description: Rate limit exceeded
       headers:

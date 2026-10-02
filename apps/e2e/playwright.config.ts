@@ -124,8 +124,16 @@ export default defineConfig({
       // verified — to the stand-in above, and the tests read it back from there.
       // The credentials are the stand-in's fake ones, not anybody's; the pilot's
       // live only in an operator's `.env`, which these override.
+      //
+      // And the deterministic AI stubs (tm 257.5). Specs assert on the stub's
+      // own words — `inbox-archive-summary.spec.ts` reads the visitor's question
+      // back out of the Copilot summary — so an operator's `.env` naming a real
+      // model must not reach this server. Locally a reused dev API still reads
+      // the root `.env`, which therefore stays on `mock` too.
       env: {
         ...process.env,
+        LLM_PROVIDER: 'mock',
+        EMBEDDING_PROVIDER: 'mock',
         RATE_LIMIT_ANON_PER_MIN: '2000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
         SCHEDULER_ENABLED: 'false',

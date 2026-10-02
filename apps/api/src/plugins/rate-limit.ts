@@ -225,6 +225,20 @@ function bucketFor(request: FastifyRequest, env: Env): Bucket {
     };
   }
 
+  // `GET /deployment` (tm 257.13): the panel reads it on every page load,
+  // signed in or not, so in the anon bucket below it would spend the 30/min
+  // that sign-in, the token exchange and the widget's token mint share — a
+  // few reloads of the sign-in screen would lock out the sign-in itself. Its
+  // own per-IP bucket, ahead of the principal buckets like the two above, so
+  // a caller that also sends a token is still metered by the route.
+  if (request.routeOptions.config.publicConfigRateLimit) {
+    return {
+      key: `rl:pubcfg:${request.ip}`,
+      limit: env.RATE_LIMIT_PUBLIC_CONFIG_PER_MIN,
+      windowMs: 60_000,
+    };
+  }
+
   if (principal?.kind === 'agent' || principal?.kind === 'bot') {
     const owner = principal.kind === 'agent' ? principal.accountId : principal.botId;
     return {
@@ -400,6 +414,11 @@ declare module 'fastify' {
      * enough that a legitimate probe never trips it.
      */
     healthRateLimit?: boolean;
+    /**
+     * `GET /deployment` (tm 257.13): use the `rl:pubcfg:<ip>` bucket instead of
+     * the shared anon one, which sign-in and the widget's token mint need.
+     */
+    publicConfigRateLimit?: boolean;
   }
 }
 

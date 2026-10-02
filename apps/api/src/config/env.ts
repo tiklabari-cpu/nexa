@@ -319,6 +319,14 @@ export const envSchema = z.object({
   /** Unauthenticated callers, per IP: sign-in, token exchange, widget tokens. */
   RATE_LIMIT_ANON_PER_MIN: z.coerce.number().int().positive().default(30),
   /**
+   * `GET /deployment`, per IP (tm 257.13). Its own bucket rather than the anon
+   * one: the panel reads it on every page load, signed in or not, and in the
+   * 30/min anon bucket it would spend the budget sign-in and the widget's
+   * token mint need. High for the same reason `/health`'s is — the ceiling
+   * bounds abuse of a public endpoint, it is not meant to be met by a person.
+   */
+  RATE_LIMIT_PUBLIC_CONFIG_PER_MIN: z.coerce.number().int().positive().default(600),
+  /**
    * Failed token resolutions, per IP (M-SEC-c1 · §D116 LOW/1).
    *
    * Not a traffic bucket like the others — this one bounds a *cost*. Every
@@ -461,6 +469,32 @@ export const envSchema = z.object({
     .enum(['true', 'false'])
     .default('true')
     .transform((v) => v === 'true'),
+
+  /**
+   * Whether this deployment is the public pilot (tm 257.13 · ADR
+   * docs/adr/pilot-public-readiness.md K-a). Off by default, and off means
+   * nothing changes: development, the test suites, the demo stack and e2e run
+   * exactly as they did before the switch existed. On, the panel hides the
+   * surfaces that are mocks (it reads the switch from `GET /deployment`) and
+   * `plugins/pilot-gate.ts` refuses their routes with 403 `not_allowed` +
+   * `details.reason: 'pilot_mode'`; in production it also turns the stub
+   * providers into a boot failure (`productionProblems`).
+   *
+   * Only the two literal words, like `SIGNUP_ENABLED` and for the same reason:
+   * an empty line, `1` or `True` was written by someone who meant one of the
+   * two, and this must not guess which.
+   */
+  PILOT_MODE: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((v) => v === 'true'),
+  /**
+   * Where pilot users write to (tm 257.13). The trial-end notice and the
+   * "closed during the pilot" notes show it; `GET /deployment` hands it to the
+   * panel. Required in production while `PILOT_MODE=true` — without it those
+   * texts point at nobody. Public by design: it is printed on screens.
+   */
+  PILOT_CONTACT_EMAIL: z.string().email().optional(),
 
   /**
    * Length of a new workspace's trial, in days (FR-MOD-10.2). Read at sign-up
@@ -1088,6 +1122,35 @@ function productionProblems(env: z.infer<typeof envSchema>): string[] {
     problems.push(
       `WEB_ORIGIN must include the widget's own origin (${widgetOrigin ?? env.WIDGET_BASE_URL}, from WIDGET_BASE_URL): the widget's browser code calls this API cross-origin, so an allowlist without it answers the agent panel and silently refuses every customer conversation.`,
     );
+  }
+
+  // The public pilot (tm 257.13 · ADR K-b). Tied to `PILOT_MODE`, not to
+  // production alone: Helm and the plain production base run the stub model
+  // and file mail on purpose, and neither is the pilot. With real people on
+  // the other end, a stub is not a cheaper provider but a silent outage —
+  // answers nobody wrote, knowledge nobody indexed, mail nobody receives — so
+  // the boot names the key instead. Key names only, as everywhere above.
+  if (env.PILOT_MODE) {
+    if (!env.PILOT_CONTACT_EMAIL) {
+      problems.push(
+        'PILOT_CONTACT_EMAIL is required in production when PILOT_MODE=true: the trial-end notice and the notes on closed features point pilot users at it.',
+      );
+    }
+    if (env.LLM_PROVIDER === 'mock') {
+      problems.push(
+        'LLM_PROVIDER must be a real provider in production when PILOT_MODE=true: the stub writes canned replies to real visitors.',
+      );
+    }
+    if (env.EMBEDDING_PROVIDER === 'mock') {
+      problems.push(
+        'EMBEDDING_PROVIDER must be a real provider in production when PILOT_MODE=true: the stub ranks knowledge by word overlap, not meaning.',
+      );
+    }
+    if (env.MAIL_PROVIDER !== 'smtp') {
+      problems.push(
+        'MAIL_PROVIDER must be smtp in production when PILOT_MODE=true: anything else delivers no invitation, reset or notice to anyone.',
+      );
+    }
   }
 
   return problems;

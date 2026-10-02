@@ -142,6 +142,10 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     expect(env.llm.openai).not.toBeNull();
     expect(env.embedding.openai).not.toBeNull();
     expect(env.webOrigins).toContain(new URL(env.WIDGET_BASE_URL).origin);
+    // The pilot is the public pilot (tm 257.13): the switch is on, and the
+    // address it shows pilot users is the template's fill-in, filled.
+    expect(env.PILOT_MODE).toBe(true);
+    expect(env.PILOT_CONTACT_EMAIL).toBe('pilot@siyahtus.test');
   });
 
   const REQUIRED = [
@@ -163,6 +167,7 @@ describe('the pilot configuration passes the production gate (tm 255.15)', () =>
     'EMBEDDING_MODEL',
     'EMBEDDING_API_KEY',
     'EMBEDDING_PROVIDER_REGION',
+    'PILOT_CONTACT_EMAIL',
   ];
 
   it.each(REQUIRED)('refuses to boot without %s, and says so by name', (key) => {

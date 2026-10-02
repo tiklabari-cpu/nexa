@@ -48,6 +48,13 @@
 - `not_allowed` + `details.reason` deseni zaten üç yerde (§D195(4)); `common.errors.*` anahtar kümesi `ERROR_TYPES`'a eşit olmak zorunda olduğundan yeni tip i18n paritesini de bozardı.
 - **Billing:** yol öneki (`sandbox-gate.ts:45-70` deseni) — gelecekte eklenecek bir billing yazması da otomatik kapanır. **Diğerleri:** route config bayrağı (`pilotRefused`), çünkü kanal, apps ve onboarding uçları ortak bir önek taşımıyor.
 - **Principal'sız rotalar:** kapı `preHandler`'da principal'a bakmadan çalışır; aksi hâlde `channels.ts:277` ve `:290` açık kalır. Ret gövde parse'ından önce gelir (gövdesi bozuk bir istek 400 değil 403 alır; reddedilen uç hiçbir girdiyi işlemez).
+- **Uygulandı (tm 257.13) — ölçülen ayrıntılar:**
+  - **Kanca `onRequest`, `preHandler` değil.** Fastify gövdeyi `preHandler`'dan önce ayrıştırır; yukarıdaki "ret parse'tan önce" şartı ancak `onRequest`/`preParsing` ile tutar. Ölçüldü: kanca `preHandler`'a taşınınca bozuk JSON'lu istek 400 alıyor (mutant kırmızı). Kapı `server.ts`'te `sandboxGate`'ten sonra kayıtlı; `onRequest` kancaları kayıt sırasıyla koştuğu için `auth`'tan sonra gelir — kimlik isteyen bir rota kimliksiz çağrıya yine 401 der, kimlikli çağrıya 403 `pilot_mode`.
+  - **Eşleşme rota kalıbıyla (`request.routeOptions.url`), `request.url` ile değil.** Ölçüldü: Fastify `/api/v1/x/%70refixed/item`'ı `/prefixed/item` işleyicisine yönlendiriyor, `request.url` ham kalıyor; ham URL'ye bakan bir önek regex'i bu yolla atlatılır. Sorgu dizesi de kalıbı değiştirmez.
+  - **HEAD = GET.** Fastify her GET rotası için aynı config'le bir HEAD rotası açıyor ve GET işleyicisini koşuyor; yol listesinde `GET` reddedilen bir uç HEAD ile reddediliyor.
+  - **Bozuk liste açılışta durur:** küçük harfli metot (hiç eşleşmez), `^`'sız kalıp, `g`/`y` bayrağı (`.test()` durum taşır, aynı rotada sırayla true/false döner).
+  - **Bayrak kapalıyken kanca hiç eklenmez**; `GET /deployment` alanları `pilot_mode`, `contact_email`, `signup_enabled` (257.7/257.9 ekler).
+  - **Ayrı bulgu (bu görevin kapsamı dışında, düzeltilmedi):** `sandbox-gate.ts` `BILLING_PATH`'i ham `request.url`'ye uyguluyor (`sandbox-gate.ts:51`). Yukarıdaki ölçülen yönlendirme davranışından çıkarım: `PATCH /api/v1/%62illing/subscription` billing işleyicisine ulaşır ve sandbox kapısının kalıbına uymaz — sandbox üzerinde koşturulmadı. 257.2 billing'i pilot kapısının yol listesine eklerken sandbox kapısı da rota kalıbına geçirilmeli (önce bu istekle kırmızı bir test).
 
 ### 2.4 K-e — açık kayıt korumaları
 

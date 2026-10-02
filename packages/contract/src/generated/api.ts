@@ -85,6 +85,41 @@ export interface paths {
     patch?: never;
     trace?: never;
   };
+  '/deployment': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /**
+     * Deployment-wide settings the panel reads before sign-in
+     * @description Anonymous, and the same for every caller: this deployment's own
+     *     settings, never a workspace's. The panel reads it on the sign-in screen
+     *     and keeps the same answer once signed in, so a screen can hide what this
+     *     deployment does not offer before anyone has a session.
+     *
+     *     Hiding is only a courtesy — the API enforces every one of these on its
+     *     own. With `pilot_mode` on, the routes behind the hidden surfaces answer
+     *     `403 not_allowed` with `error.details.reason: "pilot_mode"`, and with
+     *     `signup_enabled` off, `POST /auth/signup` answers `403` with
+     *     `signup_closed`.
+     *
+     *     Deliberately narrow, like the anonymous `/health` body: no version,
+     *     region, provider or uptime — that is infrastructure detail a stranger
+     *     has no business reading. Metered on its own per-address bucket rather
+     *     than the one sign-in and the widget's token mint share, because every
+     *     page load reads it.
+     */
+    get: operations['getDeploymentConfig'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/auth/login': {
     parameters: {
       query?: never;
@@ -7613,6 +7648,30 @@ export interface components {
       event_partitions?: components['schemas']['EventPartitionsHealth'];
       providers?: components['schemas']['HealthProviders'];
     };
+    /**
+     * @description Deployment-wide settings (tm 257.13), the same for every caller and
+     *     never about a workspace. Each field the panel reads to hide something
+     *     is also enforced by the API itself.
+     */
+    DeploymentConfig: {
+      /**
+       * @description This deployment is the public pilot (`PILOT_MODE`). Surfaces that
+       *     are mocks are hidden in the panel and refused by the API with
+       *     `403 not_allowed`, `error.details.reason: "pilot_mode"`.
+       */
+      pilot_mode: boolean;
+      /**
+       * Format: email
+       * @description Where pilot users write to (`PILOT_CONTACT_EMAIL`); `null` when the
+       *     deployment names none. Always set on a production pilot.
+       */
+      contact_email: string | null;
+      /**
+       * @description Whether `POST /auth/signup` creates workspaces here
+       *     (`SIGNUP_ENABLED`); off, it answers `403` with `signup_closed`.
+       */
+      signup_enabled: boolean;
+    };
     DependencyHealth: {
       /** @enum {string} */
       status: 'up' | 'down';
@@ -12678,6 +12737,32 @@ export interface operations {
           'application/json': components['schemas']['Health'];
         };
       };
+    };
+  };
+  getDeploymentConfig: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description This deployment's settings. */
+      200: {
+        headers: {
+          /**
+           * @description `no-cache` — a cache may keep the answer but must revalidate it,
+           *     so switching pilot mode off is seen on the next read.
+           */
+          'Cache-Control'?: string;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['DeploymentConfig'];
+        };
+      };
+      429: components['responses']['TooManyRequests'];
     };
   };
   login: {

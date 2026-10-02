@@ -882,7 +882,13 @@ describe('module parity matrix — what is still owed', () => {
       // hide its attach button instead of refusing a pick after the fact.
       // The phone composer has no such affordance to gate; nothing to read
       // there, and nothing here re-scopes.
-      contractEndpoints: 219,
+      // 219 -> 220 with `/deployment` (tm 257.13 GET /deployment) — the
+      // deployment's pilot switch, contact address and sign-up state, read
+      // anonymously so the web panel can hide what the pilot does not offer
+      // before anyone signs in. The API refuses those surfaces itself, and the
+      // app carries none of them (no billing, channels or marketplace), so it
+      // has nothing to hide; nothing here re-scopes.
+      contractEndpoints: 220,
       scopeBoundaries: 1,
     });
   });

@@ -15,6 +15,17 @@ import { SignInPage } from './SignInPage.js';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
+import type { DeploymentConfig } from '@siyahtus/types';
+
+/**
+ * `GET /deployment` through its one seam (tm 257.13). An ordinary deployment
+ * unless a test says otherwise, so every test above the pilot block runs
+ * exactly as it did before the read existed.
+ */
+const deployment = vi.hoisted(() => ({
+  current: { pilot_mode: false, contact_email: null, signup_enabled: true } as DeploymentConfig,
+}));
+vi.mock('../../lib/deployment.js', () => ({ useDeployment: () => deployment.current }));
 
 function renderSignIn(initialEntry = '/'): void {
   render(
@@ -62,6 +73,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  deployment.current = { pilot_mode: false, contact_email: null, signup_enabled: true };
   useAuth.setState({
     listWorkspaces: original.listWorkspaces,
     signIn: original.signIn,
@@ -557,5 +569,32 @@ describe('SignInPage localisation (NFR-I18N2)', () => {
 
     expect(screen.getByText('Çalışma alanınızda oturum açın')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Oturum aç' })).toBeInTheDocument();
+  });
+});
+
+/**
+ * The seed's demo login on the sign-in screen (tm 257.13). The pilot runs no
+ * seed, so the line would hand strangers credentials that open nothing; it is
+ * hidden there, and only there.
+ */
+describe('SignInPage demo credentials', () => {
+  const DEMO = /owner@acme\.localhost/;
+
+  it('shows the demo login on an ordinary deployment', () => {
+    renderSignIn();
+    expect(screen.getByText(DEMO)).toBeInTheDocument();
+  });
+
+  it('hides it in pilot mode', () => {
+    deployment.current = {
+      pilot_mode: true,
+      contact_email: 'pilot-desk@siyahtus.test',
+      signup_enabled: true,
+    };
+    renderSignIn();
+    expect(screen.queryByText(DEMO)).not.toBeInTheDocument();
+    // The rest of the screen is unchanged.
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Create a workspace' })).toBeInTheDocument();
   });
 });

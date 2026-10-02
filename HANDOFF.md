@@ -13,6 +13,13 @@
 
 ## Task log (newest-first)
 
+## tm 257.1 — PILOT-PUBLIC-ADR: herkese açık pilot kararları ADR'ye yazıldı; bayat PLAN metinleri güncellendi — done — 2026-10-02 UTC
+
+- **Yapıldı:** `docs/adr/pilot-public-readiness.md` (yeni): §0 karar tablosu K-a…K-h, her satırda HEAD `2d551b2e`'de açılıp okunmuş dosya:satır; §3 sahte yüzey envanteri (yüzey · dosya:satır · neden sahte · karar · sahibi 257.x); §4 yeni env anahtar adları; §9 ertelenenler (§D203(5) adlarıyla). PLAN: §9 "Ek olarak", §C A3/A4/A6'ya "Güncel durum", §7C kapsam dışı paragrafı + faz özeti Faz 7 satırında GDPR dışlaması daraltıldı; §D204. Ürün kodu, test, env anahtarı yok.
+- **Doğrulama:** `pnpm -w format:check` 0 · `pnpm audit:req-coverage` 0 · `turbo run typecheck lint --force` 0, "0 cached, 23 total". Panel tanılaması başsız (`DASH_PROJECT`): yalnız `git-uncommitted` + `handoff-stale` (commit öncesi beklenen); `plan-count-drift`/`plan-tm-reverse`/faz bulgusu yok; `parsePlan` faz özeti HEAD ile aynı.
+- **Varsayımlar:** §D203'ten sapma yok → alt görevlerin details'ine not düşülmedi. Görev metnindeki `team.ts:345-346` aslında `:346` (`:345` anahtar).
+- **Sonraki pencereye not:** Zapier/Make kartlarının sayıları gerçek ama bağlantıları mock — 257.18 Apps'i gizlerken `POST /webhooks`'ta `app_id` ile Zapier/Make bağlamak "connect … first" ile düşer (`webhooks.ts:110-119`); abonelik `app_id`'siz çalışır. 257.18'in bayrak açık testinde bu yolu da düşün.
+
 ## tm 257 (açılış) — PILOT-PUBLIC-READINESS: herkese açık pilot hazırlığı epic olarak açıldı; 20 alt görev; ürün kodu ve damgalar değişmedi — done — 2026-10-02 UTC
 
 - **Yapıldı:** Planlama turu (ürün kodu yok). (a) Adım B ayrı commit `0c97c170`: `run-loop.sh` MODEL/MODEL_BIG = `claude-opus-5-5`, MODEL_SMALL = `claude-sonnet-5-5`; etiket listesi ve `pick_schema` enum'u aynen; PLAN §5.1.1'e sürüm notu. (b) Dokuz konulu salt-okur inceleme (bayrak/env/i18n, sahte kanallar, billing/deneme/bölge, kenar ve istemci IP'si, Copilot LLM, kayıt doğrulaması, kötüye kullanım tavanları, yasal/widget etiketi, belgeler/damgalar) + her konuya bağımsız doğrulayıcı + eksik bulucu, HEAD `0c97c170`. (c) Task Master'a epic 257 + 20 alt görev (`tasks.json`'a elle; her alt görev kendi bootstrap kutusu, dosya:satır bulguları, KK, kırmızı-önce test stratejisi ve mutasyonlarıyla). (d) PLAN §D203: sahip kararları K1–K11, planlama kararları K-a…K-h, geçersiz kalan kayıtlar, damga kararı, ertelenenler, görev yazımı.

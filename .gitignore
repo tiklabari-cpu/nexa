@@ -6,6 +6,12 @@
 *.pem
 *.key
 secrets/
+# The pilot's Cloudflare Tunnel identity (tm 257.10): `cloudflared tunnel login`
+# and `create` write cert.pem and <UUID>.json under ~/.cloudflared/, and a copy
+# of the example next to it would hold the real UUID and names.
+**/.cloudflared/
+infra/pilot/cloudflared/*.json
+infra/pilot/cloudflared/config.yml
 
 # --- Bağımlılıklar / çıktı ---
 node_modules/

@@ -22,6 +22,15 @@
 # signed-in check, since only a real workspace has credentials:
 #   SMOKE_ORGANIZATION_ID  a workspace to mint a visitor token for, cross-origin
 #   SMOKE_ADMIN_TOKEN      an owner's bearer token, to read the admin /health
+#
+# The pilot profile also checks the edge (tm 257.10): rtm answers a WebSocket
+# upgrade with 101, and over an https base the panel and the widget's
+# loader.js carry HSTS exactly once. Over an http base the two HSTS checks
+# print "skipped (http base)" — nothing there terminates TLS.
+#
+# What a clean run counts: demo 20 passed. Pilot 22 passed over https base
+# URLs, 20 passed + 2 skipped over http ones; SMOKE_ADMIN_TOKEN adds 2 and
+# SMOKE_ORGANIZATION_ID adds 1.
 set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:4000}"
@@ -50,6 +59,7 @@ SMOKE_ADMIN_TOKEN="${SMOKE_ADMIN_TOKEN:-}"
 
 passed=0
 failed=0
+skipped=0
 body_file="$(mktemp)"
 header_file="$(mktemp)"
 trap 'rm -f "$body_file" "$header_file"' EXIT
@@ -64,6 +74,11 @@ fail() {
   printf '  FAIL  %s\n' "$1"
   [ -n "${2:-}" ] && printf '        %s\n' "$2"
   return 0
+}
+
+skip() {
+  skipped=$((skipped + 1))
+  printf '  skip  %s — skipped (%s)\n' "$1" "$2"
 }
 
 # Set to send a cross-origin request the way a browser would; empty means
@@ -137,6 +152,46 @@ check_preflight() {
     pass "$label"
   else
     fail "$label" "preflight from $origin: HTTP $status, Access-Control-Allow-Origin '${acao}'"
+  fi
+}
+
+# A WebSocket upgrade, asked the way a browser asks (tm 257.10). A broken
+# upgrade is silent in the product: the widget falls back to polling and the
+# panel stops updating live, so the edge is checked for it directly. `request`
+# cannot do it — after a 101 the connection stays open, curl only stops at
+# --max-time and exits non-zero, and `request` would report that as 000. The
+# status line decides instead.
+check_upgrade() {
+  local label="$1" url="$2" status_line
+  status_line="$(curl --http1.1 -sS -i -N --max-time 3 \
+    -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Version: 13' \
+    -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' "$url" 2>/dev/null | head -1 | tr -d '\r')"
+  case "$status_line" in
+    'HTTP/1.1 101'*) pass "$label" ;;
+    *) fail "$label" "expected HTTP/1.1 101 from $url, got '${status_line:-no response}'" ;;
+  esac
+}
+
+# HSTS on a page served over https (tm 257.10). nginx sends it only when the
+# edge says the request arrived over HTTPS (X-Forwarded-Proto, apps/web and
+# apps/widget nginx.conf), so this fails if the edge stops saying so — and if
+# the edge adds a second copy of its own. Over an http base there is nothing
+# to check: no TLS, no header.
+check_hsts() {
+  local label="$1" url="$2" status values
+  case "$url" in
+    https://*) ;;
+    *)
+      skip "$label" 'http base'
+      return 0
+      ;;
+  esac
+  status="$(curl -sS -o /dev/null -D "$header_file" -w '%{http_code}' --max-time 15 "$url" 2>/dev/null || echo 000)"
+  values="$(tr -d '\r' <"$header_file" | grep -i '^strict-transport-security:' | cut -d' ' -f2-)"
+  if [ "$values" = 'max-age=31536000; includeSubDomains' ]; then
+    pass "$label"
+  else
+    fail "$label" "HTTP $status from $url, Strict-Transport-Security '$(printf '%s' "$values" | tr '\n' '|')' (want it once: max-age=31536000; includeSubDomains)"
   fi
 }
 
@@ -291,7 +346,23 @@ elif [ "$SMOKE_PROFILE" = demo ]; then
     'sign-in did not return an organization_id to try it with'
 fi
 
-printf '\n%s passed, %s failed\n' "$passed" "$failed"
+if [ "$SMOKE_PROFILE" = pilot ]; then
+  # The edge in front of the pilot — a Cloudflare Tunnel or Caddy — run with
+  # the public https names as the base URLs. The organization id only has to
+  # be a well-formed UUID: the gateway checks the tenant at login, after the
+  # upgrade.
+  printf '\nEdge\n'
+  check_upgrade 'rtm answers a WebSocket upgrade (101)' \
+    "$RTM_BASE/v1/customer/rtm/ws?organization_id=00000000-0000-4000-8000-000000000000"
+  check_hsts 'web sends HSTS once over https' "$WEB_BASE/"
+  check_hsts 'widget loader.js sends HSTS once over https' "$WIDGET_BASE/loader.js"
+fi
+
+if [ "$skipped" -gt 0 ]; then
+  printf '\n%s passed, %s failed, %s skipped\n' "$passed" "$failed" "$skipped"
+else
+  printf '\n%s passed, %s failed\n' "$passed" "$failed"
+fi
 if [ "$failed" -gt 0 ]; then
   printf '\nStack state:\n'
   docker compose -f "$SMOKE_COMPOSE_FILE" ps 2>/dev/null || true

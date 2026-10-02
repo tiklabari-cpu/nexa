@@ -18,9 +18,19 @@
 **/.eslintcache
 
 # --- Secrets / env (never enter an image layer) ---
-.env
-.env.*
+# Every build stage runs `COPY . .`, so anything matched nowhere here is in an
+# image. `**/` because a bare name only matches at the root (tm 257.10).
+**/.env
+**/.env.*
 !.env.example
+**/*.pem
+**/*.key
+**/secrets/
+# The pilot's Cloudflare Tunnel identity (infra/pilot/cloudflared/config.example.yml).
+**/.cloudflared/
+**/cloudflared/*.json
+# scripts/backup.sh output: database dumps and the uploads archive.
+backups/
 
 # --- VCS / editor / OS ---
 .git/

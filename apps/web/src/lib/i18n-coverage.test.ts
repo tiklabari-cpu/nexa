@@ -189,6 +189,8 @@ const TEXT_FREE_FILES: readonly string[] = [
   // No text of its own — a bare open/close boolean around `TeamEditor`, whose
   // own file (already registered) carries every word the form shows.
   'src/features/team/CreateTeamButton.tsx',
+  // No text of its own — renders its children or a redirect (tm 257.2).
+  'src/components/PilotHidden.tsx',
 ];
 
 /**

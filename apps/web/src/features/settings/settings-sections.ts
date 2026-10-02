@@ -72,6 +72,12 @@ export interface SettingsSectionEntry {
    * typed, in whichever language the label happens to render.
    */
   keywords?: readonly string[];
+  /**
+   * Not offered in the public pilot (tm 257.2) — `navigation.ts`'s own
+   * `pilotHidden`, for the entries that are the settings door to a hidden
+   * module. Dropped from the navigation and the search alike.
+   */
+  pilotHidden?: true;
 }
 
 const ACCESS_RULES = ['access_rules:ro', 'access_rules:rw'] as const;
@@ -365,6 +371,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     scope: BILLING_DESTINATION?.scope ?? ['billing_manage'],
     to: '/app/billing',
     keywords: ['subscription', 'invoice', 'plan', 'payment'],
+    // Hidden where the rail hides it: the pilot sells nothing.
+    pilotHidden: true,
   },
 ];
 
@@ -373,9 +381,17 @@ export function sectionHref(entry: SettingsSectionEntry): string {
   return entry.to ?? `/app/settings/${entry.slug}`;
 }
 
-/** Sections the caller may see, in navigation order. */
-export function visibleSections(scopes: readonly string[]): SettingsSectionEntry[] {
-  return SETTINGS_SECTIONS.filter((s) => hasAnyScope(scopes, s.scope ?? []));
+/**
+ * Sections the caller may see, in navigation order — on the public pilot
+ * (`pilotMode`) less the ones it does not offer.
+ */
+export function visibleSections(
+  scopes: readonly string[],
+  pilotMode = false,
+): SettingsSectionEntry[] {
+  return SETTINGS_SECTIONS.filter(
+    (s) => !(pilotMode && s.pilotHidden) && hasAnyScope(scopes, s.scope ?? []),
+  );
 }
 
 /**
@@ -396,10 +412,11 @@ export function searchSections(
   scopes: readonly string[],
   query: string,
   labelOf: (entry: SettingsSectionEntry) => string,
+  pilotMode = false,
 ): SettingsSectionEntry[] {
   const needle = query.trim().toLowerCase();
   if (!needle) return [];
-  return visibleSections(scopes).filter((section) => {
+  return visibleSections(scopes, pilotMode).filter((section) => {
     if (labelOf(section).toLowerCase().includes(needle)) return true;
     return (section.keywords ?? []).some((keyword) => keyword.toLowerCase().includes(needle));
   });
@@ -412,8 +429,9 @@ export function searchSections(
  */
 export function visibleGroups(
   scopes: readonly string[],
+  pilotMode = false,
 ): { key: SettingsGroupKey; labelKey: string; sections: SettingsSectionEntry[] }[] {
-  const sections = visibleSections(scopes);
+  const sections = visibleSections(scopes, pilotMode);
   return SETTINGS_GROUPS.map((g) => ({
     ...g,
     sections: sections.filter((s) => s.group === g.key),

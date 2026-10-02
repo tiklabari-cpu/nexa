@@ -20,6 +20,7 @@ import { useState, type ReactElement } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiClientError } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { FieldError, emailList, splitList, useForm } from '../../lib/form.js';
 import { formatMoney } from '../../lib/format.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
@@ -312,6 +313,11 @@ export function InviteTeammates({
  * wording is deliberately conditional ("once they accept"): an invitation that
  * is revoked or left to expire never reaches the bill. Saying "adds a seat"
  * here would be the copy promising something the server does not do.
+ *
+ * In the public pilot (tm 257.2) the notice keeps the seat count and the
+ * ceiling, which the server still enforces, and drops the money: no price, no
+ * "nothing is billed yet" (nothing ever is), no sales to talk to. With nothing
+ * left to say it is not drawn at all.
  */
 function SeatNotice({
   seats,
@@ -321,8 +327,9 @@ function SeatNotice({
   seats: SeatSummary;
   outstanding: number;
   adding: number;
-}): ReactElement {
+}): ReactElement | null {
   const t = useTranslate();
+  const { pilot_mode: pilotMode } = useDeployment();
   const price = formatMoney(seats.unit_price_cents);
   const projected = seats.headcount + adding;
   // The server counts members plus every outstanding invitation plus this
@@ -330,28 +337,37 @@ function SeatNotice({
   // surprise at submit time.
   const overCeiling = seats.headcount + outstanding + adding > seats.ceiling;
 
+  const standing =
+    seats.purchased === null
+      ? pilotMode
+        ? null
+        : t('team.invite.seats.trial')
+      : t('team.invite.seats.inUse', {
+          headcount: seats.headcount,
+          purchased: seats.purchased,
+        });
+  const effect =
+    adding === 0
+      ? pilotMode
+        ? null
+        : price
+          ? t('team.invite.seats.rule', { price })
+          : t('team.invite.seats.ruleQuoted')
+      : seats.purchased !== null && projected <= seats.purchased
+        ? t('team.invite.seats.within', { count: adding, purchased: seats.purchased })
+        : t('team.invite.seats.projected', { count: adding, projected });
+
+  if (standing === null && effect === null && !overCeiling) return null;
+
   return (
     <div className="mb-4 rounded-md border border-border bg-inset p-3 text-xs text-content-secondary">
-      <p>
-        {seats.purchased === null
-          ? t('team.invite.seats.trial')
-          : t('team.invite.seats.inUse', {
-              headcount: seats.headcount,
-              purchased: seats.purchased,
-            })}
-      </p>
-      <p className="mt-1">
-        {adding === 0
-          ? price
-            ? t('team.invite.seats.rule', { price })
-            : t('team.invite.seats.ruleQuoted')
-          : seats.purchased !== null && projected <= seats.purchased
-            ? t('team.invite.seats.within', { count: adding, purchased: seats.purchased })
-            : t('team.invite.seats.projected', { count: adding, projected })}
-      </p>
+      {standing !== null && <p>{standing}</p>}
+      {effect !== null && <p className={standing !== null ? 'mt-1' : undefined}>{effect}</p>}
       {overCeiling && (
         <p role="status" className="mt-1 text-danger">
-          {t('team.invite.seats.overCeiling', { ceiling: seats.ceiling })}
+          {t(pilotMode ? 'team.invite.seats.overCeilingPilot' : 'team.invite.seats.overCeiling', {
+            ceiling: seats.ceiling,
+          })}
         </p>
       )}
     </div>

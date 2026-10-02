@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, type ReactElement } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useApiClient, useAuth, useBrand } from '../lib/auth-store.js';
+import { useDeployment } from '../lib/deployment.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
 import { LOCALES, LOCALE_NAMES, useLocale, useTranslate } from '../lib/i18n.js';
 import { useNavPinned } from '../lib/nav-store.js';
@@ -139,10 +140,14 @@ interface TrialInfo {
  * 403, which resolves to no banner rather than a retry storm — the people who
  * cannot subscribe are also the ones not nagged to. An active workspace shows
  * nothing at all.
+ *
+ * In the public pilot the countdown stays and Subscribe goes (tm 257.2): the
+ * pilot sells nothing, and the Billing page it pointed at is hidden there.
  */
 function TrialBanner(): ReactElement | null {
   const api = useApiClient();
   const t = useTranslate();
+  const { pilot_mode: pilotMode } = useDeployment();
   const { data } = useQuery({
     queryKey: ['billing', 'subscription'],
     queryFn: () => api.get<TrialInfo>('/billing/subscription'),
@@ -163,12 +168,14 @@ function TrialBanner(): ReactElement | null {
     >
       <span aria-hidden="true">◈</span>
       <span>{readOnly ? t('shell.trial.ended') : t('shell.trial.remaining', { count: days })}</span>
-      <NavLink
-        to="/app/billing"
-        className="font-semibold text-content-brand underline-offset-2 hover:underline"
-      >
-        {t('shell.subscribe')}
-      </NavLink>
+      {!pilotMode && (
+        <NavLink
+          to="/app/billing"
+          className="font-semibold text-content-brand underline-offset-2 hover:underline"
+        >
+          {t('shell.subscribe')}
+        </NavLink>
+      )}
     </div>
   );
 }
@@ -186,6 +193,7 @@ function IconRail(): ReactElement {
   // `POST /groups` requires `groups--all:rw` — `Teams.tsx`'s own `canManage` gate.
   const canManageTeams = scopes.includes('groups--all:rw');
   const badges = useNavBadges();
+  const { pilot_mode: pilotMode } = useDeployment();
 
   return (
     <nav
@@ -199,7 +207,7 @@ function IconRail(): ReactElement {
 
       <NavPinToggle pinned={pinned} onToggle={() => setPinned(!pinned)} />
 
-      {MODULES.filter((item) => isNavVisible(item, scopes)).map((item) => (
+      {MODULES.filter((item) => isNavVisible(item, scopes, pilotMode)).map((item) => (
         <RailButton
           key={item.to}
           item={badges[item.to] ? { ...item, badge: badges[item.to] } : item}
@@ -217,7 +225,7 @@ function IconRail(): ReactElement {
         {(canInvite || canManageTeams) && (
           <QuickCreateMenu pinned={pinned} canInvite={canInvite} canManageTeams={canManageTeams} />
         )}
-        {FOOTER.filter((item) => isNavVisible(item, scopes)).map((item) => (
+        {FOOTER.filter((item) => isNavVisible(item, scopes, pilotMode)).map((item) => (
           <RailButton key={item.to} item={item} pinned={pinned} />
         ))}
         <AccountMenu />

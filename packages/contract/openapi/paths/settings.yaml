@@ -1078,6 +1078,11 @@ complianceBaa:
         into, so the endpoint refuses rather than storing an agreement that
         claims something untrue about where the data is.
 
+      And in the public pilot (`pilot_mode` on `GET /deployment`) not at all:
+      the owner gets `403 not_allowed` with `error.details.reason:
+      "pilot_mode"` whatever the plan and region — the pilot provides no HIPAA
+      cover to accept.
+
       Idempotent: accepting again returns the state unchanged, keeping the
       original timestamp. The first acceptance is the record, and a second
       click is not a second agreement — so it also writes no second audit entry.

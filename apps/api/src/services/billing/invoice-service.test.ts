@@ -205,6 +205,30 @@ describe('composeInvoice — the one arithmetic behind a statement (FR-MOD-10.3)
     });
     expect(composed.total_cents).toBe(1_234);
   });
+
+  it('owes nothing in the public pilot, even on a licence that is not trialing (tm 257.2)', () => {
+    // A licence the operator activated by hand is `active`, so `trialing` is
+    // false — and still nobody paid for it. The pilot sells nothing.
+    const composed = composeInvoice(
+      base({
+        pilot: true,
+        seats: 5,
+        ai: { quantity: 260n, included: 200n, overageUnit: 50, overageUnitPriceCents: 50 },
+        api: {
+          quantity: 250_001n,
+          included: 100_000n,
+          overageUnit: 100_000,
+          overageUnitPriceCents: 2_950,
+        },
+      }),
+    );
+    expect(composed.trialing).toBe(true);
+    expect(composed.line_items).toEqual([
+      { description: 'growth plan — free during the pilot', amount_cents: 0 },
+    ]);
+    expect(composed.total_cents).toBe(0);
+    expect(toInvoice('202606', composed, 'issued').status).toBe('trial');
+  });
 });
 
 describe('toInvoice — what a period claims about itself (FR-MOD-10.3)', () => {

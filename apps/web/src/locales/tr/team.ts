@@ -213,6 +213,8 @@ export const team: Messages = {
   'team.invite.seats.within.other': 'Bu {count} davet, alınmış {purchased} koltuğun içinde kalır.',
   'team.invite.seats.overCeiling':
     '{ceiling} koltukluk tavanı aşar ve reddedilir. Artık istemediğiniz davetleri iptal edin ya da satışla görüşün.',
+  'team.invite.seats.overCeilingPilot':
+    '{ceiling} koltukluk tavanı aşar ve reddedilir. Artık istemediğiniz davetleri iptal edin.',
 
   // Temsilci profil paneli — AgentProfile.tsx (FR-MOD-04.3.4)
   'team.profile.openAriaLabel': '{name} — profil',

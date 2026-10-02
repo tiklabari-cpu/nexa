@@ -48,6 +48,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { ApiClientError, errorMessageKey } from '../lib/api-client.js';
 import { useApiClient, useAuth, type CurrentAgent } from '../lib/auth-store.js';
+import { useDeployment } from '../lib/deployment.js';
 import { useSetRoutingStatus } from '../lib/routing-status.js';
 import { confirmLeave } from '../lib/dirty-guard.js';
 import { useTranslate, type TFunction } from '../lib/i18n.js';
@@ -106,6 +107,7 @@ export function CommandPalette(): ReactElement | null {
       api.post<PaletteAiAnswer>('/palette/ai-query', { query: askedQuery }),
   });
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  const { pilot_mode: pilotMode } = useDeployment();
   const has = useCallback(
     (allowed: string[]) => allowed.some((scope) => scopes.includes(scope)),
     [scopes],
@@ -282,8 +284,9 @@ export function CommandPalette(): ReactElement | null {
 
     for (const dest of NAV_DESTINATIONS) {
       // Same courtesy as the actions loop above: a destination that only 403s
-      // for this caller is not offered as a result.
-      if (!isNavVisible(dest, scopes)) continue;
+      // for this caller is not offered as a result — nor one the public pilot
+      // does not offer (tm 257.2), which the rail hides the same way.
+      if (!isNavVisible(dest, scopes, pilotMode)) continue;
       const label = t(dest.labelKey);
       const matches =
         !routeNeedle ||
@@ -389,6 +392,7 @@ export function CommandPalette(): ReactElement | null {
     t,
     has,
     scopes,
+    pilotMode,
     actionDeps,
     aiAnswer.mutate,
   ]);

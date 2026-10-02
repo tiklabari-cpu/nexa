@@ -55,6 +55,11 @@
   - **Bozuk liste açılışta durur:** küçük harfli metot (hiç eşleşmez), `^`'sız kalıp, `g`/`y` bayrağı (`.test()` durum taşır, aynı rotada sırayla true/false döner).
   - **Bayrak kapalıyken kanca hiç eklenmez**; `GET /deployment` alanları `pilot_mode`, `contact_email`, `signup_enabled` (257.7/257.9 ekler).
   - **Ayrı bulgu (bu görevin kapsamı dışında, düzeltilmedi):** `sandbox-gate.ts` `BILLING_PATH`'i ham `request.url`'ye uyguluyor (`sandbox-gate.ts:51`). Yukarıdaki ölçülen yönlendirme davranışından çıkarım: `PATCH /api/v1/%62illing/subscription` billing işleyicisine ulaşır ve sandbox kapısının kalıbına uymaz — sandbox üzerinde koşturulmadı. 257.2 billing'i pilot kapısının yol listesine eklerken sandbox kapısı da rota kalıbına geçirilmeli (önce bu istekle kırmızı bir test).
+- **Uygulandı (tm 257.2):**
+  - **Bulgu doğrulandı ve kapandı.** Sandbox içinden `PATCH /api/v1/%62illing/subscription` HEAD kodunda **200** döndü (sandbox'a abonelik satırı yazıldı); `sandbox-gate.ts` artık `request.routeOptions.url`'ye bakıyor → 403 `sandbox`. Kırmızı-önce testi `sandbox.test.ts`'te, :415'teki test değişmeden.
+  - **Billing yol listesi:** `PILOT_REFUSED_PATHS` = `{ methods: ['POST','PUT','PATCH','DELETE'], pathRegex: /^\/api\/v1\/billing\// }`. Bugün `DELETE` rotası yok; liste bir sonraki billing yazmasını da kapatır. Okumalar (dokuz GET ve HEAD) açık.
+  - **BAA:** `POST /settings/compliance/baa` `pilotRefused: true`. Kapsam ve `exactRole: 'owner'` `auth`'un `onRequest`'inde pilot kapısından ÖNCE denetleniyor (kapsamsız çağrı kapsam hatası alır); plan (`entitlement`, `preHandler`) ve bölge (işleyici) SONRA — yani sahip, planı ve bölgesi ne olursa olsun `pilot_mode` alır.
+  - **Fatura:** karar `readComposition`'da (`pilot: env.PILOT_MODE`) ve `buildSubscriptionView`'da aynı (`owesNothing = trialing || PILOT_MODE`); `composeInvoice` pilotta tek satır `<plan> plan — free during the pilot`, aşım satırı yok, `status: 'trial'`. Süpürme açık kalır; bayrak sonradan kapanırsa yalnız sonraki aylar faturalanır, pilot ayları dondurulmuş `trial` kalır. `GET /billing/usage` sayaç olarak aşım sentlerini göstermeye devam eder (fatura değil, ölçüm).
 
 ### 2.4 K-e — açık kayıt korumaları
 

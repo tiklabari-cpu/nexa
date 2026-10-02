@@ -4646,10 +4646,10 @@ components:
         usage: { $ref: "#/components/schemas/UsageSummary" }
         estimated_total_cents:
           type: integer
-          description: Charge for the current cycle — the monthly figure, or the annual total when annual.
+          description: Charge for the current cycle — the monthly figure, or the annual total when annual. 0 while trialing, and always 0 in the public pilot (`pilot_mode`), which sells nothing.
         annual_savings_cents:
           type: integer
-          description: What annual billing saves versus twelve monthly charges. 0 on monthly.
+          description: What annual billing saves versus twelve monthly charges. 0 on monthly, while trialing and in the public pilot.
         provider: { type: string, enum: [mock] }
 
     Entitlement:
@@ -4777,7 +4777,9 @@ components:
             `paid` for a settled past period, `open` for the current one still
             accruing, `trial` when the workspace owed nothing for that period.
             Frozen alongside the rest: a workspace leaving its trial does not
-            turn its trial months into paid ones.
+            turn its trial months into paid ones. Every period composed in the
+            public pilot (`pilot_mode`) is `trial` — one $0 line, "<plan> plan —
+            free during the pilot" — even on a licence activated by hand.
         currency: { type: string, enum: [usd] }
         line_items:
           type: array

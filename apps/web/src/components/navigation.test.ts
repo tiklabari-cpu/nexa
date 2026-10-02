@@ -63,3 +63,21 @@ describe('isNavVisible (FR-MOD-01.2)', () => {
     }
   });
 });
+
+describe('isNavVisible in the public pilot (tm 257.2)', () => {
+  const owner = defaultScopesForRole('owner');
+
+  it('drops Billing for every caller, owner included', () => {
+    const billing = NAV_DESTINATIONS.find((dest) => dest.to === '/app/billing')!;
+    expect(isNavVisible(billing, owner, true)).toBe(false);
+    expect(isNavVisible(billing, owner, false)).toBe(true);
+  });
+
+  it('keeps every other destination exactly as an ordinary deployment shows it', () => {
+    for (const dest of NAV_DESTINATIONS.filter((d) => d.to !== '/app/billing')) {
+      for (const scopes of [owner, DEFAULT_AGENT_SCOPES, []]) {
+        expect(isNavVisible(dest, scopes, true), dest.to).toBe(isNavVisible(dest, scopes));
+      }
+    }
+  });
+});

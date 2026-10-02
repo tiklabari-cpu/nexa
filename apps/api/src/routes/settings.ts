@@ -2186,9 +2186,20 @@ export default async function settingsRoutes(
   // licence bought. The read above stays open on every plan: an admin should
   // be able to see that their workspace is US-hosted and has no agreement,
   // which is the question the upgrade answers.
+  //
+  // `pilotRefused` (tm 257.2): in the public pilot the Enterprise plan this
+  // needs is a free self-serve click and the agreement has no signed
+  // counterpart, so an acceptance would record HIPAA cover nobody provides.
   app.post(
     '/settings/compliance/baa',
-    { config: { scopes: ['access_rules:rw'], exactRole: 'owner', entitlement: 'hipaa' } },
+    {
+      config: {
+        scopes: ['access_rules:rw'],
+        exactRole: 'owner',
+        entitlement: 'hipaa',
+        pilotRefused: true,
+      },
+    },
     async (request, reply) => {
       parse(acceptBaaBody, request.body);
 

@@ -65,11 +65,18 @@ export interface PilotRefusedPath {
 }
 
 /**
- * The surfaces refused by path. Empty until the first one is added — billing
- * writes, by tm 257.2. Hard-coded with the mount like `sandbox-gate`'s
+ * The surfaces refused by path. Hard-coded with the mount like `sandbox-gate`'s
  * `BILLING_PATH`: importing `API_PREFIX` from `server.ts` would close a cycle.
  */
-export const PILOT_REFUSED_PATHS: readonly PilotRefusedPath[] = [];
+export const PILOT_REFUSED_PATHS: readonly PilotRefusedPath[] = [
+  // Every billing write (tm 257.2): plan, seats and cycle, the card, API
+  // packages and AI packs — the pilot takes no payment, so a purchase here
+  // would be a licence opened for nothing or a statement nobody pays. Reads
+  // stay open: the shell still reads the trial state, and the mobile app the
+  // entitlements. No `DELETE` route exists today; listed so the first one
+  // added is closed before anyone writes it.
+  { methods: ['POST', 'PUT', 'PATCH', 'DELETE'], pathRegex: /^\/api\/v1\/billing\// },
+];
 
 const HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 

@@ -460,7 +460,10 @@ async function buildSubscriptionView(
   const billingCycle = (subscription?.billingCycle ?? 'monthly') as BillingCycle;
   const seats = subscription?.seats ?? activeUsers;
   const { seatChargeCents, annualSavingsCents } = priceSeats(unitPrice, seats, billingCycle);
-  const trialing = trial.access === 'trialing';
+  // The trial owes nothing, and neither does any workspace in the public pilot
+  // (tm 257.2) — the same decision `readComposition` makes for the statement,
+  // so the quote and the open estimate cannot disagree.
+  const owesNothing = trial.access === 'trialing' || env.PILOT_MODE;
   const plan = subscription?.plan ?? 'growth';
 
   return {
@@ -483,11 +486,11 @@ async function buildSubscriptionView(
     usage,
     // Seats plus this period's metered overage — both AI resolutions and API
     // calls land on the invoice (FR-MOD-10.1.5, "aşım faturaya"). Zero while
-    // trialing; the trial owes nothing.
-    estimated_total_cents: trialing
+    // trialing or in the pilot; neither owes anything.
+    estimated_total_cents: owesNothing
       ? 0
       : seatChargeCents + usage.ai_resolutions.overage_cents + usage.api_calls.overage_cents,
-    annual_savings_cents: trialing ? 0 : annualSavingsCents,
+    annual_savings_cents: owesNothing ? 0 : annualSavingsCents,
     provider: 'mock',
   };
 }

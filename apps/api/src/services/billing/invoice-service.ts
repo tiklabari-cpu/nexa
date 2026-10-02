@@ -147,6 +147,12 @@ export interface InvoiceComposition {
   billingCycle: BillingCycle;
   /** The workspace owed nothing for this period. */
   trialing: boolean;
+  /**
+   * This deployment is the public pilot (`PILOT_MODE`, tm 257.2), which sells
+   * nothing: the period owes nothing whatever `trialing` says — a licence the
+   * operator activated by hand is `active` and still nobody paid for it.
+   */
+  pilot?: boolean;
   ai: MeteredUsage | undefined;
   api: MeteredUsage | undefined;
   apiPackages: { packageId: string; apiCalls: bigint; priceCents: number }[];
@@ -192,15 +198,18 @@ function overageCents(record: MeteredUsage, byBlock: boolean): { overage: number
 export function composeInvoice(input: InvoiceComposition): ComposedInvoice {
   const cycleLabel = input.billingCycle === 'annual' ? 'annual' : 'monthly';
   const { seatChargeCents } = priceSeats(input.unitPriceCents, input.seats, input.billingCycle);
+  const owesNothing = input.trialing || input.pilot === true;
 
   let lineItems: InvoiceLineItem[];
-  if (input.trialing) {
+  if (owesNothing) {
     // The subscription itself is free during the trial, so the statement
     // says why — matching `estimated_total_cents`, which is also 0 while
     // trialing. A package purchase is a separate, deliberate spend (the
     // trial gate never blocks `POST /billing/api-packages`), so it still
     // lands below as its own line rather than being folded into "free".
-    lineItems = [{ description: `${input.plan} plan — free during trial`, amount_cents: 0 }];
+    // The pilot refuses every purchase, so there it is the one line.
+    const free = input.pilot === true ? 'free during the pilot' : 'free during trial';
+    lineItems = [{ description: `${input.plan} plan — ${free}`, amount_cents: 0 }];
   } else {
     lineItems = [
       {
@@ -265,7 +274,7 @@ export function composeInvoice(input: InvoiceComposition): ComposedInvoice {
 
   const total = lineItems.reduce((sum, item) => sum + item.amount_cents, 0);
   return {
-    trialing: input.trialing,
+    trialing: owesNothing,
     line_items: lineItems,
     subtotal_cents: total,
     total_cents: total,
@@ -331,6 +340,11 @@ export async function readComposition(
     unitPriceCents: subscription?.unitPriceCents ?? env.UNIT_PRICE_CENTS,
     billingCycle: (subscription?.billingCycle ?? 'monthly') as BillingCycle,
     trialing: trial.access === 'trialing',
+    // Read from the deployment at the moment of composing, like the trial
+    // state above: the sweep keeps running in the pilot, so each closed month
+    // is frozen as owing nothing — and turning the switch off later bills only
+    // the months after it, never these.
+    pilot: env.PILOT_MODE,
     ai: records.find((r) => r.metric === 'ai_resolutions'),
     api: records.find((r) => r.metric === 'api_calls'),
     apiPackages: purchases,

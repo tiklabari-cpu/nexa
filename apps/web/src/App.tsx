@@ -1,6 +1,7 @@
 import { useEffect, type ReactElement } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { AppShell } from './components/AppShell.js';
+import { PilotHidden } from './components/PilotHidden.js';
 import { AuthCallbackPage } from './features/auth/AuthCallbackPage.js';
 import { SignInPage } from './features/auth/SignInPage.js';
 import {
@@ -111,7 +112,15 @@ export function App(): ReactElement {
         <Route path="team/ai-agents" element={<TeamAiAgentsPage />} />
         <Route path="team/teams" element={<TeamsPage />} />
         <Route path="reports" element={<ReportsPage />} />
-        <Route path="billing" element={<BillingPage />} />
+        {/* The pilot sells nothing (tm 257.2): its Billing address leads to the inbox. */}
+        <Route
+          path="billing"
+          element={
+            <PilotHidden>
+              <BillingPage />
+            </PilotHidden>
+          }
+        />
         <Route path="playbook" element={<PlaybookPage />} />
         {/* FR-MOD-08.1: one address per section, behind the grouped side
             navigation. The audit log keeps the address it always had. Flat

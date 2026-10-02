@@ -58,6 +58,19 @@ RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
     pnpm install --frozen-lockfile --filter @siyahtus/web...
 ARG VITE_RTM_URL=ws://localhost:4001/v1/agent/rtm/ws
 ENV VITE_RTM_URL=${VITE_RTM_URL}
+# The three other addresses the panel shows (tm 257.3): the hosted Chat page
+# link, the public KB article link and the e-mail forwarding domain. Defaults
+# are the localhost values the source falls back to, so docker-compose.full.yml
+# (the demo) builds the same bundle as before; an empty value would NOT fall
+# back (`??`) and would turn the Chat page link into a relative '/chat.html',
+# which is why the defaults live here and not as bare `ARG X`. The pilot
+# compose passes the real public addresses.
+ARG VITE_WIDGET_URL=http://localhost:5174
+ENV VITE_WIDGET_URL=${VITE_WIDGET_URL}
+ARG VITE_KB_PUBLIC_BASE=http://localhost:4000/api/v1
+ENV VITE_KB_PUBLIC_BASE=${VITE_KB_PUBLIC_BASE}
+ARG VITE_INBOUND_EMAIL_DOMAIN=inbound.siyahtus.localhost
+ENV VITE_INBOUND_EMAIL_DOMAIN=${VITE_INBOUND_EMAIL_DOMAIN}
 # No source maps in the image (tm 256.5): served from `/assets/`, a `.map` hands
 # anyone the panel's original TypeScript, comments included. `vite.config.ts`
 # turns them off on this one variable; a local `pnpm build` keeps them. The

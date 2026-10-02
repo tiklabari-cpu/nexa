@@ -54,6 +54,7 @@ import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { usePagedQuery, type PagedResponse } from '../../lib/paged-query.js';
 import { useTrafficRevision } from '../../lib/traffic-live.js';
 import { CustomersTabs } from '../customers/CustomersTabs.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { canReadChannels } from '../inbox/views.js';
 import { visitorRowActions, type RowActionId } from './rowActions.js';
 import { useSupervising } from './supervising-store.js';
@@ -269,7 +270,11 @@ export function TrafficPage(): ReactElement {
   // list behind (`canReadChannels`, `views.ts`): an ordinary agent holds
   // neither `channels--all` scope, so the CTA would only land them on a 403 —
   // the courtesy check `AuditLogPage` sets the precedent for.
-  const canManageChannels = canReadChannels(scopes);
+  //
+  // Not in the public pilot (tm 257.3): "Add more channels" leads to a grid of
+  // Website and Chat page only, neither of which is "more".
+  const { pilot_mode: pilotMode } = useDeployment();
+  const canManageChannels = canReadChannels(scopes) && !pilotMode;
 
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get(TAB_PARAM);

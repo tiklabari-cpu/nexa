@@ -159,7 +159,7 @@ export default async function channelRoutes(
 
   app.post<{ Params: { type: string } }>(
     '/channels/:type/connect',
-    { config: { scopes: ['channels--all:rw'] } },
+    { config: { scopes: ['channels--all:rw'], pilotRefused: true } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
       const tenant = request.tenant();
@@ -250,7 +250,7 @@ export default async function channelRoutes(
 
   app.post<{ Params: { type: string } }>(
     '/channels/:type/messages',
-    { config: { scopes: ['channels--all:rw'] } },
+    { config: { scopes: ['channels--all:rw'], pilotRefused: true } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
       const body = parse(outboundBody, request.body);
@@ -273,10 +273,16 @@ export default async function channelRoutes(
   // address in the body is what routes it to a workspace. The provider is mocked
   // in this build (MASTER-PROMPT §5); a real deployment verifies its signature
   // at the edge (§9, out of scope).
+  //
+  // `pilotRefused` (tm 257.3): in the public pilot every one of these doors is
+  // shut — the Caddyfile publishes `/api/*`, so an unsigned webhook would be a
+  // free ticket/chat writer for anyone, and no provider is wired behind it.
+  // Disconnect and the reads stay open so a row connected before the flag was
+  // set can still be closed.
 
   app.post<{ Params: { type: string } }>(
     '/channels/:type/webhook',
-    { config: { public: true } },
+    { config: { public: true, pilotRefused: true } },
     async (request, reply) => {
       const type = channelTypeParam(request.params.type);
       // The outcome carries its own status now: a message the spam filter drops
@@ -287,63 +293,67 @@ export default async function channelRoutes(
     },
   );
 
-  app.post('/channels/email/inbound', { config: { public: true } }, async (request, reply) => {
-    if (env.INBOUND_EMAIL_SECRET) {
-      const header = request.headers['x-inbound-secret'];
-      const provided = Array.isArray(header) ? header[0] : header;
-      if (!secretMatches(provided, env.INBOUND_EMAIL_SECRET)) {
-        throw ApiError.authentication('Invalid inbound webhook secret.');
+  app.post(
+    '/channels/email/inbound',
+    { config: { public: true, pilotRefused: true } },
+    async (request, reply) => {
+      if (env.INBOUND_EMAIL_SECRET) {
+        const header = request.headers['x-inbound-secret'];
+        const provided = Array.isArray(header) ? header[0] : header;
+        if (!secretMatches(provided, env.INBOUND_EMAIL_SECRET)) {
+          throw ApiError.authentication('Invalid inbound webhook secret.');
+        }
       }
-    }
 
-    const body = parse(inboundBody, request.body);
+      const body = parse(inboundBody, request.body);
 
-    // Both are transport concerns, settled before any tenant context: the
-    // recipient names the workspace, the sender names the customer.
-    const recipient = parseRecipient(body.to);
-    if (!recipient) throw ApiError.notFound('Unknown recipient.');
-    const sender = parseSender(body.from);
-    if (!sender) throw ApiError.validation('from: a valid sender address is required.');
+      // Both are transport concerns, settled before any tenant context: the
+      // recipient names the workspace, the sender names the customer.
+      const recipient = parseRecipient(body.to);
+      if (!recipient) throw ApiError.notFound('Unknown recipient.');
+      const sender = parseSender(body.from);
+      if (!sender) throw ApiError.validation('from: a valid sender address is required.');
 
-    // Two resolves, one per address shape, because they answer different
-    // questions. The default address is still resolved from the organization id
-    // exactly as it always was, so a workspace that never defined a labelled
-    // address is unaffected by any of this, whether or not its row exists yet.
-    // A labelled address has to *exist*, and only the table knows that.
-    const matches =
-      recipient.label === null
-        ? await app.db.$queryRaw<InboundRecipientMatch[]>(
-            Prisma.sql`SELECT * FROM auth_resolve_organization_license(${recipient.organizationId}::uuid)`,
-          )
-        : await app.db.$queryRaw<InboundRecipientMatch[]>(
-            Prisma.sql`SELECT * FROM email_resolve_inbound_address(${recipient.localPart})`,
-          );
+      // Two resolves, one per address shape, because they answer different
+      // questions. The default address is still resolved from the organization id
+      // exactly as it always was, so a workspace that never defined a labelled
+      // address is unaffected by any of this, whether or not its row exists yet.
+      // A labelled address has to *exist*, and only the table knows that.
+      const matches =
+        recipient.label === null
+          ? await app.db.$queryRaw<InboundRecipientMatch[]>(
+              Prisma.sql`SELECT * FROM auth_resolve_organization_license(${recipient.organizationId}::uuid)`,
+            )
+          : await app.db.$queryRaw<InboundRecipientMatch[]>(
+              Prisma.sql`SELECT * FROM email_resolve_inbound_address(${recipient.localPart})`,
+            );
 
-    const match = matches[0];
-    // Absent, or a workspace that is closed: the address no longer accepts mail.
-    // A 4xx tells the provider this is permanent, not something to retry. An
-    // undefined label lands here too — an address nobody created accepts nothing.
-    if (!match || match.license_status === 'canceled') {
-      throw ApiError.notFound('Unknown recipient.');
-    }
+      const match = matches[0];
+      // Absent, or a workspace that is closed: the address no longer accepts mail.
+      // A 4xx tells the provider this is permanent, not something to retry. An
+      // undefined label lands here too — an address nobody created accepts nothing.
+      if (!match || match.license_status === 'canceled') {
+        throw ApiError.notFound('Unknown recipient.');
+      }
 
-    const tenant = { licenseId: match.license_id, organizationId: match.organization_id };
-    const result = await withTenant(app.db, tenant, async (tx) => {
-      // The default address materialises its row on first use, so a ticket can
-      // name the mailbox it arrived at even for the address that predates the
-      // table (FR-MOD-08.5.3).
-      const addressId = match.address_id ?? (await emailAddresses.ensureDefault(tx, tenant)).id;
-      return ingestInboundEmail(tx, tenant, tickets, {
-        senderEmail: sender.email,
-        senderName: sender.name,
-        subject: body.subject,
-        spam: body.spam,
-        addressId,
+      const tenant = { licenseId: match.license_id, organizationId: match.organization_id };
+      const result = await withTenant(app.db, tenant, async (tx) => {
+        // The default address materialises its row on first use, so a ticket can
+        // name the mailbox it arrived at even for the address that predates the
+        // table (FR-MOD-08.5.3).
+        const addressId = match.address_id ?? (await emailAddresses.ensureDefault(tx, tenant)).id;
+        return ingestInboundEmail(tx, tenant, tickets, {
+          senderEmail: sender.email,
+          senderName: sender.name,
+          subject: body.subject,
+          spam: body.spam,
+          addressId,
+        });
       });
-    });
 
-    return reply.send(result);
-  });
+      return reply.send(result);
+    },
+  );
 
   // --- Forwarding addresses: which mailboxes this workspace accepts mail at ---
   //
@@ -363,7 +373,7 @@ export default async function channelRoutes(
 
   app.post(
     '/channels/email/addresses',
-    { config: { scopes: ['channels--all:rw'] } },
+    { config: { scopes: ['channels--all:rw'], pilotRefused: true } },
     async (request, reply) => {
       const { label } = parse(addressBody, request.body);
       const tenant = request.tenant();
@@ -386,7 +396,7 @@ export default async function channelRoutes(
 
   app.delete<{ Params: { addressId: string } }>(
     '/channels/email/addresses/:addressId',
-    { config: { scopes: ['channels--all:rw'] } },
+    { config: { scopes: ['channels--all:rw'], pilotRefused: true } },
     async (request, reply) => {
       const tenant = request.tenant();
       const { addressId } = request.params;
@@ -406,7 +416,7 @@ export default async function channelRoutes(
 
   app.post<{ Params: { addressId: string } }>(
     '/channels/email/addresses/:addressId/test',
-    { config: { scopes: ['channels--all:rw'] } },
+    { config: { scopes: ['channels--all:rw'], pilotRefused: true } },
     async (request, reply) => {
       const tenant = request.tenant();
       const accountId = selfAccountId(request.requirePrincipal());

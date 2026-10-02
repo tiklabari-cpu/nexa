@@ -78,6 +78,12 @@ export interface SettingsSectionEntry {
    * module. Dropped from the navigation and the search alike.
    */
   pilotHidden?: true;
+  /**
+   * Terms from `keywords` that stop matching in the public pilot (tm 257.3):
+   * the section stays, but searching for what it no longer offers ("whatsapp"
+   * on a Channels page that shows two cards) must not point at it.
+   */
+  pilotDroppedKeywords?: readonly string[];
 }
 
 const ACCESS_RULES = ['access_rules:ro', 'access_rules:rw'] as const;
@@ -129,6 +135,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     scope: ['channels--all:ro', 'channels--all:rw'],
     file: 'Channels',
     keywords: ['messenger', 'whatsapp', 'sms', 'telegram', 'instagram', 'email'],
+    // The pilot's grid is Website and Chat page; the six names are mocks or
+    // (email) a channel the pilot does not run.
+    pilotDroppedKeywords: ['messenger', 'whatsapp', 'sms', 'telegram', 'instagram', 'email'],
   },
   {
     slug: 'website-widgets',
@@ -418,7 +427,10 @@ export function searchSections(
   if (!needle) return [];
   return visibleSections(scopes, pilotMode).filter((section) => {
     if (labelOf(section).toLowerCase().includes(needle)) return true;
-    return (section.keywords ?? []).some((keyword) => keyword.toLowerCase().includes(needle));
+    const dropped = pilotMode ? (section.pilotDroppedKeywords ?? []) : [];
+    return (section.keywords ?? []).some(
+      (keyword) => !dropped.includes(keyword) && keyword.toLowerCase().includes(needle),
+    );
   });
 }
 

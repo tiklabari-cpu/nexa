@@ -5531,6 +5531,10 @@ export interface paths {
      *
      *     Idempotent on the channel type: connecting again re-configures the existing
      *     channel rather than creating a second.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot offers no adapter channels.
      */
     post: operations['connectChannel'];
     delete?: never;
@@ -5621,6 +5625,10 @@ export interface paths {
      *     identity is looked up) or directly by `external_id` — exactly one. Refused
      *     if the channel is not connected, or if a `chat_id` has no identity on this
      *     channel.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot offers no adapter channels.
      */
     post: operations['sendChannelMessage'];
     delete?: never;
@@ -5668,6 +5676,10 @@ export interface paths {
      *
      *     Public and unsigned in this build (the provider is mocked, MASTER-PROMPT
      *     §5); a real deployment verifies the provider signature at the edge.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot offers no adapter channels, so this public door is shut to the whole internet.
      */
     post: operations['ingestChannelWebhook'];
     delete?: never;
@@ -5704,6 +5716,10 @@ export interface paths {
      *     Delivery itself is mocked in this build (PLAN A4); a production deployment
      *     authenticates the provider at the edge. When `INBOUND_EMAIL_SECRET` is
      *     configured the caller must present it as the `X-Inbound-Secret` header.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot offers no e-mail channel, and a correct secret does not change that.
      */
     post: operations['ingestInboundEmail'];
     delete?: never;
@@ -5750,6 +5766,10 @@ export interface paths {
      *     independently through a unique key on the whole local part. A label already
      *     taken in this workspace is a 400 that says only that the address is taken —
      *     never who holds it (NFR-S5).
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused with
+     *     `403 not_allowed` and `error.details.reason: "pilot_mode"` — the pilot offers
+     *     no e-mail channel.
      */
     post: operations['createInboundEmailAddress'];
     delete?: never;
@@ -5780,6 +5800,10 @@ export interface paths {
      *     The workspace's default address cannot be deleted: it is the address every
      *     existing forwarding rule points at, and removing it would silently drop
      *     support mail. That refusal is a 400.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused with
+     *     `403 not_allowed` and `error.details.reason: "pilot_mode"` — the pilot offers
+     *     no e-mail channel.
      */
     delete: operations['deleteInboundEmailAddress'];
     options?: never;
@@ -5815,6 +5839,10 @@ export interface paths {
      *     The reply names the ticket that was created, and the address's
      *     `last_received_at` moves — so the console can show the result immediately
      *     and `GET /channels/email/addresses` reports it afterwards.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused with
+     *     `403 not_allowed` and `error.details.reason: "pilot_mode"` — the pilot offers
+     *     no e-mail channel.
      */
     post: operations['testInboundEmailAddress'];
     delete?: never;
@@ -21278,6 +21306,7 @@ export interface operations {
         };
       };
       400: components['responses']['BadRequest'];
+      403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
     };
   };
@@ -21335,6 +21364,7 @@ export interface operations {
       };
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
+      403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
     };
   };

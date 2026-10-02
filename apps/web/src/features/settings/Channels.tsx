@@ -34,6 +34,7 @@ import { useApiClient, useAuth, useBrand } from '../../lib/auth-store.js';
 import { useCloseGuard } from '../../lib/dirty-guard.js';
 import { FieldError, compose, phoneNumber, required, useForm } from '../../lib/form.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { useConnectedChannels, type ConnectedChannel } from '../inbox/useInbox.js';
 import { canReadChannels } from '../inbox/views.js';
 
@@ -135,16 +136,21 @@ function ctaText(t: TFunction, cta: string): string {
  * hands out a ready-to-use address rather than needing a connection step. The
  * five adapter channels below derive theirs from `/channels` the same way —
  * nothing in this grid is a fixed label any more.
+ *
+ * In the public pilot (`pilotMode`, tm 257.3) the grid is the first two cards
+ * only: Website and Chat page are real, and everything after them is a mock
+ * provider or the e-mail channel, which the pilot does not run.
  */
 export function channelsFor(
   websites: WebsiteStatusRow[],
   connectedChannels: ConnectedChannel[] = [],
+  pilotMode = false,
 ): Channel[] {
   const connected = websites.filter((w) => w.status === 'connected').length;
   const websiteStatus: ChannelStatus =
     connected > 0 ? 'connected' : websites.length > 0 ? 'ready' : 'not_connected';
 
-  return [
+  const all: Channel[] = [
     {
       id: 'website',
       name: 'Website widget',
@@ -176,6 +182,7 @@ export function channelsFor(
     instagramChannel(connectedChannels),
     telegramChannel(connectedChannels),
   ];
+  return pilotMode ? all.filter((c) => c.id === 'website' || c.id === 'chat-page') : all;
 }
 
 /**
@@ -581,7 +588,11 @@ export function ChannelsGrid(): ReactElement {
   // Only owner/admin hold the channels--all scope; for anyone else the
   // request never fires (it would only come back 403) — canReadChannels()
   // is the same gate the Inbox Views group uses for the same query.
-  const canChannels = canReadChannels(scopes);
+  //
+  // The pilot never asks (tm 257.3): its grid shows no adapter channel, and a
+  // 403 on `GET /channels` would blank the Website and Chat page cards with it.
+  const { pilot_mode: pilotMode } = useDeployment();
+  const canChannels = canReadChannels(scopes) && !pilotMode;
 
   const websites = useQuery({
     queryKey: ['settings', 'websites', brandId],
@@ -598,7 +609,11 @@ export function ChannelsGrid(): ReactElement {
   });
   const brandName = brandId ? brands.data?.items.find((b) => b.id === brandId)?.name : undefined;
 
-  const channels = channelsFor(websites.data?.items ?? [], connectedChannels.data?.items ?? []);
+  const channels = channelsFor(
+    websites.data?.items ?? [],
+    connectedChannels.data?.items ?? [],
+    pilotMode,
+  );
 
   return (
     <Section

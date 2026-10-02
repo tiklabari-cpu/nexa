@@ -180,6 +180,12 @@ services:
         # Baked into the bundle: a WebSocket URL cannot be relative. The same
         # public RTM address the api hands the widget (RTM_BASE_URL).
         VITE_RTM_URL: ${RTM_BASE_URL:?set RTM_BASE_URL in .env}/v1/agent/rtm/ws
+        # Also baked in (tm 257.3), or the pilot panel shows localhost: the
+        # Chat page link (the widget origin), the public KB article link
+        # (the api's public KB routes) and the forwarding domain.
+        VITE_WIDGET_URL: ${WIDGET_BASE_URL:?set WIDGET_BASE_URL in .env}
+        VITE_KB_PUBLIC_BASE: ${API_BASE_URL:?set API_BASE_URL in .env}/api/v1
+        VITE_INBOUND_EMAIL_DOMAIN: ${INBOUND_EMAIL_DOMAIN:?set INBOUND_EMAIL_DOMAIN in .env}
     image: siyahtus-web:pilot
     restart: unless-stopped
     logging: *logging

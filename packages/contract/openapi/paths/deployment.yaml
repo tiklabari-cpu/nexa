@@ -1,0 +1,40 @@
+# Deployment configuration — what the panel needs to know about this
+# deployment before anyone signs in (tm 257.13 · ADR
+# docs/adr/pilot-public-readiness.md K-a).
+
+deployment:
+  get:
+    tags: [System]
+    operationId: getDeploymentConfig
+    summary: Deployment-wide settings the panel reads before sign-in
+    description: |
+      Anonymous, and the same for every caller: this deployment's own
+      settings, never a workspace's. The panel reads it on the sign-in screen
+      and keeps the same answer once signed in, so a screen can hide what this
+      deployment does not offer before anyone has a session.
+
+      Hiding is only a courtesy — the API enforces every one of these on its
+      own. With `pilot_mode` on, the routes behind the hidden surfaces answer
+      `403 not_allowed` with `error.details.reason: "pilot_mode"`, and with
+      `signup_enabled` off, `POST /auth/signup` answers `403` with
+      `signup_closed`.
+
+      Deliberately narrow, like the anonymous `/health` body: no version,
+      region, provider or uptime — that is infrastructure detail a stranger
+      has no business reading. Metered on its own per-address bucket rather
+      than the one sign-in and the widget's token mint share, because every
+      page load reads it.
+    security: []
+    responses:
+      "200":
+        description: This deployment's settings.
+        headers:
+          Cache-Control:
+            description: |
+              `no-cache` — a cache may keep the answer but must revalidate it,
+              so switching pilot mode off is seen on the next read.
+            schema: { type: string }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/DeploymentConfig" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth, type Membership, type TwoFactorEnrollment } from '../../lib/auth-store.js';
 import { ApiClientError } from '../../lib/api-client.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
 import { downloadRecoveryCodes } from '../../lib/recovery-codes.js';
@@ -125,6 +126,9 @@ export function SignInPage(): ReactElement {
   const listWorkspaces = useAuth((s) => s.listWorkspaces);
   const signIn = useAuth((s) => s.signIn);
   const startSsoLogin = useAuth((s) => s.startSsoLogin);
+  // The seed's demo owner exists only where the seed ran; the public pilot
+  // has no seed, so the line would hand strangers a login that does not work.
+  const { pilot_mode: pilotMode } = useDeployment();
 
   const [params] = useSearchParams();
   const ssoParam = params.get('sso');
@@ -568,9 +572,11 @@ export function SignInPage(): ReactElement {
           </Link>
         </p>
 
-        <p className="mt-4 text-center text-2xs text-content-tertiary">
-          {t('auth.signin.demoCredentials')}
-        </p>
+        {!pilotMode && (
+          <p className="mt-4 text-center text-2xs text-content-tertiary">
+            {t('auth.signin.demoCredentials')}
+          </p>
+        )}
       </div>
     </main>
   );

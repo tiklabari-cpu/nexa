@@ -20,6 +20,7 @@ import licenseGate from './plugins/license-gate.js';
 import lifecycle from './plugins/lifecycle.js';
 import metering from './plugins/metering.js';
 import sandboxGate from './plugins/sandbox-gate.js';
+import pilotGate, { PILOT_REFUSED_PATHS, type PilotRefusedPath } from './plugins/pilot-gate.js';
 import rateLimit from './plugins/rate-limit.js';
 import redis from './plugins/redis.js';
 import scheduler from './plugins/scheduler.js';
@@ -70,6 +71,7 @@ import commandPaletteRoutes from './routes/command-palette.js';
 import appRoutes from './routes/apps.js';
 import auditLogRoutes from './routes/audit-log.js';
 import healthRoutes from './routes/health.js';
+import deploymentRoutes from './routes/deployment.js';
 
 export const API_PREFIX = '/api/v1';
 export const VERSION = '0.1.0';
@@ -139,6 +141,13 @@ export interface BuildServerOptions {
   embeddings?: EmbeddingProvider;
   /** How the `openai` embedding adapter reaches the network — `llmFetch`'s counterpart. */
   embeddingFetch?: typeof fetch;
+  /**
+   * The surfaces `PILOT_MODE=true` refuses by path (tm 257.13). Omitted,
+   * `PILOT_REFUSED_PATHS`. A test passes its own list to prove the matching
+   * against routes it registers itself, rather than against whichever real
+   * surface happens to be on the list.
+   */
+  pilotRefusedPaths?: readonly PilotRefusedPath[];
 }
 
 export async function buildServer({
@@ -153,6 +162,7 @@ export async function buildServer({
   llmFetch,
   embeddings: injectedEmbeddings,
   embeddingFetch,
+  pilotRefusedPaths = PILOT_REFUSED_PATHS,
 }: BuildServerOptions): Promise<FastifyInstance> {
   const telemetryInstance =
     telemetry !== undefined
@@ -411,6 +421,14 @@ export async function buildServer({
   // write under `/billing/`, where the two above have already answered the
   // general questions.
   await app.register(sandboxGate);
+  // The public pilot's refusals (tm 257.13). Registered after the three gates
+  // above but it answers before all of them: it hooks `onRequest`, which runs
+  // ahead of every `preHandler`, because a refused route must not parse its
+  // body. After `auth` on purpose — `onRequest` hooks run in registration
+  // order, so a route that needs a credential still answers 401 to a caller
+  // without one, the way every other route does, and only then "not in the
+  // pilot". It reads no principal either way; see the file header.
+  await app.register(pilotGate, { env, paths: pilotRefusedPaths });
   await app.register(metering, { env });
 
   app.addHook('onSend', async (request, reply) => {
@@ -420,6 +438,7 @@ export async function buildServer({
   await app.register(
     async (api) => {
       await api.register(healthRoutes, { env, version: VERSION });
+      await api.register(deploymentRoutes, { env });
       await api.register(authRoutes, { env, mailer });
       // Its own plugin scope, not part of `authRoutes`: the SAML response
       // arrives as a form post, and the content-type parser that reads it is

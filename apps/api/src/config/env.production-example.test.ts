@@ -57,6 +57,13 @@ describe('.env.production.example documents what parseEnv requires in production
     expect(uncommentedValueOf('OTEL_EXPORTER')).toBe('none');
   });
 
+  it('turns the pilot switch on, with the contact address left to fill in (tm 257.13)', () => {
+    // The template is the pilot's: `PILOT_MODE=true` is what makes boot refuse
+    // the stub providers above, and its contact address is the deployer's own.
+    expect(uncommentedValueOf('PILOT_MODE')).toBe('true');
+    expect(uncommentedValueOf('PILOT_CONTACT_EMAIL')).toMatch(/^<[^<>]+>$/);
+  });
+
   it.each([
     'LLM_API_KEY',
     'EMBEDDING_API_KEY',

@@ -87,6 +87,61 @@ describe('SIGNUP_ENABLED', () => {
   );
 });
 
+/**
+ * The pilot switch (tm 257.13 · ADR pilot-public-readiness K-a). Off unless a
+ * deployment says otherwise, read the way `SIGNUP_ENABLED` is: the two literal
+ * words only, because guessing which way a misspelt line was meant is the one
+ * thing the switch must never do.
+ */
+describe('PILOT_MODE', () => {
+  it('is off when unset, so dev, test, the demo and e2e run exactly as before', () => {
+    expect(parseEnv(BASE).PILOT_MODE).toBe(false);
+  });
+
+  it('reads true and false', () => {
+    expect(parseEnv({ ...BASE, PILOT_MODE: 'true' }).PILOT_MODE).toBe(true);
+    expect(parseEnv({ ...BASE, PILOT_MODE: 'false' }).PILOT_MODE).toBe(false);
+  });
+
+  it.each(['', '0', '1', 'no', 'off', 'False', 'TRUE', ' true'])(
+    'refuses %j instead of reading it as on or off',
+    (value) => {
+      expect(() => parseEnv({ ...BASE, PILOT_MODE: value })).toThrow(/PILOT_MODE/);
+    },
+  );
+
+  it('takes a contact address, and refuses one that is not an address', () => {
+    expect(parseEnv(BASE).PILOT_CONTACT_EMAIL).toBeUndefined();
+    expect(
+      parseEnv({ ...BASE, PILOT_CONTACT_EMAIL: 'pilot@siyahtus.test' }).PILOT_CONTACT_EMAIL,
+    ).toBe('pilot@siyahtus.test');
+    for (const value of ['', 'not an address', '<pilot contact address>']) {
+      expect(() => parseEnv({ ...BASE, PILOT_CONTACT_EMAIL: value }), value).toThrow(
+        /PILOT_CONTACT_EMAIL/,
+      );
+    }
+  });
+
+  it('needs none of the production rules outside production', () => {
+    // The integration twins and a developer trying the switch run it on the
+    // mock providers; only a production boot has real users behind it.
+    expect(() => parseEnv({ ...BASE, PILOT_MODE: 'true' })).not.toThrow();
+  });
+});
+
+/** The `GET /deployment` bucket (tm 257.13). */
+describe('RATE_LIMIT_PUBLIC_CONFIG_PER_MIN', () => {
+  it('is 600 per minute when unset', () => {
+    expect(parseEnv(BASE).RATE_LIMIT_PUBLIC_CONFIG_PER_MIN).toBe(600);
+  });
+
+  it.each(['0', '-1', '1.5', 'many'])('refuses %j', (value) => {
+    expect(() => parseEnv({ ...BASE, RATE_LIMIT_PUBLIC_CONFIG_PER_MIN: value })).toThrow(
+      /RATE_LIMIT_PUBLIC_CONFIG_PER_MIN/,
+    );
+  });
+});
+
 /** The assignee e-mail window (FR-MOD-13.8 · tm 256.4). */
 describe('ASSIGNEE_EMAIL_COOLDOWN_MS', () => {
   it('is fifteen minutes when unset', () => {
@@ -356,6 +411,108 @@ describe('production configuration', () => {
     // under NODE_ENV=production, so production must not insist on either.
     expect(parseEnv(PROD_BASE).SIGNUP_ENABLED).toBe(true);
     expect(parseEnv({ ...PROD_BASE, SIGNUP_ENABLED: 'false' }).SIGNUP_ENABLED).toBe(false);
+  });
+
+  it('boots without PILOT_MODE exactly as before — the pilot rules are not production rules (tm 257.13)', () => {
+    // Helm runs production on the mock model and file mail, and so does this
+    // base: tying the pilot's demands to NODE_ENV alone would break both.
+    const env = parseEnv(PROD_BASE);
+    expect(env.PILOT_MODE).toBe(false);
+    expect(env.LLM_PROVIDER).toBe('mock');
+    expect(env.MAIL_PROVIDER).toBe('file');
+  });
+
+  /**
+   * `PILOT_MODE=true` in production (tm 257.13 · ADR K-b). The switch means
+   * "real people use this", so a stub model, a stub embedder or mail written
+   * to disk is a silent outage there, and the contact address the trial and
+   * "closed in the pilot" notes point at has to exist. Each refusal names the
+   * key, never the value — the message is what an operator pastes into a chat.
+   */
+  describe('PILOT_MODE=true', () => {
+    const PILOT: NodeJS.ProcessEnv = {
+      ...PROD_BASE,
+      PILOT_MODE: 'true',
+      PILOT_CONTACT_EMAIL: 'pilot-desk@siyahtus.test',
+      LLM_PROVIDER: 'openai',
+      LLM_PROVIDER_REGION: 'us',
+      LLM_API_BASE_URL: 'https://us.api.openai.com/v1',
+      LLM_MODEL: 'a-model-id',
+      LLM_API_KEY: realSecret('llm'),
+      EMBEDDING_PROVIDER: 'openai',
+      EMBEDDING_PROVIDER_REGION: 'us',
+      EMBEDDING_API_BASE_URL: 'https://us.api.openai.com/v1',
+      EMBEDDING_MODEL: 'text-embedding-3-small',
+      EMBEDDING_API_KEY: realSecret('embedding'),
+      MAIL_PROVIDER: 'smtp',
+      SMTP_HOST: 'smtp.siyahtus.test',
+      SMTP_PORT: '587',
+      SMTP_USERNAME: 'mailer-login',
+      SMTP_PASSWORD: realSecret('smtp'),
+      SMTP_FROM: 'desk@siyahtus.test',
+    };
+
+    const problemsOf = (source: NodeJS.ProcessEnv): string => {
+      try {
+        parseEnv(source);
+        return '';
+      } catch (error) {
+        return (error as Error).message;
+      }
+    };
+
+    it('boots with a contact address, the real model, the real embedder and SMTP', () => {
+      const env = parseEnv(PILOT);
+      expect(env.PILOT_MODE).toBe(true);
+      expect(env.PILOT_CONTACT_EMAIL).toBe('pilot-desk@siyahtus.test');
+    });
+
+    it('refuses to boot without PILOT_CONTACT_EMAIL, naming it', () => {
+      const { PILOT_CONTACT_EMAIL: _omitted, ...withoutContact } = PILOT;
+      const message = problemsOf(withoutContact);
+      expect(message).toMatch(/PILOT_CONTACT_EMAIL is required/);
+      expect(message).toMatch(/PILOT_MODE=true/);
+    });
+
+    it.each([
+      ['LLM_PROVIDER', { LLM_PROVIDER: 'mock' }],
+      ['EMBEDDING_PROVIDER', { EMBEDDING_PROVIDER: 'mock' }],
+      ['MAIL_PROVIDER', { MAIL_PROVIDER: 'file' }],
+      ['MAIL_PROVIDER', { MAIL_PROVIDER: 'null' }],
+    ] as const)('refuses %s at a stub (%o), naming the key', (key, override) => {
+      const message = problemsOf({ ...PILOT, ...override });
+      expect(message).toMatch(new RegExp(`${key} must be`));
+      expect(message).toMatch(/PILOT_MODE=true/);
+      // Nothing else in the configuration is wrong, so nothing else is named.
+      expect(message.trim().split('\n')).toHaveLength(2);
+    });
+
+    it('reports every pilot problem at once', () => {
+      const { PILOT_CONTACT_EMAIL: _omitted, ...withoutContact } = PILOT;
+      const message = problemsOf({
+        ...withoutContact,
+        LLM_PROVIDER: 'mock',
+        EMBEDDING_PROVIDER: 'mock',
+        MAIL_PROVIDER: 'file',
+      });
+      expect(message).toMatch(
+        /PILOT_CONTACT_EMAIL[\s\S]*LLM_PROVIDER[\s\S]*EMBEDDING_PROVIDER[\s\S]*MAIL_PROVIDER/,
+      );
+      expect(message).not.toContain('pilot-desk@siyahtus.test');
+    });
+
+    it('asks none of it when the switch is off, even with every stub in place', () => {
+      expect(() =>
+        parseEnv({
+          ...PILOT,
+          PILOT_MODE: 'false',
+          PILOT_CONTACT_EMAIL: undefined,
+          LLM_PROVIDER: 'mock',
+          EMBEDDING_PROVIDER: 'mock',
+          MAIL_PROVIDER: 'file',
+        }),
+      ).not.toThrow();
+    });
   });
 
   it('runs the sweeps and telemetry by default, where test does not', () => {

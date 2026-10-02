@@ -143,6 +143,8 @@ paths:
     $ref: "./paths/health.yaml#/live"
   /health/ready:
     $ref: "./paths/health.yaml#/ready"
+  /deployment:
+    $ref: "./paths/deployment.yaml#/deployment"
 
   /auth/login:
     $ref: "./paths/auth.yaml#/login"
@@ -700,6 +702,34 @@ components:
         scheduler: { $ref: "#/components/schemas/SchedulerHealth" }
         event_partitions: { $ref: "#/components/schemas/EventPartitionsHealth" }
         providers: { $ref: "#/components/schemas/HealthProviders" }
+
+    DeploymentConfig:
+      type: object
+      description: |
+        Deployment-wide settings (tm 257.13), the same for every caller and
+        never about a workspace. Each field the panel reads to hide something
+        is also enforced by the API itself.
+      required: [pilot_mode, contact_email, signup_enabled]
+      additionalProperties: false
+      properties:
+        pilot_mode:
+          type: boolean
+          description: |
+            This deployment is the public pilot (`PILOT_MODE`). Surfaces that
+            are mocks are hidden in the panel and refused by the API with
+            `403 not_allowed`, `error.details.reason: "pilot_mode"`.
+        contact_email:
+          type: string
+          nullable: true
+          format: email
+          description: |
+            Where pilot users write to (`PILOT_CONTACT_EMAIL`); `null` when the
+            deployment names none. Always set on a production pilot.
+        signup_enabled:
+          type: boolean
+          description: |
+            Whether `POST /auth/signup` creates workspaces here
+            (`SIGNUP_ENABLED`); off, it answers `403` with `signup_closed`.
 
     DependencyHealth:
       type: object

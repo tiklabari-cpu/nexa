@@ -4475,6 +4475,11 @@ export interface paths {
      *       into, so the endpoint refuses rather than storing an agreement that
      *       claims something untrue about where the data is.
      *
+     *     And in the public pilot (`pilot_mode` on `GET /deployment`) not at all:
+     *     the owner gets `403 not_allowed` with `error.details.reason:
+     *     "pilot_mode"` whatever the plan and region — the pilot provides no HIPAA
+     *     cover to accept.
+     *
      *     Idempotent: accepting again returns the state unchanged, keeping the
      *     original timestamp. The first acceptance is the record, and a second
      *     click is not a second agreement — so it also writes no second audit entry.
@@ -6806,6 +6811,11 @@ export interface paths {
      *     Billing is mocked (ADR-13): nothing is charged and no external provider is
      *     called. Writable even while the workspace is read-only — subscribing is how
      *     an expired trial comes back.
+     *
+     *     The public pilot (`pilot_mode` on `GET /deployment`) sells nothing: there,
+     *     this and every other billing write answers `403 not_allowed` with
+     *     `error.details.reason: "pilot_mode"` before the body is read, and the
+     *     billing reads stay open.
      */
     patch: operations['updateSubscription'];
     trace?: never;
@@ -6919,6 +6929,9 @@ export interface paths {
      *     Writable even while the workspace is read-only: putting a card on file is
      *     part of how an expired trial comes back, so this is never blocked by the
      *     trial gate.
+     *
+     *     `403 not_allowed` with `error.details.reason: "pilot_mode"` in the public
+     *     pilot, like every billing write (see `PATCH /billing/subscription`).
      */
     put: operations['updatePaymentMethod'];
     post?: never;
@@ -6966,6 +6979,9 @@ export interface paths {
      *     Writable while the workspace is read-only, like the subscription PATCH:
      *     buying capacity is one of the ways an expired trial comes back. It still
      *     takes a billing scope — `reports_read` may see the prices, not spend money.
+     *
+     *     `403 not_allowed` with `error.details.reason: "pilot_mode"` in the public
+     *     pilot, like every billing write (see `PATCH /billing/subscription`).
      */
     post: operations['purchaseApiPackage'];
     delete?: never;
@@ -7047,6 +7063,9 @@ export interface paths {
      *     Writable while the workspace is read-only, like the subscription PATCH:
      *     buying capacity is one of the ways an expired trial comes back. It still
      *     takes a billing scope — `reports_read` may see the price, not spend money.
+     *
+     *     `403 not_allowed` with `error.details.reason: "pilot_mode"` in the public
+     *     pilot, like every billing write (see `PATCH /billing/subscription`).
      */
     post: operations['purchaseAiPackage'];
     delete?: never;
@@ -10720,9 +10739,9 @@ export interface components {
       min_seats: number;
       unit_price_cents: number;
       usage: components['schemas']['UsageSummary'];
-      /** @description Charge for the current cycle — the monthly figure, or the annual total when annual. */
+      /** @description Charge for the current cycle — the monthly figure, or the annual total when annual. 0 while trialing, and always 0 in the public pilot (`pilot_mode`), which sells nothing. */
       estimated_total_cents: number;
-      /** @description What annual billing saves versus twelve monthly charges. 0 on monthly. */
+      /** @description What annual billing saves versus twelve monthly charges. 0 on monthly, while trialing and in the public pilot. */
       annual_savings_cents?: number;
       /** @enum {string} */
       provider: 'mock';
@@ -10824,7 +10843,9 @@ export interface components {
        * @description `paid` for a settled past period, `open` for the current one still
        *     accruing, `trial` when the workspace owed nothing for that period.
        *     Frozen alongside the rest: a workspace leaving its trial does not
-       *     turn its trial months into paid ones.
+       *     turn its trial months into paid ones. Every period composed in the
+       *     public pilot (`pilot_mode`) is `trial` — one $0 line, "<plan> plan —
+       *     free during the pilot" — even on a licence activated by hand.
        * @enum {string}
        */
       status: 'paid' | 'open' | 'trial';

@@ -28,6 +28,7 @@ import { useEffect, useMemo, useState, type KeyboardEvent, type ReactElement } f
 import { NavLink, useNavigate } from 'react-router-dom';
 import { DEFAULT_UI_PREFERENCES, hasAnyScope, type UiPreferences } from '@siyahtus/types';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { searchSections, sectionHref, visibleGroups } from './settings-sections.js';
 
@@ -74,15 +75,16 @@ export function SettingsNav(): ReactElement {
   const t = useTranslate();
   const navigate = useNavigate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
-  const groups = visibleGroups(scopes);
+  const { pilot_mode: pilotMode } = useDeployment();
+  const groups = visibleGroups(scopes, pilotMode);
   const { pinned, canToggle, toggle, saving } = useSettingsNavPin();
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
   const searching = query.trim().length > 0;
   const results = useMemo(
-    () => searchSections(scopes, query, (section) => t(section.labelKey)),
-    [scopes, query, t],
+    () => searchSections(scopes, query, (section) => t(section.labelKey), pilotMode),
+    [scopes, query, t, pilotMode],
   );
   // A fresh query — or a shorter result set — must not leave the highlight
   // pointing past the end, or Enter would select nothing.

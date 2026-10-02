@@ -2,8 +2,9 @@
  * The pilot's refusal gate (tm 257.13 · ADR docs/adr/pilot-public-readiness.md
  * K-c), on the real server with every real plugin in front of it.
  *
- * No real route is refused yet — the first ones arrive with 257.2 (billing),
- * 257.3 (channels) and 257.18 (apps) — so the gate is proven on routes this
+ * The real refused routes are proven where they live — billing writes and the
+ * HIPAA BAA in `pilot-billing.test.ts` (257.2); channels (257.3) and apps
+ * (257.18) follow — so the gate itself is proven on routes this
  * file registers itself: one public and one that needs a credential, both
  * flagged `pilotRefused`, plus a path-list surface and an unflagged control.
  * Every refusal is checked twice: with the switch on it is 403 `pilot_mode`

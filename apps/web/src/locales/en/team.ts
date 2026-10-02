@@ -220,6 +220,10 @@ export const team: Messages = {
     'Inviting {count} people stays within the {purchased} seats bought.',
   'team.invite.seats.overCeiling':
     'That would pass the {ceiling}-seat ceiling and be refused. Revoke invitations you no longer want, or talk to sales.',
+  // The same ceiling in the public pilot (tm 257.2), which sells nothing — so
+  // there are no sales to talk to.
+  'team.invite.seats.overCeilingPilot':
+    'That would pass the {ceiling}-seat ceiling and be refused. Revoke invitations you no longer want.',
 
   // Teammate profile panel — AgentProfile.tsx (FR-MOD-04.3.4)
   'team.profile.openAriaLabel': 'Profile — {name}',

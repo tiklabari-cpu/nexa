@@ -1103,6 +1103,11 @@ subscription:
       Billing is mocked (ADR-13): nothing is charged and no external provider is
       called. Writable even while the workspace is read-only — subscribing is how
       an expired trial comes back.
+
+      The public pilot (`pilot_mode` on `GET /deployment`) sells nothing: there,
+      this and every other billing write answers `403 not_allowed` with
+      `error.details.reason: "pilot_mode"` before the body is read, and the
+      billing reads stay open.
     requestBody:
       required: true
       content:
@@ -1267,6 +1272,9 @@ paymentMethod:
       Writable even while the workspace is read-only: putting a card on file is
       part of how an expired trial comes back, so this is never blocked by the
       trial gate.
+
+      `403 not_allowed` with `error.details.reason: "pilot_mode"` in the public
+      pilot, like every billing write (see `PATCH /billing/subscription`).
     requestBody:
       required: true
       content:
@@ -1333,6 +1341,9 @@ apiPackages:
       Writable while the workspace is read-only, like the subscription PATCH:
       buying capacity is one of the ways an expired trial comes back. It still
       takes a billing scope — `reports_read` may see the prices, not spend money.
+
+      `403 not_allowed` with `error.details.reason: "pilot_mode"` in the public
+      pilot, like every billing write (see `PATCH /billing/subscription`).
     requestBody:
       required: true
       content:
@@ -1442,6 +1453,9 @@ aiPackages:
       Writable while the workspace is read-only, like the subscription PATCH:
       buying capacity is one of the ways an expired trial comes back. It still
       takes a billing scope — `reports_read` may see the price, not spend money.
+
+      `403 not_allowed` with `error.details.reason: "pilot_mode"` in the public
+      pilot, like every billing write (see `PATCH /billing/subscription`).
     requestBody:
       required: true
       content:

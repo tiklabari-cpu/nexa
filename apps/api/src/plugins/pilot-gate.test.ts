@@ -37,6 +37,36 @@ describe('matchesPilotRefusedPath', () => {
   });
 });
 
+describe('PILOT_REFUSED_PATHS (tm 257.2)', () => {
+  const refused = (method: string, routeUrl: string): boolean =>
+    matchesPilotRefusedPath(PILOT_REFUSED_PATHS, method, routeUrl);
+
+  it('refuses every write method under /billing/, including one no route has yet', () => {
+    for (const method of ['POST', 'PUT', 'PATCH', 'DELETE']) {
+      expect(refused(method, '/api/v1/billing/subscription'), method).toBe(true);
+      expect(refused(method, '/api/v1/billing/a-write-added-later'), method).toBe(true);
+    }
+    expect(refused('PUT', '/api/v1/billing/payment-method')).toBe(true);
+    expect(refused('POST', '/api/v1/billing/api-packages')).toBe(true);
+    expect(refused('POST', '/api/v1/billing/ai-packages')).toBe(true);
+  });
+
+  it('leaves every billing read open', () => {
+    for (const method of ['GET', 'HEAD']) {
+      expect(refused(method, '/api/v1/billing/subscription'), method).toBe(false);
+      expect(refused(method, '/api/v1/billing/invoices/:period/download'), method).toBe(false);
+      expect(refused(method, '/api/v1/billing/entitlements'), method).toBe(false);
+    }
+  });
+
+  it('refuses nothing outside the billing prefix', () => {
+    expect(refused('PATCH', '/api/v1/settings/billing')).toBe(false);
+    expect(refused('POST', '/api/v1/billingx/subscription')).toBe(false);
+    expect(refused('POST', '/api/v2/billing/subscription')).toBe(false);
+    expect(refused('PATCH', '/api/v1/chats/:chatId')).toBe(false);
+  });
+});
+
 describe('assertPilotRefusedPaths', () => {
   it('accepts the shipped list and a well-formed entry', () => {
     expect(() => assertPilotRefusedPaths(PILOT_REFUSED_PATHS)).not.toThrow();

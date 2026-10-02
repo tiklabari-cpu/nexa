@@ -48,7 +48,11 @@ async function sandboxGatePlugin(app: FastifyInstance): Promise<void> {
   app.addHook('preHandler', async (request: FastifyRequest) => {
     if (!request.principal) return;
     if (!MUTATING_METHODS.has(request.method)) return;
-    if (!BILLING_PATH.test(request.url)) return;
+    // The route the router picked, not the URL as sent: Fastify decodes
+    // `/api/v1/%62illing/subscription` to the billing handler but leaves
+    // `request.url` raw, which this prefix would never match (tm 257.2).
+    const route = request.routeOptions.url;
+    if (route === undefined || !BILLING_PATH.test(route)) return;
 
     // One indexed primary-key lookup, and only on a billing write — a few dozen
     // requests in the life of a workspace. Read fresh rather than cached for

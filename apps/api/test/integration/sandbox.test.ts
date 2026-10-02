@@ -434,6 +434,24 @@ describe('sandbox workspace (11.5-f)', () => {
       expect(parent.statusCode).toBe(200);
     });
 
+    it('refuses a billing write whose path is percent-encoded — the gate reads the route, not the URL', async () => {
+      // Fastify decodes `%62` to `b` when it picks the route but leaves
+      // `request.url` as sent (tm 257.13, ADR pilot-public-readiness K-c), so
+      // a prefix tested against the raw URL never sees `/billing/` here while
+      // the billing handler runs anyway.
+      const sandbox = await createSandbox();
+
+      const refused = await server.app.inject({
+        method: 'PATCH',
+        url: '/api/v1/%62illing/subscription',
+        headers: bearer(sandbox.token),
+        payload: { seats: 5 },
+      });
+      expect(refused.statusCode).toBe(403);
+      expect((refused.json() as ErrorBody).error.details?.sandbox).toBe(true);
+      expect(await owner.subscription.count({ where: { licenseId: sandbox.licenseId } })).toBe(0);
+    });
+
     it('does not count sandbox members as seats on the bill', async () => {
       const sandbox = await createSandbox();
 

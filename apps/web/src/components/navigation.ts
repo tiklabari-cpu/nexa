@@ -35,6 +35,12 @@ export interface NavDestination {
    */
   scope?: readonly string[];
   /**
+   * Not offered in the public pilot (`pilot_mode` from `GET /deployment`,
+   * tm 257.2) — a surface the pilot does not sell. Hidden from the rail and the
+   * palette alike; the API refuses what is behind it on its own.
+   */
+  pilotHidden?: true;
+  /**
    * A live count overlaid on the icon — attached at render by `AppShell.tsx`
    * (`useNavBadges`), not part of this static catalogue, since a count comes
    * from a request and this list does not. `ariaLabel` is the count's spoken
@@ -44,8 +50,16 @@ export interface NavDestination {
   badge?: { count: number; ariaLabel: string };
 }
 
-/** Whether `dest` should be offered to a caller holding `scopes`. */
-export function isNavVisible(dest: NavDestination, scopes: readonly string[]): boolean {
+/**
+ * Whether `dest` should be offered to a caller holding `scopes`, on a
+ * deployment that is (`pilotMode`) or is not the public pilot.
+ */
+export function isNavVisible(
+  dest: NavDestination,
+  scopes: readonly string[],
+  pilotMode = false,
+): boolean {
+  if (pilotMode && dest.pilotHidden) return false;
   return hasAnyScope(scopes, dest.scope ?? []);
 }
 
@@ -119,6 +133,8 @@ export const FOOTER: NavDestination[] = [
     // matching `TrialBanner`'s own "only owners and admins carry a billing
     // scope" note just above it in this file.
     scope: ['billing_manage', 'billing_admin', 'reports_read'],
+    // The pilot takes no payment: every billing write is refused there.
+    pilotHidden: true,
   },
   {
     to: '/app/settings',

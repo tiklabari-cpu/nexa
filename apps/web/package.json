@@ -9,8 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
-    "test": "vitest run --passWithNoTests",
-    "test:unit": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests --maxWorkers=4",
+    "test:unit": "vitest run --passWithNoTests --maxWorkers=4"
   },
   "dependencies": {
     "@siyahtus/types": "workspace:*",

@@ -10,10 +10,11 @@
  * place a message becomes more than a single text node is `appendRichText`
  * (`rich-text.ts`), which still builds elements rather than parsing markup.
  */
-import { readEditedAt, type WidgetFormField, type WidgetAppearance } from '@siyahtus/types';
+import { AI_BOT_ID, readEditedAt, type WidgetFormField } from '@siyahtus/types';
 import {
   WidgetApi,
   WidgetApiError,
+  type MintedAppearance,
   type TrackSaleInput,
   type WidgetEvent,
   type WidgetState,
@@ -99,6 +100,10 @@ interface Appearance {
   position: 'bottom-right' | 'bottom-left';
   mobileFullscreen: boolean;
   poweredBy: boolean;
+  /** The deployment's privacy policy, or null — only the server can say. */
+  privacyPolicyUrl: string | null;
+  /** Where "Powered by" links, or null for the words alone. Server-supplied. */
+  poweredByUrl: string | null;
 }
 
 const DEFAULT_APPEARANCE: Appearance = {
@@ -107,6 +112,8 @@ const DEFAULT_APPEARANCE: Appearance = {
   position: 'bottom-right',
   mobileFullscreen: true,
   poweredBy: true,
+  privacyPolicyUrl: null,
+  poweredByUrl: null,
 };
 
 /** A `#rrggbb` colour — the one shape allowed to reach the `--nx-brand` var. */
@@ -309,7 +316,7 @@ export function mount(doc: Document = document, win: Window = window): void {
     // inside it, and let the panel fill a full-screen mobile frame.
     rootEl.classList.toggle('nx-left', appearance.position === 'bottom-left');
     rootEl.classList.toggle('nx-mobile-full', appearance.mobileFullscreen);
-    ui.poweredBy.hidden = !appearance.poweredBy;
+    renderFooter(doc, ui, appearance, t);
   }
 
   applyAppearance();
@@ -1873,7 +1880,11 @@ interface Ui {
   /** Holds the workspace's configurable pre-chat fields (FR-MOD-08.7.7). */
   prechatFields: HTMLDivElement;
   prechatSubmit: HTMLButtonElement;
+  /** The footer line; holds the brand mark and the privacy link. */
   poweredBy: HTMLElement;
+  poweredBrand: HTMLElement;
+  poweredSeparator: HTMLElement;
+  privacyLink: HTMLAnchorElement;
 }
 
 function buildUi(doc: Document, t: WidgetTranslate): Ui {
@@ -2261,15 +2272,25 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
   // "Powered by SiyahTuş" (FR-MOD-11.5): shown by default, hidden when a workspace
   // removes it. A link, opened in a new tab so it never navigates the panel away
   // from a live conversation.
+  //
+  // The words are always there; whether they are a link, and where it goes, is
+  // the server's to say (`renderFooter`). Next to them sits the deployment's
+  // privacy policy, which stays even when a white-label workspace has removed
+  // the brand — it is a notice to the visitor, not branding.
   const poweredBy = doc.createElement('p');
   poweredBy.className = 'nx-powered';
-  const poweredLink = doc.createElement('a');
-  poweredLink.className = 'nx-powered-link';
-  poweredLink.href = 'https://siyahtus.example';
-  poweredLink.target = '_blank';
-  poweredLink.rel = 'noopener noreferrer';
-  poweredLink.textContent = t('poweredBy');
-  poweredBy.append(poweredLink);
+  const poweredBrand = doc.createElement('span');
+  poweredBrand.className = 'nx-powered-brand';
+  const poweredSeparator = doc.createElement('span');
+  poweredSeparator.className = 'nx-powered-sep';
+  poweredSeparator.setAttribute('aria-hidden', 'true');
+  poweredSeparator.textContent = ' · ';
+  const privacyLink = doc.createElement('a');
+  privacyLink.className = 'nx-powered-link nx-privacy-link';
+  privacyLink.target = '_blank';
+  privacyLink.rel = 'noopener noreferrer';
+  privacyLink.textContent = t('privacy');
+  poweredBy.append(poweredBrand, poweredSeparator, privacyLink);
 
   panel.append(
     header,
@@ -2375,7 +2396,59 @@ function buildUi(doc: Document, t: WidgetTranslate): Ui {
     prechatFields,
     prechatSubmit,
     poweredBy,
+    poweredBrand,
+    poweredSeparator,
+    privacyLink,
   };
+}
+
+/**
+ * The footer line (FR-MOD-11.5): "Powered by SiyahTuş" — a link only when the
+ * server sent an address, plain words otherwise (the public pilot has none) —
+ * and the deployment's privacy policy when it publishes one. The two are
+ * independent: a white-label workspace hides the brand and keeps the privacy
+ * link, and with neither there is no line at all.
+ */
+function renderFooter(doc: Document, ui: Ui, appearance: Appearance, t: WidgetTranslate): void {
+  const showBrand = appearance.poweredBy;
+  const showPrivacy = appearance.privacyPolicyUrl !== null;
+
+  ui.poweredBrand.hidden = !showBrand;
+  if (showBrand) {
+    let mark: HTMLElement;
+    if (appearance.poweredByUrl === null) {
+      mark = doc.createElement('span');
+      mark.className = 'nx-powered-text';
+    } else {
+      const link = doc.createElement('a');
+      link.className = 'nx-powered-link';
+      link.href = appearance.poweredByUrl;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      mark = link;
+    }
+    mark.textContent = t('poweredBy');
+    ui.poweredBrand.replaceChildren(mark);
+  } else {
+    ui.poweredBrand.replaceChildren();
+  }
+
+  ui.privacyLink.hidden = !showPrivacy;
+  if (appearance.privacyPolicyUrl !== null) ui.privacyLink.href = appearance.privacyPolicyUrl;
+  else ui.privacyLink.removeAttribute('href');
+
+  ui.poweredSeparator.hidden = !(showBrand && showPrivacy);
+  ui.poweredBy.hidden = !(showBrand || showPrivacy);
+}
+
+/**
+ * Whether the LLM AI Agent wrote this message. `bot` alone is not enough: rule
+ * bots and API bot tokens are `bot` too, and a visitor told "AI" about a
+ * scripted menu is told something untrue. Only the AI Agent's own id counts; a
+ * message an agent sent after improving it with the Copilot is `agent`.
+ */
+function isAiMessage(event: WidgetEvent): boolean {
+  return event.author_type === 'bot' && event.author_id === AI_BOT_ID;
 }
 
 function renderBubble(
@@ -2406,7 +2479,8 @@ function renderBubble(
   // rather than starred (FR-MOD-11.4, tm 235). A customer's own text never
   // does: their literal asterisks read back exactly as they typed them, which
   // is the rule `Transcript.tsx` already carries on the console side
-  // (`#### K02.3.5`). `bot` is the AI persona answering for the team, so it
+  // (`#### K02.3.5`). `bot` is whatever answers for the team without a person
+  // (the AI Agent, but also a rule bot's script and an API bot's text), so it
   // formats like an agent; `system_message` returned above and never gets here.
   if (event.text) {
     if (event.author_type === 'customer') bubble.textContent = event.text;
@@ -2420,7 +2494,22 @@ function renderBubble(
   time.dateTime = event.created_at;
   time.textContent = formatTime(event.created_at);
 
-  row.append(bubble, time);
+  // The AI mark (FR-MOD-11.3) sits beside the time, outside the bubble, so what
+  // the visitor copies and what a screen reader reads out of the message is
+  // still just the message. Its accessible name says what "AI" means.
+  if (isAiMessage(event)) {
+    const meta = doc.createElement('div');
+    meta.className = 'nx-meta';
+    const mark = doc.createElement('span');
+    mark.className = 'nx-ai-label';
+    mark.setAttribute('role', 'img');
+    mark.setAttribute('aria-label', t('message.aiLabel'));
+    mark.textContent = t('message.ai');
+    meta.append(time, mark);
+    row.append(bubble, meta);
+  } else {
+    row.append(bubble, time);
+  }
 
   // The honest half of an in-place correction (FR-MOD-02.3.7): the visitor
   // cannot see what the message used to say, so they are at least told it
@@ -2690,11 +2779,15 @@ function readAppearance(params: URLSearchParams): Appearance {
     position: position === 'bottom-left' ? 'bottom-left' : 'bottom-right',
     mobileFullscreen: params.get('mobile_full') !== '0',
     poweredBy: DEFAULT_APPEARANCE.poweredBy,
+    // Links are the server's to give, like `powered_by`: a URL param could
+    // point the footer anywhere.
+    privacyPolicyUrl: DEFAULT_APPEARANCE.privacyPolicyUrl,
+    poweredByUrl: DEFAULT_APPEARANCE.poweredByUrl,
   };
 }
 
 /** The widget's camelCase appearance from the API's snake_case token payload. */
-function appearanceFromApi(a: WidgetAppearance): Appearance {
+function appearanceFromApi(a: MintedAppearance): Appearance {
   return {
     primaryColor: COLOR_RE.test(a.primary_color)
       ? a.primary_color.toLowerCase()
@@ -2703,7 +2796,24 @@ function appearanceFromApi(a: WidgetAppearance): Appearance {
     position: a.position,
     mobileFullscreen: a.mobile_fullscreen,
     poweredBy: a.powered_by,
+    privacyPolicyUrl: webUrl(a.privacy_policy_url),
+    poweredByUrl: webUrl(a.powered_by_url),
   };
+}
+
+/**
+ * A link target the footer may use: an absolute http(s) URL, else null. The
+ * address comes off the wire and ends up in an `href`, so a `javascript:` or
+ * `data:` value must not survive being read.
+ */
+function webUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url.href : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -2910,6 +3020,14 @@ body {
 .nx-row--customer .nx-bubble { background: var(--nx-brand); color: #fff; }
 .nx-system { margin: 0; font-size: 11px; color: var(--nx-muted); text-align: center; }
 .nx-time { font-size: 11px; color: var(--nx-muted); margin-top: 2px; }
+.nx-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+.nx-meta .nx-time { margin-top: 0; }
+/* The AI mark: small, outlined, same muted colour as the time so it informs
+   without competing with the reply. */
+.nx-ai-label {
+  font-size: 10px; font-weight: 600; line-height: 1; letter-spacing: 0.02em;
+  color: var(--nx-muted); border: 1px solid currentColor; border-radius: 4px; padding: 2px 4px;
+}
 /* The "edited" marker sits under the timestamp and reads like one: same size
    and colour, italic so the two are not mistaken for a single line. */
 .nx-edited { font-size: 11px; font-style: italic; color: var(--nx-muted); }

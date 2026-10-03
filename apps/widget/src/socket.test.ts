@@ -389,6 +389,28 @@ describe('widget RTM socket (FR-MOD-11.6)', () => {
     expect(h.sockets[1]!.sent.map((f) => f.action)).toEqual(['login']);
   });
 
+  it('carries the author id through, which is what tells the AI Agent from a rule bot (FR-MOD-11.3)', async () => {
+    const h = harness();
+    h.socket.connect();
+    h.sockets[0]!.onopen!();
+    await settle();
+    h.sockets[0]!.reply('login', {});
+    await settle();
+
+    h.sockets[0]!.push('incoming_event', {
+      chat_id: 'chat-1',
+      event: { ...event('thr-1_3'), author_type: 'bot', author_id: 'ai-agent' },
+    });
+    h.sockets[0]!.push('incoming_event', {
+      chat_id: 'chat-1',
+      event: { ...event('thr-1_4'), author_type: 'bot', author_id: 42 },
+    });
+    h.sockets[0]!.push('incoming_event', { chat_id: 'chat-1', event: event('thr-1_5') });
+
+    // Narrowed like every other field: anything but a string is "unknown".
+    expect(h.events.map((e) => e.event.author_id)).toEqual(['ai-agent', null, null]);
+  });
+
   it('refuses to surface an event addressed to agents', async () => {
     const h = harness();
     h.socket.connect();

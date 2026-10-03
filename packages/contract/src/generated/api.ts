@@ -9454,6 +9454,33 @@ export interface components {
       updated_at: string | null;
     };
     /**
+     * @description The look the visitor's widget renders, as the token mint delivers it
+     *     (FR-MOD-11.7 · FR-MOD-11.5). The five appearance fields are the
+     *     workspace's `WidgetSettings` without the bookkeeping; the two links
+     *     are facts about the deployment, not workspace settings.
+     */
+    WidgetAppearance: {
+      /** @description Brand colour of the launcher, header and send button, a hex. */
+      primary_color: string;
+      /** @enum {string} */
+      position: 'bottom-right' | 'bottom-left';
+      /** @enum {string} */
+      theme: 'auto' | 'light' | 'dark';
+      mobile_fullscreen: boolean;
+      /** @description Whether the "Powered by SiyahTuş" footer shows. Already ruled on by the white-label entitlement, so a workspace without it always reads true. */
+      powered_by: boolean;
+      /**
+       * Format: uri
+       * @description The deployment's privacy policy (`PRIVACY_POLICY_URL`). The widget links it from its footer; null when the deployment publishes none.
+       */
+      privacy_policy_url: string | null;
+      /**
+       * Format: uri
+       * @description Where the "Powered by SiyahTuş" text links to. Null in the public pilot (`PILOT_MODE`), where the widget shows the words without a link.
+       */
+      powered_by_url: string | null;
+    };
+    /**
      * @description Per-license sales tracker configuration (FR-MOD-13.5,
      *     `sales_tracker_settings`). A workspace that has never configured it
      *     reads the shipped defaults — tracking off, USD, a 7-day attribution
@@ -14287,6 +14314,15 @@ export interface operations {
             customer_id: string;
             /** Format: uuid */
             organization_id: string;
+            /**
+             * @description The workspace's widget appearance (FR-MOD-11.7) and the two
+             *     footer links (FR-MOD-11.5): the server is the source of
+             *     truth, so the hosted Chat page and an embed running a stale
+             *     snippet theme themselves from it. Always sent; the widget
+             *     falls back to the shipped look if a deployment predating it
+             *     omits it.
+             */
+            widget: components['schemas']['WidgetAppearance'];
             /**
              * @description Whether this licence allows attachments (FR-MOD-08.9.4), so
              *     the widget can hide its attachment button rather than let a

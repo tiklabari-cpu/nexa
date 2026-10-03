@@ -2775,6 +2775,58 @@ components:
           description: The removable "Powered by SiyahTuş" footer (FR-MOD-11.5).
         updated_at: { type: string, format: date-time, nullable: true }
 
+    WidgetAppearance:
+      type: object
+      description: |
+        The look the visitor's widget renders, as the token mint delivers it
+        (FR-MOD-11.7 · FR-MOD-11.5). The five appearance fields are the
+        workspace's `WidgetSettings` without the bookkeeping; the two links
+        are facts about the deployment, not workspace settings.
+      required:
+        [
+          primary_color,
+          position,
+          theme,
+          mobile_fullscreen,
+          powered_by,
+          privacy_policy_url,
+          powered_by_url,
+        ]
+      properties:
+        primary_color:
+          type: string
+          pattern: "^#[0-9a-fA-F]{6}$"
+          description: Brand colour of the launcher, header and send button, a hex.
+        position:
+          type: string
+          enum: [bottom-right, bottom-left]
+        theme:
+          type: string
+          enum: [auto, light, dark]
+        mobile_fullscreen:
+          type: boolean
+        powered_by:
+          type: boolean
+          description: >-
+            Whether the "Powered by SiyahTuş" footer shows. Already ruled on by
+            the white-label entitlement, so a workspace without it always reads
+            true.
+        privacy_policy_url:
+          type: string
+          format: uri
+          nullable: true
+          description: >-
+            The deployment's privacy policy (`PRIVACY_POLICY_URL`). The widget
+            links it from its footer; null when the deployment publishes none.
+        powered_by_url:
+          type: string
+          format: uri
+          nullable: true
+          description: >-
+            Where the "Powered by SiyahTuş" text links to. Null in the public
+            pilot (`PILOT_MODE`), where the widget shows the words without a
+            link.
+
     SalesTrackerSettings:
       type: object
       description: |

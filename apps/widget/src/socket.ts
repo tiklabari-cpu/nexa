@@ -424,6 +424,7 @@ function asEvent(raw: unknown): WidgetEvent | null {
       author === 'agent' || author === 'customer' || author === 'bot' || author === 'system'
         ? author
         : 'system',
+    author_id: typeof value['author_id'] === 'string' ? value['author_id'] : null,
     created_at:
       typeof value['created_at'] === 'string' ? value['created_at'] : new Date().toISOString(),
     type: typeof value['type'] === 'string' ? value['type'] : 'message',

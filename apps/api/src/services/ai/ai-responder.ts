@@ -21,14 +21,12 @@
  * of which depends on the connection the response went out on.
  */
 import type { FastifyRequest } from 'fastify';
+import { AI_BOT_ID } from '@siyahtus/types';
 import type { BotPrincipal } from '../auth/principal.js';
 import type { ChatService } from '../chat/chat-service.js';
 import type { RealtimePublisher } from '../realtime/publisher.js';
 import { AiDailyCapError } from './ai-daily-budget.js';
 import type { SkillEngine, SkillRunResult } from './skill-engine.js';
-
-/** Author id the AI's own events and actions carry. */
-export const AI_BOT_ID = 'ai-agent';
 
 export class AiResponder {
   readonly #engine: SkillEngine;

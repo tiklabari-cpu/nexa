@@ -9,6 +9,7 @@ import {
   type WidgetFormField,
   type Region,
   type WidgetAppearance,
+  type WidgetTokenAppearance,
 } from '@siyahtus/types';
 import type { Env } from '../config/env.js';
 import { ApiError } from '../lib/api-error.js';
@@ -1694,7 +1695,12 @@ export default async function authRoutes(
     // All best-effort — the widget falls back to the shipped look and no extra
     // fields, so a read failure must never deny a token.
     const [widget, forms, fileSharingEnabled] = await Promise.all([
-      widgetAppearance(app.db, tenant, request),
+      widgetAppearance(app.db, tenant, request, {
+        privacy_policy_url: env.PRIVACY_POLICY_URL ?? null,
+        // The public pilot has no brand page to link to yet, so it shows the
+        // words without a link; every other deployment keeps today's address.
+        powered_by_url: env.PILOT_MODE ? null : POWERED_BY_PLACEHOLDER_URL,
+      }),
       readWidgetForms(app.db, tenant, request),
       fileSharingEnabledFor(app.db, tenant, request),
     ]);
@@ -1726,6 +1732,14 @@ export default async function authRoutes(
 }
 
 /**
+ * Where "Powered by SiyahTuş" links outside the pilot. A reserved `.example`
+ * name — the real brand address is the owner's decision, so it stays a
+ * placeholder here and moves out of the widget bundle (the value is the
+ * server's to send).
+ */
+const POWERED_BY_PLACEHOLDER_URL = 'https://siyahtus.example';
+
+/**
  * The widget appearance for a resolved license, or the shipped defaults when it
  * has never been customised or the read fails. Guarded so this never breaks
  * token issuance: the widget renders the default look if `widget` is absent.
@@ -1740,12 +1754,16 @@ export default async function authRoutes(
  * A failure still falls back to the shipped defaults, which are branded. That
  * direction matters: the safe answer when this cannot tell whether a workspace
  * bought white label is the one that does not give it away.
+ *
+ * The two footer links are deployment facts, not workspace settings, so the
+ * caller supplies them and they ride on every path, fallback included.
  */
 async function widgetAppearance(
   db: PrismaClient,
   tenant: TenantContext,
   request: FastifyRequest,
-): Promise<WidgetAppearance> {
+  links: Pick<WidgetTokenAppearance, 'privacy_policy_url' | 'powered_by_url'>,
+): Promise<WidgetTokenAppearance> {
   try {
     const appearance = await withTenant(db, tenant, async (tx) => {
       const row = await tx.widgetSettings.findFirst();
@@ -1758,10 +1776,10 @@ async function widgetAppearance(
         powered_by: await poweredByFor(tx, tenant, row.poweredBy),
       };
     });
-    return normalizeWidgetAppearance(appearance);
+    return { ...normalizeWidgetAppearance(appearance), ...links };
   } catch (error) {
     request.log.warn({ err: error }, 'failed to read widget appearance');
-    return normalizeWidgetAppearance(null);
+    return { ...normalizeWidgetAppearance(null), ...links };
   }
 }
 

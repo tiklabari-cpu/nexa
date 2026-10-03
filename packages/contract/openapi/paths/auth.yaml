@@ -825,12 +825,22 @@ customerToken:
           application/json:
             schema:
               type: object
-              required: [token, expires_in, customer_id, organization_id]
+              required: [token, expires_in, customer_id, organization_id, widget]
               properties:
                 token: { type: string }
                 expires_in: { type: integer }
                 customer_id: { type: string, format: uuid }
                 organization_id: { type: string, format: uuid }
+                widget:
+                  allOf:
+                    - $ref: "../openapi.yaml#/components/schemas/WidgetAppearance"
+                  description: |
+                    The workspace's widget appearance (FR-MOD-11.7) and the two
+                    footer links (FR-MOD-11.5): the server is the source of
+                    truth, so the hosted Chat page and an embed running a stale
+                    snippet theme themselves from it. Always sent; the widget
+                    falls back to the shipped look if a deployment predating it
+                    omits it.
                 file_sharing_enabled:
                   type: boolean
                   description: |

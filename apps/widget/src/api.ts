@@ -6,12 +6,26 @@
  * retry policy and typed routes it will never use.
  */
 
-import type { WidgetFormField, WidgetAppearance } from '@siyahtus/types';
+import type { WidgetFormField, WidgetAppearance, WidgetTokenAppearance } from '@siyahtus/types';
+
+/**
+ * The appearance off a token mint. The two footer links are optional on the
+ * wire: a deployment predating them omits both, and the widget then shows the
+ * footer text without links rather than guessing an address.
+ */
+export type MintedAppearance = WidgetAppearance &
+  Partial<Pick<WidgetTokenAppearance, 'privacy_policy_url' | 'powered_by_url'>>;
 
 export interface WidgetEvent {
   id: string;
   text: string | null;
   author_type: 'agent' | 'customer' | 'bot' | 'system';
+  /**
+   * Who wrote it, as the server names them. The widget reads it for one thing:
+   * `bot` is three different authors (the LLM AI Agent, a rule bot, an API bot
+   * token) and only this id says which, so it is what the "AI" mark keys on.
+   */
+  author_id?: string | null;
   created_at: string;
   type: string;
   attachment_url: string | null;
@@ -65,7 +79,7 @@ export interface WidgetState {
 export class WidgetApi {
   #token: string | null = null;
   #rtmUrl: string | null = null;
-  #appearance: WidgetAppearance | null = null;
+  #appearance: MintedAppearance | null = null;
   /**
    * Whether the licence allows attachments (FR-MOD-08.9.4). Starts `true` —
    * the schema default, and the state the attach button is already in before
@@ -108,7 +122,7 @@ export class WidgetApi {
    * corrects a stale baked snippet and is the only source the hosted Chat page —
    * which has no snippet — has at all.
    */
-  get appearance(): WidgetAppearance | null {
+  get appearance(): MintedAppearance | null {
     return this.#appearance;
   }
 
@@ -203,7 +217,7 @@ export class WidgetApi {
       token: string;
       customer_id: string;
       rtm_url?: string;
-      widget?: WidgetAppearance;
+      widget?: MintedAppearance;
       file_sharing_enabled?: boolean;
       pre_chat_form?: WidgetFormField[];
       post_chat_form?: WidgetFormField[];

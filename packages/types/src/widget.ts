@@ -39,6 +39,28 @@ export interface WidgetAppearance {
 }
 
 /**
+ * What the visitor's token mint carries: the appearance above plus the two
+ * footer links, which are deployment facts rather than workspace choices and so
+ * are not part of the editable `WidgetAppearance` (tm 257.17).
+ */
+export interface WidgetTokenAppearance extends WidgetAppearance {
+  /** The deployment's privacy policy, or null when it publishes none. */
+  privacy_policy_url: string | null;
+  /**
+   * Where "Powered by SiyahTuş" links to, or null for plain text (the public
+   * pilot has no brand page to point at yet).
+   */
+  powered_by_url: string | null;
+}
+
+/**
+ * The `author_id` the LLM AI Agent writes its replies under (`author_type`
+ * `bot`). Rule bots and API bot tokens are also `bot` but carry their own ids,
+ * so this id — not the author type — is what says "a model wrote this".
+ */
+export const AI_BOT_ID = 'ai-agent';
+
+/**
  * The shipped look, mirrored from the widget's own CSS defaults. A workspace
  * that has never opened the customisation screen renders exactly this, and the
  * database column defaults match value-for-value.

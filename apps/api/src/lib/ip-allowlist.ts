@@ -139,6 +139,30 @@ export function ipMatchesEntry(ip: string, entry: AllowlistEntry): boolean {
   return true;
 }
 
+/** What one IPv6 subscriber is assigned (RFC 6177's /64 floor). */
+const IPV6_CLIENT_PREFIX = 64;
+
+/**
+ * The network a per-client limit should count `ip` against (tm 257.14): an
+ * IPv4 address as itself, an IPv6 address as its /64 (`2001:db8:1:2::/64`).
+ *
+ * One IPv6 subscriber is routinely handed a whole /64 and can pick a fresh
+ * address from it for every request, so a limit keyed on the full address
+ * limits nothing. A mapped `::ffff:a.b.c.d` is the IPv4 client it carries.
+ * An address that will not parse is returned as given — still a key, and the
+ * limit still applies to whoever keeps presenting it.
+ */
+export function clientNetworkKey(ip: string): string {
+  const address = parseAddress(ip);
+  if (!address) return ip;
+  if (address.version === 4) return formatV4(address.bytes);
+  return formatAllowlistEntry({
+    version: 6,
+    bytes: maskToPrefix(address.bytes, IPV6_CLIENT_PREFIX),
+    prefixLength: IPV6_CLIENT_PREFIX,
+  });
+}
+
 /** Input to {@link decideIpAccess}: the caller's address and the stored entries. */
 export interface IpAccessDecisionInput {
   clientIp: string | null | undefined;

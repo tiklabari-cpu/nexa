@@ -44,6 +44,7 @@ import customFieldRoutes from './routes/custom-fields.js';
 import channelRoutes from './routes/channels.js';
 import accountLifecycleRoutes from './routes/account-lifecycle.js';
 import { createMailer, type Mailer } from './services/mail/mailer.js';
+import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
@@ -295,7 +296,7 @@ export async function buildServer({
   // spool had to lie about the environment to get one. Built after the app
   // rather than as a parameter default so the `smtp` carrier logs through this
   // logger — its stream, its level and its redaction paths (tm 255.3).
-  const mailer =
+  const carrier =
     injectedMailer ??
     createMailer(env.MAIL_PROVIDER, {
       ...env.mail,
@@ -381,6 +382,13 @@ export async function buildServer({
   });
   const meteredLlm = new MeteredLlm(llm, aiDailyBudget);
   const meteredCopilotLlm = new MeteredLlm(copilotLlm, aiDailyBudget);
+  // The daily mail caps (tm 257.14): every mail this process sends — routes,
+  // background mail, sweeps — goes through this one wrapper, around whatever
+  // carrier was built or injected, so an injected test spool is capped exactly
+  // like `smtp`. Over the primary, like the AI budget, once `database` exists.
+  const mailer = new CappedMailer(carrier, app.db, mailDailyCaps(env), {
+    logger: app.log.child({ component: 'mailer' }),
+  });
   // One emitter for the whole server: the caller the webhook stack never had
   // (FR-MOD-09.4). Built here, once `database` has decorated `app.db`, and
   // handed both to the sweeps and to every route that commits an event
@@ -479,7 +487,7 @@ export async function buildServer({
       await api.register(trafficRoutes);
       await api.register(campaignRoutes);
       await api.register(goalRoutes);
-      await api.register(ticketRoutes, { automations });
+      await api.register(ticketRoutes, { automations, pilotMode: env.PILOT_MODE });
       await api.register(ticketRuleRoutes);
       await api.register(botRoutes);
       await api.register(ticketEmailTemplateRoutes);

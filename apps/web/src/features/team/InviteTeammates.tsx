@@ -40,9 +40,19 @@ interface Invitation {
 interface Undelivered {
   id: string;
   email: string;
-  /** `unconfirmed`: handed to the mail server, never confirmed — it may have arrived. */
-  reason: 'failed' | 'unconfirmed';
+  /**
+   * `unconfirmed`: handed to the mail server, never confirmed — it may have
+   * arrived. `cap_reached`: today's email allowance refused it (tm 257.14).
+   */
+  reason: 'failed' | 'unconfirmed' | 'cap_reached';
 }
+
+/** The sentence for each reason an invitation's email did not go out. */
+const UNDELIVERED_KEY: Record<Undelivered['reason'], string> = {
+  failed: 'team.invite.undelivered.failed',
+  unconfirmed: 'team.invite.undelivered.unconfirmed',
+  cap_reached: 'team.invite.undelivered.capReached',
+};
 
 /** What the modal shows for one of them: its own link, since the mail did not carry it. */
 interface UndeliveredLink extends Undelivered {
@@ -262,9 +272,7 @@ export function InviteTeammates({
               {undelivered.map((miss) => (
                 <li key={miss.id} className="text-xs">
                   <p className="mb-1 text-content-secondary">
-                    {miss.reason === 'failed'
-                      ? t('team.invite.undelivered.failed', { email: miss.email })
-                      : t('team.invite.undelivered.unconfirmed', { email: miss.email })}
+                    {t(UNDELIVERED_KEY[miss.reason], { email: miss.email })}
                   </p>
                   <button
                     type="button"

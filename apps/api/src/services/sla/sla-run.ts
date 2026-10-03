@@ -24,7 +24,7 @@ loadEnvFile();
 
 import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
-import { createMailer } from '../mail/mailer.js';
+import { createJobMailer } from '../mail/mail-caps.js';
 import { SlaSweeper } from './sla-sweep.js';
 
 async function main(): Promise<void> {
@@ -32,8 +32,10 @@ async function main(): Promise<void> {
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   try {
     // Whatever `MAIL_PROVIDER` names: written to disk by default like
-    // everything else outgoing (PLAN A4), sent under `smtp` (tm 255.3).
-    const report = await new SlaSweeper(db, createMailer(env.MAIL_PROVIDER, env.mail)).run();
+    // everything else outgoing (PLAN A4), sent under `smtp` (tm 255.3) —
+    // behind the daily mail caps (tm 257.14). A capped digest is not marked
+    // announced, so the next pass tries again.
+    const report = await new SlaSweeper(db, createJobMailer(env, db)).run();
 
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     process.stderr.write(

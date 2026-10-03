@@ -173,6 +173,7 @@ model License {
   subscriptions          Subscription[]
   usageRecords           UsageRecord[]
   aiDailyUsage           AiDailyUsage[]
+  mailDailyUsage         MailDailyUsage[]
   apiPackagePurchases    ApiPackagePurchase[]
   aiPackagePurchases     AiPackagePurchase[]
   invoices               Invoice[]
@@ -2231,6 +2232,36 @@ model AiDailyUsage {
 
   @@unique([licenseId, day, meter])
   @@map("ai_daily_usage")
+}
+
+/// Today's outgoing mail against the daily caps (tm 257.14 · ADR
+/// `docs/adr/pilot-public-readiness.md` K-e(4)). Per workspace and UTC day:
+/// `workspace` (everything it sent) and `external` (what left it). With
+/// `licenseId` null: `global` (the deployment) and `recipient`, one row per
+/// address hash, for the account mail an anonymous caller can trigger.
+/// `sent` is what was handed to the carrier — a mail the carrier refused for
+/// good is given back, one that may have arrived is not.
+///
+/// Not written through Prisma: the `mail_budget_*` SECURITY DEFINER functions
+/// (migration 20261003150000) are the only writers, so the check and the
+/// increment are one statement. Unique with NULLS NOT DISTINCT, which Prisma
+/// cannot say — the index Prisma sees is the same four columns.
+model MailDailyUsage {
+  id            String   @id @default(uuid()) @db.Uuid
+  licenseId     BigInt?  @map("license_id")
+  /// `yyyymmdd`, UTC.
+  day           String   @db.Char(8)
+  /// `workspace`, `external`, `global` or `recipient`.
+  meter         String
+  /// SHA-256 of the lower-cased address, on `recipient` rows only.
+  recipientHash String?  @map("recipient_hash") @db.Char(64)
+  sent          Int      @default(0)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license License? @relation(fields: [licenseId], references: [id], onDelete: Cascade)
+
+  @@unique([licenseId, day, meter, recipientHash])
+  @@map("mail_daily_usage")
 }
 
 /// One purchased API request package (FR-MOD-09.3).

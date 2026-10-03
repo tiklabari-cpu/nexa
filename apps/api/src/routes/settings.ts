@@ -72,7 +72,8 @@ import {
 } from '../lib/sso-connection.js';
 import { writeAuditEntry, type AuditEntry } from '../services/audit/audit-log.js';
 import type { Mailer } from '../services/mail/mailer.js';
-import { deliver, mailFailureFields } from '../services/mail/delivery.js';
+import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
+import { secondsUntilUtcMidnight } from '../services/ai/ai-daily-budget.js';
 import {
   readSiemExportRow,
   readSiemExportStatus,
@@ -1589,10 +1590,24 @@ export default async function settingsRoutes(
       // second token for the same domain on the owner's say-so.
       const outcome = await deliver(mailer, {
         to: mailbox,
+        licenseId: request.tenant().licenseId,
         kind: 'notification',
         subject: `Verify ${domain} for single sign-on`,
         body: domainChallengeBody(domain, token),
       });
+      // A daily mail cap refused it (tm 257.14): a minute will not help, so
+      // the 503's "try again in a minute" would be wrong. 429 `limit_reached`
+      // with the reason and the wait until the caps renew at 00:00 UTC.
+      if (isCapRefusal(outcome)) {
+        throw new ApiError(
+          'limit_reached',
+          "Today's email allowance is used up, so the verification message was not sent. It renews at 00:00 UTC.",
+          {
+            details: { reason: 'mail_daily_cap', scope: outcome.error.scope },
+            headers: { 'Retry-After': String(secondsUntilUtcMidnight(new Date())) },
+          },
+        );
+      }
       if (outcome.status === 'failed') {
         // The domain, not the mailbox: the mailbox is an address.
         request.log.warn(

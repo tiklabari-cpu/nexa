@@ -13545,7 +13545,26 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
-      429: components['responses']['TooManyRequests'];
+      /**
+       * @description Either the anonymous rate limit (`too_many_requests`, as on every
+       *     unauthenticated route), or this network has created too many
+       *     workspaces this hour (`limit_reached`, tm 257.14):
+       *     `error.details.reason` is `signup_rate`. The second is counted per
+       *     client network — an IPv4 address, an IPv6 `/64` — on every sign-up
+       *     that reaches the form's checks, malformed ones included, and only
+       *     while sign-up is open. **Nothing was created.** `Retry-After` is
+       *     the wait until this network's hourly allowance has room again.
+       */
+      429: {
+        headers: {
+          /** @description Seconds until the caller may retry. */
+          'Retry-After'?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
     };
   };
   requestPasswordReset: {
@@ -13885,9 +13904,13 @@ export interface operations {
                *     arrived. It is not sent again: the link inside is
                *     single-use, and two copies are two chances for the
                *     wrong person to use it.
+               *     `cap_reached` — today's email allowance (this
+               *     workspace's, or the deployment's) is used up, so it
+               *     was not sent (tm 257.14). The allowances renew at
+               *     00:00 UTC; until then the link is the way in.
                * @enum {string}
                */
-              reason: 'failed' | 'unconfirmed';
+              reason: 'failed' | 'unconfirmed' | 'cap_reached';
             }[];
           };
         };
@@ -18034,7 +18057,25 @@ export interface operations {
           'application/json': components['schemas']['Error'];
         };
       };
-      429: components['responses']['TooManyRequests'];
+      /**
+       * @description Either the rate limit (`too_many_requests`, as everywhere), or
+       *     today's email allowance is used up (`limit_reached`, tm 257.14):
+       *     `error.details.reason` is `mail_daily_cap` and `error.details.scope`
+       *     whose allowance it was (`workspace`, or `global` for the whole
+       *     deployment). The challenge was recorded but its message was not
+       *     sent; the allowances renew at 00:00 UTC, which `Retry-After` counts
+       *     down to.
+       */
+      429: {
+        headers: {
+          /** @description Seconds until the caller may retry — for the mail cap, until the next 00:00 UTC. */
+          'Retry-After'?: number;
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['Error'];
+        };
+      };
       /** @description The challenge was recorded but its message could not be sent (`service_unavailable`). The owner is the only person who can learn that, so it is not hidden; another challenge may be sent a minute later. A message whose delivery was handed over but never confirmed is answered as sent (202) — it may already be in the mailbox. */
       503: {
         headers: {

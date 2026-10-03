@@ -113,6 +113,26 @@ export function ticketTemplateContext(facts: TicketEmailFacts): TemplateContext 
 }
 
 /**
+ * The line a pilot deployment adds to the end of every ticket notice (tm
+ * 257.14 · ADR `docs/adr/pilot-public-readiness.md` K-e(4)).
+ *
+ * A notice leaves from the deployment's one sender (`SMTP_FROM`) with no
+ * `Reply-To`, so a customer who answers it writes to the operator's mailbox —
+ * not to the workspace that sent it — and inbound e-mail cannot route the
+ * answer back (it opens a new ticket, without the text). Until notices carry a
+ * per-workspace reply path, the honest thing is to say so. English only, like
+ * the rest of the server's own mail text, and fixed: it is the operator's
+ * statement about the operator's mailbox, not the workspace's template.
+ */
+export const PILOT_NO_REPLY_LINE =
+  'This mailbox does not read replies. Write to us from our chat page.';
+
+/** `body` with {@link PILOT_NO_REPLY_LINE} after it, a blank line between. */
+export function withPilotNoReplyLine(body: string): string {
+  return `${body}\n\n${PILOT_NO_REPLY_LINE}`;
+}
+
+/**
  * Render a stored template for a ticket, or refuse.
  *
  * The order of the checks is the order of the risks:

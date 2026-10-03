@@ -47,6 +47,16 @@ export class ApiClientError extends Error {
 export const AI_DAILY_CAP_MESSAGE_KEY = 'common.limits.aiDailyCap';
 
 /**
+ * The other `limit_reached` reasons that are not the plan's (tm 257.14), by
+ * `details.reason`: today's email allowance, and the hourly sign-up limit per
+ * network. Like the AI cap, upgrading changes neither.
+ */
+const LIMIT_REASON_MESSAGE_KEYS: ReadonlyMap<string, string> = new Map([
+  ['mail_daily_cap', 'common.limits.mailDailyCap'],
+  ['signup_rate', 'common.limits.signupRate'],
+]);
+
+/**
  * Whether `error` is the daily AI cap (tm 257.8): a 429 `limit_reached` with
  * `details.reason: 'ai_daily_cap'`. `limit_reached` alone means a plan limit,
  * whose sentence ("the limit for your plan") would be wrong here — the cap is
@@ -84,6 +94,12 @@ export function errorMessageKey(error: unknown): string {
   // allowance is used up and comes back at UTC midnight. Outside
   // `common.errors.*`, whose keys are exactly the error types.
   if (isAiDailyCap(error)) return AI_DAILY_CAP_MESSAGE_KEY;
+  if (error.type === 'limit_reached') {
+    const reason = error.details?.['reason'];
+    // A Map, not an object: a reason off the wire must not find `toString`.
+    const key = typeof reason === 'string' ? LIMIT_REASON_MESSAGE_KEYS.get(reason) : undefined;
+    if (key) return key;
+  }
   // The type is *typed* as `ErrorType | 'network'`, but it is read straight off the
   // wire — a server ahead of this build, or a proxy writing its own envelope,
   // can put anything there. Narrowing against the real taxonomy is what keeps

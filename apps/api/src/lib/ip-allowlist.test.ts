@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clientNetworkKey,
   decideIpAccess,
   formatAllowlistEntry,
   ipMatchesEntry,
@@ -210,5 +211,37 @@ describe('wouldLockOut', () => {
   it('is false when the proposed list is empty (clearing the restriction locks no one out)', () => {
     expect(wouldLockOut('10.0.0.5', [])).toBe(false);
     expect(wouldLockOut(null, [])).toBe(false);
+  });
+});
+
+describe('clientNetworkKey (tm 257.14)', () => {
+  it('keys an IPv4 client by its address', () => {
+    expect(clientNetworkKey('203.0.113.7')).toBe('203.0.113.7');
+    expect(clientNetworkKey('203.0.113.8')).toBe('203.0.113.8');
+  });
+
+  it('keys an IPv4-mapped IPv6 address as the IPv4 client it carries', () => {
+    expect(clientNetworkKey('::ffff:203.0.113.7')).toBe('203.0.113.7');
+  });
+
+  it('keys every IPv6 address in one /64 alike, whatever its interface bits', () => {
+    const key = clientNetworkKey('2001:db8:1:2::1');
+    expect(key).toBe('2001:db8:1:2::/64');
+    for (const ip of [
+      '2001:db8:1:2:ffff:ffff:ffff:ffff',
+      '2001:DB8:1:2:0:0:0:9',
+      '2001:0db8:0001:0002::abcd',
+    ]) {
+      expect(clientNetworkKey(ip), ip).toBe(key);
+    }
+  });
+
+  it('keys the next /64 apart', () => {
+    expect(clientNetworkKey('2001:db8:1:3::1')).toBe('2001:db8:1:3::/64');
+    expect(clientNetworkKey('2001:db8:1:3::1')).not.toBe(clientNetworkKey('2001:db8:1:2::1'));
+  });
+
+  it('returns an address it cannot parse as given — still a key', () => {
+    expect(clientNetworkKey('not-an-ip')).toBe('not-an-ip');
   });
 });

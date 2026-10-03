@@ -38,7 +38,12 @@
  */
 import { maskPii } from '../../lib/log-redact.js';
 import type { Mailer, Message } from './mailer.js';
-import { isMailDeliveryError, type MailDeliveryError } from './mail-error.js';
+import {
+  isMailCapError,
+  isMailDeliveryError,
+  type MailCapError,
+  type MailDeliveryError,
+} from './mail-error.js';
 
 export type MailOutcome =
   | { status: 'sent' }
@@ -56,6 +61,18 @@ export async function deliver(mailer: Mailer, message: Message): Promise<MailOut
     }
     return { status: 'failed', error };
   }
+}
+
+/**
+ * Whether a daily mail cap refused this send (tm 257.14) — the outcome of a
+ * {@link MailCapError} thrown by `CappedMailer`, which has already written the
+ * one warning line a refusal gets. A caller that logs unsent mail skips it, so
+ * a refusal is not logged twice.
+ */
+export function isCapRefusal(
+  outcome: MailOutcome,
+): outcome is { status: 'failed'; error: MailCapError } {
+  return outcome.status === 'failed' && isMailCapError(outcome.error);
 }
 
 /**
@@ -92,7 +109,8 @@ export interface MailOutcomeLogger {
 }
 
 /**
- * Log a mail that did not go out as `sent`; stay silent when it did (tm 256.4).
+ * Log a mail that did not go out as `sent`; stay silent when it did (tm 256.4),
+ * and when a daily cap refused it (tm 257.14 — already logged).
  *
  * The line carries `event` (which mail this was), the outcome and
  * {@link mailFailureFields} — never the recipient, and never the message:
@@ -105,7 +123,8 @@ export function logUnsentMail(
   outcome: MailOutcome,
   fields: Record<string, unknown> = {},
 ): void {
-  if (outcome.status === 'sent') return;
+  // A cap refusal was logged where it was decided (`mail-caps.ts`).
+  if (outcome.status === 'sent' || isCapRefusal(outcome)) return;
   log.warn(
     { event, outcome: outcome.status, mail: mailFailureFields(outcome.error), ...fields },
     'mail not confirmed as sent',

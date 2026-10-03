@@ -56,4 +56,9 @@ export const common: Messages = {
   'common.actions.tourProgress': 'Adım {current} / {count}',
   // The deployment's daily AI allowance (tm 257.8) — not the plan's limit.
   'common.limits.aiDailyCap': 'Bugünkü AI kotası doldu; UTC gece yarısı yenilenir.',
+  // Today's email allowance and the hourly sign-up limit per network (tm 257.14).
+  'common.limits.mailDailyCap':
+    'Bugünkü e-posta kotası doldu, bu yüzden ileti gönderilmedi; UTC gece yarısı yenilenir.',
+  'common.limits.signupRate':
+    'Bu ağdan kısa süre içinde çok fazla çalışma alanı oluşturuldu. Bir saat sonra yeniden deneyin.',
 };

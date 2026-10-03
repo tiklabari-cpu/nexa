@@ -23,7 +23,10 @@ import type { WorkspaceEventDispatcher } from '../services/webhooks/workspace-ev
 import { TICKET_STATUSES, TicketService } from '../services/tickets/ticket-service.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import { TicketEmailTemplateService } from '../services/tickets/ticket-email-template-service.js';
-import type { RenderedTicketEmail } from '../services/tickets/ticket-email.js';
+import {
+  withPilotNoReplyLine,
+  type RenderedTicketEmail,
+} from '../services/tickets/ticket-email.js';
 import { logUnsentMail } from '../services/mail/delivery.js';
 import { selfAccountId } from '../services/auth/principal.js';
 import { writeAuditEntry } from '../services/audit/audit-log.js';
@@ -150,9 +153,12 @@ export default async function ticketRoutes(
   app: FastifyInstance,
   {
     automations,
+    pilotMode = false,
   }: {
     /** Fans a committed ticket creation out to Zapier/Make subscriptions (FR-MOD-09.4). */
     automations?: WorkspaceEventDispatcher;
+    /** `PILOT_MODE`: ticket notices say their mailbox reads no replies (tm 257.14). */
+    pilotMode?: boolean;
   } = {},
 ): Promise<void> {
   const tickets = new TicketService();
@@ -330,9 +336,12 @@ export default async function ticketRoutes(
         app.backgroundMail.send(
           {
             to: notice.to,
+            licenseId: tenant.licenseId,
             kind: 'ticket_notice',
             subject: notice.subject,
-            body: notice.body,
+            // Added here, at the send, rather than by the renderer: the line is
+            // the deployment's statement, not part of the workspace's template.
+            body: pilotMode ? withPilotNoReplyLine(notice.body) : notice.body,
           },
           (outcome) =>
             logUnsentMail(request.log, 'ticket.notice_mail', outcome, {

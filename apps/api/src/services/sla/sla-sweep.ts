@@ -276,8 +276,11 @@ export class SlaSweeper {
     // them. Marking them announced keeps the sweep's report honest about what
     // is outstanding.
     if (recipient) {
+      // A daily mail cap's refusal (tm 257.14) is a `failed` like any other:
+      // the breaches stay unannounced and the next pass tries again.
       const outcome = await deliver(this.#mailer, {
         to: recipient,
+        licenseId: context.licenseId,
         subject: `SiyahTuş: ${pending.length} SLA target${pending.length === 1 ? '' : 's'} missed`,
         body: renderBreachDigest(pending),
         kind: 'notification',

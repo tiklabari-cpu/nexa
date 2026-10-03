@@ -10,7 +10,12 @@
  */
 import { describe, expect, it } from 'vitest';
 import type { TicketEmailFacts } from './ticket-email.js';
-import { renderTicketEmail, ticketTemplateContext } from './ticket-email.js';
+import {
+  PILOT_NO_REPLY_LINE,
+  renderTicketEmail,
+  ticketTemplateContext,
+  withPilotNoReplyLine,
+} from './ticket-email.js';
 
 const FACTS: TicketEmailFacts = {
   ticketId: 'TCK00000001',
@@ -146,5 +151,16 @@ describe('renderTicketEmail (FR-MOD-08.7.5)', () => {
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
     expect(outcome.refusal.reason).toBe('invalid_template');
+  });
+});
+
+describe('withPilotNoReplyLine (tm 257.14)', () => {
+  it('adds the fixed line after the body, a blank line between, and changes nothing else', () => {
+    expect(withPilotNoReplyLine('Hi Ada.\nYour ticket is solved.')).toBe(
+      'Hi Ada.\nYour ticket is solved.\n\nThis mailbox does not read replies. Write to us from our chat page.',
+    );
+    expect(PILOT_NO_REPLY_LINE).toBe(
+      'This mailbox does not read replies. Write to us from our chat page.',
+    );
   });
 });

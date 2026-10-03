@@ -4948,6 +4948,10 @@ export interface paths {
     /**
      * List marketplace apps and their connection status
      * @description Every catalogue card, each flagged with whether this workspace has connected it.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) the answer is always an
+     *     empty page (`items: []`, `total: 0`) rather than a refusal: the pilot has no
+     *     marketplace, and the Developers webhook screen reads this list for its app picker.
      */
     get: operations['listApps'];
     put?: never;
@@ -4973,6 +4977,10 @@ export interface paths {
     /**
      * Disconnect an app
      * @description Removes the installation. A no-op app that was never connected is a 404.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot has no marketplace.
      */
     delete: operations['disconnectApp'];
     options?: never;
@@ -4996,6 +5004,10 @@ export interface paths {
      * @description Returns an authorize URL to send the user to and an opaque `state` to hand
      *     back on the callback. The flow is mocked (MASTER-PROMPT §5) — no real
      *     provider is contacted.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot has no marketplace.
      *
      *     Only for a `provider: oauth` card. An `api_key` card is refused with a 400
      *     (use `POST /settings/apps/{appId}/connect`), as is a channel-typed one
@@ -5028,6 +5040,10 @@ export interface paths {
      *     Only for a `provider: oauth` card — an `api_key` card is refused with a
      *     400 even with a well-formed state, so the two connection paths cannot
      *     stand in for one another.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot has no marketplace.
      */
     post: operations['completeAppOAuth'];
     delete?: never;
@@ -5062,6 +5078,10 @@ export interface paths {
      *     instead) and for a channel-typed card (set up in Settings → Channels).
      *     Re-connecting an already-connected app replaces the stored key, so
      *     rotating one is the same call.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before the body is read: the pilot has no marketplace, so no key is stored.
      */
     post: operations['connectAppWithApiKey'];
     delete?: never;
@@ -5083,7 +5103,8 @@ export interface paths {
      * Connected apps' data for this conversation's customer
      * @description For each app the workspace has connected, the (mock) data it exposes about
      *     this conversation's customer — what the agent reads in the Details pane.
-     *     Empty when nothing is connected.
+     *     Empty when nothing is connected, and always empty in the public pilot
+     *     (`pilot_mode` on `GET /deployment`), which has no marketplace.
      */
     get: operations['listChatApps'];
     put?: never;
@@ -5158,6 +5179,11 @@ export interface paths {
      *     visibly wrong data in another workspace, which is what the isolation test
      *     guards against. Idempotent: once the demo exists, a second call is a no-op
      *     and reports `seeded: false` with zero counts.
+     *
+     *     In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+     *     every caller with `403 not_allowed` and `error.details.reason:
+     *     "pilot_mode"`, before anything is written: invented rows do not belong in a
+     *     real workspace.
      */
     post: operations['seedOnboardingDemo'];
     delete?: never;

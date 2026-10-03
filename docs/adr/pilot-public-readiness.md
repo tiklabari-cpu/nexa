@@ -66,6 +66,11 @@
   - **Kontrat:** webhook ve e-posta inbound'a `403` eklendi (kontratta yoktu); bağlantı/mesaj/adres işlemlerine pilot notu. Yeni yol yok, mobil parite sayısı değişmedi.
   - **Build arg'ları:** `apps/web/Dockerfile` `VITE_WIDGET_URL`, `VITE_KB_PUBLIC_BASE`, `VITE_INBOUND_EMAIL_DOMAIN`'i bugünkü localhost değerleriyle varsayılan alır (boş varsayılan `??` yedeğini devre dışı bırakıp Chat page bağlantısını göreli `/chat.html` yapardı); `docker-compose.pilot.yml` üçünü `WIDGET_BASE_URL`, `API_BASE_URL/api/v1`, `INBOUND_EMAIL_DOMAIN`'den türetir. Pilotta e-posta kanalı olmadığı için son anahtarın değeri yalnız tutarlılık içindir; `docker-compose.full.yml` (demo) değişmedi.
   - **`INBOUND_EMAIL_SECRET` production'da zorunlu kaldı** (bayrak kapanırsa uç yeniden açılır).
+- **Uygulandı (tm 257.18) — Apps marketplace ve örnek veri:**
+  - **Reddedilen beş uç (`pilotRefused: true`):** `POST /settings/apps/:appId/oauth/start`, `…/oauth/callback`, `…/connect`, `DELETE /settings/apps/:appId` (`routes/apps.ts`) ve `POST /onboarding/seed-demo` (`routes/onboarding.ts`). Kapı gövdeyi okumadan önce; hiçbir kurulum satırı, anahtar özeti ya da tohum satırı yazılmaz.
+  - **İki okuma reddedilmez, boş döner:** `GET /settings/apps` → `{ items: [], total: 0 }`, `GET /chats/:chatId/apps` → `{ items: [] }`. Developers → Webhook subscriptions `?category=productivity` okuyor (403 olsa o ekran hata gösterirdi); bayrak kapanmadan önce bağlanmış bir kart da pilotta görünmez. Zapier/Make abonelikleri (FR-MOD-08.8.4) etkilenmez: kart sahipli abonelik listede kimliğiyle görünür, forma kart seçeneği gelmez.
+  - **Panel:** `/app/apps` → `/app/inbox` (`PilotHidden`), uygulama menüsünden "Apps" bağlantısı, Settings → Integrations bölümü (`pilotHidden`) ve `/app/settings/integrations` adresi (`SettingsPage` bu bölüm için pilotta ana ayarlara döner — `findSection` yalnız kapsam denetliyordu), Details panelinde Apps bölümü (ve okuması; `enabled: !pilotMode`), onboarding'in son adımındaki örnek-veri bölümü ve Welcome'daki "Add sample data" maddesi. Bu bölümün altında MCP ve kişisel erişim jetonları kalır, grup başlığı da.
+  - **Kontrat/env/i18n:** yeni yol, env anahtarı ya da metin yok; mobil parite sayısı aynı.
 
 ### 2.4 K-e — açık kayıt korumaları
 

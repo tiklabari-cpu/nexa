@@ -158,9 +158,11 @@ export function OnboardingWizard(): ReactElement {
           {stepId === 'team' && (
             <div className="flex flex-col gap-6">
               <TeamStep />
-              <div className="flex flex-col gap-3 border-t border-border pt-5">
-                <SampleStep initiallySeeded={state.data?.demo_seeded ?? false} />
-              </div>
+              {!pilotMode && (
+                <div className="flex flex-col gap-3 border-t border-border pt-5">
+                  <SampleStep initiallySeeded={state.data?.demo_seeded ?? false} />
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -249,7 +251,7 @@ function WelcomeStep({
         {!pilotMode && <li>• {t('auth.onboarding.welcome.bulletChannels')}</li>}
         <li>• {t('auth.onboarding.welcome.bulletCompany')}</li>
         <li>• {t('auth.onboarding.welcome.bulletTeam')}</li>
-        <li>• {t('auth.onboarding.welcome.bulletSample')}</li>
+        {!pilotMode && <li>• {t('auth.onboarding.welcome.bulletSample')}</li>}
       </ul>
       <p className="text-2xs text-content-tertiary">{t('auth.onboarding.welcome.footer')}</p>
     </div>

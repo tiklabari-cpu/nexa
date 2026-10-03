@@ -256,6 +256,9 @@ export const SETTINGS_SECTIONS: readonly SettingsSectionEntry[] = [
     labelKey: 'settings.nav.section.integrations',
     file: 'Integrations',
     keywords: ['marketplace', 'apps', 'zapier'],
+    // The marketplace it opens is not in the pilot (tm 257.18); with the door
+    // gone the section, and the words that found it, go too.
+    pilotHidden: true,
   },
   // `GET /mcp/manifest` is public — the manifest is documentation.
   {

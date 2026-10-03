@@ -71,7 +71,9 @@ export default async function onboardingRoutes(app: FastifyInstance): Promise<vo
 
   app.post(
     '/onboarding/seed-demo',
-    { config: { scopes: ['properties.configuration:rw'] } },
+    // `pilotRefused` (tm 257.18): the demo rows are invented customers written
+    // into a real workspace — the pilot's first inbox is the owner's own.
+    { config: { scopes: ['properties.configuration:rw'], pilotRefused: true } },
     async (request, reply) => {
       const principal = requireAdmin(request);
       const tenant = request.tenant();

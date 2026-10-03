@@ -122,6 +122,20 @@ describe('OnboardingWizard in the public pilot (tm 257.3)', () => {
     expect(screen.getByText(/Connect your first website/)).toBeInTheDocument();
   });
 
+  it('promises no sample data on Welcome, and offers none on the last step (tm 257.18)', async () => {
+    stubFetch();
+    renderWizard(PILOT);
+
+    expect(screen.queryByText(/Add sample data to explore/)).not.toBeInTheDocument();
+    for (let i = 0; i < 3; i += 1) {
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    }
+    expect(screen.getByText('Step 4 of 4')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Invite your team' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Add sample data' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add sample data' })).not.toBeInTheDocument();
+  });
+
   it('goes from the website step straight to the company step', async () => {
     stubFetch();
     renderWizard(PILOT);
@@ -149,5 +163,17 @@ describe('OnboardingWizard in the public pilot (tm 257.3)', () => {
     expect(screen.getByText('Step 1 of 5')).toBeInTheDocument();
     expect(within(stepper()).getByText('Channels')).toBeInTheDocument();
     expect(screen.getByText(/See the other ways customers can reach you/)).toBeInTheDocument();
+    expect(screen.getByText(/Add sample data to explore/)).toBeInTheDocument();
+  });
+
+  it('keeps the sample-data section on the last step of an ordinary deployment (tm 257.18)', async () => {
+    stubFetch();
+    renderWizard(ORDINARY);
+
+    for (let i = 0; i < 4; i += 1) {
+      await userEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    }
+    expect(screen.getByText('Step 5 of 5')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Add sample data' })).toBeInTheDocument();
   });
 });

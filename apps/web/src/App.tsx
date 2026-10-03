@@ -9,6 +9,7 @@ import {
   JoinPage,
   ResetPasswordPage,
   SignUpPage,
+  VerifyEmailPage,
 } from './features/auth/PublicPages.js';
 import { BillingPage } from './features/billing/BillingPage.js';
 import { CustomersPage } from './features/customers/CustomersPage.js';
@@ -66,9 +67,9 @@ export function App(): ReactElement {
   // dead token, so the whole tree collapses to the signed-out routes rather
   // than redirecting.
   //
-  // Those routes are a real router rather than a single page because four of
+  // Those routes are a real router rather than a single page because five of
   // them arrive carrying something in the URL that a sign-in form would throw
-  // away: `/join` and `/reset-password` a token from an email, and
+  // away: `/join`, `/reset-password` and `/verify-email` a token from an email, and
   // `/auth/callback` the authorization code a federated sign-in just earned
   // (NFR-S11 · S11-i).
   if (status !== 'signed-in') {
@@ -78,6 +79,7 @@ export function App(): ReactElement {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password" element={<ResetPasswordPage />} />
         <Route path="/join" element={<JoinPage />} />
+        <Route path="/verify-email" element={<VerifyEmailPage />} />
         <Route path="/auth/callback" element={<AuthCallbackPage />} />
         <Route path="*" element={<SignInPage />} />
       </Routes>

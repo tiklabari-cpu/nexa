@@ -21,6 +21,10 @@ import { ApiClientError } from '../../lib/api-client';
 /** One sentence for a wrong password and an unknown address alike (`/auth/login`). */
 export const INVALID_CREDENTIALS = 'Invalid email or password.';
 
+/** `/auth/authorize` refusing an account whose address is still unconfirmed. */
+export const EMAIL_UNVERIFIED =
+  'Confirm your email address in the web panel first, then sign in here.';
+
 /** A workspace that federates sign-in but names no connection to knock on. */
 export const SSO_REQUIRED =
   'This workspace requires single sign-on. Continue from your identity provider’s SiyahTuş tile.';
@@ -57,6 +61,12 @@ export function signInErrorMessage(error: unknown): string {
       case 'too_many_requests':
       case 'limit_reached':
         return 'Too many attempts. Wait a moment and try again.';
+      case 'not_allowed':
+        // An owner who has not confirmed the address (tm 257.16): the password
+        // was right, so the generic sentence would send them round again. The
+        // app has no sign-up and no resend — the web panel does both.
+        if (error.details?.['reason'] === 'email_unverified') return EMAIL_UNVERIFIED;
+        return 'Could not sign in. Try again.';
       case 'license_expired':
         return 'This workspace’s licence has expired. An owner can renew it from the web console.';
       case 'validation':

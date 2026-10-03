@@ -161,6 +161,36 @@ export const auth: Messages = {
   'auth.callback.signingIn': 'Signing you in…',
   'auth.callback.noCode': 'This sign-in did not complete. Start again from the sign-in page.',
   'auth.callback.genericFailure': 'Sign-in failed.',
+  'auth.callback.unverified':
+    'Confirm your email address before signing in. Open the link we sent you, or ask for a new one from the sign-in page.',
+
+  // Email confirmation (tm 257.16): the "check your inbox" state after sign-up,
+  // the page the mailed link opens, and the resend control both share.
+  'auth.verify.checkTitle': 'Check your inbox',
+  'auth.verify.checkSubtitle': 'One more step before your workspace opens.',
+  'auth.verify.checkBody':
+    'We sent a confirmation link to {email}. Open it and enter your password to finish. If it does not arrive in a few minutes, check your spam folder or send it again.',
+  'auth.verify.resend': 'Send the link again',
+  'auth.verify.resendWait': 'Send again in {seconds} s',
+  'auth.verify.resendSent': 'If that address is waiting to be confirmed, a new link is on its way.',
+  'auth.verify.resendTitle': 'Need a new link?',
+  'auth.verify.resendHint': 'Enter the address you signed up with.',
+  'auth.verify.resendSubmit': 'Send link',
+  'auth.verify.resendSubmitting': 'Sending…',
+  'auth.verify.title': 'Confirm your email',
+  'auth.verify.subtitle': 'Enter your password to finish setting up your workspace.',
+  'auth.verify.passwordHint': 'The password you chose when you signed up.',
+  'auth.verify.submit': 'Confirm and sign in',
+  'auth.verify.submitting': 'Confirming…',
+  'auth.verify.errorInvalid':
+    'This link is invalid or has expired, or that is not the password you chose. Check the password, or ask for a new link below.',
+  'auth.verify.errorSignIn':
+    'Your address is confirmed, but we could not sign you in. Sign in from the sign-in page.',
+  'auth.verify.noToken': 'This link is incomplete. Ask for a new one below.',
+  'auth.verify.unverifiedTitle': 'Confirm your email first',
+  'auth.verify.unverifiedBody':
+    'The address {email} has not been confirmed yet. Open the link we sent you, or ask for a new one.',
+  'auth.verify.unverifiedBack': 'Back',
 
   // Onboarding wizard
   'auth.onboarding.steps.welcome': 'Welcome',

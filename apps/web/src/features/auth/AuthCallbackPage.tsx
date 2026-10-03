@@ -15,6 +15,7 @@
  */
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { useTranslate } from '../../lib/i18n.js';
 
@@ -41,6 +42,16 @@ export function AuthCallbackPage(): ReactElement {
       return;
     }
     completeSsoLogin(code, state).catch((cause: unknown) => {
+      // An unconfirmed address (tm 257.16): the store rethrows the API's own
+      // refusal, whose prose says nothing about what to do next.
+      if (
+        cause instanceof ApiClientError &&
+        cause.type === 'not_allowed' &&
+        cause.details?.['reason'] === 'email_unverified'
+      ) {
+        setError(t('auth.callback.unverified'));
+        return;
+      }
       // i18n-ignore: a store-thrown message, not raw server prose reaching the screen.
       setError(cause instanceof Error ? cause.message : t('auth.callback.genericFailure'));
     });

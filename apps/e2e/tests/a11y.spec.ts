@@ -1168,6 +1168,54 @@ test.describe('WCAG 2.1 AA (axe)', () => {
         });
       });
 
+      // Sign-up email verification (tm 257.16). The e2e API runs with the flag
+      // off, so neither screen can be reached for real: the link page needs only
+      // a token in the URL (it is never spent here), and the "check your inbox"
+      // state is reached by answering the sign-up call with the 202 a verifying
+      // deployment sends — the one thing faked, as in the terms-box scan above.
+      test('verify-email page has no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto('/verify-email?token=a11y-scan-token-that-is-never-spent');
+        await scanPanel(page, 'Verify email', theme, testInfo, async () => {
+          await expect(page.getByRole('button', { name: 'Confirm and sign in' })).toBeVisible();
+        });
+      });
+
+      // No token: the alert plus the new-link form, the fuller of the two states.
+      test('verify-email page without a token has no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await pinTheme(page, theme);
+        await page.goto('/verify-email');
+        await scanPanel(page, 'Verify email, no token', theme, testInfo, async () => {
+          await expect(page.getByRole('button', { name: 'Send link' })).toBeVisible();
+        });
+      });
+
+      test('sign-up check-your-inbox state has no serious or critical violations', async ({
+        page,
+      }, testInfo) => {
+        await page.route('**/api/v1/auth/signup', (route) =>
+          route.fulfill({
+            status: 202,
+            contentType: 'application/json',
+            body: JSON.stringify({ message: 'Check your inbox.' }),
+          }),
+        );
+        await pinTheme(page, theme);
+        await page.goto('/signup');
+        await page.getByLabel('Workspace name').fill('A11y Check Inc');
+        await page.getByLabel('Your name').fill('A11y Check');
+        await page.getByLabel('Email').fill('a11y-check@example.com');
+        await page.getByLabel('Password').fill('a-long-enough-password');
+        await page.getByRole('button', { name: 'Create workspace' }).click();
+        await scanPanel(page, 'Sign up, check your inbox', theme, testInfo, async () => {
+          await expect(page.getByRole('heading', { name: 'Check your inbox' })).toBeVisible();
+        });
+      });
+
       // The `needs_password` branch (`ensureJoinInvitation`) — the fuller of
       // the two forms this screen renders, with two labelled fields.
       test('join page has no serious or critical violations', async ({ page }, testInfo) => {

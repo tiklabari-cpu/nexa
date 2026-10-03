@@ -144,6 +144,132 @@ function ErrorNote({ message }: { message: string | null }): ReactElement | null
 
 const MIN_PASSWORD = 12;
 
+/** How long "send the link again" waits after a link went out (tm 257.16). */
+const RESEND_COOLDOWN_SECONDS = 60;
+
+/**
+ * Seconds left on the resend button, and a way to start the wait over.
+ *
+ * Kept as a deadline rather than a counter that ticks down: a throttled
+ * background tab fires its timers late, and a counter would then be minutes
+ * wrong where a deadline is only a second stale.
+ */
+function useCooldown(initialSeconds: number): [number, () => void] {
+  const [until, setUntil] = useState(() => Date.now() + initialSeconds * 1000);
+  const [now, setNow] = useState(() => Date.now());
+  const left = Math.max(0, Math.ceil((until - now) / 1000));
+  const waiting = left > 0;
+
+  useEffect(() => {
+    if (!waiting) return undefined;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [waiting]);
+
+  const start = (): void => {
+    const current = Date.now();
+    setNow(current);
+    setUntil(current + RESEND_COOLDOWN_SECONDS * 1000);
+  };
+  return [left, start];
+}
+
+/**
+ * "Send the confirmation link again" for an address the person has already
+ * typed (tm 257.16). The server answers 202 whatever the address holds, so the
+ * sentence below the button is the same whether the call worked, was refused
+ * or never arrived — a page that reported a failure for some addresses would
+ * hand back the enumeration channel the endpoint closes.
+ */
+export function ResendVerification({
+  email,
+  initialWait = 0,
+}: {
+  email: string;
+  initialWait?: number;
+}): ReactElement {
+  const t = useTranslate();
+  const [left, start] = useCooldown(initialWait);
+  const [sent, setSent] = useState(false);
+
+  const resend = async (): Promise<void> => {
+    start();
+    await anonymous.post('/auth/verify-email/resend', { email }).catch(() => undefined);
+    setSent(true);
+  };
+
+  return (
+    <div>
+      <p role="status" className="mb-3 text-sm text-content-secondary">
+        {sent ? t('auth.verify.resendSent') : null}
+      </p>
+      <button
+        type="button"
+        onClick={() => void resend()}
+        disabled={left > 0}
+        className="w-full rounded-md border border-border px-3 py-2 text-sm font-medium disabled:opacity-50"
+      >
+        {left > 0 ? t('auth.verify.resendWait', { seconds: left }) : t('auth.verify.resend')}
+      </button>
+    </div>
+  );
+}
+
+/** The same resend, for somebody who has no address on screen yet. */
+function ResendByAddress(): ReactElement {
+  const t = useTranslate();
+  const [left, start] = useCooldown(0);
+  const [sent, setSent] = useState(false);
+
+  const form = useForm({
+    initial: { email: '' },
+    validators: {
+      email: compose(
+        required(t('auth.validation.emailRequired')),
+        emailRule(t('auth.validation.emailInvalid')),
+      ),
+    },
+    // Deliberately no error branch — see `ResendVerification`.
+    onSubmit: async (values) => {
+      start();
+      await anonymous
+        .post('/auth/verify-email/resend', { email: values.email.trim() })
+        .catch(() => undefined);
+      setSent(true);
+    },
+  });
+
+  return (
+    <section aria-labelledby="resend-title" className="mt-5 border-t border-border pt-4">
+      <h2 id="resend-title" className="mb-3 text-sm font-medium">
+        {t('auth.verify.resendTitle')}
+      </h2>
+      <form onSubmit={form.handleSubmit} noValidate>
+        <Field
+          id="resend-email"
+          label={t('auth.fields.email')}
+          type="email"
+          value={form.values.email}
+          onChange={(value) => form.setValue('email', value)}
+          onBlur={() => form.blur('email')}
+          error={form.errorFor('email')}
+          hint={t('auth.verify.resendHint')}
+        />
+        <p role="status" className="mb-3 text-sm text-content-secondary">
+          {sent ? t('auth.verify.resendSent') : null}
+        </p>
+        <Submit disabled={!form.canSubmit || left > 0}>
+          {left > 0
+            ? t('auth.verify.resendWait', { seconds: left })
+            : form.isSubmitting
+              ? t('auth.verify.resendSubmitting')
+              : t('auth.verify.resendSubmit')}
+        </Submit>
+      </form>
+    </section>
+  );
+}
+
 /**
  * What to put on the form when signup fails (C4-h).
  *
@@ -225,6 +351,9 @@ export function SignUpPage(): ReactElement {
   // is no box — and the server still refuses a sign-up without acceptance.
   const termsRequired = Boolean(termsUrl && termsVersion);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  // The address a confirmation link was just sent to; set instead of signing in
+  // when the deployment verifies addresses.
+  const [checkInboxFor, setCheckInboxFor] = useState<string | null>(null);
 
   const form = useForm({
     initial: { organization: '', name: '', email: '', password: '' },
@@ -242,27 +371,55 @@ export function SignUpPage(): ReactElement {
     },
     onSubmit: async (values, { setSubmitError }) => {
       try {
-        const session = await anonymous.post<{ memberships: Array<{ license_id: string }> }>(
-          '/auth/signup',
-          {
-            email: values.email.trim(),
-            password: values.password,
-            name: values.name.trim(),
-            organization_name: values.organization.trim(),
-            ...(pilotMode ? {} : { region }),
-            // The version the person was shown, which the server compares
-            // with its own (`terms_outdated` when they differ).
-            ...(termsRequired && termsAccepted ? { terms_version: termsVersion } : {}),
-          },
-        );
+        const session = await anonymous.post<{
+          memberships?: Array<{ license_id: string }>;
+        }>('/auth/signup', {
+          email: values.email.trim(),
+          password: values.password,
+          name: values.name.trim(),
+          organization_name: values.organization.trim(),
+          ...(pilotMode ? {} : { region }),
+          // The version the person was shown, which the server compares
+          // with its own (`terms_outdated` when they differ).
+          ...(termsRequired && termsAccepted ? { terms_version: termsVersion } : {}),
+        });
+        // A deployment that verifies addresses answers 202 with no session
+        // (tm 257.16): nothing to sign in to until the link has been opened,
+        // and the answer is the same for an address that already had an
+        // account, so this page cannot say more than "check your inbox".
+        const first = session?.memberships?.[0];
+        if (!first) {
+          setCheckInboxFor(values.email.trim());
+          return;
+        }
         // Straight into the workspace. Making someone sign in again immediately
         // after choosing a password is a step with nothing behind it.
-        await signIn(values.email.trim(), values.password, session.memberships[0]!.license_id);
+        await signIn(values.email.trim(), values.password, first.license_id);
       } catch (failure) {
         setSubmitError(signupFailureMessage(failure, t));
       }
     },
   });
+
+  if (checkInboxFor) {
+    return (
+      <AuthCard
+        title={t('auth.verify.checkTitle')}
+        subtitle={t('auth.verify.checkSubtitle')}
+        footer={
+          <Link to="/signin" className="text-content-brand underline">
+            {t('auth.common.backToSignIn')}
+          </Link>
+        }
+      >
+        <p className="mb-4 text-sm text-content-secondary">
+          {t('auth.verify.checkBody', { email: checkInboxFor })}
+        </p>
+        {/* The mail went out a moment ago, so the button starts out waiting. */}
+        <ResendVerification email={checkInboxFor} initialWait={RESEND_COOLDOWN_SECONDS} />
+      </AuthCard>
+    );
+  }
 
   return (
     <AuthCard
@@ -501,6 +658,91 @@ export function ResetPasswordPage(): ReactElement {
           </Submit>
         </form>
       )}
+    </AuthCard>
+  );
+}
+
+/**
+ * FR-MOD-00.2 — spend the confirmation link (tm 257.16).
+ *
+ * The link proves the mailbox and the password proves the person, so the page
+ * asks for both and the API checks both before it opens a session. Success
+ * hands straight to the same sign-in everything else ends in.
+ *
+ * Every refusal reads the same — unknown, expired, used, wrong password — and
+ * a wrong password leaves the link working, so the form stays to be tried again
+ * and the new-link form appears beside it rather than instead of it. A browser
+ * that is already signed in never reaches this page: the signed-in router's
+ * catch-all takes the URL, as it does for `/join`.
+ */
+export function VerifyEmailPage(): ReactElement {
+  const t = useTranslate();
+  const [params] = useSearchParams();
+  const token = params.get('token') ?? '';
+  const signIn = useAuth((s) => s.signIn);
+  const [refused, setRefused] = useState(false);
+
+  const form = useForm({
+    initial: { password: '' },
+    validators: {
+      password: minLength(
+        MIN_PASSWORD,
+        t('auth.validation.passwordMinLength', { count: MIN_PASSWORD }),
+      ),
+    },
+    onSubmit: async (values, { setSubmitError }) => {
+      let session: { account: { email: string }; memberships: Array<{ license_id: string }> };
+      try {
+        session = await anonymous.post('/auth/verify-email', { token, password: values.password });
+      } catch {
+        setRefused(true);
+        setSubmitError(t('auth.verify.errorInvalid'));
+        return;
+      }
+      // Past this point the address is confirmed, and the sentence must not
+      // send the person back to a link that has just been spent.
+      try {
+        await signIn(session.account.email, values.password, session.memberships[0]!.license_id);
+      } catch {
+        setSubmitError(t('auth.verify.errorSignIn'));
+      }
+    },
+  });
+
+  return (
+    <AuthCard
+      title={t('auth.verify.title')}
+      subtitle={t('auth.verify.subtitle')}
+      footer={
+        <Link to="/signin" className="text-content-brand underline">
+          {t('auth.common.backToSignIn')}
+        </Link>
+      }
+    >
+      {token ? (
+        <form onSubmit={form.handleSubmit} noValidate>
+          <ErrorNote message={form.submitError} />
+          <Field
+            id="password"
+            label={t('auth.fields.password')}
+            type="password"
+            value={form.values.password}
+            onChange={(value) => form.setValue('password', value)}
+            onBlur={() => form.blur('password')}
+            error={form.errorFor('password')}
+            hint={t('auth.verify.passwordHint')}
+            autoFocus
+          />
+          <Submit disabled={!form.canSubmit}>
+            {form.isSubmitting ? t('auth.verify.submitting') : t('auth.verify.submit')}
+          </Submit>
+        </form>
+      ) : (
+        <p role="alert" className="text-sm text-danger">
+          {t('auth.verify.noToken')}
+        </p>
+      )}
+      {(refused || !token) && <ResendByAddress />}
     </AuthCard>
   );
 }

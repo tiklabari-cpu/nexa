@@ -98,8 +98,11 @@ kalıyor; ikisi de kuralı bilmeyen pencereyi yanıltır:
   `npx turbo run test --force --filter=!@siyahtus/e2e`. Normal DoD kapısında `--force` gerekmez.
 - **Paralel parçalar ve başlıklı kapı (2026-10-02) — aşağıdaki elle parçalamanın yerini alır.**
   `@siyahtus/api`'nin `test` ve `test:integration` script'leri artık
-  `apps/api/scripts/run-sharded.ts` üzerinden koşar: süiti 5 parçaya böler (CPU/4, tavan 6;
-  `SIYAHTUS_TEST_JOBS=<n>` ya da `--jobs=<n>` ile değişir) ve parçaları **aynı anda** koşturur. Her
+  `apps/api/scripts/run-sharded.ts` üzerinden koşar: süiti parçalara bölebilir (tavan 6;
+  `SIYAHTUS_TEST_JOBS=<n>` ya da `--jobs=<n>` ile açılır). **Sahip kararı 2026-10-03: varsayılan
+  1 = seri, tek süreç** (paralel parçalar makineyi tüketiyordu); paralel yalnız sahip isterse
+  açıkça `--jobs` verilerek koşturulur, görev notlarında "paralel koş" denmişse bile seri kal.
+  Aşağıdaki 5 parça / 5 dk ölçümü eski varsayılana aittir; seri koşu ~25 dk sürer. Parçalar **aynı anda** koşar. Her
   parça kendi izole veritabanını alır (§1.1), yani iki pencerenin aynı anda test koşmasından farkı
   yoktur. Dosyalar bir önceki koşunun dosya sürelerine göre dağıtılır
   (`apps/api/node_modules/.cache/run-sharded/timings.json`; yoksa vitest `--shard`). Ölçüldü:

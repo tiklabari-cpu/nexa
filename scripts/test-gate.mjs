@@ -6,7 +6,7 @@
  *     pnpm test:gate birim entegrasyon    # only these headings
  *     pnpm test:gate --e2e                # the four above, then e2e
  *     pnpm test:gate --force              # bypass the turbo cache (§1.3)
- *     pnpm test:gate --jobs=3             # parallel integration shards (default: CPUs/4, max 6)
+ *     pnpm test:gate --jobs=3             # parallel integration shards (default: 1 = serial, max 6)
  *
  * Headings and what runs in each:
  *

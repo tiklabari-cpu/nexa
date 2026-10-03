@@ -805,7 +805,8 @@ datastore: a `pg_dump` of Postgres — via `docker compose exec`, the same
 container-side pattern `make psql` uses, since psql/pg_dump are not assumed to be on
 the host — plus a tar of `.data/uploads` (`STORAGE_LOCAL_DIR`, what
 `STORAGE_PROVIDER=local` writes to). Output lands in `backups/` (gitignored, never
-committed) as `db-<timestamp>.dump` + `uploads-<timestamp>.tar.gz`.
+committed, and kept outside the Docker build context by `.dockerignore`) as
+`db-<timestamp>.dump` + `uploads-<timestamp>.tar.gz`.
 
 **Retention policy (NFR-C8 — backups are subject to the retention policy too, not
 exempt from it):** backups older than `BACKUP_RETENTION_DAYS` (default 30,

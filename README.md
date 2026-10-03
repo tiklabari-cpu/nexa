@@ -252,6 +252,19 @@ fixture instead of piling more fixtures onto the last one. If you have local dat
 re-seed afterwards with `make seed`). Because it drives fixed ports against that one
 database, two `test:e2e` runs — or windows — cannot execute at the same time.
 
+The public pilot's flag-on behaviour has its own run, outside that suite:
+
+```bash
+pnpm test:e2e:pilot
+```
+
+It starts a private stack beside anything already running (api 4100, rtm 4101, web 5273,
+widget 5274, mock-smtp 4725/4726, the api with `PILOT_MODE=true`, e-mail verification and
+terms set) on a private database and Redis index (`apps/api/scripts/with-test-datastores.ts`),
+so it neither reuses a dev server nor resets the dev database. Chromium is mapped onto those
+ports from the usual ones, so the page still runs on `http://localhost:5173`. The spec is
+`apps/e2e/tests/pilot-mode.spec.ts`; the config `apps/e2e/playwright.pilot.config.ts`.
+
 ### Environment
 
 Environment lives in `.env` (created from `.env.example` by `make env`). `make` targets

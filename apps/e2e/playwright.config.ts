@@ -38,6 +38,10 @@ export const HOST_PAGE = 'http://acme-bikes.localhost:5174';
 
 export default defineConfig({
   testDir: './tests',
+  // The public pilot's spec needs an API started with `PILOT_MODE=true`, which
+  // this suite's servers are not (and, reused locally, cannot be made to be).
+  // It runs on its own stack: `playwright.pilot.config.ts`, `pnpm test:e2e:pilot`.
+  testIgnore: ['**/pilot-mode.spec.ts'],
   globalSetup: './tests/global-setup.ts',
   // The suite shares one database and one seed, so parallel files would clobber
   // each other's conversations. Correctness over wall-clock here.

@@ -58,7 +58,13 @@ RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
 RUN --mount=type=cache,id=siyahtus-pnpm-store,target=/pnpm-store \
     DATABASE_URL="postgresql://build:build@localhost:5432/build" \
     pnpm --filter @siyahtus/api exec prisma generate
-RUN pnpm --filter @siyahtus/api... run build
+# A bigger heap for `tsc` (tm 257.12). Node sizes its default from the memory
+# it can see, and inside Docker Desktop's 8 GB VM that is ~2 GB; the api's
+# compile needed 2.5 GB when measured (`tsc --extendedDiagnostics`, 1241
+# files), so the image stopped building with "JavaScript heap out of memory"
+# while every build outside Docker still passed. Build stage only — the
+# running server keeps Node's default.
+RUN NODE_OPTIONS=--max-old-space-size=4096 pnpm --filter @siyahtus/api... run build
 # Point the two runtime-consumed workspace packages at their compiled output.
 # Only this build stage's checked-out copy is touched — the real repo files
 # (which tsx/vitest need pointed at src) are untouched.

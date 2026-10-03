@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test",
+    "test:pilot": "playwright test --config playwright.pilot.config.ts",
     "test:headed": "playwright test --headed",
     "report": "playwright show-report",
     "typecheck": "tsc -p tsconfig.json --noEmit",

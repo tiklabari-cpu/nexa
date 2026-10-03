@@ -23,6 +23,11 @@ export default defineConfig(({ mode }) => {
   const sourcemap = process.env['SIYAHTUS_BUILD_SOURCEMAPS'] !== 'false';
 
   return {
+    // Same as apps/web/vite.config.ts: a second dev server (the pilot e2e
+    // stack) keeps its own dependency cache. Unset, Vite's default.
+    ...(process.env['SIYAHTUS_VITE_CACHE_DIR']
+      ? { cacheDir: process.env['SIYAHTUS_VITE_CACHE_DIR'] }
+      : {}),
     build: isLoader
       ? {
           outDir: 'dist',

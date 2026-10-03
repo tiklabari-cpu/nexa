@@ -648,7 +648,14 @@ re-embed.
       test once more with `SMOKE_ORGANIZATION_ID=<its id>` and
       `SMOKE_ADMIN_TOKEN=<the owner's access token>`: it mints a visitor token from the widget
       origin, cross-origin, and reads the admin `/health` — scheduler enabled and
-      `event_partitions.last_status: ok` (tm 255.14).
+      `event_partitions.last_status: ok` (tm 255.14). `scripts/pilot-owner-token.mjs` prints both
+      (the token, or the id with `--organization-id`) from `PILOT_OWNER_EMAIL` /
+      `PILOT_OWNER_PASSWORD` in the environment and `--api=` / `--web=` set to the public
+      addresses; it writes nothing to disk. The pilot profile also requires pilot mode
+      (tm 257.12): `/deployment` says `pilot_mode: true` and every closed surface answers 403
+      `pilot_mode` — a pilot whose api runs with the flag off fails the smoke test. A clean run
+      over the https names counts 45 passed with both inputs (27 without); the header of
+      `scripts/smoke.sh` has the other totals.
 
 ### Trial end and manual activation
 

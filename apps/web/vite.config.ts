@@ -26,6 +26,13 @@ const VENDOR_CHUNKS: Record<string, string> = {
 
 export default defineConfig({
   plugins: [react()],
+  // A second dev server beside the usual one (the pilot e2e stack,
+  // `apps/e2e/playwright.pilot.config.ts`) needs its own dependency cache, or
+  // its optimizer rewrites `.vite/deps` under the running one. Unset, Vite's
+  // default.
+  ...(process.env['SIYAHTUS_VITE_CACHE_DIR']
+    ? { cacheDir: process.env['SIYAHTUS_VITE_CACHE_DIR'] }
+    : {}),
   server: {
     port: Number(process.env['WEB_PORT'] ?? 5173),
     // Proxy in dev so the browser sees a same-origin API and cookies behave

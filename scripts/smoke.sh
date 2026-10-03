@@ -28,9 +28,27 @@
 # loader.js carry HSTS exactly once. Over an http base the two HSTS checks
 # print "skipped (http base)" — nothing there terminates TLS.
 #
-# What a clean run counts: demo 20 passed. Pilot 22 passed over https base
-# URLs, 20 passed + 2 skipped over http ones; SMOKE_ADMIN_TOKEN adds 2 and
-# SMOKE_ORGANIZATION_ID adds 1.
+# And the pilot profile requires pilot mode (tm 257.12): a pilot stack whose
+# api runs with PILOT_MODE off fails here. Anonymously it reads the flag from
+# /deployment (direct and through the panel's nginx), tries a sign-up without
+# accepting the terms (400 terms_not_accepted; 403 signup_closed while sign-up
+# is closed), and posts to a public channel webhook and the inbound-mail door.
+# With SMOKE_ADMIN_TOKEN it posts to the thirteen owner writes the pilot does
+# not offer — four billing purchases, the HIPAA agreement, five fake channels'
+# connect, a mail forwarding address, an Apps connection and onboarding sample
+# data. With SMOKE_ORGANIZATION_ID it reads the widget block of the visitor
+# token minted above (no second mint: each one writes a visitor). Every
+# refusal must be 403 not_allowed with reason pilot_mode, and every probe
+# sends `{}`: a route that is not gated answers a bare `{}` with a 400
+# validation error, so nothing is written even when the check fails — the
+# gate has to answer before the body is read for the check to pass. The
+# sign-up probe spends one try of the hourly per-network sign-up allowance
+# (RATE_LIMIT_SIGNUP_PER_HOUR); a run after that is used up fails it with 429.
+#
+# What a clean run counts: demo 20 passed. Pilot 27 passed over https base
+# URLs, 25 passed + 2 skipped over http ones; SMOKE_ADMIN_TOKEN adds 15 and
+# SMOKE_ORGANIZATION_ID adds 3 (over http: 40 with the token, 28 with the
+# organization id, 43 with both, each + 2 skipped; over https 2 more passed).
 set -uo pipefail
 
 API_BASE="${API_BASE:-http://localhost:4000}"
@@ -62,7 +80,9 @@ failed=0
 skipped=0
 body_file="$(mktemp)"
 header_file="$(mktemp)"
-trap 'rm -f "$body_file" "$header_file"' EXIT
+# The visitor-token mint's answer, kept for the pilot-mode block's widget check.
+mint_file="$(mktemp)"
+trap 'rm -f "$body_file" "$header_file" "$mint_file"' EXIT
 
 pass() {
   passed=$((passed + 1))
@@ -130,6 +150,26 @@ check_excludes() {
   fi
   if grep -q -- "$exclude_body" "$body_file"; then
     fail "$label" "HTTP $want_status from $url but the body contains '$exclude_body', which an anonymous caller must not see"
+    return 1
+  fi
+  pass "$label"
+  return 0
+}
+
+# A refusal: the status, and the error's type and `details.reason` — a status
+# alone is ambiguous (a missing scope is a 403 too). Sends `{}` for a body; see
+# the header for why.
+check_refusal() {
+  local label="$1" method="$2" url="$3" want_status="$4" want_type="$5" want_reason="$6"
+  local status
+  status="$(request "$method" "$url" '{}')"
+  if [ "$status" != "$want_status" ]; then
+    fail "$label" "expected HTTP $want_status from $method $url, got $status: $(head -c 300 "$body_file")"
+    return 1
+  fi
+  if ! grep -q -- "\"type\":\"$want_type\"" "$body_file" ||
+    ! grep -q -- "\"reason\":\"$want_reason\"" "$body_file"; then
+    fail "$label" "HTTP $want_status from $method $url but not $want_type/$want_reason: $(head -c 300 "$body_file")"
     return 1
   fi
   pass "$label"
@@ -340,6 +380,7 @@ if [ -n "$organization_id" ]; then
   check 'a visitor can mint a customer token from the widget origin' \
     POST "$API_BASE/api/v1/customer/token" 200 '"token"' \
     "{\"organization_id\":\"$organization_id\",\"host_origin\":\"$WIDGET_BASE\"}"
+  cp "$body_file" "$mint_file"
   origin_header=''
 elif [ "$SMOKE_PROFILE" = demo ]; then
   fail 'a visitor can mint a customer token from the widget origin' \
@@ -356,6 +397,73 @@ if [ "$SMOKE_PROFILE" = pilot ]; then
     "$RTM_BASE/v1/customer/rtm/ws?organization_id=00000000-0000-4000-8000-000000000000"
   check_hsts 'web sends HSTS once over https' "$WEB_BASE/"
   check_hsts 'widget loader.js sends HSTS once over https' "$WIDGET_BASE/loader.js"
+
+  # Required, not optional (tm 257.12): see the header. The routes are the
+  # ones tm 257.2/257.3/257.18 closed; `apps/api/src/plugins/pilot-gate.ts`.
+  printf '\nPilot mode\n'
+  api="$API_BASE/api/v1"
+  check 'api /deployment says pilot_mode true' GET "$api/deployment" 200 '"pilot_mode":true'
+  signup_open=false
+  grep -q '"signup_enabled":true' "$body_file" && signup_open=true
+  check 'the panel serves the same /deployment through its proxy' \
+    GET "$WEB_BASE/api/v1/deployment" 200 '"pilot_mode":true'
+  if [ "$signup_open" = true ]; then
+    # Everything valid but the acceptance, so only the terms gate can answer.
+    # `.invalid` (RFC 2606): no mail could ever go to it.
+    signup_body="{\"email\":\"smoke-$(date +%s)@smoke.invalid\",\"password\":\"smoke-terms-probe-0000\",\"name\":\"Smoke\",\"organization_name\":\"Smoke\"}"
+    status="$(request POST "$api/auth/signup" "$signup_body")"
+    if [ "$status" = 400 ] && grep -q '"reason":"terms_not_accepted"' "$body_file"; then
+      pass 'sign-up without accepting the terms is refused (400 terms_not_accepted)'
+    else
+      fail 'sign-up without accepting the terms is refused (400 terms_not_accepted)' \
+        "HTTP $status: $(head -c 300 "$body_file")"
+    fi
+  else
+    check_refusal 'sign-up is closed (403 signup_closed)' \
+      POST "$api/auth/signup" 403 not_allowed signup_closed
+  fi
+  check_refusal 'a public channel webhook is refused' \
+    POST "$api/channels/messenger/webhook" 403 not_allowed pilot_mode
+  check_refusal 'inbound mail is refused' \
+    POST "$api/channels/email/inbound" 403 not_allowed pilot_mode
+
+  if [ -n "$SMOKE_ADMIN_TOKEN" ]; then
+    auth_header="Bearer $SMOKE_ADMIN_TOKEN"
+    check_refusal 'billing: changing the plan is refused' \
+      PATCH "$api/billing/subscription" 403 not_allowed pilot_mode
+    check_refusal 'billing: saving a card is refused' \
+      PUT "$api/billing/payment-method" 403 not_allowed pilot_mode
+    check_refusal 'billing: buying an API package is refused' \
+      POST "$api/billing/api-packages" 403 not_allowed pilot_mode
+    check_refusal 'billing: buying an AI pack is refused' \
+      POST "$api/billing/ai-packages" 403 not_allowed pilot_mode
+    check_refusal 'accepting the HIPAA agreement is refused' \
+      POST "$api/settings/compliance/baa" 403 not_allowed pilot_mode
+    for channel in messenger whatsapp twilio instagram telegram; do
+      check_refusal "connecting $channel is refused" \
+        POST "$api/channels/$channel/connect" 403 not_allowed pilot_mode
+    done
+    check_refusal 'creating a mail forwarding address is refused' \
+      POST "$api/channels/email/addresses" 403 not_allowed pilot_mode
+    check_refusal 'starting an Apps connection is refused' \
+      POST "$api/settings/apps/hubspot/oauth/start" 403 not_allowed pilot_mode
+    check_refusal 'onboarding sample data is refused' \
+      POST "$api/onboarding/seed-demo" 403 not_allowed pilot_mode
+    auth_header=''
+  fi
+
+  if [ -n "$organization_id" ]; then
+    # The mint above, read again rather than repeated.
+    for pair in \
+      'the visitor token links an https privacy policy|"privacy_policy_url":"https://' \
+      'the visitor token carries no "Powered by" link|"powered_by_url":null'; do
+      if grep -q -- "${pair#*|}" "$mint_file"; then
+        pass "${pair%%|*}"
+      else
+        fail "${pair%%|*}" "the mint answered: $(head -c 300 "$mint_file")"
+      fi
+    done
+  fi
 fi
 
 if [ "$skipped" -gt 0 ]; then

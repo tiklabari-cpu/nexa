@@ -75,6 +75,8 @@ export interface TwoFactorEnrollment {
   account_name: string;
 }
 
+export type WorkspaceList = Membership[] & { emailVerified?: boolean };
+
 interface AuthState {
   accessToken: string | null;
   agent: CurrentAgent | null;
@@ -83,7 +85,14 @@ interface AuthState {
   busy: boolean;
 
   restore: () => Promise<void>;
-  listWorkspaces: (email: string, password: string) => Promise<Membership[]>;
+  /**
+   * The workspaces these credentials open. `emailVerified` is `false` only when
+   * the server says the account has not confirmed its address (tm 257.7) —
+   * absent on an older server, and read as "verified" then. It rides on the list
+   * rather than changing the return type, so a caller that only wants the
+   * workspaces is untouched.
+   */
+  listWorkspaces: (email: string, password: string) => Promise<WorkspaceList>;
   /**
    * `code` is the second factor (NFR-S11 · S11-2FA-g) — a TOTP digit string or a
    * recovery sheet entry, the server tells the two apart. Omitted rather than
@@ -335,11 +344,13 @@ export const useAuth = create<AuthState>((set, get) => {
     async listWorkspaces(email, password) {
       set({ busy: true, error: null });
       try {
-        const result = await anonymous.post<{ memberships: Membership[] }>('/auth/login', {
-          email,
-          password,
+        const result = await anonymous.post<{
+          memberships: Membership[];
+          account?: { email_verified?: boolean };
+        }>('/auth/login', { email, password });
+        return Object.assign(result.memberships, {
+          emailVerified: result.account?.email_verified,
         });
-        return result.memberships;
       } finally {
         set({ busy: false });
       }

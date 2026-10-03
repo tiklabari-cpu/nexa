@@ -13,7 +13,7 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SignInPage } from './SignInPage.js';
 import { useAuth, type Membership } from '../../lib/auth-store.js';
-import { ApiClientError } from '../../lib/api-client.js';
+import { ApiClient, ApiClientError } from '../../lib/api-client.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 import type { DeploymentConfig } from '@siyahtus/types';
 
@@ -682,5 +682,106 @@ describe('SignInPage legal links', () => {
     renderSignIn();
     expect(screen.getByRole('link', { name: 'Privacy Policy' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Terms of Service' })).toBeNull();
+  });
+});
+
+/**
+ * An owner who has not confirmed the address (tm 257.16, FR-MOD-00.2). The
+ * password was right, so "Invalid email or password." would be a lie that sends
+ * the person round the same loop: the page says what is missing and offers the
+ * link again, from either place the server says so.
+ */
+describe('SignInPage with an unconfirmed address', () => {
+  const RESENT = 'If that address is waiting to be confirmed, a new link is on its way.';
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('stops at /auth/login when the account says email_verified is false, without trying to sign in', async () => {
+    const { signIn } = stubStore(Object.assign([WORKSPACE], { emailVerified: false }));
+    renderSignIn();
+
+    await submitCredentials();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm your email first' }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/agent@acme\.localhost has not been confirmed yet/),
+    ).toBeInTheDocument();
+    expect(signIn).not.toHaveBeenCalled();
+    expect(screen.queryByText('Invalid email or password.')).toBeNull();
+  });
+
+  it('says the same on the authorize refusal reason email_unverified', async () => {
+    const signIn = vi.fn(async () => {
+      throw new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'Confirm your email address first.',
+        requestId: 'req_u1',
+        details: { reason: 'email_unverified' },
+      });
+    });
+    useAuth.setState({ busy: false, listWorkspaces: async () => [WORKSPACE], signIn });
+    renderSignIn();
+
+    await submitCredentials();
+
+    expect(
+      await screen.findByRole('heading', { name: 'Confirm your email first' }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Invalid email or password.')).toBeNull();
+  });
+
+  it('keeps the generic sentence for any other refusal', async () => {
+    const signIn = vi.fn(async () => {
+      throw new ApiClientError({
+        type: 'not_allowed',
+        status: 403,
+        message: 'No.',
+        requestId: 'req_u2',
+        details: { reason: 'something_else' },
+      });
+    });
+    useAuth.setState({ busy: false, listWorkspaces: async () => [WORKSPACE], signIn });
+    renderSignIn();
+
+    await submitCredentials();
+
+    expect(await screen.findByText('Invalid email or password.')).toBeInTheDocument();
+    expect(screen.queryByText('Confirm your email first')).toBeNull();
+  });
+
+  it('signs in as usual when the account is confirmed', async () => {
+    const { signIn } = stubStore(Object.assign([WORKSPACE], { emailVerified: true }));
+    renderSignIn();
+    await submitCredentials();
+    await waitFor(() => expect(signIn).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText('Confirm your email first')).toBeNull();
+  });
+
+  it('sends the link again for the address that was typed, and says the same thing every time', async () => {
+    stubStore(Object.assign([WORKSPACE], { emailVerified: false }));
+    const post = vi.spyOn(ApiClient.prototype, 'post').mockResolvedValue({ message: 'ok' });
+    renderSignIn();
+    await submitCredentials();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Send the link again' }));
+    expect(post).toHaveBeenCalledWith('/auth/verify-email/resend', {
+      email: 'agent@acme.localhost',
+    });
+    expect(await screen.findByText(RESENT)).toBeInTheDocument();
+  });
+
+  it('goes back to the credentials form', async () => {
+    stubStore(Object.assign([WORKSPACE], { emailVerified: false }));
+    renderSignIn();
+    await submitCredentials();
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Email')).toHaveValue('');
+    expect(screen.queryByText('Confirm your email first')).toBeNull();
   });
 });

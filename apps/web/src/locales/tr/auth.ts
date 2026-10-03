@@ -158,6 +158,37 @@ export const auth: Messages = {
   'auth.callback.signingIn': 'Oturumunuz açılıyor…',
   'auth.callback.noCode': 'Bu oturum açma tamamlanmadı. Oturum açma sayfasından yeniden başlayın.',
   'auth.callback.genericFailure': 'Oturum açma başarısız oldu.',
+  'auth.callback.unverified':
+    'Oturum açmadan önce e-posta adresinizi doğrulayın. Size gönderdiğimiz bağlantıyı açın ya da oturum açma sayfasından yenisini isteyin.',
+
+  // E-posta doğrulama (tm 257.16): kayıttan sonra "gelen kutunuzu kontrol edin"
+  // durumu, gönderilen bağlantının açtığı sayfa ve ikisinin paylaştığı yeniden
+  // gönderme düğmesi.
+  'auth.verify.checkTitle': 'Gelen kutunuzu kontrol edin',
+  'auth.verify.checkSubtitle': 'Çalışma alanınız açılmadan önce bir adım daha.',
+  'auth.verify.checkBody':
+    '{email} adresine bir doğrulama bağlantısı gönderdik. Bağlantıyı açın ve işlemi bitirmek için parolanızı girin. Birkaç dakika içinde gelmezse istenmeyen e-posta klasörünüze bakın ya da yeniden gönderin.',
+  'auth.verify.resend': 'Bağlantıyı yeniden gönder',
+  'auth.verify.resendWait': '{seconds} sn sonra yeniden gönderilebilir',
+  'auth.verify.resendSent': 'Bu adres doğrulama bekliyorsa yeni bir bağlantı yolda.',
+  'auth.verify.resendTitle': 'Yeni bir bağlantı mı lazım?',
+  'auth.verify.resendHint': 'Kayıt olurken kullandığınız adresi girin.',
+  'auth.verify.resendSubmit': 'Bağlantı gönder',
+  'auth.verify.resendSubmitting': 'Gönderiliyor…',
+  'auth.verify.title': 'E-postanızı doğrulayın',
+  'auth.verify.subtitle': 'Çalışma alanınızı kurmayı bitirmek için parolanızı girin.',
+  'auth.verify.passwordHint': 'Kayıt olurken seçtiğiniz parola.',
+  'auth.verify.submit': 'Doğrula ve oturum aç',
+  'auth.verify.submitting': 'Doğrulanıyor…',
+  'auth.verify.errorInvalid':
+    'Bu bağlantı geçersiz ya da süresi dolmuş ya da girdiğiniz parola seçtiğiniz parola değil. Parolayı kontrol edin ya da aşağıdan yeni bir bağlantı isteyin.',
+  'auth.verify.errorSignIn':
+    'Adresiniz doğrulandı ama oturumunuz açılamadı. Oturum açma sayfasından giriş yapın.',
+  'auth.verify.noToken': 'Bu bağlantı eksik. Aşağıdan yenisini isteyin.',
+  'auth.verify.unverifiedTitle': 'Önce e-postanızı doğrulayın',
+  'auth.verify.unverifiedBody':
+    '{email} adresi henüz doğrulanmadı. Size gönderdiğimiz bağlantıyı açın ya da yenisini isteyin.',
+  'auth.verify.unverifiedBack': 'Geri',
 
   // Onboarding wizard
   'auth.onboarding.steps.welcome': 'Hoş geldiniz',

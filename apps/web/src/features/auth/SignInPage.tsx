@@ -4,6 +4,7 @@ import { useAuth, type Membership, type TwoFactorEnrollment } from '../../lib/au
 import { ApiClientError } from '../../lib/api-client.js';
 import { useDeployment } from '../../lib/deployment.js';
 import { LegalLinks } from './LegalLinks.js';
+import { ResendVerification } from './PublicPages.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { FieldError, compose, email as emailRule, required, useForm } from '../../lib/form.js';
 import { downloadRecoveryCodes } from '../../lib/recovery-codes.js';
@@ -122,6 +123,11 @@ export function SignInPage(): ReactElement {
   const [codeStep, setCodeStep] = useState<CodeStep | null>(null);
   const [codeMode, setCodeMode] = useState<'totp' | 'recovery'>('totp');
   const [enrollmentRequired, setEnrollmentRequired] = useState<EnrollmentRequired | null>(null);
+  // The address of an owner who has not confirmed it yet (tm 257.16). Set from
+  // either place the server says so — `/auth/login` once the password was right,
+  // or the authorize refusal — and the panel offers the link again instead of a
+  // second try that cannot succeed.
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
 
   const busy = useAuth((s) => s.busy);
   const listWorkspaces = useAuth((s) => s.listWorkspaces);
@@ -205,6 +211,17 @@ export function SignInPage(): ReactElement {
         }
         return;
       }
+      // The refusal an unconfirmed address earns at `/auth/authorize` (tm 257.7).
+      // Not the generic sentence: the password was right, and "invalid" would
+      // send the person round the same loop.
+      if (
+        error instanceof ApiClientError &&
+        error.type === 'not_allowed' &&
+        error.details?.['reason'] === 'email_unverified'
+      ) {
+        setUnverifiedEmail(email);
+        return;
+      }
       report(genericFailureMessage);
     }
   };
@@ -221,6 +238,14 @@ export function SignInPage(): ReactElement {
     onSubmit: async (values, { setSubmitError }) => {
       try {
         const memberships = await listWorkspaces(values.email, values.password);
+        // Checked before anything else, and only `false` counts: a server that
+        // does not send the field has no unverified accounts to speak of. The
+        // password has already been proved right by this point, so saying so
+        // tells a stranger nothing about the address.
+        if (memberships.emailVerified === false) {
+          setUnverifiedEmail(values.email.trim());
+          return;
+        }
         if (memberships.length === 0) {
           setSubmitError(t('auth.signin.noWorkspaces'));
           return;
@@ -376,6 +401,27 @@ export function SignInPage(): ReactElement {
           <p role="status" className="text-sm text-content-secondary">
             {t('auth.signin.ssoRedirecting')}
           </p>
+        ) : unverifiedEmail ? (
+          <section
+            aria-label={t('auth.verify.unverifiedTitle')}
+            className="rounded-lg border border-border bg-surface p-4 shadow-xs"
+          >
+            <h2 className="mb-1 text-sm font-medium">{t('auth.verify.unverifiedTitle')}</h2>
+            <p className="mb-3 text-xs text-content-secondary">
+              {t('auth.verify.unverifiedBody', { email: unverifiedEmail })}
+            </p>
+            <ResendVerification email={unverifiedEmail} />
+            <button
+              type="button"
+              onClick={() => {
+                setUnverifiedEmail(null);
+                form.reset();
+              }}
+              className="mt-3 w-full text-xs text-content-brand underline"
+            >
+              {t('auth.verify.unverifiedBack')}
+            </button>
+          </section>
         ) : enrollmentRequired ? (
           <EnrollmentPanel
             context={enrollmentRequired}

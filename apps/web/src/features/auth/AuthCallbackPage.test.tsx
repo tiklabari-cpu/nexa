@@ -11,6 +11,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AuthCallbackPage } from './AuthCallbackPage.js';
+import { ApiClientError } from '../../lib/api-client.js';
 import { useAuth } from '../../lib/auth-store.js';
 import { renderWithLocale, resetLocale } from '../../test/i18n.js';
 
@@ -70,6 +71,27 @@ describe('AuthCallbackPage', () => {
     await renderCallback('?code=abc123&state=xyz');
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/did not start in this browser/);
+    expect(screen.getByRole('link', { name: 'Back to sign in' })).toBeInTheDocument();
+  });
+
+  it('says to confirm the address, not the API prose, when that is the refusal (tm 257.16)', async () => {
+    useAuth.setState({
+      completeSsoLogin: vi.fn(async () => {
+        throw new ApiClientError({
+          type: 'not_allowed',
+          status: 403,
+          message: 'Confirm your email address first.',
+          requestId: 'req_cb1',
+          details: { reason: 'email_unverified' },
+        });
+      }),
+    });
+
+    await renderCallback('?code=abc123&state=xyz');
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/Confirm your email address before signing in/);
+    expect(alert).not.toHaveTextContent('Confirm your email address first.');
     expect(screen.getByRole('link', { name: 'Back to sign in' })).toBeInTheDocument();
   });
 });

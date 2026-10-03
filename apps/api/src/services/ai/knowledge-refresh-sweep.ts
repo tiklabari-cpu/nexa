@@ -31,10 +31,21 @@
  * request carries this work, the residency rule is asked here: a workspace
  * under a signed BAA whose content the embedding provider would take out of
  * its region is not refreshed at all (NFR-C4 · `inference.ts`).
+ *
+ * **The daily AI cap is the third (tm 257.20).** A refresh is counted against
+ * its workspace's embedding allowance, like the same refresh pressed in the
+ * panel. When today's cap cannot take it, the source keeps its text and
+ * chunks, `last_refresh_error` says the allowance is used up, and the next
+ * attempt is the next UTC midnight — when there is room again — rather than a
+ * whole window away. The workspace's other due sources are deferred the same
+ * way without being crawled (a page fetched only to be thrown away is an
+ * outbound request for nothing), and every source after a deployment-wide
+ * refusal is too.
  */
 import type { PrismaClient } from '@prisma/client';
 import { ApiError } from '../../lib/api-error.js';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
+import { AiDailyCapError, nextUtcMidnight, type AiCapScope } from './ai-daily-budget.js';
 import { inferenceAllowed, readInferenceResidency, type InferenceProvider } from './inference.js';
 import { computeNextRefreshAt, fetchRefreshedText } from './knowledge-refresh.js';
 import type { KnowledgeService, PreparedChunks } from './knowledge-service.js';
@@ -43,6 +54,10 @@ import { EmbeddingProviderError } from './provider/embedding-error.js';
 /** What `last_refresh_error` says when the residency rule refused the refresh. */
 export const REFRESH_REFUSED_RESIDENCY =
   'Not refreshed: this workspace is covered by a signed HIPAA agreement and the embedding provider runs outside its region.';
+
+/** What `last_refresh_error` says when today's AI cap could not take the refresh (tm 257.20). */
+export const REFRESH_DEFERRED_AI_CAP =
+  "Not refreshed: today's AI allowance is used up. The previous text still answers; it is tried again after 00:00 UTC.";
 
 export interface KnowledgeRefreshSweeperOptions {
   /** Indexes the refreshed text — the server's instance, or one the CLI builds from the env. */
@@ -96,8 +111,10 @@ export class KnowledgeRefreshSweeper {
     const startedAt = now.toISOString();
 
     const results: TenantRefreshResult[] = [];
+    // Set once the deployment's cap refuses a refresh: nothing after it fits today.
+    const pass = { deploymentCapped: false };
     for (const tenant of await this.#listTenants()) {
-      results.push(await this.#sweepTenant(tenant, now));
+      results.push(await this.#sweepTenant(tenant, now, pass));
     }
 
     return {
@@ -124,7 +141,11 @@ export class KnowledgeRefreshSweeper {
       SELECT license_id, organization_id FROM retention_list_tenants()`;
   }
 
-  async #sweepTenant(tenant: TenantRow, now: Date): Promise<TenantRefreshResult> {
+  async #sweepTenant(
+    tenant: TenantRow,
+    now: Date,
+    pass: { deploymentCapped: boolean },
+  ): Promise<TenantRefreshResult> {
     const context: TenantContext = {
       licenseId: tenant.license_id,
       organizationId: tenant.organization_id,
@@ -155,12 +176,21 @@ export class KnowledgeRefreshSweeper {
 
     let refreshed = 0;
     let failed = 0;
+    let workspaceCapped = false;
     for (const source of due) {
       if (!allowed) {
         await this.#recordFailure(context, source, now, REFRESH_REFUSED_RESIDENCY);
         failed += 1;
-      } else if (await this.#refreshOne(context, source, now)) refreshed += 1;
-      else failed += 1;
+      } else if (workspaceCapped || pass.deploymentCapped) {
+        await this.#deferForCap(context, source, now);
+        failed += 1;
+      } else {
+        const outcome = await this.#refreshOne(context, source, now);
+        if (outcome === 'refreshed') refreshed += 1;
+        else failed += 1;
+        if (outcome === 'workspace') workspaceCapped = true;
+        if (outcome === 'global') pass.deploymentCapped = true;
+      }
     }
 
     return {
@@ -172,7 +202,12 @@ export class KnowledgeRefreshSweeper {
     };
   }
 
-  async #refreshOne(context: TenantContext, source: DueSource, now: Date): Promise<boolean> {
+  /** `refreshed`, `failed`, or which daily AI cap refused it (`workspace` / `global`). */
+  async #refreshOne(
+    context: TenantContext,
+    source: DueSource,
+    now: Date,
+  ): Promise<'refreshed' | 'failed' | AiCapScope> {
     let text: string;
     try {
       text = await fetchRefreshedText({
@@ -183,14 +218,19 @@ export class KnowledgeRefreshSweeper {
     } catch (error) {
       const message = error instanceof ApiError ? error.message : 'Could not refresh this source.';
       await this.#recordFailure(context, source, now, message);
-      return false;
+      return 'failed';
     }
 
-    // Embedded before the write transaction, like the crawl above (tm 255.7).
+    // Embedded before the write transaction, like the crawl above (tm 255.7),
+    // and counted against the workspace's daily AI allowance (tm 257.20).
     let prepared: PreparedChunks;
     try {
-      prepared = await this.#knowledge.prepare(text);
+      prepared = await this.#knowledge.prepare(text, context);
     } catch (error) {
+      if (error instanceof AiDailyCapError) {
+        await this.#deferForCap(context, source, now);
+        return error.scope;
+      }
       if (!(error instanceof EmbeddingProviderError)) throw error;
       await this.#recordFailure(
         context,
@@ -198,7 +238,7 @@ export class KnowledgeRefreshSweeper {
         now,
         `Not refreshed: the embedding provider did not answer (${error.kind}). The previous text still answers.`,
       );
-      return false;
+      return 'failed';
     }
 
     await withTenant(this.#db, context, async (tx) => {
@@ -216,7 +256,21 @@ export class KnowledgeRefreshSweeper {
       // answers from stale chunks is worse than one still stale.
       await this.#knowledge.index(tx, context, source.id, prepared);
     });
-    return true;
+    return 'refreshed';
+  }
+
+  /**
+   * A refresh today's AI cap could not take: the text and chunks stay, the
+   * reason is recorded, and the next attempt is the next UTC midnight — when
+   * the day's allowance starts again — not a whole refresh window away.
+   */
+  async #deferForCap(context: TenantContext, source: DueSource, now: Date): Promise<void> {
+    await withTenant(this.#db, context, (tx) =>
+      tx.knowledgeSource.updateMany({
+        where: { id: source.id },
+        data: { lastRefreshError: REFRESH_DEFERRED_AI_CAP, nextRefreshAt: nextUtcMidnight(now) },
+      }),
+    );
   }
 
   /**

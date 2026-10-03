@@ -62,7 +62,9 @@
  * is said, a human answers — but it is not a provider failure and is not filed
  * as one: `capped` names the cap, `failure` stays empty. A live run is still
  * recorded (its question was embedded, and that cost is on the run); a preview
- * rethrows the refusal, which its route answers with a 429.
+ * rethrows the refusal, which its route answers with a 429. The question's
+ * embedding is counted the same way on the embedding meter (tm 257.20), and a
+ * refusal there ends the run the same way, having cost nothing.
  */
 import {
   matchIntent,
@@ -535,8 +537,19 @@ export class SkillEngine {
     // Outside any transaction, like the model call below (see the file header).
     let question: EmbeddedQuery;
     try {
-      question = await this.#knowledge.embedQuery(input.message);
+      question = await this.#knowledge.embedQuery(input.message, tenant);
     } catch (error) {
+      if (error instanceof AiDailyCapError) {
+        // The question's embedding did not fit today's cap (tm 257.20): nothing
+        // was asked of any provider, so the run cost nothing, and with nothing
+        // retrieved the model is not asked either — as at the model's own cap.
+        return {
+          text: null,
+          capped: error,
+          spent: { embeddingTokens: 0 },
+          detail: `today's AI cap is reached (${error.scope}) — handed to a human`,
+        };
+      }
       if (!(error instanceof EmbeddingProviderError)) throw error;
       // Nothing retrieved, so nothing to ground an answer in: the model is not
       // asked at all. The provider logged its status and code; its message

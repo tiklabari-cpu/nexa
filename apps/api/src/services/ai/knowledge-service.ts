@@ -32,6 +32,12 @@ import { Prisma } from '@prisma/client';
 import { chunk, toVectorLiteral } from '@siyahtus/ai-mock';
 import { ApiError } from '../../lib/api-error.js';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
+import {
+  embeddingEstimate,
+  MeteredEmbeddings,
+  type EmbeddingHold,
+  type EmbeddingPayer,
+} from './metered-embeddings.js';
 import { EmbeddingProviderError } from './provider/embedding-error.js';
 import type { EmbeddingProvider, EmbeddingUsage } from './provider/embedding-provider.js';
 
@@ -43,6 +49,8 @@ export interface PreparedChunks {
   /** The space every vector below is in. */
   space: string;
   chunks: Array<{ text: string; vector: string; tokenCount: number }>;
+  /** What the provider billed for them (tm 257.20) — 0 when nothing was asked. */
+  usage: EmbeddingUsage;
 }
 
 /**
@@ -64,10 +72,14 @@ export interface EmbeddedQuery extends QueryEmbedding {
 }
 
 /**
- * For a request an admin is waiting on: `knowledge.prepare(text).catch(refuseUnembeddable)`.
+ * For a request an admin is waiting on: `knowledge.prepare(text, tenant).catch(refuseUnembeddable)`.
  * An embedding failure becomes the 503 the contract documents
  * (`EmbeddingUnavailable`) — indexing fails and says so, having written
- * nothing — and anything else propagates as the defect it is.
+ * nothing — and anything else propagates as it is. That includes the daily AI
+ * cap's refusal (tm 257.20): an `AiDailyCapError` is never an
+ * `EmbeddingProviderError`, so it stays its own 429 rather than becoming a 503
+ * that tells the admin to try again in a moment, when nothing will fit before
+ * UTC midnight.
  */
 export function refuseUnembeddable(error: unknown): never {
   if (!(error instanceof EmbeddingProviderError)) throw error;
@@ -173,8 +185,14 @@ interface ChunkRow {
 const APPROXIMATE_SAVEPOINT = 'knowledge_approximate_search';
 
 export interface KnowledgeServiceOptions {
-  /** Who embeds — the server's one provider, so every caller shares its circuit breaker. */
-  embeddings: EmbeddingProvider;
+  /**
+   * Who embeds — the server's one provider, so every caller shares its circuit
+   * breaker. Metered (tm 257.20) wherever the work is real: the server, the
+   * scheduler and the CLIs pass a `MeteredEmbeddings` with the daily AI
+   * budget. A bare provider is counted by nothing — a unit test's, or a
+   * measurement over a throwaway fixture.
+   */
+  embeddings: EmbeddingProvider | MeteredEmbeddings;
   /**
    * Overrides {@link EXACT_SEARCH_CEILING}; tests lower it so a knowledge base
    * of a few thousand chunks crosses it.
@@ -192,7 +210,7 @@ export interface KnowledgeServiceOptions {
 }
 
 export class KnowledgeService {
-  readonly #embeddings: EmbeddingProvider;
+  readonly #embeddings: MeteredEmbeddings;
   readonly #exactSearchCeiling: number;
   readonly #threshold: number;
 
@@ -207,7 +225,7 @@ export class KnowledgeService {
     if (!Number.isFinite(threshold) || threshold < -1 || threshold > 1) {
       throw new RangeError(`retrievalThreshold must be a number in [-1, 1], got ${threshold}`);
     }
-    this.#embeddings = options.embeddings;
+    this.#embeddings = MeteredEmbeddings.wrap(options.embeddings);
     this.#exactSearchCeiling = ceiling;
     this.#threshold = threshold;
   }
@@ -223,17 +241,37 @@ export class KnowledgeService {
   }
 
   /**
+   * What {@link prepare} would reserve for `content` against the daily AI cap
+   * (tm 257.20): the UTF-8 bytes of its chunks, which overlap by a sentence
+   * where a paragraph is cut. The bulk import adds these up before its first row.
+   */
+  estimate(content: string): number {
+    return embeddingEstimate(chunk(content));
+  }
+
+  /**
+   * Reserve `estimate` of `tenant`'s embedding allowance for several
+   * {@link prepare} calls at once — the bulk import's file (tm 257.20). Throws
+   * `AiDailyCapError` when it does not fit; settle the hold when done.
+   */
+  hold(tenant: TenantContext, estimate: number): Promise<EmbeddingHold> {
+    return this.#embeddings.hold(tenant, estimate);
+  }
+
+  /**
    * Chunk a source's text and embed every chunk — in one call, so one request
    * for any realistic source. The provider call; never inside a transaction.
    *
+   * Counted against `payer`'s daily AI allowance (tm 257.20) and refused with
+   * `AiDailyCapError` when it does not fit — before the provider is asked.
    * Rejects with the provider's `EmbeddingProviderError` when it could not
    * embed, before anything has been written: indexing fails whole and says so.
    * Text that chunks to nothing asks the provider for nothing.
    */
-  async prepare(content: string): Promise<PreparedChunks> {
+  async prepare(content: string, payer?: EmbeddingPayer): Promise<PreparedChunks> {
     const pieces = chunk(content);
-    if (pieces.length === 0) return { space: this.space, chunks: [] };
-    const { vectors } = await this.#embeddings.embed(pieces);
+    if (pieces.length === 0) return { space: this.space, chunks: [], usage: { inputTokens: 0 } };
+    const { vectors, usage } = await this.#embeddings.embed(pieces, payer);
     return {
       space: this.space,
       chunks: pieces.map((text, position) => ({
@@ -241,6 +279,7 @@ export class KnowledgeService {
         vector: toVectorLiteral(vectors[position]!),
         tokenCount: text.split(/\s+/).length,
       })),
+      usage,
     };
   }
 
@@ -286,11 +325,13 @@ export class KnowledgeService {
    * A question with nothing but whitespace in it has nothing to search for:
    * the provider is not asked, and {@link search} answers it with no chunks —
    * what the stub's zero vector always amounted to. Rejects with the
-   * provider's `EmbeddingProviderError` when it could not embed.
+   * provider's `EmbeddingProviderError` when it could not embed, and with
+   * `AiDailyCapError` when `payer`'s daily AI allowance cannot take it
+   * (tm 257.20).
    */
-  async embedQuery(query: string): Promise<EmbeddedQuery> {
+  async embedQuery(query: string, payer?: EmbeddingPayer): Promise<EmbeddedQuery> {
     if (query.trim() === '') return { space: this.space, vector: null, usage: { inputTokens: 0 } };
-    const { vectors, usage } = await this.#embeddings.embed([query]);
+    const { vectors, usage } = await this.#embeddings.embed([query], payer);
     return { space: this.space, vector: toVectorLiteral(vectors[0]!), usage };
   }
 

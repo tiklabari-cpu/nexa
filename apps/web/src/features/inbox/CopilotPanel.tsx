@@ -222,7 +222,15 @@ export function CopilotPanel({
               )}
             </div>
           ) : (
-            <p className="text-2xs text-content-tertiary">{t('inbox.copilot.reply.empty')}</p>
+            // An empty draft is "nothing matched" unless the server says today's
+            // AI allowance stopped the search (tm 257.20).
+            <p className="text-2xs text-content-tertiary">
+              {t(
+                reply.data.reason === 'ai_daily_cap'
+                  ? AI_DAILY_CAP_MESSAGE_KEY
+                  : 'inbox.copilot.reply.empty',
+              )}
+            </p>
           ))}
       </PanelSection>
 

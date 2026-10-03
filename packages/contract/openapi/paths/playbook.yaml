@@ -382,7 +382,7 @@ knowledgeSources:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
 knowledgeSourcesBulk:
@@ -408,6 +408,14 @@ knowledgeSourcesBulk:
       The ADR-06 error envelope is reserved for a request refused *as a whole*
       — malformed CSV, a header missing a required column, or a budget overrun
       (row/cell/byte limits, refused rather than silently truncated).
+
+      Today's AI allowance is one of those budgets (tm 257.20): the embedding
+      of every pasted-text row is reserved before the first row is imported,
+      and a file the day cannot afford is a 429 `ai_daily_cap` with nothing
+      written — never a list of rows skipped one by one. A `website` row's
+      text exists only once it is crawled, so it reserves its own share then;
+      if that does not fit, that row is skipped with the reason. What the rows
+      did not use is handed back when the import ends.
 
       `dry_run: true` runs everything except the writes and the fetches, and
       returns the same `results` — which is where the preview in the UI comes
@@ -470,7 +478,7 @@ knowledgeSourcesBulk:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
 
 knowledgeSourcesFile:
   post:
@@ -564,7 +572,7 @@ knowledgeSourcesFile:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
 knowledgeSource:
@@ -647,7 +655,7 @@ knowledgeSource:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
   delete:
@@ -718,5 +726,5 @@ knowledgeSourceReindex:
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
       "404": { $ref: "../openapi.yaml#/components/responses/NotFound" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }

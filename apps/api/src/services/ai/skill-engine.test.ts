@@ -824,6 +824,40 @@ describe('the daily AI cap (tm 257.8)', () => {
     expect(ws.runs).toHaveLength(0);
   });
 
+  it('hands a run to a human when the question’s embedding does not fit, asking no model and costing nothing (tm 257.20)', async () => {
+    const fake = new FakeLlmProvider();
+    const refusal = new AiDailyCapError('embedding', 'workspace', 120);
+    const asked: unknown[] = [];
+    const capped = knowledgeWith(async (_question, payer) => {
+      asked.push(payer);
+      throw refusal;
+    });
+    const ws = workspace([...KNOWLEDGE_ANSWER, { type: 'send_message', source: 'knowledge' }]);
+    const run = new SkillEngine({
+      llm: fake,
+      maxOutputTokens: 400,
+      timeoutMs: 20_000,
+      maxPromptChars: MAX_PROMPT_CHARS,
+      knowledge: capped,
+    });
+
+    const result = await run.run(ws.db, TENANT, { message: MESSAGE, chatId: 'c' });
+
+    // Counted against the run's own workspace.
+    expect(asked).toEqual([TENANT]);
+    expect(fake.calls).toHaveLength(0);
+    expect(result).toMatchObject({ capped: refusal, failure: null, outcome: 'handed_off' });
+    expect(result.log.find((entry) => entry.step === 'send_message')!.detail).toBe(
+      "today's AI cap is reached (workspace) — handed to a human",
+    );
+    expect(ws.runs[0]).toMatchObject({ status: 'failed', embeddingTokens: 0, llmInputTokens: 0 });
+
+    // A preview says why instead of showing a result.
+    await expect(
+      run.preview(ws.db, TENANT, { steps: KNOWLEDGE_ANSWER, message: MESSAGE }),
+    ).rejects.toBe(refusal);
+  });
+
   it('never meets the cap with a fixed reply, which asks no model', async () => {
     const fake = new FakeLlmProvider();
     const { llm } = cappedLlm(fake);

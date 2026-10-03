@@ -88,10 +88,14 @@ export function utcDayKey(at: Date): string {
   return `${yyyy}${mm}${dd}`;
 }
 
+/** The next 00:00 UTC after `at` — when a refused call can fit again. */
+export function nextUtcMidnight(at: Date): Date {
+  return new Date(Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate() + 1));
+}
+
 /** Whole seconds from `at` to the next UTC midnight — when a refused call can fit again. At least 1. */
 export function secondsUntilUtcMidnight(at: Date): number {
-  const midnight = Date.UTC(at.getUTCFullYear(), at.getUTCMonth(), at.getUTCDate() + 1);
-  return Math.max(1, Math.ceil((midnight - at.getTime()) / 1000));
+  return Math.max(1, Math.ceil((nextUtcMidnight(at).getTime() - at.getTime()) / 1000));
 }
 
 /**
@@ -118,9 +122,13 @@ export class AiDailyCapError extends ApiError {
   }
 }
 
-/** A reservation in flight: settled once, on the day it was made. */
+/**
+ * A reservation in flight: settled once, on the day it was made. `tenant` null
+ * is operator work counted on the deployment's row alone
+ * ({@link AiDailyBudget.reserveDeployment}).
+ */
 export interface AiReservation {
-  readonly tenant: TenantContext;
+  readonly tenant: TenantContext | null;
   readonly meter: AiMeter;
   readonly day: string;
   readonly estimate: number;
@@ -194,6 +202,29 @@ export class AiDailyBudget {
   }
 
   /**
+   * Reserve `estimate` on the deployment's row only (tm 257.20), or throw
+   * {@link AiDailyCapError} with scope `global` and reserve nothing.
+   *
+   * For operator work that no workspace asked for — `knowledge:reembed`
+   * moving every workspace's stored knowledge into a new embedding space.
+   * Charging that to the workspaces would switch their AI off for the day a
+   * provider is changed; not counting it at all would let a migration spend
+   * the deployment's key past its cap. No tenant transaction: the counting
+   * function reads none (migration `20261003170000_ai_budget_deployment`).
+   */
+  async reserveDeployment(meter: AiMeter, estimate: number): Promise<AiReservation> {
+    const at = this.#now();
+    const day = utcDayKey(at);
+    const amount = Math.max(0, Math.ceil(estimate));
+    const rows = await this.#db.$queryRaw<Array<{ scope: AiCapScope | null }>>`
+      SELECT ai_budget_reserve_deployment(${day}, ${meter}, ${BigInt(amount)},
+        ${BigInt(this.#caps[meter].global)}) AS scope`;
+    const scope = rows[0]?.scope ?? null;
+    if (scope) throw this.#refuse(null, meter, scope, at);
+    return { tenant: null, meter, day, estimate: amount };
+  }
+
+  /**
    * Hand the reservation back and keep `used`. Never throws: the call it
    * belongs to has already happened, and losing its answer to a counter write
    * would be the worse failure. A settle that did not land leaves the estimate
@@ -201,22 +232,28 @@ export class AiDailyBudget {
    */
   async settle(reservation: AiReservation, used: number): Promise<void> {
     const spent = Math.max(0, Math.ceil(used));
+    const { tenant, day, meter, estimate } = reservation;
     try {
-      await withTenant(
-        this.#db,
-        reservation.tenant,
-        (tx) => tx.$executeRaw`
-          SELECT ai_budget_settle(${reservation.day}, ${reservation.meter},
-            ${BigInt(reservation.estimate)}, ${BigInt(spent)})`,
-      );
+      if (tenant === null) {
+        await this.#db.$executeRaw`
+          SELECT ai_budget_settle_deployment(${day}, ${meter}, ${BigInt(estimate)},
+            ${BigInt(spent)})`;
+      } else {
+        await withTenant(
+          this.#db,
+          tenant,
+          (tx) => tx.$executeRaw`
+            SELECT ai_budget_settle(${day}, ${meter}, ${BigInt(estimate)}, ${BigInt(spent)})`,
+        );
+      }
     } catch (error) {
       this.#log.error(
         {
           err: error,
           event: 'ai.budget_settle_failed',
-          license_id: reservation.tenant.licenseId.toString(),
-          meter: reservation.meter,
-          reserved: reservation.estimate,
+          license_id: tenant ? tenant.licenseId.toString() : null,
+          meter,
+          reserved: estimate,
           used: spent,
         },
         'daily AI cap could not be settled; the estimate stays counted',
@@ -224,9 +261,19 @@ export class AiDailyBudget {
     }
   }
 
-  #refuse(tenant: TenantContext, meter: AiMeter, scope: AiCapScope, at: Date): AiDailyCapError {
+  #refuse(
+    tenant: TenantContext | null,
+    meter: AiMeter,
+    scope: AiCapScope,
+    at: Date,
+  ): AiDailyCapError {
     this.#log.warn(
-      { event: 'ai.cap_reached', license_id: tenant.licenseId.toString(), meter, scope },
+      {
+        event: 'ai.cap_reached',
+        license_id: tenant ? tenant.licenseId.toString() : null,
+        meter,
+        scope,
+      },
       'daily AI cap reached; the provider was not called',
     );
     return new AiDailyCapError(meter, scope, secondsUntilUtcMidnight(at));

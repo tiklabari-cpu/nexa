@@ -36,17 +36,33 @@
  * Residency is asked per workspace before anything is embedded, because no
  * request carries this work (NFR-C4): a covered workspace whose content the
  * provider would take out of its region is left untouched and reported.
+ *
+ * **Counted on the deployment's daily AI cap alone (tm 257.20).** This is an
+ * operator's migration, not something any workspace asked for, so it spends no
+ * workspace's allowance — a re-embed on the morning a provider is switched
+ * would otherwise switch every workspace's AI off for the day. It does spend
+ * the deployment's key, so each source reserves on the deployment's row
+ * (`MeteredEmbeddings.embedForDeployment`). When that is full the run stops
+ * asking the provider: every source not yet moved is reported `failed` with
+ * `kind: 'ai_daily_cap'`, left exactly where it was, and the next run —
+ * after 00:00 UTC — picks it up (promise 2).
  */
 import type { PrismaClient } from '@prisma/client';
 import { toVectorLiteral } from '@siyahtus/ai-mock';
 import { type TenantClient, type TenantContext, withTenant } from '../../lib/tenant.js';
 import { inferenceAllowed, readInferenceResidency, type InferenceProvider } from './inference.js';
+import { AiDailyCapError } from './ai-daily-budget.js';
+import { MeteredEmbeddings } from './metered-embeddings.js';
 import { EmbeddingProviderError, type EmbeddingFailureKind } from './provider/embedding-error.js';
 import type { EmbeddingProvider } from './provider/embedding-provider.js';
 
 export interface KnowledgeReembedderOptions {
-  /** The provider to embed with — its `space` is where the chunks go. */
-  embeddings: EmbeddingProvider;
+  /**
+   * The provider to embed with — its `space` is where the chunks go. The CLI
+   * passes it metered with the daily AI budget (tm 257.20); a bare provider is
+   * counted by nothing.
+   */
+  embeddings: EmbeddingProvider | MeteredEmbeddings;
   /** Where that provider runs (`resolveEmbeddingInferenceProvider`). */
   embeddingInference: InferenceProvider;
 }
@@ -60,8 +76,12 @@ export interface ReembedSourceEvent {
   outcome: ReembedOutcome;
   /** Chunks moved into the target space — 0 unless `reembedded`. */
   chunks: number;
-  /** Why the provider could not embed, when the outcome is `failed`. */
-  kind?: EmbeddingFailureKind;
+  /**
+   * Why the source was not moved, when the outcome is `failed`: the provider's
+   * failure, or `ai_daily_cap` when the deployment's daily AI cap stopped the
+   * run before it (tm 257.20).
+   */
+  kind?: EmbeddingFailureKind | 'ai_daily_cap';
 }
 
 export interface ReembedRunOptions {
@@ -90,6 +110,12 @@ export interface ReembedReport {
   finishedAt: string;
   /** False when `limit` stopped the run with sources still pending. */
   finished: boolean;
+  /**
+   * True when the deployment's daily AI cap refused a source (tm 257.20): from
+   * then on the provider was not asked, and every source still pending is in
+   * `failed` for the next run.
+   */
+  capped: boolean;
   tenants: TenantReembedResult[];
   totals: {
     tenants: number;
@@ -134,12 +160,12 @@ interface ChunkRow {
 
 export class KnowledgeReembedder {
   readonly #db: PrismaClient;
-  readonly #embeddings: EmbeddingProvider;
+  readonly #embeddings: MeteredEmbeddings;
   readonly #inference: InferenceProvider;
 
   constructor(db: PrismaClient, options: KnowledgeReembedderOptions) {
     this.#db = db;
-    this.#embeddings = options.embeddings;
+    this.#embeddings = MeteredEmbeddings.wrap(options.embeddings);
     this.#inference = options.embeddingInference;
   }
 
@@ -217,6 +243,8 @@ export class KnowledgeReembedder {
     const limit = options.limit ?? Number.POSITIVE_INFINITY;
     let handled = 0;
     let finished = true;
+    // Once the deployment's cap refuses a source nothing more fits today.
+    const pass = { capped: false };
 
     const tenants: TenantReembedResult[] = [];
     for (const tenant of await this.#listTenants()) {
@@ -255,7 +283,7 @@ export class KnowledgeReembedder {
           break;
         }
         handled += 1;
-        const event = await this.#reembedSource(context, sourceId);
+        const event = await this.#reembedSource(context, sourceId, pass);
         if (event.outcome === 'reembedded') {
           result.reembedded += 1;
           result.chunks += event.chunks;
@@ -274,6 +302,7 @@ export class KnowledgeReembedder {
       startedAt,
       finishedAt: new Date().toISOString(),
       finished,
+      capped: pass.capped,
       tenants,
       totals: {
         tenants: tenants.length,
@@ -291,9 +320,16 @@ export class KnowledgeReembedder {
    * One source: read what is pending, embed it with no transaction open, then
    * move it in one transaction — or not at all, if the source changed meanwhile.
    */
-  async #reembedSource(context: TenantContext, sourceId: string): Promise<ReembedSourceEvent> {
+  async #reembedSource(
+    context: TenantContext,
+    sourceId: string,
+    pass: { capped: boolean },
+  ): Promise<ReembedSourceEvent> {
     const target = this.target;
     const licenseId = context.licenseId.toString();
+    if (pass.capped) {
+      return { licenseId, sourceId, outcome: 'failed', chunks: 0, kind: 'ai_daily_cap' };
+    }
     const pending = (tx: TenantClient, lock: boolean) =>
       lock
         ? tx.$queryRaw<ChunkRow[]>`
@@ -311,8 +347,14 @@ export class KnowledgeReembedder {
 
     let vectors: number[][];
     try {
-      ({ vectors } = await this.#embeddings.embed(read.map((row) => row.chunk_text)));
+      ({ vectors } = await this.#embeddings.embedForDeployment(read.map((row) => row.chunk_text)));
     } catch (error) {
+      if (error instanceof AiDailyCapError) {
+        // Nothing was asked and nothing written; this and every later source
+        // wait for the next run (see the file header).
+        pass.capped = true;
+        return { licenseId, sourceId, outcome: 'failed', chunks: 0, kind: 'ai_daily_cap' };
+      }
       if (!(error instanceof EmbeddingProviderError)) throw error;
       // Nothing was written: the source is still wholly where it was, and the
       // next run tries it again.

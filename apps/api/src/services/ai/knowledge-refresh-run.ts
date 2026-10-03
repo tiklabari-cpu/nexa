@@ -7,7 +7,9 @@
  * sweep by hand. The in-process scheduler (`services/scheduler/jobs.ts`) calls
  * the same `KnowledgeRefreshSweeper.run()` on its own interval. It connects as
  * the runtime (RLS-bound) role, so every read and every write is scoped to its
- * own workspace exactly as a request would be.
+ * own workspace exactly as a request would be. A refresh is counted against
+ * its workspace's daily AI allowance in the same Postgres counters the API
+ * spends from (tm 257.20).
  *
  * No dry-run: a refused crawl already leaves the source untouched — that is
  * the sweep's own safety property (`knowledge-refresh-sweep.ts`), not
@@ -24,15 +26,16 @@ import { parseEnv } from '../../config/env.js';
 import { resolveEmbeddingInferenceProvider } from './inference.js';
 import { KnowledgeRefreshSweeper } from './knowledge-refresh-sweep.js';
 import { KnowledgeService } from './knowledge-service.js';
-import { createEmbeddingProvider } from './provider/create-embedding-provider.js';
+import { createMeteredEmbeddings } from './metered-embeddings.js';
 
 async function main(): Promise<void> {
   const env = parseEnv();
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   // The configured provider, exactly as the server builds it: a refresh
   // embedded with anything else would land in a space questions never search.
+  // Metered like the server's, against the same daily AI caps (tm 257.20).
   const knowledge = new KnowledgeService({
-    embeddings: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+    embeddings: createMeteredEmbeddings(db, env),
     retrievalThreshold: env.RETRIEVAL_THRESHOLD,
   });
   try {

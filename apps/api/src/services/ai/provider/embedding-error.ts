@@ -105,7 +105,11 @@ export class EmbeddingProviderError extends Error {
   readonly requestId: string | null;
   readonly reason: string | null;
   readonly dimensions: number | null;
-  readonly usage: EmbeddingUsage | null;
+  /**
+   * Tokens billed before the call failed: set by the adapter when earlier
+   * batches of the same call had answered (tm 257.20).
+   */
+  usage: EmbeddingUsage | null;
   /** Requests made for the failing batch before giving up; 0 when the circuit refused the call. */
   attempts = 0;
 

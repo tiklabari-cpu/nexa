@@ -15,6 +15,11 @@
  * the sweeps. The report goes to stdout as JSON, a one-line summary to
  * stderr. Exit 1 when a source failed or a workspace was refused — both are
  * left exactly as they were, and running again retries them.
+ *
+ * The provider's cost is counted on the deployment's daily AI cap alone, never
+ * on a workspace's (tm 257.20): when that is full the run stops asking, the
+ * report says `capped: true`, and the sources not yet moved wait for a run
+ * after 00:00 UTC.
  */
 import { loadEnvFile } from '../../config/load-env-file.js';
 
@@ -24,7 +29,7 @@ import { PrismaClient } from '@prisma/client';
 import { parseEnv } from '../../config/env.js';
 import { resolveEmbeddingInferenceProvider } from './inference.js';
 import { KnowledgeReembedder } from './knowledge-reembed.js';
-import { createEmbeddingProvider } from './provider/create-embedding-provider.js';
+import { createMeteredEmbeddings } from './metered-embeddings.js';
 
 interface Args {
   status: boolean;
@@ -52,7 +57,7 @@ async function main(): Promise<void> {
   const env = parseEnv();
   const db = new PrismaClient({ datasourceUrl: env.runtimeDatabaseUrl });
   const reembedder = new KnowledgeReembedder(db, {
-    embeddings: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+    embeddings: createMeteredEmbeddings(db, env),
     embeddingInference: resolveEmbeddingInferenceProvider(env),
   });
   try {
@@ -74,6 +79,7 @@ async function main(): Promise<void> {
       `knowledge:reembed: ${totals.reembedded} source(s) (${totals.chunks} chunk(s)) moved to ` +
         `${report.target}; ${totals.changed} changed meanwhile, ${totals.failed} failed, ` +
         `${totals.refused} workspace(s) refused` +
+        `${report.capped ? " — today's AI allowance for the deployment is used up, run again after 00:00 UTC" : ''}` +
         `${report.finished ? '' : ' — stopped at --limit, run again to continue'}\n`,
     );
     if (totals.failed > 0 || totals.refused > 0) process.exitCode = 1;

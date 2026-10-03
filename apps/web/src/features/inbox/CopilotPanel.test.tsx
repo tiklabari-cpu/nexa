@@ -147,6 +147,18 @@ describe('CopilotPanel', () => {
     );
   });
 
+  it('says today’s AI allowance is used up, not that nothing matched, when the cap emptied the draft (tm 257.20)', async () => {
+    stubFetch({ '/reply': { draft: '', sources: [], reason: 'ai_daily_cap' } });
+    renderPanel();
+    await userEvent.click(screen.getByRole('button', { name: 'Draft a reply' }));
+    await waitFor(() =>
+      expect(
+        screen.getByText("Today's AI allowance is used up; it renews at midnight UTC."),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText(/No suggestion found/)).toBeNull();
+  });
+
   it('rewrites a draft in the chosen register (12.3)', async () => {
     const { calls } = stubFetch({
       '/enhance': { text: 'Hello, we cannot do that.', mode: 'formal' },

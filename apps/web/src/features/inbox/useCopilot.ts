@@ -20,6 +20,8 @@ export interface CopilotSummary {
 export interface CopilotReplyDraft {
   draft: string;
   sources: Array<{ name: string; score: number }>;
+  /** Set when the draft is empty because today's AI allowance is used up (tm 257.20). */
+  reason?: 'ai_daily_cap';
 }
 
 export type EnhanceMode = 'rephrase' | 'friendly' | 'formal' | 'grammar';

@@ -18,6 +18,7 @@ import {
 } from './useInbox.js';
 import { useTypingStore } from './typing.js';
 import { useCopilotDraftStore } from './copilotDraft.js';
+import { AI_DAILY_CAP_MESSAGE_KEY } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { uploadAttachment, type UploadedAttachment } from './uploadAttachment.js';
 import {
@@ -95,6 +96,10 @@ export function Composer({
   // already on screen while this is true — it is a row that may still grow, not
   // a spinner standing in for an empty one.
   const [copilotPending, setCopilotPending] = useState(false);
+  // Copilot answered with no draft because today's AI allowance is used up
+  // (tm 257.20) — said in the row, so the agent does not read the missing chip
+  // as "nothing in the knowledge base".
+  const [copilotCapped, setCopilotCapped] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const send = useSendMessage(chatId);
@@ -330,6 +335,7 @@ export function Composer({
     }
     setSuggestions(null);
     setCopilotPending(false);
+    setCopilotCapped(false);
   }, []);
 
   // Nothing may land on an unmounted composer.
@@ -368,7 +374,10 @@ export function Composer({
       .then((result) => {
         if (suggestionRequest.current !== request) return;
         const draft = (result.draft ?? '').trim();
-        if (draft.length === 0) return;
+        if (draft.length === 0) {
+          if (result.reason === 'ai_daily_cap') setCopilotCapped(true);
+          return;
+        }
         setSuggestions((current) =>
           current === null ? current : withCopilotDraft(current, draft),
         );
@@ -600,6 +609,15 @@ export function Composer({
               className="rounded-full border border-dashed border-border px-3 py-1 text-2xs text-content-tertiary"
             >
               {t('inbox.composer.suggestions.copilotPending')}
+            </span>
+          )}
+          {copilotCapped && (
+            // In place of the Copilot chip, never instead of the template ones.
+            <span
+              role="status"
+              className="rounded-full border border-dashed border-border px-3 py-1 text-2xs text-content-tertiary"
+            >
+              {t(AI_DAILY_CAP_MESSAGE_KEY)}
             </span>
           )}
           <button

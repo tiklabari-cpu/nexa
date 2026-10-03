@@ -21,6 +21,7 @@ import {
   type KnowledgeService,
   type PreparedChunks,
 } from '../services/ai/knowledge-service.js';
+import { AiDailyCapError } from '../services/ai/ai-daily-budget.js';
 import { EmbeddingProviderError } from '../services/ai/provider/embedding-error.js';
 import {
   isKnowledgeBulkHeaderError,
@@ -681,6 +682,10 @@ export default async function playbookRoutes(
       const tenant = request.tenant();
       const principal = request.requirePrincipal();
 
+      // The agent first (tm 257.20): a request that will write nothing must
+      // not crawl a website or spend the day's AI allowance on its way to a 400.
+      await request.withTenant((tx) => requireAiAgent(tx, body.ai_agent_id));
+
       // A website is crawled *before* the transaction: the SSRF guard rejects a
       // private/internal target with a 400 (`source_url` never reaches a fetcher),
       // and the fetch+parse — even mocked — has no business holding a DB row open.
@@ -695,15 +700,13 @@ export default async function playbookRoutes(
 
       // Embedded before the transaction as well, for the crawl's reason: the
       // provider is a network call with its own timeout (tm 255.7). A refusal
-      // is a 503 with nothing written.
-      const prepared = await knowledge.prepare(content).catch(refuseUnembeddable);
+      // is a 503 with nothing written; a call today's AI cap cannot take is a
+      // 429 `ai_daily_cap` with nothing written (tm 257.20).
+      const prepared = await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
 
       const created = await request.withTenant(async (tx) => {
-        const agent = await tx.aiAgent.findFirst({
-          where: { id: body.ai_agent_id },
-          select: { id: true },
-        });
-        if (!agent) throw ApiError.validation('That AI agent does not exist.');
+        // Again inside the write: the agent may have been deleted meanwhile.
+        await requireAiAgent(tx, body.ai_agent_id);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
         const source = await tx.knowledgeSource.create({
@@ -784,14 +787,13 @@ export default async function playbookRoutes(
       const title = body.name ?? titleFromFilename(body.filename);
       if (title === '') throw ApiError.validation('filename: a file needs a usable name.');
 
-      const prepared = await knowledge.prepare(parsed.text).catch(refuseUnembeddable);
+      // The agent before the embedding (tm 257.20), as on the endpoint above.
+      await request.withTenant((tx) => requireAiAgent(tx, body.ai_agent_id));
+
+      const prepared = await knowledge.prepare(parsed.text, tenant).catch(refuseUnembeddable);
 
       const created = await request.withTenant(async (tx) => {
-        const agent = await tx.aiAgent.findFirst({
-          where: { id: body.ai_agent_id },
-          select: { id: true },
-        });
-        if (!agent) throw ApiError.validation('That AI agent does not exist.');
+        await requireAiAgent(tx, body.ai_agent_id);
 
         const addedBy = principal.kind === 'agent' ? principal.accountId : null;
         const source = await tx.knowledgeSource.create({
@@ -962,127 +964,163 @@ export default async function playbookRoutes(
         skip(line, name, type, refusal.message);
       };
 
-      for (const { line, row, result } of mapped) {
-        if (!result.ok) {
-          skip(
-            line,
-            echoCell(row[columns.name]),
-            echoCell(row[columns.type]),
-            `${result.error.field}: ${result.error.message}`,
+      // Today's AI allowance for the whole file, reserved before its first row
+      // is embedded (tm 257.20): a file the day cannot afford is refused whole —
+      // one 429 `ai_daily_cap`, not two hundred skipped rows — with nothing
+      // crawled and nothing written. Pasted text is estimated here, chunk by
+      // chunk as it will be sent; a website row's text exists only once it is
+      // crawled, so its embedding reserves what it needs when it gets there.
+      // Settled when the loop ends, however it ends: what the rows did not use
+      // goes back to the day. A dry run embeds nothing and reserves nothing.
+      const hold = body.dry_run
+        ? null
+        : await knowledge.hold(
+            tenant,
+            mapped.reduce(
+              (sum, { result }) =>
+                result.ok && result.value.type !== 'website'
+                  ? sum + knowledge.estimate(result.value.content ?? '')
+                  : sum,
+              0,
+            ),
           );
-          continue;
-        }
 
-        const { name, type } = result.value;
-        let content = result.value.content ?? '';
-        let sourceUrl: string | null = null;
-
-        if (type === 'website') {
-          const target = result.value.source_url ?? '';
-          if (body.dry_run) {
-            // A preview runs the guard and stops there. That is the verdict a
-            // preview exists to give, and fetching for one would make a dry run
-            // a way to probe hosts with nothing written to show for it.
-            const checked = checkWebsiteUrl(target);
-            if (!checked.ok) {
-              refuseWebsiteRow(line, name, type, checked);
-              continue;
-            }
-          } else {
-            // Resolved *before* the transaction below is opened, exactly as the
-            // single-source path does it: a fetch has no business holding a DB
-            // row open. A refused row is a verdict, not a reason to stop
-            // reading the file.
-            const crawled = await crawler.crawl(target);
-            if (!crawled.ok) {
-              refuseWebsiteRow(line, name, type, crawled);
-              continue;
-            }
-            content = crawled.content;
-            sourceUrl = crawled.url;
+      try {
+        for (const { line, row, result } of mapped) {
+          if (!result.ok) {
+            skip(
+              line,
+              echoCell(row[columns.name]),
+              echoCell(row[columns.type]),
+              `${result.error.field}: ${result.error.message}`,
+            );
+            continue;
           }
-        }
 
-        if (body.dry_run) {
-          results.push({
-            line,
-            name,
-            type,
-            status: 'imported',
-            id: null,
-            chunk_count: null,
-            added_by_name: null,
-            error: null,
-          });
-          imported += 1;
-          continue;
-        }
+          const { name, type } = result.value;
+          let content = result.value.content ?? '';
+          let sourceUrl: string | null = null;
 
-        // Embedded before the row's transaction, like its crawl (tm 255.7). A
-        // row the provider could not embed is a row-level verdict like any
-        // other — nothing is written for it, and the rows after it still get
-        // their chance; the provider's circuit breaker keeps an outage from
-        // costing every remaining row a full timeout.
-        let prepared: PreparedChunks;
-        try {
-          prepared = await knowledge.prepare(content);
-        } catch (error) {
-          if (!(error instanceof EmbeddingProviderError)) throw error;
-          request.log.warn(
-            { line, kind: error.kind },
-            'bulk knowledge import: row could not be embedded',
-          );
-          skip(
-            line,
-            name,
-            type,
-            `This row could not be indexed: the embedding provider did not answer (${error.kind}).`,
-          );
-          continue;
-        }
+          if (type === 'website') {
+            const target = result.value.source_url ?? '';
+            if (body.dry_run) {
+              // A preview runs the guard and stops there. That is the verdict a
+              // preview exists to give, and fetching for one would make a dry run
+              // a way to probe hosts with nothing written to show for it.
+              const checked = checkWebsiteUrl(target);
+              if (!checked.ok) {
+                refuseWebsiteRow(line, name, type, checked);
+                continue;
+              }
+            } else {
+              // Resolved *before* the transaction below is opened, exactly as the
+              // single-source path does it: a fetch has no business holding a DB
+              // row open. A refused row is a verdict, not a reason to stop
+              // reading the file.
+              const crawled = await crawler.crawl(target);
+              if (!crawled.ok) {
+                refuseWebsiteRow(line, name, type, crawled);
+                continue;
+              }
+              content = crawled.content;
+              sourceUrl = crawled.url;
+            }
+          }
 
-        try {
-          const created = await request.withTenant(async (tx) => {
-            const source = await tx.knowledgeSource.create({
-              data: {
-                aiAgentId: body.ai_agent_id,
-                licenseId: tenant.licenseId,
-                type,
+          if (body.dry_run) {
+            results.push({
+              line,
+              name,
+              type,
+              status: 'imported',
+              id: null,
+              chunk_count: null,
+              added_by_name: null,
+              error: null,
+            });
+            imported += 1;
+            continue;
+          }
+
+          // Embedded before the row's transaction, like its crawl (tm 255.7). A
+          // row the provider could not embed is a row-level verdict like any
+          // other — nothing is written for it, and the rows after it still get
+          // their chance; the provider's circuit breaker keeps an outage from
+          // costing every remaining row a full timeout. Drawn from the file's
+          // hold; a crawled row the hold has no room for and today's cap cannot
+          // take either is skipped with that reason (tm 257.20).
+          let prepared: PreparedChunks;
+          try {
+            prepared = await knowledge.prepare(content, hold ?? tenant);
+          } catch (error) {
+            if (error instanceof AiDailyCapError) {
+              skip(
+                line,
                 name,
-                content,
-                sourceUrl,
-                status: 'indexing',
-                addedBy,
-                updatedAt: new Date(),
-              },
+                type,
+                "This row was not indexed: today's AI allowance is used up; it renews at 00:00 UTC.",
+              );
+              continue;
+            }
+            if (!(error instanceof EmbeddingProviderError)) throw error;
+            request.log.warn(
+              { line, kind: error.kind },
+              'bulk knowledge import: row could not be embedded',
+            );
+            skip(
+              line,
+              name,
+              type,
+              `This row could not be indexed: the embedding provider did not answer (${error.kind}).`,
+            );
+            continue;
+          }
+
+          try {
+            const created = await request.withTenant(async (tx) => {
+              const source = await tx.knowledgeSource.create({
+                data: {
+                  aiAgentId: body.ai_agent_id,
+                  licenseId: tenant.licenseId,
+                  type,
+                  name,
+                  content,
+                  sourceUrl,
+                  status: 'indexing',
+                  addedBy,
+                  updatedAt: new Date(),
+                },
+              });
+
+              // Same transaction as the create, exactly as the single-source path:
+              // a source that exists but is not searchable looks ready and answers
+              // nothing.
+              const chunks = await knowledge.index(tx, tenant, source.id, prepared);
+              return { source, chunks };
             });
 
-            // Same transaction as the create, exactly as the single-source path:
-            // a source that exists but is not searchable looks ready and answers
-            // nothing.
-            const chunks = await knowledge.index(tx, tenant, source.id, prepared);
-            return { source, chunks };
-          });
-
-          results.push({
-            line,
-            name,
-            type,
-            status: 'imported',
-            id: created.source.id,
-            chunk_count: created.chunks,
-            added_by_name: addedByName,
-            error: null,
-          });
-          imported += 1;
-        } catch (error) {
-          // A row that fails to write is a row-level verdict like any other: the
-          // 199 rows after it still deserve to be imported. Logged in full,
-          // reported generically — a database message is not something to hand
-          // back over HTTP.
-          request.log.error({ err: error, line }, 'bulk knowledge import: row failed to save');
-          skip(line, name, type, 'This row could not be saved.');
+            results.push({
+              line,
+              name,
+              type,
+              status: 'imported',
+              id: created.source.id,
+              chunk_count: created.chunks,
+              added_by_name: addedByName,
+              error: null,
+            });
+            imported += 1;
+          } catch (error) {
+            // A row that fails to write is a row-level verdict like any other: the
+            // 199 rows after it still deserve to be imported. Logged in full,
+            // reported generically — a database message is not something to hand
+            // back over HTTP.
+            request.log.error({ err: error, line }, 'bulk knowledge import: row failed to save');
+            skip(line, name, type, 'This row could not be saved.');
+          }
         }
+      } finally {
+        await hold?.settle();
       }
 
       return reply.send({ imported, failed, dry_run: body.dry_run, results });
@@ -1159,7 +1197,7 @@ export default async function playbookRoutes(
         sourceUrl = url.toString();
       }
       const prepared =
-        text === null ? null : await knowledge.prepare(text).catch(refuseUnembeddable);
+        text === null ? null : await knowledge.prepare(text, tenant).catch(refuseUnembeddable);
 
       // A schedule change or a fresh crawl both restart the countdown, from
       // now — the source is, in either case, as fresh as it has just been
@@ -1263,7 +1301,7 @@ export default async function playbookRoutes(
       const text = await fetchRefreshedText(existing);
       // And embedded before the transaction too; a refusal keeps the stale
       // answer, exactly as a refused crawl does (tm 255.7).
-      const prepared = await knowledge.prepare(text).catch(refuseUnembeddable);
+      const prepared = await knowledge.prepare(text, tenant).catch(refuseUnembeddable);
       const now = new Date();
 
       const refreshed = await request.withTenant(async (tx) => {
@@ -1396,6 +1434,16 @@ function serialiseAgent(agent: {
  * narrows on, because two accounts can share a name and one can be renamed
  * (FR-MOD-05.4).
  */
+/**
+ * Refuse an `ai_agent_id` this workspace cannot see. Under RLS a foreign agent
+ * is simply not visible, so "does not exist" and "belongs to someone else" are
+ * one answer.
+ */
+async function requireAiAgent(tx: TenantClient, aiAgentId: string): Promise<void> {
+  const agent = await tx.aiAgent.findFirst({ where: { id: aiAgentId }, select: { id: true } });
+  if (!agent) throw ApiError.validation('That AI agent does not exist.');
+}
+
 async function creatorName(tx: TenantClient, createdBy: string | null): Promise<string | null> {
   if (!createdBy) return null;
   const account = await tx.account.findFirst({ where: { id: createdBy }, select: { name: true } });

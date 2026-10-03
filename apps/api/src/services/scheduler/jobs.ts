@@ -31,7 +31,7 @@ import type { Env } from '../../config/env.js';
 import { resolveEmbeddingInferenceProvider } from '../ai/inference.js';
 import { KnowledgeRefreshSweeper } from '../ai/knowledge-refresh-sweep.js';
 import { KnowledgeService } from '../ai/knowledge-service.js';
-import { createEmbeddingProvider } from '../ai/provider/create-embedding-provider.js';
+import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
@@ -87,7 +87,8 @@ export interface SchedulerJobsOptions {
    * Indexes what the freshness sweep re-crawls — the server's one instance,
    * so the sweep embeds with the provider (and the circuit breaker) requests
    * use (tm 255.7). Omitted, one is built from `env` the way the CLI builds it:
-   * the configured provider, never a silent stub.
+   * the configured provider, never a silent stub, metered against the daily AI
+   * caps over `db` (tm 257.20).
    */
   knowledge?: KnowledgeService;
 }
@@ -103,7 +104,7 @@ export function buildSchedulerJobs({
   mailer,
   automations,
   knowledge = new KnowledgeService({
-    embeddings: createEmbeddingProvider(env.EMBEDDING_PROVIDER, env.embedding),
+    embeddings: createMeteredEmbeddings(db, env),
     retrievalThreshold: env.RETRIEVAL_THRESHOLD,
   }),
 }: SchedulerJobsOptions): JobDefinition[] {

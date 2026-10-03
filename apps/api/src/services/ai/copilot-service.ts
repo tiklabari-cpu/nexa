@@ -24,6 +24,7 @@ import {
 } from '@siyahtus/ai-mock';
 import type { TenantClient, TenantContext } from '../../lib/tenant.js';
 import type { Principal } from '../auth/principal.js';
+import { AiDailyCapError } from './ai-daily-budget.js';
 import { buildOverviewReport, resolveRange } from '../../routes/reports.js';
 import {
   lastInstantBefore,
@@ -262,13 +263,16 @@ export class CopilotService {
    * question is embedded in between and the provider is never called with a
    * transaction open (tm 255.7). When the provider cannot embed, the draft is
    * empty and `failure` says why — the agent writes the reply, and no draft is
-   * better than one from a search that did not run.
+   * better than one from a search that did not run. The question is counted
+   * against the workspace's daily AI allowance (tm 257.20); when today's cap
+   * cannot take it the draft is empty and `capped` carries the refusal, so the
+   * agent is told the allowance is used up rather than that nothing matched.
    */
   async draftReply(
     db: TenantRunner,
     tenant: TenantContext,
     chatId: string,
-  ): Promise<CopilotDraft & { failure?: EmbeddingFailureKind }> {
+  ): Promise<CopilotDraft & { failure?: EmbeddingFailureKind; capped?: AiDailyCapError }> {
     const { agentId, turns } = await db(async (tx) => ({
       agentId: await this.findAgentId(tx),
       turns: await this.conversationTurns(tx, chatId),
@@ -281,8 +285,9 @@ export class CopilotService {
 
     let question: QueryEmbedding;
     try {
-      question = await this.knowledge.embedQuery(lastCustomer.text);
+      question = await this.knowledge.embedQuery(lastCustomer.text, tenant);
     } catch (error) {
+      if (error instanceof AiDailyCapError) return { draft: '', sources: [], capped: error };
       if (!(error instanceof EmbeddingProviderError)) throw error;
       return { draft: '', sources: [], failure: error.kind };
     }

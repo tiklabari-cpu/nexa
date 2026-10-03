@@ -275,11 +275,11 @@ export class OpenAiEmbeddingProvider implements EmbeddingProvider {
     }
 
     let outcome: 'healthy' | 'faulty' = 'healthy';
+    let inputTokens = 0;
     try {
       const started = this.#now();
       const batches = planEmbeddingBatches(texts, this.#batch);
       const vectors: number[][] = [];
-      let inputTokens = 0;
       for (const batch of batches) {
         const result = await this.#embedBatch(batch);
         vectors.push(...result.vectors);
@@ -298,7 +298,12 @@ export class OpenAiEmbeddingProvider implements EmbeddingProvider {
       );
       return { vectors, usage: { inputTokens } };
     } catch (error) {
-      if (error instanceof EmbeddingProviderError && error.providerFault) outcome = 'faulty';
+      if (error instanceof EmbeddingProviderError) {
+        if (error.providerFault) outcome = 'faulty';
+        // The batches that answered before this one were billed, and the
+        // daily AI cap counts what was billed (tm 257.20, `metered-embeddings.ts`).
+        if (inputTokens > 0 && error.usage === null) error.usage = { inputTokens };
+      }
       throw error;
     } finally {
       this.#settle(permit, outcome);

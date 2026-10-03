@@ -48,6 +48,7 @@ import { CappedMailer, mailDailyCaps } from './services/mail/mail-caps.js';
 import { createLlmProvider, type LlmProvider } from './services/ai/provider/llm-provider.js';
 import { KnowledgeService } from './services/ai/knowledge-service.js';
 import { AiDailyBudget, aiDailyCaps } from './services/ai/ai-daily-budget.js';
+import { MeteredEmbeddings } from './services/ai/metered-embeddings.js';
 import { MeteredLlm } from './services/ai/metered-llm.js';
 import { createEmbeddingProvider } from './services/ai/provider/create-embedding-provider.js';
 import type { EmbeddingProvider } from './services/ai/provider/embedding-provider.js';
@@ -335,10 +336,6 @@ export async function buildServer({
       logger: app.log.child({ component: 'embedding' }),
       ...(embeddingFetch ? { fetchImpl: embeddingFetch } : {}),
     });
-  const knowledge = new KnowledgeService({
-    embeddings,
-    retrievalThreshold: env.RETRIEVAL_THRESHOLD,
-  });
 
   await app.register(errorHandler);
   // First, and with no dependencies of its own: `/health/ready` has to be able
@@ -382,6 +379,14 @@ export async function buildServer({
   });
   const meteredLlm = new MeteredLlm(llm, aiDailyBudget);
   const meteredCopilotLlm = new MeteredLlm(copilotLlm, aiDailyBudget);
+  // Every embedding too (tm 257.20), through the one knowledge service: the
+  // panel's indexing, the bulk import, Copilot's sources and drafts, the
+  // visitor's question and the freshness sweep all spend from the same
+  // workspace and deployment allowance on the embedding meter.
+  const knowledge = new KnowledgeService({
+    embeddings: new MeteredEmbeddings(embeddings, aiDailyBudget),
+    retrievalThreshold: env.RETRIEVAL_THRESHOLD,
+  });
   // The daily mail caps (tm 257.14): every mail this process sends — routes,
   // background mail, sweeps — goes through this one wrapper, around whatever
   // carrier was built or injected, so an injected test spool is capped exactly

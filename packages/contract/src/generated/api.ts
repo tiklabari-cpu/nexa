@@ -2840,6 +2840,14 @@ export interface paths {
      *     — malformed CSV, a header missing a required column, or a budget overrun
      *     (row/cell/byte limits, refused rather than silently truncated).
      *
+     *     Today's AI allowance is one of those budgets (tm 257.20): the embedding
+     *     of every pasted-text row is reserved before the first row is imported,
+     *     and a file the day cannot afford is a 429 `ai_daily_cap` with nothing
+     *     written — never a list of rows skipped one by one. A `website` row's
+     *     text exists only once it is crawled, so it reserves its own share then;
+     *     if that does not fit, that row is skipped with the reason. What the rows
+     *     did not use is handed back when the import ends.
+     *
      *     `dry_run: true` runs everything except the writes and the fetches, and
      *     returns the same `results` — which is where the preview in the UI comes
      *     from: the rule shown in the preview is the same code that will run on
@@ -3144,6 +3152,10 @@ export interface paths {
      *     than inventing an answer — and equally when the search could not run
      *     because the embedding provider did not answer: the agent writes the reply
      *     themselves, and no draft is better than one from a search that failed.
+     *     The question's embedding is counted against the workspace's daily AI
+     *     allowance (tm 257.20); when today's cap cannot take it the draft is empty
+     *     too, and `reason` says so, so the panel can tell the agent the allowance
+     *     is used up rather than that nothing matched.
      */
     post: operations['copilotReply'];
     delete?: never;
@@ -12706,13 +12718,14 @@ export interface components {
      * @description Either the rate limit (`too_many_requests`, as everywhere), or today's
      *     AI allowance is used up (`limit_reached`, tm 257.8):
      *     `error.details.reason` is `ai_daily_cap`, `error.details.meter` the
-     *     counter (`llm`) and `error.details.scope` whose allowance it was —
-     *     `workspace` (this workspace's) or `global` (the whole deployment's).
-     *     The model was not called and nothing was written. Allowances are
-     *     counted in provider tokens per UTC day and renew at 00:00 UTC, which
-     *     `Retry-After` counts down to; retrying sooner gets the same answer.
-     *     Only a deployment with a real model counts; the in-process stub never
-     *     returns the cap.
+     *     counter (`llm` for a model's writing, `embedding` for indexing and
+     *     searching text — tm 257.20) and `error.details.scope` whose allowance
+     *     it was — `workspace` (this workspace's) or `global` (the whole
+     *     deployment's). No provider was called and nothing was written.
+     *     Allowances are counted in provider tokens per UTC day and renew at
+     *     00:00 UTC, which `Retry-After` counts down to; retrying sooner gets the
+     *     same answer. Only a deployment with a real model counts; the
+     *     in-process stub never returns the cap.
      */
     TooManyRequestsOrAiDailyCap: {
       headers: {
@@ -17195,7 +17208,7 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
     };
   };
@@ -17249,7 +17262,7 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
     };
   };
   uploadKnowledgeSourceFile: {
@@ -17302,7 +17315,7 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
     };
   };
@@ -17369,7 +17382,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
     };
   };
@@ -17397,7 +17410,7 @@ export interface operations {
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
       404: components['responses']['NotFound'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
     };
   };
@@ -17461,7 +17474,7 @@ export interface operations {
       400: components['responses']['BadRequest'];
       401: components['responses']['Unauthorized'];
       403: components['responses']['Forbidden'];
-      429: components['responses']['TooManyRequests'];
+      429: components['responses']['TooManyRequestsOrAiDailyCap'];
       503: components['responses']['EmbeddingUnavailable'];
     };
   };
@@ -17556,6 +17569,13 @@ export interface operations {
               name: string;
               score: number;
             }[];
+            /**
+             * @description Present only when the draft is empty because today's AI
+             *     allowance (the workspace's or the deployment's) is used up;
+             *     it renews at 00:00 UTC.
+             * @enum {string}
+             */
+            reason?: 'ai_daily_cap';
           };
         };
       };

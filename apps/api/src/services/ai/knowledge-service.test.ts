@@ -342,8 +342,32 @@ describe('KnowledgeService — embedding before the transaction (FR-MOD-06.3.2)'
     const fake = new FakeEmbeddingProvider();
     const prepared = await new KnowledgeService({ embeddings: fake }).prepare('   \n\n  ');
 
-    expect(prepared).toEqual({ space: FAKE_EMBEDDING_SPACE, chunks: [] });
+    expect(prepared).toEqual({
+      space: FAKE_EMBEDDING_SPACE,
+      chunks: [],
+      usage: { inputTokens: 0 },
+    });
     expect(fake.calls).toHaveLength(0);
+  });
+
+  it('returns what the provider billed, and estimates the bytes it will send (tm 257.20)', async () => {
+    const fake = new FakeEmbeddingProvider();
+    const knowledge = new KnowledgeService({ embeddings: fake });
+    const prepared = await knowledge.prepare(SOURCE);
+
+    const pieces = chunk(SOURCE);
+    // The fake bills a token per character.
+    expect(prepared.usage).toEqual({
+      inputTokens: pieces.reduce((sum, piece) => sum + piece.length, 0),
+    });
+    // The estimate is over the chunks as sent, in UTF-8 bytes — not the source's length.
+    expect(knowledge.estimate(SOURCE)).toBe(
+      pieces.reduce((sum, piece) => sum + Buffer.byteLength(piece, 'utf8'), 0),
+    );
+    expect(knowledge.estimate('Teslimat üç–beş iş günü sürer.')).toBe(
+      Buffer.byteLength('Teslimat üç–beş iş günü sürer.', 'utf8'),
+    );
+    expect(knowledge.estimate('   \n\n  ')).toBe(0);
   });
 
   it('asks the provider nothing for a blank question, and searches nothing', async () => {

@@ -233,8 +233,9 @@ export default async function copilotRoutes(
       }
 
       // Embedded before the transaction too (tm 255.7); a refusal is a 503
-      // with nothing written.
-      const prepared = await knowledge.prepare(content).catch(refuseUnembeddable);
+      // with nothing written, and today's AI cap a 429 with nothing written
+      // (tm 257.20).
+      const prepared = await knowledge.prepare(content, tenant).catch(refuseUnembeddable);
 
       const source = await request.withTenant((tx) =>
         copilot.createSource(tx, tenant, principal, {
@@ -355,11 +356,17 @@ export default async function copilotRoutes(
 
       // A runner rather than one transaction: the question is embedded between
       // the reads, and never with a transaction open (tm 255.7).
-      const { failure, ...draft } = await copilot.draftReply(
+      const { failure, capped, ...draft } = await copilot.draftReply(
         (fn) => request.withTenant(fn),
         tenant,
         chatId,
       );
+      if (capped) {
+        // An empty draft, said apart from "nothing matched" (tm 257.20): the
+        // agent's chip and panel tell them today's AI allowance is used up.
+        // The refusal was logged once where the cap decided it.
+        return reply.send({ ...draft, reason: 'ai_daily_cap' });
+      }
       if (failure) {
         // The provider logged its status and code (component `embedding`);
         // this ties the empty draft to the chat an agent was working on.

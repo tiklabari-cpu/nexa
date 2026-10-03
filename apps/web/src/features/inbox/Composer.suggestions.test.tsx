@@ -53,7 +53,11 @@ function customerSaid(text: string): ChatEvent {
  * it".
  */
 type CopilotBehaviour =
-  { kind: 'draft'; draft: string } | { kind: 'empty' } | { kind: 'refuse' } | { kind: 'silent' };
+  | { kind: 'draft'; draft: string }
+  | { kind: 'empty' }
+  | { kind: 'capped' }
+  | { kind: 'refuse' }
+  | { kind: 'silent' };
 
 function stubFetch(copilot: CopilotBehaviour = { kind: 'empty' }): void {
   vi.stubGlobal(
@@ -74,7 +78,12 @@ function stubFetch(copilot: CopilotBehaviour = { kind: 'empty' }): void {
           ok: true,
           status: 200,
           headers: { get: () => null },
-          json: async () => ({ draft: copilot.kind === 'draft' ? copilot.draft : '', sources: [] }),
+          json: async () => ({
+            draft: copilot.kind === 'draft' ? copilot.draft : '',
+            sources: [],
+            // An empty draft the daily AI cap caused, said apart (tm 257.20).
+            ...(copilot.kind === 'capped' ? { reason: 'ai_daily_cap' } : {}),
+          }),
         };
       }
       // Everything else the composer asks for on mount (the canned-reply library).
@@ -316,6 +325,42 @@ describe('Composer — Reply Suggestions (FR-MOD-02.3.2)', () => {
         .filter((button) => button.getAttribute('aria-label') === null);
       expect(chips).toHaveLength(3);
       expect(chips[0]?.textContent).toMatch(/pull up the details/i);
+      expect(within(group).queryByRole('status')).toBeNull();
+    });
+
+    it('says today’s AI allowance is used up when that is why there is no draft (tm 257.20)', async () => {
+      const input = setup([customerSaid('Can I get a refund?')], { kind: 'capped' });
+      fireEvent.keyDown(input, { key: ' ' });
+      const group = await screen.findByRole('group', { name: 'Reply suggestions' });
+
+      // In place of the Copilot chip: a status, not an error, and the template
+      // chips the agent already had stay usable.
+      await waitFor(() =>
+        expect(within(group).getByRole('status')).toHaveTextContent(
+          "Today's AI allowance is used up; it renews at midnight UTC.",
+        ),
+      );
+      const chips = within(group)
+        .getAllByRole('button')
+        .filter((button) => button.getAttribute('aria-label') === null);
+      expect(chips).toHaveLength(3);
+      expect(screen.queryByRole('alert')).toBeNull();
+
+      // Gone with the row, and not carried into the next one.
+      fireEvent.keyDown(input, { key: 'Escape' });
+      expect(screen.queryByRole('group', { name: 'Reply suggestions' })).toBeNull();
+      expect(screen.queryByText(/AI allowance/)).toBeNull();
+    });
+
+    it('says it in Turkish to a Turkish console (tm 257.20)', async () => {
+      const input = setupTurkish([customerSaid('İade istiyorum')], { kind: 'capped' });
+      fireEvent.keyDown(input, { key: ' ' });
+
+      await waitFor(() =>
+        expect(
+          screen.getByText('Bugünkü AI kotası doldu; UTC gece yarısı yenilenir.'),
+        ).toBeTruthy(),
+      );
     });
 
     it('stops waiting after the budget and keeps the chips it already had', async () => {

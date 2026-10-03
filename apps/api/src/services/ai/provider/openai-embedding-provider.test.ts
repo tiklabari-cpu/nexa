@@ -180,6 +180,28 @@ describe('batching', () => {
     expect(usage).toEqual({ inputTokens: 5 * 7 });
   });
 
+  it('carries what the answered batches billed on a failure that comes after them (tm 257.20)', async () => {
+    const net = fakeOpenAiFetch(ok(), ok(), openAiProblem(400, 'invalid_request_error'));
+    const error = await failure(
+      adapter(net, { batch: { maxInputs: 2 } }).provider.embed([
+        'one',
+        'two',
+        'three',
+        'four',
+        'five',
+      ]),
+    );
+
+    expect(net.calls).toHaveLength(3);
+    expect(error.kind).toBe('bad_request');
+    // Two requests of two inputs answered at 7 tokens an input before the third was refused.
+    expect(error.usage).toEqual({ inputTokens: 4 * 7 });
+
+    // A failure on the first request has nothing billed before it.
+    const first = fakeOpenAiFetch(openAiProblem(400, 'invalid_request_error'));
+    expect((await failure(adapter(first).provider.embed(['one']))).usage).toBeNull();
+  });
+
   it('counts tokens as UTF-8 bytes, an upper bound, so a batch never exceeds the limit', () => {
     // 'ğ' is two bytes: three of them are six "tokens", which a budget of ten
     // cannot take twice.

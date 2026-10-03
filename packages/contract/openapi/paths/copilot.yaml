@@ -61,7 +61,7 @@ knowledge:
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequestsOrAiDailyCap" }
       "503": { $ref: "../openapi.yaml#/components/responses/EmbeddingUnavailable" }
 
 knowledgeSource:
@@ -164,6 +164,10 @@ reply:
       than inventing an answer — and equally when the search could not run
       because the embedding provider did not answer: the agent writes the reply
       themselves, and no draft is better than one from a search that failed.
+      The question's embedding is counted against the workspace's daily AI
+      allowance (tm 257.20); when today's cap cannot take it the draft is empty
+      too, and `reason` says so, so the panel can tell the agent the allowance
+      is used up rather than that nothing matched.
     responses:
       "200":
         description: A suggested reply
@@ -182,6 +186,13 @@ reply:
                     properties:
                       name: { type: string }
                       score: { type: number }
+                reason:
+                  type: string
+                  enum: [ai_daily_cap]
+                  description: |
+                    Present only when the draft is empty because today's AI
+                    allowance (the workspace's or the deployment's) is used up;
+                    it renews at 00:00 UTC.
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "403": { $ref: "../openapi.yaml#/components/responses/Forbidden" }

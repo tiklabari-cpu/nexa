@@ -22,7 +22,8 @@ import { pricingForPlan } from '../services/billing/subscription-service.js';
 import { REGIONS, servesRegion, type AgentRole } from '@siyahtus/types';
 import { roleAtLeast } from '../services/auth/principal.js';
 import type { Mailer } from '../services/mail/mailer.js';
-import { deliver, mailFailureFields } from '../services/mail/delivery.js';
+import { deliver, isCapRefusal, mailFailureFields } from '../services/mail/delivery.js';
+import { clientNetworkKey } from '../lib/ip-allowlist.js';
 
 const NEUTRAL_RESET_MESSAGE = 'If an account exists for that address, we sent a link.';
 
@@ -88,6 +89,14 @@ const acceptBody = z.object({
   name: z.string().trim().min(1).max(120).optional(),
   password: z.string().min(12).max(200).optional(),
 });
+
+/** One entry of `POST /invitations`' `undelivered` list. */
+interface UndeliveredInvitation {
+  id: string;
+  email: string;
+  /** `cap_reached`: a daily mail cap refused it before the carrier was asked (tm 257.14). */
+  reason: 'failed' | 'unconfirmed' | 'cap_reached';
+}
 
 function parse<T extends z.ZodTypeAny>(schema: T, value: unknown): z.infer<T> {
   const result = schema.safeParse(value);
@@ -161,12 +170,14 @@ export default async function accountLifecycleRoutes(
     app.backgroundMail.send(
       {
         to,
+        licenseId: null,
         kind: 'email_verification',
         subject: 'Confirm your email address for SiyahTuş',
         body: `Open this link to confirm this address and finish setting up your workspace:\n\n${env.WEB_APP_URL}/verify-email?token=${encodeURIComponent(token)}\n\nYou will be asked for the password you chose when you signed up. The link expires in ${hours} ${hours === 1 ? 'hour' : 'hours'} and works once.\n\nIf you did not sign up, ignore this message: without the password the link does nothing.`,
       },
       async (outcome) => {
-        if (outcome.status !== 'sent') {
+        // A cap refusal was logged where it was decided (`mail-caps.ts`).
+        if (outcome.status !== 'sent' && !isCapRefusal(outcome)) {
           request.log.warn(
             {
               event: 'email_verification.mail',
@@ -215,6 +226,50 @@ export default async function accountLifecycleRoutes(
         'not_allowed',
         'Sign-up is closed on this deployment. Ask the owner of a workspace to invite you.',
         { details: { reason: 'signup_closed' } },
+      );
+    }
+
+    // --- Sign-ups per network per hour (tm 257.14 · ADR K-e(2)) -------------
+    // Behind the closed door, so a closed deployment answers as before and
+    // spends nothing; ahead of the body, so a malformed request is counted
+    // too — a script probing the form must pay for every try, not only for
+    // the ones that would have created a workspace.
+    //
+    // In the handler, against `request.ip`, rather than as a route bucket: the
+    // rate-limit plugin picks one bucket per request, and a caller presenting
+    // any valid agent token would be metered by that token's bucket instead
+    // of this one. The key is the client's network — an IPv4 address, an IPv6
+    // /64 — because one subscriber holds a whole /64 and can rotate through
+    // it. `request.ip` is only as good as `TRUST_PROXY_HOPS` (K-g): set one
+    // hop short and every visitor shares the edge's address, which turns this
+    // into one hourly limit for the whole deployment.
+    //
+    // Fails open when Redis is unreachable, like every bucket here: sign-up
+    // is still bounded by the anonymous bucket, email verification and the
+    // daily mail caps.
+    let signupBudget: { allowed: boolean; resetMs: number } | null = null;
+    try {
+      signupBudget = await app.rateLimiter.consume(
+        `rl:signup:${clientNetworkKey(request.ip)}`,
+        env.RATE_LIMIT_SIGNUP_PER_HOUR,
+        HOUR_MS,
+      );
+    } catch (error) {
+      request.log.error({ err: error, bucket: 'signup' }, 'budget unavailable — allowing');
+    }
+    if (signupBudget && !signupBudget.allowed) {
+      // `limit_reached`, not `too_many_requests`: this is not traffic shaping
+      // to retry through in a second but an hourly allowance, and
+      // `details.reason` is what the form reads to say so.
+      throw new ApiError(
+        'limit_reached',
+        'Too many workspaces were created from this network recently. Try again later.',
+        {
+          details: { reason: 'signup_rate' },
+          headers: {
+            'Retry-After': String(Math.max(1, Math.ceil(signupBudget.resetMs / 1000))),
+          },
+        },
       );
     }
 
@@ -365,12 +420,13 @@ export default async function accountLifecycleRoutes(
         app.backgroundMail.send(
           {
             to: body.email,
+            licenseId: null,
             kind: 'account_exists_notice',
             subject: 'You already have a SiyahTuş account',
             body: `Someone — perhaps you — just tried to create a SiyahTuş workspace with this address, but it already has an account, so nothing was created.\n\nTo get in, sign in at ${env.WEB_APP_URL}/signin. If you do not remember the password, reset it at ${env.WEB_APP_URL}/forgot-password.\n\nIf this was not you, you can ignore this message: nothing about your account has changed.`,
           },
           (outcome) => {
-            if (outcome.status === 'sent') return;
+            if (outcome.status === 'sent' || isCapRefusal(outcome)) return;
             request.log.warn(
               {
                 event: 'account_exists_notice.mail',
@@ -465,12 +521,15 @@ export default async function accountLifecycleRoutes(
       app.backgroundMail.send(
         {
           to: body.email,
+          licenseId: null,
           kind: 'password_reset',
           subject: 'Reset your SiyahTuş password',
           body: `Open this link to choose a new password:\n\n${env.WEB_APP_URL}/reset-password?token=${encodeURIComponent(token)}\n\nIt expires in one hour and works once.`,
         },
         (outcome) => {
-          if (outcome.status === 'sent') return;
+          // A daily cap's refusal (tm 257.14) was logged where it was decided,
+          // without the address; the answer above is the same 202 either way.
+          if (outcome.status === 'sent' || isCapRefusal(outcome)) return;
           // `unconfirmed` is not "failed": the link may have arrived, and it
           // must not be sent twice. Either way the person can ask again, which
           // spends this token and mails a fresh one.
@@ -765,15 +824,23 @@ export default async function accountLifecycleRoutes(
       created.map((invite) =>
         deliver(mailer, {
           to: invite.email,
+          licenseId: tenant.licenseId,
           kind: 'invitation',
           subject: 'You have been invited to a SiyahTuş workspace',
           body: `Open this link to join:\n\n${invite.accept_url}\n\nIt expires in seven days and works once.`,
         }),
       ),
     );
-    const undelivered = created.flatMap((invite, index) => {
+    const undelivered = created.flatMap((invite, index): UndeliveredInvitation[] => {
       const outcome = outcomes[index];
       if (!outcome || outcome.status === 'sent') return [];
+      // The workspace's (or the deployment's) daily mail cap (tm 257.14):
+      // the invitation exists and its link works, it just was not mailed —
+      // `cap_reached` tells the modal to say why, and "Copy invite link" is
+      // the way it still reaches the person. Logged once, by the cap.
+      if (isCapRefusal(outcome)) {
+        return [{ id: invite.id, email: invite.email, reason: 'cap_reached' }];
+      }
       // The invitation id, not the address — the row already holds that.
       request.log.warn(
         {

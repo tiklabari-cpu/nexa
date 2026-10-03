@@ -73,4 +73,10 @@ export const common: Messages = {
   // A `limit_reached` that is not the plan's (tm 257.8): the deployment's daily
   // AI allowance, chosen by `errorMessageKey` from `details.reason`.
   'common.limits.aiDailyCap': "Today's AI allowance is used up; it renews at midnight UTC.",
+  // tm 257.14, the same way: today's email allowance (the SSO domain challenge
+  // could not be mailed), and the hourly sign-up limit per network.
+  'common.limits.mailDailyCap':
+    "Today's email allowance is used up, so the message was not sent; it renews at midnight UTC.",
+  'common.limits.signupRate':
+    'Too many workspaces were created from this network recently. Try again in an hour.',
 };

@@ -251,7 +251,7 @@ describe('courtesy mail leaves the request (tm 256.4)', () => {
       [
         `notification → ${fx.a.agentEmail}`, // the assignee's new-message e-mail
         `notification → ${fx.a.agentEmail}`, // the team copy of the transcript
-        `notification → ${VISITOR}`, // the visitor's copy of the transcript
+        `chat_transcript → ${VISITOR}`, // the visitor's copy of the transcript (its own kind since tm 257.14)
         `ticket_notice → ${TICKET_CUSTOMER}`,
       ].sort(),
     );

@@ -1234,9 +1234,14 @@ export class ChatService {
         // agent-archive route hands in `backgroundMail.asMailer` (tm 256.4), so
         // there this returns as soon as the copy is handed over and the route's
         // callback logs the outcome.
+        //
+        // The visitor's copy is `chat_transcript` (tm 257.14): it leaves the
+        // workspace, to an address a visitor typed, and counts against the
+        // external daily cap. The team's copy goes to a teammate.
         await deliver(mailer, {
           to: recipient.to,
-          kind: 'notification',
+          licenseId: tenant.licenseId,
+          kind: recipient.party === 'customer' ? 'chat_transcript' : 'notification',
           subject: content.subject,
           body: content.body,
         });

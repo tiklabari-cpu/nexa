@@ -53,6 +53,13 @@ export function testEnv(overrides: Partial<NodeJS.ProcessEnv> = {}): Env {
     // cannot quietly turn spooling back on for every suite.
     MAIL_PROVIDER: 'null',
     PUSH_PROVIDER: 'null',
+    // Suites sign up from one address in a loop (account-lifecycle 12 times,
+    // region 11), which the hourly per-network limit (tm 257.14) would stop
+    // at 10. Raised like the anonymous bucket is in CI; the limit itself is
+    // proven with a low value in `signup-rate-limit.test.ts`. The daily mail
+    // caps stay at their defaults: `resetDatabase` empties their counter with
+    // every other table, so a suite starts each test on a fresh day's count.
+    RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
     ...overrides,
   });
 }

@@ -531,7 +531,22 @@ ssoDomainChallenge:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429":
+        description: |
+          Either the rate limit (`too_many_requests`, as everywhere), or
+          today's email allowance is used up (`limit_reached`, tm 257.14):
+          `error.details.reason` is `mail_daily_cap` and `error.details.scope`
+          whose allowance it was (`workspace`, or `global` for the whole
+          deployment). The challenge was recorded but its message was not
+          sent; the allowances renew at 00:00 UTC, which `Retry-After` counts
+          down to.
+        headers:
+          Retry-After:
+            description: Seconds until the caller may retry — for the mail cap, until the next 00:00 UTC.
+            schema: { type: integer }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
       "503":
         description: >-
           The challenge was recorded but its message could not be sent

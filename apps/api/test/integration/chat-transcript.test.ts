@@ -167,8 +167,12 @@ describe('chat transcript e-mail (FR-MOD-08.7.4)', () => {
     return { chatId, threadId };
   }
 
+  // Both copies: the team's is a `notification`, the visitor's has been its
+  // own `chat_transcript` kind since tm 257.14.
   const notifications = async () =>
-    (await mailer.outbox()).filter((m) => m.kind === 'notification');
+    (await mailer.outbox()).filter(
+      (m) => m.kind === 'notification' || m.kind === 'chat_transcript',
+    );
 
   beforeAll(async () => {
     if (!APP_URL) throw new Error('DATABASE_APP_URL must be set');

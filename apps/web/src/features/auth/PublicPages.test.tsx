@@ -267,6 +267,34 @@ describe('SignUpPage closed sign-up', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Could not create that workspace.');
   });
+
+  it('says when to come back after the hourly sign-up limit for the network (tm 257.14)', async () => {
+    vi.spyOn(ApiClient.prototype, 'post').mockRejectedValue(
+      new ApiClientError({
+        type: 'limit_reached',
+        status: 429,
+        message: 'Too many workspaces were created from this network recently.',
+        requestId: 'req_4',
+        details: { reason: 'signup_rate' },
+        retryAfterSeconds: 1_800,
+      }),
+    );
+    renderAt(<SignUpPage />);
+    await fill({
+      workspace: 'Workspace name',
+      name: 'Your name',
+      email: 'Email',
+      password: 'Password',
+      submit: 'Create workspace',
+    });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(
+      'Too many workspaces were created from this network recently. Try again in an hour.',
+    );
+    // Not the plan's limit — there is no plan before there is a workspace.
+    expect(alert).not.toHaveTextContent('limit for your plan');
+  });
 });
 
 describe('ResetPasswordPage validation', () => {

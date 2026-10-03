@@ -152,7 +152,23 @@ signup:
         content:
           application/json:
             schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
-      "429": { $ref: "../openapi.yaml#/components/responses/TooManyRequests" }
+      "429":
+        description: |
+          Either the anonymous rate limit (`too_many_requests`, as on every
+          unauthenticated route), or this network has created too many
+          workspaces this hour (`limit_reached`, tm 257.14):
+          `error.details.reason` is `signup_rate`. The second is counted per
+          client network — an IPv4 address, an IPv6 `/64` — on every sign-up
+          that reaches the form's checks, malformed ones included, and only
+          while sign-up is open. **Nothing was created.** `Retry-After` is
+          the wait until this network's hourly allowance has room again.
+        headers:
+          Retry-After:
+            description: Seconds until the caller may retry.
+            schema: { type: integer }
+        content:
+          application/json:
+            schema: { $ref: "../openapi.yaml#/components/schemas/Error" }
 
 passwordReset:
   post:
@@ -464,7 +480,7 @@ invitations:
                       email: { type: string }
                       reason:
                         type: string
-                        enum: [failed, unconfirmed]
+                        enum: [failed, unconfirmed, cap_reached]
                         description: |
                           `failed` — the email did not go out: the mail server
                           refused it, or could not be reached after retries.
@@ -473,6 +489,10 @@ invitations:
                           arrived. It is not sent again: the link inside is
                           single-use, and two copies are two chances for the
                           wrong person to use it.
+                          `cap_reached` — today's email allowance (this
+                          workspace's, or the deployment's) is used up, so it
+                          was not sent (tm 257.14). The allowances renew at
+                          00:00 UTC; until then the link is the way in.
       "400": { $ref: "../openapi.yaml#/components/responses/BadRequest" }
       "401": { $ref: "../openapi.yaml#/components/responses/Unauthorized" }
       "402": { $ref: "../openapi.yaml#/components/responses/PaymentRequired" }

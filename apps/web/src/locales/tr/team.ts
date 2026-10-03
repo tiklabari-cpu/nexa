@@ -180,6 +180,8 @@ export const team: Messages = {
   'team.invite.undelivered.failed': '{email} — e-posta gönderilemedi.',
   'team.invite.undelivered.unconfirmed':
     '{email} — e-posta ulaşmamış olabilir. Görmezlerse bağlantıyı kendiniz gönderin.',
+  'team.invite.undelivered.capReached':
+    '{email} — gönderilmedi: bugünkü e-posta kotası doldu (UTC gece yarısı yenilenir). Bağlantıyı kendiniz gönderin.',
   'team.invite.undelivered.copy': '{email} için bağlantıyı kopyala',
   'team.invite.discardConfirm': 'Yazdığınız adresler atılsın mı?',
   'team.invite.cancel': 'İptal',

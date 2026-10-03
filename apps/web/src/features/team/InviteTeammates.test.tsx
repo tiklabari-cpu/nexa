@@ -285,6 +285,25 @@ describe('InviteTeammates when an email does not go out (FR-MOD-04.4 · tm 255.4
     expect(screen.queryByRole('button', { name: 'Copy link for ada@example.test' })).toBeNull();
   });
 
+  it("says the day's email allowance stopped an invitation, and still hands over its link (tm 257.14)", async () => {
+    stubCreate([{ id: 'i-2', email: 'bob@example.test', reason: 'cap_reached' }]);
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });
+
+    await invite('ada@example.test, bob@example.test');
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent(
+      "bob@example.test — not sent: today's email allowance is used up (it renews at midnight UTC). Send them the link.",
+    );
+    // Not the carrier's two sentences: nothing was tried, and nothing may have arrived.
+    expect(status).not.toHaveTextContent('could not be sent');
+    expect(status).not.toHaveTextContent('may not have arrived');
+
+    await userEvent.click(screen.getByRole('button', { name: 'Copy link for bob@example.test' }));
+    expect(writeText).toHaveBeenLastCalledWith('http://app/join?token=b');
+  });
+
   it('keeps the ordinary notice when every email went out', async () => {
     stubCreate([]);
 

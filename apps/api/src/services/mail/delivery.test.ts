@@ -12,17 +12,19 @@ import { describe, expect, it } from 'vitest';
 import {
   BackgroundMail,
   deliver,
+  isCapRefusal,
   logUnsentMail,
   mailFailureFields,
   type MailOutcome,
 } from './delivery.js';
 import type { Mailer, Message } from './mailer.js';
-import { PermanentMailError, TransientMailError } from './mail-error.js';
+import { MailCapError, PermanentMailError, TransientMailError } from './mail-error.js';
 
 const MESSAGE: Message = {
   to: 'someone@example.test',
   subject: 'Reset your SiyahTuş password',
   body: 'https://app.example.test/reset-password?token=x',
+  licenseId: null,
   kind: 'password_reset',
 };
 
@@ -234,10 +236,52 @@ describe('logUnsentMail (tm 256.4)', () => {
     expect(JSON.stringify(log.lines)).not.toContain(MESSAGE.to);
   });
 
+  it('is silent about a daily cap refusal, which the cap has already logged (tm 257.14)', () => {
+    const log = recorder();
+    logUnsentMail(log, 'ticket.notice_mail', {
+      status: 'failed',
+      error: new MailCapError('external'),
+    });
+    expect(log.lines).toEqual([]);
+  });
+
   it('logs unconfirmed as its own outcome, not as failed', () => {
     const log = recorder();
     const error = new PermanentMailError({ code: 'unconfirmed', phase: 'data' });
     logUnsentMail(log, 'chat.transcript_mail', { status: 'unconfirmed', error });
     expect(log.lines[0]!.details['outcome']).toBe('unconfirmed');
+  });
+});
+
+describe('isCapRefusal (tm 257.14)', () => {
+  it('is true only for a failed send whose error is the daily cap', async () => {
+    const capped = await deliver(failingWith(new MailCapError('workspace')), MESSAGE);
+    expect(capped.status).toBe('failed');
+    expect(isCapRefusal(capped)).toBe(true);
+
+    expect(isCapRefusal({ status: 'sent' })).toBe(false);
+    expect(
+      isCapRefusal({
+        status: 'failed',
+        error: new PermanentMailError({ code: 'rejected', phase: 'rcpt_to' }),
+      }),
+    ).toBe(false);
+    expect(
+      isCapRefusal({
+        status: 'unconfirmed',
+        error: new PermanentMailError({ code: 'unconfirmed', phase: 'data' }),
+      }),
+    ).toBe(false);
+  });
+
+  it('carries the scope and logs as cap_reached, contacting nothing', () => {
+    const error = new MailCapError('global');
+    expect(error.scope).toBe('global');
+    expect(mailFailureFields(error)).toEqual({
+      code: 'cap_reached',
+      phase: 'compose',
+      retryable: false,
+      attempts: 1,
+    });
   });
 });

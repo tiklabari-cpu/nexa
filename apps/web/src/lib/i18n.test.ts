@@ -188,6 +188,46 @@ describe('errorMessageKey', () => {
     expect(isAiDailyCap(new Error('ai_daily_cap'))).toBe(false);
   });
 
+  it('names the daily mail cap and the hourly sign-up limit apart from a plan limit, in both languages (tm 257.14)', () => {
+    const limit = (reason: string) =>
+      new ApiClientError({
+        type: 'limit_reached',
+        status: 429,
+        message: 'refused',
+        requestId: 'rq-limit',
+        details: { reason },
+        retryAfterSeconds: 3_600,
+      });
+
+    expect(errorMessageKey(limit('mail_daily_cap'))).toBe('common.limits.mailDailyCap');
+    expect(translate('en', errorMessageKey(limit('mail_daily_cap')))).toBe(
+      "Today's email allowance is used up, so the message was not sent; it renews at midnight UTC.",
+    );
+    expect(translate('tr', errorMessageKey(limit('mail_daily_cap')))).toBe(
+      'Bugünkü e-posta kotası doldu, bu yüzden ileti gönderilmedi; UTC gece yarısı yenilenir.',
+    );
+
+    expect(errorMessageKey(limit('signup_rate'))).toBe('common.limits.signupRate');
+    expect(translate('tr', errorMessageKey(limit('signup_rate')))).toBe(
+      'Bu ağdan kısa süre içinde çok fazla çalışma alanı oluşturuldu. Bir saat sonra yeniden deneyin.',
+    );
+
+    // A reason off the wire is looked up, never walked into the prototype.
+    expect(errorMessageKey(limit('toString'))).toBe('common.errors.limit_reached');
+    // And the reason on another type is not one of these.
+    expect(
+      errorMessageKey(
+        new ApiClientError({
+          type: 'too_many_requests',
+          status: 429,
+          message: 'Slow down.',
+          requestId: 'rq-rl',
+          details: { reason: 'signup_rate' },
+        }),
+      ),
+    ).toBe('common.errors.too_many_requests');
+  });
+
   it('covers the client-only network failure', () => {
     const error = new ApiClientError({
       type: 'network',

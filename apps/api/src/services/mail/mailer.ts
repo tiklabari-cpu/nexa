@@ -20,6 +20,17 @@ export interface Message {
   subject: string;
   body: string;
   /**
+   * The workspace this mail is sent for, or `null` for mail about an account
+   * rather than a workspace — the password reset, the sign-up link, the
+   * account-exists notice, the two-factor notice (tm 257.14).
+   *
+   * Required, so every send site has to say: it is what the daily caps
+   * (`mail-caps.ts`) charge. Workspace mail counts against that workspace's
+   * cap and may not use the security reserve; account mail is exempt from
+   * every workspace cap and may.
+   */
+  licenseId: bigint | null;
+  /**
    * Correlates a message with the thing that caused it, for tests and support.
    *
    * `scheduled_report` is its own kind rather than reusing `notification` — the
@@ -36,6 +47,12 @@ export interface Message {
    * a taken address is sent instead) are the two halves of one indistinguishable
    * 202 (tm 257.7): the answer cannot say which happened, so the mailbox is
    * where a test — and the pilot rehearsal's spool check — tells them apart.
+   *
+   * `chat_transcript` is a closed chat's transcript sent to the visitor (tm
+   * 257.14), split out of `notification` for `ticket_notice`'s second reason:
+   * it leaves the workspace, to an address a visitor typed, which is what the
+   * external daily cap counts. The team's copy goes to a teammate and stays a
+   * `notification`.
    */
   kind:
     | 'password_reset'
@@ -43,8 +60,18 @@ export interface Message {
     | 'notification'
     | 'scheduled_report'
     | 'ticket_notice'
+    | 'chat_transcript'
     | 'email_verification'
     | 'account_exists_notice';
+}
+
+/**
+ * A message as `FileMailer` writes it: the licence as a decimal string, since
+ * JSON has no bigint.
+ */
+interface SpooledMessage extends Omit<Message, 'licenseId'> {
+  licenseId?: string | null;
+  sent_at: string;
 }
 
 export interface Mailer {
@@ -63,7 +90,15 @@ export class FileMailer implements Mailer {
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     await writeFile(
       join(this.#dir, `${stamp}-${message.kind}-${randomUUID().slice(0, 8)}.json`),
-      JSON.stringify({ ...message, sent_at: new Date().toISOString() }, null, 2),
+      JSON.stringify(
+        {
+          ...message,
+          licenseId: message.licenseId === null ? null : message.licenseId.toString(),
+          sent_at: new Date().toISOString(),
+        } satisfies SpooledMessage,
+        null,
+        2,
+      ),
       'utf8',
     );
   }
@@ -79,7 +114,13 @@ export class FileMailer implements Mailer {
     const messages = await Promise.all(
       names
         .filter((n) => n.endsWith('.json'))
-        .map(async (n) => JSON.parse(await readFile(join(this.#dir, n), 'utf8'))),
+        .map(async (n): Promise<Message & { sent_at: string }> => {
+          const spooled = JSON.parse(await readFile(join(this.#dir, n), 'utf8')) as SpooledMessage;
+          // A file written before the licence was recorded has none: read as
+          // account mail rather than refusing to list it.
+          const { licenseId, ...rest } = spooled;
+          return { ...rest, licenseId: licenseId ? BigInt(licenseId) : null };
+        }),
     );
     return messages.sort((a, b) => b.sent_at.localeCompare(a.sent_at));
   }

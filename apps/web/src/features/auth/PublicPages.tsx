@@ -179,6 +179,12 @@ function signupFailureMessage(failure: unknown, t: TFunction): string {
     return t('auth.signup.errorTermsOutdated');
   }
 
+  // The hourly sign-up limit per network (tm 257.14): nothing was created,
+  // and trying again straight away cannot work — the sentence says when.
+  if (failure.type === 'limit_reached' && failure.details?.['reason'] === 'signup_rate') {
+    return t('common.limits.signupRate');
+  }
+
   if (failure.type === 'misdirected_request') {
     const served = failure.details?.['served_region'];
     if (isRegion(served)) {

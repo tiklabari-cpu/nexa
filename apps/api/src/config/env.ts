@@ -403,6 +403,21 @@ export const envSchema = z.object({
    * and a client retrying on a flaky connection never come close.
    */
   RATE_LIMIT_TWO_FACTOR_PER_HOUR: z.coerce.number().int().positive().default(20),
+  /**
+   * Sign-ups per client network per **hour** (tm 257.14 · ADR
+   * `docs/adr/pilot-public-readiness.md` K-e(2)), counted at `POST
+   * /auth/signup` on top of the anonymous per-minute bucket.
+   *
+   * Always on, unlike the verification flag: every sign-up creates a
+   * workspace, and with verification on each one also mails a stranger's
+   * address from the deployment's own sender. The network is the address an
+   * IPv4 client connects from, and an IPv6 client's /64 — one subscriber is
+   * handed a whole /64 and can rotate through it freely. An hour for the
+   * 2FA budget's reason: a per-minute window bounds nothing a script cannot
+   * wait out. The suites that sign up from one address in a loop raise it
+   * (CI, e2e, the test fixture), the way they raise the anonymous bucket.
+   */
+  RATE_LIMIT_SIGNUP_PER_HOUR: z.coerce.number().int().positive().default(10),
 
   /**
    * Data retention windows in days (NFR-C8). Each is a positive integer; the
@@ -780,6 +795,38 @@ export const envSchema = z.object({
     .nonnegative()
     .max(86_400_000)
     .default(900_000),
+  /**
+   * Daily outgoing-mail caps per UTC day (tm 257.14 · ADR
+   * `docs/adr/pilot-public-readiness.md` K-e(4)). Sign-up is public in the
+   * pilot, and every invitation, ticket notice and transcript leaves from the
+   * deployment's own sender carrying text a tenant or a visitor wrote — the
+   * sender's reputation, and the mail account itself, are what a stranger
+   * would spend. Counted in Postgres (`mail_daily_usage`,
+   * `services/mail/mail-caps.ts`) for every provider, so the test suites
+   * exercise the same counter production uses.
+   *
+   * - `MAIL_DAILY_PER_WORKSPACE` — everything a workspace sends.
+   * - `MAIL_DAILY_EXTERNAL_PER_WORKSPACE` — the part of that leaving the
+   *   workspace: invitations, ticket notices, a visitor's transcript.
+   * - `MAIL_DAILY_GLOBAL` — the whole deployment; set it under the mail
+   *   provider's own daily sending limit.
+   * - `MAIL_SECURITY_RESERVE` — the top of the global cap no workspace mail
+   *   may take, kept for account mail (password reset, sign-up verification,
+   *   the account-exists notice, the two-factor notice), so a day of tenant
+   *   mail cannot lock someone out of their account. Less than the global cap.
+   *
+   * At least 1 (the reserve at least 0), and no "off": an operator who wants
+   * no cap writes a number nobody reaches. The defaults are the ADR's cautious
+   * ones.
+   */
+  MAIL_DAILY_PER_WORKSPACE: z.coerce.number().int().min(1).default(200),
+  MAIL_DAILY_EXTERNAL_PER_WORKSPACE: z.coerce.number().int().min(1).default(50),
+  MAIL_DAILY_GLOBAL: z.coerce.number().int().min(1).default(400),
+  // A bare `MAIL_SECURITY_RESERVE=` is refused rather than read as 0: no
+  // reserve is a choice to write down, not a value a blank line can make.
+  MAIL_SECURITY_RESERVE: z
+    .preprocess((value) => (value === '' ? Number.NaN : value), z.coerce.number().int().min(0))
+    .default(50),
   /**
    * Outgoing push (M-PROV-a). Same pair of mocks as the mailer, spooling under
    * `PUSH_DIR` (13.7-d). A newer key than the rest — this channel arrived after
@@ -1486,6 +1533,15 @@ export function parseEnv(source: NodeJS.ProcessEnv = process.env): Env {
   if (env.TERMS_URL && !env.TERMS_VERSION) {
     throw new Error(
       'Invalid environment:\n  TERMS_VERSION is required when TERMS_URL is set: sign-up records which version of the terms a workspace accepted.',
+    );
+  }
+
+  // Every environment, for the same reason: a reserve that fills the global
+  // cap leaves no room for any workspace mail at all, so every invitation and
+  // notice would be refused from the first one of the day (tm 257.14).
+  if (env.MAIL_SECURITY_RESERVE >= env.MAIL_DAILY_GLOBAL) {
+    throw new Error(
+      'Invalid environment:\n  MAIL_SECURITY_RESERVE must be less than MAIL_DAILY_GLOBAL: the reserve is the part of the global cap only account mail may use.',
     );
   }
 

@@ -9,7 +9,7 @@
  * promises (a message on disk, or nothing on disk), which is the thing an
  * operator setting the key is actually asking for.
  */
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -33,6 +33,7 @@ const MESSAGE = {
   to: 'someone@example.test',
   subject: 'Reset your password',
   body: 'https://app.example.test/reset-password?token=x',
+  licenseId: null,
   kind: 'password_reset',
 } as const;
 
@@ -56,6 +57,19 @@ describe('createMailer', () => {
     const written = await readdir(dir);
     expect(written).toHaveLength(1);
     expect(written[0]).toContain('password_reset');
+  });
+
+  it('spools the licence as text and reads it back as a bigint, null for account mail (tm 257.14)', async () => {
+    const mailer = new FileMailer(dir);
+    await mailer.send({ ...MESSAGE, licenseId: 9_007_199_254_740_993n, kind: 'invitation' });
+    await mailer.send({ ...MESSAGE, licenseId: null });
+
+    const [file] = (await readdir(dir)).filter((name) => name.includes('invitation'));
+    const raw = JSON.parse(await readFile(join(dir, file!), 'utf8')) as Record<string, unknown>;
+    expect(raw['licenseId']).toBe('9007199254740993');
+
+    const byKind = Object.fromEntries((await mailer.outbox()).map((m) => [m.kind, m.licenseId]));
+    expect(byKind).toEqual({ invitation: 9_007_199_254_740_993n, password_reset: null });
   });
 
   it('keeps nothing for "null"', async () => {

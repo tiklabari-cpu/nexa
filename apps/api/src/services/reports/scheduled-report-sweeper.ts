@@ -38,12 +38,23 @@
  * went out and the bookkeeping failed after it", so it would risk a duplicate
  * every time it was wrong. The row is what a later window's history endpoint
  * (07.9-sched-g) reads, so nothing fails quietly either way.
+ *
+ * One refusal is not a failure: the daily mail cap (tm 257.14). When it
+ * refuses a delivery before anything went out, nothing can be sent twice by
+ * trying again — the cap answered before the carrier was asked — so the run
+ * is resolved `failed` with {@link MAIL_CAP_DEFERRED} as its error, and the
+ * next sweep *re-claims* that row (one conditional UPDATE, which the database
+ * serialises like the INSERT) instead of skipping it. Re-claimed rather than
+ * deleted: the application role has no DELETE on runs (see the migration),
+ * and the row tells the history screen what happened in the meantime. A cap
+ * that stops a delivery halfway, after some recipient may already have it,
+ * consumes the period as any failure does.
  */
 import { Prisma, type PrismaClient } from '@prisma/client';
 import type { ScheduledExportFrequency } from '@siyahtus/types';
 import { type TenantContext, withTenant, withTenantRead } from '../../lib/tenant.js';
 import { exportFilename, reportGroup, toCsv } from '../../routes/reports-export.js';
-import { deliver } from '../mail/delivery.js';
+import { deliver, isCapRefusal } from '../mail/delivery.js';
 import type { Mailer } from '../mail/mailer.js';
 import { buildGroupCsv } from './report-csv.js';
 import { buildScheduledReportMail } from './scheduled-report-mail.js';
@@ -57,6 +68,23 @@ import { periodFor, type ReportPeriod } from './scheduled-report-period.js';
  */
 const ERROR_MAX_LENGTH = 500;
 
+/**
+ * The error a run carries while the daily mail cap holds it back (tm 257.14):
+ * nothing went out, and the next sweep re-claims the period. Read back by
+ * {@link isDeferredRun} — the text is the marker, so it must not change.
+ */
+export const MAIL_CAP_DEFERRED =
+  "Today's email limit was reached before this report went out; the next sweep sends it.";
+
+/** Whether a stored run is one the daily mail cap deferred, and so re-claimable. */
+export function isDeferredRun(run: {
+  status: string;
+  recipientCount: number;
+  error: string | null;
+}): boolean {
+  return run.status === 'failed' && run.recipientCount === 0 && run.error === MAIL_CAP_DEFERRED;
+}
+
 export interface ScheduledReportDelivery {
   scheduledReportId: string;
   /** The `REPORT_GROUPS` id the definition names. */
@@ -67,9 +95,11 @@ export interface ScheduledReportDelivery {
    * `delivered` is the run row's `sent`: the row's spelling is fixed by
    * `scheduled_report_runs_status_check`, and this report reads as prose.
    * `skipped` never reaches the table — it means the period was already taken
-   * (or is being taken right now by another sweep).
+   * (or is being taken right now by another sweep). `deferred` is a run the
+   * daily mail cap refused before anything went out (tm 257.14): stored as
+   * `failed` with {@link MAIL_CAP_DEFERRED}, re-claimed by the next sweep.
    */
-  status: 'delivered' | 'skipped' | 'failed';
+  status: 'delivered' | 'skipped' | 'failed' | 'deferred';
   /** Recipients the mail actually reached — not the number configured. */
   recipientCount: number;
   /** Data rows in the CSV, excluding the header row. */
@@ -85,13 +115,20 @@ export interface TenantScheduledReportResult {
   delivered: number;
   skipped: number;
   failed: number;
+  deferred: number;
 }
 
 export interface ScheduledReportSweepReport {
   startedAt: string;
   finishedAt: string;
   tenants: TenantScheduledReportResult[];
-  totals: { tenants: number; delivered: number; skipped: number; failed: number };
+  totals: {
+    tenants: number;
+    delivered: number;
+    skipped: number;
+    failed: number;
+    deferred: number;
+  };
 }
 
 interface TenantRow {
@@ -155,6 +192,7 @@ export class ScheduledReportSweeper {
         delivered: results.reduce((sum, r) => sum + r.delivered, 0),
         skipped: results.reduce((sum, r) => sum + r.skipped, 0),
         failed: results.reduce((sum, r) => sum + r.failed, 0),
+        deferred: results.reduce((sum, r) => sum + r.deferred, 0),
       },
     };
   }
@@ -188,6 +226,7 @@ export class ScheduledReportSweeper {
       delivered: deliveries.filter((d) => d.status === 'delivered').length,
       skipped: deliveries.filter((d) => d.status === 'skipped').length,
       failed: deliveries.filter((d) => d.status === 'failed').length,
+      deferred: deliveries.filter((d) => d.status === 'deferred').length,
     };
   }
 
@@ -282,16 +321,52 @@ export class ScheduledReportSweeper {
       // for good. The first failure is still what the run records, after the
       // others have had their turn. `unconfirmed` is not counted — it may have
       // landed, and this count only claims what is known to have.
+      //
+      // The daily mail cap (tm 257.14) ends the loop instead: every later
+      // recipient would be refused too. If nothing can have gone out yet —
+      // nothing sent, nothing `unconfirmed` — the period is handed to the next
+      // sweep rather than consumed.
       let firstFailure: { error: unknown } | null = null;
+      let mayHaveArrived = false;
+      let capped = false;
       for (const to of definition.recipients) {
         const outcome = await deliver(this.#mailer, {
           to,
+          licenseId: context.licenseId,
           subject: mail.subject,
           body: mail.body,
           kind: 'scheduled_report',
         });
-        if (outcome.status === 'sent') recipientCount += 1;
-        else firstFailure ??= { error: outcome.error };
+        if (outcome.status === 'sent') {
+          recipientCount += 1;
+        } else if (isCapRefusal(outcome)) {
+          capped = true;
+          break;
+        } else {
+          if (outcome.status === 'unconfirmed') mayHaveArrived = true;
+          firstFailure ??= { error: outcome.error };
+        }
+      }
+      if (capped && recipientCount === 0 && !mayHaveArrived) {
+        await this.#resolve(context, runId, definition.id, {
+          status: 'failed',
+          recipientCount: 0,
+          rowCount,
+          error: MAIL_CAP_DEFERRED,
+          deliveredAt: null,
+        });
+        return {
+          ...base,
+          status: 'deferred',
+          recipientCount: 0,
+          rowCount,
+          error: MAIL_CAP_DEFERRED,
+        };
+      }
+      if (capped) {
+        throw new Error(
+          `Today's email limit was reached after ${recipientCount} of ${definition.recipients.length} recipients.`,
+        );
       }
       if (firstFailure) throw firstFailure.error;
 
@@ -328,6 +403,11 @@ export class ScheduledReportSweeper {
    *
    * This commits on its own. A claim sharing a transaction with the delivery
    * would be rolled back by a delivery failure, releasing the period.
+   *
+   * A period the daily mail cap deferred (tm 257.14) is taken back from its
+   * `failed` row by a conditional UPDATE: the first sweep to reach the row
+   * locks it, the second re-reads it once the first commits and no longer
+   * matches — so exactly one caller wins here too.
    */
   async #claim(
     context: TenantContext,
@@ -351,10 +431,37 @@ export class ScheduledReportSweeper {
       return run.id;
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
-        return null;
+        return this.#reclaimDeferred(context, scheduledReportId, period);
       }
       throw error;
     }
+  }
+
+  /** Take back a period the daily mail cap deferred, or null when it is not one. */
+  async #reclaimDeferred(
+    context: TenantContext,
+    scheduledReportId: string,
+    period: ReportPeriod,
+  ): Promise<string | null> {
+    return withTenant(this.#db, context, async (tx) => {
+      const { count } = await tx.scheduledReportRun.updateMany({
+        where: {
+          licenseId: context.licenseId,
+          scheduledReportId,
+          periodKey: period.periodKey,
+          status: 'failed',
+          recipientCount: 0,
+          error: MAIL_CAP_DEFERRED,
+        },
+        data: { status: 'pending', error: null },
+      });
+      if (count === 0) return null;
+      const run = await tx.scheduledReportRun.findUnique({
+        where: { scheduledReportId_periodKey: { scheduledReportId, periodKey: period.periodKey } },
+        select: { id: true },
+      });
+      return run?.id ?? null;
+    });
   }
 
   /**

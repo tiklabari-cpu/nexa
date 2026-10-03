@@ -17,6 +17,7 @@ import { poweredByFor } from '../lib/entitlements.js';
 import { originHost } from '../lib/origin.js';
 import { withTenant, type TenantContext } from '../lib/tenant.js';
 import type { Mailer } from '../services/mail/mailer.js';
+import { isMailCapError } from '../services/mail/mail-error.js';
 import { isIpBanned } from '../lib/banned-ip.js';
 import { CustomFieldService } from '../services/custom-fields/custom-field-service.js';
 import {
@@ -1225,8 +1226,12 @@ export default async function authRoutes(
           select: { name: true },
         }),
       );
+      // Account mail (tm 257.14): the factor guards every workspace the
+      // account reaches, so no workspace's daily cap may stop the notice; it
+      // counts against the deployment's and may use the security reserve.
       await mailer.send({
         to: email,
+        licenseId: null,
         kind: 'notification',
         subject: 'Two-factor authentication is now on for your SiyahTuş account',
         body:
@@ -1240,7 +1245,10 @@ export default async function authRoutes(
           `tell an owner of that workspace.`,
       });
     } catch (err) {
-      request.log.warn({ err }, 'could not send the two-factor enrollment notice');
+      // A daily cap's refusal was logged where it was decided.
+      if (!isMailCapError(err)) {
+        request.log.warn({ err }, 'could not send the two-factor enrollment notice');
+      }
     }
   }
 

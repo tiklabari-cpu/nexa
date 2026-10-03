@@ -125,6 +125,13 @@ export default defineConfig({
       // The credentials are the stand-in's fake ones, not anybody's; the pilot's
       // live only in an operator's `.env`, which these override.
       //
+      // And the sign-up limit and the daily mail caps (tm 257.14). The suite
+      // signs up a fresh owner in spec after spec from one address, past the
+      // hourly default of 10; and it runs against the one seeded database,
+      // where the day's mail count is never emptied, so two or three full runs
+      // in a UTC day would reach the caps a single run stays under. Both are
+      // proven in `apps/api/test/integration`, not here.
+      //
       // And the deterministic AI stubs (tm 257.5). Specs assert on the stub's
       // own words — `inbox-archive-summary.spec.ts` reads the visitor's question
       // back out of the Copilot summary — so an operator's `.env` naming a real
@@ -136,6 +143,10 @@ export default defineConfig({
         EMBEDDING_PROVIDER: 'mock',
         RATE_LIMIT_ANON_PER_MIN: '2000',
         RATE_LIMIT_AGENT_PER_MIN: '5000',
+        RATE_LIMIT_SIGNUP_PER_HOUR: '10000',
+        MAIL_DAILY_PER_WORKSPACE: '1000000',
+        MAIL_DAILY_EXTERNAL_PER_WORKSPACE: '1000000',
+        MAIL_DAILY_GLOBAL: '1000000',
         SCHEDULER_ENABLED: 'false',
         MAIL_PROVIDER: 'smtp',
         SMTP_HOST: '127.0.0.1',

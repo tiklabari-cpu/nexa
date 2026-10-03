@@ -187,6 +187,9 @@ export const team: Messages = {
   'team.invite.undelivered.failed': '{email} — the email could not be sent.',
   'team.invite.undelivered.unconfirmed':
     '{email} — the email may not have arrived. If they do not see it, send them the link.',
+  // tm 257.14: a daily email allowance refused it before anything was sent.
+  'team.invite.undelivered.capReached':
+    "{email} — not sent: today's email allowance is used up (it renews at midnight UTC). Send them the link.",
   'team.invite.undelivered.copy': 'Copy link for {email}',
   'team.invite.discardConfirm': 'Discard the addresses you have typed?',
   'team.invite.cancel': 'Cancel',

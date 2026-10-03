@@ -282,6 +282,72 @@ describe('AI_DAILY_*_TOKENS_*', () => {
   }
 });
 
+/** Sign-ups per client network per hour (tm 257.14). */
+describe('RATE_LIMIT_SIGNUP_PER_HOUR', () => {
+  it('is 10 when unset', () => {
+    expect(parseEnv(BASE).RATE_LIMIT_SIGNUP_PER_HOUR).toBe(10);
+  });
+
+  it('reads a positive whole number, and refuses anything else by name', () => {
+    expect(
+      parseEnv({ ...BASE, RATE_LIMIT_SIGNUP_PER_HOUR: '250' }).RATE_LIMIT_SIGNUP_PER_HOUR,
+    ).toBe(250);
+    for (const value of ['0', '-1', '2.5', 'many', '']) {
+      expect(() => parseEnv({ ...BASE, RATE_LIMIT_SIGNUP_PER_HOUR: value }), value).toThrow(
+        /RATE_LIMIT_SIGNUP_PER_HOUR/,
+      );
+    }
+  });
+});
+
+/** The daily outgoing-mail caps (tm 257.14). */
+describe('MAIL_DAILY_* and MAIL_SECURITY_RESERVE', () => {
+  const DEFAULTS = {
+    MAIL_DAILY_PER_WORKSPACE: 200,
+    MAIL_DAILY_EXTERNAL_PER_WORKSPACE: 50,
+    MAIL_DAILY_GLOBAL: 400,
+    MAIL_SECURITY_RESERVE: 50,
+  } as const;
+
+  it('takes the ADR’s cautious defaults when unset', () => {
+    expect(parseEnv(BASE)).toMatchObject(DEFAULTS);
+  });
+
+  for (const key of [
+    'MAIL_DAILY_PER_WORKSPACE',
+    'MAIL_DAILY_EXTERNAL_PER_WORKSPACE',
+    'MAIL_DAILY_GLOBAL',
+  ] as const) {
+    it(`reads ${key} as a whole number of mails, at least 1 — no "off"`, () => {
+      expect(parseEnv({ ...BASE, [key]: '1000' })[key]).toBe(1000);
+      for (const value of ['0', '-5', '1.5', 'unlimited', '']) {
+        expect(() => parseEnv({ ...BASE, [key]: value }), value).toThrow(new RegExp(key));
+      }
+    });
+  }
+
+  it('reads MAIL_SECURITY_RESERVE as 0 or more, and refuses a blank rather than reading it as 0', () => {
+    expect(parseEnv({ ...BASE, MAIL_SECURITY_RESERVE: '0' }).MAIL_SECURITY_RESERVE).toBe(0);
+    expect(parseEnv({ ...BASE, MAIL_SECURITY_RESERVE: '120' }).MAIL_SECURITY_RESERVE).toBe(120);
+    for (const value of ['', '-1', '2.5', 'some']) {
+      expect(() => parseEnv({ ...BASE, MAIL_SECURITY_RESERVE: value }), value).toThrow(
+        /MAIL_SECURITY_RESERVE/,
+      );
+    }
+  });
+
+  it('refuses a reserve that leaves no room for workspace mail, in every environment', () => {
+    for (const reserve of ['400', '500']) {
+      expect(() => parseEnv({ ...BASE, MAIL_SECURITY_RESERVE: reserve }), reserve).toThrow(
+        /MAIL_SECURITY_RESERVE must be less than MAIL_DAILY_GLOBAL/,
+      );
+    }
+    expect(() =>
+      parseEnv({ ...BASE, MAIL_DAILY_GLOBAL: '10', MAIL_SECURITY_RESERVE: '9' }),
+    ).not.toThrow();
+  });
+});
+
 /** The assignee e-mail window (FR-MOD-13.8 · tm 256.4). */
 describe('ASSIGNEE_EMAIL_COOLDOWN_MS', () => {
   it('is fifteen minutes when unset', () => {

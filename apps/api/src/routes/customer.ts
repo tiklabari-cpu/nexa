@@ -480,6 +480,7 @@ export default async function customerRoutes(
       app.backgroundMail.send(
         {
           to: channel.email,
+          licenseId,
           kind: 'notification',
           subject: 'New message from a visitor',
           body: `Hi ${channel.name ?? 'there'},\n\nA visitor sent a new message in a conversation assigned to you.\n\nOpen it here:\n${env.WEB_APP_URL}/app/inbox`,

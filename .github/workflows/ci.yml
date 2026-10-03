@@ -188,6 +188,9 @@ jobs:
       # the anonymous limiter, and the run fails with 429s that look like
       # product bugs. Raised here only.
       RATE_LIMIT_ANON_PER_MIN: '500'
+      # And the hourly per-network sign-up limit (tm 257.14, default 10): the
+      # suites sign up from this one address many times an hour.
+      RATE_LIMIT_SIGNUP_PER_HOUR: '10000'
 
     steps:
       - uses: actions/checkout@v4

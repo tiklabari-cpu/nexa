@@ -50,7 +50,13 @@ export type MailErrorCode =
   /** The message was handed over but its acceptance was never confirmed — see the module note. */
   | 'unconfirmed'
   /** The message itself cannot be sent (an address that is not one). Nothing was contacted. */
-  | 'invalid_message';
+  | 'invalid_message'
+  /**
+   * A daily mail cap refused it before the carrier was asked (tm 257.14 —
+   * {@link MailCapError}). Nothing was contacted; the same message fits again
+   * after 00:00 UTC.
+   */
+  | 'cap_reached';
 
 /** The SMTP step a failure happened in. */
 export type MailPhase =
@@ -112,6 +118,33 @@ export class TransientMailError extends MailDeliveryError {
 /** Must not be sent again — refused for good, or possibly already delivered (`unconfirmed`). */
 export class PermanentMailError extends MailDeliveryError {
   readonly retryable = false;
+}
+
+/** Which daily cap refused a message (tm 257.14 · `services/mail/mail-caps.ts`). */
+export type MailCapScope = 'recipient' | 'workspace' | 'external' | 'global';
+
+/**
+ * A daily mail cap refused the message (tm 257.14). Raised by the capped
+ * mailer before the carrier is reached, so every caller meets it where it
+ * already meets a carrier failure: `deliver` reports it as `failed`.
+ *
+ * Not retryable in this sense of the word — the carrier must not retry it —
+ * and not a carrier fault: `scope` names whose allowance was used up, which
+ * is the one thing a caller that reacts to it (an invitation, a scheduled
+ * report, the SSO challenge) needs to know.
+ */
+export class MailCapError extends MailDeliveryError {
+  readonly retryable = false;
+  readonly scope: MailCapScope;
+
+  constructor(scope: MailCapScope) {
+    super({ code: 'cap_reached', phase: 'compose' });
+    this.scope = scope;
+  }
+}
+
+export function isMailCapError(error: unknown): error is MailCapError {
+  return error instanceof MailCapError;
 }
 
 export function isMailDeliveryError(error: unknown): error is MailDeliveryError {

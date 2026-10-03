@@ -45,6 +45,7 @@ const MESSAGE: Message = {
   to: TO,
   subject: 'Reset your password',
   body: 'Follow this link within the hour:\nhttps://app.example.test/reset-password?token=Zq81-secret-body-token',
+  licenseId: null,
   kind: 'password_reset',
 };
 

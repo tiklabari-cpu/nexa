@@ -35,9 +35,9 @@ import { PrismaClient } from '@prisma/client';
 import type { ScheduledExportFrequency } from '@siyahtus/types';
 import { parseEnv } from '../../config/env.js';
 import { type TenantContext, withTenant } from '../../lib/tenant.js';
-import { createMailer } from '../mail/mailer.js';
+import { createJobMailer } from '../mail/mail-caps.js';
 import { periodFor } from './scheduled-report-period.js';
-import { ScheduledReportSweeper } from './scheduled-report-sweeper.js';
+import { ScheduledReportSweeper, isDeferredRun } from './scheduled-report-sweeper.js';
 
 interface TenantRow {
   license_id: bigint;
@@ -106,11 +106,12 @@ async function previewDefinition(
   const existing = await withTenant(db, context, (tx) =>
     tx.scheduledReportRun.findUnique({
       where: { scheduledReportId_periodKey: { scheduledReportId: definition.id, periodKey } },
-      select: { id: true },
+      select: { status: true, recipientCount: true, error: true },
     }),
   );
 
-  return { ...base, periodKey, alreadyClaimed: existing !== null };
+  // A run the daily mail cap deferred is taken back by `--apply` (tm 257.14).
+  return { ...base, periodKey, alreadyClaimed: existing !== null && !isDeferredRun(existing) };
 }
 
 async function preview(db: PrismaClient, now: Date): Promise<PreviewReport> {
@@ -185,14 +186,17 @@ async function main(): Promise<void> {
 
     const report = await new ScheduledReportSweeper(
       db,
-      createMailer(env.MAIL_PROVIDER, env.mail),
+      // Behind the daily mail caps (tm 257.14); a capped report keeps its
+      // period for the next run.
+      createJobMailer(env, db),
       readDb ?? db,
     ).run({ now });
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
     const { totals } = report;
     process.stderr.write(
       `scheduled-reports applied: ${totals.delivered} delivered, ${totals.skipped} skipped, ` +
-        `${totals.failed} failed across ${totals.tenants} tenant(s)\n`,
+        `${totals.failed} failed, ${totals.deferred} deferred to the next run ` +
+        `across ${totals.tenants} tenant(s)\n`,
     );
   } finally {
     await db.$disconnect();

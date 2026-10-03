@@ -33,6 +33,7 @@ import { Modal } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDateTime } from '../../lib/format.js';
+import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 export const SANDBOX_QUERY_KEY = ['settings', 'sandbox'];
@@ -131,9 +132,13 @@ function SandboxCard({
   );
 }
 
-function entitlementMessage(t: TFunction, error: unknown): string {
+function entitlementMessage(
+  t: TFunction,
+  entitlementNote: (key: string) => string,
+  error: unknown,
+): string {
   if (error instanceof ApiClientError && error.details?.['entitlement'] === 'sandbox') {
-    return t('settings.sandbox.entitlementNote');
+    return entitlementNote('settings.sandbox.entitlementNote');
   }
   return t(errorMessageKey(error));
 }
@@ -156,6 +161,7 @@ function SandboxBody({
   onRequestReset: () => void;
 }): ReactElement {
   const t = useTranslate();
+  const entitlementNote = useEntitlementNote();
 
   if (view.is_sandbox) {
     return (
@@ -186,7 +192,9 @@ function SandboxBody({
         <div className="flex items-center gap-2 text-sm font-medium">
           <StatusDot tone="neutral" label={t('settings.sandbox.notAvailable')} />
         </div>
-        <p className="text-2xs text-content-tertiary">{t('settings.sandbox.entitlementNote')}</p>
+        <p className="text-2xs text-content-tertiary">
+          {entitlementNote('settings.sandbox.entitlementNote')}
+        </p>
       </div>
     );
   }
@@ -227,7 +235,7 @@ function SandboxBody({
           </button>
           {createError !== null && (
             <p role="alert" className="text-2xs text-danger">
-              {entitlementMessage(t, createError)}
+              {entitlementMessage(t, entitlementNote, createError)}
             </p>
           )}
         </div>

@@ -35,7 +35,22 @@ declare module 'fastify' {
   }
 }
 
-async function licenseGatePlugin(app: FastifyInstance): Promise<void> {
+export interface LicenseGateOptions {
+  /**
+   * `PILOT_MODE` (tm 257.15). Nothing can be bought in the public pilot, so the
+   * refusal says why in a word the panel can act on — `details.reason:
+   * 'pilot_trial_ended'` — and stops telling the caller to subscribe. Omitted,
+   * the refusal is the one every other deployment has always sent.
+   */
+  pilotMode?: boolean;
+}
+
+async function licenseGatePlugin(
+  app: FastifyInstance,
+  options: LicenseGateOptions = {},
+): Promise<void> {
+  const { pilotMode = false } = options;
+
   app.addHook('preHandler', async (request: FastifyRequest) => {
     const principal = request.principal;
     if (!principal) return;
@@ -51,8 +66,14 @@ async function licenseGatePlugin(app: FastifyInstance): Promise<void> {
     if (access === 'read_only') {
       throw new ApiError(
         'license_expired',
-        'This workspace is read-only. Your data is intact and still readable — subscribe to start new conversations.',
-        { details: { access: 'read_only' } },
+        pilotMode
+          ? 'This workspace is read-only. Your data is intact and still readable — the pilot trial has ended; contact the pilot operator to continue.'
+          : 'This workspace is read-only. Your data is intact and still readable — subscribe to start new conversations.',
+        {
+          details: pilotMode
+            ? { access: 'read_only', reason: 'pilot_trial_ended' }
+            : { access: 'read_only' },
+        },
       );
     }
   });

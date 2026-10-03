@@ -6,6 +6,18 @@ export const shell: Messages = {
   'shell.modules': 'Modules',
   'shell.subscribe': 'Subscribe',
   'shell.trial.ended': 'Your trial has ended — subscribe to start new conversations.',
+  // The public pilot's strip (tm 257.15): nothing is on sale there, so the way on
+  // is the contact address. `{email}` is made a mailto link by the strip itself.
+  'shell.pilotTrial.remaining.one':
+    'Your pilot trial ends in {count} day — to continue, contact {email}.',
+  'shell.pilotTrial.remaining.other':
+    'Your pilot trial ends in {count} days — to continue, contact {email}.',
+  'shell.pilotTrial.ended': 'Your pilot trial has ended — to continue, contact {email}.',
+  // A pilot deployment with no contact address configured (production refuses to
+  // boot that way; a development build can): the same facts, without the address.
+  'shell.pilotTrial.noContact.remaining.one': 'Your pilot trial ends in {count} day.',
+  'shell.pilotTrial.noContact.remaining.other': 'Your pilot trial ends in {count} days.',
+  'shell.pilotTrial.noContact.ended': 'Your pilot trial has ended.',
   // Plural forms, selected by `Intl.PluralRules` from the `count` param. English
   // needs both; see the Turkish file for why it still carries two.
   'shell.trial.remaining.one': '{count} day left in your trial.',

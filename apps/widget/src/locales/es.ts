@@ -11,6 +11,7 @@ export const es: Record<string, string> = {
   'error.connect': 'El chat no está disponible en este momento. Inténtalo de nuevo en breve.',
   'error.upload': 'No se pudo adjuntar ese archivo.',
   'error.send': 'Mensaje no enviado. Comprueba tu conexión e inténtalo de nuevo.',
+  'error.readOnly': 'Esta conversación no puede recibir mensajes nuevos en este momento.',
   'attach.label': 'Adjuntar un archivo',
   'attach.remove': 'Quitar adjunto',
   'emoji.trigger': 'Insertar emoji',

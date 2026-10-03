@@ -12,6 +12,7 @@ export const fr: Record<string, string> = {
   'error.connect': 'Le chat est actuellement indisponible. Merci de réessayer sous peu.',
   'error.upload': "Ce fichier n'a pas pu être joint.",
   'error.send': 'Message non envoyé. Vérifiez votre connexion et réessayez.',
+  'error.readOnly': 'Cette conversation ne peut pas recevoir de nouveaux messages pour le moment.',
   'attach.label': 'Joindre un fichier',
   'attach.remove': 'Supprimer la pièce jointe',
   'emoji.trigger': 'Insérer un emoji',

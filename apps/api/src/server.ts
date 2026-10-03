@@ -431,7 +431,7 @@ export async function buildServer({
   // After `audit`, which it writes through, and before the routes that declare
   // `aiInference` (NFR-C4 · C4-e).
   await app.register(aiResidency, { env });
-  await app.register(licenseGate);
+  await app.register(licenseGate, { pilotMode: env.PILOT_MODE });
   // After the licence gate, so an expired trial is told it is read-only rather
   // than told what its plan does not include — the first is the reason it
   // cannot write, and the second would be a confusing answer to it.

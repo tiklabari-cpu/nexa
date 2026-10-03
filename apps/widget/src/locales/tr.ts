@@ -11,6 +11,7 @@ export const tr: Record<string, string> = {
   'error.connect': 'Sohbet şu anda kullanılamıyor. Lütfen birazdan tekrar deneyin.',
   'error.upload': 'Bu dosya eklenemedi.',
   'error.send': 'Mesaj gönderilemedi. Bağlantınızı kontrol edip tekrar deneyin.',
+  'error.readOnly': 'Bu görüşme şu anda yeni mesaj alamıyor.',
   'attach.label': 'Dosya ekle',
   'attach.remove': 'Eki kaldır',
   'emoji.trigger': 'Emoji ekle',

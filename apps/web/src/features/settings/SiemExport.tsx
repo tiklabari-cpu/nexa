@@ -29,6 +29,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatCount, formatDateTime } from '../../lib/format.js';
+import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import { SIEM_EXPORT_TARGETS, type SiemExportTarget } from '@siyahtus/types';
 
@@ -63,6 +64,7 @@ export function SiemExport({ canEdit }: { canEdit: boolean }): ReactElement | nu
 
 function SiemExportCard({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const entitlementNote = useEntitlementNote();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -151,7 +153,7 @@ function SiemExportCard({ canEdit }: { canEdit: boolean }): ReactElement {
                   <p role="alert" className="w-full text-2xs text-danger">
                     {save.error instanceof ApiClientError &&
                     save.error.details?.['entitlement'] === 'siem_export'
-                      ? t('settings.siemExport.entitlementError')
+                      ? entitlementNote('settings.siemExport.entitlementError')
                       : t(errorMessageKey(save.error))}
                   </p>
                 )}

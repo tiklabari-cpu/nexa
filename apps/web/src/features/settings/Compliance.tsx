@@ -23,6 +23,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { formatDate } from '../../lib/format.js';
+import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 import type { Region } from '@siyahtus/types';
 
@@ -67,6 +68,7 @@ function ComplianceCard({
   restricted: boolean;
 }): ReactElement {
   const t = useTranslate();
+  const entitlementNote = useEntitlementNote();
   const api = useApiClient();
   const queryClient = useQueryClient();
 
@@ -146,7 +148,7 @@ function ComplianceCard({
                       <p role="alert" className="text-2xs text-danger">
                         {accept.error instanceof ApiClientError &&
                         accept.error.details?.['entitlement'] === 'hipaa'
-                          ? t('settings.compliance.entitlementError')
+                          ? entitlementNote('settings.compliance.entitlementError')
                           : t(errorMessageKey(accept.error))}
                       </p>
                     )}

@@ -6,6 +6,14 @@ export const shell: Messages = {
   'shell.modules': 'Modüller',
   'shell.subscribe': 'Abone Ol',
   'shell.trial.ended': 'Deneme süreniz sona erdi — yeni sohbetler başlatmak için abone olun.',
+  'shell.pilotTrial.remaining.one':
+    'Pilot denemeniz {count} gün sonra bitiyor — devam için {email}.',
+  'shell.pilotTrial.remaining.other':
+    'Pilot denemeniz {count} gün sonra bitiyor — devam için {email}.',
+  'shell.pilotTrial.ended': 'Pilot denemeniz bitti — devam için {email} ile iletişime geçin.',
+  'shell.pilotTrial.noContact.remaining.one': 'Pilot denemeniz {count} gün sonra bitiyor.',
+  'shell.pilotTrial.noContact.remaining.other': 'Pilot denemeniz {count} gün sonra bitiyor.',
+  'shell.pilotTrial.noContact.ended': 'Pilot denemeniz bitti.',
   // Turkish does not inflect a noun after a numeral, so both plural categories
   // read the same. Both are still written out: `Intl.PluralRules('tr')` does
   // return `one` for 1, and a locale that answered only `other` would quietly

@@ -79,4 +79,10 @@ export const common: Messages = {
     "Today's email allowance is used up, so the message was not sent; it renews at midnight UTC.",
   'common.limits.signupRate':
     'Too many workspaces were created from this network recently. Try again in an hour.',
+  // tm 257.15: the public pilot's read-only 402, chosen by `errorMessageKey` from
+  // `details.reason`. Outside `common.errors.*` (whose keys are exactly the error
+  // types). It carries no address — these calls take no parameters — so it points
+  // at the strip that does.
+  'common.pilot.licenseExpired':
+    'Your pilot trial has ended — the contact address is in the bar at the top.',
 };

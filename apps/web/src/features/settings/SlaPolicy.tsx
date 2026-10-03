@@ -24,6 +24,7 @@ import { StatusDot } from '../../components/StatusDot.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient } from '../../lib/auth-store.js';
 import { FieldError, useForm, type Validator } from '../../lib/form.js';
+import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate, type TFunction } from '../../lib/i18n.js';
 
 interface SlaPolicyView {
@@ -104,6 +105,7 @@ function SlaPolicyForm({
   onSaved: (data: SlaPolicyView) => void;
 }): ReactElement {
   const t = useTranslate();
+  const entitlementNote = useEntitlementNote();
   const api = useApiClient();
 
   const save = useMutation({
@@ -141,7 +143,7 @@ function SlaPolicyForm({
       } catch (error) {
         setSubmitError(
           error instanceof ApiClientError && error.details?.['entitlement'] === 'sla'
-            ? t('settings.sla.entitlementError')
+            ? entitlementNote('settings.sla.entitlementError')
             : t(errorMessageKey(error)),
         );
       }

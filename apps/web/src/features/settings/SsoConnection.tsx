@@ -45,6 +45,7 @@ import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
 import { FieldError, required, useForm } from '../../lib/form.js';
 import { formatDate } from '../../lib/format.js';
+import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { optimisticCacheUpdate } from '../../lib/optimistic.js';
 
@@ -443,6 +444,7 @@ function SsoConnections({
   restricted: boolean;
 }): ReactElement {
   const t = useTranslate();
+  const entitlementNote = useEntitlementNote();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const [allowIdpInitiated, setAllowIdpInitiated] = useState(false);
@@ -527,7 +529,7 @@ function SsoConnections({
       } catch (error) {
         setSubmitError(
           error instanceof ApiClientError && error.details?.['entitlement'] === 'sso'
-            ? t('settings.sso.entitlementError')
+            ? entitlementNote('settings.sso.entitlementError')
             : t(errorMessageKey(error)),
         );
       }

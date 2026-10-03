@@ -376,6 +376,22 @@ me:
                     Agent principals only. Whether the workspace has finished (or
                     skipped) first-run setup — the shell gates the onboarding
                     wizard on this without a second request (FR-MOD-00.4).
+                license:
+                  type: object
+                  required: [access, trial_ends_at]
+                  description: |
+                    Agent principals only, **every role** (tm 257.15). What the
+                    workspace may do right now — the same `access` that
+                    `GET /billing/subscription` reports, but readable without a
+                    billing scope, so the shell can tell an agent that the trial
+                    is running out or over (FR-MOD-01.1.6). Read once with the
+                    profile, so a trial that ends mid-session is learned from
+                    the `402 license_expired` the next write gets.
+                  properties:
+                    access:
+                      type: string
+                      enum: [trialing, active, read_only]
+                    trial_ends_at: { type: string, format: date-time, nullable: true }
                 notification_preferences:
                   allOf:
                     - $ref: "../openapi.yaml#/components/schemas/NotificationPreferences"

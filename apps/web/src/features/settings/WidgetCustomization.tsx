@@ -25,6 +25,7 @@ import {
 import { Card, ErrorNotice, Section } from '../../components/Page.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useBrand } from '../../lib/auth-store.js';
+import { useEntitlementNote } from '../../lib/entitlement-note.js';
 import { useTranslate } from '../../lib/i18n.js';
 
 interface WidgetSettings extends WidgetAppearance {
@@ -36,6 +37,7 @@ type Edits = Partial<WidgetAppearance>;
 
 export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactElement {
   const t = useTranslate();
+  const entitlementNote = useEntitlementNote();
   const api = useApiClient();
   const queryClient = useQueryClient();
   const { brandId } = useBrand();
@@ -185,7 +187,7 @@ export function WidgetCustomization({ canEdit }: { canEdit: boolean }): ReactEle
                           Sandbox.tsx and SlaPolicy.tsx already name theirs. */}
                       {save.error instanceof ApiClientError &&
                       save.error.details?.['entitlement'] === 'white_label'
-                        ? t('settings.widgetCustomization.entitlementError')
+                        ? entitlementNote('settings.widgetCustomization.entitlementError')
                         : t(errorMessageKey(save.error))}
                     </p>
                   )}

@@ -85,6 +85,11 @@ export default async function appRoutes(
     '/settings/apps',
     { config: { scopes: ['access_rules:ro', 'access_rules:rw'] } },
     async (request, reply) => {
+      // The public pilot (tm 257.18) offers no marketplace: its catalogue is
+      // mock OAuth and unused API keys. The read is not refused — Developers →
+      // Webhook subscriptions lists `?category=productivity` for its app
+      // picker — it just has nothing to show.
+      if (options.env.PILOT_MODE) return reply.send({ items: [], total: 0 });
       const query = parse(listQuery, request.query);
       const tenant = request.tenant();
 
@@ -110,7 +115,7 @@ export default async function appRoutes(
 
   app.post<{ Params: { appId: string } }>(
     '/settings/apps/:appId/oauth/start',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], pilotRefused: true } },
     async (request, reply) => {
       const tenant = request.tenant();
       // Pure — no tenant transaction needed to mint a signed state.
@@ -120,7 +125,7 @@ export default async function appRoutes(
 
   app.post<{ Params: { appId: string } }>(
     '/settings/apps/:appId/oauth/callback',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], pilotRefused: true } },
     async (request, reply) => {
       const body = parse(callbackBody, request.body);
       const tenant = request.tenant();
@@ -144,7 +149,7 @@ export default async function appRoutes(
 
   app.post<{ Params: { appId: string } }>(
     '/settings/apps/:appId/connect',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], pilotRefused: true } },
     async (request, reply) => {
       const body = parse(connectBody, request.body);
       const tenant = request.tenant();
@@ -168,7 +173,7 @@ export default async function appRoutes(
 
   app.delete<{ Params: { appId: string } }>(
     '/settings/apps/:appId',
-    { config: { scopes: ['access_rules:rw'] } },
+    { config: { scopes: ['access_rules:rw'], pilotRefused: true } },
     async (request, reply) => {
       const tenant = request.tenant();
       const appId = request.params.appId;
@@ -196,6 +201,9 @@ export default async function appRoutes(
     '/chats/:chatId/apps',
     { config: { scopes: ['chats--all:ro', 'chats--access:ro'] } },
     async (request, reply) => {
+      // Nothing is connected in the pilot, and the Details panel tolerates an
+      // empty list (tm 257.18) — the stub data is not shown about a real customer.
+      if (options.env.PILOT_MODE) return reply.send({ items: [] });
       const tenant = request.tenant();
       const items = await request.withTenant((tx) =>
         apps.chatData(tx, tenant, request.params.chatId),

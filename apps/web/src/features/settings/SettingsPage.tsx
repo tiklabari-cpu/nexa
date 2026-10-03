@@ -22,6 +22,7 @@ import { Navigate, useLocation, useParams } from 'react-router-dom';
 import { hasAnyScope } from '@siyahtus/types';
 import { Page } from '../../components/Page.js';
 import { useAuth } from '../../lib/auth-store.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { useTranslate } from '../../lib/i18n.js';
 import { Brands } from './Brands.js';
 import { CompanyDetails } from './CompanyDetails.js';
@@ -165,11 +166,17 @@ export function SettingsIndex(): ReactElement {
 export function SettingsPage(): ReactElement {
   const t = useTranslate();
   const scopes = useAuth((s) => s.agent?.scopes ?? []);
+  const { pilot_mode: pilotMode } = useDeployment();
   const { section } = useParams();
   const entry = findSection(section);
   const render = entry ? SECTION_ELEMENTS[entry.slug] : undefined;
 
-  if (!entry || !render || !hasAnyScope(scopes, entry.scope ?? [])) {
+  if (
+    !entry ||
+    !render ||
+    !hasAnyScope(scopes, entry.scope ?? []) ||
+    (pilotMode && entry.pilotHidden)
+  ) {
     return <Navigate to="/app/settings" replace />;
   }
 

@@ -60,6 +60,11 @@ seedDemo:
       visibly wrong data in another workspace, which is what the isolation test
       guards against. Idempotent: once the demo exists, a second call is a no-op
       and reports `seeded: false` with zero counts.
+
+      In the public pilot (`pilot_mode` on `GET /deployment`) this is refused for
+      every caller with `403 not_allowed` and `error.details.reason:
+      "pilot_mode"`, before anything is written: invented rows do not belong in a
+      real workspace.
     responses:
       "200":
         description: Sample data laid down (or already present)

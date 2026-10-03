@@ -221,7 +221,23 @@ describe('the shell in the public pilot (tm 257.2)', () => {
     expect(within(palette).queryByRole('option', { name: /Billing/ })).toBeNull();
   });
 
+  it('leaves the marketplace link out of the app menu, and keeps the menu (tm 257.18)', async () => {
+    deployment.current = PILOT;
+    const user = userEvent.setup();
+    renderShell();
+    await user.click(screen.getByRole('button', { name: 'App menu' }));
+    expect(screen.queryByRole('link', { name: 'Apps' })).toBeNull();
+  });
+
   describe('on an ordinary deployment', () => {
+    it('links the app menu to the marketplace (tm 257.18)', async () => {
+      deployment.current = ORDINARY;
+      const user = userEvent.setup();
+      renderShell();
+      await user.click(screen.getByRole('button', { name: 'App menu' }));
+      expect(screen.getByRole('link', { name: 'Apps' })).toHaveAttribute('href', '/app/apps');
+    });
+
     it('shows Billing in the rail', () => {
       deployment.current = ORDINARY;
       renderShell();

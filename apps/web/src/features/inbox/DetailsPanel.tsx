@@ -4,6 +4,7 @@ import { StatusDot, type StatusTone } from '../../components/StatusDot.js';
 import { Banner, Dropdown, Modal, Panel, PanelSection } from '../../components/ui/index.js';
 import { ApiClientError, errorMessageKey } from '../../lib/api-client.js';
 import { useApiClient, useAuth } from '../../lib/auth-store.js';
+import { useDeployment } from '../../lib/deployment.js';
 import { getLocale, useTranslate } from '../../lib/i18n.js';
 import { formatDateTime } from '../../lib/format.js';
 import { useChatAction } from './useInbox.js';
@@ -117,10 +118,15 @@ export function DetailsPanel({
   // Data from connected marketplace apps for this customer (FR-MOD-09.1). The
   // query failing (an agent without chat read scope, say) simply leaves the
   // section empty rather than blocking the panel.
+  //
+  // The public pilot has no marketplace (tm 257.18): the section is not drawn
+  // and the read is not made — the API answers it with an empty list anyway.
+  const { pilot_mode: pilotMode } = useDeployment();
   const apps = useQuery({
     queryKey: ['chat-apps', chatId],
     queryFn: () => api.get<{ items: AppChatData[] }>(`/chats/${chatId}/apps`),
     staleTime: 30_000,
+    enabled: !pilotMode,
   });
   const connectedApps = apps.data?.items ?? [];
 
@@ -270,27 +276,29 @@ export function DetailsPanel({
         {/* Data pulled from connected marketplace apps (FR-MOD-09.1): a CRM's
           lifecycle stage, a store's order count — the context an integration is
           connected to provide. Empty until an app is connected in Settings. */}
-        <PanelSection title={t('inbox.details.section.apps')}>
-          {connectedApps.length === 0 ? (
-            <p className="text-xs text-content-tertiary">{t('inbox.details.apps.empty')}</p>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {connectedApps.map((app) => (
-                <div key={app.app_id} data-testid={`chat-app-${app.app_id}`}>
-                  <div className="mb-1 flex items-center gap-1.5 text-2xs font-medium text-content-secondary">
-                    <span aria-hidden="true">{app.icon}</span>
-                    <span className="truncate">{app.data_label}</span>
+        {!pilotMode && (
+          <PanelSection title={t('inbox.details.section.apps')}>
+            {connectedApps.length === 0 ? (
+              <p className="text-xs text-content-tertiary">{t('inbox.details.apps.empty')}</p>
+            ) : (
+              <div className="flex flex-col gap-3">
+                {connectedApps.map((app) => (
+                  <div key={app.app_id} data-testid={`chat-app-${app.app_id}`}>
+                    <div className="mb-1 flex items-center gap-1.5 text-2xs font-medium text-content-secondary">
+                      <span aria-hidden="true">{app.icon}</span>
+                      <span className="truncate">{app.data_label}</span>
+                    </div>
+                    {app.fields.map((field) => (
+                      <Row key={field.label} label={field.label}>
+                        <span className="text-xs">{field.value}</span>
+                      </Row>
+                    ))}
                   </div>
-                  {app.fields.map((field) => (
-                    <Row key={field.label} label={field.label}>
-                      <span className="text-xs">{field.value}</span>
-                    </Row>
-                  ))}
-                </div>
-              ))}
-            </div>
-          )}
-        </PanelSection>
+                ))}
+              </div>
+            )}
+          </PanelSection>
+        )}
 
         {/* Where this visitor has been and on what — the context an agent reads
           before replying (FR-MOD-02.4). Both sections stay visible with an

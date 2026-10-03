@@ -375,6 +375,22 @@ describe('WebhookSubscriptions — automation card (FR-MOD-09.4)', () => {
    * comment cannot hold it. Adding a 101st `productivity` card turns this red
    * instead of silently truncating the dropdown.
    */
+  /**
+   * The public pilot has no marketplace (tm 257.18): `GET /settings/apps` answers
+   * 200 with nothing, whatever the category. A subscription a Zapier card owned
+   * before the flag was set must still be listed — by its id — and the form just
+   * has no app to offer. Nothing on the screen may turn into an error.
+   */
+  it('lists a card-owned subscription and offers no app when the apps read is empty (tm 257.18)', async () => {
+    mockList([{ ...registeredWebhook, app_id: 'zapier' }], []);
+    renderComponent('webhooks');
+
+    expect(await screen.findByText('via zapier')).toBeInTheDocument();
+    expect(screen.getByLabelText('URL')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Automation app')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
   it('asks for the whole productivity section in one page (NFR-P5)', () => {
     const productivity = APP_CATALOG.filter((entry) => entry.category === 'productivity');
     expect(productivity.length).toBeGreaterThan(0);

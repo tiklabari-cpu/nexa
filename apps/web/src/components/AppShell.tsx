@@ -378,6 +378,8 @@ function useNavBadges(): Partial<Record<string, { count: number; ariaLabel: stri
  */
 function AppMenu(): ReactElement {
   const t = useTranslate();
+  // The pilot has no marketplace to link to (tm 257.18).
+  const { pilot_mode: pilotMode } = useDeployment();
 
   return (
     <Dropdown
@@ -390,21 +392,23 @@ function AppMenu(): ReactElement {
       {({ close }) => (
         <div className="flex flex-col gap-1">
           <BrandSwitcher />
-          <Link
-            to="/app/apps"
-            className="block rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
-            // Same dirty-guard courtesy as `RailButton` (FR-MOD-06.2.1) — this
-            // is another way out of the module holding unsaved work.
-            onClick={(event) => {
-              if (!confirmLeave()) {
-                event.preventDefault();
-                return;
-              }
-              close();
-            }}
-          >
-            {t('shell.menu.apps')}
-          </Link>
+          {!pilotMode && (
+            <Link
+              to="/app/apps"
+              className="block rounded-md px-2 py-1.5 text-sm hover:bg-surface-2"
+              // Same dirty-guard courtesy as `RailButton` (FR-MOD-06.2.1) — this
+              // is another way out of the module holding unsaved work.
+              onClick={(event) => {
+                if (!confirmLeave()) {
+                  event.preventDefault();
+                  return;
+                }
+                close();
+              }}
+            >
+              {t('shell.menu.apps')}
+            </Link>
+          )}
         </div>
       )}
     </Dropdown>

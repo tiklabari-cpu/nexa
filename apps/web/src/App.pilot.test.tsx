@@ -22,6 +22,9 @@ vi.mock('./features/inbox/InboxPage.js', () => ({ InboxPage: () => <p>Inbox modu
 vi.mock('./features/billing/BillingPage.js', () => ({
   BillingPage: () => <p>Billing module</p>,
 }));
+vi.mock('./features/apps/AppsMarketplace.js', () => ({
+  AppsMarketplacePage: () => <p>Apps module</p>,
+}));
 
 function LocationProbe(): React.ReactElement {
   return <output data-testid="location">{useLocation().pathname}</output>;
@@ -53,6 +56,33 @@ beforeEach(() => {
       scopes: [],
       routing_status: 'accepting_chats',
     },
+  });
+});
+
+describe('/app/apps (tm 257.18)', () => {
+  const config = (pilotMode: boolean): DeploymentConfig => ({
+    pilot_mode: pilotMode,
+    contact_email: null,
+    signup_enabled: true,
+    email_verification_required: false,
+    privacy_policy_url: null,
+    terms_url: null,
+    terms_version: null,
+  });
+
+  it('lands in the inbox in the public pilot', async () => {
+    deployment.current = config(true);
+    renderAt('/app/apps');
+    expect(await screen.findByText('Inbox module')).toBeInTheDocument();
+    expect(screen.queryByText('Apps module')).toBeNull();
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/inbox');
+  });
+
+  it('opens the marketplace on an ordinary deployment', async () => {
+    deployment.current = config(false);
+    renderAt('/app/apps');
+    expect(await screen.findByText('Apps module')).toBeInTheDocument();
+    expect(screen.getByTestId('location')).toHaveTextContent('/app/apps');
   });
 });
 

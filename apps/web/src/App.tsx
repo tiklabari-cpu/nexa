@@ -152,7 +152,16 @@ export function App(): ReactElement {
             </SettingsLayout>
           }
         />
-        <Route path="apps" element={<AppsMarketplacePage />} />
+        {/* The marketplace is mock OAuth and unused API keys (tm 257.18): the pilot's
+            Apps address leads to the inbox. */}
+        <Route
+          path="apps"
+          element={
+            <PilotHidden>
+              <AppsMarketplacePage />
+            </PilotHidden>
+          }
+        />
         <Route path="developers" element={<DeveloperPortalPage />} />
       </Route>
       {/* Anything else, including the OAuth callback path, lands in the inbox. */}

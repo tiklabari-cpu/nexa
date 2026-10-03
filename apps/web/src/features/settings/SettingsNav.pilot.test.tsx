@@ -65,7 +65,14 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
     });
     expect(within(nav).queryByText('Billing')).not.toBeInTheDocument();
     expect(within(nav).queryByRole('link', { name: 'Subscription and invoices' })).toBeNull();
-    expect(within(nav).getAllByRole('link')).toHaveLength(SETTINGS_SECTIONS.length - 1);
+    // Billing (257.2) and Integrations (257.18) are the two pilot-hidden doors.
+    expect(within(nav).getAllByRole('link')).toHaveLength(
+      SETTINGS_SECTIONS.filter((s) => !s.pilotHidden).length,
+    );
+    expect(SETTINGS_SECTIONS.filter((s) => s.pilotHidden).map((s) => s.slug)).toStrictEqual([
+      'integrations',
+      'billing',
+    ]);
     expect(within(nav).getByText('Security')).toBeInTheDocument();
   });
 
@@ -93,6 +100,24 @@ describe('Settings navigation in the public pilot (tm 257.2)', () => {
       );
       expect(searchSections(OWNER, query, englishLabel).map((s) => s.slug)).toContain('billing');
     }
+  });
+
+  it('drops the Integrations door to the marketplace, and the words that found it (tm 257.18)', () => {
+    for (const query of ['marketplace', 'zapier']) {
+      expect(searchSections(OWNER, query, englishLabel, true).map((s) => s.slug)).not.toContain(
+        'integrations',
+      );
+      expect(searchSections(OWNER, query, englishLabel).map((s) => s.slug)).toContain(
+        'integrations',
+      );
+    }
+    // The group stays: MCP and personal access tokens are real.
+    expect(visibleGroups(OWNER, true).map((g) => g.key)).toContain('integrations');
+    expect(
+      visibleGroups(OWNER, true)
+        .find((g) => g.key === 'integrations')
+        ?.sections.map((s) => s.slug),
+    ).not.toContain('integrations');
   });
 
   it('leaves the Billing group out of the grouped navigation in the pilot', () => {

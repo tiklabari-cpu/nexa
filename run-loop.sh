@@ -2,7 +2,7 @@
 # =============================================================================
 # SiyahTuş — Otonom Görev Döngüsü (CANLI loglamalı)
 # Her task TEMİZ bir Claude Code penceresinde çalışır; durum Task Master + git'te.
-# Politika: full-otonom (bypassPermissions) | hata → 1 kez temiz pencerede retry
+# Politika: full-otonom (auto) | hata → 1 kez temiz pencerede retry
 #           → yine olmazsa DUR + bildir | efor task etiketine göre otomatik.
 # İZLEME: her pencere terminale canlı akar + tam kayıt .loop-logs/'a yazılır.
 #         Ayrı izleme:  tail -f .loop-logs/task-<id>.jsonl | ./run-loop.sh yok;
@@ -31,7 +31,7 @@ MODEL_SMALL="claude-sonnet-5-5"
 EFFORT_MAX="max"            # opus 'max' desteklemiyorsa: "high"
 EFFORT_XHIGH="xhigh"
 EFFORT_HIGH="high"
-PERM="bypassPermissions"   # tam otonom, prompt YOK. Güvenli alt.: "auto"
+PERM="auto"   # tam otonom, prompt YOK, sınıflandırıcılı (2026-10-03). Eski: "bypassPermissions"
 MAX_TURNS=250
 RUNNER_PROMPT_FILE="TASK-RUNNER-PROMPT.md"
 LOG_DIR=".loop-logs"; mkdir -p "$LOG_DIR"

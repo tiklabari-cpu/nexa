@@ -86,6 +86,10 @@ Unattended bırakmadan önce **ilk 1-2 task'ı izleyerek** çalıştır:
 
 ## Güvenlik (tam otonom — bypassPermissions)
 
+> **2026-10-03'ten beri `run-loop.sh` `PERM="auto"` ile koşar** (aşağıdaki notta anlatılan
+> sınıflandırıcılı mod; tm 257.15'ten itibaren pencereler bu modda kapandı). Bu bölüm
+> `bypassPermissions`'a geri dönüşü anlatmak için duruyor.
+
 Çalışma modu `--permission-mode bypassPermissions`: pencereler hiç izin sormaz (en yüksek
 otonomi, "duruyor" sorunu tümden biter). Bu güvenli, çünkü güvenlik izin-prompt'unda değil,
 şu 4 katmanda:

@@ -302,7 +302,7 @@ stack's `minio` on 9000/9001.
 
 ## Background jobs
 
-`apps/api` runs eight sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
+`apps/api` runs nine sweeps in-process, each on its own timer (`SCHEDULER_ENABLED`,
 default: on outside tests). A Redis lock (`SET NX`, one key per job) keeps two running
 instances from double-running the same pass; `GET /health` reports each job's interval,
 enabled flag, and last run's time/status.
@@ -317,15 +317,28 @@ enabled flag, and last run's time/status.
 | `webhook_redelivery` | 60 s             | Retries failed outbound webhooks (08.8.4 · NFR-S7)                               |
 | `knowledge_refresh`  | 1 h              | Re-crawls a `website` knowledge source past its freshness window (FR-MOD-06.3.3) |
 | `invoice_close`      | 1 h              | Freezes a closed billing period into a statement (FR-MOD-10.3)                   |
+| `unverified_signups` | 1 h              | Deletes an expired sign-up nobody verified, with its empty workspace (tm 257.19) |
 
 Override an interval with `SCHEDULE_<JOB>_MS`, and spread instances from one deploy so
 they don't all tick together with `SCHEDULE_JITTER_PCT` (default 10%) — see
 `.env.example` for every key. To turn a background sweep off entirely and drive it from
 outside the app instead (a host cron, a managed job runner), set `SCHEDULER_ENABLED=false`;
-every job but one keeps its own `pnpm --filter @siyahtus/api <job>:run` CLI script, which is
+every job but two keeps its own `pnpm --filter @siyahtus/api <job>:run` CLI script, which is
 what that outside trigger calls. Webhook redelivery has no CLI equivalent — it is not a pass
 an operator would ever want to force, and a hand-run one would race the scheduled one for the
-same rows.
+same rows. Nor has `unverified_signups`: it only matters on a deployment that verifies
+sign-ups, which is one with the scheduler on.
+
+`unverified_signups` (tm 257.19) runs only while `SIGNUP_EMAIL_VERIFICATION=true` — off, an
+unverified account signs in like any other, and `/health` lists the job as `disabled`. On, it
+deletes an account nobody verified once it is `UNVERIFIED_SIGNUP_TTL_HOURS` old (default 72),
+together with the workspace it signed up with — but only a workspace nobody has reached: no
+chat, no ticket, no other member, no open invitation into it or addressed to the account, and
+no verification or password-reset link that still works. Everything else about such an
+account keeps it. The deletion runs in the database (`purge_unverified_signups`), locking each
+candidate and checking it again first, so a verification arriving at the same moment wins.
+Nothing is written to the audit trail — the workspace's trail goes with it — so the job logs
+`signup.unverified_purged` with the count, and nothing that identifies anyone.
 
 `knowledge_refresh` (FR-MOD-06.3.3) is the freshness sweep: a `website` knowledge source opts
 in with a `refresh_after_days` window (set on the source, in the Playbook UI or via

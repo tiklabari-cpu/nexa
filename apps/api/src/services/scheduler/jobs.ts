@@ -25,6 +25,14 @@
  * those: `invoice-close-run.ts` takes no `--apply` either, because freezing a
  * closed period moves no money and cannot happen twice. `webhook_redelivery`
  * has no CLI script at all (see README.md).
+ *
+ * `unverified_signups` (tm 257.19) is the second job that can be registered
+ * switched off, and the second that deletes. It runs only while
+ * `SIGNUP_EMAIL_VERIFICATION` is on: off, `/auth/authorize` reads no gate and
+ * an unverified account signs in like any other, so deleting it for not having
+ * verified would delete a working account. What may go, and the locking that
+ * keeps a concurrent verification safe, live in its database function; it has
+ * no CLI script either.
  */
 import type { PrismaClient } from '@prisma/client';
 import type { Env } from '../../config/env.js';
@@ -34,6 +42,7 @@ import { KnowledgeService } from '../ai/knowledge-service.js';
 import { createMeteredEmbeddings } from '../ai/metered-embeddings.js';
 import { SiemSink } from '../audit/siem-sink.js';
 import { createSiemTarget } from '../audit/siem-target.js';
+import { UnverifiedSignupSweeper } from '../auth/unverified-signup-sweep.js';
 import { InvoiceCloseSweeper } from '../billing/invoice-close-sweep.js';
 import { ChatService } from '../chat/chat-service.js';
 import type { WorkspaceEventDispatcher } from '../webhooks/workspace-events.js';
@@ -268,6 +277,29 @@ export function buildSchedulerJobs({
             skipped: report.totals.skipped,
           },
         };
+      },
+    },
+    {
+      // Deletes a sign-up nobody verified once it has expired with its
+      // workspace still empty (tm 257.19). Off with the flag — see the
+      // header — and registered either way, so `/health` says `disabled`.
+      name: 'unverified_signups',
+      intervalMs: intervals.unverified_signups,
+      enabled: env.SIGNUP_EMAIL_VERIFICATION,
+      async run(context) {
+        const report = await new UnverifiedSignupSweeper(db, {
+          ttlHours: env.UNVERIFIED_SIGNUP_TTL_HOURS,
+        }).run({ signal: context.signal });
+        if (report.totals.purged > 0) {
+          // The purged workspaces' audit trail went with them, so this line is
+          // the record that they existed. A count and nothing else: no
+          // address, name or id.
+          context.logger.info(
+            { event: 'signup.unverified_purged', count: report.totals.purged },
+            'expired unverified sign-ups purged',
+          );
+        }
+        return { counts: { purged: report.totals.purged, batches: report.totals.batches } };
       },
     },
   ];

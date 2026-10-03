@@ -7,7 +7,8 @@
  * `test/integration/{chat-timeout,sla,siem-sink,scheduled-reports-sweep,
  * retention,webhook-redelivery}.test.ts`. This suite is only about what this module adds on top
  * of that: does every job get the interval its own `SCHEDULE_<JOB>_MS` names,
- * does `retention` alone answer to `RETENTION_ENABLED`, and does calling
+ * do `retention` and `unverified_signups` alone answer to their switches
+ * (`RETENTION_ENABLED`, `SIGNUP_EMAIL_VERIFICATION`), and does calling
  * `run()` the way the scheduler will actually resolve — against a real
  * database rather than a stub, since the sweepers underneath issue real SQL
  * (`retention_list_tenants()` among them) that a stub would prove nothing
@@ -53,6 +54,7 @@ describe('buildSchedulerJobs', () => {
       'webhook_redelivery',
       'knowledge_refresh',
       'invoice_close',
+      'unverified_signups',
     ]);
     // A name declared but never registered is a job somebody forgot to wire,
     // and `/health` would simply not mention it.
@@ -69,6 +71,7 @@ describe('buildSchedulerJobs', () => {
       SCHEDULE_WEBHOOK_REDELIVERY_MS: '66000',
       SCHEDULE_KNOWLEDGE_REFRESH_MS: '77000',
       SCHEDULE_INVOICE_CLOSE_MS: '88000',
+      SCHEDULE_UNVERIFIED_SIGNUPS_MS: '99000',
     });
     const jobs = buildSchedulerJobs({ db, env, mailer: new NullMailer() });
     const intervalOf = (name: string): number | undefined =>
@@ -82,22 +85,37 @@ describe('buildSchedulerJobs', () => {
     expect(intervalOf('webhook_redelivery')).toBe(66_000);
     expect(intervalOf('knowledge_refresh')).toBe(77_000);
     expect(intervalOf('invoice_close')).toBe(88_000);
+    expect(intervalOf('unverified_signups')).toBe(99_000);
   });
 
-  it('registers retention disabled unless RETENTION_ENABLED is set — no other job is gated', () => {
+  it('registers retention and the unverified sign-up sweep disabled unless their switches are set — no other job is gated', () => {
+    const GATED = ['retention', 'unverified_signups'];
     const off = buildSchedulerJobs({ db, env: testEnv(), mailer: new NullMailer() });
-    expect(off.find((job) => job.name === 'retention')?.enabled).toBe(false);
+    for (const name of GATED)
+      expect(off.find((job) => job.name === name)?.enabled, name).toBe(false);
     for (const job of off) {
-      if (job.name === 'retention') continue;
-      expect(job.enabled).not.toBe(false);
+      if (GATED.includes(job.name)) continue;
+      expect(job.enabled, job.name).not.toBe(false);
     }
 
-    const on = buildSchedulerJobs({
+    // Each switch turns on its own job and nothing else.
+    const retention = buildSchedulerJobs({
       db,
       env: testEnv({ RETENTION_ENABLED: 'true' }),
       mailer: new NullMailer(),
     });
-    expect(on.find((job) => job.name === 'retention')?.enabled).toBe(true);
+    expect(retention.find((job) => job.name === 'retention')?.enabled).toBe(true);
+    expect(retention.find((job) => job.name === 'unverified_signups')?.enabled).toBe(false);
+
+    // Off, an unverified account signs in like any other (tm 257.19), so the
+    // sweep that deletes one for not having verified runs only while it is on.
+    const verification = buildSchedulerJobs({
+      db,
+      env: testEnv({ SIGNUP_EMAIL_VERIFICATION: 'true' }),
+      mailer: new NullMailer(),
+    });
+    expect(verification.find((job) => job.name === 'unverified_signups')?.enabled).toBe(true);
+    expect(verification.find((job) => job.name === 'retention')?.enabled).toBe(false);
   });
 
   describe('each job resolves against a real database', () => {
@@ -186,6 +204,18 @@ describe('buildSchedulerJobs', () => {
       );
       const outcome = await job?.run(context());
       expect(outcome?.counts).toEqual({ tenants: 0, issued: 0, reconstructed: 0, skipped: 0 });
+    });
+
+    it('unverified_signups, once SIGNUP_EMAIL_VERIFICATION is on, finds nothing to purge in one batch', async () => {
+      // Through the application role, as the server calls it: the purge is a
+      // SECURITY DEFINER function granted to that role alone.
+      const job = buildSchedulerJobs({
+        db,
+        env: testEnv({ SIGNUP_EMAIL_VERIFICATION: 'true' }),
+        mailer: new NullMailer(),
+      }).find((j) => j.name === 'unverified_signups');
+      const outcome = await job?.run(context());
+      expect(outcome?.counts).toEqual({ purged: 0, batches: 1 });
     });
   });
 });

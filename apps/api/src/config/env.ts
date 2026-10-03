@@ -520,6 +520,18 @@ export const envSchema = z.object({
    * and spends the old one.
    */
   SIGNUP_VERIFICATION_TTL_HOURS: z.coerce.number().int().positive().max(168).default(24),
+  /**
+   * How long a sign-up nobody verified is kept, in hours (tm 257.19). Three days
+   * by default. Past it, the `unverified_signups` job deletes the account with
+   * its workspace — but only an account that owns nothing but the empty
+   * workspace it signed up with (no chat, no ticket, no other member, no open
+   * invitation either way) and whose latest link has lapsed too, so a link
+   * mailed later than the sign-up keeps it for that link's whole life. The job
+   * runs only while `SIGNUP_EMAIL_VERIFICATION` is on. At most a year: the
+   * value becomes a Postgres `int` interval, and a sign-up older than that is
+   * not pending anything.
+   */
+  UNVERIFIED_SIGNUP_TTL_HOURS: z.coerce.number().int().positive().max(8_760).default(72),
 
   /**
    * Whether this deployment is the public pilot (tm 257.13 · ADR
@@ -946,6 +958,12 @@ export const envSchema = z.object({
    * is one indexed anti-join per workspace.
    */
   SCHEDULE_INVOICE_CLOSE_MS: z.coerce.number().int().positive().default(3_600_000),
+  /**
+   * The expired unverified sign-up sweep (tm 257.19). Hourly: the window it
+   * acts on is days long, so all a shorter interval buys is deleting a bot's
+   * workspace a few minutes sooner.
+   */
+  SCHEDULE_UNVERIFIED_SIGNUPS_MS: z.coerce.number().int().positive().default(3_600_000),
   /**
    * Lets the retention job actually run its scheduled pass (M-SCHED-b ·
    * `services/scheduler/types.ts`'s `JobDefinition.enabled`). Off by default:

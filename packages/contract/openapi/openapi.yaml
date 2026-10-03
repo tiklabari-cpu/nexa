@@ -819,8 +819,10 @@ components:
           type: boolean
           description: |
             False for a job registered but switched off from the moment it was
-            registered — today only `retention`, gated by `RETENTION_ENABLED`
-            because unlike the other four it hard-deletes data.
+            registered — `retention`, gated by `RETENTION_ENABLED` because it
+            hard-deletes data, and `unverified_signups`, which runs only while
+            `SIGNUP_EMAIL_VERIFICATION` is on: with it off an unverified account
+            signs in like any other, so there is nothing to delete it for.
         last_run_at:
           type: string
           format: date-time

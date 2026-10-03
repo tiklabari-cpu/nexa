@@ -21,7 +21,7 @@
  * visible from a snapshot, which is why `/health` is checked *last* here and
  * never instead.
  *
- * Three properties, three servers:
+ * Four properties, four servers:
  *
  *   1. The four unconditional sweeps produce their effects, and `/health`
  *      reports what happened.
@@ -31,6 +31,9 @@
  *      proves the lock itself).
  *   3. Retention deletes only when `RETENTION_ENABLED` says so — silent and
  *      irreversible is the one combination this repo will not ship.
+ *   4. The unverified sign-up sweep deletes only while
+ *      `SIGNUP_EMAIL_VERIFICATION` is on (tm 257.19) — off, server 1 keeps an
+ *      expired unverified sign-up; on, server 4 removes it by itself.
  *
  * Waiting is done by polling for the effect rather than sleeping a fixed
  * amount: a slow machine should make this suite late, not red, and a fixed
@@ -64,6 +67,11 @@ import {
   type TenantFixture,
 } from '../helpers/fixtures.js';
 import { startTestServer, type TestServer } from '../helpers/server.js';
+import {
+  ageSignup,
+  seedUnverifiedSignup,
+  type SignupFixture,
+} from '../helpers/unverified-signups.js';
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -235,6 +243,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
   let idleChatId: string;
   let unansweredThreadId: string;
   let retentionCanaryId: string;
+  let unverifiedCanary: SignupFixture;
   let health: HealthBody;
   /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
   let adminAuth: { authorization: string };
@@ -356,6 +365,11 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       })
     ).threadId;
 
+    // The second canary: a sign-up nobody verified, a week past the 72-hour
+    // TTL. `SIGNUP_EMAIL_VERIFICATION` is off here, so nothing may delete it.
+    unverifiedCanary = await seedUnverifiedSignup(owner, 'canary@unverified.test');
+    await ageSignup(owner, unverifiedCanary, 7 * 24);
+
     server = await startTestServer(
       {
         SCHEDULER_ENABLED: 'true',
@@ -368,6 +382,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
         SCHEDULE_WEBHOOK_REDELIVERY_MS: TICK_MS,
         SCHEDULE_KNOWLEDGE_REFRESH_MS: TICK_MS,
         SCHEDULE_INVOICE_CLOSE_MS: TICK_MS,
+        SCHEDULE_UNVERIFIED_SIGNUPS_MS: TICK_MS,
         SIEM_DIR: siemDir,
         // The retention sweep prunes the mail spool by path, so even a pass
         // that is not supposed to happen is pointed at a temporary directory
@@ -478,7 +493,18 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
     expect(await owner.auditLogEntry.count({ where: { action: 'data.retention_pruned' } })).toBe(0);
   });
 
-  it("says so on /health — enabled, eight jobs, and what each one's last pass did", () => {
+  it('leaves unverified sign-ups alone while SIGNUP_EMAIL_VERIFICATION is off: registered, never run (tm 257.19)', async () => {
+    // A week past the TTL, ticking at 200 ms beside the others — and still here,
+    // workspace and all: with the flag off the account signs in like any other.
+    expect(await owner.account.count({ where: { id: unverifiedCanary.accountId } })).toBe(1);
+    expect(await owner.license.count({ where: { id: unverifiedCanary.licenseId } })).toBe(1);
+
+    const sweep = health.scheduler.jobs.find((job) => job.name === 'unverified_signups');
+    expect(sweep).toMatchObject({ enabled: false, last_status: 'disabled' });
+    expect(sweep?.last_run_at).toBeNull();
+  });
+
+  it("says so on /health — enabled, nine jobs, and what each one's last pass did", () => {
     expect(health.scheduler.enabled).toBe(true);
     expect(health.scheduler.jobs.map((job) => job.name)).toEqual([
       'chat_timeout',
@@ -489,6 +515,7 @@ describe('a running server sweeps without anyone asking it to (§D113/K1)', () =
       'webhook_redelivery',
       'knowledge_refresh',
       'invoice_close',
+      'unverified_signups',
     ]);
 
     for (const name of UNCONDITIONAL) {
@@ -639,9 +666,9 @@ describe('retention deletes only once a deployment has said so', () => {
       RETENTION_ENABLED: 'true',
       SCHEDULE_JITTER_PCT: NO_JITTER,
       SCHEDULE_RETENTION_MS: TICK_MS,
-      // The other five are left far out of reach: this scenario is about the
-      // one sweep that deletes, and a chat timeout pass in the background would
-      // only add noise to what was removed.
+      // The others are left far out of reach: this scenario is about retention,
+      // and a chat timeout pass in the background would only add noise to what
+      // was removed.
       SCHEDULE_CHAT_TIMEOUT_MS: NEVER_MS,
       SCHEDULE_SLA_MS: NEVER_MS,
       SCHEDULE_SIEM_MS: NEVER_MS,
@@ -649,6 +676,7 @@ describe('retention deletes only once a deployment has said so', () => {
       SCHEDULE_WEBHOOK_REDELIVERY_MS: NEVER_MS,
       SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
       SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
+      SCHEDULE_UNVERIFIED_SIGNUPS_MS: NEVER_MS,
       MAIL_DIR: mailDir,
     });
 
@@ -683,5 +711,98 @@ describe('retention deletes only once a deployment has said so', () => {
     const retention = body.scheduler.jobs.find((job) => job.name === 'retention');
     expect(retention).toMatchObject({ enabled: true, last_status: 'ok' });
     expect(retention?.last_run_at).not.toBeNull();
+  });
+});
+
+// ===========================================================================
+// 4 · The unverified sign-up sweep, only while verification is on
+// ===========================================================================
+
+describe('the unverified sign-up sweep runs by itself once SIGNUP_EMAIL_VERIFICATION is on (tm 257.19)', () => {
+  let server: TestServer;
+  let fx: Fixtures;
+  let expired: SignupFixture;
+  let fresh: SignupFixture;
+  /** `/health`'s scheduler block is admin-only (M-SEC-b2 · §D116 MEDIUM (b)). */
+  let adminAuth: { authorization: string };
+
+  beforeAll(async () => {
+    fx = await seedFixtures(owner);
+    adminAuth = {
+      authorization: `Bearer ${await grantToken(owner, {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: [],
+      })}`,
+    };
+
+    expired = await seedUnverifiedSignup(owner, 'expired@unverified.test');
+    await ageSignup(owner, expired, 73);
+    // Inside the 72-hour TTL: the pass has to be a window, not a sweep of every
+    // unverified account.
+    fresh = await seedUnverifiedSignup(owner, 'fresh@unverified.test');
+
+    server = await startTestServer({
+      SCHEDULER_ENABLED: 'true',
+      SIGNUP_EMAIL_VERIFICATION: 'true',
+      SCHEDULE_JITTER_PCT: NO_JITTER,
+      SCHEDULE_UNVERIFIED_SIGNUPS_MS: TICK_MS,
+      // The rest out of reach, as in scenario 3: this one is about one sweep.
+      SCHEDULE_CHAT_TIMEOUT_MS: NEVER_MS,
+      SCHEDULE_SLA_MS: NEVER_MS,
+      SCHEDULE_SIEM_MS: NEVER_MS,
+      SCHEDULE_SCHEDULED_REPORTS_MS: NEVER_MS,
+      SCHEDULE_RETENTION_MS: NEVER_MS,
+      SCHEDULE_WEBHOOK_REDELIVERY_MS: NEVER_MS,
+      SCHEDULE_KNOWLEDGE_REFRESH_MS: NEVER_MS,
+      SCHEDULE_INVOICE_CLOSE_MS: NEVER_MS,
+    });
+
+    await waitForAll({
+      'purged the expired sign-up': async () =>
+        (await owner.account.count({ where: { id: expired.accountId } })) === 0,
+      // Same gap as above: the delete commits before the pass is recorded.
+      'recorded a completed unverified_signups pass': async () =>
+        lastStatus(server, 'unverified_signups') === 'ok',
+    });
+  });
+
+  afterAll(async () => {
+    await server.close();
+  });
+
+  it('deletes the expired sign-up with its workspace, and keeps the one inside the TTL', async () => {
+    expect(await owner.organization.count({ where: { id: expired.organizationId } })).toBe(0);
+    expect(await owner.license.count({ where: { id: expired.licenseId } })).toBe(0);
+    expect(await owner.account.count({ where: { id: fresh.accountId } })).toBe(1);
+    expect(await owner.license.count({ where: { id: fresh.licenseId } })).toBe(1);
+  });
+
+  it('leaves the seeded tenants alone', async () => {
+    expect(
+      await owner.license.count({ where: { id: { in: [fx.a.licenseId, fx.b.licenseId] } } }),
+    ).toBe(2);
+    expect(
+      await owner.account.count({
+        where: {
+          id: {
+            in: [
+              fx.a.ownerAccountId,
+              fx.a.agentAccountId,
+              fx.b.ownerAccountId,
+              fx.b.agentAccountId,
+            ],
+          },
+        },
+      }),
+    ).toBe(4);
+  });
+
+  it('reports itself enabled and running on /health', async () => {
+    const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+    const sweep = body.scheduler.jobs.find((job) => job.name === 'unverified_signups');
+    expect(sweep).toMatchObject({ enabled: true, interval_ms: Number(TICK_MS), last_status: 'ok' });
+    expect(sweep?.last_run_at).not.toBeNull();
   });
 });

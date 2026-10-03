@@ -31,7 +31,7 @@ describe('the job list', () => {
     );
   });
 
-  it('names the five sweeps that had no scheduler, plus webhook redelivery, the knowledge freshness sweep and the billing period close', () => {
+  it('names the five sweeps that had no scheduler, plus webhook redelivery, the knowledge freshness sweep, the billing period close and the unverified sign-up sweep', () => {
     // §D113/K1's list, in one place, because a job renamed here and nowhere else
     // would leave two instances holding different locks for the same sweep.
     expect([...SCHEDULER_JOB_NAMES]).toEqual([
@@ -43,12 +43,19 @@ describe('the job list', () => {
       'webhook_redelivery',
       'knowledge_refresh',
       'invoice_close',
+      'unverified_signups',
     ]);
+  });
+
+  it('derives the unverified sign-up sweep key the deployment documents', () => {
+    // `.env.example` and the production template name this key (tm 257.19);
+    // the job name is what it is derived from.
+    expect(intervalEnvKey('unverified_signups')).toBe('SCHEDULE_UNVERIFIED_SIGNUPS_MS');
   });
 });
 
 describe('intervals', () => {
-  it('defaults to a minute for the ones a person can feel, and an hour for retention, knowledge refresh and the period close', () => {
+  it('defaults to a minute for the ones a person can feel, and an hour for retention, knowledge refresh, the period close and the unverified sign-up sweep', () => {
     expect(jobIntervals(parseEnv(BASE))).toEqual({
       chat_timeout: 60_000,
       sla: 60_000,
@@ -58,6 +65,7 @@ describe('intervals', () => {
       webhook_redelivery: 60_000,
       knowledge_refresh: 3_600_000,
       invoice_close: 3_600_000,
+      unverified_signups: 3_600_000,
     });
   });
 

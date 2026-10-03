@@ -103,6 +103,7 @@ describe('GET /health — scheduler (admin caller)', () => {
         'webhook_redelivery',
         'knowledge_refresh',
         'invoice_close',
+        'unverified_signups',
       ]);
       // Registered but never ticked — `SCHEDULER_ENABLED` defaults to off
       // under `NODE_ENV=test` (env.ts), same as every other suite's server.
@@ -114,13 +115,18 @@ describe('GET /health — scheduler (admin caller)', () => {
     }
   });
 
-  it('marks retention disabled from registration — no other job is gated', async () => {
+  it('marks retention and the unverified sign-up sweep disabled from registration — no other job is gated', async () => {
     const server = await startTestServer();
     try {
       const body = (await server.get('/health', adminAuth)).json() as HealthBody;
       const byName = Object.fromEntries((body.scheduler?.jobs ?? []).map((job) => [job.name, job]));
 
       expect(byName['retention']).toMatchObject({ enabled: false, last_status: 'disabled' });
+      // Off with SIGNUP_EMAIL_VERIFICATION, which is off by default (tm 257.19).
+      expect(byName['unverified_signups']).toMatchObject({
+        enabled: false,
+        last_status: 'disabled',
+      });
       for (const name of [
         'chat_timeout',
         'sla',
@@ -132,6 +138,22 @@ describe('GET /health — scheduler (admin caller)', () => {
       ]) {
         expect(byName[name]).toMatchObject({ enabled: true, last_status: null });
       }
+    } finally {
+      await server.close();
+    }
+  });
+
+  it('lists the unverified sign-up sweep enabled, hourly, once SIGNUP_EMAIL_VERIFICATION is on (tm 257.19)', async () => {
+    const server = await startTestServer({ SIGNUP_EMAIL_VERIFICATION: 'true' });
+    try {
+      const body = (await server.get('/health', adminAuth)).json() as HealthBody;
+      const job = body.scheduler?.jobs.find((row) => row.name === 'unverified_signups');
+      expect(job).toMatchObject({
+        enabled: true,
+        interval_ms: 3_600_000,
+        last_run_at: null,
+        last_status: null,
+      });
     } finally {
       await server.close();
     }
@@ -180,8 +202,14 @@ describe('GET /health — scheduler (admin caller)', () => {
     }
   });
 
-  it('reflects SCHEDULER_ENABLED and RETENTION_ENABLED from the environment', async () => {
-    const server = await startTestServer({ SCHEDULER_ENABLED: 'true', RETENTION_ENABLED: 'true' });
+  it('reflects SCHEDULER_ENABLED, RETENTION_ENABLED and SIGNUP_EMAIL_VERIFICATION from the environment', async () => {
+    // The two gated jobs' switches with the scheduler's own (tm 257.19 added
+    // the second): all three on, nothing is left registered-but-off.
+    const server = await startTestServer({
+      SCHEDULER_ENABLED: 'true',
+      RETENTION_ENABLED: 'true',
+      SIGNUP_EMAIL_VERIFICATION: 'true',
+    });
     try {
       const body = (await server.get('/health', adminAuth)).json() as HealthBody;
 

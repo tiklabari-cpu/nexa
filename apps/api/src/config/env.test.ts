@@ -171,6 +171,21 @@ describe('SIGNUP_EMAIL_VERIFICATION', () => {
     }
   });
 
+  it('keeps an unverified sign-up three days by default before the sweep may take it, between an hour and a year (tm 257.19)', () => {
+    expect(parseEnv(BASE).UNVERIFIED_SIGNUP_TTL_HOURS).toBe(72);
+    expect(
+      parseEnv({ ...BASE, UNVERIFIED_SIGNUP_TTL_HOURS: '1' }).UNVERIFIED_SIGNUP_TTL_HOURS,
+    ).toBe(1);
+    expect(
+      parseEnv({ ...BASE, UNVERIFIED_SIGNUP_TTL_HOURS: '8760' }).UNVERIFIED_SIGNUP_TTL_HOURS,
+    ).toBe(8760);
+    for (const value of ['0', '-1', '1.5', '8761', 'three days']) {
+      expect(() => parseEnv({ ...BASE, UNVERIFIED_SIGNUP_TTL_HOURS: value }), value).toThrow(
+        /UNVERIFIED_SIGNUP_TTL_HOURS/,
+      );
+    }
+  });
+
   it('needs no mail rule outside production', () => {
     expect(() => parseEnv({ ...BASE, SIGNUP_EMAIL_VERIFICATION: 'true' })).not.toThrow();
   });

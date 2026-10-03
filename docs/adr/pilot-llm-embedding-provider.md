@@ -2,7 +2,7 @@
 
 - **Görev:** tm 255.1 (PILOT-LLM-DECIDE) · PLAN.md §D176
 - **Tarih:** 2026-09-22
-- **Durum:** Kabul edildi (pencere kararı). Kod ve testler (255.5–255.9) bu karara göre hemen ilerleyebilir; **pilotun canlıya çıkması** §11'deki iki sahip onayını bekler.
+- **Durum:** Kabul edildi (pencere kararı). Kod ve testler (255.5–255.9) bu karara göre hemen ilerleyebilir; **pilotun canlıya çıkması** için §11'deki iki sahip kararı 2026-10-02'de verildi (OpenAI, bölge `us`); kalan iş hesap ve anahtardır.
 - **Yöntem:** Yalnız resmi dokümantasyon okundu (URL'ler her satırda ve §12'de). Hiçbir sağlayıcıya istek atılmadı, hesap açılmadı, anahtar edinilmedi ya da girilmedi. Bu dosyada hiçbir sır değeri yoktur; yalnız anahtar ADLARI vardır.
 - **PRD:** NFR-C4 (bölge/HIPAA kapısı korunur) · FR-MOD-06.3.2 (embedding + index sözleşmesi) · FR-05-06.EK1 (skill motoru çalışma zamanı).
 
@@ -181,12 +181,12 @@ PrivateEmail resmi ayarları: sunucu `mail.privateemail.com`; **465 = SSL/TLS** 
 - **255.9 (limit/maliyet):** kayıt birimi **token** (`usage.prompt_tokens` / `completion_tokens` ya da arayüzdeki `inputTokens`/`outputTokens`); para karşılığı koda gömülmez. Tavan anahtarları `LLM_MAX_OUTPUT_TOKENS` + `LLM_MAX_PROMPT_CHARS`. Redaction listesi: `LLM_API_KEY`, `EMBEDDING_API_KEY`, `SMTP_USERNAME`, `SMTP_PASSWORD`.
 - **255.15 (Docker prod):** `.env.production.example` §9'daki adları yorumlu ve **değersiz** taşır; dört kaynak paritesi (env.ts · .env.example · turbo.json globalEnv · .env.production.example) bu adlarla yeşil kalır.
 
-## 11. Sahip kararı bekleniyor
+## 11. Sahip kararları (2026-10-02'de verildi)
 
-Aşağıdakiler pencerenin veremeyeceği kararlardır (hesap, sözleşme, veri işleme). **Kod ve testler (255.5–255.9) bunları beklemez** — hepsi ağsız, sahte sağlayıcı ya da enjekte edilen `fetch` ile koşar. Bekleyen şey **pilotun gerçek sağlayıcıyla açılması** (255.16'nın gerçek-sağlayıcı adımı ve canlıya çıkış):
+Aşağıdakiler pencerenin veremeyeceği kararlardı (hesap, sözleşme, veri işleme). **Kod ve testler (255.5–255.9) bunları beklemedi** — hepsi ağsız, sahte sağlayıcı ya da enjekte edilen `fetch` ile koşar. İki karar da sahip tarafından 2026-10-02'de verildi (tm 257, PLAN §D203); gerçek anahtarla açılış `docs/production-checklist.md` §9'daki sıradır:
 
-1. **Sahip kararı bekleniyor: satıcı onayı.** OpenAI hesabı + faturalama kabul mü? Hayır ise bu ADR yeniden açılır ve §3'ün sıradaki adayı için ayrı bir adaptör görevi açılır (Anthropic → native `/v1/messages`; Mistral → kendi alan adları; Gemini → bölge gerekiyorsa Vertex AI). Embedding kararı (§4.2) sohbet kararından bağımsız kalabilir.
-2. **Sahip kararı bekleniyor: pilotun bölgesi.** Pilot çalışma alanları `eu` mu `us` mu (`SIYAHTUS_REGION`)? `eu` ise OpenAI'ın AB veri yerleşimi için _abuse monitoring controls_ onayı + _Modified Retention amendment_ gerekir — bu bir başvurudur, kod işi değil. `us` için onay gerekmez.
+1. **Karar verildi (2026-10-02): satıcı OpenAI.** Hesap ve faturalama kabul. Sohbet ve embedding aynı hesaptan çalışır; sağlayıcı tarafı bütçe sınırı projede tanımlanır, uygulamanın günlük token tavanlarına ek olarak. (Reddedilseydi bu ADR yeniden açılır ve §3'ün sıradaki adayı için ayrı bir adaptör görevi açılırdı.)
+2. **Karar verildi (2026-10-02): pilotun bölgesi `us`.** `SIYAHTUS_REGION`, `LLM_PROVIDER_REGION` ve `EMBEDDING_PROVIDER_REGION` üçü de `us`; taban adres `us.api.openai.com`. `us` için OpenAI onayı gerekmez; `eu` AB veri yerleşimi başvurusu ayrı bir iş olurdu. Bölge ile taban adres birlikte değişir.
 
 ## 12. Kaynaklar (erişim 2026-09-22, yalnız resmi dokümantasyon)
 

@@ -67,4 +67,4 @@ Kütüphaneyle kalıp kuralı korumanın iki yolu vardı, ikisi de kötü: (a) i
 
 ## 5. Kapsam dışı (bilerek)
 
-Mailer arayüzü ve dokuz çağrı yeri değişmedi. Kuyruk/outbox tablosu, bounce/complaint webhook'u, gelen e-posta, SPF/DKIM/DMARC DNS kaydı, HTML şablonlar, SMTPUTF8 (ASCII dışı adres) ve CRAM-MD5/XOAUTH2 kapsam dışıdır. PrivateEmail PLAIN/LOGIN sunar ve pilot adresleri ASCII'dir. Hata durumunda çağrı yerinin davranışı tm 255.4'tür.
+Mailer arayüzü ve dokuz çağrı yeri değişmedi. Kuyruk/outbox tablosu, bounce/complaint webhook'u, gelen e-posta, SPF/DKIM/DMARC DNS kaydı (kod değil, sahibin işi; herkese açık pilotta kayıt açılmadan önceki kapı olarak `docs/production-checklist.md` §9'da), HTML şablonlar, SMTPUTF8 (ASCII dışı adres) ve CRAM-MD5/XOAUTH2 kapsam dışıdır. PrivateEmail PLAIN/LOGIN sunar ve pilot adresleri ASCII'dir. Hata durumunda çağrı yerinin davranışı tm 255.4'tür.

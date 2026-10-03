@@ -11,6 +11,7 @@ export const en: Record<string, string> = {
   'error.connect': 'Chat is unavailable right now. Please try again shortly.',
   'error.upload': 'That file could not be attached.',
   'error.send': 'Message not sent. Check your connection and try again.',
+  'error.readOnly': "This conversation can't receive new messages right now.",
   'attach.label': 'Attach a file',
   'attach.remove': 'Remove attachment',
   'emoji.trigger': 'Insert emoji',

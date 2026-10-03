@@ -11,7 +11,13 @@
  * (`rich-text.ts`), which still builds elements rather than parsing markup.
  */
 import { readEditedAt, type WidgetFormField, type WidgetAppearance } from '@siyahtus/types';
-import { WidgetApi, type TrackSaleInput, type WidgetEvent, type WidgetState } from './api.js';
+import {
+  WidgetApi,
+  WidgetApiError,
+  type TrackSaleInput,
+  type WidgetEvent,
+  type WidgetState,
+} from './api.js';
 import { insertEmojiAtCaret, WIDGET_EMOJI_CATEGORIES } from './emoji.js';
 import { appendRichText } from './rich-text.js';
 import { WidgetSocket } from './socket.js';
@@ -1224,7 +1230,15 @@ export function mount(doc: Document = document, win: Window = window): void {
       state.error = null;
       await refresh();
     } catch (error) {
-      state.error = t('error.send');
+      // A workspace whose trial is over refuses every write, the visitor's included
+      // (402 `license_expired`, tm 257.15). "Check your connection" would send them
+      // hunting for a fault that is not theirs; say the conversation is closed to
+      // new messages instead, whatever the deployment.
+      state.error = t(
+        error instanceof WidgetApiError && error.status === 402 && error.type === 'license_expired'
+          ? 'error.readOnly'
+          : 'error.send',
+      );
       // Put the text and attachment back so neither is lost.
       ui.input.value = text;
       state.pendingAttachment = attachment;

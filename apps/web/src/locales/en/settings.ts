@@ -749,6 +749,11 @@ export const settings: Messages = {
   'settings.sandbox.notAvailable': 'Not available',
   'settings.sandbox.entitlementNote':
     'A sandbox is an Enterprise feature. Upgrade the plan to create one.',
+  // tm 257.15: the six "Enterprise feature — upgrade the plan" notes, as the public
+  // pilot words them. The plan cannot be changed there (Billing is hidden), so the
+  // note says the feature is off and who to ask. Chosen by `useEntitlementNote`.
+  'settings.pilot.unavailable': 'This feature is not available in the pilot — contact {email}.',
+  'settings.pilot.unavailableNoContact': 'This feature is not available in the pilot.',
   'settings.sandbox.createdLabel': 'Sandbox created',
   'settings.sandbox.createdSummary': 'Created {created}. Last reset: {reset}.',
   'settings.sandbox.createdUnknown': 'unknown',

@@ -228,6 +228,42 @@ describe('errorMessageKey', () => {
     ).toBe('common.errors.too_many_requests');
   });
 
+  it('names the pilot’s read-only 402 apart from a renewable subscription, in both languages (tm 257.15)', () => {
+    const expired = (details?: Record<string, unknown>) =>
+      new ApiClientError({
+        type: 'license_expired',
+        status: 402,
+        message: 'This workspace is read-only.',
+        requestId: 'rq-402',
+        ...(details ? { details } : {}),
+      });
+
+    const pilot = expired({ access: 'read_only', reason: 'pilot_trial_ended' });
+    expect(errorMessageKey(pilot)).toBe('common.pilot.licenseExpired');
+    expect(translate('en', errorMessageKey(pilot))).toBe(
+      'Your pilot trial has ended — the contact address is in the bar at the top.',
+    );
+    expect(translate('tr', errorMessageKey(pilot))).toBe(
+      'Pilot denemeniz bitti — iletişim adresi üstteki şeritte.',
+    );
+
+    // Everywhere else the sentence is the one it always was.
+    expect(errorMessageKey(expired({ access: 'read_only' }))).toBe('common.errors.license_expired');
+    expect(errorMessageKey(expired())).toBe('common.errors.license_expired');
+    // And the reason belongs to this type: on another it names nothing.
+    expect(
+      errorMessageKey(
+        new ApiClientError({
+          type: 'not_allowed',
+          status: 403,
+          message: 'no',
+          requestId: 'rq-x',
+          details: { reason: 'pilot_trial_ended' },
+        }),
+      ),
+    ).toBe('common.errors.not_allowed');
+  });
+
   it('covers the client-only network failure', () => {
     const error = new ApiClientError({
       type: 'network',

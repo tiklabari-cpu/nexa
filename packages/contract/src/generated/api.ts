@@ -12628,6 +12628,10 @@ export interface components {
     /**
      * @description The trial has expired and the workspace is read-only (ADR-10). Reads
      *     still succeed and nothing has been deleted; writes resume on subscribing.
+     *     `error.details.access` is `read_only`; on a public-pilot deployment
+     *     (`GET /deployment` → `pilot_mode`) `error.details.reason` is also
+     *     `pilot_trial_ended` — nothing can be bought there, the way on is the
+     *     contact address (tm 257.15).
      */
     PaymentRequired: {
       headers: {
@@ -13246,6 +13250,21 @@ export interface operations {
              *     wizard on this without a second request (FR-MOD-00.4).
              */
             onboarding_completed?: boolean;
+            /**
+             * @description Agent principals only, **every role** (tm 257.15). What the
+             *     workspace may do right now — the same `access` that
+             *     `GET /billing/subscription` reports, but readable without a
+             *     billing scope, so the shell can tell an agent that the trial
+             *     is running out or over (FR-MOD-01.1.6). Read once with the
+             *     profile, so a trial that ends mid-session is learned from
+             *     the `402 license_expired` the next write gets.
+             */
+            license?: {
+              /** @enum {string} */
+              access: 'trialing' | 'active' | 'read_only';
+              /** Format: date-time */
+              trial_ends_at: string | null;
+            };
             /**
              * @description Agent principals only. Every channel the caller can be reached
              *     through — per user, per license (FR-MOD-13.8 / 08.2). Shipped

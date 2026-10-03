@@ -187,7 +187,7 @@ export class WidgetApi {
         ...(this.hostOrigin ? { host_origin: this.hostOrigin } : {}),
       }),
     });
-    if (!response.ok) throw new WidgetApiError(await describe(response));
+    if (!response.ok) throw await failure(response);
 
     const {
       token,
@@ -268,7 +268,7 @@ export class WidgetApi {
       headers: { 'content-type': file.type },
       body: file,
     });
-    if (!response.ok) throw new WidgetApiError(await describe(response));
+    if (!response.ok) throw await failure(response);
     return grant.file_url;
   }
 
@@ -278,7 +278,7 @@ export class WidgetApi {
     const response = await fetch(new URL(url, this.baseUrl).toString(), {
       headers: { authorization: `Bearer ${this.#token}` },
     });
-    if (!response.ok) throw new WidgetApiError(await describe(response));
+    if (!response.ok) throw await failure(response);
     return response.blob();
   }
 
@@ -355,7 +355,7 @@ export class WidgetApi {
       await this.connect();
       return this.#request<T>(method, path, body);
     }
-    if (!response.ok) throw new WidgetApiError(await describe(response));
+    if (!response.ok) throw await failure(response);
     if (response.status === 204) return undefined as T;
 
     return (await response.json()) as T;
@@ -363,18 +363,28 @@ export class WidgetApi {
 }
 
 export class WidgetApiError extends Error {
-  constructor(message: string) {
+  /** The ADR-06 `error.type` the server named, when the failure came with one. */
+  readonly type: string | undefined;
+  readonly status: number | undefined;
+
+  constructor(message: string, details: { type?: string; status?: number } = {}) {
     super(message);
     this.name = 'WidgetApiError';
+    this.type = details.type;
+    this.status = details.status;
   }
 }
 
-async function describe(response: Response): Promise<string> {
+async function failure(response: Response): Promise<WidgetApiError> {
+  const status = response.status;
   try {
-    const body = (await response.json()) as { error?: { message?: string } };
-    return body.error?.message ?? `request failed (${response.status})`;
+    const body = (await response.json()) as { error?: { message?: string; type?: string } };
+    return new WidgetApiError(body.error?.message ?? `request failed (${status})`, {
+      status,
+      ...(body.error?.type ? { type: body.error.type } : {}),
+    });
   } catch {
-    return `request failed (${response.status})`;
+    return new WidgetApiError(`request failed (${status})`, { status });
   }
 }
 

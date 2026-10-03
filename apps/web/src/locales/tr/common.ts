@@ -61,4 +61,5 @@ export const common: Messages = {
     'Bugünkü e-posta kotası doldu, bu yüzden ileti gönderilmedi; UTC gece yarısı yenilenir.',
   'common.limits.signupRate':
     'Bu ağdan kısa süre içinde çok fazla çalışma alanı oluşturuldu. Bir saat sonra yeniden deneyin.',
+  'common.pilot.licenseExpired': 'Pilot denemeniz bitti — iletişim adresi üstteki şeritte.',
 };

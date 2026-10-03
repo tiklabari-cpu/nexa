@@ -748,6 +748,8 @@ export const settings: Messages = {
   'settings.sandbox.notAvailable': 'Kullanılamıyor',
   'settings.sandbox.entitlementNote':
     'Sandbox bir Enterprise özelliğidir. Bir tane oluşturmak için planı yükseltin.',
+  'settings.pilot.unavailable': 'Bu özellik pilotta kapalı — {email} ile iletişime geçin.',
+  'settings.pilot.unavailableNoContact': 'Bu özellik pilotta kapalı.',
   'settings.sandbox.createdLabel': 'Sandbox oluşturuldu',
   'settings.sandbox.createdSummary': '{created} tarihinde oluşturuldu. Son sıfırlama: {reset}.',
   'settings.sandbox.createdUnknown': 'bilinmiyor',

@@ -6749,6 +6749,10 @@ components:
       description: |
         The trial has expired and the workspace is read-only (ADR-10). Reads
         still succeed and nothing has been deleted; writes resume on subscribing.
+        `error.details.access` is `read_only`; on a public-pilot deployment
+        (`GET /deployment` → `pilot_mode`) `error.details.reason` is also
+        `pilot_trial_ended` — nothing can be bought there, the way on is the
+        contact address (tm 257.15).
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }

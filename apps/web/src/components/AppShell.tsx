@@ -141,13 +141,19 @@ interface TrialInfo {
  * cannot subscribe are also the ones not nagged to. An active workspace shows
  * nothing at all.
  *
- * In the public pilot the countdown stays and Subscribe goes (tm 257.2): the
- * pilot sells nothing, and the Billing page it pointed at is hidden there.
+ * The public pilot sells nothing and hides Billing, so it has a bar of its own
+ * ({@link PilotTrialBanner}, tm 257.15) — and a different source, because the
+ * people who most need to hear that the trial is over are the agents this one
+ * never reaches.
  */
 function TrialBanner(): ReactElement | null {
+  const { pilot_mode: pilotMode } = useDeployment();
+  return pilotMode ? <PilotTrialBanner /> : <BillingTrialBanner />;
+}
+
+function BillingTrialBanner(): ReactElement | null {
   const api = useApiClient();
   const t = useTranslate();
-  const { pilot_mode: pilotMode } = useDeployment();
   const { data } = useQuery({
     queryKey: ['billing', 'subscription'],
     queryFn: () => api.get<TrialInfo>('/billing/subscription'),
@@ -168,14 +174,71 @@ function TrialBanner(): ReactElement | null {
     >
       <span aria-hidden="true">◈</span>
       <span>{readOnly ? t('shell.trial.ended') : t('shell.trial.remaining', { count: days })}</span>
-      {!pilotMode && (
-        <NavLink
-          to="/app/billing"
-          className="font-semibold text-content-brand underline-offset-2 hover:underline"
-        >
-          {t('shell.subscribe')}
-        </NavLink>
-      )}
+      <NavLink
+        to="/app/billing"
+        className="font-semibold text-content-brand underline-offset-2 hover:underline"
+      >
+        {t('shell.subscribe')}
+      </NavLink>
+    </div>
+  );
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * The pilot's trial bar, for **every role** (tm 257.15 · ADR K-d §3.1).
+ *
+ * Fed by `agent.license`, which `GET /auth/me` carries for any caller — not by
+ * `/billing/subscription`, whose billing scope an agent does not have, which is
+ * why an agent used to see no bar and learned the trial was over only from a
+ * refused write. Where the old bar offered Subscribe, this one offers the
+ * contact address (`GET /deployment` → `contact_email`) as a `mailto:` link:
+ * nothing is for sale in the pilot, so the way on is to write to the operator.
+ *
+ * The address is placed by the sentence, not beside it: `{email}` sits where
+ * each language wants it, and the bar splits the finished text there to make it
+ * a link. The profile is read once per session, so a trial that ends mid-session
+ * is learned from the 402 the next write gets (`common.pilot.licenseExpired`).
+ */
+function PilotTrialBanner(): ReactElement | null {
+  const t = useTranslate();
+  const { contact_email: email } = useDeployment();
+  const license = useAuth((s) => s.agent?.license);
+
+  if (!license || license.access === 'active') return null;
+
+  const readOnly = license.access === 'read_only';
+  const days =
+    license.trial_ends_at === null
+      ? 0
+      : Math.max(0, Math.ceil((Date.parse(license.trial_ends_at) - Date.now()) / DAY_MS));
+  const prefix = email ? 'shell.pilotTrial' : 'shell.pilotTrial.noContact';
+  const sentence = readOnly
+    ? t(`${prefix}.ended`, { email: email ?? '' })
+    : t(`${prefix}.remaining`, { count: days, email: email ?? '' });
+  const at = email ? sentence.indexOf(email) : -1;
+
+  return (
+    <div
+      role="status"
+      data-testid="trial-badge"
+      className="flex items-center justify-center gap-2 border-b border-border bg-brand-500/10 px-4 py-1.5 text-xs text-content"
+    >
+      <span aria-hidden="true">◈</span>
+      <span>
+        {email && at >= 0 ? (
+          <>
+            {sentence.slice(0, at)}
+            <a href={`mailto:${email}`} className="font-semibold text-content-brand underline">
+              {email}
+            </a>
+            {sentence.slice(at + email.length)}
+          </>
+        ) : (
+          sentence
+        )}
+      </span>
     </div>
   );
 }

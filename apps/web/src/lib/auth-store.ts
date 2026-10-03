@@ -54,6 +54,17 @@ export interface CurrentAgent {
   notification_preferences?: NotificationPreferences;
   /** First-run setup gate (FR-MOD-00.4). Absent on older tokens — treat as done. */
   onboarding_completed?: boolean;
+  /**
+   * What the workspace may do right now, for every role (tm 257.15) — the
+   * public pilot's trial strip reads it here, because `/billing/subscription`
+   * is behind a billing scope an agent does not carry. Read once with the
+   * profile; absent from an older server, which the strip reads as "say
+   * nothing".
+   */
+  license?: {
+    access: 'trialing' | 'active' | 'read_only';
+    trial_ends_at: string | null;
+  };
 }
 
 /** What `POST /auth/2fa/enroll` hands back — the authenticator app's half. */

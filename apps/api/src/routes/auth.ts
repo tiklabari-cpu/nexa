@@ -33,6 +33,7 @@ import {
   NOTIFICATION_PREFERENCE_SELECT,
   serialiseNotificationPreferences,
 } from '../services/notifications/preferences.js';
+import { trialState } from '../services/billing/metering.js';
 import { markWebsiteConnected } from '../services/websites/website-service.js';
 import {
   defaultScopesForRole,
@@ -888,7 +889,7 @@ export default async function authRoutes(
       // SECURITY DEFINER function.
       const [profile, twoFactorStatus] = await Promise.all([
         request.withTenant(async (tx) => {
-          const [account, membership, license, organization] = await Promise.all([
+          const [account, membership, license, organization, trial] = await Promise.all([
             tx.account.findUnique({
               where: { id: principal.accountId },
               select: { email: true, name: true, avatarUrl: true },
@@ -918,8 +919,12 @@ export default async function authRoutes(
               where: { id: principal.organizationId },
               select: { name: true },
             }),
+            // What the workspace may do right now, for every role (tm 257.15): the
+            // trial strip reads it here because `/billing/subscription` is behind a
+            // billing scope an agent does not carry.
+            trialState(tx, request.tenant()),
           ]);
-          return { account, membership, license, organization };
+          return { account, membership, license, organization, trial };
         }),
         twoFactor.status(principal.accountId),
       ]);
@@ -945,6 +950,7 @@ export default async function authRoutes(
         // second round trip (13.7-c).
         notification_preferences: serialiseNotificationPreferences(profile.membership),
         onboarding_completed: profile.license?.onboardingCompletedAt != null,
+        license: { access: profile.trial.access, trial_ends_at: profile.trial.trialEndsAt },
         two_factor: {
           enabled: twoFactorStatus.enabled,
           pending: twoFactorStatus.pending,

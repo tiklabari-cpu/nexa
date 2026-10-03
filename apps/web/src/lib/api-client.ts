@@ -43,6 +43,12 @@ export class ApiClientError extends Error {
   }
 }
 
+/** `details.reason` on a pilot deployment's 402 `license_expired` (tm 257.15). */
+const PILOT_TRIAL_ENDED_REASON = 'pilot_trial_ended';
+
+/** The sentence for a pilot's read-only 402 — outside `common.errors.*`, which is one key per error type. */
+export const PILOT_LICENSE_EXPIRED_MESSAGE_KEY = 'common.pilot.licenseExpired';
+
 /** The sentence for {@link isAiDailyCap}: "today's AI allowance is used up; it renews at 00:00 UTC". */
 export const AI_DAILY_CAP_MESSAGE_KEY = 'common.limits.aiDailyCap';
 
@@ -94,6 +100,11 @@ export function errorMessageKey(error: unknown): string {
   // allowance is used up and comes back at UTC midnight. Outside
   // `common.errors.*`, whose keys are exactly the error types.
   if (isAiDailyCap(error)) return AI_DAILY_CAP_MESSAGE_KEY;
+  // The public pilot's read-only refusal (tm 257.15): nothing there can be
+  // renewed, so "renew it to continue" would point at a door that is not there.
+  if (error.type === 'license_expired' && error.details?.['reason'] === PILOT_TRIAL_ENDED_REASON) {
+    return PILOT_LICENSE_EXPIRED_MESSAGE_KEY;
+  }
   if (error.type === 'limit_reached') {
     const reason = error.details?.['reason'];
     // A Map, not an object: a reason off the wire must not find `toString`.

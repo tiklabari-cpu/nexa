@@ -111,11 +111,112 @@ jobs:
       - name: Build
         run: pnpm build
 
+      # `turbo` is a workspace dev dependency, not a binary on the runner's PATH:
+      # called bare it exits 127 before a single test runs (tm 258).
       - name: Unit tests
-        run: turbo run test:unit --filter=!@siyahtus/mobile
+        run: pnpm turbo run test:unit --filter=!@siyahtus/mobile
 
-      - name: Integration tests
-        run: pnpm test:integration
+  # The API integration suite runs its files one after another (owner decision
+  # 2026-10-03, `run-sharded.ts` DEFAULT_JOBS = 1) and takes ~22 min on one
+  # machine — past `verify`'s ceiling. Here the split is across runners instead:
+  # vitest's own `--shard`, each shard against its own isolated database
+  # (`with-test-datastores.ts`, CONVENTIONS §1.3). RTM's suite rides on shard 1.
+  integration:
+    name: Integration (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: verify
+
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_USER: siyahtus
+          POSTGRES_PASSWORD: siyahtus_dev_password
+          POSTGRES_DB: siyahtus
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd "pg_isready -U siyahtus -d siyahtus"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports: ['6380:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+
+    env:
+      NODE_ENV: test
+      DATABASE_URL: postgresql://siyahtus:siyahtus_dev_password@localhost:5433/siyahtus
+      DATABASE_APP_URL: postgresql://siyahtus_app:siyahtus_app_dev_password@localhost:5433/siyahtus
+      REDIS_URL: redis://localhost:6380
+      JWT_SIGNING_KEY: ci-jwt-signing-key-0123456789abcdef0123456789
+      WEBHOOK_HMAC_SEED: ci-webhook-hmac-seed-0123456789abcdef0123456789
+      CUSTOMER_TOKEN_SECRET: ci-customer-token-secret-0123456789abcdef0123
+      AUDIT_CHAIN_SECRET: ci-audit-chain-secret-0123456789abcdef0123456
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Prepare database extensions and app role
+        run: |
+          PGPASSWORD=siyahtus_dev_password psql -h localhost -p 5433 -U siyahtus -d siyahtus \
+            -v ON_ERROR_STOP=1 -f infra/db/init/00-extensions.sql
+
+      - name: Generate Prisma client
+        run: pnpm --filter @siyahtus/api db:generate
+
+      - name: Apply migrations
+        run: pnpm --filter @siyahtus/api db:migrate
+
+      - name: Build workspace dependencies
+        run: pnpm turbo run build --filter=@siyahtus/api^... --filter=@siyahtus/rtm^...
+
+      - name: API integration tests (shard ${{ matrix.shard }}/3)
+        working-directory: apps/api
+        run: pnpm exec tsx scripts/with-test-datastores.ts vitest run --passWithNoTests --dir test/integration --shard=${{ matrix.shard }}/3
+
+      - name: RTM integration tests
+        if: matrix.shard == 1
+        run: pnpm --filter @siyahtus/rtm test:integration
+
+  # The pilot's images are what the owner's host builds; nothing else compiles
+  # them. tm 257.12 found the api image failing `tsc` for heap only at the
+  # closing rehearsal. The template's `<…>` placeholders satisfy compose's `:?`
+  # checks; only build arguments are read, no secret is involved.
+  pilot-images:
+    name: Pilot images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the pilot images
+        run: |
+          cp .env.production.example .env
+          docker compose -f docker-compose.pilot.yml build
 
   mobile:
     name: Mobile (Jest)
@@ -146,7 +247,7 @@ jobs:
   e2e:
     name: End-to-end
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     needs: verify
 
     services:

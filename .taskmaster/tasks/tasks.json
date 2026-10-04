@@ -10820,16 +10820,29 @@
           }
         ],
         "updatedAt": "2026-10-03T13:02:59.611Z"
+      },
+      {
+        "id": "258",
+        "title": "CI-GREEN [OPUS-HIGH] GitHub Actions main'i yeşile çevir",
+        "description": "ci.yml: birim test adımı turbo'yu PATH'te bulamıyor (exit 127); entegrasyon seri ~22 dk 20 dk iş sınırına sığmıyor; e2e sınırı 25 dk dar; pilot imajları CI'de derlenmiyor (257.12 OOM boşluğu).",
+        "details": "Yalnız .github/workflows/ci.yml: pnpm turbo; integration ayrı iş, 3 parçalı matris (with-test-datastores vitest --shard=i/3), rtm parça 1'de; e2e timeout 45; pilot-images işi (.env.production.example ile docker compose -f docker-compose.pilot.yml build). Doğrulama: fix/ci-pipeline dalında workflow_dispatch ile tüm işler yeşil, sonra main.\n\n[günlük 2026-10-04 18:21 UTC] plan: yalnız ci.yml — pnpm turbo; integration ayrı iş 3 parça matris; e2e timeout 45; pilot-images build işi; fix/ci-pipeline dalında workflow_dispatch ile doğrula",
+        "testStrategy": "",
+        "status": "in-progress",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [],
+        "updatedAt": "2026-10-04T18:21:41.010Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-03T13:02:59.612Z",
-      "taskCount": 257,
+      "lastModified": "2026-10-04T18:21:41.017Z",
+      "taskCount": 258,
       "completedCount": 257,
       "tags": [
         "master"
-      ]
+      ],
+      "updated": "2026-10-04T18:21:41.473Z"
     }
   }
 }

@@ -2,7 +2,7 @@
 
 **Title:** S12 — audit_log yazicisi (append-only olay yazimi) [MAX]
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 
@@ -26,28 +26,28 @@ DoD kapisi + guvenlik. Her guvenlik eyleminde tam 1 append (integration); append
 
 ### 23.1. Olay kumesi + alan sozlesmesi
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** None  
 
 actor/tenant/action/target/request_id; PII-min; hangi eylemler yazilir.
 
 ### 23.2. Merkezi writeAuditEntry (withTenant/RLS, append-only dogrula)
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 23.1  
 
 Tek giris noktasi; UPDATE/DELETE policy reddini dogrula.
 
 ### 23.3. Guvenlik-hassas handler'lara cagri ekle
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 23.2  
 
 auth/settings/billing/PAT/trusted-domains handler'larinda writeAuditEntry cagrilari.
 
 ### 23.4. Testler: integration (append/eylem, append-only red, cross-tenant) + unit
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 23.3  
 
 Her eylemde 1 append; UPDATE/DELETE red; cross-tenant negatif; PII yok.

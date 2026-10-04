@@ -2,7 +2,7 @@
 
 **Title:** I18N1/2 — Panel + widget i18n (mesaj katalogu + locale)
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 
@@ -25,28 +25,28 @@ DoD kapisi + widget bundle butcesi (P3) korunur (describe.skipIf boyut testi yes
 
 ### 26.1. i18n yaklasimi + katalog (tr/en) + t() + locale kaynagi
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** None  
 
 Hafif cozum; fallback; locale secimi.
 
 ### 26.2. Panel string katalogla + Intl helper'lari locale'e bagla
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 26.1  
 
 apps/web string'leri + format.ts locale.
 
 ### 26.3. Widget string katalogla (bundle butcesi P3)
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 26.2  
 
 apps/widget; boyut korunur.
 
 ### 26.4. Testler: t() fallback unit + locale smoke + widget boyut
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 26.3  
 
 Fallback; locale-degisim; P3 boyut.

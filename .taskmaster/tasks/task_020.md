@@ -2,7 +2,7 @@
 
 **Title:** 07.3.2 — Reports KPI: Manual/Assisted/Automated cozum ayrimi + Total cases
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 
@@ -27,35 +27,35 @@ DoD kapisi (typecheck/lint/unit/integration/build/e2e exit 0). Ozel: reports int
 
 ### 20.1. Kontrat: reports.yaml overview -> manual/assisted (+rate) alanlari
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** None  
 
 openapi paths/reports.yaml overview yanitina manual, assisted, manual_rate, assisted_rate ekle; @siyahtus/types generate.
 
 ### 20.2. Aggregation: reports.ts SQL uc-sinif siniflandirmasi
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 20.1  
 
 skill_executions + agent-authored event ile Manual/Assisted/Automated ayrimi; ADR-09 automated korunur.
 
 ### 20.3. Rate hesaplari + null guard
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 20.2  
 
 manual_rate/assisted_rate; closed=0 -> null; automated_rate mevcut mantikla tutarli.
 
 ### 20.4. Web: ReportsPage 3 KPI karti + Total cases
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 20.3  
 
 ReportsPage.tsx uc kart (Manual/Assisted/Automated) + Total cases; automated karti korunur.
 
 ### 20.5. Testler: integration (3 sinif + toplam + cross-tenant) + unit (rate)
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 20.4  
 
 Fixtür'ler; toplam=closed; automated=ADR-09; cross-tenant negatif; rate unit.

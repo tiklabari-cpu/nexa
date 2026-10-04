@@ -10827,22 +10827,21 @@
         "description": "ci.yml: birim test adımı turbo'yu PATH'te bulamıyor (exit 127); entegrasyon seri ~22 dk 20 dk iş sınırına sığmıyor; e2e sınırı 25 dk dar; pilot imajları CI'de derlenmiyor (257.12 OOM boşluğu).",
         "details": "Yalnız .github/workflows/ci.yml: pnpm turbo; integration ayrı iş, 3 parçalı matris (with-test-datastores vitest --shard=i/3), rtm parça 1'de; e2e timeout 45; pilot-images işi (.env.production.example ile docker compose -f docker-compose.pilot.yml build). Doğrulama: fix/ci-pipeline dalında workflow_dispatch ile tüm işler yeşil, sonra main.\n\n[günlük 2026-10-04 18:21 UTC] plan: yalnız ci.yml — pnpm turbo; integration ayrı iş 3 parça matris; e2e timeout 45; pilot-images build işi; fix/ci-pipeline dalında workflow_dispatch ile doğrula\n\n[günlük 2026-10-04 19:21 UTC] doğrulama: CI 37225749905 yedi iş yeşil; kök nedenler: çıplak turbo + eksik UPLOAD_SIGNING_KEY",
         "testStrategy": "",
-        "status": "in-progress",
+        "status": "done",
         "dependencies": [],
         "priority": "high",
         "subtasks": [],
-        "updatedAt": "2026-10-04T18:21:41.010Z"
+        "updatedAt": "2026-10-04T19:22:04.918Z"
       }
     ],
     "metadata": {
       "version": "1.0.0",
-      "lastModified": "2026-10-04T18:21:41.017Z",
+      "lastModified": "2026-10-04T19:22:04.918Z",
       "taskCount": 258,
-      "completedCount": 257,
+      "completedCount": 258,
       "tags": [
         "master"
-      ],
-      "updated": "2026-10-04T19:21:46.512Z"
+      ]
     }
   }
 }

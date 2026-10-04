@@ -2,7 +2,7 @@
 
 **Title:** M5 — Gozlemlenebilirlik: OpenTelemetry span/metrik (request_id koprusu)
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 
@@ -25,28 +25,28 @@ DoD kapisi. Ozel: mock exporter'a span dustugu + span'de request_id attribute me
 
 ### 25.1. OTel SDK kurulum + tracer + mock/konsol exporter
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** None  
 
 Node OTel; test-kapatilabilir exporter.
 
 ### 25.2. HTTP/route span'leri + request_id korelasyonu
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 25.1  
 
 server.ts; span attribute request_id.
 
 ### 25.3. Temel metrikler (istek/sure/hata) kritik yollarda
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 25.2  
 
 auth/chats/reports.
 
 ### 25.4. Testler: span uretimi + request_id attribute (mock exporter)
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 25.3  
 
 Span dustu + attribute assertion.

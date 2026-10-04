@@ -2,9 +2,9 @@
 
 **Title:** 07.1/07.3.1/07.3.3 — Reports Breakdown sayfasi + AI Agent sekmesi + vs-onceki donem + Chats kartlari
 
-**Status:** pending
+**Status:** done
 
-**Dependencies:** 20
+**Dependencies:** 20 ✓
 
 **Priority:** medium
 
@@ -25,35 +25,35 @@ DoD kapisi. Ozel: previous-period delta integration testi (esit uzunluk donem do
 
 ### 21.1. Kontrat: breakdown/ai-agent + previous_period delta
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** None  
 
 reports.yaml yeni yanitlar + overview delta blogu; types generate.
 
 ### 21.2. Backend: previous-period delta + 365/custom range + breakdown/ai-agent aggregation
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 21.1  
 
 reports.ts onceki donem + delta; range dogrulama; yeni aggregation sorgulari.
 
 ### 21.3. Web: sol sekmeler (Overview/AI Agent/Breakdown)
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 21.2  
 
 ReportsPage sekme yapisi + rota/durum.
 
 ### 21.4. Web: range tabs 365+custom + vs-onceki delta rozetleri + Chats kartlari
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 21.3  
 
 Date picker; delta rozetleri; Chats bolumu kartlari.
 
 ### 21.5. Testler: integration (delta + custom range) + unit + e2e sekme gezinme
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 21.4  
 
 Delta dogrulugu; custom range; e2e navigasyon.

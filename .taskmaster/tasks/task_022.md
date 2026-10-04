@@ -2,7 +2,7 @@
 
 **Title:** 00.4 — Onboarding sihirbazi + tohum veri (yeni calisma alani)
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 
@@ -25,28 +25,28 @@ DoD kapisi. Ozel: onboarding e2e (yeni signup -> sihirbaz -> hem skip hem comple
 
 ### 22.1. Adim kapsami + tamamlanma durumu modeli
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** None  
 
 Adimlari netlestir; onboarding flag / state ucu tasarimi.
 
 ### 22.2. Backend: tenant-kapsamli tohum veri SECURITY DEFINER fonksiyonu + state ucu
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 22.1  
 
 Demo veri seed fn (RLS uyumlu) + tamamlanma durumu.
 
 ### 22.3. Web: onboarding sihirbazi rotasi + adimlar + skip
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 22.2  
 
 Persona/website/invite/seed adimlari; mevcut bilesenleri yeniden kullan; atla.
 
 ### 22.4. Testler: integration (seed izolasyon) + e2e (signup->wizard->inbox)
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 22.3  
 
 Cross-tenant seed; skip ve complete e2e yollari.

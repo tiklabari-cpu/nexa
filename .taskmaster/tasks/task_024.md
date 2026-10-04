@@ -2,7 +2,7 @@
 
 **Title:** C8 — Veri saklama (retention) isi: suresi gecen veriyi budama (GDPR/KVKK) [MAX]
 
-**Status:** pending
+**Status:** done
 
 **Dependencies:** None
 
@@ -25,28 +25,28 @@ DoD kapisi + guvenlik: irreversible silme icin siki testler. Integration: suresi
 
 ### 24.1. Saklama politikasi (tablo->TTL) + dry-run tasarimi
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** None  
 
 Hangi veri ne kadar tutulur; dry-run/uygula ayrimi.
 
 ### 24.2. retention:run script + SECURITY DEFINER tenant-dongulu budama
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 24.1  
 
 package.json script; batch, idempotent, RLS-guvenli.
 
 ### 24.3. Guvenlik guard'lari
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 24.2  
 
 Kesin WHERE; dry-run; silinen sayaci log; cross-tenant koruma.
 
 ### 24.4. Testler: integration (gecen siler / gecmeyen kalir / cross-tenant / idempotent / dry-run)
 
-**Status:** pending  
+**Status:** done  
 **Dependencies:** 24.3  
 
 Tam kapsama negatif+pozitif.

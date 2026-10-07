@@ -207,7 +207,8 @@ export class RtmClient {
     } catch {
       // The renewal itself failed — the network, the server — which says
       // nothing about the session. Back off and try it all again, as for any
-      // dropped connection.
+      // dropped connection. (The panel's own renewal waits out such a failure
+      // instead of throwing it, tm 259.2; a `renewToken` that throws still lands here.)
       if (this.#closedByUs || refused !== this.#ws) return true;
       this.#renewed = false;
       this.#replace(refused);

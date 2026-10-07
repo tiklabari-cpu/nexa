@@ -154,6 +154,9 @@ export interface ApiClientOptions {
    * already happened (another request's, another tab's) is reused rather than
    * repeated. Absent on clients with no session to renew, which is every one
    * but the panel's own (`lib/auth-store.ts` · `sessionClient`).
+   *
+   * It can take a while: when the renewal meets a passing failure the session
+   * reconnects (tm 259.2), and the request waits for it, then goes through.
    */
   renewAccessToken?: (refused: string) => Promise<string | null>;
   /**

@@ -13,6 +13,12 @@
  * and on the first request the server refuses. Every renewal — and the restore
  * a page load does — goes through {@link AuthState.refreshSession}, the one
  * place that spends the refresh token.
+ *
+ * Only the server refusing the refresh token ends a session (tm 259.2). A 429,
+ * a 5xx or a dead network keeps it: the panel works on with the access token
+ * it holds, and once it has none to act with it says it is reconnecting and
+ * tries again — after `Retry-After`, or backing off — until an attempt gets
+ * through, the server refuses, or the agent signs out.
  */
 import { create } from 'zustand';
 import { readNotificationPreferences, type NotificationPreferences } from '@siyahtus/types';
@@ -87,7 +93,20 @@ export type WorkspaceList = Membership[] & { emailVerified?: boolean };
 interface AuthState {
   accessToken: string | null;
   agent: CurrentAgent | null;
-  status: 'unknown' | 'signed-out' | 'signed-in';
+  /**
+   * `reconnecting` (tm 259.2): there is a session — the stored refresh token is
+   * kept — but no access token to act with, and the server cannot be reached
+   * to get one. A page load has no `agent` yet; a session that ran out
+   * mid-outage keeps the one it had, and the shell stays mounted underneath.
+   */
+  status: 'unknown' | 'signed-out' | 'signed-in' | 'reconnecting';
+  /**
+   * How a `reconnecting` session is getting on, null in every other status:
+   * `waiting` for its next automatic attempt, `trying` one now, or `paused`
+   * once the attempts are used up — then only "Try now" or signing out moves
+   * it on. The token is kept in all three.
+   */
+  reconnect: 'waiting' | 'trying' | 'paused' | null;
   error: string | null;
   busy: boolean;
   /**
@@ -110,11 +129,18 @@ interface AuthState {
    *
    * Resolves with the token to use, or `null` when the session is over (it has
    * then already been signed out, and `sessionEnded` set if it was live).
-   * Rejects with the `ApiClientError` when the renewal failed for a reason that
-   * says nothing about the session — the network, a 5xx, a 429 — leaving the
-   * stored token and the session untouched; tm 259.2 widens that branch.
+   *
+   * A renewal that fails for a reason that says nothing about the session —
+   * the network, a 5xx, a 429 — keeps the stored token and puts the session in
+   * `reconnecting` (tm 259.2): the caller's token is refused or gone, so there
+   * is nothing to act with until a new one arrives. The promise then waits for
+   * that, and settles when an attempt gets through (the new token) or the
+   * session ends (`null`). A caller arriving while the session is already
+   * reconnecting waits for the attempts under way rather than adding one.
    */
   refreshSession: (stale?: string) => Promise<string | null>;
+  /** "Try now" on the reconnecting screen: an attempt at once, and a fresh run of them if it fails. */
+  retryNow: () => void;
   /**
    * A request repeated with a just-renewed `token` was refused as well: the
    * membership or the workspace behind the session is gone. Ends the session
@@ -184,6 +210,49 @@ const SESSION_CHANNEL = 'siyahtus.session';
 const RENEW_AT = 0.8;
 /** …brought forward by up to this share, at random, so the tabs of one browser rarely wake together. */
 const RENEW_SPREAD = 0.1;
+
+/**
+ * Seconds to wait after the 1st, 2nd, … passing failure in a row before trying
+ * again (tm 259.2): nine attempts over about two minutes. While the panel still
+ * holds a working token the last step repeats; once it has none, the attempts
+ * stop there and the session waits for "Try now".
+ */
+const BACKOFF_S = [1, 2, 4, 8, 16, 30, 30, 30];
+/** A 429's `Retry-After` is honoured up to this many seconds. */
+const MAX_RETRY_AFTER_S = 60;
+
+/**
+ * Whether the server has refused the session for good — the one failure that
+ * forgets the stored token (tm 259.2).
+ *
+ * The token endpoint refuses a refresh token with a 401 (`details.oauth_error`
+ * `invalid_grant` or `invalid_client`, `oauth-service.ts`); RFC 6749 §5.2 puts
+ * the same refusal in a 400, which counts as well. A 401 from `/auth/me` for a
+ * token minted a moment ago is a refusal too. Nothing else is: a 429 is turned
+ * away by the rate limiter before the token endpoint runs, a 5xx rolls the
+ * rotation back (the successor and the spent mark commit together), and a dead
+ * network or a proxy's error page never reached it.
+ */
+function isRefusal(error: unknown): boolean {
+  if (!(error instanceof ApiClientError)) return false;
+  if (error.status === 401) return true;
+  const code = error.details?.['oauth_error'];
+  return error.status === 400 && (code === 'invalid_grant' || code === 'invalid_client');
+}
+
+/**
+ * Seconds to wait after the `failures`-th passing failure in a row: what the
+ * server's `Retry-After` named (at most {@link MAX_RETRY_AFTER_S}), otherwise
+ * the next step of {@link BACKOFF_S}.
+ */
+function waitAfter(error: unknown, failures: number): number {
+  const named = error instanceof ApiClientError ? error.retryAfterSeconds : undefined;
+  if (named !== undefined && Number.isFinite(named) && named >= 0) {
+    return Math.min(named, MAX_RETRY_AFTER_S);
+  }
+  const last = BACKOFF_S.length - 1;
+  return BACKOFF_S[Math.min(failures - 1, last)] ?? BACKOFF_S[last]!;
+}
 
 /** What `POST /auth/token` answers, for both grants. */
 interface TokenGrant {
@@ -407,6 +476,26 @@ export const useAuth = create<AuthState>((set, get) => {
   let channel: BroadcastChannel | null = null;
   let keeping = false;
 
+  // --- Riding out a passing failure (tm 259.2) -----------------------------
+  //
+  // A 429, a 5xx or a dead network says nothing about the refresh token, so it
+  // is kept. While the access token in hand still works the panel carries on
+  // with it and tries again behind the scenes (`renewQuietly`). Once there is
+  // no token to act with — a page load, a token refused or run out — the
+  // session is `reconnecting` and says so, and `reconnect` tries on the same
+  // schedule until it gets through, the server refuses, or the agent signs out.
+
+  /** Passing failures in a row: which step of `BACKOFF_S` comes next. */
+  let failures = 0;
+  /** The next automatic attempt while `reconnecting`. */
+  let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  /**
+   * Callers waiting for a working token again — a request refused mid-outage,
+   * a socket whose login was. Settled with the token when an attempt gets
+   * through, with null when the session ends.
+   */
+  let waiters: Array<(token: string | null) => void> = [];
+
   function startKeeping(): void {
     if (keeping) return;
     keeping = true;
@@ -420,6 +509,8 @@ export const useAuth = create<AuthState>((set, get) => {
   function stopKeeping(): void {
     if (renewTimer !== null) clearTimeout(renewTimer);
     renewTimer = null;
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    retryTimer = null;
     renewDueAt = null;
     expiresAt = null;
     if (!keeping) return;
@@ -465,17 +556,131 @@ export const useAuth = create<AuthState>((set, get) => {
   }
 
   /**
-   * A renewal nobody is waiting on. A failure costs nothing yet — the token
-   * still has a fifth of its life, and the first request refused after that
-   * renews on its own (`sessionClient`). How to wait out a 429, a 5xx or a dead
-   * network before trying again is tm 259.2's to decide.
+   * A renewal nobody is waiting on, due ahead of time. A passing failure costs
+   * nothing yet — the token in hand still has a fifth of its life — so the
+   * panel works on with it and tries again on the backoff schedule, no later
+   * than the moment it stops working. A failure then leaves nothing to act
+   * with: the session is reconnecting (tm 259.2).
    */
   async function renewQuietly(stale: string): Promise<void> {
+    const started = generation;
     try {
-      await get().refreshSession(stale);
-    } catch {
-      // See above: the next refused request tries again.
+      await renew(stale);
+    } catch (error) {
+      if (generation !== started) return;
+      // Moved on meanwhile: a sibling's token arrived, or a refused request
+      // has already started reconnecting.
+      const { status, accessToken } = get();
+      if (status !== 'signed-in' || accessToken !== stale) return;
+
+      const left = expiresAt === null ? 0 : expiresAt - Date.now();
+      if (left <= 0) {
+        reconnectLater(error);
+        return;
+      }
+      failures += 1;
+      if (renewTimer !== null) clearTimeout(renewTimer);
+      renewTimer = setTimeout(
+        () => {
+          renewTimer = null;
+          void renewQuietly(stale);
+        },
+        Math.min(waitAfter(error, failures) * 1000, left),
+      );
     }
+  }
+
+  /**
+   * No token to act with, and none to be had yet: say so, and arm the next
+   * attempt — or, once the attempts are used up, wait for "Try now".
+   */
+  function reconnectLater(error: unknown): void {
+    // Counted from the moment the panel stopped working, not from the quiet
+    // retries behind it: the agent's two minutes start now.
+    if (get().status !== 'reconnecting') failures = 0;
+    failures += 1;
+
+    // One schedule: a renewal due on the old timer would only jump the queue.
+    if (renewTimer !== null) clearTimeout(renewTimer);
+    renewTimer = null;
+    renewDueAt = null;
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    retryTimer = null;
+
+    if (failures > BACKOFF_S.length) {
+      set({ status: 'reconnecting', reconnect: 'paused' });
+      return;
+    }
+    retryTimer = setTimeout(
+      () => {
+        retryTimer = null;
+        void reconnect();
+      },
+      waitAfter(error, failures) * 1000,
+    );
+    set({ status: 'reconnecting', reconnect: 'waiting' });
+  }
+
+  /**
+   * One attempt at getting the session back: a new token, and — after a page
+   * load — the profile that goes with it. Always a fresh rotation, so a 401
+   * from the profile is about a token minted a moment ago: a refusal.
+   */
+  async function reconnect(): Promise<void> {
+    const started = generation;
+    if (get().status === 'reconnecting') set({ reconnect: 'trying' });
+    try {
+      const token = await renew(get().accessToken ?? undefined);
+      // Refused: `rotate` has already forgotten the token and signed out.
+      if (token === null || generation !== started) return;
+      const agent = get().agent ?? (await loadAgent(token));
+      if (generation !== started) return;
+      resume(token, agent);
+    } catch (error) {
+      if (generation !== started) return;
+      // A sibling tab's token brought this one back while the attempt ran.
+      if (get().status === 'signed-in') return;
+      if (isRefusal(error)) {
+        // The profile refused a token minted a moment ago: the membership or
+        // the workspace behind it is gone.
+        writeStored(REFRESH_KEY, null);
+        forgetSession(false);
+        return;
+      }
+      reconnectLater(error);
+    }
+  }
+
+  /** Back to work with `token`, and every caller that was waiting for one with it. */
+  function resume(token: string, agent: CurrentAgent): void {
+    if (retryTimer !== null) clearTimeout(retryTimer);
+    retryTimer = null;
+    failures = 0;
+    set({ agent, status: 'signed-in', reconnect: null, sessionEnded: false });
+    settleWaiters(token);
+  }
+
+  function waitForToken(): Promise<string | null> {
+    return new Promise((settle) => waiters.push(settle));
+  }
+
+  function settleWaiters(token: string | null): void {
+    const waiting = waiters;
+    waiters = [];
+    for (const settle of waiting) settle(token);
+  }
+
+  /** Spend the stored refresh token, once per tab and once across tabs at a time. */
+  function renew(stale: string | undefined): Promise<string | null> {
+    // Already past `stale`: no lock, no round trip.
+    const current = get().accessToken;
+    if (stale !== undefined && current !== null && current !== stale) {
+      return Promise.resolve(current);
+    }
+    refreshing ??= withRefreshLock(() => rotate(stale)).finally(() => {
+      refreshing = null;
+    });
+    return refreshing;
   }
 
   /**
@@ -486,19 +691,28 @@ export const useAuth = create<AuthState>((set, get) => {
   function adoptSiblingToken(message: unknown): void {
     if (!isSiblingToken(message)) return;
     const { status, agent, accessToken } = get();
-    if (status !== 'signed-in' || agent === null || accessToken === null) return;
+    if (status !== 'signed-in' && status !== 'reconnecting') return;
+    if (agent === null || accessToken === null) return;
     // A sibling signed in as somebody else holds a token this tab must never
     // act with — every request would land in another person's workspace.
     if (message.accountId !== agent.account_id || message.licenseId !== agent.license_id) return;
-    if (expiresAt !== null && message.expiresAt <= expiresAt) return;
+    // Reconnecting, the token in hand is refused or spent, so any live
+    // successor beats it; otherwise only one that outlives it does.
+    const holding = status === 'reconnecting' ? Date.now() : expiresAt;
+    if (holding !== null && message.expiresAt <= holding) return;
 
     expiresAt = message.expiresAt;
     set({ accessToken: message.accessToken });
     scheduleRenewal();
+    // The sibling got through first (tm 259.2): this tab is back too.
+    if (status === 'reconnecting') resume(message.accessToken, agent);
   }
 
   /** Hold `grant`'s access token: set it, arm its renewal, tell the sibling tabs. */
   function acceptGrant(grant: TokenGrant): void {
+    // A grant ends a run of passing failures — but not while reconnecting,
+    // where the attempt is over only once the profile is back too (`resume`).
+    if (get().status !== 'reconnecting') failures = 0;
     startKeeping();
     expiresAt =
       typeof grant.expires_in === 'number' && grant.expires_in > 0
@@ -526,12 +740,18 @@ export const useAuth = create<AuthState>((set, get) => {
   function forgetSession(sessionEnded: boolean): void {
     generation += 1;
     stopKeeping();
-    set({ accessToken: null, agent: null, status: 'signed-out', sessionEnded });
+    failures = 0;
+    set({ accessToken: null, agent: null, status: 'signed-out', reconnect: null, sessionEnded });
+    // Whoever was waiting out an outage hears the session is over.
+    settleWaiters(null);
   }
 
-  /** The server ended the session: forget it, and if it was live, say so on the sign-in page. */
+  /**
+   * The server ended the session: forget it, and if it was live — signed in, or
+   * reconnecting after it had been — say so on the sign-in page.
+   */
   function endSession(): void {
-    forgetSession(get().status === 'signed-in');
+    forgetSession(get().agent !== null);
   }
 
   /** The body of {@link AuthState.refreshSession}, run holding the refresh lock. */
@@ -563,7 +783,9 @@ export const useAuth = create<AuthState>((set, get) => {
       });
     } catch (error) {
       if (generation !== started) return null;
-      if (error instanceof ApiClientError && error.isRetryable) throw error;
+      // A passing failure (tm 259.2): nothing was spent, so the token stays
+      // for the next attempt and the caller decides how to wait for it.
+      if (!isRefusal(error)) throw error;
       // Refused: the family was revoked (signed out elsewhere, or a replay) or
       // the token expired. Forget it — unless a sign-in in another tab has
       // stored a different one meanwhile, which is that tab's to keep.
@@ -608,17 +830,10 @@ export const useAuth = create<AuthState>((set, get) => {
       return;
     }
 
-    try {
-      const accessToken = await get().refreshSession();
-      // Refused: `refreshSession` has already forgotten the token and signed out.
-      if (accessToken === null) return;
-      set({ agent: await loadAgent(accessToken), status: 'signed-in', sessionEnded: false });
-    } catch {
-      // Anything else — until tm 259.2 tells a passing failure from a final
-      // one — starts clean rather than looping.
-      writeStored(REFRESH_KEY, null);
-      forgetSession(false);
-    }
+    // One attempt now. If the server cannot be reached the token is kept, the
+    // session says it is reconnecting, and the next attempt is armed (tm 259.2)
+    // — a deploy or a 429 used to land every reloading agent on the sign-in form.
+    await reconnect();
   }
 
   /** Mirror the server's answer into `localStorage` for `loadPrefs`. */
@@ -632,6 +847,7 @@ export const useAuth = create<AuthState>((set, get) => {
     accessToken: null,
     agent: null,
     status: 'unknown',
+    reconnect: null,
     error: null,
     busy: false,
     sessionEnded: false,
@@ -646,15 +862,34 @@ export const useAuth = create<AuthState>((set, get) => {
     },
 
     refreshSession(stale) {
-      // Already past `stale`: no lock, no round trip.
       const current = get().accessToken;
       if (stale !== undefined && current !== null && current !== stale) {
         return Promise.resolve(current);
       }
-      refreshing ??= withRefreshLock(() => rotate(stale)).finally(() => {
-        refreshing = null;
+      // Already riding out an outage: wait for the attempts under way.
+      if (get().status === 'reconnecting') return waitForToken();
+
+      const started = generation;
+      return renew(stale).catch((error: unknown) => {
+        if (generation !== started) return null;
+        // A sibling tab's token arrived while the renewal ran: use that.
+        const now = get().accessToken;
+        if (get().status === 'signed-in' && now !== null && now !== stale) return now;
+        // The caller's token is refused or gone and no new one can be had
+        // yet: nothing to act with until an attempt gets through.
+        reconnectLater(error);
+        return waitForToken();
       });
-      return refreshing;
+    },
+
+    retryNow() {
+      const { status, reconnect: progress } = get();
+      if (status !== 'reconnecting' || progress === 'trying') return;
+      if (retryTimer !== null) clearTimeout(retryTimer);
+      retryTimer = null;
+      // A fresh run: if this one fails too, the panel tries on its own again.
+      failures = 0;
+      void reconnect();
     },
 
     rejectSession(token) {

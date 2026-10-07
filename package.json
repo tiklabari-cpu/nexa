@@ -17,6 +17,7 @@
     "test:integration": "turbo run test:integration --concurrency=1",
     "test:e2e": "pnpm --filter @siyahtus/e2e test",
     "test:e2e:pilot": "pnpm --filter @siyahtus/api exec tsx scripts/with-test-datastores.ts pnpm --filter @siyahtus/e2e test:pilot",
+    "test:e2e:session": "pnpm --filter @siyahtus/api exec tsx scripts/with-test-datastores.ts pnpm --filter @siyahtus/e2e test:session",
     "test:gate": "node scripts/test-gate.mjs",
     "contract:generate": "pnpm --filter @siyahtus/contract generate",
     "db:migrate": "pnpm --filter @siyahtus/api db:migrate",

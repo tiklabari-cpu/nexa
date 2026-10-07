@@ -27,6 +27,7 @@ export const auth: Messages = {
 
   // Sign in
   'auth.signin.subtitle': 'Çalışma alanınızda oturum açın',
+  'auth.signin.sessionEnded': 'Oturumunuz sona erdi. Devam etmek için yeniden oturum açın.',
   'auth.signin.submit': 'Oturum aç',
   'auth.signin.submitting': 'Oturum açılıyor…',
   'auth.signin.forgotPassword': 'Parolanızı mı unuttunuz?',

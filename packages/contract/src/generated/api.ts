@@ -12640,7 +12640,14 @@ export interface components {
         'application/json': components['schemas']['Error'];
       };
     };
-    /** @description Missing, malformed or expired credentials */
+    /**
+     * @description Missing, malformed or expired credentials. When the bearer credential
+     *     itself was refused — expired, revoked or never issued, the three told
+     *     apart nowhere but the server's log — `error.details.oauth_error` is
+     *     `invalid_token` (RFC 6750 §3.1), and renewing the access token may help.
+     *     A 401 without it was raised about something inside the request (a wrong
+     *     password or code), and a renewal would not.
+     */
     Unauthorized: {
       headers: {
         [name: string]: unknown;

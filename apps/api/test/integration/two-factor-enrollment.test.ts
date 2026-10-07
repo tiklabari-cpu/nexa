@@ -362,6 +362,9 @@ describe('two-factor enrollment endpoints (S11-2FA-d)', () => {
       const response = await deleteTwoFactor({ password: 'not-the-password' });
       expect(response.statusCode).toBe(401);
       expect(response.json().error.type).toBe('authentication');
+      // Not `invalid_token`: the session's token was fine, so the panel must
+      // not renew it and resubmit the wrong password (tm 259.1).
+      expect(response.json().error.details).toBeUndefined();
 
       expect(
         await owner.accountTwoFactor.findUnique({ where: { accountId: fx.a.ownerAccountId } }),

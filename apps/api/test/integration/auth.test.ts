@@ -528,6 +528,51 @@ describe('auth', () => {
       expect(a.json().error.message).toBe(b.json().error.message);
     });
 
+    /**
+     * The refusal names the bearer itself (RFC 6750 §3.1 · tm 259.1). The panel
+     * renews its access token on exactly this answer and on no other 401: a
+     * wrong password inside an authenticated request is a 401 too, and renewing
+     * there would resubmit the password and end the session on the second
+     * refusal (`two-factor-enrollment.test.ts` pins that side).
+     */
+    it('marks a refused bearer invalid_token, alike for expired, revoked and never-issued tokens (NFR-S2)', async () => {
+      const tenant = {
+        licenseId: fx.a.licenseId,
+        organizationId: fx.a.organizationId,
+        ownerId: fx.a.ownerAccountId,
+        scopes: ['accounts--my:ro'],
+      };
+      const expired = await grantToken(owner, {
+        ...tenant,
+        expiresAt: new Date(Date.now() - 1000),
+      });
+      const revoked = await grantToken(owner, { ...tenant, revokedAt: new Date() });
+
+      const answers = [];
+      for (const token of [expired, revoked, 'never-existed']) {
+        answers.push(await get('/auth/me', { authorization: `Bearer ${token}` }));
+      }
+
+      for (const answer of answers) {
+        expect(answer.statusCode).toBe(401);
+        expect(answer.json().error.details).toEqual({ oauth_error: 'invalid_token' });
+      }
+      // One answer for all three, down to the last field: which of them it was
+      // is what somebody holding a guessed token would like to learn.
+      const withoutRequestId = answers.map((answer) => {
+        const { request_id: _requestId, ...rest } = answer.json().error as Record<string, unknown>;
+        return rest;
+      });
+      expect(withoutRequestId[1]).toEqual(withoutRequestId[0]);
+      expect(withoutRequestId[2]).toEqual(withoutRequestId[0]);
+    });
+
+    it('does not mark a request that carried no credential at all (RFC 6750 §3.1)', async () => {
+      const response = await get('/auth/me');
+      expect(response.statusCode).toBe(401);
+      expect(response.json().error.details).toBeUndefined();
+    });
+
     it('stops working the moment the membership is suspended', async () => {
       const token = await grantToken(owner, {
         licenseId: fx.a.licenseId,

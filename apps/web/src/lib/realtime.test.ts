@@ -200,3 +200,144 @@ describe('a gateway that refuses the handshake (M-LOAD-CAP · NFR-R2)', () => {
     });
   });
 });
+
+/**
+ * A socket that comes back with an expired token (tm 259.1).
+ *
+ * The gateway checks the token at `login` only, so a connection opened with a
+ * good token stays up after it expires. What does not is a *re*connect: a page
+ * that slept through its renewal wakes to a dropped socket, and the first
+ * thing it does is log in again with the token it had. Before, that refusal
+ * meant `offline` for good — "credentials are wrong; retrying would loop" —
+ * and the agent stopped receiving chats while the rest of the panel worked.
+ */
+describe('a login refused because the token went stale (tm 259.1)', () => {
+  const REFUSED = {
+    error: { type: 'authentication', message: 'Invalid or expired credentials.' },
+  };
+
+  /** Answer the socket's latest request the way the gateway would. */
+  function answer(socket: FakeWebSocket, success: boolean, payload: object = {}): void {
+    const request = JSON.parse(socket.sent.at(-1)!) as { request_id: string; action: string };
+    socket.emit('message', {
+      data: JSON.stringify({
+        request_id: request.request_id,
+        action: request.action,
+        type: 'response',
+        success,
+        payload,
+      }),
+    });
+  }
+
+  /** `#login` awaits its answer and then the renewal: let every hop settle. */
+  async function settle(): Promise<void> {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  }
+
+  function clientWith(
+    renewToken: (stale: string) => Promise<string | null>,
+    token: { current: string },
+    seen: RtmStatus[] = [],
+  ): RtmClient {
+    return new RtmClient({
+      url: 'ws://127.0.0.1:4001/v1/agent/rtm/ws',
+      organizationId: '11111111-1111-4111-8111-111111111111',
+      getToken: () => token.current,
+      renewToken,
+      pushes: [],
+      onPush: () => {},
+      onStatusChange: (status) => seen.push(status),
+    });
+  }
+
+  it('renews the token once and logs in again with the new one', async () => {
+    install();
+    const token = { current: 'stale' };
+    const renewToken = vi.fn(async () => {
+      token.current = 'fresh';
+      return 'fresh';
+    });
+    const seen: RtmStatus[] = [];
+    const client = clientWith(renewToken, token, seen);
+    client.connect();
+
+    const first = FakeWebSocket.instances[0]!;
+    first.emit('open');
+    answer(first, false, REFUSED);
+    await settle();
+
+    expect(renewToken).toHaveBeenCalledTimes(1);
+    expect(renewToken).toHaveBeenCalledWith('stale');
+    expect(FakeWebSocket.instances).toHaveLength(2);
+
+    const second = FakeWebSocket.instances[1]!;
+    second.emit('open');
+    expect(JSON.parse(second.sent[0]!).payload.token).toBe('Bearer fresh');
+    answer(second, true);
+    await settle();
+
+    expect(client.status).toBe('live');
+    expect(seen).not.toContain('offline');
+    // The first socket was closed on purpose; its `close` must not schedule a
+    // second, competing reconnect on top of the live one.
+    expect(first.closedByCaller).toBe(true);
+    first.emit('close');
+    expect(scheduled.filter((timer) => timer.ms < 15_000)).toHaveLength(0);
+    expect(client.status).toBe('live');
+  });
+
+  it('goes offline when the renewed token is refused as well — one renewal, no loop', async () => {
+    install();
+    const token = { current: 'stale' };
+    const renewToken = vi.fn(async () => 'fresh');
+    const client = clientWith(renewToken, token);
+    client.connect();
+
+    const first = FakeWebSocket.instances[0]!;
+    first.emit('open');
+    answer(first, false, REFUSED);
+    await settle();
+    const second = FakeWebSocket.instances[1]!;
+    second.emit('open');
+    answer(second, false, REFUSED);
+    await settle();
+
+    expect(renewToken).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    expect(client.status).toBe('offline');
+  });
+
+  it('goes offline without reconnecting when the session is over', async () => {
+    install();
+    const renewToken = vi.fn(async () => null);
+    const client = clientWith(renewToken, { current: 'stale' });
+    client.connect();
+
+    const first = FakeWebSocket.instances[0]!;
+    first.emit('open');
+    answer(first, false, REFUSED);
+    await settle();
+
+    expect(renewToken).toHaveBeenCalledTimes(1);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+    expect(client.status).toBe('offline');
+  });
+
+  it('does not renew for a refusal that is not about the token', async () => {
+    install();
+    const renewToken = vi.fn(async () => 'fresh');
+    const client = clientWith(renewToken, { current: 'live-token' });
+    client.connect();
+
+    const first = FakeWebSocket.instances[0]!;
+    first.emit('open');
+    answer(first, false, {
+      error: { type: 'misdirected_request', message: 'Wrong region.', details: { region: 'eu' } },
+    });
+    await settle();
+
+    expect(renewToken).not.toHaveBeenCalled();
+    expect(client.status).toBe('offline');
+  });
+});

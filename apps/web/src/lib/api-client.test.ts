@@ -213,3 +213,214 @@ describe('ApiClient', () => {
     expect(new Headers(withoutBody!.headers).has('Content-Type')).toBe(false);
   });
 });
+
+/**
+ * One renewal when the server refuses the credential itself (tm 259.1).
+ *
+ * The access token lives an hour at most. Before this, a panel left open past
+ * that answered every request with a 401 and an "API unreachable" screen. The
+ * client now renews once and repeats the request — but only for the 401 that
+ * says the *bearer* was refused (`details.oauth_error: 'invalid_token'`, RFC
+ * 6750 §3.1). The API also answers 401 for a wrong password or code inside an
+ * authenticated request, and renewing there would spend a refresh token,
+ * submit the wrong password twice, and end the session on the second refusal.
+ */
+describe('a refused credential is renewed once (tm 259.1 · NFR-S2)', () => {
+  /** The auth plugin's answer to an expired, revoked or unknown bearer token. */
+  const refusedCredential = () =>
+    jsonResponse(
+      {
+        error: {
+          type: 'authentication',
+          message: 'Invalid or expired credentials.',
+          request_id: 'rq-401',
+          details: { oauth_error: 'invalid_token' },
+        },
+      },
+      { status: 401 },
+    );
+
+  /** A 401 a handler raised about something inside the request, not about the token. */
+  const wrongPassword = () =>
+    jsonResponse(
+      {
+        error: {
+          type: 'authentication',
+          message: 'That password is not correct.',
+          request_id: 'rq-pw',
+        },
+      },
+      { status: 401 },
+    );
+
+  const bearerOf = (init: RequestInit | undefined) =>
+    new Headers(init?.headers).get('Authorization');
+
+  it('renews after a refused credential and repeats the request once, with the new token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) =>
+      bearerOf(init) === 'Bearer stale' ? refusedCredential() : jsonResponse({ items: [] }),
+    );
+    const renewAccessToken = vi.fn(async () => 'fresh');
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'stale',
+      renewAccessToken,
+    });
+
+    await expect(client.get('/chats')).resolves.toEqual({ items: [] });
+
+    expect(renewAccessToken).toHaveBeenCalledTimes(1);
+    expect(renewAccessToken).toHaveBeenCalledWith('stale');
+    expect(fetchImpl.mock.calls.map(([, init]) => bearerOf(init))).toEqual([
+      'Bearer stale',
+      'Bearer fresh',
+    ]);
+  });
+
+  it('repeats a write with the same body — a refused credential never reached the handler', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) =>
+      bearerOf(init) === 'Bearer stale' ? refusedCredential() : jsonResponse({ id: 'e1' }),
+    );
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'stale',
+      renewAccessToken: async () => 'fresh',
+    });
+
+    await client.post('/chats/X/events', { text: 'hello' });
+
+    expect(fetchImpl.mock.calls.map(([, init]) => init?.method)).toEqual(['POST', 'POST']);
+    expect(fetchImpl.mock.calls.map(([, init]) => init?.body)).toEqual([
+      '{"text":"hello"}',
+      '{"text":"hello"}',
+    ]);
+  });
+
+  it('lets the original 401 through when the session cannot be renewed', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => refusedCredential());
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'stale',
+      renewAccessToken: async () => null,
+    });
+
+    const error = (await client.get('/chats').catch((e: unknown) => e)) as ApiClientError;
+
+    expect(error).toBeInstanceOf(ApiClientError);
+    expect(error.status).toBe(401);
+    expect(error.details).toEqual({ oauth_error: 'invalid_token' });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not renew a 401 about a wrong password inside the request', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => wrongPassword());
+    const renewAccessToken = vi.fn(async () => 'fresh');
+    const onSessionRejected = vi.fn();
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'live',
+      renewAccessToken,
+      onSessionRejected,
+    });
+
+    const error = (await client
+      .request('DELETE', '/auth/2fa', { password: 'wrong' })
+      .catch((e: unknown) => e)) as ApiClientError;
+
+    expect(error.message).toBe('That password is not correct.');
+    expect(renewAccessToken).not.toHaveBeenCalled();
+    expect(onSessionRejected).not.toHaveBeenCalled();
+    // Submitted once: a second try would spend the attempt budget for nothing.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not renew for a request that carried no token', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => refusedCredential());
+    const renewAccessToken = vi.fn(async () => 'fresh');
+    const client = new ApiClient({ fetchImpl, renewAccessToken });
+
+    await client.get('/chats').catch(() => undefined);
+
+    expect(renewAccessToken).not.toHaveBeenCalled();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a credential refused again right after renewal, once, without looping', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async () => refusedCredential());
+    const renewAccessToken = vi.fn(async () => 'fresh');
+    const onSessionRejected = vi.fn();
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'stale',
+      renewAccessToken,
+      onSessionRejected,
+    });
+
+    const error = (await client.get('/chats').catch((e: unknown) => e)) as ApiClientError;
+
+    expect(error.status).toBe(401);
+    expect(renewAccessToken).toHaveBeenCalledTimes(1);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // A token minted a moment ago and refused anyway is not stale: the
+    // membership or the workspace is gone, and the session cannot continue.
+    expect(onSessionRejected).toHaveBeenCalledTimes(1);
+    expect(onSessionRejected).toHaveBeenCalledWith('fresh');
+  });
+
+  it('does not end the session when the repeat fails for a reason inside the request', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) =>
+      bearerOf(init) === 'Bearer stale' ? refusedCredential() : wrongPassword(),
+    );
+    const onSessionRejected = vi.fn();
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'stale',
+      renewAccessToken: async () => 'fresh',
+      onSessionRejected,
+    });
+
+    const error = (await client
+      .request('POST', '/auth/2fa/recovery-codes', { password: 'wrong' })
+      .catch((e: unknown) => e)) as ApiClientError;
+
+    expect(error.message).toBe('That password is not correct.');
+    expect(onSessionRejected).not.toHaveBeenCalled();
+  });
+
+  it('renews for an attachment download too', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) =>
+      bearerOf(init) === 'Bearer stale'
+        ? refusedCredential()
+        : new Response(new Blob(['png']), { status: 200 }),
+    );
+    const renewAccessToken = vi.fn(async () => 'fresh');
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'stale',
+      renewAccessToken,
+    });
+
+    const blob = await client.getBlob('/uploads/key-1');
+
+    expect(blob.size).toBeGreaterThan(0);
+    expect(renewAccessToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('renews for a report export too', async () => {
+    const fetchImpl = vi.fn<typeof fetch>(async (_url, init) =>
+      bearerOf(init) === 'Bearer stale'
+        ? refusedCredential()
+        : new Response(new Blob(['date,chats\r\n']), { status: 200 }),
+    );
+    const client = new ApiClient({
+      fetchImpl,
+      getAccessToken: () => 'stale',
+      renewAccessToken: async () => 'fresh',
+    });
+
+    const { blob } = await client.getFile('/reports/export?group=overview&format=csv');
+
+    expect(blob.size).toBeGreaterThan(0);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});

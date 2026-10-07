@@ -41,7 +41,9 @@ export default defineConfig({
   // The public pilot's spec needs an API started with `PILOT_MODE=true`, which
   // this suite's servers are not (and, reused locally, cannot be made to be).
   // It runs on its own stack: `playwright.pilot.config.ts`, `pnpm test:e2e:pilot`.
-  testIgnore: ['**/pilot-mode.spec.ts'],
+  // The same holds for the minute-long access token `session-refresh.spec.ts`
+  // waits out (tm 259.1): `playwright.session.config.ts`, `pnpm test:e2e:session`.
+  testIgnore: ['**/pilot-mode.spec.ts', '**/session-refresh.spec.ts'],
   globalSetup: './tests/global-setup.ts',
   // The suite shares one database and one seed, so parallel files would clobber
   // each other's conversations. Correctness over wall-clock here.

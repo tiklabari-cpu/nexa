@@ -32,6 +32,7 @@ export const auth: Messages = {
 
   // Sign in
   'auth.signin.subtitle': 'Sign in to your workspace',
+  'auth.signin.sessionEnded': 'Your session has ended. Sign in again to continue.',
   'auth.signin.submit': 'Sign in',
   'auth.signin.submitting': 'Signing in…',
   'auth.signin.forgotPassword': 'Forgot your password?',
